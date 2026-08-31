@@ -215,7 +215,11 @@ def test_a_standing_piece_is_boxed_around_the_top_face_the_camera_sees(
     renderer: MontessoriSceneRenderer, pipeline: MontessoriPerceptionPipeline
 ):
     frame = renderer.render([PlacedPiece(MontessoriShapeCategory.CUBE, x=0.58, y=0.15)])
-    [piece] = pipeline.detect(frame).shapes
+    [piece] = [
+        detected
+        for detected in pipeline.detect(frame).shapes
+        if detected.supporting_surface == pipeline.table.name
+    ]
     view = CameraView(frame)
 
     drawn = DetectionOverlay().draw(view, MontessoriScene(shapes=[piece]))

@@ -10,6 +10,11 @@ from typing_extensions import List
 
 from experiments.montessori.perception.detections import MontessoriShapeDetection
 from experiments.montessori.perception.footprint import Footprint
+from experiments.montessori.perception.hypotheses import (
+    BeliefSource,
+    BelievedPlace,
+    PieceHypothesis,
+)
 from experiments.montessori.perception.exceptions import NothingIsHiddenFromBelow
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -70,6 +75,7 @@ def piece_at(
     :param outline_agreement: How much of its outline lay along a seen edge.
     """
     height = 0.03
+    resting_on = PrefixedName("table", "occupancy_test")
     return MontessoriShapeDetection(
         pose=Pose.from_xyz_rpy(x, y, surface_height + height / 2),
         footprint=Footprint(
@@ -82,9 +88,13 @@ def piece_at(
         ),
         outline=square_at(x, y),
         category=MontessoriShapeCategory.CUBE,
-        supporting_surface=PrefixedName("table", "occupancy_test"),
+        supporting_surface=resting_on,
         height=height,
         outline_agreement=outline_agreement,
+        hypothesis=PieceHypothesis(
+            place=BelievedPlace(surface=resting_on, center=(x, y)),
+            source=BeliefSource.COLOR_IN_THE_PICTURE,
+        ),
     )
 
 

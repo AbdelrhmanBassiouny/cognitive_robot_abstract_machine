@@ -10,10 +10,17 @@ import math
 import cv2
 import numpy as np
 import pytest
-from typing_extensions import List, Tuple
+from typing_extensions import List, Optional, Tuple
 
 from experiments.montessori.perception.edges import EdgeDistances
-from experiments.montessori.perception.detections import MontessoriScene
+from experiments.montessori.perception.detections import (
+    MontessoriScene,
+    MontessoriShapeDetection,
+)
+from experiments.montessori.perception.hypotheses import (
+    BelievedPlace,
+    PieceHypothesis,
+)
 from experiments.montessori.perception.orthophoto import Orthophoto, WorkspaceRegion
 from experiments.montessori.perception.piece_matcher import PieceMatcher
 from experiments.montessori.perception.surfaces import WorkspaceSurface
@@ -172,12 +179,46 @@ def _drawn(
     return EdgeDistances.of(Orthophoto(image=image, region=region, plane_height=0.0))
 
 
+def _resting_on(
+    scene: MontessoriScene, surface: PrefixedName
+) -> List[MontessoriShapeDetection]:
+    """
+    The pieces one look put on one surface.
+
+    :param scene: The result of that look.
+    :param surface: The surface to read the pieces off.
+    """
+    return [piece for piece in scene.shapes if piece.supporting_surface == surface]
+
+
+DRAWN_SURFACE = PrefixedName("table", "piece_matching_test")
+"""
+What the world is taken to call the surface a test draws its pieces on.
+"""
+
+
+def _believing(
+    center: Tuple[float, float] = (0.0, 0.0), hue: Optional[int] = None
+) -> PieceHypothesis:
+    """
+    That a piece of the colour seen at a spot is standing around it.
+
+    :param center: The world-frame ``(x, y)`` the piece is believed to be at.
+    :param hue: The colour measured there, or None where there was none to read.
+    """
+    return PieceHypothesis.of_color(
+        BelievedPlace(surface=DRAWN_SURFACE, center=center), hue
+    )
+
+
 @pytest.mark.parametrize("piece", KNOWN_PIECES, ids=_piece_id)
 def test_each_known_piece_is_recognised_from_its_own_outline(piece: KnownPiece):
     matcher = PieceMatcher()
     placed = math.radians(17)
 
-    match = matcher.match(_drawn(piece.turned_outline(placed)), (0.0, 0.0), piece.hue)
+    match = matcher.match(
+        _drawn(piece.turned_outline(placed)), _believing(hue=piece.hue)
+    )
 
     assert match.piece.category is piece.category
     assert match.outline_agreement > CLEAN_FIT_AGREEMENT
@@ -191,7 +232,7 @@ def test_a_piece_turned_by_its_own_period_looks_untouched(piece: KnownPiece):
     matcher = PieceMatcher()
 
     match = matcher.match(
-        _drawn(piece.turned_outline(piece.rotation_period)), (0.0, 0.0), piece.hue
+        _drawn(piece.turned_outline(piece.rotation_period)), _believing(hue=piece.hue)
     )
 
     assert match.piece.category is piece.category
@@ -203,7 +244,7 @@ def test_an_orientation_is_reported_as_the_smallest_turn_that_reaches_it():
     matcher = PieceMatcher()
     placed = cube.rotation_period - math.radians(10)
 
-    match = matcher.match(_drawn(cube.turned_outline(placed)), (0.0, 0.0), cube.hue)
+    match = matcher.match(_drawn(cube.turned_outline(placed)), _believing(hue=cube.hue))
 
     assert match.yaw == pytest.approx(math.radians(-10), abs=matcher.angle_step)
 
@@ -220,7 +261,9 @@ def test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for(
     stands_at = (0.6, 0.2)
     looked_for = (stands_at[0] - 0.012, stands_at[1] + 0.009)
 
-    match = matcher.match(_drawn(piece.outline, stands_at), looked_for, piece.hue)
+    match = matcher.match(
+        _drawn(piece.outline, stands_at), _believing(looked_for, piece.hue)
+    )
 
     assert match.center == pytest.approx(stands_at, abs=matcher.step)
 
@@ -230,8 +273,8 @@ def test_a_piece_is_never_recognised_as_one_of_the_other_colour():
     matcher = PieceMatcher()
     edges = _drawn(cylinder.outline)
 
-    recognised = matcher.match(edges, (0.0, 0.0), cylinder.hue)
-    seen_yellow = matcher.match(edges, (0.0, 0.0), YELLOW_HUE)
+    recognised = matcher.match(edges, _believing(hue=cylinder.hue))
+    seen_yellow = matcher.match(edges, _believing(hue=YELLOW_HUE))
 
     assert recognised.piece.category is MontessoriShapeCategory.CYLINDER
     assert seen_yellow is None or seen_yellow.piece.hue == YELLOW_HUE
@@ -241,7 +284,7 @@ def test_a_colour_no_piece_wears_leaves_nothing_to_recognise():
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     unworn = (CYAN_HUE + YELLOW_HUE) // 2
 
-    assert PieceMatcher().match(_drawn(cube.outline), (0.0, 0.0), unworn) is None
+    assert PieceMatcher().match(_drawn(cube.outline), _believing(hue=unworn)) is None
 
 
 def test_edges_no_known_piece_follows_are_refused():
@@ -250,13 +293,13 @@ def test_edges_no_known_piece_follows_are_refused():
         [[-reach, -reach], [reach, -reach], [reach, reach], [-reach, reach]]
     )
 
-    assert PieceMatcher().match(_drawn(sprawl), (0.0, 0.0), CYAN_HUE) is None
+    assert PieceMatcher().match(_drawn(sprawl), _believing(hue=CYAN_HUE)) is None
 
 
 def test_an_outline_with_no_colour_to_read_is_recognised_by_its_shape_alone():
     triangle = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
 
-    match = PieceMatcher().match(_drawn(triangle.outline), (0.0, 0.0), None)
+    match = PieceMatcher().match(_drawn(triangle.outline), _believing())
 
     assert match.piece.category is MontessoriShapeCategory.TRIANGULAR_PRISM
 
@@ -271,7 +314,9 @@ def test_a_reflection_around_a_piece_does_not_move_where_it_is_recognised():
     stands_at = (0.6, 0.2)
     edges = _drawn(cube.outline, stands_at)
 
-    match = PieceMatcher().match(edges, (stands_at[0] - 0.015, stands_at[1]), cube.hue)
+    match = PieceMatcher().match(
+        edges, _believing((stands_at[0] - 0.015, stands_at[1]), cube.hue)
+    )
 
     assert match.piece.category is MontessoriShapeCategory.CUBE
     assert match.center == pytest.approx(stands_at, abs=0.002)
@@ -286,7 +331,7 @@ def test_a_piece_is_detected_at_the_angle_it_was_placed(
     placed = math.radians(25)
     frame = renderer.render([PlacedPiece(piece.category, x=0.58, y=0.15, yaw=placed)])
 
-    [detected] = pipeline.detect(frame).shapes
+    [detected] = _resting_on(pipeline.detect(frame), pipeline.table.name)
 
     assert detected.category is piece.category
     assert detected.yaw == pytest.approx(
@@ -311,9 +356,9 @@ def test_a_piece_is_recognised_through_the_reflection_the_table_throws(
 
     scene = pipeline.detect(reflecting.render(placed_pieces))
 
-    assert {detected.category for detected in scene.shapes} == {
-        placed.category for placed in placed_pieces
-    }
+    assert {
+        detected.category for detected in _resting_on(scene, pipeline.table.name)
+    } == {placed.category for placed in placed_pieces}
 
 
 def test_a_piece_is_reported_where_it_stands_and_not_where_its_reflection_reaches(
@@ -324,7 +369,7 @@ def test_a_piece_is_reported_where_it_stands_and_not_where_its_reflection_reache
     scene = pipeline.detect(reflecting.render(placed_pieces))
 
     stands_at = {placed.category: (placed.x, placed.y) for placed in placed_pieces}
-    for detected in scene.shapes:
+    for detected in _resting_on(scene, pipeline.table.name):
         assert detected.pose.to_position().to_np()[:2] == pytest.approx(
             stands_at[detected.category], abs=0.003
         )

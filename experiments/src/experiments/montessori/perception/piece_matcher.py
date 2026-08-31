@@ -27,13 +27,8 @@ import numpy as np
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.edges import EdgeDistances
-from experiments.montessori.pieces import (
-    HUE_TOLERANCE,
-    KNOWN_PIECES,
-    KnownPiece,
-    hue_distance,
-    points_along,
-)
+from experiments.montessori.perception.hypotheses import PieceHypothesis
+from experiments.montessori.pieces import KnownPiece, points_along
 
 # %% what a fit came to
 
@@ -77,21 +72,13 @@ class MatchedPiece:
 @dataclass(frozen=True)
 class PieceMatcher:
     """
-    Recognises the piece the edges around one spot on the table belong to.
+    Recognises the piece standing at a believed place.
 
-    The search runs twice: once coarsely and forgivingly, to find where the piece lies
-    even when the spot it was seeded from is centimetres off, and once finely around
-    that placement, to settle its position and its turn.
-    """
-
-    candidates: Tuple[KnownPiece, ...] = KNOWN_PIECES
-    """
-    The pieces that may be found on the table.
-    """
-
-    hue_tolerance: int = HUE_TOLERANCE
-    """
-    How far a measured colour may sit from a piece's own before that piece is ruled out.
+    The search runs twice: once coarsely and forgivingly, over everything the belief
+    allows, and once finely around the placement that came back, to settle its position
+    and its turn. How far the coarse search reaches, which turns it tries and which
+    pieces it tries there are all read from the belief, so a place known closely costs a
+    fraction of what an unguided pass over the same surface costs.
     """
 
     minimum_agreement: float = 0.62
@@ -102,14 +89,6 @@ class PieceMatcher:
     On the real table a correctly recognised piece reaches between 0.63 and 0.86, while
     the best any *other* piece of the same colour reaches on the same spot is 0.62; this
     sits at that boundary, so a piece is refused rather than reported as its neighbour.
-    """
-
-    search_radius: float = 0.024
-    """
-    How far, in metres, a piece may be found from the spot it was seeded at.
-
-    A piece seen together with its own reflection is seeded from the middle of the two,
-    which on this table is up to fifteen millimetres off.
     """
 
     coarse_step: float = 0.003
@@ -157,44 +136,28 @@ class PieceMatcher:
     """
 
     def match(
-        self,
-        edges: EdgeDistances,
-        seed: Tuple[float, float],
-        hue: Optional[int],
+        self, edges: EdgeDistances, hypothesis: PieceHypothesis
     ) -> Optional[MatchedPiece]:
         """
-        Recognise the piece standing around one spot.
+        Recognise the piece a hypothesis expects, where it expects it.
 
         :param edges: The edges seen in the plane the piece's top face stands on.
-        :param seed: The world-frame ``(x, y)`` to search around.
-        :param hue: The colour that spot was measured to be, or None where it had no
-            colour to read.
-        :return: The best fit, or None if no known piece follows the edges well enough.
+        :param hypothesis: What is expected, and where it is believed to be.
+        :return: The best fit, or None if no expected piece follows the edges well
+            enough.
         """
-        candidates = [piece for piece in self.candidates if self._could_be(piece, hue)]
-        if not candidates:
+        if not hypothesis.candidates:
             return None
         best = max(
-            (self._fit(piece, edges, seed) for piece in candidates),
+            (self._fit(piece, edges, hypothesis) for piece in hypothesis.candidates),
             key=lambda fit: fit.outline_agreement,
         )
         if best.outline_agreement < self.minimum_agreement:
             return None
         return best
 
-    def _could_be(self, piece: KnownPiece, hue: Optional[int]) -> bool:
-        """
-        Whether a piece's own colour is close enough to a measured one to be it.
-
-        :param piece: The piece to consider.
-        :param hue: The colour measured, or None where there was none to read.
-        """
-        if hue is None:
-            return True
-        return hue_distance(hue, piece.hue) <= self.hue_tolerance
-
     def _fit(
-        self, piece: KnownPiece, edges: EdgeDistances, seed: Tuple[float, float]
+        self, piece: KnownPiece, edges: EdgeDistances, hypothesis: PieceHypothesis
     ) -> MatchedPiece:
         """
         Place and turn one piece until its outline follows the edges as closely as it
@@ -202,15 +165,15 @@ class PieceMatcher:
 
         :param piece: The piece to lay over the edges.
         :param edges: The edges seen in the plane its top face stands on.
-        :param seed: The world-frame ``(x, y)`` to search around.
+        :param hypothesis: What is believed about where it stands.
         :return: The best placement this piece reaches.
         """
         coarse = self._sweep(
             piece,
             edges,
-            seed,
-            self._turns_of(piece, self.coarse_angle_step),
-            self.search_radius,
+            hypothesis.place.center,
+            hypothesis.turns_of(piece, self.coarse_angle_step),
+            hypothesis.place.radius,
             self.coarse_step,
             self.coarse_reach,
         )
@@ -286,24 +249,13 @@ class PieceMatcher:
             outline_agreement=float(agreements[best]),
         )
 
-    @staticmethod
-    def _turns_of(piece: KnownPiece, step: float) -> List[float]:
-        """
-        The turns a piece is worth trying, which span one of its rotation periods about
-        zero and so hold every orientation it can be told apart in.
-
-        :param piece: The piece to turn.
-        :param step: How finely to turn it, in radians.
-        """
-        if piece.rotation_period is None:
-            return [0.0]
-        steps = int(piece.rotation_period / 2 / step)
-        return list(np.arange(-steps, steps + 1) * step)
-
     def _turns_around(self, piece: KnownPiece, angle: float) -> List[float]:
         """
         The turns worth trying either side of one the coarse search settled on, which
         reach a full coarse step in both directions.
+
+        Refining a turn the coarse sweep already chose from what the belief allowed,
+        rather than a second reading of the belief itself.
 
         :param piece: The piece to turn.
         :param angle: The turn to search around, in radians.

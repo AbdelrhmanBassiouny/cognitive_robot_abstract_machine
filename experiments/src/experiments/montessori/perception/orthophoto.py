@@ -118,6 +118,19 @@ class WorkspaceRegion(SubclassJSONSerializer):
             self.minimum_y + pixel_y * self.resolution,
         )
 
+    def to_pixels(self, positions: np.ndarray) -> np.ndarray:
+        """
+        The rectified pixels world-frame positions on this plane fall on.
+
+        :param positions: The positions, as ``(n, 2)`` world-frame ``(x, y)`` points in
+            metres.
+        :return: The pixels, as ``(n, 2)`` fractional ``(column, row)`` points.
+        """
+        return (
+            np.asarray(positions, dtype=float)
+            - np.array([self.minimum_x, self.minimum_y])
+        ) / self.resolution
+
     def contains(self, x: float, y: float) -> bool:
         """
         Whether a world-frame position falls inside this patch.

@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from typing_extensions import List, Optional, Tuple
+from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import (
@@ -43,6 +43,11 @@ from experiments.montessori.perception.footprint import (
     Footprint,
     FootprintClassifier,
 )
+from experiments.montessori.perception.hypotheses import (
+    BeliefSource,
+    BelievedPlace,
+    PieceHypothesis,
+)
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.perception.orthophoto import (
     Orthophoto,
@@ -51,8 +56,13 @@ from experiments.montessori.perception.orthophoto import (
 )
 from experiments.montessori.perception.piece_matcher import PieceMatcher
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
-from experiments.montessori.pieces import HUE_RANGE, HUE_TOLERANCE, PIECE_HUES
-from experiments.montessori.semantics import ShapeSortingBoard
+from experiments.montessori.pieces import (
+    HUE_RANGE,
+    HUE_TOLERANCE,
+    KNOWN_PIECE_BY_CATEGORY,
+    PIECE_HUES,
+)
+from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
@@ -583,6 +593,12 @@ class LoosePieceDetector:
     cancellation is forgiving of the difference.
     """
 
+    hue_tolerance: int = HUE_TOLERANCE
+    """
+    How far a measured colour may sit from a piece's own before a colour seen at a place
+    stops suggesting that piece.
+    """
+
     def detect(
         self,
         orthophoto: Orthophoto,
@@ -590,41 +606,106 @@ class LoosePieceDetector:
         frame: RgbdFrame,
         reference_frame: Optional[KinematicStructureEntity],
         search: SurfaceSearch,
+        expected: Sequence[PieceHypothesis] = (),
     ) -> List[MontessoriShapeDetection]:
         """
-        Find the pieces resting on one surface.
+        Find the pieces resting on one surface, by evaluating what is expected there.
 
-        Colour says where to look and the edges say what is there. A piece seen from off
-        to one side hides none of itself but shows its sides as well as its top, so its
-        silhouette rectified onto the surface it rests on is the piece's footprint
-        together with its top face pushed away from the point directly below the camera
-        -- on this table that stretches a thirty millimetre piece by nearly twenty.
-        Rectifying onto the piece's top instead pushes the *base* the other way, towards
-        that point, so what the two silhouettes agree on is roughly the footprint, and
-        roughly is as far as colour gets on a table that reflects each piece back at the
-        camera.
-
-        The piece itself is then found by fitting the known pieces to the edges of the
-        view rectified onto their tops, where a piece's own top face lies at exactly its
-        footprint, undistorted and sharply bounded.
+        Every hypothesis this surface owns is fitted against the edges of the view
+        rectified onto a piece's top, where a piece's own top face lies at exactly its
+        footprint, undistorted and sharply bounded. A colour seen in the picture is one
+        source of hypotheses; whatever the caller already believes is another, and a
+        piece is found at a place it was expected whether or not any colour separated it
+        from what it rests on.
 
         :param orthophoto: The rectified view of the surface's own plane.
         :param top_orthophoto: The rectified view of the plane a piece's top stands on.
         :param frame: The camera data, for measuring how tall each piece stands.
         :param reference_frame: Frame the resulting poses are expressed in.
         :param search: The surface being searched, which settles what rests on it.
+        :param expected: What is believed to be on this surface already, from anything
+            other than this picture.
         :return: One detection per recognised piece.
         """
         edges = EdgeDistances.of(top_orthophoto)
         pieces = []
+        for hypothesis in [
+            *self._colors_seen_in(orthophoto, top_orthophoto, search),
+            *expected,
+        ]:
+            if not self._is_this_surfaces(hypothesis, search):
+                continue
+            piece = self._piece_at(
+                hypothesis, orthophoto, edges, frame, reference_frame, search
+            )
+            if piece is not None:
+                pieces.append(piece)
+        return pieces
+
+    @staticmethod
+    def _is_this_surfaces(hypothesis: PieceHypothesis, search: SurfaceSearch) -> bool:
+        """
+        Whether a hypothesis is one this pass may report.
+
+        A belief names the surface it is about, and a position on this plane belongs to
+        this surface only where nothing standing on it reaches -- which is what the
+        surface's own pass reports instead.
+
+        :param hypothesis: What is expected, and where.
+        :param search: The surface being searched.
+        """
+        return hypothesis.place.surface == search.surface.name and search.claims(
+            *hypothesis.place.center
+        )
+
+    def _colors_seen_in(
+        self,
+        orthophoto: Orthophoto,
+        top_orthophoto: Orthophoto,
+        search: SurfaceSearch,
+    ) -> List[PieceHypothesis]:
+        """
+        What the colours in this picture suggest is standing on the surface.
+
+        A piece seen from off to one side hides none of itself but shows its sides as
+        well as its top, so its silhouette rectified onto the surface it rests on is the
+        piece's footprint together with its top face pushed away from the point directly
+        below the camera -- on this table that stretches a thirty millimetre piece by
+        nearly twenty. Rectifying onto the piece's top instead pushes the *base* the
+        other way, so what the two silhouettes agree on is roughly the footprint, and
+        roughly is as far as colour gets on a table that reflects each piece back at the
+        camera. It is enough to say where to look.
+
+        An outline that reaches the edge of the region is passed over: only part of it
+        was seen, so neither how large it is nor what colour it wears was measured.
+
+        :param orthophoto: The rectified view of the surface's own plane.
+        :param top_orthophoto: The rectified view of the plane a piece's top stands on.
+        :param search: The surface being searched.
+        """
+        seen = []
         for hue in PIECE_HUES:
             for contour in self._outlines_wearing(hue, orthophoto, top_orthophoto):
-                piece = self._piece_at(
-                    contour, orthophoto, edges, frame, reference_frame, search
+                footprint = Footprint.from_contour(
+                    contour, orthophoto.region.resolution
                 )
-                if piece is not None:
-                    pieces.append(piece)
-        return pieces
+                if not self.piece_size.admits(footprint):
+                    continue
+                if not _wholly_within(contour, orthophoto):
+                    continue
+                seen.append(
+                    PieceHypothesis.of_color(
+                        place=BelievedPlace(
+                            surface=search.surface.name,
+                            center=orthophoto.contour_center(contour),
+                        ),
+                        hue=self.colors.measure_hue(
+                            orthophoto, _filled(contour, orthophoto)
+                        ),
+                        hue_tolerance=self.hue_tolerance,
+                    )
+                )
+        return seen
 
     def _outlines_wearing(
         self, hue: int, orthophoto: Orthophoto, top_orthophoto: Orthophoto
@@ -647,7 +728,7 @@ class LoosePieceDetector:
 
     def _piece_at(
         self,
-        contour: np.ndarray,
+        hypothesis: PieceHypothesis,
         orthophoto: Orthophoto,
         edges: EdgeDistances,
         frame: RgbdFrame,
@@ -655,38 +736,27 @@ class LoosePieceDetector:
         search: SurfaceSearch,
     ) -> Optional[MontessoriShapeDetection]:
         """
-        Recognise the piece one outline covers, if it is a piece of this surface's at
-        all.
+        Recognise the piece a hypothesis expects, if the picture bears it out.
 
-        An outline that reaches the edge of the region is passed over: only part of it
-        was seen, so how large it is and what shape it has were never measured. So is one
-        standing where another surface reaches, which that surface's own pass reports.
+        The outline the fit settled on is what the piece is measured by, rather than the
+        colour blob a hypothesis may have come from: it is the piece's own footprint,
+        and it is the only outline a hypothesis expected from anything but a colour has.
 
-        :param contour: The outline to read, in rectified pixels.
+        :param hypothesis: What is expected, and where it is believed to be.
         :param orthophoto: The rectified view of the surface's own plane.
         :param edges: How far each point of the top view lies from an edge the camera
             saw, which is what a piece's own outline is fitted to.
         :param frame: The camera data, for measuring how tall the piece stands.
         :param reference_frame: Frame the resulting pose is expressed in.
         :param search: The surface being searched.
-        :return: The piece, or None where the outline is not one of this surface's.
+        :return: The piece, or None where nothing expected follows the edges there.
         """
-        footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
-        if not self.piece_size.admits(footprint):
-            return None
-        if not _wholly_within(contour, orthophoto):
-            return None
-        x, y = orthophoto.contour_center(contour)
-        if not search.claims(x, y):
-            return None
-        match = self.matcher.match(
-            edges,
-            (x, y),
-            self.colors.measure_hue(orthophoto, _filled(contour, orthophoto)),
-        )
+        match = self.matcher.match(edges, hypothesis)
         if match is None:
             return None
-        height = _measure_height(contour, orthophoto, frame, self.piece_height)
+        outline = match.piece.turned_outline(match.yaw) + np.asarray(match.center)
+        fitted = _to_rectified_contour(outline, orthophoto)
+        height = _measure_height(fitted, orthophoto, frame, self.piece_height)
         return MontessoriShapeDetection(
             pose=Pose.from_xyz_rpy(
                 match.center[0],
@@ -695,12 +765,13 @@ class LoosePieceDetector:
                 yaw=match.yaw,
                 reference_frame=reference_frame,
             ),
-            footprint=footprint,
-            outline=match.piece.turned_outline(match.yaw) + np.asarray(match.center),
+            footprint=Footprint.from_contour(fitted, orthophoto.region.resolution),
+            outline=outline,
             category=match.piece.category,
             height=height,
             outline_agreement=match.outline_agreement,
             supporting_surface=search.surface.name,
+            hypothesis=hypothesis,
         )
 
 
@@ -790,6 +861,19 @@ def _to_world_outline(contour: np.ndarray, orthophoto: Orthophoto) -> np.ndarray
     )
 
 
+def _to_rectified_contour(outline: np.ndarray, orthophoto: Orthophoto) -> np.ndarray:
+    """
+    Express a world-frame outline as a contour of the rectified view it lies in, which
+    is where an outline is measured and where the depth behind it is read.
+
+    :param outline: The outline, as ``(n, 2)`` world-frame ``(x, y)`` points.
+    :param orthophoto: The rectified view it lies in.
+    :return: The contour, in rectified pixels.
+    """
+    pixels = orthophoto.region.to_pixels(outline)
+    return np.round(pixels).astype(np.int32).reshape(-1, 1, 2)
+
+
 # %% the pipeline
 
 
@@ -822,6 +906,14 @@ class MontessoriPerceptionPipeline:
     """
     Frame the detections' poses are expressed in, which must be the frame the camera's
     own pose was given in.
+    """
+
+    world: Optional[World] = None
+    """
+    The world the robot already keeps, which says what pieces it has placed in the
+    workspace and so where a look may expect to find them.
+
+    None where a look has no world behind it at all, as a recorded frame does.
     """
 
     board_detector: BoardDetector = field(default_factory=BoardDetector)
@@ -865,6 +957,7 @@ class MontessoriPerceptionPipeline:
             table=WorkspaceSurface.of_body(table, reference_frame),
             lid=WorkspaceSurface.of(board, reference_frame),
             reference_frame=reference_frame,
+            world=world,
         )
 
     @property
@@ -935,6 +1028,38 @@ class MontessoriPerceptionPipeline:
         )
         return standing_on_the_lid.hides(self.table.height, frame.camera_position)
 
+    def expected_pieces(self) -> List[PieceHypothesis]:
+        """
+        Where a piece may be, from what the robot knows before anything is segmented.
+
+        The world already places the pieces the robot has put in the workspace and names
+        which piece each one is, and a belief that names one piece at one place needs no
+        colour to separate it from what it rests on -- which is what a piece wearing
+        that surface's own hue never has. Anything believed more particularly than the
+        world can say is supplied by whoever asks for the look.
+
+        :return: One hypothesis per place a piece is expected.
+        """
+        if self.world is None:
+            return []
+        placed = []
+        for shape in self.world.get_semantic_annotations_by_type(MontessoriShape):
+            position = shape.root.global_pose.to_position().to_np()[:2]
+            if not self.table.region.contains(float(position[0]), float(position[1])):
+                continue
+            placed.extend(
+                PieceHypothesis(
+                    place=BelievedPlace(
+                        surface=surface.name,
+                        center=(float(position[0]), float(position[1])),
+                    ),
+                    source=BeliefSource.BODY_IN_THE_WORLD,
+                    candidates=(KNOWN_PIECE_BY_CATEGORY[shape.shape_category],),
+                )
+                for surface in (self.table, self.lid)
+            )
+        return placed
+
     def detect(self, frame: RgbdFrame) -> MontessoriScene:
         """
         Recognise everything in one frame.
@@ -942,8 +1067,11 @@ class MontessoriPerceptionPipeline:
         Every surface of the scene is searched on its own plane, so a piece standing on
         the board's lid is rectified from the lid rather than from the table eighty
         millimetres below it, where parallax would have pushed its two silhouettes past
-        each other. The same frame seen from two planes reports one thing twice, so what
-        every surface found is settled against the places already taken.
+        each other. Each pass evaluates what is expected on its own surface -- what its
+        colours suggest, and what the board and the world already say -- rather than
+        only what a colour separated. The same frame seen from two planes reports one
+        thing twice, so what every surface found is settled against the places already
+        taken.
 
         :param frame: The camera data to search.
         :return: The pieces, the board, and its holes.
@@ -951,6 +1079,7 @@ class MontessoriPerceptionPipeline:
         board = self.board_detector.detect(
             self.rectify(frame, self.lid.height), self.reference_frame
         )
+        expected = self.expected_pieces()
         pieces = []
         for search in self.searched_surfaces(board):
             pieces.extend(
@@ -963,6 +1092,7 @@ class MontessoriPerceptionPipeline:
                     frame,
                     self.reference_frame,
                     search,
+                    expected,
                 )
             )
         occupancy = Occupancy()
