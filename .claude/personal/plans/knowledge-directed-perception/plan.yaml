@@ -578,7 +578,7 @@ items:
     branch: claude/plan-item-kickoff-perception-ogf2g9
     pull_request_number: 227
     track: request-language
-    depends_on: [perception-backend]
+    depends_on: [perception-backend, predicates-answer-whether-they-hold]
     status: in_progress
     session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
     notes: >-
@@ -620,6 +620,85 @@ items:
       they already sit in: that item is in `surfaces` and depends only on one-detection-per-thing,
       so it lands first and defines the belief; this one supplies it from a predicate. The
       imagination-world rejection sampler is this item's alone and duplicates nothing.
+
+  - id: predicates-answer-whether-they-hold
+    title: "Let a predicate answer whether it holds, with the measurement behind it"
+    branch: null
+    pull_request_number: null
+    track: request-language
+    depends_on: []
+    status: not_started
+    notes: >-
+      The developer's direction on 2026-08-31, correcting a call #227 made: a relation that
+      computes a ratio should still be a Predicate. Its `__call__` answers a truth value, the
+      ratio is read from a method of its own, and a threshold field with a default is what turns
+      the one into the other. #227 had made InsideOf a SymbolicFunction instead, on the grounds
+      that Predicate.__call__ must return bool and three call sites read the ratio - which is
+      true of the mechanism and wrong about the intent. A threshold field answers both: the
+      callers that want the number call the method, and a statement that wants the relation gets
+      a predicate it can assert.
+
+      Applies to every relation in reasoning/predicates.py of that shape, not only InsideOf:
+      is_body_in_region answers the same kind of fraction, and the truth-valued relations that
+      are only @symbolic_functions today - support, contact, visibility, reachability, occupancy
+      - cannot be stated in a query at all while they are functions. krrood's own
+      symbolic_callable_to_function is the sanctioned way to keep the function spelling working
+      off one implementation, so no call site in coraplex, segmind or giskardpy has to change
+      with it.
+
+      Its own pull request off main, at the developer's direction, because it is a change to
+      semantic_digital_twin's vocabulary rather than to perception: the same placement
+      surface-finish-annotation already has. The knowledge-directed items that need it merge it
+      in rather than waiting for it to land, which is this plan's standing rule for depends_on.
+      perception-predicates-guide-the-search (#227) needs it and carries the InsideOf change this
+      item overturns, so that branch takes this one in and drops its own.
+
+  - id: search-clipped-to-a-predicates-region
+    title: "Clip the search to the region a spatial predicate allows"
+    branch: null
+    pull_request_number: null
+    track: request-language
+    depends_on: [perception-predicates-guide-the-search, pieces-looked-for-where-expected]
+    status: not_started
+    notes: >-
+      The developer's second mechanism on r3893602153, deferred out of #227 rather than dropped:
+      "one can interpret spatial predicates as specifying Regions (like the region class in
+      semdt) with extents to look at and excluding other regions, once can clip images and depth
+      to look only inside these regions."
+
+      That is the same economy #222's supporting-surface narrowing already buys, stated in the
+      world's vocabulary instead of an attribute's, and it is where narrowing stops being a
+      filter over what a detector returned and becomes less picture to search in the first place.
+
+      It waits on both parents for one reason each. perception-predicates-guide-the-search is
+      where a statement's predicates are read at all, and pieces-looked-for-where-expected owns
+      the believed place - a region of a named surface and an interval of yaw - which the roadmap
+      settled is defined once, there, and supplied by a predicate here. Building the type in
+      either branch alone is the duplication this repository has already paid for twice.
+
+  - id: imagination-world-rejects-what-a-predicate-refuses
+    title: "Reject what a predicate refuses, by testing it in a copy of the world"
+    branch: null
+    pull_request_number: null
+    track: request-language
+    depends_on: [perception-predicates-guide-the-search]
+    status: not_started
+    notes: >-
+      The developer's third mechanism on r3893499716, deferred out of #227 as a second pull
+      request's worth of work: a predicate no search algorithm covers is still answerable, by
+      detecting what the other conditions do reach, spawning what was found into a copy of the
+      world, evaluating the predicate there against real Body and SemanticAnnotations, and
+      deleting what it rejects.
+
+      It is what closes the gap #227 leaves open. A look reports sightings rather than the things
+      a relation is written over - a MontessoriShapeDetection is a dataclass, not a Body - so
+      #227 has a backend promise to check its own narrowing relations, and refuses any other
+      relation outright. Spawning the sightings into an imagination world is what gives every
+      other predicate something real to be evaluated against, so nothing has to be refused for
+      want of a subject.
+
+      Duplicates nothing: the roadmap's "Two items that meet at one type" records this mechanism
+      as this item's alone.
 
   - id: surface-finish-annotation
     title: "Say in the digital twin how a surface takes light"
