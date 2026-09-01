@@ -32,6 +32,20 @@ with #232 and #229's tip merged in.
   - [x] `watch_narrowing` states support, a direction, then the colour, and
         reports what each step finds.
   - [x] Re-measure the cost; push; rewrite the PR description and the roadmap.
+- [x] **Third round (2026-09-01), at the developer's ask**: one whole query,
+      read from where the camera stands, with pictures that show the answer.
+  - [x] `RgbdFrame.point_of_view`: the optical frame in the convention a pose
+        is stated in, so *right* is right on screen.
+  - [x] `PlacementRelation.allowed_part_of`, since no box holds the half space
+        a camera-relative direction leaves; each surface narrowed against the
+        stretch it was about to read.
+  - [x] The backend answers the things a statement *describes*, so the lid and
+        the hole are named in the query rather than fetched.
+  - [x] `Match.one_condition_at_a_time`, and `SearchNarrowing` reading one
+        statement instead of a list of conditions.
+  - [x] Draw what each step found, and the rectified plane through
+        `ViewFromAbove` so it reads the way the camera sees it.
+  - [x] Re-measure; push; rewrite the PR description, the roadmap and this.
 
 ## What the build found, beyond the plan
 
@@ -49,13 +63,20 @@ with #232 and #229's tip merged in.
 - **The board pass is narrowed by nothing**, since where the board stands is
   what every surface's extent is read from. Clipping it by a statement about
   what rests on it would let that statement decide how far the lid reaches.
-- **Right of the square hole leaves the cylinder, not the cube.** Both lid
-  pieces stand to the same side of that hole along the robot's left-right
-  axis; the cube is 25 mm in front of it and the cylinder 40 mm behind. So
-  the demonstration states *in front of*, and a test pins both answers.
-- **Cost, one run, all six captures**, against an unnarrowed look: 0.28x for
-  the surface, 0.43x for a direction alone, 0.30x for a 50 mm radius, 0.26x
-  for all of them with the colour. 20 pieces unnarrowed, 5 with everything.
+- **Right of the square hole leaves the cylinder, not the cube**, from the
+  camera's own point of view as well as from the robot's: the cylinder stands
+  34 mm to the right of that hole in the picture and 36 mm below it, the cube
+  28 mm above it and 6 mm to its left. So the demonstration states *above*,
+  and a test pins both answers.
+- **A camera-relative direction narrows nothing on its own.** It runs across
+  the world's axes, and no axis-aligned box holds a half space, so the clip
+  has to be asked about a stretch that is already bounded. That is
+  `allowed_part_of`, and without it the direction step would have left the
+  picture exactly as it found it.
+- **Cost, one run, all six captures**, against an unnarrowed look at 0.333
+  s/frame: 0.25x for the surface, 0.40x for a direction alone, 0.30x for a
+  50 mm radius, 0.25x for all of them with the colour. 20 pieces unnarrowed,
+  5 with everything.
 
 ## Notes to keep
 
@@ -65,6 +86,13 @@ with #232 and #229's tip merged in.
   quietly not checking.
 - **Cube and cylinder are both cyan** in this set, so colour never separates
   those two. What it narrows is two hues to one and six candidates to two.
+- **A rectified patch is indexed a quarter turn from the camera's view**, so a
+  window drawn straight off it makes a stated direction read wrong on screen.
+  `overlay.ViewFromAbove` already turned it; the demonstration uses it now.
+- **A description answerable from its own domain is answered, not refused.**
+  That reverses one krrood test's premise, deliberately: what a look cannot do
+  is *fetch* another variable, not read one the statement already gave a
+  domain for.
 - **First item on this plan with parents on two different stacks.** #227 and
   #232 diverge at #221. `expectations-from-events` and
   `competing-explanations` face the same divide and it only grows.
