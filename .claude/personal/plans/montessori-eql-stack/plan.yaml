@@ -113,6 +113,21 @@ items:
       real check. The five branches above this one, plus #176, #177 and #178, are all stale by the
       merge and were not restacked.
 
+      2026-09-01, round 22: CI on `3e9f3847` was red in six jobs; fixed in `82a2c0a8e`. Three causes
+      were the merge's own, all the same shape - `main` moved something and the auto-merge kept the
+      branch's use of where it used to be: `insert_shape_action.py` called
+      `translate_free_space_to_where_condition` and `navigation_map_at_target`, both moved onto
+      `GraphOfBoundingBoxes` / `PlanarGraphOfBoundingBoxes`; `PickUpAction` passed a view where
+      `MoveGripperMotion` wants a body; and the `experiments` ORM interface lost its `segmind`
+      dependency. A fourth was the merge's decision not to convert `cramera/requirements.txt` -
+      `main` has a test for that convention, so it is now declared inline, and `experiments`
+      declares the `cramera` and `segmind` it imports. Three further failures were the branch's own
+      and red before the merge (a `friction` argument, a run clock, and two test processes sharing
+      one temporary file while downloading the same mesh); all fixed.
+      `test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion` is still red and
+      untouched - the one failure recorded as pre-existing for many rounds, which needs the
+      workspace to chase.
+
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
     branch: cramera_eql_autocomplete
