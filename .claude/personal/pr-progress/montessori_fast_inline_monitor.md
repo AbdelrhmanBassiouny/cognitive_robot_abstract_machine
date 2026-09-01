@@ -476,3 +476,42 @@ cause is visible in the test source is worth reading before it is deferred.
     resolve; reverted that hunk. Second round running that it has damaged a docstring
     it had never been run over.
 
+### Round 25 -- the gripper, and a test with no fix behind it
+
+126. The bound worked: coraplex finished in **14:46**, 3 failed / 415 passed, and
+    `test_move_to_reach` -- the test that had been hanging for six hours -- passed.
+127. **Two failures and the Tracy demo hang were one bug.** `_goal_state` assigns the
+    object's half-width *in meters* to every finger connection. That is what the
+    Panda's model means (`type="slide" range="0 0.04"`, sliding along the axis the
+    width is measured on). Nothing else here does:
+    - Tracy (Robotiq 85): open `[0.0, 0.0]`, closed `[0.8, -0.8]` **radians**,
+      antisymmetric. Both knuckles got the same small positive number -> wrong unit,
+      wrong sign, never converges.
+    - PR2: open `[0.548, 0.548]`, closed `[0.0, 0.0]` -- the Panda's *sign* convention
+      in radians. Wrong the same way but silent: the number lands in range, so it
+      converges to a meaningless angle.
+128. Gated on `isinstance(connection, PrismaticConnection)` for every finger
+    connection. **The joint type, not a guess from the numbers** -- a prismatic joint's
+    position *is* a displacement in meters, which is the whole premise of the sizing.
+129. One predicate now decides the goal *and* the tightened threshold. They were
+    computed independently, so any fallback in one would have tightened the threshold
+    against a goal that was never resized.
+130. **Why the demo kept hanging after the tick bound**: it runs `ExecutionType.REAL`,
+    and `_execute_real` is a single call into giskard that waits. The budget added for
+    `_execute_simulation` does not reach it. Worth remembering before assuming a bound
+    covers every execution path.
+131. The PR2 test asserted the *threshold*, never the goal -- which is exactly why the
+    units bug survived there. Retargeted to assert the new contract. Note the
+    tight-threshold behaviour is now pinned only end-to-end by the montessori Panda
+    suite; coraplex has no prismatic gripper to test against.
+132. **The third failure was a TDD cycle nobody finished.**
+    `test_spin_thread_ends_quietly_when_somebody_else_ends_the_context` came in with
+    `08257863` and `git diff origin/main...HEAD -- coraplex/src/coraplex/demonstrations.py`
+    is *empty* -- the test was written, the fix never was. It has never passed. An
+    earlier note here called it pre-existing "on this branch and its parent alike",
+    which was true and misleading: the parent is another branch of this same stack.
+    **Check whether a "pre-existing" failure has a fix behind it at all.**
+133. `executor.spin` ran as the thread target; rclpy raises `ExternalShutdownException`
+    out of it when the context's owner ends it and, unlike the executor's own shutdown,
+    does not swallow it. `_spin_until_the_context_ends` returns on it.
+
