@@ -303,7 +303,7 @@ items:
   - id: chain-signature-reads-attribute-only-names
     title: "Bug: a structural signature cannot tell two chains apart unless every step is an attribute"
     branch: claude/match-query-ergonomics-chain-tozhhq
-    pull_request_number: null
+    pull_request_number: 248
     track: mapping-semantics
     session: https://claude.ai/code/session_01UqhcpSE2EKFycf3vtvU25c
     depends_on:
