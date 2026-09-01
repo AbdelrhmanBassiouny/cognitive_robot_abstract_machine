@@ -113,7 +113,7 @@ def test_the_skill_reports_the_pending_links_with_the_command_that_renders_them(
     """
     skill = MAINTENANCE_SKILL_DOCUMENT.read_text()
 
-    assert PendingPromotionsCommand.invoked_as in skill
+    assert PendingPromotionsCommand().invoked_as in skill
 
 
 def test_the_skill_rests_on_no_notification_to_deliver_its_links():

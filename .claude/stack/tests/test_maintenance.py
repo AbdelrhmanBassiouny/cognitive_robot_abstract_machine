@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import inspect
 import json
 import os
 import subprocess
@@ -55,6 +56,7 @@ from maintenance_commands import (
     BoardCommand,
     MaintenanceCommand,
     MaintenancePass,
+    PendingPromotionsCommand,
     RestackCommand,
     RunReportCommand,
 )
@@ -1913,6 +1915,19 @@ def test_an_unknown_command_is_a_usage_error(fork_checkout: ForkCheckout):
     )
 
     assert result.returncode == MaintenanceExitCode.USAGE
+
+
+def test_the_pending_promotions_command_declares_itself_with_ordinary_properties():
+    """
+    Nothing reads a command off the class: :data:`COMMANDS` builds every one of them,
+    and the parser is handed those instances. So a command needs no descriptor of its
+    own to answer, and one that uses a class-level descriptor answers only where that
+    descriptor is still defined.
+    """
+    for name in ("invoked_as", "description"):
+        assert isinstance(
+            inspect.getattr_static(PendingPromotionsCommand, name), property
+        )
 
 
 def test_every_command_class_is_one_reachable_command():

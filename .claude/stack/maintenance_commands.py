@@ -283,15 +283,15 @@ class PendingPromotionsCommand(MaintenanceCommand):
     Reports every upstream link that is built and still waiting to be opened.
     """
 
-    @classproperty
-    def invoked_as(cls) -> str:
+    @property
+    def invoked_as(self) -> str:
         """
         The name it is invoked by on the command line.
         """
         return "pending-promotions"
 
-    @classproperty
-    def description(cls) -> str:
+    @property
+    def description(self) -> str:
         """
         What it does, as ``--help`` puts it.
         """
