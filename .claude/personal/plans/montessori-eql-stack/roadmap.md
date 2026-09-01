@@ -1510,3 +1510,58 @@ CRAM workspace, so nothing could count worlds. The reasoning is exact about *wha
 branch adds* (one session-held world, and nothing else) but not about how close main's
 own baseline sits to 30. CI is the check.
 
+## 2026-09-01: the six-hour coraplex job was an unbounded tick loop
+
+The developer reported the coraplex and examples jobs running for hours. They were not
+slow: `test_each_lib (coraplex)` had been starting, producing nothing, and being killed
+by GitHub's six-hour job limit on every push since the main merge. The workflows declare
+no `concurrency` group, so each superseded run kept burning a runner for its full six
+hours; six of them were cancelled by hand.
+
+The log names the hang exactly. `test_training_environments.py::test_move_to_reach`
+starts on `gw1` at 07:56:55 and never reports again; `gw0` drains its own queue by
+07:57:15 and the session waits on `gw1` until cancellation. That test is `main`'s,
+untouched by this branch: it asks `MoveToReachTrainingEnvironment` for two randomly
+sampled episodes and asserts only `success_rate >= 0.0`, precisely because some sampled
+targets are unreachable and are *expected* to fail.
+
+What turns an unreachable target into a failure rather than a hang is the tick budget,
+and this branch had removed it. `main` ticks
+`while counter < len(self.motion_mappings) * 2000` and then raises `MotionDidNotFinish`.
+Making that budget configurable here spelled its default `None` and read `None` as "tick
+until the motion ends" -- so every caller that did not ask for a budget got `while True`.
+The only callers that ask are the three montessori scripts; the whole coraplex suite,
+and every other consumer, ran unbounded.
+
+`d21071ca5` makes the budget a number again, defaulting to the 2000 `main` hardcoded and
+now named `DEFAULT_MAX_TICKS_PER_MOTION_MAPPING`, and deletes the `None`-means-unbounded
+path so no configuration can produce a non-terminating loop. `ExecutionEnvironment`'s own
+`max_ticks_per_motion_mapping` keeps meaning "leave the budget unchanged", which is a
+different thing and stays `Optional`. The bound moved onto a `tick_limit` property so the
+loop and the test that pins it read one statement of it.
+
+### Why the test is on the bound rather than on the hang
+
+The behaviour is "a motion that never ends gives up", but exercising that with the
+default budget means 4000 ticks of a real QP solve. Worse, a test that *sets* a small
+budget passes against the broken code too, since the bug is only in the default. So the
+test asserts what actually regressed: with no environment budget set, `tick_limit` is
+finite and equals `len(motion_mappings) * DEFAULT_MAX_TICKS_PER_MOTION_MAPPING`. A second
+test pins that an environment's budget replaces the default and is restored on exit.
+
+### The same shape, left alone
+
+`SimulationTimePacer.sleep()` (`giskardpy/executor.py`, added by this branch) spins
+`while self.simulation_clock() < self._next_target_time` with no bound, so a stalled
+simulation clock blocks a tick forever and the tick budget above cannot help. It is not
+reachable from any test -- only the three montessori demo scripts set
+`context.simulation_clock` -- so it is not what CI was hitting, but it is a real hang in
+the demo. Left for the developer: what a stalled simulation should do is a policy
+decision, not a fix to guess at.
+
+### Environment
+
+Still no CRAM workspace, so neither the fix nor its tests could be run: verified by
+byte-compilation, a pyflakes differential (no new findings), and reading `main`'s own
+version of the loop. CI on `d21071ca5` is the check.
+

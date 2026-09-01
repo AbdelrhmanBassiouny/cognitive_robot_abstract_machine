@@ -152,6 +152,20 @@ items:
       in `4150026be`; the world-budget half is reasoned rather than measured, since the container has
       no CRAM workspace.
 
+      2026-09-01, round 25: the developer reported the coraplex and examples jobs running for hours.
+      They were hanging, not slow - killed by GitHub's six-hour job limit on every push since the
+      merge, with no `concurrency` group to stop superseded runs (six were cancelled by hand). The
+      log names it: `test_training_environments.py::test_move_to_reach` starts on one xdist worker
+      and never reports again. That test is `main`'s and untouched here; it samples random reach
+      targets and tolerates failures, and what turns an unreachable target into a failure rather
+      than a hang is the tick budget - which this branch had removed. Making the budget
+      configurable spelled its default `None` and read `None` as unbounded, so every caller that
+      did not ask for a budget (the whole coraplex suite; only the three montessori scripts ask)
+      ticked `while True` where `main` ticks 2000 per motion mapping and then raises
+      `MotionDidNotFinish`. `d21071ca5` restores the bound as a named default and deletes the
+      unbounded path. Left flagged, not fixed: `SimulationTimePacer.sleep()` waits on a simulation
+      clock with no bound of its own, unreachable from tests but a real hang in the demo.
+
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
     branch: cramera_eql_autocomplete
