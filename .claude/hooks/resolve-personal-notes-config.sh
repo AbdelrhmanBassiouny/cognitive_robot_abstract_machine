@@ -361,6 +361,10 @@ STACK_DIRECTORY=".claude/stack"
 # stack.py: read-only stacked-PR status tool (status/check/next/restack-plan)
 # - see its own module docstring and STACK_DIRECTORY/README.md.
 STACK_SCRIPT="${STACK_DIRECTORY}/stack.py"
+# integration.py: builds the personal integration branch - the upstream base with
+# every in-flight stack tip merged on top, regenerated from scratch on demand - and
+# reports which tips it could not fit. See its own module docstring.
+INTEGRATION_SCRIPT="${STACK_DIRECTORY}/integration.py"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
 STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
