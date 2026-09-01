@@ -1114,3 +1114,55 @@ description. Per the personal-notes review-comment convention, the thread stays
 unresolved until that answer lands — resolving it now would claim work not yet done or
 agreed to. No plan.yaml status change: PR #196 is otherwise unblocked, so `in_progress`
 still describes it accurately.
+
+## 25. 2026-09-01: the steps of a chain now say what they are
+
+`/plan-item-resolve match-query-ergonomics chain-signature-reads-attribute-only-names`, in
+auto mode. Branch `claude/match-query-ergonomics-chain-tozhhq`, PR #248 (draft, `bug`), off
+`main` at `2318e206`.
+
+**The blocker was discharged rather than solved.** The item recorded "needs #182's
+per-subclass `_rebuild_on_` to have landed"; #182 merged on 2026-08-24, so the hook and
+#186's mapping hierarchy are both on `main` and the dependency check reports
+`merged` / `is_ready: true`. Nothing else was blocking it - the item had simply not been
+looked at since section 21 wrote the blocker.
+
+**Re-measured on today's `main` before changing anything**, and the mechanism is worse
+than "the names do not exist":
+
+```
+order.lines[0].price -> ('', <root>, (('lines', Order), (Order.lines[0]._attribute_name_, …), ('price', Line)))
+order.lines[1].price -> ('', <root>, (('lines', Order), (Order.lines[1]._attribute_name_, …), ('price', Line)))
+equal: True
+```
+
+The two printed paths *differ* and still compare equal, because the reads on the index step
+produce symbolic attributes and comparing two of those builds a `Comparator`, which is
+truthy. So the signature was not merely coarse; it answered a question it had never
+evaluated.
+
+**Each kind of mapping now states its own `_structural_key_`** - its kind together with the
+arguments it was written with - abstract on `MappedVariable` for the reason section 22 gave
+for `_rebuild_on_`: a mapping added later must not be able to inherit a key that says
+nothing about what distinguishes it. `Attribute` states its name and owning class,
+`IndexByValue` its key, `IndexByExpression` the identifier of its key expression, `Call` its
+arguments, and `FlatVariable` its own identity - the identity axis section 13 established,
+since a flattening names no element and each one written ranges over the elements on its
+own. Expression-valued arguments are identified rather than held, the same rule
+`_rerooted_chains_` already records for its memo key.
+
+**A test that could not fail first, and why that is the plan's own subject.** The core
+tests written against `_structural_key_` *passed* before the property existed: the missing
+name became a symbolic attribute and `== <tuple>` built a truthy `Comparator`. Only the
+four assembler-level tests failed on `main`, so those are what pinned the bug first. This
+is section 18's hazard again, met while fixing the very read that causes it.
+
+**What this pull request cannot show, stated rather than papered over.**
+`_expression_signature` is reachable only through `_is_order_key`, whose caller requires an
+`Aggregator` order key, and on `main` every aggregate's chain is still the bogus
+`_chain_expression_` read #196 fixes. So `sum(o.lines[0].price)` vs `sum(o.lines[1].price)`
+becomes separable only once both land: #248 closes the chain half, #196 the aggregate half.
+Not stacked on #196 either, since it is a draft, which is not what this workflow stacks on;
+the two touch adjacent lines of one method, so whichever lands second resolves that hunk.
+
+Verification: `test/krrood_test/test_eql` 1276 passed, 3 skipped.
