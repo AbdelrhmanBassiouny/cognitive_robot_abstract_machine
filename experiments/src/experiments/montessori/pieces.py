@@ -310,6 +310,15 @@ KNOWN_PIECE_BY_CATEGORY: Dict[MontessoriShapeCategory, KnownPiece] = {
 :data:`KNOWN_PIECES` keyed by the shape each one is.
 """
 
+LARGEST_PIECE_RADIUS: float = max(piece.radius for piece in KNOWN_PIECES)
+"""
+How far, in metres, the widest piece in this set reaches from its own centre.
+
+A piece is searched for by where its centre may be but recognised by its whole outline,
+so this is how far past that a picture has to reach for the fit to have anything to
+measure at the piece's far side.
+"""
+
 PIECE_HUES: Tuple[int, ...] = tuple(sorted({piece.hue for piece in KNOWN_PIECES}))
 """
 Every colour a loose piece in this set wears.

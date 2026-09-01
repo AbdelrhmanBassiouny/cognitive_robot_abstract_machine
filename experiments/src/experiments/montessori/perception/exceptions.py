@@ -281,3 +281,36 @@ class NothingIsHiddenFromBelow(DataclassException):
             "Check the camera's pose and the frame it is given in: a camera mounted "
             "above the scene reads higher than everything standing in it."
         )
+
+
+@dataclass
+class RegionsDoNotMeet(DataclassException):
+    """
+    Raised when the stretch two patches of a plane have in common is asked for, and they
+    have none.
+    """
+
+    bounds: Tuple[float, float, float, float]
+    """
+    The first patch's bounds, as ``(minimum_x, maximum_x, minimum_y, maximum_y)`` in
+    metres.
+    """
+
+    other_bounds: Tuple[float, float, float, float]
+    """
+    The second patch's bounds, in the same order.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"A patch spanning x {self.bounds[0]:.3f}..{self.bounds[1]:.3f}, "
+            f"y {self.bounds[2]:.3f}..{self.bounds[3]:.3f} shares no ground with one "
+            f"spanning x {self.other_bounds[0]:.3f}..{self.other_bounds[1]:.3f}, "
+            f"y {self.other_bounds[2]:.3f}..{self.other_bounds[3]:.3f}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Ask whether the two meet before asking what they have in common: a look "
+            "narrowed past the surface it searches has nothing left to rectify."
+        )

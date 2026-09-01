@@ -14,6 +14,7 @@ from typing_extensions import Optional, Type
 
 from experiments.montessori.perception.detections import MontessoriDetection
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.world_entity import Region
 
 # %% what to look for
 
@@ -41,6 +42,16 @@ class SceneRequest:
     """
     The surface to search, by the name the world knows it by, or ``None`` to search
     every surface of the scene.
+    """
+
+    region: Optional[Region] = None
+    """
+    The region of the world the thing sought is said to lie in, or ``None`` where the
+    statement says none.
+
+    The world entity itself rather than a patch in metres: what a region reaches is read
+    where the frame the detections are reported in is known, which is the look rather
+    than the statement.
     """
 
     def wants(self, detection_type: Type[MontessoriDetection]) -> bool:

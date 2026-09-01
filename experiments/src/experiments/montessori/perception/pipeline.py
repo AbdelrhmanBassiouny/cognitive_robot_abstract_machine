@@ -52,6 +52,7 @@ from experiments.montessori.perception.orthophoto import (
     Orthophoto,
     OrthophotoProjector,
     WorkspaceBox,
+    WorkspaceRegion,
 )
 from experiments.montessori.perception.piece_matcher import PieceMatcher
 from experiments.montessori.perception.scene_request import SceneRequest
@@ -971,25 +972,57 @@ class MontessoriPerceptionPipeline:
         The space this pipeline looks at: its own patch of table, and the room above it
         a piece or the board can stand in.
         """
+        return self.workspace_over(self.table.region)
+
+    def workspace_over(self, region: WorkspaceRegion) -> WorkspaceBox:
+        """
+        The space standing over one patch of this pipeline's table.
+
+        A look narrowed to less than the whole table stands over less of it, so what a
+        window shows of the scene narrows with the search rather than staying the widest
+        the pipeline could have searched.
+
+        :param region: The patch of table to stand over.
+        """
         return WorkspaceBox(
-            region=self.table.region,
+            region=region,
             minimum_height=self.table.height,
             maximum_height=self.table.height + self.headroom,
         )
 
-    def rectify(self, frame: RgbdFrame, height: float) -> Orthophoto:
+    def rectify(
+        self,
+        frame: RgbdFrame,
+        height: float,
+        region: Optional[WorkspaceRegion] = None,
+    ) -> Orthophoto:
         """
         Rectify a frame onto a horizontal plane, which is where outlines lying in that
         plane are measured.
 
-        Every plane is rectified over the same patch of table, so the board is found
-        wherever on it the board happens to stand.
-
         :param frame: The camera data to rectify.
         :param height: Height of the plane, above the world frame's origin, in metres.
+        :param region: The patch of the plane to rectify, or None for the whole stretch
+            of table this pipeline looks at.
         :return: That plane's top-down view.
         """
-        return OrthophotoProjector(region=self.table.region).project(frame, height)
+        patch = self.table.region if region is None else region
+        return OrthophotoProjector(region=patch).project(frame, height)
+
+    def stated_region(self, request: SceneRequest) -> Optional[WorkspaceRegion]:
+        """
+        The stretch of the world a look's own statement says the thing sought lies in.
+
+        A region is a world entity, so what it means in metres is read here, where the
+        frame the detections are reported in is known, rather than where the statement
+        was compiled.
+
+        :param request: What the look was asked for.
+        :return: The patch the statement names, or None where it names none.
+        """
+        if request.region is None:
+            return None
+        return WorkspaceSurface.of_region(request.region, self.reference_frame).region
 
     def searched_surfaces(
         self,
@@ -1001,21 +1034,34 @@ class MontessoriPerceptionPipeline:
 
         The table is everything but where the board stands; the board's lid is the board
         itself, and only where it was actually seen. A request naming one of them drops
-        the other, so a look asked about one surface rectifies and searches one plane.
+        the other, so a look asked about one surface rectifies and searches one plane,
+        and a region the statement names cuts each remaining plane down to where the
+        thing sought may actually be.
 
         :param board: The board, or None if it was not in view.
         :param request: What the look was asked for.
-        :return: One entry per surface a piece can be found on and the request asked
-            about.
+        :return: One entry per surface a piece can be found on that the request asked
+            about and left anything of to search.
         """
+        narrowed_to = self.stated_region(request)
         if board is None:
-            searches = [SurfaceSearch(surface=self.table)]
+            searches = [SurfaceSearch(surface=self.table, narrowed_to=narrowed_to)]
         else:
             searches = [
-                SurfaceSearch(surface=self.table, supported_surfaces=(board,)),
-                SurfaceSearch(surface=self.lid, boundary=board),
+                SurfaceSearch(
+                    surface=self.table,
+                    supported_surfaces=(board,),
+                    narrowed_to=narrowed_to,
+                ),
+                SurfaceSearch(
+                    surface=self.lid, boundary=board, narrowed_to=narrowed_to
+                ),
             ]
-        return [search for search in searches if request.searches(search.surface.name)]
+        return [
+            search
+            for search in searches
+            if request.searches(search.surface.name) and search.is_searched
+        ]
 
     def table_hidden_by(
         self, board: MontessoriBoardDetection, frame: RgbdFrame
@@ -1089,15 +1135,29 @@ class MontessoriPerceptionPipeline:
 
         The board is found whatever was asked for: it is the answer to a request about
         the board itself or its holes, and it is what says how far each surface reaches
-        for a request about the pieces.
+        for a request about the pieces. It is therefore looked for across everything the
+        statement allows rather than across one surface, since where the board stands is
+        what a narrowing to its own lid is read from.
+
+        Each piece pass then rectifies only the stretch its own surface reaches into,
+        which is where a narrowing stops being a filter over what came back and becomes
+        less picture to search.
 
         :param frame: The camera data to search.
         :param request: What the look was asked for, unnarrowed by default.
         :return: The pieces, the board, and its holes, as far as the request asked for
             them.
         """
+        stated = self.stated_region(request)
+        if stated is not None and not self.table.region.meets(stated):
+            return MontessoriScene(shapes=[], board=None)
+        searched = (
+            self.table.region
+            if stated is None
+            else self.table.region.intersection(stated)
+        )
         board = self.board_detector.detect(
-            self.rectify(frame, self.lid.height), self.reference_frame
+            self.rectify(frame, self.lid.height, searched), self.reference_frame
         )
         expected = self.expected_pieces()
         pieces = []
@@ -1105,10 +1165,11 @@ class MontessoriPerceptionPipeline:
             for search in self.searched_surfaces(board, request):
                 pieces.extend(
                     self.piece_detector.detect(
-                        self.rectify(frame, search.surface.height),
+                        self.rectify(frame, search.surface.height, search.region),
                         self.rectify(
                             frame,
                             search.surface.height + self.piece_detector.piece_height,
+                            search.region,
                         ),
                         frame,
                         self.reference_frame,

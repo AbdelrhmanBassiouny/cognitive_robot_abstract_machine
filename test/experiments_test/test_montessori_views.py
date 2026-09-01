@@ -19,7 +19,10 @@ from experiments.montessori.perception.colors import (
     DetectionColor,
 )
 from experiments.montessori.perception.detections import MontessoriScene
-from experiments.montessori.perception.exceptions import WorkspaceOutOfView
+from experiments.montessori.perception.exceptions import (
+    RegionsDoNotMeet,
+    WorkspaceOutOfView,
+)
 from experiments.montessori.perception.orthophoto import (
     OrthophotoProjector,
     WorkspaceRegion,
@@ -391,3 +394,67 @@ def test_the_view_from_above_turns_its_image_and_its_pixels_together(
     turned = view.to_image()
     assert turned.shape[:2] == orthophoto.image.shape[1::-1]
     assert (turned[round(turned_pixel[1]), round(turned_pixel[0])] == mark).all()
+
+
+# %% narrowing a patch of a plane
+
+
+def test_two_patches_that_share_ground_meet():
+    table = WorkspaceRegion(minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75)
+    lid = WorkspaceRegion(minimum_x=0.6, maximum_x=0.9, minimum_y=0.0, maximum_y=0.3)
+
+    assert table.meets(lid)
+    assert lid.meets(table)
+
+
+def test_two_patches_that_share_no_ground_do_not_meet():
+    table = WorkspaceRegion(minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75)
+    elsewhere = WorkspaceRegion(minimum_x=2.0, maximum_x=2.5, minimum_y=0.0, maximum_y=0.3)
+
+    assert not table.meets(elsewhere)
+
+
+def test_the_ground_two_patches_share_is_the_smaller_of_each_bound():
+    table = WorkspaceRegion(minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75)
+    half = WorkspaceRegion(minimum_x=0.6, maximum_x=1.6, minimum_y=-0.2, maximum_y=0.2)
+
+    shared = table.intersection(half)
+
+    assert shared == WorkspaceRegion(
+        minimum_x=0.6,
+        maximum_x=1.35,
+        minimum_y=-0.2,
+        maximum_y=0.2,
+        resolution=table.resolution,
+    )
+
+
+def test_a_patch_narrowed_by_one_it_does_not_meet_is_refused():
+    table = WorkspaceRegion(minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75)
+    elsewhere = WorkspaceRegion(minimum_x=2.0, maximum_x=2.5, minimum_y=0.0, maximum_y=0.3)
+
+    with pytest.raises(RegionsDoNotMeet):
+        table.intersection(elsewhere)
+
+
+def test_a_grown_patch_reaches_the_margin_further_on_every_side():
+    patch = WorkspaceRegion(minimum_x=0.6, maximum_x=0.9, minimum_y=0.0, maximum_y=0.3)
+    margin = 0.05
+
+    grown = patch.grown_by(margin)
+
+    assert grown.minimum_x == pytest.approx(patch.minimum_x - margin)
+    assert grown.maximum_x == pytest.approx(patch.maximum_x + margin)
+    assert grown.minimum_y == pytest.approx(patch.minimum_y - margin)
+    assert grown.maximum_y == pytest.approx(patch.maximum_y + margin)
+    assert grown.resolution == patch.resolution
+
+
+def test_a_patch_read_off_an_outline_spans_exactly_that_outline():
+    outline = np.array([[0.7, 0.1], [0.8, 0.15], [0.75, 0.25], [0.65, 0.2]])
+
+    patch = WorkspaceRegion.of_outline(outline)
+
+    assert patch == WorkspaceRegion(
+        minimum_x=0.65, maximum_x=0.8, minimum_y=0.1, maximum_y=0.25
+    )
