@@ -64,6 +64,12 @@ class HookScript(StrEnum):
     Runs the whole first-time setup non-interactively.
     """
 
+    SETUP_STEPS = "setup_steps.py"
+    """
+    Prints the setup steps that live outside the clone - labels, access, environment
+    variables - filled in for the fork the clone points at.
+    """
+
     SESSION_START = "session-start.sh"
     """
     The SessionStart hook, which writes ``CLAUDE.local.md`` and prints its summary.
