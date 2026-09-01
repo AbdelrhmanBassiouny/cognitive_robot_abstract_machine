@@ -373,8 +373,21 @@ More than round 21 assumed. With a hand-built 3.12 venv (`pytest`, `packaging`,
 Anything importing `semantic_digital_twin` proper still cannot: `rustworkx`, then
 numpy, trimesh, casadi.
 
-### Still red
+### The one that looked like it needed the workspace, and did not
 
-`test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion` -- frameless
-matrix into a connection origin. Pre-existing, reproduces on `stutter_montessori`,
-needs the workspace. Untouched.
+`test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion`, red since
+before the merge base, was a single missing argument. `move_to` assigned a frameless
+matrix to the shape's connection origin; that setter transforms into the parent frame
+and so needs the frame stated, and it raised on the *first* move -- the test never
+reached the movement it exists to check, nor its three assertions.
+
+The frame is not a guess: the coordinates come from `global_transform`, so they are the
+world root's, and `MontessoriWorld._spawn_free_body` joints a movable shape straight to
+`world.root` and writes its own origin with exactly that frame. The transform is an
+identity, which is what made it safe to push from here. `085f160f9`.
+
+Open: whether the three assertions hold, now that they run at all. CI answers that.
+
+Worth generalising: "needs the workspace to chase" was wrong here, and the tell was
+that the traceback names the *test's own* line, not production code. A failure whose
+cause is visible in the test source is worth reading before it is deferred.
