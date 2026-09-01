@@ -232,7 +232,7 @@ def test_each_known_piece_is_recognised_from_its_own_outline(piece: KnownPiece):
     assert match.piece.category is piece.category
     assert match.outline_agreement > CLEAN_FIT_AGREEMENT
     assert match.yaw == pytest.approx(
-        piece.smallest_equivalent_turn(placed), abs=matcher.angle_step
+        piece.smallest_equivalent_turn(placed), abs=matcher.fitter.angle_step
     )
 
 
@@ -245,7 +245,7 @@ def test_a_piece_turned_by_its_own_period_looks_untouched(piece: KnownPiece):
     )
 
     assert match.piece.category is piece.category
-    assert match.yaw == pytest.approx(0.0, abs=matcher.angle_step)
+    assert match.yaw == pytest.approx(0.0, abs=matcher.fitter.angle_step)
 
 
 def test_an_orientation_is_reported_as_the_smallest_turn_that_reaches_it():
@@ -255,7 +255,7 @@ def test_an_orientation_is_reported_as_the_smallest_turn_that_reaches_it():
 
     match = matcher.match(_drawn(cube.turned_outline(placed)), _believing(hue=cube.hue))
 
-    assert match.yaw == pytest.approx(math.radians(-10), abs=matcher.angle_step)
+    assert match.yaw == pytest.approx(math.radians(-10), abs=matcher.fitter.angle_step)
 
 
 @pytest.mark.parametrize("piece", KNOWN_PIECES, ids=_piece_id)
@@ -275,8 +275,8 @@ def test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for(
     )
 
     assert match.center == PlanarPoint(
-        pytest.approx(stands_at[0], abs=matcher.step),
-        pytest.approx(stands_at[1], abs=matcher.step),
+        pytest.approx(stands_at[0], abs=matcher.fitter.step),
+        pytest.approx(stands_at[1], abs=matcher.fitter.step),
     )
 
 
