@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+import missing_requirements
 from scratch_repository import (
     NOTES_BRANCH,
     PERSONAL_GIT_IDENTITY_PATH,
@@ -135,6 +136,7 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     scratch_repository.install_hook_scripts(
         "resolve-personal-notes-config.sh", "check-setup.sh"
     )
+    scratch_repository.install_hook_modules(missing_requirements)
 
     scratch_repository.write_setup_prerequisites()
     scratch_repository.write("CLAUDE.local.md", "notes\n")

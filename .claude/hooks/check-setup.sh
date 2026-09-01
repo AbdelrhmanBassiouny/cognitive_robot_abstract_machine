@@ -211,31 +211,15 @@ fi
 
 # Derived from requirements.txt itself rather than a second hand-written list
 # of import names, which would silently go stale the moment that file changes.
-# Distribution names are what requirements.txt states, so they're what gets
-# looked up - no pyyaml/yaml-style mapping to maintain anywhere.
+# The reading is missing_requirements.py's, shared with every other script
+# that asks the same question of a different requirements file.
 if ! command -v python3 > /dev/null 2>&1; then
   report dashboard_dependencies needs-setup "python3 is not on PATH, so the plan-dashboard scripts cannot run at all"
 elif [ ! -f "${PLAN_DASHBOARD_REQUIREMENTS_FILE}" ]; then
   report dashboard_dependencies needs-setup "cannot check: ${PLAN_DASHBOARD_REQUIREMENTS_FILE} is missing"
 else
-  MISSING_DEPENDENCIES="$(python3 - "${PLAN_DASHBOARD_REQUIREMENTS_FILE}" <<'PYTHON'
-import re
-import sys
-from importlib.metadata import PackageNotFoundError, distribution
-
-missing = []
-for line in open(sys.argv[1], encoding="utf-8"):
-    requirement = line.split("#", 1)[0].strip()
-    if not requirement:
-        continue
-    name = re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0]
-    try:
-        distribution(name)
-    except PackageNotFoundError:
-        missing.append(name)
-print(" ".join(missing))
-PYTHON
-)"
+  MISSING_DEPENDENCIES="$(python3 "${PROJECT_ROOT}/${MISSING_REQUIREMENTS_SCRIPT}" \
+    "${PLAN_DASHBOARD_REQUIREMENTS_FILE}")"
   if [ -z "${MISSING_DEPENDENCIES}" ]; then
     report dashboard_dependencies ok "every requirement in ${PLAN_DASHBOARD_REQUIREMENTS_FILE} is installed"
   else

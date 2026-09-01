@@ -1,0 +1,5 @@
+# What the Python half of the hooks needs, and the one place it is written down:
+# check-setup.sh and plan-size-report.sh both report what is missing by reading
+# this file, so a dependency added here is checked everywhere without a second
+# list being updated to match.
+pyyaml>=6
