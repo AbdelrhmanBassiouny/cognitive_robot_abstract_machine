@@ -1565,3 +1565,65 @@ Still no CRAM workspace, so neither the fix nor its tests could be run: verified
 byte-compilation, a pyflakes differential (no new findings), and reading `main`'s own
 version of the loop. CI on `d21071ca5` is the check.
 
+## 2026-09-01: one gripper bug behind two failures and the demo hang
+
+With the tick loop bounded, the coraplex job finished for the first time since the main
+merge -- 14:46, 3 failed / 415 passed -- and `test_move_to_reach`, the test that had been
+hanging, passed. The Tracy *demo* job went on hanging, because it runs
+`ExecutionType.REAL` and `_execute_real` hands the motion to giskard and waits, with no
+budget of its own.
+
+Two of the three failures and that hang are the same bug.
+`MoveGripperMotion._goal_state` measures the grasped object's half-width in meters and
+assigns it to every finger connection. That is exactly what the Panda's model means: its
+fingers are `type="slide" range="0 0.04"` prismatic joints sliding along the very axis
+the width is measured along, closed at `0.0` and open at `0.04`. No other gripper in this
+workspace says that:
+
+- **Tracy** (Robotiq 85): open `[0.0, 0.0]`, closed `[0.8, -0.8]` -- revolute knuckles in
+  radians, and antisymmetric. The sizing commanded *both* knuckles the same small
+  positive number, which is neither the right unit nor the right sign, so `CloseGripper`
+  could not converge. Simulated, that became `MotionDidNotFinish` once the tick bound
+  existed; on the real path it is an unbounded wait inside giskard, which is the demo
+  hang.
+- **PR2**: open `[0.548, 0.548]`, closed `[0.0, 0.0]` -- the Panda's *sign* convention
+  but in radians. Wrong in the same way and quieter about it: the number lands inside
+  the joint's range, so the motion converges, just to a meaningless angle. Nothing
+  caught it because the only test of the feature asserted the convergence *threshold*
+  rather than the goal.
+
+So the sizing now applies only where every finger connection is a `PrismaticConnection`
+-- the property that makes a width in meters the thing a joint position means. It is the
+joint type, not an inference from the numbers. Every other gripper keeps the fully-closed
+goal its own model states, which is what it had before the feature existed and what
+`main` still does, where this job passes.
+
+One predicate (`_sizes_goal_to_object`) now decides both the goal and the tightened
+convergence threshold. They were computed independently before, so a fallback in one
+would have left the other tightened against a goal that had not been resized.
+
+The PR2 test was retargeted rather than deleted: it asserts the new contract (a revolute
+gripper keeps its nominal closed goal) instead of the threshold. Worth knowing that the
+tight-threshold behaviour is now pinned only end-to-end, by the montessori Panda suite --
+coraplex has no prismatic gripper to test it against.
+
+### The third failure was a TDD cycle that was never finished
+
+`test_spin_thread_ends_quietly_when_somebody_else_ends_the_context` arrived in `08257863`
+and `git diff origin/main...HEAD -- coraplex/src/coraplex/demonstrations.py` is *empty*:
+the test was added and the fix it describes never was, so it has never passed. (An
+earlier note in this roadmap recorded it as failing "on this branch and its parent
+alike, so it is not this work's" -- true but misleading, since the parent is another
+branch of this same stack.) The spin thread ran `executor.spin` directly; rclpy reports
+a context ended by its owner -- the ordinary way a borrowed session stops -- by raising
+`ExternalShutdownException` out of the spin and, unlike the executor's own shutdown,
+does not swallow it. `_spin_until_the_context_ends` ends the thread quietly on it.
+
+### Worth keeping
+
+- A demo on the real-execution path has no tick budget: `_execute_real` is one call into
+  giskard. The budget added for `_execute_simulation` does not protect it, which is why
+  the Tracy demo kept hanging after the bound landed.
+- Read a gripper's own `GripperState` joint states before assuming what its numbers mean.
+  Three grippers here use three different conventions, and two of them look alike.
+

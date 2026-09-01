@@ -166,6 +166,19 @@ items:
       unbounded path. Left flagged, not fixed: `SimulationTimePacer.sleep()` waits on a simulation
       clock with no bound of its own, unreachable from tests but a real hang in the demo.
 
+      2026-09-01, round 26: with the bound in place the coraplex job finished (14:46, 3 failed / 415
+      passed) and `test_move_to_reach` passed. Two of the three failures, plus the still-hanging
+      Tracy demo, were one bug: `MoveGripperMotion` sized its closing goal to the grasped object's
+      half-width in meters, which is what the Panda's prismatic `type="slide" range="0 0.04"`
+      fingers mean and nothing else here does - Tracy's Robotiq knuckles are revolute and
+      antisymmetric (`[0.8, -0.8]` rad), so `CloseGripper` could not converge, and the demo runs
+      `ExecutionType.REAL`, where `_execute_real` waits in giskard with no budget. The PR2 was
+      wrong the same way but quiet, converging to a meaningless angle. The sizing is now gated on
+      every finger connection being a `PrismaticConnection`, and one predicate decides both the
+      goal and the tightened threshold. The third failure was this branch's own test of a fix that
+      was never written: `demonstrations.py` is byte-identical to `main`'s, so the spin thread
+      still let `ExternalShutdownException` escape; it now ends quietly on it. `7fa4b1936`.
+
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
     branch: cramera_eql_autocomplete
