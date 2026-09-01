@@ -1453,3 +1453,60 @@ which is what makes the fix safe to push from a container that cannot run it.
 
 `085f160f9`. Whether the assertions themselves hold is now a real question for the
 first time, and CI answers it rather than this session.
+## 2026-09-01: the second CI round -- a retyped designator and a world budget
+
+Two jobs stayed red after `82a2c0a8e`, and neither was a leftover of the first CI round.
+
+### `PickUpAction` names its object by annotation now
+
+Eight `experiments` tests died on `'Body' object has no attribute 'root'`. `main` had
+retyped `PickUpAction.object_designator` (and `ReachAction`'s) from `Body` to
+`HasRootBody` and taken `.root` at every use inside the action; the montessori callers,
+written against the old type, were handing it `self.montessori_shape.root`, so the
+action called `.root` on a `Body`. They pass the annotation itself now, which is what
+`main`'s own callers (`cereal`, `apple_annotation`) do. `PlaceAction` still takes a
+`Body`, so the two `PlaceAction` sites four lines below each fix keep their `.root` --
+the shape of the bug is exactly that two neighbouring calls no longer want the same
+thing.
+
+Worth recording as a correction: the first CI round fixed the *reverse* of this in
+`pick_up.py` (`grasped_object=self.object_designator` -> `.root`). Both are right. The
+field is a view now, so uses inside the action need `.root` and callers must not
+pre-apply it -- one type change producing errors in opposite directions on either side
+of the boundary.
+
+The same call site exists in the two Franka pickup smoke-test scripts, neither of which
+CI runs. `franka_pickup_smoke_test.py` already had a `MontessoriShape` in hand. The
+bare one deliberately builds an unannotated cube -- but "bare" in its docstring is about
+the scene carrying no sorting board, not about semantics, and naming an object to
+`PickUpAction` now requires an annotation, so the cube is annotated as the `CubeShape`
+the sorting demo picks up.
+
+### The world budget, and why it only surfaced now
+
+`semantic_digital_twin` tripped `count_worlds`, `test/conftest.py`'s autouse guard that
+fails a module once `objgraph.count("World") > 30` after a `gc.collect()`. It is a
+budget shared by the whole run, checked at every module boundary, and the suite runs
+under `-n auto`, so which worker crosses it depends on how xdist distributes modules --
+which is why exactly one module reported it.
+
+The branch's contribution to that budget was found by elimination rather than guessed:
+of every fixture in `test/conftest.py`, `armar7_world_state_reset` is the **only** one
+that any `test/semantic_digital_twin_test` file requests on this branch and none does on
+`main`. `_armar7_world_setup` behind it has no user anywhere on `main` at all, so main's
+sdt job never builds an Armar7 world and this branch's does -- and holds it for the
+whole session. `test_world_armar7.py`'s second test mutates the drive origin, which is
+the only reason it wanted the deepcopy-and-restore wrapper; a world built per test is
+served better, so it takes one and the session holds none. Nothing it asserts changed.
+
+Why it took until now to appear: the sdt suite had **never run on this branch**. Every
+run back to `da2e062e3` failed at the `Build ORM` step and skipped `Run tests` outright;
+the main merge is what brought the ORM machinery that makes the job get as far as
+pytest. So this is not a regression the merge introduced but a suite addition that had
+never been measured.
+
+The honest limit on this one: the fix is reasoned, not measured. This container has no
+CRAM workspace, so nothing could count worlds. The reasoning is exact about *what the
+branch adds* (one session-held world, and nothing else) but not about how close main's
+own baseline sits to 30. CI is the check.
+

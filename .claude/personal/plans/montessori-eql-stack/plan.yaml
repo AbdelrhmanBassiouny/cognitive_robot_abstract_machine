@@ -128,6 +128,30 @@ items:
       untouched - the one failure recorded as pre-existing for many rounds, which needs the
       workspace to chase.
 
+      2026-09-01, round 23: `085f160f9` fixed
+      `test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion`, which had been
+      deferred for many rounds as needing the workspace and did not - its `move_to` helper assigned
+      a frameless matrix to the shape's connection origin, whose setter transforms into the parent
+      frame and so needs the frame stated, and it raised on the first move. The frame is the world
+      root, which both `global_transform` (where the coordinates come from) and
+      `MontessoriWorld._spawn_free_body` (which joints a movable shape straight to `world.root`)
+      agree on, so the transform is an identity and the poses are unchanged. Whether its three
+      assertions hold is now a real question for the first time.
+
+      2026-09-01, round 24: the next CI run left two jobs red, neither a leftover. `experiments`
+      failed eight tests on `'Body' object has no attribute 'root'` - `main` retyped
+      `PickUpAction.object_designator` from `Body` to `HasRootBody` and takes `.root` at every use
+      inside the action, so the montessori callers must hand over the annotation rather than
+      pre-applying `.root`; note this is the reverse of the round-22 fix in `pick_up.py`, and both
+      are right. `semantic_digital_twin` tripped `count_worlds`, the conftest guard failing a module
+      once more than 30 `World` objects are alive: `armar7_world_state_reset` is the only conftest
+      fixture the branch newly brings into the sdt job and the session-scoped world behind it has no
+      user at all on `main`, so `test_world_armar7.py` takes a per-test world instead. The sdt suite
+      had never run on this branch before the merge (`Build ORM` failed and the tests were skipped),
+      so this is a suite addition that had never been measured rather than a merge regression. Fixed
+      in `4150026be`; the world-budget half is reasoned rather than measured, since the container has
+      no CRAM workspace.
+
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
     branch: cramera_eql_autocomplete
