@@ -1627,3 +1627,28 @@ does not swallow it. `_spin_until_the_context_ends` ends the thread quietly on i
 - Read a gripper's own `GripperState` joint states before assuming what its numbers mean.
   Three grippers here use three different conventions, and two of them look alike.
 
+## 2026-09-01: the library half of #169 split into #244, and #169 re-based onto it
+
+At the developer's request, everything #169 changes under `semantic_digital_twin`, `segmind` and
+`krrood` - with the one `physics_simulators` change the Mujoco adapter's real-time factor needs,
+and the Armar7 fixtures in `test/conftest.py` the new sdt tests use - is now its own pull request,
+#244 (`sdt_segmind_krrood_from_fast_monitor`), off `main`. It was cut by checking those paths out
+of #169's tip `daeddaf6` onto `main`, three commits, one per package, so `git diff` between the two
+branches over those paths is empty and re-basing #169 onto it changes nothing in its tree. #169's
+diff now shows the cramera, experiments, coraplex and giskardpy work alone. Left in #169
+deliberately: `giskardpy`'s `SimulationTimePacer`, which only cramera and the demo scripts use, and
+the `experiments` ORM interface declaration.
+
+Re-basing #169 took the native-stack procedure `stacked-pr-maintenance` records: the base change
+was refused with `422 - Cannot change the base branch because the pull request is part of a stack`,
+so stack #173 (`169, 170, 164, 165, 167, 168`) was recorded, dissolved, #169 retargeted through the
+MCP `update_pull_request`, and the stack re-created as **#247** with #244 at its foot:
+`244, 169, 170, 164, 165, 167, 168`. The pre-dissolve record is in the creating session's scratchpad
+(`stacks-before-unstack.json`). The `knowledge-directed-perception` item
+`episode-replayed-into-the-world` (#246) is based on #244 as well, by the same instruction, so the
+segmind detector changes sit under the rosbag player rather than colliding with it later.
+
+Landing hazard for #244: #229 (`sdt_predicates_answer_whether_they_hold`) rewrites
+`reasoning/predicates.py` and edits `world_description/geometry.py`, both changed by #244; whichever
+lands second takes the other's structure and keeps the bounds rejection and the numeric containment
+ratio on top.

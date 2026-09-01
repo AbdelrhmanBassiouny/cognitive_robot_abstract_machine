@@ -57,12 +57,30 @@ tracks:
       and the window management to arrange those tabs freely.
 
 items:
+  - id: sdt_segmind_krrood_from_fast_monitor
+    title: "The library half of the fast inline monitor: numeric geometry, hole events and EQL fixes"
+    branch: sdt_segmind_krrood_from_fast_monitor
+    pull_request_number: 244
+    track: montessori-eql
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01UdpwcAQGVFCKEy8VA2iFwv
+    blockers: []
+    notes: >
+      Split out of #169 on 2026-09-01 at the developer's request: everything #169 changes under
+      semantic_digital_twin, segmind and krrood, plus the one physics_simulators change the Mujoco
+      adapter needs and the Armar7 fixtures in test/conftest.py the new sdt tests use. Three commits,
+      one per package, every file byte-identical to #169's tip daeddaf6, so #169 re-based onto it
+      changes nothing in its tree. Now the foot of the stack: #169 depends on it, and the
+      knowledge-directed-perception item episode-replayed-into-the-world (#246) is based on it too.
+      Landing hazard: #229 rewrites reasoning/predicates.py and edits geometry.py, both changed here.
+
   - id: montessori_fast_inline_monitor
     title: "A monitor tick cheap enough to stay on the planning thread"
     branch: montessori_fast_inline_monitor
     pull_request_number: 169
     track: montessori-eql
-    depends_on: []
+    depends_on: [sdt_segmind_krrood_from_fast_monitor]
     status: in_progress
     session: https://claude.ai/code/session_01CgSACpWiXinUgDRxzKX2X8
     blockers: []
