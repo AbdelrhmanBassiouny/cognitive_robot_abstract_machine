@@ -27,13 +27,11 @@ from typing_extensions import (
     Dict,
     Any,
     Optional,
-    ClassVar,
     List,
     Iterator,
     Union as TypingUnion,
     Tuple,
     Set,
-    Self,
     TYPE_CHECKING,
     Generic,
     Type,
@@ -47,6 +45,10 @@ from krrood.entity_query_language.evaluation_context import (
     _evaluation_context_var,
 )
 from krrood.entity_query_language.exceptions import NoExpressionFoundForGivenID
+from krrood.entity_query_language.rule_tree_context import (
+    RuleTreeContext,
+    RuleTreeContextStack,
+)
 from krrood.entity_query_language.utils import make_list, T, make_set, is_iterable
 from krrood.symbol_graph.symbol_graph import SymbolGraph
 
@@ -60,29 +62,6 @@ Bindings: TypeAlias = Dict[uuid.UUID, Any]
 A dictionary for expressions' bindings in EQL that maps the expression's unique
 identifier to its value.
 """
-
-
-@dataclass
-class RuleTreeContext:
-    """
-    A ``with``-block anchor together with the parent edge its rule tree reaches it by.
-
-    A shared node has several parents, so which parent a rule-tree edit must happen above
-    is only defined relative to the branch that is asking. Recording that edge when the
-    block is entered keeps the answer independent of which parent happened to be attached
-    first.
-    """
-
-    condition: SymbolicExpression
-    """
-    The condition node the ``with`` block anchors on.
-    """
-
-    owning_parent: Optional[SymbolicExpression]
-    """
-    The parent through which the asking rule tree reaches :attr:`condition`, kept current
-    by whoever splices a new node into that edge.
-    """
 
 
 @dataclass(eq=False)
@@ -103,12 +82,6 @@ class SymbolicExpression(AbstractContextManager):
     """
     Set of conclusion expressions attached to this node, these are evaluated when the
     truth value of this node is true during evaluation.
-    """
-
-    _symbolic_expression_stack_: ClassVar[List[RuleTreeContext]] = []
-    """
-    The current stack of symbolic expressions that has been entered using the ``with``
-    statement, each paired with the parent edge its rule tree reaches it by.
     """
 
     _children_: List[SymbolicExpression] = field(
@@ -773,44 +746,13 @@ class SymbolicExpression(AbstractContextManager):
             isinstance(descendant, expression_type) for descendant in self._descendants_
         )
 
-    @classmethod
-    def _current_parent_in_context_stack_(cls) -> Optional[SymbolicExpression]:
+    @property
+    def _rule_tree_anchor_(self) -> SymbolicExpression:
         """
-        :return: The current parent symbolic expression in the enclosing context of the ``with`` statement. Used when
-        making rule trees.
+        :return: The expression a ``with`` block on this expression anchors its rule-tree
+            edits on.
         """
-        innermost_context = cls._innermost_rule_tree_context_()
-        if innermost_context is None:
-            return None
-        return innermost_context.condition
-
-    @classmethod
-    def _innermost_rule_tree_context_(cls) -> Optional[RuleTreeContext]:
-        """
-        :return: The context of the innermost enclosing ``with`` statement, or ``None``
-            outside any.
-        """
-        if not cls._symbolic_expression_stack_:
-            return None
-        return cls._symbolic_expression_stack_[-1]
-
-    @classmethod
-    def _rule_tree_context_anchored_on_(
-        cls, condition: SymbolicExpression
-    ) -> Optional[RuleTreeContext]:
-        """
-        :param condition: The condition an edit is about to be made relative to.
-        :return: The context of the innermost enclosing ``with`` statement that anchors on
-            the given condition, or ``None`` when no enclosing statement does.
-        """
-        return next(
-            (
-                context
-                for context in reversed(cls._symbolic_expression_stack_)
-                if context.condition._id_ == condition._id_
-            ),
-            None,
-        )
+        return self
 
     def _rule_tree_context_(self) -> RuleTreeContext:
         """
@@ -822,10 +764,8 @@ class SymbolicExpression(AbstractContextManager):
         this expression is the branch that edit introduced. Otherwise there is no asking
         branch to speak of and the structural parent stands in.
         """
-        enclosing_context = self._innermost_rule_tree_context_()
-        enclosing_parent = (
-            enclosing_context.owning_parent if enclosing_context is not None else None
-        )
+        stack = RuleTreeContextStack.active()
+        enclosing_parent = None if stack is None else stack.innermost.owning_parent
         if enclosing_parent is None or not self._has_parent_(enclosing_parent):
             return RuleTreeContext(self, self._parent_)
         return RuleTreeContext(self, enclosing_parent)
@@ -868,24 +808,23 @@ class SymbolicExpression(AbstractContextManager):
 
         return Not(self)
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> SymbolicExpression:
         """
-        Enter a context where this symbolic expression is the current parent symbolic
-        expression.
+        Open a rule-tree block anchored on this expression, creating the context stack
+        when this is the outermost block.
 
-        This updates the current parent symbolic expression, the context stack and
-        returns this expression.
+        :return: The anchor rule-tree edits inside the block attach to, which is this
+            expression unless a subclass anchors elsewhere.
         """
-        SymbolicExpression._symbolic_expression_stack_.append(
-            self._rule_tree_context_()
-        )
-        return self
+        anchor = self._rule_tree_anchor_
+        RuleTreeContextStack.enter_block(anchor._rule_tree_context_(), self)
+        return anchor
 
     def __exit__(self, *args):
         """
-        Exit the context and remove this symbolic expression from the context stack.
+        Close this expression's rule-tree block.
         """
-        SymbolicExpression._symbolic_expression_stack_.pop()
+        RuleTreeContextStack.exit_block(self)
 
     def __hash__(self):
         return hash(self._id_)
