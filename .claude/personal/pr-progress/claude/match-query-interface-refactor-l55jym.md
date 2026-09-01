@@ -1,7 +1,8 @@
 # PR #192 - match-underscore-rename-and-forwarding (plan match-query-ergonomics)
 
-Draft PR #192, based on `claude/match-query-ergonomics-where-rooted-b876wm` (#182).
-Roadmap section 17 has the full record and the reasoning.
+Draft PR #192, based on `main` - #182 merged on 2026-08-24 and the 2026-08-30
+maintenance pass reparented this PR (roadmap section 23). Roadmap sections 17 and 26 have
+the full record and the reasoning.
 
 ## Done
 
@@ -37,6 +38,23 @@ Roadmap section 17 has the full record and the reasoning.
        `variable == match` passed every row; `SymbolicExpression._as_operand_` states the
        rule once. Suite: 2088 passed, 6 skipped.
 
+8. [x] Merged `main`, 2026-09-01 (roadmap section 26), `ff5414e0a`. The branch was cut
+       from #182's head *before* #182 merged `main` to take #186's `Index` split, so it
+       carried none of that hierarchy while rewriting the same `mapped_variable.py` -
+       which is the whole of what six identical maintenance comments since 2026-08-28
+       were reporting. All three conflicts took both sides: the operators keep this PR's
+       routing through `_symbolic_expression_` and gain #186's `Attribute`/`Index`/`Call`
+       return types and the `IndexByValue`/`IndexByExpression` split; `has_cause_attributes`
+       and `causes()` arrive from `main`'s `do()` operator reading
+       `_matches_with_variables_`; `AttributeMatch.assigned_variable` keeps `main`'s
+       fresh-copy branch for a shared `Cause`/`Confounder`; `_update_kwargs_from` takes
+       `main`'s `IndexByValue` distinction; `test_match.py` keeps both sides' tests. The
+       mypy fixture's `a(Robot).battery` pin moved from `CanBehaveLikeAVariable[Robot]` to
+       `Attribute[Robot]`, the narrower type `main` landed - roadmap sections 15/16 settle
+       "return types name what they build" as this plan's own convention, so reverting it
+       would have undone a landed improvement. `test_eql` 1287 passed, 3 skipped; full
+       `test/krrood_test` 2269 passed, 5 skipped.
+
 ## Outstanding
 
 - The PR is a draft, as always; the developer marks it ready.
@@ -45,18 +63,25 @@ Roadmap section 17 has the full record and the reasoning.
   assembler bug, `argument-position-correlation` (#137, behind `binding-order-planner`)
   for a query evaluated uncorrelated in an argument position, and the already-existing
   `factories-unwrap-match-and-migrate` for selecting a match. None of them blocks #192.
-- CI on #192 has not been read since the second push.
+- CI is running on `ff5414e0a` (`mergeable_state` went `dirty` -> `unstable` on the push).
+  The previous run was all 23 checks green, but on `e9aae10be` of 2026-08-24 against a base
+  nine days stale, so it said nothing about the merged result.
+- The `needs-resolution` label is left in place: the stack tooling clears it itself once
+  the branch merges cleanly again, and hand-clearing it would be managing a signal that is
+  not this session's.
 - Still refused by design, reported on the PR: a match given to a predicate (a query
   argument there is evaluated uncorrelated even with no match involved - wave 1's
   territory), and selecting a match (`entity(match)`, `the(match)`), which is item 3's.
 
 ## Environment
 
-No project dependencies in this container. Scratch venv (python3.12) at
-`$SCRATCHPAD/venv`, plus `objgraph plotly matplotlib mypy casadi pyjpt docformatter` and
-editable `krrood random_events probabilistic_model semantic_digital_twin`. The repo-root
-`test/conftest.py` imports `semantic_digital_twin.robots`, so runs use
-`--confcutdir=test/krrood_test`. `test_rustworkx_utils` needs `flask`/`dash` and
+No project dependencies in this container. Scratch venv (python3.12 - 3.11 is too old) at
+`$SCRATCHPAD/venv`, plus `objgraph mypy black docformatter` and editable `krrood
+random_events probabilistic_model giskardpy physics_simulators semantic_digital_twin`.
+`semantic_digital_twin` must be in the *same* `pip install` as `giskardpy` and
+`physics_simulators`, since it declares them as requirements and pip cannot resolve them
+from an index. With that full set the repo-root `test/conftest.py` imports cleanly and no
+`--confcutdir` is needed. `test_rustworkx_utils` needs `flask`/`dash` and
 `test_object_diagram` needs the Graphviz `dot` binary; both fail on this container
 regardless of the diff. Running the suite rewrites
 `test_eql/test_verbalization/verbalization_results.py` with different import order - check
