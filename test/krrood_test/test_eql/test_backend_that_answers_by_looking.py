@@ -28,6 +28,7 @@ from ..dataset.backend_that_looks_at_the_world import (
     Place,
     Sighting,
     SightingOfSomethingHeldUp,
+    StandingBetween,
     StandingOn,
 )
 
@@ -123,9 +124,9 @@ def test_a_relation_asserted_about_the_thing_sought_is_read_off_the_condition():
 
     request = BackendThatLooksAtTheWorld.read_request(statement)
 
-    assert request.stated_relations == [
-        StatedRelation(relation_type=StandingOn, related_thing=LID)
-    ]
+    [stated] = request.stated_relations
+    assert stated.relation_type is StandingOn
+    assert stated.related_thing is LID
 
 
 def test_the_thing_a_relation_relates_the_sought_thing_to_is_read_back_by_its_class():
@@ -141,6 +142,36 @@ def test_a_statement_asserting_no_relation_relates_the_thing_sought_to_nothing()
 
     assert request.stated_relations == []
     assert request.related_by(StandingOn) is None
+
+
+def test_a_relation_of_more_than_two_operands_is_read_whole():
+    """
+    A look narrowed by a relation needs everything the statement holds it to relate the
+    thing sought to, not only the one thing a triple names second.
+    """
+    statement = an(Sighting)()
+    statement = statement.where(StandingBetween(statement.variable, TABLE, LID))
+
+    [stated] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
+
+    assert stated.relation_type is StandingBetween
+    assert stated.stated_operands == {"one": TABLE, "other": LID}
+
+
+def test_a_relation_read_off_a_statement_can_be_rebuilt_without_the_thing_sought():
+    """
+    What a relation allows is read from its other operands alone, so a search reads it
+    before anything has been found -- which is the form this builds.
+    """
+    statement = an(Sighting)()
+    statement = statement.where(StandingBetween(statement.variable, TABLE, LID))
+
+    [stated] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
+    constraint = stated.constraint()
+
+    assert isinstance(constraint, StandingBetween)
+    assert constraint.subject is None
+    assert (constraint.one, constraint.other) == (TABLE, LID)
 
 
 def test_a_relation_asserted_about_another_variable_is_not_read_as_the_sought_things():

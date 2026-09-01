@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Optional, Type
+from typing_extensions import Optional, Tuple, Type
 
 from experiments.montessori.perception.detections import MontessoriDetection
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.world_description.world_entity import Region
+from semantic_digital_twin.reasoning.predicates import PlacementRelation
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% what to look for
 
@@ -44,14 +45,22 @@ class SceneRequest:
     every surface of the scene.
     """
 
-    region: Optional[Region] = None
+    placements: Tuple[PlacementRelation, ...] = ()
     """
-    The region of the world the thing sought is said to lie in, or ``None`` where the
-    statement says none.
+    Everything the statement says about where the thing sought lies, each as the
+    relation that says it with nothing standing in the place of that thing.
 
-    The world entity itself rather than a patch in metres: what a region reaches is read
-    where the frame the detections are reported in is known, which is the look rather
-    than the statement.
+    The relations themselves rather than a patch in metres: what one of them allows is
+    read where the frame the detections are reported in is known, which is the look
+    rather than the statement.
+    """
+
+    color: Optional[Color] = None
+    """
+    The colour the thing sought wears, or ``None`` where the statement says none.
+
+    A colour is a narrowing like the others: a look asked for one marks that colour
+    alone and fits only the pieces that wear it.
     """
 
     def wants(self, detection_type: Type[MontessoriDetection]) -> bool:

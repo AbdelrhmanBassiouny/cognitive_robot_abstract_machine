@@ -15,11 +15,13 @@ Everything about how a statement is read, narrowed and checked belongs to
 any sensor. What is here is only what is particular to this scene: that a look is taken
 by the Montessori pipeline, and which relations its search can narrow itself by.
 
-Two can. *Supported by* names a surface, and a surface is a stretch of a plane the world
-already describes, so a look narrowed by it rectifies that stretch instead of the whole
-table. *Inside* names a region outright, which is extents in the world's own vocabulary.
-Either way the picture searched shrinks before anything is detected, rather than the
-detections being filtered after.
+Three can. *Supported by* names a surface, and a surface is a stretch of a plane the
+world already describes, so a look narrowed by it rectifies that stretch instead of the
+whole table. Every relation that says where a thing may be -- inside a region, right of
+one thing, between two, near a place -- answers the stretch it allows, so the picture is
+cut to it before anything is detected. And a colour says which pieces are worth fitting
+at all, so a look asked for one marks that colour alone. What none of them do is decide
+the answer: each is checked again over what came back.
 """
 
 from __future__ import annotations
@@ -30,14 +32,16 @@ from typing_extensions import ClassVar, Iterable, Optional, Tuple, Type
 
 from experiments.montessori.perception.detections import MontessoriDetection
 from experiments.montessori.perception.exceptions import LookHasNoReferenceFrame
-from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
-from experiments.montessori.perception.surfaces import WorkspaceSurface
 from krrood.entity_query_language.backends import LookRequest, PerceptionBackend
-from krrood.entity_query_language.predicate import Triple
+from krrood.entity_query_language.predicate import Relation
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.reasoning.predicates import InsideRegion, SupportedBy
+from semantic_digital_twin.reasoning.predicates import (
+    Colored,
+    PlacementRelation,
+    SupportedBy,
+)
 
 # %% the backend
 
@@ -53,13 +57,14 @@ class MontessoriPerceptionBackend(PerceptionBackend):
     Where a look at the scene comes from.
     """
 
-    narrowing_relations: ClassVar[Tuple[Type[Triple], ...]] = (
+    narrowing_relations: ClassVar[Tuple[Type[Relation], ...]] = (
         SupportedBy,
-        InsideRegion,
+        PlacementRelation,
+        Colored,
     )
     """
-    A look here searches one supporting surface at a time and only the stretch of it a
-    statement allows, so support and containment are what it can narrow itself by.
+    A look here searches one supporting surface at a time, only the stretch of it a
+    statement allows, and only for the pieces of the colour it asks about.
     """
 
     def look(
@@ -86,9 +91,11 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         :param instance: One detection the look reported.
         :param request: What the statement asks a look for.
         """
-        return self._rests_on_the_surface_asked_about(
-            instance, request
-        ) and self._stands_in_the_region_asked_about(instance, request)
+        return (
+            self._rests_on_the_surface_asked_about(instance, request)
+            and self._stands_where_the_statement_says(instance, request)
+            and self._wears_the_color_asked_about(instance, request)
+        )
 
     def _rests_on_the_surface_asked_about(
         self, instance: MontessoriDetection, request: LookRequest[MontessoriDetection]
@@ -103,41 +110,56 @@ class MontessoriPerceptionBackend(PerceptionBackend):
             or instance.supporting_surface == supporting_surface
         )
 
-    def _stands_in_the_region_asked_about(
+    def _stands_where_the_statement_says(
         self, instance: MontessoriDetection, request: LookRequest[MontessoriDetection]
     ) -> bool:
         """
-        Whether a detection was seen inside the region the statement named.
+        Whether a detection was seen where every relation the statement states allows.
 
         A detection is a sighting rather than a body, so where it stands is the position
         it was reported at rather than a volume a containment can be measured against.
 
         :param instance: One detection the look reported.
         :param request: What the statement asks a look for.
+        :raises LookHasNoReferenceFrame: If the statement says where the thing lies but
+            the source reports its detections in no frame, which leaves the relation
+            nothing to be read against.
         """
-        patch = self.region_asked_about(request)
-        if patch is None:
+        placements = self.placements_asked_about(request)
+        if not placements:
             return True
-        seen_at = instance.pose.to_position().to_np()
-        return patch.contains(float(seen_at[0]), float(seen_at[1]))
+        if self.source.reference_frame is None:
+            raise LookHasNoReferenceFrame(type(placements[0]).__name__)
+        return all(
+            placement.allows(instance.pose.to_position()) for placement in placements
+        )
 
-    def region_asked_about(
-        self, request: LookRequest[MontessoriDetection]
-    ) -> Optional[WorkspaceRegion]:
+    def _wears_the_color_asked_about(
+        self, instance: MontessoriDetection, request: LookRequest[MontessoriDetection]
+    ) -> bool:
         """
-        The stretch of the world a statement says the thing it is looking for lies in.
+        :param instance: One detection the look reported.
+        :param request: What the statement asks a look for.
+        """
+        color = request.related_by(Colored)
+        return color is None or instance.color == color
+
+    @classmethod
+    def placements_asked_about(
+        cls, request: LookRequest[MontessoriDetection]
+    ) -> Tuple[PlacementRelation, ...]:
+        """
+        Everything the statement says about where the thing it is looking for lies, each
+        as the relation that says it with nothing standing in the place of that thing.
 
         :param request: What the statement asks a look for.
-        :return: That stretch in metres, or None where the statement names no region.
-        :raises LookHasNoReferenceFrame: If a region is named but the source reports its
-            detections in no frame.
+        :return: One relation per placement the statement states, empty where it states
+            none.
         """
-        region = request.related_by(InsideRegion)
-        if region is None:
-            return None
-        if self.source.reference_frame is None:
-            raise LookHasNoReferenceFrame(str(region.name))
-        return WorkspaceSurface.of_region(region, self.source.reference_frame).region
+        return tuple(
+            placement.constraint()
+            for placement in request.stated_relations_of(PlacementRelation)
+        )
 
     @classmethod
     def scene_request(cls, request: LookRequest[MontessoriDetection]) -> SceneRequest:
@@ -145,13 +167,14 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         Read what a statement asks for as something a look at this scene can act on.
 
         :param request: What the statement asks a look for.
-        :return: The kind of detection to run detectors for, the surface to search, and
-            the region of the world to stay inside.
+        :return: The kind of detection to run detectors for, the surface to search, the
+            placements to stay within, and the colour to look for.
         """
         return SceneRequest(
             detection_type=request.type_,
             supporting_surface=cls.supporting_surface_asked_about(request),
-            region=request.related_by(InsideRegion),
+            placements=cls.placements_asked_about(request),
+            color=request.related_by(Colored),
         )
 
     @classmethod

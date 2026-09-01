@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing_extensions import Any, ClassVar, List, Optional, Tuple, Type
 
 from krrood.entity_query_language.backends import LookRequest, PerceptionBackend
-from krrood.entity_query_language.predicate import Triple
+from krrood.entity_query_language.predicate import Relation, Triple
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     clause,
     Noun,
@@ -97,6 +97,49 @@ class StandingOn(Triple):
     @classmethod
     def _verbalization_fragment_(cls, fields):
         return clause(Noun(fields["thing"]), Verb("stand on"), Noun(fields["place"]))
+
+
+@dataclass(eq=False)
+class StandingBetween(Relation):
+    """
+    Asserts that a thing rests somewhere between two places.
+
+    A relation of more than two operands, so what a look reads off a statement has to be
+    the whole relation rather than the one thing a triple relates its subject to. The
+    thing it is asserted about is optional, so the relation can also be built as the
+    constraint alone -- which is the form a search reads before anything has been found.
+    """
+
+    thing: Optional[Any] = None
+    """
+    What is resting between the two, or None where the relation is the constraint alone.
+    """
+
+    one: Optional[Place] = None
+    """
+    One of the two places.
+    """
+
+    other: Optional[Place] = None
+    """
+    The other of the two.
+    """
+
+    @property
+    def subject(self) -> Any:
+        return self.thing
+
+    def __call__(self) -> bool:
+        return self.thing.place in (self.one.name, self.other.name)
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return clause(
+            Noun(fields["thing"]),
+            Verb("stand between"),
+            Noun(fields["one"]),
+            Noun(fields["other"]),
+        )
 
 
 # %% the backend

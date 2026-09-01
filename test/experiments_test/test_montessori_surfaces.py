@@ -355,7 +355,12 @@ def test_a_boundary_reaching_past_the_surface_is_searched_only_where_the_surface
     assert search.region.maximum_y == surface.region.maximum_y
 
 
-def test_a_look_narrowed_to_a_stretch_searches_only_where_the_two_meet():
+def test_a_look_narrowed_to_a_stretch_reads_a_pieces_width_past_it():
+    """
+    A statement says where the thing is, not which pixels may be read, so the picture
+    reaches past the stretch it allows by as much as a piece standing at the very edge
+    of that stretch needs for its far side to be in view.
+    """
     surface = _surface_at(0.88)
     stated = WorkspaceRegion(
         minimum_x=0.5, maximum_x=2.0, minimum_y=-1.0, maximum_y=0.75
@@ -364,7 +369,9 @@ def test_a_look_narrowed_to_a_stretch_searches_only_where_the_two_meet():
     search = SurfaceSearch(surface=surface, narrowed_to=stated)
 
     assert search.is_searched
-    assert search.region == surface.region.intersection(stated)
+    assert search.region == surface.region.intersection(
+        stated.grown_by(search.overhang)
+    )
 
 
 def test_a_look_narrowed_away_from_a_surface_leaves_nothing_of_it_to_search():

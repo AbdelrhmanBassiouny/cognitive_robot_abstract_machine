@@ -30,7 +30,7 @@ from krrood.entity_query_language.core.variable import (
     Literal,
     Variable,
 )
-from krrood.entity_query_language.predicate import Triple
+from krrood.entity_query_language.predicate import Relation, Triple
 from krrood.patterns.code_parsing_utils import (
     get_accessed_attribute_name_in_return_statement_of_property,
 )
@@ -235,18 +235,43 @@ class StatedRelation:
     of an attribute nor the name of a field.
     """
 
-    relation_type: Type[Triple]
+    relation_type: Type[Relation]
     """
     The relation asserted, by the class that means it.
     """
 
-    related_thing: Any
+    stated_operands: Dict[str, Any] = field(default_factory=dict)
     """
-    What the thing being looked for is asserted to stand in that relation to.
+    What the statement already holds each of the relation's other operands to be, keyed
+    by the operand's own name.
 
-    Always something the statement already holds, never the thing being looked for --
-    which is why a search can act on it before anything has been found.
+    Never the thing being looked for, which is why a search can act on them before
+    anything has been found -- and everything but that thing, so a relation of more than
+    two operands is read whole rather than down to the one it happens to name second.
     """
+
+    @property
+    def related_thing(self) -> Any:
+        """
+        The one thing the thing being looked for is asserted to stand in this relation
+        to.
+
+        :raises KeyError: If the relation is not a :class:`Triple`, and so relates the
+            thing sought to other than exactly one thing.
+        """
+        return self.stated_operands[
+            self._name_of(self.relation_type.object, self.relation_type)
+        ]
+
+    def constraint(self) -> Relation:
+        """
+        The relation as stated, with nothing standing where the thing sought would.
+
+        What a relation allows is read from its other operands alone, so this is the
+        form a search reads before anything has been found. A relation meant to be read
+        this way declares the thing it is asserted about optional.
+        """
+        return self.relation_type(**self.stated_operands)
 
     @classmethod
     def read_from(
@@ -258,26 +283,38 @@ class StatedRelation:
         :param condition: The condition to read.
         :param selection: The thing the statement is looking for.
         :return: The relation the condition asserts, or ``None`` when it asserts none --
-            because it is not a relation, because it relates something else, or because
-            the thing it relates the selection to is not known yet.
+            because it is not a relation, because it is asserted about something else,
+            or because something it relates the selection to is not known yet.
         """
         if not isinstance(condition, InstantiatedVariable):
             return None
         relation_type = condition._type_
-        if not isinstance(relation_type, type) or not issubclass(relation_type, Triple):
+        if not isinstance(relation_type, type) or not issubclass(
+            relation_type, Relation
+        ):
             return None
-        subject_name = get_accessed_attribute_name_in_return_statement_of_property(
-            relation_type.subject, relation_type
-        )
-        object_name = get_accessed_attribute_name_in_return_statement_of_property(
-            relation_type.object, relation_type
-        )
+        subject_name = cls._name_of(relation_type.subject, relation_type)
         if condition._kwargs_.get(subject_name) is not selection:
             return None
-        related_thing = condition._kwargs_.get(object_name)
-        if isinstance(related_thing, SymbolicExpression):
+        operands = {
+            name: value
+            for name, value in condition._kwargs_.items()
+            if name != subject_name
+        }
+        if any(isinstance(value, SymbolicExpression) for value in operands.values()):
             return None
-        return cls(relation_type=relation_type, related_thing=related_thing)
+        return cls(relation_type=relation_type, stated_operands=operands)
+
+    @staticmethod
+    def _name_of(operand: property, relation_type: Type[Relation]) -> str:
+        """
+        :param operand: The property naming one of the relation's operands.
+        :param relation_type: The relation that property belongs to.
+        :return: The name of the field that property returns.
+        """
+        return get_accessed_attribute_name_in_return_statement_of_property(
+            operand, relation_type
+        )
 
 
 @dataclass(frozen=True)
@@ -319,10 +356,24 @@ class LookRequest(Generic[T]):
         :return: What the statement says the thing sought stands in that relation to, or
             ``None`` when it asserts no such relation.
         """
-        for stated in self.stated_relations:
-            if issubclass(stated.relation_type, relation_type):
-                return stated.related_thing
-        return None
+        stated = self.stated_relations_of(relation_type)
+        if not stated:
+            return None
+        return stated[0].related_thing
+
+    def stated_relations_of(
+        self, relation_type: Type[Relation]
+    ) -> List[StatedRelation]:
+        """
+        :param relation_type: The kind of relation to read.
+        :return: Every relation of that kind the statement asserts about the thing
+            sought, in the order it states them.
+        """
+        return [
+            stated
+            for stated in self.stated_relations
+            if issubclass(stated.relation_type, relation_type)
+        ]
 
     def admits(self, instance: Any) -> bool:
         """
@@ -370,7 +421,7 @@ class PerceptionBackend(GenerativeBackend, ABC):
     something already recorded.
     """
 
-    narrowing_relations: ClassVar[Tuple[Type[Triple], ...]] = ()
+    narrowing_relations: ClassVar[Tuple[Type[Relation], ...]] = ()
     """
     The relations a look of this kind can narrow itself by.
 

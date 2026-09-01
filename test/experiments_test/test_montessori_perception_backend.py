@@ -24,7 +24,16 @@ from experiments.montessori.perception.scene_source import FixedScene
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
-from semantic_digital_twin.reasoning.predicates import InsideRegion, SupportedBy
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
+from semantic_digital_twin.reasoning.predicates import (
+    Between,
+    Colored,
+    InsideRegion,
+    Near,
+    PlacementRelation,
+    RightOf,
+    SupportedBy,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
@@ -74,10 +83,63 @@ def test_what_the_search_narrows_by_is_a_relation_rather_than_an_attributes_name
 
 def test_a_search_narrows_itself_by_where_a_statement_says_the_thing_lies():
     """
-    A region is extents in the world's own vocabulary, so a look stating one can cut its
-    picture down to it before anything is detected.
+    Every relation that says where a thing may be answers the stretch it leaves, so a
+    look stating one can cut its picture down to that before anything is detected --
+    whatever the relation happens to be.
     """
-    assert InsideRegion in MontessoriPerceptionBackend.narrowing_relations
+    assert PlacementRelation in MontessoriPerceptionBackend.narrowing_relations
+    assert issubclass(InsideRegion, PlacementRelation)
+
+
+@pytest.mark.parametrize("relation", [RightOf, Between, Near])
+def test_a_search_narrows_itself_by_any_relation_that_says_where_a_thing_lies(relation):
+    """
+    Naming the family rather than its members is what lets the vocabulary grow without
+    the backend being edited for each new way of saying where something is.
+    """
+    assert issubclass(relation, PlacementRelation)
+    assert issubclass(relation, MontessoriPerceptionBackend.narrowing_relations)
+
+
+def test_a_search_narrows_itself_by_the_color_the_thing_sought_wears():
+    """
+    What colour a piece is, is knowledge about the piece, so a look asked for one marks
+    that colour alone instead of every colour a piece of this set can wear.
+    """
+    assert Colored in MontessoriPerceptionBackend.narrowing_relations
+
+
+def test_a_stated_color_is_what_the_look_is_asked_to_mark():
+    color = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE].color
+    statement = an(MontessoriShapeDetection)()
+    statement = statement.where(Colored(statement.variable, color))
+
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
+
+    assert request.color == color
+
+
+def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
+    pipeline: MontessoriPerceptionPipeline,
+):
+    """
+    The relation itself rather than a patch in metres: what it allows is read where the
+    frame the detections are reported in is known, which is the look.
+    """
+    lid = Body(name=pipeline.lid.name)
+    statement = an(MontessoriShapeDetection)()
+    statement = statement.where(Near(statement.variable, lid, radius=0.05))
+
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
+
+    [placement] = request.placements
+    assert isinstance(placement, Near)
+    assert placement.place is lid
+    assert placement.radius == 0.05
 
 
 def test_the_kind_of_detection_asked_for_is_what_the_look_is_asked_for():

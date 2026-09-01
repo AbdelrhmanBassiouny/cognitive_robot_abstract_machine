@@ -61,7 +61,8 @@ from experiments.montessori.pieces import (
     HUE_RANGE,
     HUE_TOLERANCE,
     KNOWN_PIECE_BY_CATEGORY,
-    PIECE_HUES,
+    hues_of,
+    pieces_colored,
 )
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
@@ -69,6 +70,7 @@ from experiments.montessori.world import BOARD_SCALE
 from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
@@ -165,6 +167,23 @@ class SurfaceColors:
             & orthophoto.observed
         )
         return mask.astype(np.uint8) * 255
+
+    def color_mask(self, orthophoto: Orthophoto, color: Color) -> np.ndarray:
+        """
+        Mark every pixel wearing a colour, whichever of this set's hues that colour is.
+
+        The pieces are still searched one hue at a time, for the reason
+        :meth:`piece_mask` records; this is the whole of what a look asked for one
+        colour has left to read, which is what a viewer draws.
+
+        :param orthophoto: The rectified image to segment.
+        :param color: The colour to mark.
+        :return: A ``uint8`` mask, 255 on that colour and 0 elsewhere.
+        """
+        marked = np.zeros(orthophoto.image.shape[:2], dtype=np.uint8)
+        for hue in hues_of(pieces_colored(color)):
+            marked = cv2.bitwise_or(marked, self.piece_mask(orthophoto, hue))
+        return marked
 
     def measure_hue(self, orthophoto: Orthophoto, region: np.ndarray) -> Optional[int]:
         """
@@ -610,6 +629,7 @@ class LoosePieceDetector(BeliefSource):
         reference_frame: Optional[KinematicStructureEntity],
         search: SurfaceSearch,
         expected: Sequence[PieceHypothesis] = (),
+        color: Optional[Color] = None,
     ) -> List[MontessoriShapeDetection]:
         """
         Find the pieces resting on one surface, by evaluating what is expected there.
@@ -628,12 +648,15 @@ class LoosePieceDetector(BeliefSource):
         :param search: The surface being searched, which settles what rests on it.
         :param expected: What is believed to be on this surface already, from anything
             other than this picture.
+        :param color: The colour the piece sought wears, or None for any of them. A
+            colour narrows what is marked and what is fitted, so a look asked for one
+            reads less of the picture rather than discarding what it read.
         :return: One detection per recognised piece.
         """
         edges = EdgeDistances.of(top_orthophoto)
         pieces = []
         for hypothesis in [
-            *self._colors_seen_in(orthophoto, top_orthophoto, search),
+            *self._colors_seen_in(orthophoto, top_orthophoto, search, color),
             *expected,
         ]:
             if not self._is_this_surfaces(hypothesis, search):
@@ -666,6 +689,7 @@ class LoosePieceDetector(BeliefSource):
         orthophoto: Orthophoto,
         top_orthophoto: Orthophoto,
         search: SurfaceSearch,
+        color: Optional[Color] = None,
     ) -> List[PieceHypothesis]:
         """
         What the colours in this picture suggest is standing on the surface.
@@ -685,9 +709,10 @@ class LoosePieceDetector(BeliefSource):
         :param orthophoto: The rectified view of the surface's own plane.
         :param top_orthophoto: The rectified view of the plane a piece's top stands on.
         :param search: The surface being searched.
+        :param color: The colour the piece sought wears, or None for any of them.
         """
         seen = []
-        for hue in PIECE_HUES:
+        for hue in hues_of(pieces_colored(color)):
             for contour in self._outlines_wearing(hue, orthophoto, top_orthophoto):
                 footprint = Footprint.from_contour(
                     contour, orthophoto.region.resolution
@@ -1013,16 +1038,27 @@ class MontessoriPerceptionPipeline:
         """
         The stretch of the world a look's own statement says the thing sought lies in.
 
-        A region is a world entity, so what it means in metres is read here, where the
-        frame the detections are reported in is known, rather than where the statement
-        was compiled.
+        A relation is stated between things the world holds, so what it leaves in metres
+        is read here, where the frame the detections are reported in is known, rather
+        than where the statement was compiled. Several of them compose: what is left is
+        the ground every one of them allows.
+
+        A relation that constrains no axis of this table leaves the patch unbounded
+        along it, which the surface being searched is what bounds.
 
         :param request: What the look was asked for.
-        :return: The patch the statement names, or None where it names none.
+        :return: The patch the statement leaves, or None where it states no placement.
         """
-        if request.region is None:
+        if not request.placements:
             return None
-        return WorkspaceSurface.of_region(request.region, self.reference_frame).region
+        allowed = [placement.allowed_space for placement in request.placements]
+        return WorkspaceRegion(
+            minimum_x=max(space.x_interval.lower for space in allowed),
+            maximum_x=min(space.x_interval.upper for space in allowed),
+            minimum_y=max(space.y_interval.lower for space in allowed),
+            maximum_y=min(space.y_interval.upper for space in allowed),
+            resolution=self.table.region.resolution,
+        )
 
     def searched_surfaces(
         self,
@@ -1133,11 +1169,12 @@ class MontessoriPerceptionPipeline:
         thing twice, so what every surface found is settled against the places already
         taken.
 
-        The board is found whatever was asked for: it is the answer to a request about
-        the board itself or its holes, and it is what says how far each surface reaches
-        for a request about the pieces. It is therefore looked for across everything the
-        statement allows rather than across one surface, since where the board stands is
-        what a narrowing to its own lid is read from.
+        The board is found whatever was asked for, and wherever the pipeline looks at
+        all: it is the answer to a request about the board itself or its holes, and it
+        is what says how far each surface reaches for a request about the pieces. So
+        neither a stated surface nor a stated placement cuts the picture it is found in
+        -- a statement about what rests on the board would otherwise decide how much of
+        the board is seen, and with it how far its lid is taken to reach.
 
         Each piece pass then rectifies only the stretch its own surface reaches into,
         which is where a narrowing stops being a filter over what came back and becomes
@@ -1151,13 +1188,9 @@ class MontessoriPerceptionPipeline:
         stated = self.stated_region(request)
         if stated is not None and not self.table.region.meets(stated):
             return MontessoriScene(shapes=[], board=None)
-        searched = (
-            self.table.region
-            if stated is None
-            else self.table.region.intersection(stated)
-        )
         board = self.board_detector.detect(
-            self.rectify(frame, self.lid.height, searched), self.reference_frame
+            self.rectify(frame, self.lid.height, self.table.region),
+            self.reference_frame,
         )
         expected = self.expected_pieces()
         pieces = []
@@ -1175,6 +1208,7 @@ class MontessoriPerceptionPipeline:
                         self.reference_frame,
                         search,
                         expected,
+                        request.color,
                     )
                 )
         occupancy = Occupancy()

@@ -5,11 +5,14 @@ Run it as::
 
     python -m experiments.montessori.perception.watch_narrowing
 
-A statement is built up condition by condition, and after each one the picture that is
-left to search is drawn: the camera's own image cut to it, and the rectified plane the
-detectors would actually read. Each window is named by how the statement reads so far,
-so what is on screen and what was asked for are the same sentence. Press any key to add
-the next condition; press ``q`` or escape to stop.
+A statement is built up condition by condition -- what the piece rests on, which way it
+lies from one of the board's own holes, what colour it is -- and after each one the
+picture that is left to search is drawn: the camera's own image cut to it, and the
+rectified plane the detectors would actually read, with everything but a stated colour
+blacked out. Each window is named by how the statement reads so far, so what is on
+screen and what was asked for are the same sentence, and each step also reports what a
+look answering it finds. Press any key to add the next condition; press ``q`` or escape
+to stop.
 
 Everything but the drawing is :class:`SearchNarrowing`, so a run with no window at all
 takes the same steps and can be checked without a screen.
@@ -19,10 +22,11 @@ from __future__ import annotations
 
 import argparse
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+import cv2
 import numpy as np
 from typing_extensions import Any, Callable, List, Optional, Sequence, Tuple
 
@@ -31,15 +35,17 @@ from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.captures import CAPTURE_DIRECTORY, SceneCapture
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.hole_geometry import HOLE_NAME_BY_CATEGORY
 from experiments.montessori.perception.recorded_setup import (
+    board_holes_in,
     lid_surface,
     recorded_world,
-    region_over,
-    searched_workspace,
     perception_pipeline,
 )
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
+from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.perception.scene_request import SceneRequest
-from experiments.montessori.perception.scene_source import FixedScene
+from experiments.montessori.perception.scene_source import RecordedFrame
 from experiments.montessori.perception.viewer import (
     ImageDisplay,
     OpenCvDisplay,
@@ -50,10 +56,16 @@ from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
-    MontessoriScene,
     MontessoriShapeDetection,
 )
-from semantic_digital_twin.reasoning.predicates import InsideRegion, SupportedBy
+from semantic_digital_twin.reasoning.predicates import (
+    Colored,
+    InFrontOf,
+    SupportedBy,
+)
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -107,6 +119,11 @@ class NarrowingStep:
     Height of the plane that patch lies in, above the world frame's origin, in metres.
     """
 
+    found: Tuple[MontessoriShapeDetection, ...]
+    """
+    What a look answering the statement so far reports.
+    """
+
     @property
     def searched_area(self) -> float:
         """
@@ -151,21 +168,24 @@ class SearchNarrowing:
     Tallest a picture is drawn, in pixels.
     """
 
-    _backend: MontessoriPerceptionBackend = field(init=False)
-    """
-    Reads a statement, and gives the verbalization its *"Look for ..."* verb.
-    """
+    def board_in(self, frame: RgbdFrame) -> Optional[MontessoriBoardDetection]:
+        """
+        The board as one frame shows it, which is what says how far its lid reaches and
+        where each of its holes lies.
 
-    def __post_init__(self) -> None:
-        self._backend = MontessoriPerceptionBackend(
-            source=FixedScene(
-                captured=MontessoriScene(shapes=[], board=None),
-                reported_in=self.pipeline.reference_frame,
-            )
+        :param frame: The camera data the look is taken from.
+        :return: The board, or None if it was not in view.
+        """
+        return self.pipeline.board_detector.detect(
+            self.pipeline.rectify(frame, self.pipeline.lid.height),
+            self.pipeline.reference_frame,
         )
 
     def steps(
-        self, frame: RgbdFrame, conditions: Sequence[StatedCondition]
+        self,
+        frame: RgbdFrame,
+        conditions: Sequence[StatedCondition],
+        board: Optional[MontessoriBoardDetection] = None,
     ) -> List[NarrowingStep]:
         """
         Take the statement from saying nothing to saying every condition in turn.
@@ -173,53 +193,70 @@ class SearchNarrowing:
         :param frame: The camera data the look is taken from, which is what says where
             the board stands and so how far its lid reaches.
         :param conditions: The conditions to add, in the order they are stated.
+        :param board: The board as this frame shows it, where it has already been found
+            -- which it has whenever a condition names one of its holes -- or None to
+            find it here.
         :return: One step for the bare statement and one for each condition added.
         """
-        board = self.pipeline.board_detector.detect(
-            self.pipeline.rectify(frame, self.pipeline.lid.height),
-            self.pipeline.reference_frame,
+        board = self.board_in(frame) if board is None else board
+        backend = MontessoriPerceptionBackend(
+            source=RecordedFrame(pipeline=self.pipeline, frame=frame)
         )
         statement = an(MontessoriShapeDetection)()
-        taken = [self._step(statement, board)]
+        taken = [self._step(statement, board, backend)]
         for condition in conditions:
             statement = statement.where(condition(statement.variable))
-            taken.append(self._step(statement, board))
+            taken.append(self._step(statement, board, backend))
         return taken
 
     def _step(
-        self, statement: Any, board: Optional[MontessoriBoardDetection]
+        self,
+        statement: Any,
+        board: Optional[MontessoriBoardDetection],
+        backend: MontessoriPerceptionBackend,
     ) -> NarrowingStep:
         """
-        What one statement leaves a look to read.
+        What one statement leaves a look to read, and what answering it reports.
 
         :param statement: The statement so far.
         :param board: The board as this frame showed it, which is what says how far its
             lid reaches.
+        :param backend: What answers the statement by looking.
         """
-        request = self._backend.scene_request(self._backend.read_request(statement))
+        request = backend.scene_request(backend.read_request(statement))
         searches = self.pipeline.searched_surfaces(board, request)
         return NarrowingStep(
-            label=verbalize_expression(statement, backend=self._backend),
+            label=verbalize_expression(statement, backend=backend),
             request=request,
             region=searches[0].region if searches else None,
             plane_height=(
                 searches[0].surface.height if searches else self.pipeline.table.height
             ),
+            found=tuple(statement.evaluate(backend=backend)),
         )
 
     def watch(
-        self, frame: RgbdFrame, conditions: Sequence[StatedCondition]
+        self,
+        frame: RgbdFrame,
+        conditions: Sequence[StatedCondition],
+        board: Optional[MontessoriBoardDetection] = None,
     ) -> List[NarrowingStep]:
         """
         Take the steps, drawing each one and holding it until a key is pressed.
 
         :param frame: The camera data the look is taken from.
         :param conditions: The conditions to add, in the order they are stated.
+        :param board: The board as this frame shows it, where it has already been found.
         :return: The steps taken, however many of them were drawn.
         """
-        taken = self.steps(frame, conditions)
+        taken = self.steps(frame, conditions, board)
         for step in taken:
-            logger.info("%s -- %.3f m2 left to read", step.label, step.searched_area)
+            logger.info(
+                "%s -- %.3f m2 left to read, and %s in it",
+                step.label,
+                step.searched_area,
+                ", ".join(piece.label for piece in step.found) or "nothing",
+            )
             if self.display is None:
                 continue
             self.draw(step, frame)
@@ -245,12 +282,30 @@ class SearchNarrowing:
                 NarrowingView.CAMERA,
                 self.pipeline.workspace_over(step.region).clip(frame.color, frame),
             ),
-            (
-                NarrowingView.RECTIFIED,
-                self.pipeline.rectify(frame, step.plane_height, step.region).image,
-            ),
+            (NarrowingView.RECTIFIED, self._rectified(step, frame)),
         ):
             self.display.draw(self.window_name(view, step), self._fitted(picture))
+
+    def _rectified(self, step: NarrowingStep, frame: RgbdFrame) -> np.ndarray:
+        """
+        The plane a step still searches, as the detectors would read it.
+
+        A colour is a narrowing like the others, so a step stating one has everything
+        else blacked out: what is left is what a look asked for that colour marks.
+
+        :param step: The step to draw.
+        :param frame: The camera data the look is taken from.
+        """
+        rectified = self.pipeline.rectify(frame, step.plane_height, step.region)
+        if step.request.color is None:
+            return rectified.image
+        return cv2.bitwise_and(
+            rectified.image,
+            rectified.image,
+            mask=self.pipeline.piece_detector.colors.color_mask(
+                rectified, step.request.color
+            ),
+        )
 
     @staticmethod
     def window_name(view: NarrowingView, step: NarrowingStep) -> str:
@@ -274,43 +329,51 @@ class SearchNarrowing:
 # %% the conditions this demonstration states
 
 
-def conditions_over(world: World) -> Tuple[StatedCondition, ...]:
+def conditions_over(
+    world: World, board: Optional[MontessoriBoardDetection]
+) -> Tuple[StatedCondition, ...]:
     """
     The conditions the demonstration adds, each narrowing what is left of the one
     before.
 
     Support first, because it is the narrowing the request language already had and the
     one the digital twin answers by itself: naming the surface names a stretch of a
-    plane the world describes. Containment second, because it is extents said outright,
-    and it cuts down what support left.
+    plane the world describes. A direction from one of the board's own holes second,
+    because it is the world's own vocabulary saying where on that surface to look. The
+    colour last, because it narrows what is worth fitting rather than where to fit it,
+    and so is the one narrowing a picture of the region cannot show on its own.
 
-    :param world: The world holding the surfaces and regions the conditions name.
+    *In front of* rather than *right of*, measured: on ``tracy_pickup_demo`` the cube
+    stands 25 mm in front of the square hole and the cylinder 40 mm behind it, while
+    both stand to the same side of it along the robot's own left-right axis. Which
+    direction is stated is one word, and the two pieces are told apart by this one.
+
+    :param world: The world holding the surfaces and holes the conditions name.
+    :param board: The board as this look found it, which is what says where its holes
+        are, or None where it was not in view.
     :return: One condition per step.
     """
     lid = Body(name=lid_surface().name)
-    near_the_board = region_over(
-        world, _half_the_table_nearest_the_robot(), "near_half"
+    conditions = [lambda sought: SupportedBy(sought, lid)]
+    if board is not None:
+        square_hole = board_holes_in(world, board)[
+            HOLE_NAME_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+        ]
+        conditions.append(
+            lambda sought: InFrontOf(
+                sought,
+                square_hole,
+                HomogeneousTransformationMatrix.from_xyz_rpy(
+                    reference_frame=world.root
+                ),
+            )
+        )
+    conditions.append(
+        lambda sought: Colored(
+            sought, KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE].color
+        )
     )
-    return (
-        lambda sought: SupportedBy(sought, lid),
-        lambda sought: InsideRegion(sought, near_the_board),
-    )
-
-
-def _half_the_table_nearest_the_robot() -> WorkspaceRegion:
-    """
-    The half of the searched table closest to the world frame's origin along y.
-
-    Nothing measures this: it is a stretch chosen so a second condition visibly cuts
-    into what the first one left.
-    """
-    searched = searched_workspace()
-    return WorkspaceRegion(
-        minimum_x=searched.minimum_x,
-        maximum_x=searched.maximum_x,
-        minimum_y=searched.minimum_y,
-        maximum_y=(searched.minimum_y + searched.maximum_y) / 2,
-    )
+    return tuple(conditions)
 
 
 def main() -> None:
@@ -342,9 +405,10 @@ def main() -> None:
         pipeline=perception_pipeline(world),
         display=None if arguments.without_windows else OpenCvDisplay(),
     )
-    capture = SceneCapture.load(arguments.capture, arguments.directory)
+    frame = SceneCapture.load(arguments.capture, arguments.directory).to_frame()
+    board = narrowing.board_in(frame)
     try:
-        narrowing.watch(capture.to_frame(), conditions_over(world))
+        narrowing.watch(frame, conditions_over(world, board), board)
     finally:
         if narrowing.display is not None:
             narrowing.display.close()

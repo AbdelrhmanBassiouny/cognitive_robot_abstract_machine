@@ -326,3 +326,23 @@ Every colour a loose piece in this set wears.
 What a piece stands on is whatever the table happens to be covered with, so it is these
 that say a pixel belongs to a piece rather than anything about the surface under it.
 """
+
+
+def pieces_colored(color: Optional[Color] = None) -> Tuple[KnownPiece, ...]:
+    """
+    The pieces of this set wearing a colour.
+
+    :param color: The colour to look for, or None for every piece whatever it wears.
+    """
+    if color is None:
+        return KNOWN_PIECES
+    return tuple(piece for piece in KNOWN_PIECES if piece.color == color)
+
+
+def hues_of(pieces: Tuple[KnownPiece, ...]) -> Tuple[int, ...]:
+    """
+    Every colour a given set of pieces wears, as OpenCV reports hue.
+
+    :param pieces: The pieces to read.
+    """
+    return tuple(sorted({piece.hue for piece in pieces}))

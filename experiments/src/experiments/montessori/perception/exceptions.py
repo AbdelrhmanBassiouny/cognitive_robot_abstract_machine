@@ -319,19 +319,19 @@ class RegionsDoNotMeet(DataclassException):
 @dataclass
 class LookHasNoReferenceFrame(DataclassException):
     """
-    Raised when a statement narrows a look by a region, but the look reports its
-    detections in no frame, so what the region reaches cannot be read in metres.
+    Raised when a statement says where the thing sought lies, but the look reports its
+    detections in no frame, so what the relation allows cannot be read in metres.
     """
 
-    region_name: str
+    relation_name: str
     """
-    What the world calls the region the statement named.
+    The relation the statement stated, by the name of the class that means it.
     """
 
     def error_message(self) -> str:
         return (
             f"A look reporting detections in no frame cannot say where "
-            f"{self.region_name} reaches."
+            f"{self.relation_name} allows a thing to be."
         )
 
     def suggest_correction(self) -> str:

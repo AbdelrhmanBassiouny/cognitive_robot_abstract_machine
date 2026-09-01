@@ -213,6 +213,38 @@ def _find_perforated_body(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     raise ValueError("No part of the board mesh has holes cut into it.")
 
 
+HOLE_NAME_BY_CATEGORY = {
+    MontessoriShapeCategory.CUBE: "square_hole",
+    MontessoriShapeCategory.TRIANGULAR_PRISM: "triangle_hole",
+    MontessoriShapeCategory.RECTANGULAR_PRISM: "rectangular_hole",
+    MontessoriShapeCategory.DISK: "disk_hole",
+}
+"""
+What a hole of a given shape is called, for the shapes the board carries at most one
+hole of.
+
+The :attr:`~experiments.montessori.semantics.MontessoriShapeCategory.CYLINDER` category
+occurs twice and is numbered instead (``circular_hole_1``, ``circular_hole_2``).
+"""
+
+
+def hole_names(footprints: List[HoleFootprint]) -> List[str]:
+    """
+    What each of the board's holes is called, in the order they were detected.
+
+    :param footprints: The board's holes, as cut into its mesh.
+    """
+    circular_hole_count = 0
+    names = []
+    for footprint in footprints:
+        if footprint.category is MontessoriShapeCategory.CYLINDER:
+            circular_hole_count += 1
+            names.append(f"circular_hole_{circular_hole_count}")
+        else:
+            names.append(HOLE_NAME_BY_CATEGORY[footprint.category])
+    return names
+
+
 def detect_hole_footprints() -> List[HoleFootprint]:
     """
     Detect the shape-sorting board's holes by slicing its mesh horizontally through the

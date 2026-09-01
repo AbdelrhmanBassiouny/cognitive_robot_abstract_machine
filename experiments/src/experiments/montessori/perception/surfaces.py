@@ -201,7 +201,7 @@ class SurfaceSearch:
         A look asked about a stretch of the world that this surface never reaches has no
         pass to run here, which is not a failure: it is the narrowing doing its work.
         """
-        return self.narrowed_to is None or self._reach.meets(self.narrowed_to)
+        return self._narrowing is None or self._reach.meets(self._narrowing)
 
     @property
     def region(self) -> WorkspaceRegion:
@@ -211,9 +211,24 @@ class SurfaceSearch:
         :raises RegionsDoNotMeet: If the look was narrowed away from this surface, which
             :attr:`is_searched` answers before it is asked.
         """
-        if self.narrowed_to is None:
+        if self._narrowing is None:
             return self._reach
-        return self._reach.intersection(self.narrowed_to)
+        return self._reach.intersection(self._narrowing)
+
+    @property
+    def _narrowing(self) -> Optional[WorkspaceRegion]:
+        """
+        The stretch of the world the look was asked to stay inside, as much of it as a
+        picture has to reach to measure something standing at its very edge.
+
+        A statement says where the *thing* is, not which pixels may be read, so the
+        picture reaches an :attr:`overhang` past it for the same reason it does past a
+        surface's own boundary -- otherwise a piece standing just inside the stretch a
+        statement allows has its far side cut off and is never fitted.
+        """
+        if self.narrowed_to is None:
+            return None
+        return self.narrowed_to.grown_by(self.overhang)
 
     @property
     def _reach(self) -> WorkspaceRegion:

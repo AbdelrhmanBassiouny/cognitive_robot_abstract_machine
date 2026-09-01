@@ -17,9 +17,11 @@ from typing_extensions import List, Optional
 
 from experiments.montessori.perception.footprint import Footprint
 from experiments.montessori.perception.hypotheses import PieceHypothesis
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% detections
 
@@ -72,6 +74,18 @@ class MontessoriDetection(ABC):
         so its top is that surface.
         """
         return self.surface_height
+
+    @property
+    def color(self) -> Optional[Color]:
+        """
+        What colour the thing recognised is, or None where nothing says.
+
+        Read from what this set is known to contain rather than from the picture: the
+        table throws a coloured reflection of every piece back at the camera, so the
+        colour measured at a place is evidence about what stands there and not a
+        measurement of the thing itself.
+        """
+        return None
 
     @property
     @abstractmethod
@@ -142,6 +156,13 @@ class MontessoriShapeDetection(MontessoriDetection):
     A result carries what it was looked for and why, so it can be explained rather than
     only checked.
     """
+
+    @property
+    def color(self) -> Color:
+        """
+        The colour this set gives the piece that was recognised.
+        """
+        return KNOWN_PIECE_BY_CATEGORY[self.category].color
 
     @property
     def surface_height(self) -> float:
