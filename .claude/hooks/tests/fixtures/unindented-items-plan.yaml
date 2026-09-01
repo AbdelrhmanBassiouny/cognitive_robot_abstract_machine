@@ -1,0 +1,28 @@
+schema_version: 1
+id: unindented-items-plan
+title: A plan whose sequence entries sit flush with their key
+description: >
+  Written the way PyYAML's own dumper writes a manifest - sequence entries at
+  the same indentation as the key holding them - which is valid YAML and is
+  what a plan re-saved through a full round trip looks like.
+default_repository: owner/repo
+waves:
+- id: only-wave
+  name: The only wave
+tracks:
+- id: only-track
+  name: The only track
+  wave: only-wave
+items:
+- id: first
+  title: The first item
+  track: only-track
+  status: not_started
+- id: second
+  title: The second item
+  track: only-track
+  status: not_started
+- id: third
+  title: The third item
+  track: only-track
+  status: not_started
