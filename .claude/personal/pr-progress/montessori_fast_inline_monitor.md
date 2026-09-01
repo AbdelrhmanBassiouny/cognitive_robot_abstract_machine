@@ -391,3 +391,52 @@ Open: whether the three assertions hold, now that they run at all. CI answers th
 Worth generalising: "needs the workspace to chase" was wrong here, and the tell was
 that the traceback names the *test's own* line, not production code. A failure whose
 cause is visible in the test source is worth reading before it is deferred.
+### Round 23 -- the second CI round
+
+109. **`PickUpAction` wants the annotation, not the body.** Eight `experiments` tests
+    died on `'Body' object has no attribute 'root'`. `main` retyped
+    `PickUpAction.object_designator` (and `ReachAction`'s) from `Body` to `HasRootBody`
+    and takes `.root` at every use *inside* the action; the montessori callers were
+    pre-applying `.root`. Fixed at both `insert_shape_action.py` sites (459, 481) --
+    and note the two `PlaceAction` calls ten lines below each of them keep their
+    `.root`, because `PlaceAction.object_designator` is still a `Body`.
+110. **This is the reverse of round 22's `pick_up.py` fix, and both are right.** One
+    type change produces errors in opposite directions on either side of the boundary:
+    uses inside the action gained `.root`, callers lost it. Worth remembering before
+    "fixing" one by analogy with the other.
+111. Same call site in the two Franka pickup smoke scripts, neither of which CI runs.
+    `franka_pickup_smoke_test.py` had a `MontessoriShape` in hand already. The bare one
+    builds an unannotated cube on purpose -- but its docstring's "bare" is about the
+    scene carrying no sorting board, not about semantics, and there is no way to name an
+    unannotated body to `PickUpAction` any more, so it is annotated as `CubeShape`.
+
+### The world budget
+
+112. `semantic_digital_twin` tripped `count_worlds` (`test/conftest.py`), an autouse
+    module-scoped guard failing once `objgraph.count("World") > 30` after a
+    `gc.collect()`. Shared by the whole run, checked at every module boundary, under
+    `-n auto` -- so which worker crosses it varies, which is why exactly one module
+    reported it.
+113. Found by elimination, not by guessing: of every fixture in `test/conftest.py`,
+    `armar7_world_state_reset` is the only one any `test/semantic_digital_twin_test`
+    file requests on this branch and none does on `main`; `_armar7_world_setup` behind
+    it has **no user anywhere on `main`**. So main's sdt job never builds an Armar7
+    world and this branch's builds one and holds it for the session. The one-liner that
+    establishes this is worth keeping:
+    `for n in $(fixture names); do compare grep -rl over HEAD vs git grep -l over origin/main; done`.
+114. `test_world_armar7.py`'s second test mutates the drive origin, which is the only
+    reason it wanted the deepcopy-and-restore wrapper. A per-test world serves it
+    better; conftest gained a function-scoped `armar7_world` over the existing
+    `world_with_urdf_factory`, and nothing the test asserts changed. Main's two fixtures
+    are left exactly as they are -- unused, as they are on `main`.
+115. **Why it took until now**: the sdt suite had *never run on this branch*. Every run
+    back to `da2e062e3` failed at `Build ORM` and skipped `Run tests` outright; the main
+    merge brought the machinery that lets the job reach pytest. Not a merge regression --
+    a suite addition that had never been measured.
+116. Limit worth stating: the world-budget fix is reasoned, not measured. The reasoning
+    is exact about what the branch *adds* (one session-held world, and nothing else) and
+    silent about how close main's own baseline sits to 30. `4150026be`; CI is the check.
+117. `scripts/format_docstrings.py` reflowed two docstrings it had never been run over.
+    Kept the `TABLE_TOP_SCALE` one (a proper summary/body split); reverted the other,
+    which wrapped as `full hole-\ninsertion`.
+
