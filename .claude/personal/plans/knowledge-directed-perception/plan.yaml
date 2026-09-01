@@ -833,12 +833,13 @@ items:
     rather than reversed here - the thread is left open for that reason.'
 - id: detector-parameters-from-knowledge
   title: Take the detectors' numbers from the objects and the surfaces they look at
-  branch: perception_parameters_from_knowledge
-  pull_request_number: null
+  branch: claude/knowledge-directed-perception-detector-zrm57t
+  pull_request_number: 239
   track: method-selection
   depends_on:
   - choose-detection-method
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_014LgGAmWL8JZM3qW7pwwnbp
   notes: 'Raised by the developer across nine review threads on #202, which are one ask: the numbers the
     detectors carry - the saturation and darkness a pixel needs to belong to an object, the areas a hole
     and a piece may cover, how much of an outline must lie along a seen edge, how tall a loose piece stands,

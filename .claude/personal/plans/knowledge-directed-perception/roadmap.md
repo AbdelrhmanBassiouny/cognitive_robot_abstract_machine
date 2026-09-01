@@ -2946,3 +2946,108 @@ sharing non-trivial: two detectors asking for the same plane may no longer be as
 the same picture, so what is shared has to be keyed by the region as well as by the
 height. #223's `Footprint` rename conflicts the usual mechanical way, and #236 edits
 `pipeline.py` too.
+
+## `detector-parameters-from-knowledge`: the numbers as knowledge, and the engine this item was written around
+
+Kicked off 2026-09-01 in `auto` mode, as pull request #239 off
+`claude/choose-detection-method-gf64yp` (#231, open and out of draft, so ready to stack
+on -- `check_dependency_readiness.py` reports `open_ready`). The session's branch arrived
+cut from `integration` rather than from anything this plan is stacked on -- the hazard
+#199 exists to refuse, and the seventh time on this plan after #223, #225, #227, #232,
+#236 and #238 -- and was re-cut onto #231's tip before the first commit.
+
+The mechanical scope check reports every path this touches absent from `main` and shared
+with #231, #232, #236, #238 and #223, which every round on this plan has already recorded
+as expected: every file in this plan is introduced by #202, so path overlap alone would
+fold the whole plan into one item. The purpose check is the one that decides it and it
+comes back clean twice over: #231 recorded "moving measured colours onto the twin is
+`detector-parameters-from-knowledge`'s ask, and this is a second reader for it", and
+deliberately did not do it; #221 recorded the same about the board's surface. What remains
+once #231's edits are removed is knowledge moving onto the twin's objects and a rule tree
+concluding a detector's *numbers* rather than its *identity*, which no earlier item states
+in any form.
+
+### #159 is merged in, which is what this item was told to stack on
+
+The item's own note and the correction of 2026-08-31 both say it: this item asks for "an
+inspectable rule tree rather than a hand-written condition", and `render_tree` is what
+that names. #231 stayed off the engine at the developer's decision and recorded why that
+decision does not carry here -- "what the engine actually adds -- `fit` with an expert,
+`render_tree`, the corner-case store, the model file and the interactive expert interface
+-- is what the *next two* items are written around, not this one. **Both should stack on
+#159**, and the tuning item on #77."
+
+Measured before the branch was opened rather than assumed: `D-core-single-class` merges
+into #231's tip with no conflict at all, and adds 9,236 lines over 50 files. That is the
+figure #231 refused for a 600-line pull request, and it is accepted here because it is the
+mechanism this item's own ask names rather than another plan's work carried through this
+one's review.
+
+**`EQLSingleClassRDR.query` is `field(init=False)`, so the rules are authored by fitting.**
+#231 read that as a cost -- two known rules becoming fitted-from-examples. For this item it
+is the right authoring model rather than a concession: the parameters genuinely are
+concluded from situations, and `tune-detection-rules-against-the-camera`, which depends on
+this item, is a presenter over the expert's `ConclusionHelper` -- the same expert-driven
+path. Fitting through a scripted expert here is what that item extends.
+
+### What is built
+
+- **`DetectionParameters`** -- the numbers one look needs, in one value object: the
+  saturation and brightness floors a pixel must clear, the area range a piece's outline
+  may cover, how tall a piece stands, how far a measured hue may sit from a piece's own,
+  the agreement a fitted outline must reach, and how finely the fit steps and turns. The
+  detectors read one per look instead of carrying their own defaults, which is the whole
+  of the developer's "these are properties of the objects, not of the detector".
+- **The knowledge moves onto the twin.** The board's *measured* surface colour replaces
+  `Color.BEIGE()`; `ShapeSortingBoard` carries its own hole count, lid area and footprint;
+  `ShapeSortingHole` carries the marker thickness; each Montessori shape annotation
+  carries the hue and height measured off the real piece.
+- **`DetectionParameterRules`** -- an `EQLSingleClassRDR` over the same `TargetOnSurface`
+  situation #231's tree already reads, concluding a `DetectionParameters`, authored by
+  fitting known situations through a scripted expert and rendered by `render_tree`.
+- **The contour accept/reject chain becomes rules.** `EdgeFitDetector._piece_at`'s guard
+  chain -- too small or too large, not wholly within the region, standing where another
+  surface reaches -- is the chain of ifs the developer named at `pipeline.py:619`. It
+  becomes a rule tree that says *which* condition refused a contour rather than returning
+  `None`.
+
+### The checkable outcome
+
+#221 and #231 both recorded the same consequence of this item, and it is what makes the
+claim measurable rather than structural: `BOARD_COLOR` is eleven hues from the wood the
+camera measures, so #231's rule sending an amber piece to the edge fit does not fire on
+the real board. With the measured colour on the twin it does. That is asserted, not
+observed.
+
+### Deliberately not built here, each recorded rather than dropped
+
+- **The reach of a seeded search.** The 2026-08-31 widening asks for the numbers that say
+  *how far* around a believed place to look. #232 already moved that onto the belief --
+  `PieceMatcher` lost `search_radius`, and `SEED_REACH` carries it into `hypotheses.py` --
+  so concluding it here would build it a second time on a stack that cannot see it, which
+  is the duplication these notes record four times over. The stepping and turning numbers
+  *are* still the detector's on both stacks, so those are concluded here.
+- **How much better one explanation must be than the next.** That is
+  `competing-explanations`, which is what `minimum_agreement` cannot be tuned into.
+- **The mesh classification thresholds** in `hole_geometry.py`. #236 removes
+  `CrossSectionClassifier` outright and takes each hole's identity from the fitted layout
+  instead, so concluding those four numbers here would parameterise something that item
+  deletes. The developer's own answer on that thread was that they read as the detector's
+  rather than the objects' anyway.
+- **The interactive presenter**, which is `tune-detection-rules-against-the-camera`.
+
+### Landing hazards
+
+#223's `Footprint` -> `RectifiedFootprint` rename conflicts with this branch's edits to
+`pipeline.py` and `piece_matcher.py`, the same mechanical way it does with #205, #221,
+#225, #232, #236 and #238. #232, #236 and #238 all edit `pipeline.py` on the other stack
+and none of them carries `DetectionParameters`, so whichever of them meets this branch
+first pays for threading the parameters through `detect`.
+
+### The bootstrap script's indentation fault is still unfixed
+
+`.claude/hooks/plan_item_bootstrap.py` writes item fields at four-space indentation while
+this plan's `plan.yaml` indents them by two, so `open` failed inside `save-plan.sh` with
+the error swallowed by `capture_output=True` -- exactly as #231 recorded on 2026-08-31 and
+#236 and #238 on 2026-09-01. Worked around a fourth time by editing `plan.yaml` directly.
+It is the same family as #160 and still wants its own bug-fix pull request.

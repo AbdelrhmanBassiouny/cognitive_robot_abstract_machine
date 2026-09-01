@@ -33,7 +33,7 @@ claude/kdp-search-constraints-pfaph7	knowledge-directed-perception
 sdt_surface_finish_annotation	knowledge-directed-perception
 perception_surface_from_description	knowledge-directed-perception
 claude/choose-detection-method-gf64yp	knowledge-directed-perception
-perception_parameters_from_knowledge	knowledge-directed-perception
+claude/knowledge-directed-perception-detector-zrm57t	knowledge-directed-perception
 perception_interactive_rule_tuning	knowledge-directed-perception
 segmind_rosbag_player	knowledge-directed-perception
 perception_expectations_from_events	knowledge-directed-perception
