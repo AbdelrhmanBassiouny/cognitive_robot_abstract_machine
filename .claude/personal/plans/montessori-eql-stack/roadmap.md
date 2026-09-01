@@ -1242,3 +1242,120 @@ three database test files run here: 52 passed, the one failure being the known
 its association table) belong in the production `experiments` ORM interface at all, and
 whether this fix deserves its own bug-fix PR instead of riding #168 — it touches
 `results_database.py`, which the voice-questions work otherwise leaves alone.
+
+## 2026-09-01: #169 merged main again, and main had built the same things
+
+`montessori_fast_inline_monitor` had gone thirteen days without a push while `main`
+reached `1227a68f`, 353 commits past the `90c24116` it last carried. Nine
+`stacked-pr-maintenance` passes had reported the conflict on the pull request and
+skipped the branch, the `needs-resolution` label doing exactly what it is for. Merged as
+`3e9f3847`, a fast-forward push; the pull request went from `dirty` to `unstable`, so
+only CI stands between it and mergeable.
+
+Twenty-five files conflicted, and the interesting thing about them is how many were
+collisions of purpose rather than of text: `main` had independently built three things
+this branch built.
+
+### The ORM interfaces: main's is the superset
+
+`main` ported the same `ijcai-tutorial` `OrmInterface` / `WorkspaceOrmInterfaces` this
+branch had, and then carried it much further -- 1,927 lines against this branch's ~400.
+It asks whether an interface is *outdated* against the sources it is generated from
+rather than merely whether it is present, runs every generator in one interpreter
+through a new `orm_generation` module, shows a progress bar, and gives pytest an
+`--orm-build` option so a test run builds what it needs. Both sides had already deleted
+the placeholder machinery (`empty_generated_orm_interfaces.py`,
+`protect_generated_orm_interfaces.py`) and both gitignore the interfaces.
+
+So `main`'s side was taken whole, and with it the disappearance of
+`WorkspaceOrmInterfaces.ensure_generated`. What it does not cover is a run that is not a
+test run, which is the only reason this branch's piece existed:
+`scripts/ensure_orm_interfaces.py` stays as `run_montessori_demo.sh`'s pre-flight,
+rewritten as a thin CLI over `is_outdated` + `regenerate`, exactly as
+`regenerate_all_orm.py` is a thin CLI over `regenerate`. `doc/contributing.rst` says so
+beside `main`'s own `--orm-build` section. The explicit "Build ORM" CI step went too:
+`main` builds through the conftests instead.
+
+### The bounding boxes: a rename over an invasive type change
+
+`main` renamed `BoundingBox` to `VolumetricBoundingBox`, added `PlanarBoundingBox` for
+floor-plan regions, and factored what they share into an `AxisAlignedBox` base -- which
+had *absorbed this branch's own additions*, `Bounds`, `to_array_bounds` and
+`from_array_bounds`, in a form generic over dimensionality. Meanwhile this branch had
+changed the same class's `origin` from a `HomogeneousTransformationMatrix` to a
+`NumericTransform`, which is the whole point of the monitor work: a box that carries
+numbers can be read off the thread that owns the world.
+
+The question the merge had to answer was where that numeric origin lives now that there
+are two box classes. It went onto the base: `AxisAlignedBox.__post_init__` reads a
+symbolic origin out into a `NumericTransform`, so `PlanarBoundingBox` gets it too, and
+`transform_to_origin` crosses frames through `compute_forward_kinematics_np` over
+corners built from a new abstract `axis_bounds`, replacing `main`'s symbolic version for
+both dimensionalities. The alternative -- numeric on the volumetric box only, symbolic on
+the planar one -- would have left two behaviours under one name in a family whose base
+class exists precisely to state one.
+
+Judged in scope rather than a scope change: "a bounding box carries numbers, not CasADi"
+is a decision this pull request already shipped and describes. `main` factoring a base
+class out of the class that carried it does not reopen it.
+
+Two things fell out of that. `axis_intervals` and `origin_translation`, which this branch
+added to read a *symbolic* origin once instead of three times, are gone: with a numeric
+origin `main`'s per-axis `_interval` already costs nothing, so keeping them would have
+been a second name for one operation. And both `__eq__` implementations were compared
+with `np.allclose(self.origin, other.origin)`, which has no array to work with once an
+origin is a `NumericTransform` -- latent on this branch since the type changed, and newly
+reachable for `PlanarBoundingBox`. They compare `origin.to_np()` now, pinned by two tests
+written to fail first.
+
+### MuJoCo syncing: both sides rewrote the same layer
+
+`main` resolved each connection to its joint once through a `JointBackedConnection` and
+moved the world -> sim push under the model lock, because RK4 writes integrated qpos back
+at the end of a step and silently swallows anything written mid-step. This branch had
+added ramped control setpoints, physically simulated DOFs and an integrated position
+setpoint. `main`'s structure was taken and the ramping kept on top; the command interval
+the ramp divides by is now measured in `_measure_command_interval` immediately before the
+push, which is where this branch's own inline loop measured it.
+
+The keyframe qpos stayed this branch's `_compute_keyframe_qpos`. `main`'s version walks
+`world.bodies_topologically_sorted`; this branch's walks the *compiled model's* own joint
+order, and its docstring records why -- the two orders do not generally match, and getting
+it wrong assigns one body's qpos to another silently.
+
+### The rest
+
+`PickUpAction` and `PlacingAction` take `main`'s pose thresholds, `perceive_before_grasp`
+and `object_designator.root` target pose while still gating `AttachNode`/`DetachNode` on
+`Context.update_world_model_attachment`. `Armar7MobileBase` no longer takes `forward_axis`
+as a constructor argument -- `main` made it a `classproperty` -- and both sides root it at
+`Dummy_Platform_link`. krrood's two tuple-collection fixes, which both sides had written
+differently, went to `main`'s wording; the branch's own `COLUMN_VALUE_TYPES` ORMatic fix
+auto-merged and survives, since `main` does not have it. The experiments conftest took
+`main`'s renamed `CEREAL_NAME` beside this branch's `create_engine` import. Both sides had
+appended tests to the end of `test_multi_sim.py`; both blocks were kept.
+
+### Verified statically only
+
+This container has no CRAM workspace -- no numpy, no sqlalchemy, no ROS, and Python 3.11
+where the repository needs 3.12 -- so no suite ran. What was checked: every resolved file
+byte-compiles under 3.12, `scripts/format_docstrings.py` clean, `git merge-tree` against
+`main` clean, and the undefined-name differential this stack has now needed five times --
+`pyflakes` over the 258 non-generated `.py` files `main`'s side touched, minus each
+parent's own findings, comparing with line numbers *and* "from line N" back-references
+stripped, which is what turns the `Color` re-definitions from eight false positives into
+none. Nothing new. CI on `3e9f3847` is the real check.
+
+### Not done here
+
+The five branches stacked above this one, plus #176, #177 and #178, are all stale by this
+merge. Nothing was restacked: that is `stacked-pr-maintenance`'s pass and it was not asked
+for.
+
+`cramera` still declares its dependencies through `cramera/requirements.txt`, the
+convention `main` has just replaced everywhere else with inline `pyproject` dependencies
+(it deleted fourteen such files). It is valid setuptools and installs, so it was left
+alone -- converting it would conflict with #168, which declares `rapidfuzz` there.
+
+The `needs-resolution` label is still on the pull request; the routine that applies it
+clears it on its next pass now that the branch merges cleanly.
