@@ -309,9 +309,26 @@ items:
   title: Promote with a written summary, and report the links as a table rather than a notification
   branch: claude/plan-item-kickoff-workflow-y38l38
   pull_request_number: 162
-  status: in_progress
+  status: blocked
   session: https://claude.ai/code/session_01RTWnbUYSauqy9peX7JFJUz
   track: pass
+  blockers:
+    - >-
+      Withheld from promotion by the `integration-conflict` label since 2026-08-31, and nothing
+      clears that label automatically. The recorded comment names the pair but not the cause;
+      reproduced on 2026-09-01 by merging the two branches and running the configured integration
+      suite, which fails at collection with `NameError: name 'classproperty' is not defined` in
+      `.claude/stack/maintenance_commands.py`. `PendingPromotionsCommand`, which this branch adds,
+      declares `invoked_as` and `description` with `@classproperty`; `manifest-currency-first`
+      (#151) deletes `.claude/stack/class_property.py` when it moves the command base out to
+      `.claude/shared/command_line.py`, where both are ordinary abstract properties. Git merges the
+      two edits without a conflict because the new class is text only this branch has, so the merged
+      file keeps a decorator whose import the other branch removed.
+    - >-
+      One unresolved review thread, carrying a question from 2026-08-31 that has had no answer:
+      whether this branch should now be rebased onto `manifest-currency-first` (#151) for the shared
+      `DataclassException` base, given that #151 is no longer behind `main`. The 2026-08-13 answer
+      rested on #151 being 159 commits behind, which is no longer true.
   depends_on:
   - stack-maintenance-executor
   - pinned-stack-tooling
