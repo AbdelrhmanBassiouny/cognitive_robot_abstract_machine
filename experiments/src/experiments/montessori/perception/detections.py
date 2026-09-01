@@ -16,6 +16,7 @@ import numpy as np
 from typing_extensions import List, Optional
 
 from experiments.montessori.perception.footprint import Footprint
+from experiments.montessori.perception.hypotheses import PieceHypothesis
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -131,7 +132,15 @@ class MontessoriShapeDetection(MontessoriDetection):
 
     One is a perfect fit. A low value says no placement of this piece follows what is in
     the picture, which is how a piece is told apart from its own reflection in the
-    table.
+    table. It is the evidence for :attr:`hypothesis`.
+    """
+
+    hypothesis: PieceHypothesis = field(kw_only=True)
+    """
+    What was expected here and what suggested it, which is what this detection answers.
+
+    A result carries what it was looked for and why, so it can be explained rather than
+    only checked.
     """
 
     @property

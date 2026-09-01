@@ -122,21 +122,39 @@ def test_every_piece_resting_on_the_table_is_found(
     assert not (Counter(truth.pieces_on_table) - found)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A piece standing on the lid is reported a second time on the table, where "
-        "the table pass rectified it. Owned by the plan item one-detection-per-thing."
-    ),
-)
+TABLE_GHOSTS_STILL_REPORTED: List[str] = ["non_inserted_objects"]
+"""
+The captures where a piece on the lid is still read as one on the table.
+
+What a raised thing hides from the camera is measured off the board as it was detected,
+and the board's own orientation comes from the holes found in its lid. In this capture
+alone the board is reported turned twenty-two degrees from where the other five put it,
+about the same centre, so the stretch of table it is taken to stand in front of is
+turned with it.
+"""
+
+
 def test_only_the_pieces_resting_on_the_table_are_detected_there(
+    request: pytest.FixtureRequest,
     scene: MontessoriScene,
     truth: CaptureTruth,
+    capture: SceneCapture,
     capture_pipeline: MontessoriPerceptionPipeline,
 ) -> None:
     """
     Nothing is reported on the table that is not lying on it.
     """
+    if capture.name in TABLE_GHOSTS_STILL_REPORTED:
+        request.node.add_marker(
+            pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "The board is read as turned away from where it stands, so what it "
+                    "hides is turned with it; owned by the plan item "
+                    "holes-fitted-like-pieces."
+                ),
+            )
+        )
     assert detections_on(scene, capture_pipeline.table.name) == Counter(
         truth.pieces_on_table
     )
@@ -149,10 +167,13 @@ LID_PIECES_STILL_MISSED: List[str] = [
     "non_inserted_objects",
 ]
 """
-The captures whose lid pieces the detectors cannot yet read.
+The captures whose lid pieces no look at them expects.
 
-Their pieces either wear the lid's own hue or touch one another, so segmentation hands
-the edge fit either nothing to start from or one blob covering several pieces.
+Their pieces wear the lid's own hue or touch one another, so no colour suggests a place
+to look; and a capture carries no world, so nothing else here believes anything about
+the lid. A look told where to expect a piece finds it (see
+``test_a_piece_wearing_the_surfaces_own_hue_is_found_where_it_is_expected``), and what
+would tell it on a capture is the object's own history.
 """
 
 
@@ -171,8 +192,9 @@ def test_every_piece_resting_on_the_lid_is_found(
             pytest.mark.xfail(
                 strict=True,
                 reason=(
-                    "Pieces on the lid are lost to it or to one another; owned by the "
-                    "plan item detector-parameters-from-knowledge."
+                    "Nothing tells this look to expect a piece on the lid, and colour "
+                    "cannot separate one there. Owned by the plan item "
+                    "expectations-from-events."
                 ),
             )
         )
