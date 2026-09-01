@@ -805,24 +805,20 @@ class WrappedTable:
         # create a relationship
         rel_name = f"{wrapped_field.field.name}"
 
-        # SQLAlchemy's relationship() only accepts a mutable collection_class it can
-        # instrument (append/remove/...) -- list, set, dict, or a custom
-        # @collection-decorated class. A domain field typed as a tuple (or any other
-        # immutable container) can't be used directly here; the ORM-managed collection
-        # falls back to list, while the generated Mapped[...] type hint below keeps
-        # showing the field's real domain type. Reconstructing the domain object
-        # (from_dao) still produces the original container type, since that's derived
-        # from the domain dataclass's own field type, not from this collection_class.
-        sqlalchemy_collection_type = (
+        # SQLAlchemy instruments a collection class in place (it needs an appender
+        # method), which an immutable domain container such as tuple cannot provide.
+        # The relationship is therefore held as a list at the ORM layer; from_dao
+        # restores the domain field's own tuple type once its object is populated
+        # (see DataAccessObject._finalize_object_containers).
+        collection_class_type = (
             list
-            if isclass(wrapped_field.container_type)
-            and issubclass(wrapped_field.container_type, tuple)
+            if wrapped_field.container_type is tuple
             else wrapped_field.container_type
         )
-        container_name = module_and_class_name(sqlalchemy_collection_type)
+        container_name = module_and_class_name(collection_class_type)
 
         # Association Object pattern
-        rel_type = f"Mapped[{module_and_class_name(wrapped_field.container_type)}[{association_table.name}]]"
+        rel_type = f"Mapped[{container_name}[{association_table.name}]]"
         rel_constructor = (
             f"relationship('{association_table.name}', "
             f"collection_class={container_name}, "

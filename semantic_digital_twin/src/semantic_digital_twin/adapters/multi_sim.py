@@ -13,7 +13,17 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import IntEnum
 from types import NoneType
-from typing_extensions import Dict, List, Any, ClassVar, Type, Optional, Set, Union
+from typing_extensions import (
+    Dict,
+    List,
+    Any,
+    ClassVar,
+    Iterator,
+    Type,
+    Optional,
+    Set,
+    Union,
+)
 
 import numpy
 import mujoco
@@ -323,9 +333,17 @@ class KinematicStructureEntityConverter(EntityConverter, ABC):
         kinematic_structure_entity_props = EntityConverter._convert(self, entity)
         # The simulator joint supplies the variable part, so the static frame must
         # exclude it (see Connection.reference_origin_expression).
-        [px, py, pz, qx, qy, qz, qw] = (
-            entity.parent_connection.reference_origin_as_position_quaternion().evaluate()[0]
-        )
+        [
+            px,
+            py,
+            pz,
+            qx,
+            qy,
+            qz,
+            qw,
+        ] = entity.parent_connection.reference_origin_as_position_quaternion().evaluate()[
+            0
+        ]
         kinematic_structure_entity_pos = [px, py, pz]
         kinematic_structure_entity_quat = [qw, qx, qy, qz]
         kinematic_structure_entity_props.update(
@@ -1378,10 +1396,13 @@ class MujocoMeshConverter(MujocoGeomConverter, MeshConverter):
 
         :param material: The trimesh material (``TextureVisuals.material``) to resolve.
         :param mesh_directory: Directory of the mesh file the material came from.
-        :return: The texture's file path, or ``None`` if the texture is a programmatically
-            generated image (for example a flat "glass" material) with no backing file.
+        :return: The texture's file path, or ``None`` if the material has no image at
+            all (a flat colour with no texture) or a programmatically generated image
+            with no backing file.
         """
         image = material.image
+        if image is None:
+            return None
         candidates = [material.name, image.info.get("file_path", "")]
         if isinstance(image, PIL.ImageFile.ImageFile):
             candidates.append(image.filename)
@@ -1767,10 +1788,26 @@ class MujocoBuilder(MultiSimBuilder):
 
     spec: mujoco.MjSpec = field(default=mujoco.MjSpec())
 
+    planar_thickness_epsilon: float = 1e-4
+    """
+    Below this thickness (in meters, measured along a mesh's own best-fit-plane
+    normal), a mesh is treated as near-planar for :meth:`_thicken_if_near_planar`.
+    """
+
+    _thickened_mesh_paths: Dict[str, str] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    """
+    Memoizes :meth:`_thicken_if_near_planar` by input path, so a mesh referenced by
+    many geoms (e.g. a screw reused across a whole object) is only loaded and checked
+    once instead of once per reference.
+    """
+
     def _start_build(self, file_path: str):
         self.spec = mujoco.MjSpec()
         self.spec.modelname = "scene"
         self.spec.compiler.degree = 0
+        self._thickened_mesh_paths = {}
 
     def _end_build(self, file_path: str):
         self._build_equalities()
@@ -1876,7 +1913,7 @@ class MujocoBuilder(MultiSimBuilder):
         bodies), and getting that order wrong silently assigns one body's
         qpos values to a different body. Every generated MuJoCo joint is
         named after its owning Connection (see e.g.
-        MultiSimSynchronizer._resolve_qpos_adr, which relies on the same
+        MujocoSynchronizer._resolve_qpos_address, which relies on the same
         invariant), so each joint is resolved back to its Connection by
         name rather than by position.
         """
@@ -1998,9 +2035,75 @@ class MujocoBuilder(MultiSimBuilder):
         logger.info(
             f"Converting Collada mesh to STL for MuJoCo: {original_mesh_file_path}"
         )
-        tm = trimesh.load(original_mesh_file_path, force="mesh")
+        trimesh_mesh = trimesh.load(original_mesh_file_path, force="mesh")
 
-        tm.export(stl_file_path)
+        trimesh_mesh.export(stl_file_path)
+
+    def _thicken_if_near_planar(self, mesh_file_path: str) -> str:
+        """
+        MuJoCo cannot compute a convex hull for a mesh whose vertices are (near-)
+        exactly coplanar - a flat, effectively two-dimensional panel with no enclosed
+        volume - and raises "mesh ... has coplanar vertices, cannot compute convex
+        hull" rather than compiling. Real CAD furniture sometimes ships geometry this
+        way (a door or cover modelled as a single-sided sheet).
+
+        MuJoCo hulls a mesh's vertex positions, not its exact topology, so the fix does
+        not need to close the mesh into a topological solid: duplicating every vertex
+        and offsetting the two copies apart by a small epsilon along the panel's own
+        normal already gives MuJoCo a non-degenerate point cloud to hull, invisibly
+        (the offset is a fraction of a millimeter for real furniture-scale meshes).
+
+        The offset is scaled to the mesh's own extent (floored at
+        ``planar_thickness_epsilon``): STL's float32 export loses precision at large
+        enough coordinate magnitudes, so a mesh authored at a much larger scale than
+        typical furniture (seen on one real ArtVIP object, tens of thousands of units
+        across) needs a correspondingly larger absolute offset to remain distinguishable
+        from zero once exported.
+
+        :param mesh_file_path: The mesh file to check.
+        :return: ``mesh_file_path`` unchanged if it already has meaningful thickness,
+            otherwise the path to a thickened copy written into the asset folder.
+        """
+        if mesh_file_path in self._thickened_mesh_paths:
+            return self._thickened_mesh_paths[mesh_file_path]
+
+        trimesh_mesh = trimesh.load(mesh_file_path, force="mesh")
+        centered_vertices = trimesh_mesh.vertices - trimesh_mesh.vertices.mean(axis=0)
+        _, _, principal_axes = numpy.linalg.svd(centered_vertices, full_matrices=False)
+        normal = principal_axes[-1]
+        projections = centered_vertices @ normal
+        thickness = projections.max() - projections.min()
+        if thickness > self.planar_thickness_epsilon:
+            self._thickened_mesh_paths[mesh_file_path] = mesh_file_path
+            return mesh_file_path
+
+        base_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
+        thickened_file_path = os.path.join(
+            self.asset_folder_path, base_name + "_thickened.stl"
+        )
+        # Always (re)written rather than reused when already present on disk: two
+        # different source meshes can share a basename (e.g. two objects each
+        # containing a "cover.stl"), and an existence check keyed only on that name
+        # would silently reuse a stale, geometrically wrong thickened mesh left over
+        # from a previous build that wrote into the same asset folder.
+        extent = numpy.linalg.norm(
+            trimesh_mesh.vertices.max(axis=0) - trimesh_mesh.vertices.min(axis=0)
+        )
+        offset_magnitude = max(self.planar_thickness_epsilon, extent * 1e-5)
+        offset = normal * (offset_magnitude / 2.0)
+        vertex_count = len(trimesh_mesh.vertices)
+        thickened = trimesh.Trimesh(
+            vertices=numpy.concatenate(
+                [trimesh_mesh.vertices + offset, trimesh_mesh.vertices - offset]
+            ),
+            faces=numpy.concatenate(
+                [trimesh_mesh.faces, trimesh_mesh.faces[:, ::-1] + vertex_count]
+            ),
+            process=False,
+        )
+        thickened.export(thickened_file_path)
+        self._thickened_mesh_paths[mesh_file_path] = thickened_file_path
+        return thickened_file_path
 
     def _parse_geom(self, geom_props: Dict[str, Any]) -> bool:
         """
@@ -2028,6 +2131,8 @@ class MujocoBuilder(MultiSimBuilder):
                     original_mesh_file_path=mesh_file_path, stl_file_path=stl_file_path
                 )
             mesh_file_path = stl_file_path
+
+        mesh_file_path = self._thicken_if_near_planar(mesh_file_path)
 
         mesh_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
         mesh_scale = [mesh_entity.scale.x, mesh_entity.scale.y, mesh_entity.scale.z]
@@ -2939,6 +3044,27 @@ class ControlSetpointRamp:
     """
 
 
+@dataclass
+class JointBackedConnection:
+    """
+    A connection paired with the MuJoCo joint that backs it.
+
+    Resolving a connection to its joint costs a name lookup, so the two sync
+    directions carry the resolved address alongside the connection rather than
+    each looking it up again.
+    """
+
+    connection: Connection
+    """
+    The connection in the world.
+    """
+
+    qpos_address: int
+    """
+    Index at which this joint's values start in ``_mj_data.qpos``.
+    """
+
+
 @dataclass(eq=False)
 class MujocoSynchronizer(MultiSimSynchronizer):
     simulator: MujocoSimulator
@@ -3118,7 +3244,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
                 body_2_name=connection.parent.name.name,
             )
 
-    def _resolve_qpos_adr(self, connection: Connection) -> Optional[int]:
+    def _resolve_qpos_address(self, connection: Connection) -> Optional[int]:
         """
         Resolve the qpos address for the MuJoCo joint backing ``connection``,
         or ``None`` if the joint is not present in the model.
@@ -3270,16 +3396,125 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         quat_xyzw = Rotation.from_matrix(pose[:3, :3]).as_quat()
         return xyz, quat_xyzw
 
-    def _read_6dof_from_qpos(self, connection: Connection6DoF, qpos_adr: int) -> None:
+    def _joint_backed_connections(self) -> Iterator[JointBackedConnection]:
+        """
+        Yield every connection that a MuJoCo joint can be synced with, paired
+        with the qpos address of that joint.
+
+        Fixed connections carry no DoFs, and a connection that does not resolve
+        to a joint is not in the compiled model, so neither has anything to
+        sync. Both sync directions walk the same set, so they share this.
+        """
+        for connection in self._world.connections:
+            if isinstance(connection, FixedConnection):
+                continue
+            qpos_address = self._resolve_qpos_address(connection)
+            if qpos_address is None:
+                continue
+            yield JointBackedConnection(
+                connection=connection, qpos_address=qpos_address
+            )
+
+    @staticmethod
+    def _warn_unsupported_connection(direction: str, connection: Connection) -> None:
+        """
+        Report a connection that has a MuJoCo joint but no sync implementation.
+
+        :param direction: Which way the sync was going, for the message.
+        :param connection: The connection that could not be synced.
+        """
+        logger.warning(
+            "%s sync: unsupported connection type %s for joint %s; skipping",
+            direction,
+            type(connection).__name__,
+            connection.name.name,
+        )
+
+    def _read_connections_from_qpos(self) -> bool:
+        """
+        Copy ``_mj_data.qpos`` into ``world.state`` for every joint-backed
+        connection.
+
+        Held under ``_model_lock`` so the whole pull sees one coherent
+        post-step state rather than a mixture of poses from either side of an
+        ``mj_step`` running on the physics thread.
+
+        :return: Whether any connection was read.
+        """
+        changed = False
+        with self.simulator._model_lock:
+            for joint_backed in self._joint_backed_connections():
+                connection = joint_backed.connection
+                match connection:
+                    case Connection6DoF():
+                        self._read_6dof_from_qpos(connection, joint_backed.qpos_address)
+                        changed = True
+                    case ActiveConnection1DOF():
+                        self._read_1dof_from_qpos(connection, joint_backed.qpos_address)
+                        changed = True
+                    case _:
+                        self._warn_unsupported_connection("sim→world", connection)
+        return changed
+
+    def _write_connections_to_qpos(
+        self, positions: numpy.ndarray, previous_positions: numpy.ndarray
+    ) -> None:
+        """
+        Push ``world.state`` into ``_mj_data.qpos`` for every joint-backed
+        connection whose DoF values differ from ``previous_positions``.
+
+        ``_model_lock`` is what serialises access to ``_mj_data`` against the
+        physics thread, and holding it here is not just about torn reads: the
+        model integrates with RK4, and ``mj_step`` writes the integrated qpos
+        back from state it saved at the top of the step, so a write that lands
+        mid-step is overwritten and vanishes. The body then simply carries on
+        from its old pose, with nothing raised anywhere. Acquired inside
+        ``_world_lock`` to match the order ``modify_world`` already
+        establishes.
+
+        :param positions: The current ``world.state`` positions.
+        :param previous_positions: The positions as of the last notification,
+            used to find what changed. Must be the same length as ``positions``.
+        """
+        state_index = self._world.state._index
+        with self.simulator._model_lock:
+            for joint_backed in self._joint_backed_connections():
+                connection = joint_backed.connection
+                match connection:
+                    case Connection6DoF():
+                        self._write_6dof_to_qpos(
+                            connection,
+                            joint_backed.qpos_address,
+                            positions,
+                            previous_positions,
+                            state_index,
+                        )
+                    case ActiveConnection1DOF():
+                        self._write_1dof_to_qpos(
+                            connection,
+                            joint_backed.qpos_address,
+                            positions,
+                            previous_positions,
+                            state_index,
+                        )
+                    case _:
+                        self._warn_unsupported_connection("world→sim", connection)
+
+    def _read_6dof_from_qpos(
+        self, connection: Connection6DoF, qpos_address: int
+    ) -> None:
         """
         Copy a 6DoF MuJoCo free-joint qpos block into ``world.state`` for
         ``connection``.
+
+        :param connection: The 6DoF connection whose DoFs are written.
+        :param qpos_address: Index of the free joint's 7-value qpos block.
         """
         mj_data = self.simulator._mj_data
         state = self._world.state
 
-        xyz = mj_data.qpos[qpos_adr : qpos_adr + 3]
-        qwxyz = mj_data.qpos[qpos_adr + 3 : qpos_adr + 7]
+        xyz = mj_data.qpos[qpos_address : qpos_address + 3]
+        qwxyz = mj_data.qpos[qpos_address + 3 : qpos_address + 7]
 
         mj_T_world = self._make_pose_matrix(
             xyz,
@@ -3298,7 +3533,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         state[connection.qz.id].position = float(dof_quat_xyzw[2])
 
     def _read_1dof_from_qpos(
-        self, connection: ActiveConnection1DOF, qpos_adr: int
+        self, connection: ActiveConnection1DOF, qpos_address: int
     ) -> None:
         """
         Copy a single MuJoCo qpos slot into ``world.state`` for ``connection``.
@@ -3309,9 +3544,12 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         ``tolerate_stall``) must see the joint's real, physical settling, not
         the controller's still-nonzero commanded velocity -- otherwise a
         joint physically stopped by contact never registers as stalled.
+
+        :param connection: The 1DoF connection whose DoF is written.
+        :param qpos_address: Index of the joint's single qpos slot.
         """
         self._world.state[connection.raw_dof.id].position = float(
-            self.simulator._mj_data.qpos[qpos_adr]
+            self.simulator._mj_data.qpos[qpos_address]
         )
         if connection.raw_dof not in self.physically_simulated_dofs:
             return
@@ -3330,6 +3568,18 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         ``sync_rate_hz`` wall-clock Hz. The sibling state-change callback is
         paused across the write so our own ``notify_state_change`` does not
         echo back into :meth:`_on_state_change`.
+
+        The whole pull runs under ``World._world_lock``. ``WorldState`` takes
+        that lock per accessor, so holding it only for the individual writes
+        would let a writer thread land in the middle of this pull: the pose it
+        just wrote gets overwritten here with the pre-write qpos values, and
+        the notification that would have pushed that pose into MuJoCo is
+        swallowed by the ``pause()`` below. The write is then lost without a
+        trace, because the closing ``update_previous_world_state`` rebases the
+        diff baseline onto what this pull just wrote. ``_world_lock`` is the
+        outermost lock in the codebase -- ``modify_world`` takes it before the
+        simulator's ``_model_lock`` -- so acquiring it here preserves that
+        order.
         """
         if self.sync_rate_hz <= 0:
             return
@@ -3338,47 +3588,37 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             return
         self._last_sync_time = now
 
-        changed = False
-        self._state_callback.pause()
-
-        for connection in self._world.connections:
-            if isinstance(connection, FixedConnection):
-                continue
-            qpos_adr = self._resolve_qpos_adr(connection)
-            if qpos_adr is None:
-                continue
-
-            if isinstance(connection, Connection6DoF):
-                self._read_6dof_from_qpos(connection, qpos_adr)
-                changed = True
-            elif isinstance(connection, ActiveConnection1DOF):
-                self._read_1dof_from_qpos(connection, qpos_adr)
-                changed = True
-            else:
-                logger.warning(
-                    "sim→world sync: unsupported connection type %s for "
-                    "joint %s; skipping",
-                    type(connection).__name__,
-                    connection.name.name,
-                )
-
-        if changed:
-            self._world.notify_state_change()
-            self._state_callback.update_previous_world_state()
-        self._state_callback.resume()
+        with self._world._world_lock:
+            self._state_callback.pause()
+            try:
+                if self._read_connections_from_qpos():
+                    self._world.notify_state_change()
+                    self._state_callback.update_previous_world_state()
+            finally:
+                # Always resume: a callback left paused by an exception would
+                # silently disable the world -> sim direction for the rest of
+                # the run.
+                self._state_callback.resume()
 
     def _write_6dof_to_qpos(
         self,
         connection: Connection6DoF,
-        qpos_adr: int,
+        qpos_address: int,
         positions: numpy.ndarray,
         previous_positions: numpy.ndarray,
         state_index: Dict[Any, int],
     ) -> None:
         """
         Push the 6DoF world state for ``connection`` into the MuJoCo qpos
-        block at ``qpos_adr``. No-op if the DoF values match the previous
+        block at ``qpos_address``. No-op if the DoF values match the previous
         snapshot within tolerance.
+
+        :param connection: The 6DoF connection whose pose is pushed.
+        :param qpos_address: Index of the free joint's 7-value qpos block.
+        :param positions: The current ``world.state`` positions.
+        :param previous_positions: The positions as of the last notification,
+            compared against ``positions`` to decide whether to write.
+        :param state_index: Maps a DoF id to its column in those two arrays.
         """
         ix = state_index[connection.x.id]
         iy = state_index[connection.y.id]
@@ -3407,25 +3647,25 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         mj_xyz, mj_quat_xyzw = self._decompose_pose_matrix(parent_T_conn @ conn_T_child)
 
         mj_data = self.simulator._mj_data
-        mj_data.qpos[qpos_adr + 0] = mj_xyz[0]
-        mj_data.qpos[qpos_adr + 1] = mj_xyz[1]
-        mj_data.qpos[qpos_adr + 2] = mj_xyz[2]
-        mj_data.qpos[qpos_adr + 3] = mj_quat_xyzw[3]
-        mj_data.qpos[qpos_adr + 4] = mj_quat_xyzw[0]
-        mj_data.qpos[qpos_adr + 5] = mj_quat_xyzw[1]
-        mj_data.qpos[qpos_adr + 6] = mj_quat_xyzw[2]
+        mj_data.qpos[qpos_address + 0] = mj_xyz[0]
+        mj_data.qpos[qpos_address + 1] = mj_xyz[1]
+        mj_data.qpos[qpos_address + 2] = mj_xyz[2]
+        mj_data.qpos[qpos_address + 3] = mj_quat_xyzw[3]
+        mj_data.qpos[qpos_address + 4] = mj_quat_xyzw[0]
+        mj_data.qpos[qpos_address + 5] = mj_quat_xyzw[1]
+        mj_data.qpos[qpos_address + 6] = mj_quat_xyzw[2]
 
     def _write_1dof_to_qpos(
         self,
         connection: ActiveConnection1DOF,
-        qpos_adr: int,
+        qpos_address: int,
         positions: numpy.ndarray,
         previous_positions: numpy.ndarray,
         state_index: Dict[Any, int],
     ) -> None:
         """
         Push the 1DoF world state for ``connection`` into the MuJoCo qpos slot
-        at ``qpos_adr``, and into its actuator's ``ctrl`` setpoint if it has
+        at ``qpos_address``, and into its actuator's ``ctrl`` setpoint if it has
         one, so the actuator's PD controller tracks the commanded position
         instead of continuing to servo toward a stale setpoint. No-op if the
         DoF value is unchanged.
@@ -3437,6 +3677,13 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         commanded increments (see ``_desired_positions``), not the raw belief
         position, so a controller pushing against a contact builds up an
         actual servo force instead of chasing the measured stall position.
+
+        :param connection: The 1DoF connection whose value is pushed.
+        :param qpos_address: Index of the joint's single qpos slot.
+        :param positions: The current ``world.state`` positions.
+        :param previous_positions: The positions as of the last notification,
+            compared against ``positions`` to decide whether to write.
+        :param state_index: Maps a DoF id to its column in those two arrays.
         """
         idx = state_index[connection.raw_dof.id]
         if positions[idx] == previous_positions[idx]:
@@ -3445,14 +3692,14 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         ctrl_adr = None if actuator is None else self._resolve_ctrl_adr(connection)
         physically_simulated = connection.raw_dof in self.physically_simulated_dofs
         if not physically_simulated:
-            self.simulator._mj_data.qpos[qpos_adr] = positions[idx]
+            self.simulator._mj_data.qpos[qpos_address] = positions[idx]
             setpoint = positions[idx]
         else:
             setpoint = self._integrate_desired_position(
                 connection.raw_dof,
                 commanded_increment=positions[idx] - previous_positions[idx],
                 fallback_position=previous_positions[idx],
-                measured_position=float(self.simulator._mj_data.qpos[qpos_adr]),
+                measured_position=float(self.simulator._mj_data.qpos[qpos_address]),
                 maximum_lead=(
                     None
                     if ctrl_adr is None
@@ -3471,6 +3718,16 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             self._schedule_control_setpoint(ctrl_adr, target)
             return
         self.simulator._mj_data.ctrl[ctrl_adr] = target
+
+    def _measure_command_interval(self) -> None:
+        """
+        Record how much simulated time has passed since the previous command, which
+        is the interval :meth:`_schedule_control_setpoint` spreads a setpoint step
+        across.
+        """
+        simulation_time = float(self.simulator._mj_data.time)
+        self._command_interval = simulation_time - self._last_command_simulation_time
+        self._last_command_simulation_time = simulation_time
 
     def _schedule_control_setpoint(self, ctrl_adr: int, target: float) -> None:
         """
@@ -3528,9 +3785,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             return 0.0
         return commanded_increment / self._command_interval
 
-    def _maximum_setpoint_lead(
-        self, ctrl_adr: int, velocity: float
-    ) -> Optional[float]:
+    def _maximum_setpoint_lead(self, ctrl_adr: int, velocity: float) -> Optional[float]:
         """
         How far an affine position servo's setpoint can usefully lead its
         measured position before the actuator saturates, or ``None`` if the
@@ -3604,55 +3859,27 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         Push ``world.state`` into ``_mj_data.qpos`` for every connection whose
         DoF values changed since the last notification. Only non-fixed
         connections that resolve to a MuJoCo joint are pushed.
+
+        Runs under ``World._world_lock`` so the diff against
+        ``previous_world_state_data`` and the qpos writes it produces cannot be
+        interleaved with :meth:`_sim_to_world` on the physics thread. Callers
+        that mutate ``world.state`` already hold the lock, and it is reentrant,
+        so this is free on that path.
         """
-        positions = self._world.state.positions
-        previous_positions = self._state_callback.previous_world_state_data
+        with self._world._world_lock:
+            positions = self._world.state.positions
+            previous_positions = self._state_callback.previous_world_state_data
 
-        if len(positions) != len(previous_positions):
-            # Model shape changed since the last notification (e.g. a spawn
-            # just added DoFs). The spawner already wrote the initial qpos
-            # for the new entities; just rebase the diff and return.
+            if len(positions) != len(previous_positions):
+                # Model shape changed since the last notification (e.g. a spawn
+                # just added DoFs). The spawner already wrote the initial qpos
+                # for the new entities; just rebase the diff and return.
+                self._state_callback.update_previous_world_state()
+                return
+
+            self._measure_command_interval()
+            self._write_connections_to_qpos(positions, previous_positions)
             self._state_callback.update_previous_world_state()
-            return
-
-        simulation_time = float(self.simulator._mj_data.time)
-        self._command_interval = simulation_time - self._last_command_simulation_time
-        self._last_command_simulation_time = simulation_time
-
-        state_index = self._world.state._index
-
-        for connection in self._world.connections:
-            if isinstance(connection, FixedConnection):
-                continue
-            qpos_adr = self._resolve_qpos_adr(connection)
-            if qpos_adr is None:
-                continue
-
-            if isinstance(connection, Connection6DoF):
-                self._write_6dof_to_qpos(
-                    connection,
-                    qpos_adr,
-                    positions,
-                    previous_positions,
-                    state_index,
-                )
-            elif isinstance(connection, ActiveConnection1DOF):
-                self._write_1dof_to_qpos(
-                    connection,
-                    qpos_adr,
-                    positions,
-                    previous_positions,
-                    state_index,
-                )
-            else:
-                logger.warning(
-                    "world→sim sync: unsupported connection type %s for "
-                    "joint %s; skipping",
-                    type(connection).__name__,
-                    connection.name.name,
-                )
-
-        self._state_callback.update_previous_world_state()
 
     def stop(self):
         if "read_data_from_simulator" in self.simulator.__dict__:

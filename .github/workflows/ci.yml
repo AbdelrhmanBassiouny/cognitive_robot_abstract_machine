@@ -59,7 +59,7 @@ jobs:
           if [ -n "$tracked" ]; then
             echo "These generated ORM interface files must not be tracked:"
             echo "$tracked"
-            echo "Untrack them with 'git rm --cached', and build them locally with scripts/ensure_orm_interfaces.py."
+            echo "Untrack them with 'git rm --cached', and build them locally with scripts/regenerate_all_orm.py."
             exit 1
           fi
 
@@ -78,4 +78,5 @@ jobs:
           pip install pytest -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
       - run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          python -m pytest "${PLAN_DASHBOARD_TESTS_DIRECTORY}" "${HOOKS_TESTS_DIRECTORY}" "${STACK_TESTS_DIRECTORY}"
+          python -m pytest "${PLAN_DASHBOARD_TESTS_DIRECTORY}" "${HOOKS_TESTS_DIRECTORY}" \
+            "${STACK_TESTS_DIRECTORY}" "${ADD_PLAN_ITEM_TESTS_DIRECTORY}"

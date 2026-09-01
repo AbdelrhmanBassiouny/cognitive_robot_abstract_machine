@@ -5,10 +5,13 @@ Claude Code already loads as project memory, and which is gitignored — from a 
 you own. Your notes (e.g. "always open my PRs as drafts") follow you across sessions and are never
 committed to a shared branch.
 
+> **Setting this up for the first time?** [`../SETUP.md`](../SETUP.md) is the whole thing in
+> three steps, including the ones only you can do — labels on your fork, Claude's access to it,
+> and the variables a fresh-clone environment needs. This page is the reference behind it.
+>
 > **Rather see it in action than read about it?**
 > [`example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md) is a short worked
-> example of the whole thing in use, from a plan-mode idea to a published dashboard. Or just run
-> `/setup-personal-notes` in a session and come back here when you want the details.
+> example of the whole thing in use, from a plan-mode idea to a published dashboard.
 
 Three kinds of content, stored the same way and never merged anywhere:
 
@@ -32,8 +35,8 @@ Every run prints a summary of what it found and wrote, so a session never has to
 3. Done. Every session from now on writes `CLAUDE.local.md` automatically.
 
 It is safe to re-run: on a clone that's already set up it reports what it found and asks nothing.
-You don't have to run it first either — `/plan-create`, `/plan-dashboard`, `/plan-item-kickoff` and
-`/plan-item-resolve` each offer it if something is missing.
+You don't have to run it first either — `/plan-create`, `/plan-dashboard`, `/plan-item-kickoff`,
+`/plan-item-resolve` and `/add-plan-item` each offer it if something is missing.
 
 To do the same by hand:
 
@@ -148,7 +151,9 @@ Override only what you need:
     config from them, and is a no-op if none are set.
 
 For Claude Code on the web, see <https://code.claude.com/docs/en/claude-code-on-the-web> for where
-either of those lives.
+either of those lives. [`setup_steps.py`](./setup_steps.py) prints the exact variable lines your
+clone needs — only the settings you have moved off their defaults — alongside the other two steps
+no script can perform for you.
 
 ### Fallback: your branch's own upstream
 
@@ -177,6 +182,16 @@ the narrative that doesn't belong in structured data.
   marks it `in_progress` as soon as its plan is approved — via
   [`plan_item_bootstrap.py`](./plan_item_bootstrap.py), which you can also run by hand — so the
   manifest never says `not_started` while the work is underway.
+- Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope
+  check in [`scope-decision.md`](../skills/add-plan-item/scope-decision.md) — the rule all four plan
+  skills defer to for "is this new work, or a change to work already in flight?"
+- Choose whether either skill implements on its own, plans first, or asks → `/plan-item-mode
+  <auto|plan|ask> [kickoff|resolve|both]`, or the
+  [`plan_item_mode.py`](./plan_item_mode.py) `resolve|set` it calls. Defaults in
+  [`plan-item-modes.toml`](./plan-item-modes.toml) are `auto` for both; `set` pins a per-user
+  override at `.claude/personal/plan-item-modes.toml` on the notes branch. What each mode obliges
+  the skill to do, and when `auto` still stops to ask →
+  [`execution-modes.md`](../skills/plan-dashboard/execution-modes.md).
 - Recheck one for updates, without rereading it →
   [`plan-updates-since.sh`](./plan-updates-since.sh) `<plan-id> [--since <sha>]`. Every
   `session-start.sh` run stamps the notes-branch commit it just fetched (gitignored, at

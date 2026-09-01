@@ -14,7 +14,7 @@ from segmind.datastructures.object_tracker import (
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.spatial_types.numeric import NumericPose
-from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
 
@@ -200,7 +200,7 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     The bodies that were in contact with each other in the previous time step.
     """
 
-    bounding_box: BoundingBox = field(init=False)
+    bounding_box: VolumetricBoundingBox = field(init=False)
     """
     Bounding box of the object.
     """
@@ -210,7 +210,9 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     Pose of the object, read out into numbers so a detector thread can record it.
     """
 
-    with_object_bounding_box: Optional[BoundingBox] = field(init=False, default=None)
+    with_object_bounding_box: Optional[VolumetricBoundingBox] = field(
+        init=False, default=None
+    )
     """
     Bounding box of the second object in contact.
     """
@@ -224,14 +226,14 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
         # combined_mesh (not tracked_object.collision.combined_mesh directly) so this
         # also works when with_object is a hole's Region root, which exposes its
         # geometry via .area rather than .collision.
-        self.bounding_box = BoundingBox.from_mesh(
+        self.bounding_box = VolumetricBoundingBox.from_mesh(
             self.tracked_object.combined_mesh,
             origin=self.tracked_object.numeric_global_transform,
         )
         self.pose = self.tracked_object.numeric_global_pose
 
         if self.with_object is not None:
-            self.with_object_bounding_box = BoundingBox.from_mesh(
+            self.with_object_bounding_box = VolumetricBoundingBox.from_mesh(
                 self.with_object.combined_mesh,
                 origin=self.with_object.numeric_global_transform,
             )

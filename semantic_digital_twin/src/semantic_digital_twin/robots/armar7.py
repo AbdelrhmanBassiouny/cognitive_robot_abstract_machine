@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self, List
 
+from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
@@ -559,6 +560,10 @@ class Armar7Torso(
 @dataclass(eq=False)
 class Armar7MobileBase(MobileBase[OmniDrive], HasTorso[Armar7Torso]):
 
+    @classproperty
+    def forward_axis(cls) -> Vector3:
+        return Vector3.Y()
+
     def setup_hardware_interfaces(self):
         pass
 
@@ -586,7 +591,6 @@ class Armar7MobileBase(MobileBase[OmniDrive], HasTorso[Armar7Torso]):
             )
         return cls(
             root=base_root,
-            forward_axis=Vector3.Y(),
         )
 
 

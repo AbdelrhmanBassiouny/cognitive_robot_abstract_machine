@@ -8,7 +8,7 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.world_description.geometry import (
-    BoundingBox,
+    VolumetricBoundingBox,
     Bounds,
     Sphere,
 )
@@ -67,10 +67,10 @@ def test_enclosing_bounds_span_every_box_in_the_collection():
         world.add_body(frame)
     collection = BoundingBoxCollection(
         [
-            BoundingBox(
+            VolumetricBoundingBox(
                 -1.0, -1.0, -1.0, 0.0, 0.0, 0.0, NumericTransform(reference_frame=frame)
             ),
-            BoundingBox(
+            VolumetricBoundingBox(
                 0.5, 0.5, 0.5, 2.0, 3.0, 4.0, NumericTransform(reference_frame=frame)
             ),
         ],
