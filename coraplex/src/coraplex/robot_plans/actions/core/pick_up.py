@@ -272,7 +272,7 @@ class PickUpAction(
                 # Size the close to the object instead of the gripper's
                 # nominal fully-closed state, which a grasped object makes
                 # unreachable and which therefore squeezes it back out.
-                grasped_object=self.object_designator,
+                grasped_object=self.object_designator.root,
             ),
         ]
         if self.context.update_world_model_attachment:

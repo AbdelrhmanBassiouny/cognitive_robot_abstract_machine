@@ -16,7 +16,18 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 keywords = ["robotics", "visualization"]
-dynamic = ["version", "dependencies"]
+dynamic = ["version"]
+# The server and the live bridge are stdlib-only on purpose: the viewer must be
+# servable on machines without the full CRAM stack, so these are imported lazily and
+# only reached by the knowledge panel, the onboarder and the live bridge hooks. They
+# are declared all the same, because a workspace member that resolves its dependencies
+# anywhere but here drops out of the graph uv and the IDE read.
+dependencies = [
+    "coraplex",
+    "giskardpy",
+    "krrood",
+    "semantic_digital_twin",
+]
 license = { text = "GPL-3.0-only" }
 
 [project.urls]
@@ -37,7 +48,6 @@ cramera = ["web/**/*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "cramera._version.__version__" }
-dependencies = { file = "requirements.txt" }
 
 [project.optional-dependencies]
 dev = [

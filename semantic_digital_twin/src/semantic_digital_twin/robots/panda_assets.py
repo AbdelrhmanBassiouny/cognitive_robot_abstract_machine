@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from pathlib import Path
@@ -160,13 +161,28 @@ class PandaMeshAssets:
         if response.status_code != HTTPStatus.OK:
             raise MeshDownloadFailed(url=url, status_code=response.status_code)
 
-        # Written to a temporary name first so an interrupted download
-        # cannot leave a truncated mesh that later runs take for complete.
-        partial = directory / f"{filename}.partial"
+        partial = self.partial_path(filename, directory)
         with partial.open("wb") as mesh_file:
             for chunk in response.iter_content(chunk_size=8192):
                 mesh_file.write(chunk)
         partial.rename(directory / filename)
+
+    @staticmethod
+    def partial_path(filename: str, directory: Path) -> Path:
+        """
+        Where a mesh is written while it is still arriving.
+
+        A mesh is written under a temporary name first, so an interrupted download
+        cannot leave a truncated file that later runs take for complete. The name
+        carries the process that is writing it, because a test run split across
+        processes has several of them downloading the same mesh into the same
+        directory at once: sharing one temporary name let whichever finished first
+        rename the file out from under the others.
+
+        :param filename: Name of the mesh being downloaded.
+        :param directory: Where the mesh is written.
+        """
+        return directory / f"{filename}.{os.getpid()}.partial"
 
     def request_while_failing_transiently(self, url: str) -> requests.Response:
         """

@@ -114,7 +114,7 @@ def _box_body_with_geometry() -> Body:
 def test_apply_grasp_contact_parameters_sets_friction_reference_and_impedance():
     body = _box_body_with_geometry()
 
-    apply_grasp_contact_parameters([body])
+    apply_grasp_contact_parameters([body], GRASP_FRICTION)
 
     [geometry] = list(body.collision)
     [mujoco_geom] = [
@@ -134,7 +134,7 @@ def test_apply_grasp_contact_parameters_modifies_an_existing_mujoco_geom_in_plac
         MujocoGeom(friction=[1.0, 0.005, 0.0001])
     )
 
-    apply_grasp_contact_parameters([body])
+    apply_grasp_contact_parameters([body], GRASP_FRICTION)
 
     # A second, appended MujocoGeom would be silently ignored by MujocoBuilder, which
     # reads only the first one -- so the existing one must be modified, not duplicated.

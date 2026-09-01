@@ -3,6 +3,7 @@ import threading
 import numpy as np
 from giskardpy.motion_statechart.context import MotionStatechartContext
 
+from cramera.live.run_clock import RunClock
 from cramera.monkey_patch import MethodPatch
 
 from experiments.montessori.event_monitoring import (
@@ -414,7 +415,7 @@ class TestTheListenerHearsWhatEachTickDetected:
         """
         montessori = MontessoriWorld(shapes_are_movable=True)
         shape, _ = _shape_and_hole(montessori, "square_hole")
-        source = MontessoriLiveEventSource()
+        source = MontessoriLiveEventSource(clock=RunClock())
         monitor = build_shape_monitor(montessori, shape, listener=source)
 
         for _ in range(5):

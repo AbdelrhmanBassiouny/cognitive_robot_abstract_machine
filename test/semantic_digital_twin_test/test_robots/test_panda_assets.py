@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,10 +16,9 @@ from semantic_digital_twin.robots.panda_assets import (
 
 SCENE_SOURCE = Path(__file__).resolve().parents[1] / "dataset" / "two_mesh_arm.xml"
 """
-An MJCF declaring two meshes in an ``assets`` mesh directory, copied next to a
-temporary mesh directory by :func:`scene`.
+An MJCF declaring two meshes in an ``assets`` mesh directory, copied next to a temporary
+mesh directory by :func:`scene`.
 """
-
 
 # %% http stand-ins
 
@@ -54,9 +54,9 @@ class QueuedHttpResponse:
 @dataclass
 class QueuedHttpResponses:
     """
-    Stand-in for an HTTP session that answers every request for a mesh with the
-    next status queued for that mesh, repeating the last one once the queue runs
-    down, and serves the mesh's own name as the body.
+    Stand-in for an HTTP session that answers every request for a mesh with the next
+    status queued for that mesh, repeating the last one once the queue runs down, and
+    serves the mesh's own name as the body.
     """
 
     statuses_by_filename: dict[str, list[int]]
@@ -156,6 +156,52 @@ def test_a_mesh_already_downloaded_is_not_requested_again(scene: Path):
     assets.download_if_missing()
 
     assert responses.requested_filenames == ["link0.obj", "link1.obj"]
+
+
+# %% two processes downloading one mesh
+
+OTHER_PROCESS_ID = 424242
+"""
+Process a mesh is half-downloaded by while the process under test downloads it too.
+"""
+
+
+def test_two_processes_do_not_write_one_mesh_to_the_same_temporary_file(
+    scene: Path, monkeypatch: pytest.MonkeyPatch
+):
+    assets = assets_with(scene, QueuedHttpResponses(statuses_by_filename={}))
+
+    monkeypatch.setattr(os, "getpid", lambda: OTHER_PROCESS_ID)
+    elsewhere = assets.partial_path("link0.obj", assets.directory)
+    monkeypatch.undo()
+    here = assets.partial_path("link0.obj", assets.directory)
+
+    assert here != elsewhere
+
+
+def test_a_download_leaves_another_processes_half_written_mesh_alone(
+    scene: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    A test run splits across processes, and two of them reaching ``parse_panda`` at once
+    download the same meshes into the same directory.
+
+    Sharing one temporary name let whichever renamed first take the file out from under
+    the other, which then failed on a temporary file that was no longer there.
+    """
+    responses = QueuedHttpResponses(statuses_by_filename={"link0.obj": [200]})
+    assets = assets_with(scene, responses)
+    directory = assets.directory
+    directory.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(os, "getpid", lambda: OTHER_PROCESS_ID)
+    elsewhere = assets.partial_path("link0.obj", directory)
+    elsewhere.write_bytes(b"half a mesh from another process")
+    monkeypatch.undo()
+
+    assets.download("link0.obj", directory)
+
+    assert (directory / "link0.obj").read_bytes() == b"link0.obj"
+    assert elsewhere.read_bytes() == b"half a mesh from another process"
 
 
 # %% retry policy
