@@ -87,6 +87,52 @@ def test_connection6dof_origin_setter_round_trips_with_non_identity_constants(
     assert_allclose(connection.origin, desired_origin, atol=1e-9)
 
 
+def test_connection6dof_origin_setter_requires_a_reference_frame(world_with_two_bodies):
+    world, parent, child = world_with_two_bodies
+    with world.modify_world():
+        connection = Connection6DoF.create_with_dofs(world, parent, child)
+        world.add_connection(connection)
+
+    transformation_without_reference_frame = (
+        HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0)
+    )
+
+    with pytest.raises(MissingReferenceFrameError):
+        connection.origin = transformation_without_reference_frame
+
+
+def test_connection6dof_origin_setter_converts_from_a_non_parent_reference_frame(
+    world_with_two_bodies,
+):
+    """
+    The assigned transform does not need to already be expressed in the parent frame:
+    the setter must convert it via the world graph before un-composing the connection's
+    own constant offsets.
+    """
+    world, parent, child = world_with_two_bodies
+    grandparent = Body(name=PrefixedName("grandparent"))
+    grandparent_T_parent = HomogeneousTransformationMatrix.from_xyz_rpy(x=2.0, y=1.0)
+    with world.modify_world():
+        world.add_connection(
+            FixedConnection.create_with_dofs(
+                world,
+                grandparent,
+                parent,
+                parent_T_connection_expression=grandparent_T_parent,
+            )
+        )
+        connection = Connection6DoF.create_with_dofs(world, parent, child)
+        world.add_connection(connection)
+
+    desired_origin_in_grandparent = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=2.5, y=1.5, z=0.2, reference_frame=grandparent
+    )
+    connection.origin = desired_origin_in_grandparent
+
+    expected_origin_in_parent = world.transform(desired_origin_in_grandparent, parent)
+    assert_allclose(connection.origin, expected_origin_in_parent, atol=1e-9)
+
+
 def test_reference_origin_excludes_joint_state(world_with_two_bodies):
     """
     The reference origin stays at the zero configuration, the origin follows the joint.

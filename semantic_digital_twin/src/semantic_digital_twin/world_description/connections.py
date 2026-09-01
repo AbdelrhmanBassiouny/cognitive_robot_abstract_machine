@@ -748,7 +748,9 @@ class Connection6DoF(Connection):
             spatial types (e.g. ``Pose``) must be converted with their own
             ``to_homogeneous_matrix()`` before being assigned here.
         """
-        local_kinematics = self._calculate_local_kinematics(transformation)
+        local_kinematics = self._calculate_local_kinematics(
+            self._world.transform(transformation, self.parent)
+        )
         position = local_kinematics.to_position()
         orientation = local_kinematics.to_rotation_matrix().to_quaternion()
         with self._world._world_lock:
@@ -818,6 +820,7 @@ class WheeledDrive(ActiveConnection, HasUpdateState, ABC):
     Superclass for connections that describe a drive, e.g., an omnidirectional drive or
     a differential drive.
     """
+
     x: DegreeOfFreedom = field(kw_only=True)
     """
     Passive DoFs describing the measured odometry in x with respect to parent frame.
@@ -899,13 +902,13 @@ class OmniDrive(WheeledDrive):
         They are combined into one active dof.
     """
 
-
     x_velocity: DegreeOfFreedom = field(kw_only=True)
     """
     Active DoF describing the measured and commanded velocity in x.
 
     Represented with respect to the child frame.
     """
+
     y_velocity: DegreeOfFreedom = field(kw_only=True)
     """
     Active DoF describing the measured and commanded velocity in y.

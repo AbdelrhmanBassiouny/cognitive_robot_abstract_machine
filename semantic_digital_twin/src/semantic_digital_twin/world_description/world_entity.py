@@ -1144,12 +1144,16 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
         self.parent_T_connection_expression.reference_frame = self.parent
         self.parent_T_connection_expression.child_frame = self.child
 
-    def _calculate_local_kinematics(self, transformation: HomogeneousTransformationMatrix) -> HomogeneousTransformationMatrix:
+    def _calculate_local_kinematics(
+        self, transformation: HomogeneousTransformationMatrix
+    ) -> HomogeneousTransformationMatrix:
         """
-        Calculates the local kinematics of this connection based on its current
-        configuration.
+        Un-compose an origin with this connection's constant offsets, leaving the part a
+        degree of freedom can carry.
 
-        :return: The local kinematics as a HomogeneousTransformationMatrix.
+        :param transformation: The desired origin, already expressed in the parent
+            frame. Callers accepting other frames convert first.
+        :return: The local kinematics producing that origin.
         """
         if isinstance(transformation, np.ndarray):
             transformation = HomogeneousTransformationMatrix(data=transformation)
