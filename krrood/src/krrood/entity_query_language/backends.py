@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import enum
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from types import NoneType
-from typing import Iterable, TypeVar
+from operator import eq
+from types import EllipsisType, NoneType
+from typing import Generic, Iterable, Type, TypeVar
 
 import random_events.variable
 from random_events.product_algebra import Event
 from sqlalchemy.orm import sessionmaker
-from typing_extensions import ClassVar, Dict, List, Optional
+from typing_extensions import Any, ClassVar, Dict, List, Optional, Tuple
 
 from krrood import logger
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
@@ -21,10 +24,21 @@ from krrood.entity_query_language.operators.causal import (
     CauseEffectVariables,
     ScoredIntervention,
 )
-from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.core.variable import (
+    InstantiatedVariable,
+    Literal,
+    Variable,
+)
+from krrood.entity_query_language.predicate import Triple
+from krrood.patterns.code_parsing_utils import (
+    get_accessed_attribute_name_in_return_statement_of_property,
+)
+from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
     BackendCannotEvaluateCause,
+    BackendCannotResolveCondition,
     NoCauseVariablesForRanking,
     NoCausesEffectConditionForCause,
     NoSolutionFound,
@@ -62,6 +76,51 @@ except ImportError as e:
     UnderspecifiedParameters = NoneType
 
 T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class AttributeEqualityToLiteral:
+    """
+    A condition fixing one attribute of the variable a query selects to a literal.
+
+    This is the shape a backend translating a query into another engine's plan can
+    usually act on directly, so it is read off a condition once here rather than by
+    every such backend. An equality against anything but a literal is not one of these:
+    the other side has to be evaluated before it names a value, which is the query's own
+    work rather than the plan's.
+    """
+
+    attribute_name: str
+    """
+    The attribute the condition fixes, by the name the selected type gives it.
+    """
+
+    value: Any
+    """
+    The literal's value.
+    """
+
+    @classmethod
+    def read_from(
+        cls, condition: Evaluable, selection: Selectable
+    ) -> Optional[AttributeEqualityToLiteral]:
+        """
+        Read a condition as an equality about the selected variable's own attribute.
+
+        :param condition: The condition to read.
+        :param selection: The variable the query selects.
+        :return: The equality the condition states, or ``None`` when it states none --
+            because it compares something else, compares by something other than
+            equality, or compares against anything but a literal.
+        """
+        if not isinstance(condition, Comparator) or condition.operation is not eq:
+            return None
+        attribute, compared = condition._children_
+        if not isinstance(attribute, Attribute) or not isinstance(compared, Literal):
+            return None
+        if attribute._chain_root_ is not selection:
+            return None
+        return cls(attribute._attribute_name_, compared._value_)
 
 
 @dataclass
@@ -162,6 +221,281 @@ class GenerativeBackend(QueryBackend, ABC):
 
     @abstractmethod
     def _evaluate(self, expression: Match[T]) -> Iterable[T]: ...
+
+
+@dataclass(frozen=True)
+class StatedRelation:
+    """
+    A relation a statement asserts between the thing it is looking for and something the
+    world already holds.
+
+    This is what a look can be narrowed by without a name being spelled twice: the
+    relation is a class, so it is its own source of truth, and the thing on the other
+    side of it is an object the world already knows. Reading it needs neither the name
+    of an attribute nor the name of a field.
+    """
+
+    relation_type: Type[Triple]
+    """
+    The relation asserted, by the class that means it.
+    """
+
+    related_thing: Any
+    """
+    What the thing being looked for is asserted to stand in that relation to.
+
+    Always something the statement already holds, never the thing being looked for --
+    which is why a search can act on it before anything has been found.
+    """
+
+    @classmethod
+    def read_from(
+        cls, condition: Evaluable, selection: Selectable
+    ) -> Optional[StatedRelation]:
+        """
+        Read a condition as a relation asserted about the thing being looked for.
+
+        :param condition: The condition to read.
+        :param selection: The thing the statement is looking for.
+        :return: The relation the condition asserts, or ``None`` when it asserts none --
+            because it is not a relation, because it relates something else, or because
+            the thing it relates the selection to is not known yet.
+        """
+        if not isinstance(condition, InstantiatedVariable):
+            return None
+        relation_type = condition._type_
+        if not isinstance(relation_type, type) or not issubclass(relation_type, Triple):
+            return None
+        subject_name = get_accessed_attribute_name_in_return_statement_of_property(
+            relation_type.subject, relation_type
+        )
+        object_name = get_accessed_attribute_name_in_return_statement_of_property(
+            relation_type.object, relation_type
+        )
+        if condition._kwargs_.get(subject_name) is not selection:
+            return None
+        related_thing = condition._kwargs_.get(object_name)
+        if isinstance(related_thing, SymbolicExpression):
+            return None
+        return cls(relation_type=relation_type, related_thing=related_thing)
+
+
+@dataclass(frozen=True)
+class LookRequest(Generic[T]):
+    """
+    What a statement asks a look for.
+
+    A look is not free, and whoever makes one usually wants less than everything the
+    world holds. This is the part of a statement a look can act on: the kind of thing
+    asked for, whichever of its attributes the statement fixes outright, and whatever
+    the statement says it stands in relation to.
+    """
+
+    type_: Type[T]
+    """
+    The kind of thing asked for.
+    """
+
+    stated_attributes: List[AttributeEqualityToLiteral] = field(default_factory=list)
+    """
+    Every attribute the statement fixes to a literal.
+
+    Each is a narrowing and never a promise: a look that cannot act on one may answer
+    with more than was asked for, so every one of them is checked again over what came
+    back.
+    """
+
+    stated_relations: List[StatedRelation] = field(default_factory=list)
+    """
+    Every relation the statement asserts between the thing sought and something known.
+
+    A narrowing on the same terms as an attribute, said in the world's own vocabulary
+    rather than by naming a field.
+    """
+
+    def related_by(self, relation_type: Type[Triple]) -> Optional[Any]:
+        """
+        :param relation_type: The relation to read.
+        :return: What the statement says the thing sought stands in that relation to, or
+            ``None`` when it asserts no such relation.
+        """
+        for stated in self.stated_relations:
+            if issubclass(stated.relation_type, relation_type):
+                return stated.related_thing
+        return None
+
+    def admits(self, instance: Any) -> bool:
+        """
+        Whether an instance is of the kind this look was asked for.
+
+        A look may answer with more kinds than were asked for, and the kind a variable
+        declares is not one of the conditions a statement re-checks, so whoever asked
+        applies this to what came back.
+
+        :param instance: One thing the look found.
+        """
+        return isinstance(instance, self.type_)
+
+    def value_stated_for(self, attribute_name: str) -> Optional[Any]:
+        """
+        :param attribute_name: The attribute to read.
+        :return: The value the statement fixes that attribute to, or ``None`` when it
+            leaves it open.
+        """
+        for stated in self.stated_attributes:
+            if stated.attribute_name == attribute_name:
+                return stated.value
+        return None
+
+
+@dataclass
+class PerceptionBackend(GenerativeBackend, ABC):
+    """
+    Answers a statement about the world by going and looking at it.
+
+    Generative, because what a look reports is not in any domain the statement was
+    handed: an object nothing has observed yet has no instance to select, and the look
+    is what brings one into existence. Asking where a thing already believed in stands
+    is the same act with its pose left open.
+
+    What the look can act on narrows it, and what it cannot is checked over what came
+    back, so no part of a statement is ever quietly dropped. The two halves cannot
+    disagree, because a narrowing is checked again afterwards -- it is an economy, never
+    the thing that makes the answer right.
+    """
+
+    opening_directive: ClassVar[Optional[Directive]] = Directive.LOOK_FOR
+    """
+    Going to look reads as *"Look for …"*, which is what tells it apart from recalling
+    something already recorded.
+    """
+
+    narrowing_relations: ClassVar[Tuple[Type[Triple], ...]] = ()
+    """
+    The relations a look of this kind can narrow itself by.
+
+    A relation named here is answered by the look rather than by evaluating it, because
+    what a look reports is a sighting of a thing and not the thing itself, so the
+    relation's own implementation has nothing to evaluate against. Naming it is
+    therefore a promise to check it over the answer too, in :meth:`relations_hold`.
+    """
+
+    def _evaluate(self, expression: Match[T]) -> Iterable[T]:
+        """
+        Look for what the statement asks about, then check what came back against it.
+
+        :param expression: The statement to answer.
+        :raises BackendCannotResolveCondition: If a condition constrains anything other
+            than the thing being looked for.
+        """
+        request = self.read_request(expression)
+        found = [
+            instance
+            for instance in self.look(request)
+            if request.admits(instance) and self.relations_hold(instance, request)
+        ]
+        expression.variable._update_domain_(found)
+        yield from self._check_what_was_found(expression, request)
+
+    def relations_hold(self, instance: T, request: LookRequest[T]) -> bool:
+        """
+        Whether a found instance stands in the relations this look narrows itself by.
+
+        A narrowing is never a promise -- a look already taken cannot be narrowed at all
+        -- so what :attr:`narrowing_relations` names is checked here over what came
+        back, which is what keeps the answer right whether or not the search honoured
+        it.
+
+        :param instance: One thing the look found.
+        :param request: What the look was asked for.
+        """
+        return True
+
+    @abstractmethod
+    def look(self, request: LookRequest[T]) -> Iterable[T]:
+        """
+        Look at the world, and report what is there as instances.
+
+        :param request: What the statement asks a look for. Acting on it is an economy
+            rather than an obligation, since whatever it does not narrow is checked
+            afterwards anyway.
+        :return: Everything the look found.
+        """
+
+    @classmethod
+    def read_request(cls, expression: Match[T]) -> LookRequest[T]:
+        """
+        Read what a statement asks a look for.
+
+        :param expression: The statement to read.
+        :return: The kind of thing it asks for, the attributes it fixes outright, and
+            the relations it asserts about it. An attribute left as ``...`` fixes
+            nothing: the statement is saying the look must supply it.
+        """
+        stated_relations = [
+            StatedRelation.read_from(condition, expression.variable)
+            for condition in expression._where_conditions_
+        ]
+        return LookRequest(
+            type_=expression.variable._type_,
+            stated_attributes=[
+                AttributeEqualityToLiteral(
+                    attribute_match.attribute_name, attribute_match.assigned_value
+                )
+                for attribute_match in expression.matches_with_variables
+                if not isinstance(attribute_match.assigned_value, EllipsisType)
+            ],
+            stated_relations=[
+                relation for relation in stated_relations if relation is not None
+            ],
+        )
+
+    def _check_what_was_found(
+        self, expression: Match[T], request: LookRequest[T]
+    ) -> Iterable[T]:
+        """
+        Keep only what the statement actually asked for, out of what the look reported.
+
+        The attributes the statement leaves as ``...`` are the ones the look was there
+        to supply, so they are not checked; everything else it states is. A relation
+        this look narrows itself by is checked by :meth:`relations_hold` instead, since
+        the look reports sightings rather than the things the relation is written over.
+
+        :param expression: The statement being answered.
+        :param request: What the look was asked for.
+        :raises BackendCannotResolveCondition: If a ``where`` condition constrains any
+            variable other than the thing being looked for, which a look can neither
+            search for nor check afterwards.
+        :return: Every found instance the statement admits.
+        """
+        for condition in expression._where_conditions_:
+            if condition._constrained_variables_ - {expression.variable}:
+                raise BackendCannotResolveCondition(condition, type(self))
+        remaining_conditions = [
+            condition
+            for condition in expression._where_conditions_
+            if not self._look_answers(condition, expression.variable)
+        ]
+        stated = [
+            getattr(expression.variable, attribute.attribute_name) == attribute.value
+            for attribute in request.stated_attributes
+        ]
+        found = entity(expression.variable)._quantify_(expression._quantifier_type_)
+        if stated or remaining_conditions:
+            found = found.where(*stated, *remaining_conditions)
+        yield from found._evaluate_natively_()
+
+    def _look_answers(self, condition: Evaluable, selection: Selectable) -> bool:
+        """
+        Whether a condition asserts one of the relations this look narrows itself by.
+
+        :param condition: The condition to read.
+        :param selection: The thing the statement is looking for.
+        """
+        stated = StatedRelation.read_from(condition, selection)
+        return stated is not None and issubclass(
+            stated.relation_type, self.narrowing_relations
+        )
 
 
 @dataclass
