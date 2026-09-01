@@ -3051,3 +3051,73 @@ this plan's `plan.yaml` indents them by two, so `open` failed inside `save-plan.
 the error swallowed by `capture_output=True` -- exactly as #231 recorded on 2026-08-31 and
 #236 and #238 on 2026-09-01. Worked around a fourth time by editing `plan.yaml` directly.
 It is the same family as #160 and still wants its own bug-fix pull request.
+
+### `detector-parameters-from-knowledge`: the knowledge half, and the figure that was wrong
+
+Built 2026-09-01 as `3a493be9` on #239. 7 new tests; `397 passed, 1 skipped, 16 xfailed`
+across `test/experiments_test/` against `390 passed, 1 skipped, 16 xfailed` on the
+merge of #231 and #159, which is the seven added here and nothing else moved.
+
+**The finish was the gate, not the colour, and the recorded figure for the colour is
+wrong.** #221 and #231 both record that `BOARD_COLOR` is `Color.BEIGE()`, "eleven hues
+from the wood the camera measures", and #231 concludes from it that its amber-piece rule
+"does not fire on the real board until `detector-parameters-from-knowledge` moves
+measured colours onto the twin". Measured before anything was changed: `Color.BEIGE()`
+reads as hue **17** against the wood's measured **19**. Two hues, not eleven -- and two
+is inside the four-hue tolerance either way, so that rule was already falling back to
+the edge fit and the colour move does not change its answer.
+
+What actually kept #231's tree from ever firing on a real world is the other thing that
+item recorded: **nothing in this workspace states a finish**, so the matte rule could
+never hold whatever the colours were. So the checkable outcome this item delivers is the
+finish, and the colour comes with it because it is the same move: the board's lid states
+the hue measured off the real board and `SurfaceFinish.MATTE`, and Tracy's table states
+its own near-colourless grey and the `SurfaceFinish.MIRROR` its brushed steel has. Three
+tests assert the tree choosing from surfaces read off a built `MontessoriWorld` -- a cyan
+cube on the lid answered by the colour blob, a piece on the table by the edge fit, and an
+amber prism on the lid falling back to the edge fit because it wears the wood's own hue.
+
+**The table had been drawn in the board's own wood**, which is the same fault `_SHAPE_COLORS`
+was fixed for on #202: a nominal colour standing in for a measured one. It has its own
+now, and the robot stand with it.
+
+**An appearance has to be stated on the collision geometry.** `WorkspaceSurface.of_body`
+picks the widest horizontal *collision* shape and reads the finish and colour off that
+one shape -- which is #216's own recorded design ("the fallback ... is the one where the
+finish is read off the very shape whose scale and origin that item already reads"). The
+board's collision is a hand-built grid of boxes, so a finish stated only on its visual
+mesh is one perception never sees. Found by the test failing rather than by reading, and
+worth generalizing: **on this codebase an appearance is knowledge only if the collision
+geometry carries it.**
+
+#### What is still to build on this branch
+
+The knowledge half landed; the rule tree that concludes the numbers did not, and neither
+did the two pieces after it. Recorded here rather than left to the diff:
+
+- **`DetectionParameters`** -- the numbers one look reads the picture with, in one value
+  object the detectors are handed rather than carrying as their own fields. This is the
+  literal ask in seven of the nine #202 threads, and it is what the rule tree concludes.
+  It moves `SurfaceColors`, `SizeRange` and both `PieceDetector`s' `colors` / `piece_size`
+  / `piece_height` fields.
+- **`DetectionParameterRules`** -- an `EQLSingleClassRDR` over #231's `TargetOnSurface`,
+  concluding a `DetectionParameters`, rendered by `render_tree`. The engine's `query` is
+  `field(init=False)`, so the rules are authored by fitting known situations *with*
+  targets, which asks the expert for `AnswerName.CONDITIONS` only -- a scripted
+  `ExpertInterface` writing the condition into the namespace is what that needs.
+- **The contour chain as rules** -- `EdgeFitDetector._piece_at`'s guard chain, the
+  `pipeline.py:619` ask, saying which condition refused a contour rather than returning
+  `None`.
+
+One measurement to carry into the first of those: **every `KNOWN_PIECE` stands 0.03 m**,
+so moving `piece_height` off the detector onto the candidates it was chosen for is
+behaviour-identical on this set, and provably so rather than by assertion.
+
+#### The environment, which is different again
+
+#238 recorded that `/usr/local/bin/uv` does not exist in its container and that uv 0.12.8
+from `astral.sh` builds the workspace. The same holds here -- the `uv` on `PATH` is 0.8.17
+and fails on this repository's own `pyproject.toml`, identically on unmodified `main`.
+That is the fourth different environment four consecutive items have found. `black` and
+`docformatter` are not in the dependency set, and `scripts/format_docstrings.py` shells
+out to them by name, so `.venv/bin` has to be on `PATH` and not merely be the interpreter.
