@@ -3608,3 +3608,65 @@ on `PATH` is 0.8.17 and fails on the repository's `pyproject.toml`; `pip install
 None on this plan: no other item touches `segmind/players` or `data_player.py`. On
 `montessori-eql-stack`, `montessori_event_replay` edits `test_segmind_detectors.py` heavily and
 `segmind/detectors`; this branch edits neither.
+
+### `episode-replayed-into-the-world`: what it took, and what the recording turned out to be
+
+Built as one commit on #246 off #244's tip. Nine new tests in
+`test/segmind_test/test_episode_replay/test_rosbag_player.py`; `test/segmind_test` reports
+`48 passed, 1 skipped` against `39 passed, 1 skipped` before, which is the nine added here and
+nothing else moved. `scripts/format_docstrings.py` ran over every touched file, and black
+re-wrapped `json_player.py` on the way, which is the only reason that file's diff is larger
+than the four-line stub it removes.
+
+**The plan held.** `RosbagPlayer(FilePlayer)` in `segmind/players/rosbag_player.py` with
+`RosbagTopic` and `RosbagMessageType` enums, a `TransformTree` holding the latest edge per
+child frame and composing a chain, and a sampling generator; `FrameData.joint_positions`,
+`DataPlayer.get_joint_positions` (empty by default) and `apply_frame`, which applies one
+frame's poses and joint positions under one `World.batch_state_changes()`; `JSONPlayer`'s
+`get_joint_states` stub removed; `rosbags` declared in `segmind/pyproject.toml`; two
+exceptions in a new `segmind/exceptions.py`, `RecordingHoldsNothingToReplay` (raised at
+construction, from the recording's topic list) and `ReferenceFrameNotRecorded` (raised on the
+first frame, once the transform tree has been read up to it). The test dataset gained
+`test/segmind_test/dataset/recorded_episode.py`, which writes an episode of static transforms,
+timed transforms and timed joint positions into an `mcap` bag through `rosbags`' writer, using
+the player's own topic and message-type enums so the test and the code agree by definition.
+
+**Sampling is decided per message, not per frame.** The generator holds the transform tree
+and the joint positions as the latest values seen, and before applying a message at time *t*
+it emits a frame for every sample time strictly before *t*; after the last message it emits
+the samples up to and including the last message time. So a period equal to the message
+spacing yields one frame per message and a shorter period repeats the held state between
+them, which one test pins. The first sample is taken at the first dynamic message
+(`/tf` or `/joint_states`); `/tf_static` is applied whenever it arrives and starts nothing.
+
+**The reference frame is checked on the first frame, not at construction.** Checking it at
+construction would mean reading the whole recording twice; a frame that cannot be expressed
+in the reference frame is the first thing the replay does, so the error arrives before
+anything has moved.
+
+**One thing the plan had not looked at, worth knowing for the demo.** On `main`,
+`segmind/datastructures/events.py` imports `geometry_msgs.msg.PoseStamped`, so no segmind test
+can be collected without ROS 2 -- the baseline run over the `main` worktree here failed at
+collection for all five segmind modules. #244 removes that import (its numeric-pose change
+replaced it), which is why this item's tests run in this container at all and a second reason,
+after the detector changes, that basing on #244 was the right call.
+
+**`DataPlayer.process_objects_data` keeps posing only `bodies_with_collision`.** The rosbag
+player hands it only bodies whose parent connection is a `Connection6DoF`, and the collision
+filter holds for the same reason as before: a frame-only body has nothing for a detector to
+see. Recorded here because a robot root placed in `map` by `/tf` without a collision shape
+would not be moved by a replay; on the demo world the robot stands where the URDF puts it.
+
+**Deliberately left standing.** `experiments`' `RecordedTransformTree` and this
+`TransformTree` walk the same chain over two readers (`rosbag2_py` there, `rosbags` here).
+Folding is in the direction of `rosbags`, and belongs to whoever next touches the camera
+reader.
+
+**The environment.** `/usr/local/bin/uv` did not exist; `pip install -U uv` put 0.12.8 there,
+`uv sync --extra dev --python 3.12` built the workspace, and `rosbags`, `black` and
+`docformatter` were installed into `.venv` by hand. Tests run with `--orm-build never`, since
+the giskardpy ORM generator still stops on `DebugExpressionPublisher` here as on unmodified
+`main`; `test_robots/test_pose_facing.py` fails to collect here (a robot type resolves to
+`NotSet`), also independent of the branch, and is ignored. `.claude/hooks/plan_item_bootstrap.py
+open` failed at `save-plan.sh` exactly as #231, #236, #238 and #239 recorded; worked around by
+editing `plan.yaml` directly.
