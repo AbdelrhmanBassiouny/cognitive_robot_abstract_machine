@@ -440,3 +440,39 @@ cause is visible in the test source is worth reading before it is deferred.
     Kept the `TABLE_TOP_SCALE` one (a proper summary/body split); reverted the other,
     which wrapped as `full hole-\ninsertion`.
 
+### Round 24 -- the six-hour coraplex job
+
+118. **Not slow, hung.** `test_each_lib (coraplex)` had been hitting GitHub's six-hour
+    job limit on every push since the merge. The workflows declare no `concurrency`
+    group, so every superseded run kept a runner for its whole six hours; six were
+    cancelled by hand. Worth proposing a `concurrency` group to the developer.
+119. The log pins it without ambiguity: `test_training_environments.py::test_move_to_reach`
+    starts on `gw1` at 07:56:55 and never reports again, `gw0` drains its queue by
+    07:57:15, and the session waits on `gw1` until cancellation. **Read an xdist log for
+    a started-but-never-reported item**, not for the last line printed -- the last line
+    was a passing test on the *other* worker and points nowhere.
+120. That test is `main`'s and untouched here. It samples two random reach episodes and
+    asserts only `success_rate >= 0.0`, because unreachable targets are expected: the
+    tick budget is what makes one a failure instead of a hang.
+121. **The regression**: `main` ticks `while counter < len(self.motion_mappings) * 2000`
+    then raises `MotionDidNotFinish`. Making the budget configurable here defaulted it
+    to `None` and read `None` as "tick until the motion ends" -- `while True` for every
+    caller that does not ask, which is everything except the three montessori scripts.
+122. Fixed in `d21071ca5`: `DEFAULT_MAX_TICKS_PER_MOTION_MAPPING = 2000`, the ClassVar
+    is an `int`, the unbounded path is gone, and the bound is a `tick_limit` property.
+    `ExecutionEnvironment.max_ticks_per_motion_mapping` stays `Optional` -- there
+    `None` means "leave unchanged", a different thing.
+123. **The test had to be on the bound, not the hang.** A test that sets a small budget
+    passes against the broken code too, since only the *default* regressed; and the
+    default is 4000 real QP ticks. So it asserts `tick_limit` is finite and equals
+    `len(motion_mappings) * DEFAULT_MAX_TICKS_PER_MOTION_MAPPING` with no environment
+    budget set.
+124. Flagged, not fixed: `SimulationTimePacer.sleep()` spins on the simulation clock
+    with no bound, so a stalled sim blocks a tick forever and the budget cannot help.
+    Unreachable from tests (only the demo scripts set `context.simulation_clock`), but
+    a real hang in the demo. The timeout policy is the developer's call.
+125. `scripts/format_docstrings.py` split a `:py:attr:` target across a line
+    (`...GiskardExecutable\n.max_ticks_per_motion_mapping`), which Sphinx cannot
+    resolve; reverted that hunk. Second round running that it has damaged a docstring
+    it had never been run over.
+
