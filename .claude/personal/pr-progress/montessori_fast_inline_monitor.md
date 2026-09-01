@@ -325,3 +325,56 @@ tooling.
   moved to inline `pyproject` dependencies). Left alone so as not to conflict with #168.
 - Earlier "Next" items below still stand: the head-to-head soak, `rotational_error`,
   `TFPublisher`, `MujocoSimulator.add_entity`, `body.global_pose`.
+
+### Round 22 -- what CI said, and the check that would have caught it
+
+Six red jobs on `3e9f3847`, fixed in `82a2c0a8e`.
+
+**Mine, three of them, all one shape** -- `main` moved something, the auto-merge kept
+the branch's use of the old place, git said nothing:
+
+- `insert_shape_action.py`: `translate_free_space_to_where_condition` ->
+  `GraphOfBoundingBoxes.constrain_to_free_space`, `navigation_map_at_target` ->
+  `PlanarGraphOfBoundingBoxes.navigation_map_at_target`, and the same stale 3D query
+  point `main` fixed in `sage10k_actions.py` (`1a6d4206e` is the commit to read).
+- `PickUpAction`: `grasped_object=self.object_designator` needed `.root`, like every
+  other use in that method.
+- `WORKSPACE_ORM_INTERFACES`: `experiments` declares `("coraplex", "segmind")`.
+
+**Mine by omission**: `cramera/requirements.txt`. Round 21 left it "valid setuptools,
+not worth conflicting with #168"; `main` tests the convention in
+`test_dependency_declarations.py`. Now inline, file deleted, and `experiments` declares
+`cramera` + `segmind`.
+
+**The branch's own, red before the merge**: `apply_grasp_contact_parameters` friction
+arity, `MontessoriLiveEventSource(clock=...)`, and the `parse_panda` mesh download race
+(two xdist workers, one `.partial` name).
+
+### The differential's second half
+
+`pyflakes` is per-file: it cannot see that `from x import y` names something `x` does
+not define. `$SCRATCH/check_imports.py` (kept in the round's scratchpad; worth
+re-writing rather than hunting for) parses every such import, resolves the module to
+its file, follows `import *` through `__init__.py`, and reports the misses. Merge vs
+branch: identical, 41 either way, all long-standing noise (segmind SCRDR generated
+models, ROS shims). Run it as a *difference*, like the pyflakes one.
+
+### What runs in this container after all
+
+More than round 21 assumed. With a hand-built 3.12 venv (`pytest`, `packaging`,
+`requests`):
+
+- `test/version_test/test_dependency_declarations.py --noconftest` runs outright: 22
+  passed. Pure `tomllib` + `re`, no workspace.
+- `panda_assets.py` can be loaded by path with `semantic_digital_twin.exceptions`
+  stubbed, which is enough to drive `download()` and show a pin failing before the fix.
+- The ORM declaration assertion is a dozen lines of `ast` over the generators.
+
+Anything importing `semantic_digital_twin` proper still cannot: `rustworkx`, then
+numpy, trimesh, casadi.
+
+### Still red
+
+`test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion` -- frameless
+matrix into a connection origin. Pre-existing, reproduces on `stutter_montessori`,
+needs the workspace. Untouched.
