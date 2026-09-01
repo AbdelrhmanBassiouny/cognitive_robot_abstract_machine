@@ -74,6 +74,11 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   - `python .claude/stack/stack.py landed` - one `name<TAB>pr` line per open fork PR whose branch
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
+  - `python .claude/stack/stack.py pin-tooling` - copies this directory to a path outside the
+    checkout and prints the copy's `stack.py`. A pass switches branches, and this directory is
+    tracked content, so the branch checked out at any moment decides which version of the tooling
+    answers; a pass that pins first is driven by one version from beginning to end. The board is
+    left behind rather than copied, since it belongs to the pass that exported it.
 - **`maintenance.py`** - the executor: the half of a pass that moves commits, where `stack.py`
   only derives and prints. `board --write`, `fast-forward`, `restack`, `promote` and
   `run-report --json`; see [Running a maintenance pass](#running-a-maintenance-pass). It is the
