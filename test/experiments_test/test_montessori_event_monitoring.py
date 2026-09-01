@@ -66,8 +66,13 @@ def test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion():
     hole_position = hole.root.global_transform.to_position()
 
     def move_to(x: float, y: float, z: float) -> None:
+        # The coordinates are read off global_transform above, so they are the world
+        # root's, which the origin setter needs stated to transform them into the
+        # connection's parent frame.
         shape.root.parent_connection.origin = (
-            HomogeneousTransformationMatrix.from_xyz_rpy(x, y, z)
+            HomogeneousTransformationMatrix.from_xyz_rpy(
+                x, y, z, reference_frame=montessori.world.root
+            )
         )
         monitor.tick()
 
