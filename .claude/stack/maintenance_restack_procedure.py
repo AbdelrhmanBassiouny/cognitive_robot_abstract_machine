@@ -23,7 +23,7 @@ from maintenance_restack_steps import (
     RefuseAnUnsafeMove,
     RestackStep,
     SkipBranchAlreadyCurrent,
-    WithholdBranchStillConflicting,
+    WithholdBlockedBranch,
 )
 from stack import CommitMoveChecks, IntegrationStrategy, Stack, restack_plan
 
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 # %% the order that is the procedure
 
 RESTACK_STEPS: tuple[RestackStep, ...] = (
-    WithholdBranchStillConflicting(),
+    WithholdBlockedBranch(),
     SkipBranchAlreadyCurrent(),
     IntegrateParent(),
     RefuseAnUnsafeMove(),
