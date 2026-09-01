@@ -15,6 +15,7 @@ from experiments.montessori.perception import pipeline as pipeline_module
 from experiments.montessori.perception.detections import MontessoriBoardDetection
 from experiments.montessori.perception.exceptions import (
     BoardMissingFromWorld,
+    RegionsDoNotMeet,
     SurfaceHasNothingToMeasure,
 )
 from experiments.montessori.perception.footprint import Footprint
@@ -298,3 +299,79 @@ def test_a_bounded_surface_claims_only_what_stands_within_it():
 
     assert search.claims(0.5, 0.5)
     assert not search.claims(0.2, 0.2)
+
+
+# %% the stretch of a plane one pass rectifies
+
+
+def test_a_surface_with_no_boundary_of_its_own_is_searched_wherever_it_reaches():
+    surface = _surface_at(0.88)
+
+    search = SurfaceSearch(surface=surface)
+
+    assert search.is_searched
+    assert search.region == surface.region
+
+
+def test_a_surface_seen_only_where_its_boundary_was_is_searched_around_that_boundary():
+    board = _board_outlining([(0.4, 0.4), (0.6, 0.4), (0.6, 0.6), (0.4, 0.6)])
+    surface = _surface_at(0.88)
+    overhang = 0.02
+
+    search = SurfaceSearch(surface=surface, boundary=board, overhang=overhang)
+
+    assert search.region.minimum_x <= 0.4 - overhang
+    assert search.region.maximum_x >= 0.6 + overhang
+    assert search.region.minimum_y <= 0.4 - overhang
+    assert search.region.maximum_y >= 0.6 + overhang
+    assert search.region.maximum_x - search.region.minimum_x < (
+        surface.region.maximum_x - surface.region.minimum_x
+    )
+
+
+def test_a_searched_patch_samples_the_same_world_points_its_whole_surface_would():
+    board = _board_outlining(
+        [(0.4321, 0.4321), (0.6, 0.4321), (0.6, 0.6), (0.4321, 0.6)]
+    )
+    surface = _surface_at(0.88)
+
+    search = SurfaceSearch(surface=surface, boundary=board, overhang=0.0197)
+
+    for narrowed, whole in (
+        (search.region.minimum_x, surface.region.minimum_x),
+        (search.region.minimum_y, surface.region.minimum_y),
+    ):
+        samples = (narrowed - whole) / surface.region.resolution
+        assert samples == pytest.approx(round(samples))
+
+
+def test_a_boundary_reaching_past_the_surface_is_searched_only_where_the_surface_is():
+    board = _board_outlining([(0.9, 0.9), (1.5, 0.9), (1.5, 1.5), (0.9, 1.5)])
+    surface = _surface_at(0.88)
+
+    search = SurfaceSearch(surface=surface, boundary=board, overhang=0.02)
+
+    assert search.region.maximum_x == surface.region.maximum_x
+    assert search.region.maximum_y == surface.region.maximum_y
+
+
+def test_a_look_narrowed_to_a_stretch_searches_only_where_the_two_meet():
+    surface = _surface_at(0.88)
+    stated = WorkspaceRegion(
+        minimum_x=0.5, maximum_x=2.0, minimum_y=-1.0, maximum_y=0.75
+    )
+
+    search = SurfaceSearch(surface=surface, narrowed_to=stated)
+
+    assert search.is_searched
+    assert search.region == surface.region.intersection(stated)
+
+
+def test_a_look_narrowed_away_from_a_surface_leaves_nothing_of_it_to_search():
+    stated = WorkspaceRegion(minimum_x=5.0, maximum_x=6.0, minimum_y=5.0, maximum_y=6.0)
+
+    search = SurfaceSearch(surface=_surface_at(0.88), narrowed_to=stated)
+
+    assert not search.is_searched
+    with pytest.raises(RegionsDoNotMeet):
+        search.region

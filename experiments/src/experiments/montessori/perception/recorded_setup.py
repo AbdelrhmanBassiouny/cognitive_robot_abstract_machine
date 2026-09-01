@@ -19,6 +19,15 @@ from experiments.montessori.perception.pipeline import MontessoriPerceptionPipel
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body, Region
+from typing_extensions import Optional
 
 SETUP_NAME = "tracy"
 """
@@ -41,6 +50,22 @@ The whole stretch of that table the camera looks over, and the widest a run may 
 A workspace tuned for this setup is cut out of this one, so an edge brought in by
 :mod:`~experiments.montessori.perception.tune_workspace` can always be pushed back out
 to where it started.
+"""
+
+SURFACE_THICKNESS = 0.02
+"""
+How thick, in metres, a surface of this setup is drawn as in :func:`recorded_world`.
+
+Nothing measures it: a surface is read from the top face of the body that carries it, so
+a slab needs a thickness only to have a top at all.
+"""
+
+REGION_HEADROOM = 0.15
+"""
+How far, in metres, a region built by :func:`region_over` reaches above the table.
+
+Enough to hold the board and anything standing on it, which is what a statement naming a
+stretch of this table means to reach over.
 """
 
 TUNED_WORKSPACE_FILE = (
@@ -86,8 +111,112 @@ def lid_surface() -> WorkspaceSurface:
     )
 
 
-def perception_pipeline() -> MontessoriPerceptionPipeline:
+def recorded_world() -> World:
     """
+    A world holding the two surfaces this setup's recordings were taken over.
+
+    A relation is stated between entities, and a recording carries no world to name any,
+    so a statement about a capture has nothing to be written over. These are the same
+    two surfaces :func:`table_surface` and :func:`lid_surface` describe, by the very
+    names those record, as bodies a statement can relate a detection to.
+
+    It holds no pieces: what a look finds on this table is what the picture says, not
+    what a world places there.
+    """
+    world = World()
+    root = Body(name=PrefixedName("root", SETUP_NAME))
+    with world.modify_world():
+        world.add_kinematic_structure_entity(root)
+        for surface in (table_surface(), lid_surface()):
+            world.add_connection(
+                FixedConnection(
+                    parent=root,
+                    child=_body_of(surface),
+                    parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(),
+                )
+            )
+    world.update_forward_kinematics()
+    return world
+
+
+def _body_of(surface: WorkspaceSurface) -> Body:
+    """
+    The body a measured surface stands for, as a slab filling its own extent.
+
+    :param surface: The surface to describe.
+    """
+    return Body(
+        name=surface.name,
+        collision=ShapeCollection(
+            [
+                Box(
+                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        x=(surface.region.minimum_x + surface.region.maximum_x) / 2,
+                        y=(surface.region.minimum_y + surface.region.maximum_y) / 2,
+                        z=surface.height - SURFACE_THICKNESS / 2,
+                    ),
+                    scale=Scale(
+                        surface.region.maximum_x - surface.region.minimum_x,
+                        surface.region.maximum_y - surface.region.minimum_y,
+                        SURFACE_THICKNESS,
+                    ),
+                )
+            ]
+        ),
+    )
+
+
+def region_over(world: World, patch: WorkspaceRegion, name: str) -> Region:
+    """
+    A stretch of this setup's table, as a region a statement can say a thing lies in.
+
+    :param world: The world to add it to, from :func:`recorded_world`.
+    :param patch: The stretch of table it covers.
+    :param name: What to call it.
+    :return: The region, standing on the table and reaching up to the room above it.
+    """
+    region = Region(
+        name=PrefixedName(name, SETUP_NAME),
+        area=ShapeCollection(
+            [
+                Box(
+                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        z=REGION_HEADROOM / 2
+                    ),
+                    scale=Scale(
+                        patch.maximum_x - patch.minimum_x,
+                        patch.maximum_y - patch.minimum_y,
+                        REGION_HEADROOM,
+                    ),
+                )
+            ]
+        ),
+    )
+    with world.modify_world():
+        world.add_connection(
+            FixedConnection(
+                parent=world.root,
+                child=region,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=(patch.minimum_x + patch.maximum_x) / 2,
+                    y=(patch.minimum_y + patch.maximum_y) / 2,
+                    z=TABLE_HEIGHT,
+                ),
+            )
+        )
+    world.update_forward_kinematics()
+    return region
+
+
+def perception_pipeline(world: Optional[World] = None) -> MontessoriPerceptionPipeline:
+    """
+    :param world: The world to place the detections in, or None to report them in no
+        frame, which is what a run that only reads the pictures needs.
     :return: The pipeline that reads a recording of this setup.
     """
-    return MontessoriPerceptionPipeline(table=table_surface(), lid=lid_surface())
+    return MontessoriPerceptionPipeline(
+        table=table_surface(),
+        lid=lid_surface(),
+        reference_frame=None if world is None else world.root,
+        world=world,
+    )

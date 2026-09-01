@@ -24,7 +24,7 @@ from experiments.montessori.perception.scene_source import FixedScene
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
-from semantic_digital_twin.reasoning.predicates import SupportedBy
+from semantic_digital_twin.reasoning.predicates import InsideRegion, SupportedBy
 from semantic_digital_twin.world_description.world_entity import Body
 from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
@@ -69,7 +69,15 @@ def test_what_the_search_narrows_by_is_a_relation_rather_than_an_attributes_name
     Support is a relation the world means something by, so the search is narrowed by the
     class that means it and there is no attribute name spelled a second time.
     """
-    assert MontessoriPerceptionBackend.narrowing_relations == (SupportedBy,)
+    assert SupportedBy in MontessoriPerceptionBackend.narrowing_relations
+
+
+def test_a_search_narrows_itself_by_where_a_statement_says_the_thing_lies():
+    """
+    A region is extents in the world's own vocabulary, so a look stating one can cut its
+    picture down to it before anything is detected.
+    """
+    assert InsideRegion in MontessoriPerceptionBackend.narrowing_relations
 
 
 def test_the_kind_of_detection_asked_for_is_what_the_look_is_asked_for():

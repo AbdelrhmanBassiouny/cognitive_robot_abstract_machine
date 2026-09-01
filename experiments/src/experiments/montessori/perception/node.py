@@ -314,6 +314,13 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
 
     # %% serving results
 
+    @property
+    def reference_frame(self) -> Optional[KinematicStructureEntity]:
+        """
+        The frame this node's pipeline places its detections in.
+        """
+        return self.pipeline.reference_frame
+
     def scene(self, request: SceneRequest = SceneRequest()) -> MontessoriScene:
         """
         Serve the newest look, whatever the request narrowed it to.
