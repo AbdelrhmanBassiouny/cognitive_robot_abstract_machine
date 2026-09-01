@@ -16,7 +16,15 @@ branch `claude/match-query-ergonomics-chain-tozhhq` off `main` at 2318e206.
 
 ## Verification
 - `test/krrood_test/test_eql`: 1276 passed, 3 skipped.
-- Full `test/krrood_test` run in progress at the time of writing; result goes on the PR.
+- Full `test/krrood_test`: 2258 passed, 5 skipped; the two `test_object_diagram`
+  failures are this container's missing Graphviz `dot` binary (`/usr/bin/dot: not
+  found`), the same pair every earlier session on this plan recorded.
+- The recorded repro script prints `equal : False` on this branch and `equal : True`
+  on `main`.
+
+## Records written
+- `plan.yaml`: status `in_progress`, blockers cleared, branch/PR/session recorded.
+- `roadmap.md` §25; dashboard republished; tracking issue #181 and #196 commented.
 
 ## Next / outstanding
 - Landing order with #196: adjacent lines of `_expression_signature`; second lander
