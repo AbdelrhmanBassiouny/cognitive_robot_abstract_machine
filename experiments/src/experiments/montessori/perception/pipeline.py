@@ -294,6 +294,17 @@ sixty millimetre square -- wide enough for every piece in the set and narrow eno
 reject a hand reaching into the scene.
 """
 
+BOARD_SCALES_TRIED = tuple(round(0.70 + step * 0.01, 2) for step in range(41))
+"""
+The sizes a shape-sorting board of the mesh's shape is tried at when one is measured,
+against that mesh.
+
+Reaches from a board about a third smaller than the mesh to one about a third larger,
+which is wider than any board that would still be recognisable as the same toy, at a
+step of one part in a hundred -- finer than the two to three millimetres a fitted hole
+lands from the opening it belongs to.
+"""
+
 HOLE_SIZE = SizeRange(minimum_area=0.00006, maximum_area=0.003)
 """
 Area a hole in the board's lid may cover.
@@ -326,20 +337,40 @@ class BoardDetector:
     The holes the board's mesh is cut with, which is what is looked for.
     """
 
+    rough_fitter: OutlineFitter = field(
+        default_factory=lambda: OutlineFitter(
+            coarse_angle_step=math.radians(12.0),
+            angle_step=math.radians(12.0),
+            coarse_reach=0.020,
+            reach=0.020,
+            coarse_step=0.006,
+            step=0.006,
+            coarse_outline_spacing=0.012,
+            outline_spacing=0.012,
+        )
+    )
+    """
+    Finds roughly which way round the board lies, over every turn it could be at.
+
+    A board can be stood on the table any way round, and nothing before the fit says
+    which, so the turn has to be searched over a whole circle -- which is most of what a
+    fit costs. This pass reaches wide enough, and compares at few enough points, that a
+    circle is affordable, and it is only ever asked which twelfth of a turn to look in.
+    """
+
     fitter: OutlineFitter = field(
         default_factory=lambda: OutlineFitter(
             angle_step=math.radians(0.5), coarse_outline_spacing=0.006
         )
     )
     """
-    Lays the layout over the edges seen in the lid's plane.
+    Settles the placement, around the turn the first pass came back with.
 
     Turned far more finely than a loose piece is: half a degree moves the outermost hole
     of a layout spanning a hundred and eighty millimetres by under a millimetre, where
     the two degrees a thirty millimetre piece is content with would move it by three --
-    further than the fit's own reach. The coarse pass compares at a third of the points
-    for the same reason from the other side: six outlines are hundreds of points, and
-    the first pass only has to say which placement to look around.
+    further than the fit's own reach. Its own coarse pass compares at a third of the
+    points for the same reason from the other side: six outlines are hundreds of points.
     """
 
     colors: SurfaceColors = field(default_factory=SurfaceColors)
@@ -392,16 +423,120 @@ class BoardDetector:
         seed = self._seed_from_dark_patches(orthophoto)
         if seed is None:
             return None
-        placement = self.fitter.fit(
-            self.layout,
-            EdgeDistances.of(orthophoto),
+        placement = self._fit(self.layout, EdgeDistances.of(orthophoto), seed)
+        return self._board_at(placement, orthophoto, reference_frame)
+
+    def measure_scale(
+        self, orthophoto: Orthophoto, candidates: Sequence[float] = BOARD_SCALES_TRIED
+    ) -> Optional[float]:
+        """
+        How large the board in view is, against the mesh its layout was read from.
+
+        Where the holes lie relative to one another is cut into the board and cannot
+        vary, so a look whose openings no placement of the layout can reach says
+        something about the board rather than about the look: the board is not the size
+        the mesh was drawn at. The size is then the hypothesis that makes the layout
+        hold again, and it is measured by trying the sizes such a board could be and
+        keeping the one whose holes land on the openings actually seen.
+
+        Not something a look does for itself -- it costs one fit per size tried, and a
+        board does not change size between frames. It is run once against a look at the
+        board and its answer is stated with the scene, the way the surfaces are.
+
+        :param orthophoto: A rectified view of the lid's plane, with the board in it.
+        :param candidates: The sizes to try, against the mesh.
+        :return: The size that best explains the openings, or None if no surface in view
+            carried enough of them to measure against.
+        """
+        seed = self._seed_from_dark_patches(orthophoto)
+        if seed is None:
+            return None
+        openings = np.array(
+            [
+                (patch.x, patch.y)
+                for patch in self._board_sized_cluster(
+                    self._dark_patches_within(
+                        self._most_coloured_surface(orthophoto), orthophoto
+                    )
+                )
+            ]
+        )
+        edges = EdgeDistances.of(orthophoto)
+        return min(
+            candidates,
+            key=lambda scale: self._gap_to_openings(scale, edges, seed, openings),
+        )
+
+    def _gap_to_openings(
+        self,
+        scale: float,
+        edges: EdgeDistances,
+        seed: PlanarPoint,
+        openings: np.ndarray,
+    ) -> float:
+        """
+        How far the openings seen lie from the holes a board of one size would put
+        there, once that board is fitted as well as it can be.
+
+        :param scale: The size to try, against the mesh.
+        :param edges: The edges seen in the lid's plane.
+        :param seed: Roughly where the board stands.
+        :param openings: World-frame ``(n, 2)`` middles of the openings seen.
+        :return: The middle distance, in metres, from an opening to the nearest hole.
+        """
+        layout = BoardHoleLayout.of_board_mesh(scale)
+        placement = self._fit(layout, edges, seed)
+        holes = np.array(
+            [
+                (hole.center.x, hole.center.y)
+                for hole in layout.placed(placement.center, placement.yaw)
+            ]
+        )
+        return float(
+            np.median(
+                np.linalg.norm(openings[:, None, :] - holes[None, :, :], axis=2).min(
+                    axis=1
+                )
+            )
+        )
+
+    def _fit(
+        self, layout: BoardHoleLayout, edges: EdgeDistances, seed: PlanarPoint
+    ) -> Placement:
+        """
+        Lay one layout over the edges, from anywhere within reach of the seed and at any
+        turn.
+
+        Searched twice over: once roughly, over every turn a board could be stood at,
+        and once carefully around the answer. Sweeping a whole circle at the resolution
+        the second pass needs would cost three times as much and answer the same, since
+        all the first one has to say is which twelfth of a turn the board lies in.
+
+        :param layout: The holes to look for.
+        :param edges: The edges seen in the lid's plane.
+        :param seed: Roughly where the board stands.
+        """
+        rough = self.rough_fitter.fit(
+            layout,
+            edges,
             center=seed,
             radius=self.seed_reach,
             angles=list(
-                np.arange(-math.pi, math.pi, self.fitter.coarse_angle_step)
+                np.arange(-math.pi, math.pi, self.rough_fitter.coarse_angle_step)
             ),
         )
-        return self._board_at(placement, orthophoto, reference_frame)
+        turns = round(
+            self.rough_fitter.coarse_angle_step / self.fitter.coarse_angle_step
+        )
+        return self.fitter.fit(
+            layout,
+            edges,
+            center=rough.center,
+            radius=2 * self.rough_fitter.coarse_step,
+            angles=list(
+                rough.yaw + np.arange(-turns, turns + 1) * self.fitter.coarse_angle_step
+            ),
+        )
 
     def _seed_from_dark_patches(self, orthophoto: Orthophoto) -> Optional[PlanarPoint]:
         """
@@ -415,14 +550,8 @@ class BoardDetector:
         :return: The middle of the largest board-sized group of patches, or None if no
             surface in view carried enough of them.
         """
-        mask = _clean(self.colors.surface_mask(orthophoto))
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
         best: List[PlanarPoint] = []
-        for contour in contours:
-            footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
-            if footprint.area < self.minimum_lid_area:
-                continue
+        for contour in self._surfaces_large_enough_to_be_a_lid(orthophoto):
             patches = self._board_sized_cluster(
                 self._dark_patches_within(contour, orthophoto)
             )
@@ -432,6 +561,38 @@ class BoardDetector:
             return None
         middle = np.array([(patch.x, patch.y) for patch in best]).mean(axis=0)
         return PlanarPoint(float(middle[0]), float(middle[1]))
+
+    def _surfaces_large_enough_to_be_a_lid(
+        self, orthophoto: Orthophoto
+    ) -> List[np.ndarray]:
+        """
+        The coloured surfaces in view big enough to be the board's lid.
+
+        :param orthophoto: The rectified view of the lid's plane.
+        :return: Their contours, in rectified pixels.
+        """
+        mask = _clean(self.colors.surface_mask(orthophoto))
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return [
+            contour
+            for contour in contours
+            if Footprint.from_contour(contour, orthophoto.region.resolution).area
+            >= self.minimum_lid_area
+        ]
+
+    def _most_coloured_surface(self, orthophoto: Orthophoto) -> np.ndarray:
+        """
+        The largest surface in view that could be the board's lid.
+
+        :param orthophoto: The rectified view of the lid's plane.
+        :return: Its contour, in rectified pixels.
+        """
+        return max(
+            self._surfaces_large_enough_to_be_a_lid(orthophoto),
+            key=lambda contour: Footprint.from_contour(
+                contour, orthophoto.region.resolution
+            ).area,
+        )
 
     def _dark_patches_within(
         self, surface: np.ndarray, orthophoto: Orthophoto
@@ -467,8 +628,8 @@ class BoardDetector:
         Keep only the patches that could lie on one board.
 
         A surface that has merged with an arm reaching over the table carries dark
-        patches scattered far beyond any board, so they are grouped by how close together
-        they lie and only the largest group that still fits on a board is kept.
+        patches scattered far beyond any board, so they are grouped by how close
+        together they lie and only the largest group that still fits on a board is kept.
 
         :param patches: Every hole-sized dark patch found on one surface.
         :return: The largest group of them that fits within one board's lid.
@@ -514,9 +675,7 @@ class BoardDetector:
         (_, _), (first_side, second_side), _ = cv2.minAreaRect(centers)
         span = sorted((first_side, second_side))
         allowed = sorted((self.layout.size.x, self.layout.size.y))
-        return all(
-            measured <= reach for measured, reach in zip(span, allowed)
-        )
+        return all(measured <= reach for measured, reach in zip(span, allowed))
 
     def _board_at(
         self,
@@ -529,8 +688,8 @@ class BoardDetector:
 
         The lid's own edges are not used: they run into whatever the board is standing
         against. The layout is what says where the board is, and it says it better than
-        the lid's outline could, since six holes constrain a placement that one rectangle
-        leaves free to slide along itself.
+        the lid's outline could, since six holes constrain a placement that one
+        rectangle leaves free to slide along itself.
 
         :param placement: Where the layout was fitted to.
         :param orthophoto: The rectified view of the lid's plane.

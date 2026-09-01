@@ -151,8 +151,10 @@ def test_the_layout_is_found_where_it_was_drawn(
 ) -> None:
     """
     Fitting the layout over its own outlines recovers the placement they were drawn at,
-    from a seed that is neither the right place nor the right turn. Driven through the
-    detector's own fitter, so what is measured is the configuration that ships.
+    from a seed that is neither the right place nor the right turn.
+
+    Driven through the detector's own fitter, so what is measured is the configuration
+    that ships.
     """
     layout = BoardHoleLayout.of_board_mesh()
     drawn_center = PlanarPoint(0.79, 0.135)

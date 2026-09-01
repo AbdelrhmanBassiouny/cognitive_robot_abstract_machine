@@ -89,8 +89,8 @@ class KnownOutline(ABC):
     can be laid over a picture at any placement.
 
     Recognising one is therefore not *what shape is this* but *where is it and how is it
-    turned*, which is a question a sweep over placements answers and whose answer carries
-    how well it fitted.
+    turned*, which is a question a sweep over placements answers and whose answer
+    carries how well it fitted.
     """
 
     @abstractmethod

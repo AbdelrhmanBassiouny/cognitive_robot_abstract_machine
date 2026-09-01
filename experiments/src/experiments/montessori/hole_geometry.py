@@ -321,19 +321,35 @@ class BoardHoleLayout(KnownOutline):
     How far the lid reaches along the board's own axes, in metres.
     """
 
+    scale: float = 1.0
+    """
+    How large the board this layout describes is, against the mesh it was read from.
+
+    One is the mesh itself, which is what a scene built from that mesh shows. A real
+    board is whatever size it is, and :meth:`~BoardScale.of_look` measures that rather
+    than assuming the mesh was cut to it.
+    """
+
     @classmethod
-    @lru_cache(maxsize=1)
-    def of_board_mesh(cls) -> Self:
+    @lru_cache(maxsize=8)
+    def of_board_mesh(cls, scale: float = 1.0) -> Self:
         """
-        Read the layout out of the board's own mesh.
+        Read the layout out of the board's own mesh, at the size a board of that mesh's
+        shape is known to be.
 
         Cached, since finding the holes slices that mesh and a look is taken every frame.
+
+        :param scale: How large the board is against the mesh.
         """
         lid = _find_perforated_body(trimesh.load(BOARD_MESH_PATH))
-        reach = lid.bounds[1] - lid.bounds[0]
+        reach = (lid.bounds[1] - lid.bounds[0]) * scale
         return cls(
-            holes=tuple(detect_hole_footprints()),
+            holes=tuple(
+                _scaled_footprint(footprint, scale)
+                for footprint in detect_hole_footprints()
+            ),
             size=PlanarSize(float(reach[0]), float(reach[1])),
+            scale=scale,
         )
 
     def outline_points(self, angle: float, spacing: float) -> np.ndarray:
@@ -347,7 +363,10 @@ class BoardHoleLayout(KnownOutline):
         """
         return turned(
             np.vstack(
-                [points_along(_boundary_about_the_board(hole), spacing) for hole in self.holes]
+                [
+                    points_along(_boundary_about_the_board(hole), spacing)
+                    for hole in self.holes
+                ]
             ),
             angle,
         )
@@ -396,4 +415,24 @@ def _boundary_about_the_board(hole: HoleFootprint) -> np.ndarray:
     """
     return np.array([(point.x, point.y) for point in hole.boundary]) + np.array(
         [hole.center.x, hole.center.y]
+    )
+
+
+def _scaled_footprint(footprint: HoleFootprint, scale: float) -> HoleFootprint:
+    """
+    The same hole on a board of a different size.
+
+    :param footprint: The hole as the mesh cuts it.
+    :param scale: How large the board is against the mesh.
+    """
+    if scale == 1.0:
+        return footprint
+    return HoleFootprint(
+        category=footprint.category,
+        center=PlanarPoint(footprint.center.x * scale, footprint.center.y * scale),
+        size=PlanarSize(footprint.size.x * scale, footprint.size.y * scale),
+        boundary=tuple(
+            PlanarPoint(point.x * scale, point.y * scale)
+            for point in footprint.boundary
+        ),
     )
