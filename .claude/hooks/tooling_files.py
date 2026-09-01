@@ -65,6 +65,12 @@ class HookScript(StrEnum):
     Runs the whole first-time setup non-interactively.
     """
 
+    SETUP_STEPS = "setup_steps.py"
+    """
+    Prints the setup steps that live outside the clone - labels, access, environment
+    variables - filled in for the fork the clone points at.
+    """
+
     WRITE_BRANCH_FILES = "write-branch-files.sh"
     """
     Pushes several files to a branch in one commit, through a scratch worktree.
