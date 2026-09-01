@@ -20,7 +20,7 @@ from krrood.entity_query_language.exceptions import (
     BackendCannotResolveCondition,
     GenerativeBackendQueryIsNotUnderspecifiedVariable,
 )
-from krrood.entity_query_language.factories import an, entity, variable
+from krrood.entity_query_language.factories import a, an, entity, variable
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
 from ..dataset.backend_that_looks_at_the_world import (
@@ -325,6 +325,56 @@ def test_a_description_no_single_thing_answers_is_refused_rather_than_guessed_at
     statement = statement.where(
         place.name != "nowhere", StandingOn(statement.variable, place)
     )
+
+    with pytest.raises(BackendCannotResolveCondition) as raised:
+        list(statement.evaluate(backend=backend))
+
+    assert raised.value.backend_type is BackendThatLooksAtTheWorld
+
+
+def looking_for_something_standing_on_the_place_answering(name: str):
+    """
+    A statement asking a look for whatever stands on a place described by a statement of
+    its own, handed to the relation where that place would stand.
+
+    :param name: What the world calls the place.
+    """
+    place = a(Place)().from_([TABLE, LID])
+    place.where(place.variable.name == name)
+    statement = an(Sighting)()
+    return statement.where(StandingOn(statement.variable, place.expression))
+
+
+def test_a_thing_described_by_a_statement_of_its_own_narrows_the_look_too(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    A description can be written as a statement in its own right and handed to the
+    relation in the place of the thing it describes, which says what stating its
+    conditions beside that relation says.
+    """
+    results = list(
+        looking_for_something_standing_on_the_place_answering(LID.name).evaluate(
+            backend=backend
+        )
+    )
+
+    assert backend.searched_place == LID
+    assert results == [CUBE_ON_THE_LID]
+
+
+def test_a_statement_of_its_own_no_single_thing_answers_is_refused_too(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    Where the description is written makes no difference to what has to be settled
+    before a look is taken, so one two places answer is refused as the same description
+    stated beside the relation is.
+    """
+    place = a(Place)().from_([TABLE, LID])
+    place.where(place.variable.name != "nowhere")
+    statement = an(Sighting)()
+    statement = statement.where(StandingOn(statement.variable, place.expression))
 
     with pytest.raises(BackendCannotResolveCondition) as raised:
         list(statement.evaluate(backend=backend))

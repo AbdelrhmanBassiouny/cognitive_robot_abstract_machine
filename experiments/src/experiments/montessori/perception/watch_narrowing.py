@@ -32,9 +32,15 @@ import cv2
 import numpy as np
 from typing_extensions import List, Optional, Tuple
 
+from experiments.montessori.hole_geometry import HOLE_NAME_BY_CATEGORY
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.captures import CAPTURE_DIRECTORY, SceneCapture
+from experiments.montessori.perception.detections import (
+    MontessoriBoardDetection,
+    MontessoriScene,
+    MontessoriShapeDetection,
+)
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.overlay import (
     CameraView,
@@ -44,16 +50,12 @@ from experiments.montessori.perception.overlay import (
     ViewFromAbove,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.hole_geometry import HOLE_NAME_BY_CATEGORY
 from experiments.montessori.perception.recorded_setup import (
-    SETUP_NAME,
     board_holes_in,
     lid_surface,
     recorded_world,
     perception_pipeline,
 )
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
-from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import RecordedFrame
 from experiments.montessori.perception.viewer import (
@@ -62,24 +64,22 @@ from experiments.montessori.perception.viewer import (
     QuitKey,
     scale_to_fit,
 )
-from krrood.entity_query_language.factories import an, variable
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
+from experiments.montessori.semantics import MontessoriShapeCategory
+from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
-from experiments.montessori.perception.detections import (
-    MontessoriBoardDetection,
-    MontessoriScene,
-    MontessoriShapeDetection,
-)
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.reasoning.predicates import (
     Above,
     Colored,
     SupportedBy,
+    LeftOf,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
 logger = logging.getLogger(__name__)
+
 
 # %% what a step is shown as
 
@@ -355,42 +355,54 @@ def look_for_the_cube_on_the_lid(
     the things it says that piece stands in relation to, and every one of those
     relations.
 
-    Nothing is fetched out of the world beforehand. The lid and the hole are described
-    in the statement itself, by what the world calls them, and answering those
-    descriptions is the backend's own first move -- which is what lets the relations
-    that mention them narrow the look at all.
+    Nothing is fetched out of the world beforehand. The lid and the two holes are
+    described in the statement itself, by what the world calls them -- the lid beside
+    the relation naming it, each hole as a statement of its own handed to the relation
+    in its place -- and answering those descriptions is the backend's own first move,
+    which is what lets the relations that mention them narrow the look at all.
 
     Support first, because it is the narrowing the request language already had and the
     one the digital twin answers by itself: naming the surface names a stretch of a
-    plane the world describes. A direction from one of the board's own holes second,
-    because it is the world's own vocabulary saying where on that surface to look. The
-    colour last, because it narrows what is worth fitting rather than where to fit it,
-    and so is the one narrowing a picture of the region cannot show on its own.
+    plane the world describes. Directions from two of the board's own holes second,
+    because they are the world's own vocabulary saying where on that surface to look.
+    The colour last, because it narrows what is worth fitting rather than where to fit
+    it, and so is the one narrowing a picture of the region cannot show on its own.
 
-    The direction is read from where the camera stands, so left, right and above mean
-    what they mean on screen. Which of them tells the two pieces on the lid apart is
-    measured rather than assumed: on ``tracy_pickup_demo`` the cube stands above the
-    square hole in the picture and the cylinder to its right, so *above* leaves the cube
-    and *right of* leaves the cylinder.
+    A direction is read from where the camera stands, so left, right and above mean what
+    they mean on screen. Which of them tells the two pieces on the lid apart is measured
+    rather than assumed: on ``tracy_pickup_demo`` the cube stands left of the square
+    hole in the picture and above the triangle hole, and the cylinder stands right of
+    the one and below the other.
 
     :param world: The world holding the surfaces the statement describes.
     :param frame: The camera data the look is taken from, which is what says where the
         directions are read from.
     :param board: The board as this look found it, which is what says where its holes
-        lie; they are put in the world here so the statement can describe one of them.
+        lie; they are put in the world here so the statement can describe two of them.
     :return: The whole statement.
     """
     board_holes_in(world, board)
     lid = variable(Body, world.bodies)
-    square_hole = variable(Body, world.bodies)
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
-    sought = an(MontessoriShapeDetection)()
+    triangle = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
+    square_hole = a(Body)().from_(world.bodies)
+    square_hole.where(
+        square_hole.variable.name.name == HOLE_NAME_BY_CATEGORY[cube.category]
+    )
+    triangle_hole = a(Body)().from_(world.bodies)
+    triangle_hole.where(
+        triangle_hole.variable.name.name == HOLE_NAME_BY_CATEGORY[triangle.category]
+    )
+    sought = a(MontessoriShapeDetection)()
     return sought.where(
         lid.name == lid_surface().name,
-        square_hole.name
-        == PrefixedName(HOLE_NAME_BY_CATEGORY[cube.category], SETUP_NAME),
         SupportedBy(sought.variable, lid),
-        Above(sought.variable, square_hole, frame.point_of_view(world.root)),
+        LeftOf(
+            sought.variable, square_hole.expression, frame.point_of_view(world.root)
+        ),
+        Above(
+            sought.variable, triangle_hole.expression, frame.point_of_view(world.root)
+        ),
         Colored(sought.variable, cube.color),
     )
 

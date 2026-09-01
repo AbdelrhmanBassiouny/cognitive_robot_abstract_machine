@@ -216,7 +216,7 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
         Dataclass-generated `__init__` never have this problem unless `InitVar` is used.
     """
 
-    _expression: Query = field(init=False, default=None)
+    _expression: Optional[Query] = field(init=False, default=None)
     """
     Cache for the expression (the actual EQL query) as soon as it has been calculated.
 

@@ -328,8 +328,8 @@ class StatedRelation:
             return None
         return relation_type
 
-    @staticmethod
-    def _thing_stood_for(operand: Any, described_things: Dict[Any, Any]) -> Any:
+    @classmethod
+    def _thing_stood_for(cls, operand: Any, described_things: Dict[Any, Any]) -> Any:
         """
         :param operand: What the statement puts in one of the relation's places.
         :param described_things: What the statement describes rather than hands over.
@@ -339,9 +339,22 @@ class StatedRelation:
             comparable to a variable.
         """
         for variable_, thing in described_things.items():
-            if operand is variable_:
+            if operand is variable_ or cls._selects(operand, variable_):
                 return thing
         return operand
+
+    @staticmethod
+    def _selects(operand: Any, variable_: Any) -> bool:
+        """
+        :param operand: What the statement puts in one of the relation's places.
+        :param variable_: The variable standing for a thing the statement describes.
+        :return: Whether that operand is a statement of its own selecting that variable,
+            which is the other way a statement puts a thing it describes in a
+            relation's place.
+        """
+        return isinstance(operand, Query) and any(
+            selected is variable_ for selected in operand._selected_variables_
+        )
 
     @staticmethod
     def _name_of(operand: property, relation_type: Type[Relation]) -> str:
@@ -570,18 +583,56 @@ class PerceptionBackend(GenerativeBackend, ABC):
             condition stating it stays one this backend cannot resolve.
         """
         described_things = {}
+        for variable_, description in cls._descriptions_in(expression).items():
+            answers = list(description._evaluate_natively_())
+            if len(answers) == 1:
+                described_things[variable_] = answers[0]
+        return described_things
+
+    @classmethod
+    def _descriptions_in(cls, expression: Match[T]) -> Dict[Any, Evaluable]:
+        """
+        What the statement says about each thing other than the one it is looking for.
+
+        Such a description is written one of two ways: as conditions stated beside the
+        relation that mentions the thing, or as a statement of its own handed to that
+        relation in the thing's place. Both say the same, so both are read as the query
+        answering the description out of the domain the statement gave it.
+
+        :param expression: The statement to read.
+        :return: The query answering each description, keyed by the variable standing
+            for the thing described. A variable the statement constrains but describes
+            neither way is left out.
+        """
+        descriptions = {
+            selected: description
+            for description in cls._statements_handed_to(expression)
+            for selected in description._selected_variables_
+        }
         for variable_ in cls._variables_described_by(expression):
             about_it = [
                 condition
                 for condition in expression._where_conditions_
                 if condition._constrained_variables_ == {variable_}
             ]
-            if not about_it:
+            if not about_it or variable_ in descriptions:
                 continue
-            answers = list(an(entity(variable_)).where(*about_it)._evaluate_natively_())
-            if len(answers) == 1:
-                described_things[variable_] = answers[0]
-        return described_things
+            descriptions[variable_] = an(entity(variable_)).where(*about_it)
+        return descriptions
+
+    @staticmethod
+    def _statements_handed_to(expression: Match[T]) -> List[Query]:
+        """
+        :param expression: The statement to read.
+        :return: Every statement of its own the conditions hand over in the place of a
+            thing they mention.
+        """
+        return [
+            reached
+            for condition in expression._where_conditions_
+            for reached in condition._descendants_
+            if isinstance(reached, Query)
+        ]
 
     @staticmethod
     def _variables_described_by(expression: Match[T]) -> Set[Any]:

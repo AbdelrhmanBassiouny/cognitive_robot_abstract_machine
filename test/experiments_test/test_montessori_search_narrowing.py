@@ -535,6 +535,7 @@ def test_the_demonstration_states_its_way_down_to_the_cube_alone(watched):
         [MontessoriShapeCategory.CUBE, MontessoriShapeCategory.CYLINDER],
         [MontessoriShapeCategory.CUBE],
         [MontessoriShapeCategory.CUBE],
+        [MontessoriShapeCategory.CUBE],
     ]
     assert steps[0].searched_area > steps[1].searched_area > steps[2].searched_area
 
