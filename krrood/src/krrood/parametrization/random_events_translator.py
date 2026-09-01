@@ -30,11 +30,6 @@ from random_events.interval import closed_open, closed, open
 from random_events.product_algebra import Event, SimpleEvent
 
 if TYPE_CHECKING:
-    # ConditionType is only ever a dataclass field annotation here (see
-    # WhereExpressionToRandomEventTranslator.conditions_root below) -- never
-    # constructed -- so importing krrood.entity_query_language.factories at runtime
-    # (which would cycle back through operators/probabilistic_queries.py, which
-    # factories.py imports Distribution/Probability from) isn't needed.
     from krrood.entity_query_language.factories import ConditionType
 
 # %% translating a where expression into a random event

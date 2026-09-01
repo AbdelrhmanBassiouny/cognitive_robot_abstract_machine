@@ -47,19 +47,6 @@ if TYPE_CHECKING:
         UnderspecifiedParameters,
     )
 
-# krrood.entity_query_language.factories imports Distribution/Probability from this
-# module, so anything imported here at module level that reaches back to factories
-# would cycle. JointQueryAcrossClassesNotSupported/WhereExpressionToRandomEventTranslator
-# (imported above) don't -- neither krrood.parametrization.exceptions nor
-# krrood.parametrization.random_events_translator import factories.py at runtime (only
-# under TYPE_CHECKING, for a type hint neither ever needs at runtime). The two imports
-# below stay local instead: factories.count/entity is a direct runtime dependency on
-# factories.py itself, and krrood.parametrization.parameterizer imports factories.and_
-# for real (not just a type hint) -- both would cycle if hoisted, so they're deferred
-# into each method body instead (matching operators/causal.py's existing leaf-module
-# pattern), delaying them until a backend actually evaluates the query, by which point
-# every module involved has finished loading.
-
 
 @dataclass(eq=False, repr=False)
 class ProbabilisticQuery(Evaluable, HasExpression, ABC):
@@ -119,7 +106,7 @@ class Probability(ProbabilisticQuery):
         :raises JointQueryAcrossClassesNotSupported: If the condition references
             attributes reached from more than one ``variable(...)`` root, or none.
         """
-        # See the module-level comment above for why this is a local import.
+        # Local import: avoids a circular import through factories.py.
         from krrood.entity_query_language.factories import count, entity
 
         referenced_attributes = WhereExpressionToRandomEventTranslator(
@@ -137,7 +124,7 @@ class Probability(ProbabilisticQuery):
         yield matching_count / total_count
 
     def _resolve_(self, model_registry: ModelRegistry) -> float:
-        # See the module-level comment above for why this is a local import.
+        # Local import: avoids a circular import through factories.py.
         from krrood.parametrization.parameterizer import ConditionParameters
 
         parameters = ConditionParameters(self.condition)
@@ -185,7 +172,7 @@ class Distribution(ProbabilisticQuery):
     """
 
     def _resolve_(self, model_registry: ModelRegistry) -> Any:
-        # See the module-level comment above for why this is a local import.
+        # Local import: avoids a circular import through factories.py.
         from krrood.parametrization.parameterizer import UnderspecifiedParameters
 
         parameters = UnderspecifiedParameters(self.match)
