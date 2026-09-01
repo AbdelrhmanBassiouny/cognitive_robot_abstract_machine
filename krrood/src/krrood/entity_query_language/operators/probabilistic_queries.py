@@ -33,7 +33,12 @@ from krrood.entity_query_language.exceptions import (
     BackendCannotEvaluateProbabilisticQuery,
     NoSolutionFound,
 )
+from krrood.entity_query_language.factories import count, entity
 from krrood.parametrization.exceptions import JointQueryAcrossClassesNotSupported
+from krrood.parametrization.parameterizer import (
+    ConditionParameters,
+    UnderspecifiedParameters,
+)
 from krrood.parametrization.random_events_translator import (
     WhereExpressionToRandomEventTranslator,
 )
@@ -42,10 +47,6 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
     from krrood.entity_query_language.query.match import Match
     from krrood.parametrization.model_registries import ModelRegistry
-    from krrood.parametrization.parameterizer import (
-        ConditionParameters,
-        UnderspecifiedParameters,
-    )
 
 
 @dataclass(eq=False, repr=False)
@@ -106,9 +107,6 @@ class Probability(ProbabilisticQuery):
         :raises JointQueryAcrossClassesNotSupported: If the condition references
             attributes reached from more than one ``variable(...)`` root, or none.
         """
-        # Local import: avoids a circular import through factories.py.
-        from krrood.entity_query_language.factories import count, entity
-
         referenced_attributes = WhereExpressionToRandomEventTranslator(
             self.condition
         ).variables.keys()
@@ -124,9 +122,6 @@ class Probability(ProbabilisticQuery):
         yield matching_count / total_count
 
     def _resolve_(self, model_registry: ModelRegistry) -> float:
-        # Local import: avoids a circular import through factories.py.
-        from krrood.parametrization.parameterizer import ConditionParameters
-
         parameters = ConditionParameters(self.condition)
         model = model_registry.get_model(parameters)
         return model.probability(parameters.event)
@@ -172,9 +167,6 @@ class Distribution(ProbabilisticQuery):
     """
 
     def _resolve_(self, model_registry: ModelRegistry) -> Any:
-        # Local import: avoids a circular import through factories.py.
-        from krrood.parametrization.parameterizer import UnderspecifiedParameters
-
         parameters = UnderspecifiedParameters(self.match)
         model = model_registry.get_model(parameters)
         result = parameters.resolve_conditioned_and_truncated_model(model)

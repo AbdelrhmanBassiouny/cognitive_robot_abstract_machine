@@ -17,6 +17,7 @@ from typing_extensions import (
     Optional,
     Tuple,
     Type,
+    TYPE_CHECKING,
     TypeVar,
     overload,
 )
@@ -30,10 +31,6 @@ from krrood.entity_query_language.core.base_expressions import (
 from krrood.entity_query_language.operators.causal import (
     cause,
     confounder,
-)
-from krrood.entity_query_language.operators.probabilistic_queries import (
-    Probability,
-    Distribution,
 )
 from krrood.entity_query_language.core.helpers import _resolve_domain
 from krrood.entity_query_language.core.mapped_variable import (
@@ -95,6 +92,12 @@ from krrood.entity_query_language.rules.conclusion_selector import (
 from krrood.entity_query_language.utils import is_iterable
 from krrood.symbol_graph.symbol_graph import Symbol, SymbolGraph
 
+if TYPE_CHECKING:
+    from krrood.entity_query_language.operators.probabilistic_queries import (
+        Distribution,
+        Probability,
+    )
+
 ConditionType = Union[SymbolicExpression, bool, Predicate, TruthValueOperator]
 """
 The possible types for conditions.
@@ -147,6 +150,11 @@ def distribution_of(
         match's free variables is kept.
     :return: Distribution descriptor.
     """
+    # Local import: avoids a circular import through operators/probabilistic_queries.py.
+    from krrood.entity_query_language.operators.probabilistic_queries import (
+        Distribution,
+    )
+
     return Distribution(match=match, marginalize_for=marginalize_for)
 
 
@@ -168,6 +176,9 @@ def probability_of(condition: ConditionType) -> Probability:
     :param condition: The condition to compute the probability of.
     :return: Probability descriptor.
     """
+    # Local import: avoids a circular import through operators/probabilistic_queries.py.
+    from krrood.entity_query_language.operators.probabilistic_queries import Probability
+
     return Probability(condition=condition)
 
 
