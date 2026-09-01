@@ -3256,3 +3256,152 @@ YAML and `save-plan.sh` refused it, with the error swallowed by `capture_output=
 exactly as #231 recorded on 2026-08-31 and #236 again here. Worked around by editing
 `plan.yaml` directly. It is the same family as #160 and still wants its own bug-fix pull
 request.
+
+### `search-clipped-to-a-predicates-region`: every relation that says where a thing may be
+
+Widened 2026-09-01 at the developer's ask, from the two relations #227 could read -- support and
+containment -- to the whole family, plus a colour. The ask, in his words: *"I want even more
+spatial predicates like right of the square hole, between the square hole and the triangle hole,
+in front of the circular hole, at a region around a pose with a certain radius or extents"*, with
+the demonstration stating one of them and then filtering by the cube's colour.
+
+#### One abstraction, and it is where the narrowing was always going
+
+`PlacementRelation`, in `semantic_digital_twin.reasoning.predicates`: a relation that says where
+the thing it is asserted about may be, and therefore answers two questions rather than one.
+
+- `allowed_space` -- the stretch of the world it leaves, unbounded along every axis it does not
+  constrain. This is what a search reads, before anything has been found in it.
+- `allows(place)` -- whether one place satisfies it, answered exactly (a signed distance, a
+  distance, a projection onto a line), never from the box.
+
+The box is a narrowing and the exact answer is the check, which is the same split the plan already
+made between what a search is told and what is re-checked over what came back. A direction running
+across the world's own axes leaves the box unbounded rather than reporting a stretch that omits
+somewhere the relation allows -- the narrowing gives up, the answer does not.
+
+**A relation stated about nothing is the constraint alone.** That is what let the family have an
+`allowed_space` at all: a search has no subject to build the relation about, so every placement
+relation declares the thing it is about optional and raises `RelationStatedAboutNothing` rather
+than guessing when asked whether it holds without one. It is also what `StatedRelation.constraint()`
+builds.
+
+#### What the six directional relations lost, and what they gained
+
+They were six copies of one `__call__` differing in an axis index and a comparison. They are now
+the axis and the side, as class variables, over one implementation:
+
+```python
+class RightOf(ViewDependentSpatialRelation):
+    axis: ClassVar[SpatialVariables] = SpatialVariables.y
+    positive_side: ClassVar[bool] = False
+```
+
+Two docstrings said the opposite of what the code does (`LeftOf` is +Y, not -Y) and now match it;
+`InFrontOf` was also setting a `result` field the other five spell `spatial_relation_result`.
+Both operands take entities as well as points, since a statement relates the things the world
+holds rather than coordinates measured beforehand. `Between` and `Near` are new, and so is
+`Colored`, which is not a placement but is narrowed the same way.
+
+**`Between`'s sideways tolerance is a judgement, so it is stated**, following what #229 recorded
+about `minimum_contained_fraction`: half the distance between the two things, to either side, so
+what counts as between two things is as wide across as they are far apart. It is a fraction rather
+than a distance because how wide *between* reads is set by the two things themselves.
+
+**`Near`'s radius has no default at all** (`field(kw_only=True)`), because how near is near is the
+caller's to say. Extents around a pose are `InsideRegion`'s job, which already carries a region
+with a pose and a size -- no second predicate for it.
+
+#### krrood: a relation is asserted about one subject
+
+`StatedRelation` read a relation down to *the one thing a triple names second*, which is enough for
+`SupportedBy` and nothing else: a direction also needs its point of view, and *between* has two
+objects and so is not a triple at all. So `Relation` is now a predicate asserted about one subject
+and `Triple` is the two-operand case, `StatedRelation` carries every operand the statement holds
+concrete, and `constraint()` rebuilds the relation with nothing standing where the thing sought
+would. `narrowing_relations` names the family rather than its members, so the vocabulary grows
+without the backend being edited for each new way of saying where something is.
+
+#### Two faults the widening found, and the second is the more interesting
+
+**A stated stretch says where the *thing* is, not which pixels may be read.** Taken literally, the
+clip lost a cube standing 25 mm inside the stretch a statement allowed: its rectified silhouette
+crossed the boundary, so the colour pass discarded it as only partly seen. The picture now reaches
+an overhang past a stated stretch for exactly the reason it already did past a surface's own
+boundary, and by the same `LARGEST_PIECE_RADIUS`. A stretch a third the width of the piece standing
+in it now finds that piece, measured exactly as the unnarrowed look measured it. **This was a fault
+in the clip as first built, not in the new relations** -- `InsideRegion` had it too, and no test
+had a piece near enough to a stated edge to catch it.
+
+**The board is what says how far every surface reaches**, so no statement about what *rests* on it
+may cut the picture it is found in. The first build clipped the board pass by a stated region,
+which this roadmap recorded as deliberate; with a region as small as one around a hole it stops
+being deliberate and starts being a statement about a piece deciding how much of the board is seen,
+and with it how far its lid is taken to reach. One of the three rectifications a frame costs is now
+never narrowed. That is the invariant costing something, which is what an invariant is for.
+
+#### The demonstration, and the direction it states
+
+`watch_narrowing` now states support, then a direction from one of the board's own holes, then the
+cube's own colour, and reports what each step leaves *and what a look answering it finds*:
+
+| statement | left to read | reported |
+| --- | --- | --- |
+| bare | 0.635 m2 | rectangular prism, triangular prism, cube, cylinder |
+| supported by the lid | 0.061 m2 | cube, cylinder |
+| and in front of the square hole | 0.034 m2 | cube |
+| and coloured like the cube | 0.034 m2 | cube |
+
+**The developer's own example was *right of* the square hole, and measuring says that leaves the
+cylinder rather than the cube.** On this capture both lid pieces stand to the same side of that
+hole along the robot's left-right axis, while the cube stands 25 mm in front of it and the cylinder
+40 mm behind, so *in front of* is the direction that tells them apart and it is what the
+demonstration states. Both answers are pinned by a test, so the measurement is executable rather
+than recorded in prose. *Between the square and the triangle holes* also leaves the cube; *near the
+square hole* leaves the cube at 50 mm and both at 100 mm.
+
+**Which hole is where is knowledge and observation together**, and it has to be: this branch's hole
+*detector* finds no square hole at all -- the fault `holes-fitted-like-pieces` (#236, on the other
+stack) owns. So the board mesh says the layout, the look says where the board stands, and
+`recorded_setup.board_holes_in` puts the two together. The naming those holes carry
+(`square_hole`, `triangle_hole`, `circular_hole_1`) moved out of `world.py` into `hole_geometry.py`
+so the simulated board and a statement about a recording call them the same thing. Worth knowing
+for whoever merges #236: it would let the hole be named from the detection instead, and the mesh is
+about 15% larger than the board these recordings hold, so a hole placed from it is a hole placed
+approximately.
+
+**A colour narrows what is fitted rather than where to look**, so the colour step leaves the same
+region and a different picture: the rectified plane with everything but that colour blacked out.
+Cube and cylinder are both cyan in this set, so colour alone never separates those two -- what it
+narrows is two hues to one and six candidate pieces to two.
+
+#### What it costs
+
+Every row is the same statement answered through the backend, timed against the unnarrowed look in
+the same run:
+
+| what the statement says | cost | pieces reported |
+| --- | --- | --- |
+| nothing | 0.174 s/frame | 20 |
+| supported by the lid | 0.28x | 6 |
+| in front of the square hole | 0.43x | 6 |
+| near the square hole (50 mm) | 0.30x | 5 |
+| all three, and coloured like the cube | 0.26x | 5 |
+
+A placement stated on its own is worth about as much as naming a surface, and the two compose. The
+floor is the board pass, which is never narrowed.
+
+#### Verification
+
+450 passed, 1 skipped, 11 xfailed across `test/experiments_test/` against 437 on this branch's
+previous tip. `test/krrood_test/test_eql/` and `test/semantic_digital_twin_test/test_worlds/test_predicates.py`
+come back with a failing-and-erroring set byte-identical to that tip's, 191 lines, diffed by name in
+a worktree with its own `*/src` on `PYTHONPATH`. The sdt ORM interface regenerates with
+`BetweenDAO`, `NearDAO`, `ColoredDAO` and `PlacementRelationDAO` mapped and imports;
+`regenerate_all_orm.py` still stops on `giskardpy`, which needs `rclpy` and reproduces on `main`.
+
+Two API changes updated their own tests rather than being worked around: `StatedRelation` no longer
+takes `related_thing` as a constructor argument (the two tests that built one now assert the
+relation type and the related thing directly, which is the stronger form), and a look narrowed to a
+stretch now reads an overhang past it, which is what its test asserts.
+

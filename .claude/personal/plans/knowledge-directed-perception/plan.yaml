@@ -685,7 +685,34 @@ items:
     predicates are read at all, and pieces-looked-for-where-expected owns the believed place - a region
     of a named surface and an interval of yaw - which the roadmap settled is defined once, there, and
     supplied by a predicate here. Building the type in either branch alone is the duplication this repository
-    has already paid for twice.'
+    has already paid for twice.
+
+
+    Widened 2026-09-01 at the developer''s ask, from the two relations #227 could read to every
+    relation that says where a thing may be. semantic_digital_twin gains PlacementRelation: a
+    relation answers the stretch of the world it leaves (what a search reads, before anything has
+    been found) and whether one place satisfies it (answered exactly, never from the box), and one
+    stated about nothing is the constraint alone. The six view-dependent relations lose their six
+    copies of one __call__ for the axis and the side that are all that tell them apart, and take
+    entities as well as points; Between, Near and Colored are new. krrood gains Relation - a
+    predicate asserted about one subject, of which Triple is the two-operand case - so a relation of
+    three operands is read whole rather than down to the one thing a triple names second.
+
+
+    Two faults the widening found, both fixed. A stated stretch says where the *thing* is, not which
+    pixels may be read, so a cube 25 mm inside the stretch a statement allowed was never fitted; the
+    picture now reaches an overhang past a stated stretch as it already did past a surface''s own
+    boundary. And the board is what says how far every surface reaches, so no statement about what
+    rests on it may cut the picture it is found in - one of the three rectifications a frame costs
+    is now never narrowed, deliberately.
+
+
+    Measured on tracy_pickup_demo, and it settles the direction the demonstration states: *right of*
+    the square hole leaves the cylinder, not the cube, since both lid pieces stand to the same side
+    of that hole along the robot''s left-right axis while the cube stands 25 mm in front of it and
+    the cylinder 40 mm behind. So watch_narrowing states *in front of*, and a test pins both
+    answers. Cost against an unnarrowed look in one run: 0.28x for the surface, 0.43x for a
+    direction stated alone, 0.30x for a radius, 0.26x for all of them with the colour.'
 - id: imagination-world-rejects-what-a-predicate-refuses
   title: Reject what a predicate refuses, by testing it in a copy of the world
   branch: null
