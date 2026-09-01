@@ -64,7 +64,7 @@ items:
     track: montessori-eql
     depends_on: []
     status: in_progress
-    session: https://claude.ai/code/session_01HPQPiabgjE3yuBHd5skUR3
+    session: https://claude.ai/code/session_01CgSACpWiXinUgDRxzKX2X8
     blockers: []
     notes: >
       Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6) cleared
@@ -100,6 +100,18 @@ items:
       reworked `MultiSim`'s joint syncing around a `JointBackedConnection`, and rewritten
       `PickUpAction`/`PlacingAction` with pose thresholds. There are no review threads on #169 at
       all, so nothing here is waiting on a reviewer.
+
+      2026-09-01: merged `main` at `1227a68f` as `3e9f3847`, clearing the conflict nine maintenance
+      passes had reported; #169 now reports `unstable` rather than `dirty`, so only CI stands
+      between it and mergeable. `main` had independently built three of the things this branch built
+      - the ORM-interface generation (as a superset, which was taken whole, leaving only
+      `scripts/ensure_orm_interfaces.py` as the demo's pre-flight), the `Bounds`/`to_array_bounds`
+      bounding-box helpers (absorbed into a new `AxisAlignedBox` base, onto which this branch's
+      numeric origin was carried so both box classes hold numbers), and the MuJoCo joint syncing
+      (`main`'s `JointBackedConnection` structure kept, with this branch's setpoint ramping on top).
+      Verified statically only - no CRAM workspace in that container - so CI on `3e9f3847` is the
+      real check. The five branches above this one, plus #176, #177 and #178, are all stale by the
+      merge and were not restacked.
 
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
