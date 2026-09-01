@@ -34,7 +34,7 @@ def test_armar7_mobile_base_bounding_box(armar7):
 # %% root connection type
 
 
-def test_armar7_root_attaches_via_drive_connection(armar7_world_state_reset):
+def test_armar7_root_attaches_via_drive_connection(armar7_world):
     """
     Armar7's root used to be ``Dummy_Platform_link``, one fixed joint below the URDF's
     actual root, which attached the robot to the world via a :class:`FixedConnection`
@@ -43,7 +43,7 @@ def test_armar7_root_attaches_via_drive_connection(armar7_world_state_reset):
     Location sampling relies on setting
     ``robot.root.parent_connection.origin``, which only a drive connection supports.
     """
-    armar7 = armar7_world_state_reset.get_semantic_annotations_by_type(Armar7)[0]
+    armar7 = armar7_world.get_semantic_annotations_by_type(Armar7)[0]
 
     assert isinstance(armar7.root.parent_connection, OmniDrive)
 

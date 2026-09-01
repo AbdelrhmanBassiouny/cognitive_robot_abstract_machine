@@ -217,7 +217,7 @@ def main() -> None:
             [
                 ParkArmsAction(Arms.RIGHT),
                 PickUpAction(
-                    shape.root,
+                    shape,
                     Arms.RIGHT,
                     GraspDescription(
                         ApproachDirection.FRONT,

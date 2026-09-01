@@ -28,6 +28,7 @@ from experiments.montessori.franka_panda_equipment import (
     equip_panda_for_physical_simulation,
     parse_panda,
 )
+from experiments.montessori.semantics import CubeShape
 from experiments.montessori.world import mount_stationary_robot
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.panda import Panda
@@ -59,8 +60,10 @@ Size of the floor slab, whose top surface is the world's ``z = 0``.
 
 TABLE_TOP_SCALE = Scale(0.6, 0.9, 0.025)
 """
-Size of the tabletop. No legs: nothing here stands on the floor, and legs are only more
-geometry for a reach to collide with.
+Size of the tabletop.
+
+No legs: nothing here stands on the floor, and legs are only more geometry for a reach
+to collide with.
 """
 
 TABLE_TOP_POSITION = Point3(-0.4, 0.0, 0.5)
@@ -301,12 +304,16 @@ def main() -> None:
     try:
         world.update_forward_kinematics()
         start_position = cube.global_transform.to_position()
+        # PickUpAction names its object by a semantic annotation rather than by the
+        # body itself. The scene is bare of a sorting board, not of semantics, so the
+        # cube is annotated as the same shape the sorting demo picks up.
+        cube_shape = CubeShape(root=cube)
 
         plan = sequential(
             [
                 ParkArmsAction(Arms.RIGHT),
                 PickUpAction(
-                    cube,
+                    cube_shape,
                     Arms.RIGHT,
                     GraspDescription(
                         ApproachDirection.FRONT,
