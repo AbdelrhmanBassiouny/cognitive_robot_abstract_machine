@@ -400,7 +400,9 @@ def test_the_view_from_above_turns_its_image_and_its_pixels_together(
 
 
 def test_two_patches_that_share_ground_meet():
-    table = WorkspaceRegion(minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75)
+    table = WorkspaceRegion(
+        minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
+    )
     lid = WorkspaceRegion(minimum_x=0.6, maximum_x=0.9, minimum_y=0.0, maximum_y=0.3)
 
     assert table.meets(lid)
@@ -408,14 +410,20 @@ def test_two_patches_that_share_ground_meet():
 
 
 def test_two_patches_that_share_no_ground_do_not_meet():
-    table = WorkspaceRegion(minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75)
-    elsewhere = WorkspaceRegion(minimum_x=2.0, maximum_x=2.5, minimum_y=0.0, maximum_y=0.3)
+    table = WorkspaceRegion(
+        minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
+    )
+    elsewhere = WorkspaceRegion(
+        minimum_x=2.0, maximum_x=2.5, minimum_y=0.0, maximum_y=0.3
+    )
 
     assert not table.meets(elsewhere)
 
 
 def test_the_ground_two_patches_share_is_the_smaller_of_each_bound():
-    table = WorkspaceRegion(minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75)
+    table = WorkspaceRegion(
+        minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
+    )
     half = WorkspaceRegion(minimum_x=0.6, maximum_x=1.6, minimum_y=-0.2, maximum_y=0.2)
 
     shared = table.intersection(half)
@@ -430,8 +438,12 @@ def test_the_ground_two_patches_share_is_the_smaller_of_each_bound():
 
 
 def test_a_patch_narrowed_by_one_it_does_not_meet_is_refused():
-    table = WorkspaceRegion(minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75)
-    elsewhere = WorkspaceRegion(minimum_x=2.0, maximum_x=2.5, minimum_y=0.0, maximum_y=0.3)
+    table = WorkspaceRegion(
+        minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
+    )
+    elsewhere = WorkspaceRegion(
+        minimum_x=2.0, maximum_x=2.5, minimum_y=0.0, maximum_y=0.3
+    )
 
     with pytest.raises(RegionsDoNotMeet):
         table.intersection(elsewhere)

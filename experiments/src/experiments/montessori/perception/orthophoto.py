@@ -227,7 +227,9 @@ class WorkspaceRegion(SubclassJSONSerializer):
         if bound <= origin:
             return origin
         samples = (bound - origin) / self.resolution
-        return origin + math.floor(samples + SAMPLE_ROUNDING_TOLERANCE) * self.resolution
+        return (
+            origin + math.floor(samples + SAMPLE_ROUNDING_TOLERANCE) * self.resolution
+        )
 
     def _sample_at_or_above(self, origin: float, bound: float) -> float:
         """

@@ -179,8 +179,8 @@ class SurfaceSearch:
 
     narrowed_to: Optional[WorkspaceRegion] = None
     """
-    A stretch of the world the look was asked to stay inside, or None where it was
-    asked to search wherever this surface reaches.
+    A stretch of the world the look was asked to stay inside, or None where it was asked
+    to search wherever this surface reaches.
     """
 
     overhang: float = LARGEST_PIECE_RADIUS
@@ -198,9 +198,8 @@ class SurfaceSearch:
         """
         Whether any of this surface is left once the look's own narrowing is applied.
 
-        A look asked about a stretch of the world that this surface never reaches has
-        no pass to run here, which is not a failure: it is the narrowing doing its
-        work.
+        A look asked about a stretch of the world that this surface never reaches has no
+        pass to run here, which is not a failure: it is the narrowing doing its work.
         """
         return self.narrowed_to is None or self._reach.meets(self.narrowed_to)
 

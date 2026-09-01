@@ -330,7 +330,9 @@ def test_a_surface_seen_only_where_its_boundary_was_is_searched_around_that_boun
 
 
 def test_a_searched_patch_samples_the_same_world_points_its_whole_surface_would():
-    board = _board_outlining([(0.4321, 0.4321), (0.6, 0.4321), (0.6, 0.6), (0.4321, 0.6)])
+    board = _board_outlining(
+        [(0.4321, 0.4321), (0.6, 0.4321), (0.6, 0.6), (0.4321, 0.6)]
+    )
     surface = _surface_at(0.88)
 
     search = SurfaceSearch(surface=surface, boundary=board, overhang=0.0197)
@@ -366,9 +368,7 @@ def test_a_look_narrowed_to_a_stretch_searches_only_where_the_two_meet():
 
 
 def test_a_look_narrowed_away_from_a_surface_leaves_nothing_of_it_to_search():
-    stated = WorkspaceRegion(
-        minimum_x=5.0, maximum_x=6.0, minimum_y=5.0, maximum_y=6.0
-    )
+    stated = WorkspaceRegion(minimum_x=5.0, maximum_x=6.0, minimum_y=5.0, maximum_y=6.0)
 
     search = SurfaceSearch(surface=_surface_at(0.88), narrowed_to=stated)
 

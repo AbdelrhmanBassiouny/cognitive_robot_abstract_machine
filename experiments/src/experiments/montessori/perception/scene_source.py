@@ -14,6 +14,10 @@ from dataclasses import dataclass
 
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.scene_request import SceneRequest
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
+from typing_extensions import Optional
 
 # %% where a scene comes from
 
@@ -22,6 +26,17 @@ class MontessoriSceneSource(ABC):
     """
     Something that can say what the Montessori scene currently looks like.
     """
+
+    @property
+    @abstractmethod
+    def reference_frame(self) -> Optional[KinematicStructureEntity]:
+        """
+        The frame this source reports its detections in, or None where it reports them
+        in none.
+
+        A region a statement names is a world entity, so what it reaches in metres can
+        only be read against the frame the things it is stated about are placed in.
+        """
 
     @abstractmethod
     def scene(self, request: SceneRequest = SceneRequest()) -> MontessoriScene:
@@ -44,6 +59,15 @@ class FixedScene(MontessoriSceneSource):
     """
     The scene to answer every query from.
     """
+
+    reported_in: Optional[KinematicStructureEntity] = None
+    """
+    The frame the captured scene's detections were placed in, where it is known.
+    """
+
+    @property
+    def reference_frame(self) -> Optional[KinematicStructureEntity]:
+        return self.reported_in
 
     def scene(self, request: SceneRequest = SceneRequest()) -> MontessoriScene:
         """

@@ -314,3 +314,28 @@ class RegionsDoNotMeet(DataclassException):
             "Ask whether the two meet before asking what they have in common: a look "
             "narrowed past the surface it searches has nothing left to rectify."
         )
+
+
+@dataclass
+class LookHasNoReferenceFrame(DataclassException):
+    """
+    Raised when a statement narrows a look by a region, but the look reports its
+    detections in no frame, so what the region reaches cannot be read in metres.
+    """
+
+    region_name: str
+    """
+    What the world calls the region the statement named.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"A look reporting detections in no frame cannot say where "
+            f"{self.region_name} reaches."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Give the source the frame its detections are placed in, which for a "
+            "pipeline read out of a world is that world's own root."
+        )
