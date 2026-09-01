@@ -1,58 +1,57 @@
-
 # PR #196 - aggregate signature reads a missing attribute
 
-Plan item `match-query-ergonomics / aggregate-signature-reads-a-missing-attribute`,
-kicked off in auto mode. Branch `claude/plan-item-kickoff-match-query-npzr78` off `main`
-at `2b44f1e5`. Draft PR #196, `bug` label. Roadmap section 21.
+Plan item `match-query-ergonomics / aggregate-signature-reads-a-missing-attribute`.
+This session ran `/plan-item-resolve` for it - the item's own designated branch
+`claude/plan-item-kickoff-match-query-npzr78` (PR #196), not the session's
+originally-assigned scratch branch, which was cut from `integration` and has no
+item of its own. All work below happened on npzr78, checked out locally.
 
 ## Plan
 
-1. Failing tests first, in `test/krrood_test/test_eql/test_verbalization/test_set_of_ranking.py`:
-   - two `Sum`s over different chains have different signatures;
-   - a restated `Sum` over the same chain keeps the same signature (what `_is_order_key` exists for);
-   - a ranked `set_of` names the aggregate it is `ordered_by`, not the first one selected.
-2. Fix: `QueryAssembler._expression_signature` walks `expression._child_` instead of the
-   undefined `expression._chain_expression_`.
-3. Verify: the seven existing `test_set_of_ranking` tests, then the whole
-   `test/krrood_test/test_eql` suite.
+The item was already fully implemented and pushed by a prior session
+(roadmap section 21) - PR #196, green, out of blockers, `mergeable_state: clean`.
+This session's job was to gather live state (per `plan-item-resolve`) and act on
+what it found: one unresolved review thread the developer left on the PR since
+the prior session ended.
 
 ## Done
 
-- Context gathered; bug and its user-visible symptom re-measured on today's `main`.
-- Scope check (`check_scope_overlap.py`): no path shared with #182 or #192.
-- Branch, draft PR #196, manifest fields and roadmap section 21 recorded.
-- Manifest corrections saved: #186 `in_progress` -> `done` (merged 2026-08-24), and a new
-  item `chain-signature-reads-attribute-only-names` for the second read (see below).
-- Three tests written and confirmed failing on the unfixed code (two of them; the third is
-  the guard, which passes both ways by design), then the fix applied and all three green.
-- `test/krrood_test`: 2172 passed, 5 skipped, 2 failed - both `test_object_diagram`, this
-  container having no Graphviz `dot` binary, the same baseline every session here records.
-- Pushed as `658fd6b6`; PR #196 description updated to match what the work does.
+- Gathered live state: PR #196 clean/green (23 checks passing), one open review
+  thread on `test_set_of_ranking.py:337` (closing assert of
+  `test_ranking_names_the_ordered_by_aggregate_not_the_first_selected`),
+  proposing the trailing "the sum" be spelled out in full instead of reduced.
+- Built an isolated Python 3.12 venv (`pip install -e krrood -e random_events
+  -e probabilistic_model`, plus `objgraph`) and ran the file with
+  `--confcutdir=test/krrood_test` to skip the workspace-root `conftest.py` -
+  17/17 pass, this test included. Confirmed by reading the code
+  (`AggregatorRule.build` in `verbalization/grammar/aggregation/rules.py`)
+  that the reduction is correct by identity (`referent_id=node._id_`): `tax`
+  is the literal same object in both the order key and the selection, so the
+  trailing "the sum" resolves back to it, exactly as `_highest_aggregate_
+  modifier`'s docstring says it should.
+- Concluded the comment is still onto something real, just not a code bug in
+  #196: to a reader, proximity resolves "the sum" to the just-mentioned net,
+  not the frame's tax three clauses back. Fixing that is a second root cause
+  in `AggregatorRule.build`'s identity-only reduction, not a one-line change
+  to this PR - the same "one root cause per PR" split #196 already made for
+  its sibling issue (`chain-signature-reads-attribute-only-names`).
+- Replied on the thread with the measurement and the question (change the
+  assert here, or carve out a new item) rather than resolving it -
+  unresolved until that answer lands.
+  https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3908782904
+- Recorded the finding in `plan.yaml`'s item notes and roadmap section 24 (via
+  `save-plan.sh --manifest/--roadmap`, since this branch has no plan-manifest
+  markers in `CLAUDE.local.md`), then republished the plan dashboard.
 
 ## Next
 
-- Republish the dashboard, then this session's obligation to #196 ends (personal notes:
-  opening a PR ends the session's obligation to it).
+- Nothing to do until the developer answers the reply. No code change was
+  made to #196 - PR left exactly as found (draft, green, one open thread).
+- Per the review-comment convention, do not resolve that thread until the
+  chosen direction is actually implemented.
 
 ## Decisions
 
-- **The second read is a separate item, not part of this PR.** `_expression_signature`
-  also builds its path from `step._attribute_name_` / `step._owner_class_`, which only
-  `Attribute` defines - so `order.lines[0].price` and `order.lines[1].price` get equal
-  signatures on `main`. Same root cause, different fix: a faithful key needs each mapping
-  subclass to report its constructor arguments (no existing name works - `Call._name_`
-  drops the call's arguments), which is core API in `mapped_variable.py` that #182 is
-  rewriting. Tracked as `chain-signature-reads-attribute-only-names`, blocked on #182.
-- **`_expression_signature` is declared `@staticmethod`.** It reads no instance state, and
-  saying so is what lets a test call it without fabricating a `RuleContext`. `_is_order_key`
-  reaches it through `self` unchanged.
-- **`verbalization_results.py` is regenerated by the suite** and picked up unrelated import
-  churn during a run; reverted so the PR stays the fix. Also: do not edit the tree while a
-  suite is running (roadmap section 13) - one run had to be discarded for that.
-- The environment needs a Python 3.12 venv (roadmap section 14): the container ships no
-  project dependencies, and 3.11 is too old for `make_dataclass(module=...)`.
-
-## Outstanding
-
-- The tracking-issue subscription (issue 181) was refused by the permission classifier, so
-  this session will not see concurrent structural changes to the plan as events.
+- Did not touch the test/code to match the comment's literal suggested text,
+  since it would make the file's own tests fail and contradicts the design
+  the existing docstrings state - flagged instead of guessed at.
