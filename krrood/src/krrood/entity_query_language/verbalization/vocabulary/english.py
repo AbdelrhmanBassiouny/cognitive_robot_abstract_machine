@@ -664,6 +664,16 @@ class RangePhrases(VocabEnum):
     BETWEEN = OperatorWord("between")
 
 
+class ConditionalPhrases(VocabEnum):
+    """
+    Fixed phrases for an inline conditional value (``case_when``): the *"if"*
+    introducing its condition and the *"otherwise"* introducing its fallback.
+    """
+
+    IF = PlainWord("if")
+    OTHERWISE = PlainWord("otherwise")
+
+
 class CoindexedPhrases(VocabEnum):
     """
     Fixed phrases for the factored co-indexed comparison rendering: the *"those
