@@ -1193,17 +1193,24 @@ def create_body_with_box(name: str, scale: Scale) -> Body:
     return body
 
 
+def forbid_mesh_building(monkeypatch) -> None:
+    """
+    Make building a box's mesh fail, so a test can prove it was never needed.
+    """
+
+    def refuse_to_build_mesh(self):
+        raise AssertionError("the mesh was built to answer has_collision")
+
+    monkeypatch.setattr(Box, "mesh", property(refuse_to_build_mesh))
+
+
 def test_shape_of_sufficient_volume_needs_no_mesh(monkeypatch):
     """
     A shape big enough to be checked is recognised from its own volume, without building
     the mesh that only stands in for it.
     """
     body = create_body_with_box("chunky", Scale(0.1, 0.1, 0.1))
-
-    def refuse_to_build_mesh(self):
-        raise AssertionError("the mesh was built to answer has_collision")
-
-    monkeypatch.setattr(Box, "mesh", property(refuse_to_build_mesh))
+    forbid_mesh_building(monkeypatch)
 
     assert body.has_collision() is True
 
@@ -1216,6 +1223,17 @@ def test_flat_shape_is_recognised_by_its_surface():
     flat_body = create_body_with_box("flat", Scale(1.0, 1.0, 0.0))
 
     assert flat_body.collision[0].volume == 0
+    assert flat_body.has_collision() is True
+
+
+def test_flat_shape_needs_no_mesh(monkeypatch):
+    """
+    The surface a flat shape is recognised by is its own, so falling through the volume
+    check still builds no mesh.
+    """
+    flat_body = create_body_with_box("flat", Scale(1.0, 1.0, 0.0))
+    forbid_mesh_building(monkeypatch)
+
     assert flat_body.has_collision() is True
 
 

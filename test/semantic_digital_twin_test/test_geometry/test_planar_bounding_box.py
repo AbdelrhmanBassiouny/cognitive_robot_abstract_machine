@@ -179,6 +179,34 @@ def test_planar_bounding_box_intersection_with_disjoint_box_is_none():
     assert a.intersection_with(b) is None
 
 
+# %% equality
+
+
+def test_two_planar_boxes_of_the_same_extent_and_origin_are_equal():
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("map")))
+    origin = HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=world.root)
+
+    assert PlanarBoundingBox(-1, -1, 1, 1, origin) == PlanarBoundingBox(
+        -1, -1, 1, 1, origin
+    )
+
+
+def test_two_planar_boxes_at_different_origins_are_unequal():
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("map")))
+    origin = HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=world.root)
+    moved_origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        0, 1, 0, reference_frame=world.root
+    )
+
+    assert PlanarBoundingBox(-1, -1, 1, 1, origin) != PlanarBoundingBox(
+        -1, -1, 1, 1, moved_origin
+    )
+
+
 # %% BoundingBoxCollection[PlanarBoundingBox]
 
 

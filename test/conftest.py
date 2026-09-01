@@ -531,6 +531,31 @@ def _garmi_world_setup():
 
 
 @pytest.fixture(scope="session")
+def _armar7_world_setup():
+    return world_with_urdf_factory(Armar7)
+
+
+@pytest.fixture(scope="function")
+def armar7_world_state_reset(_armar7_world_setup):
+    world = deepcopy(_armar7_world_setup)
+    state = world.state._data.copy()
+    yield world
+    world.state._data[:] = state
+
+
+@pytest.fixture(scope="function")
+def armar7_world():
+    """
+    A fresh Armar7 world, rooted through the map/odom drive connection.
+
+    Built per test rather than for the session, so that no Armar7 world stays alive
+    for the whole run, and so that a test mutating the drive origin leaves no state
+    to restore.
+    """
+    return world_with_urdf_factory(Armar7)
+
+
+@pytest.fixture(scope="session")
 def tracy_world():
     if not tracy_installed():
         pytest.skip("Tracy not installed")
