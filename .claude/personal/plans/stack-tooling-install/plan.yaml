@@ -331,105 +331,222 @@ items:
   track: install
   depends_on:
   - stack-tooling-on-main
-  notes: |-
-    Mirrors its two siblings' read-only-check plus guided-skill pattern, with two install modes: native
+  notes: >
+    Mirrors its two siblings' read-only-check plus guided-skill pattern, with two install modes:
+    native
+
     (tooling on the target repository's main) and fork-overlay (a never-merged tooling branch on the
-    user's fork, where re-running the skill is the updater). Creates missing labels, writes the personal
+
+    user's fork, where re-running the skill is the updater). Creates missing labels, writes the
+    personal
+
     configuration, emits the prompt.
 
     Based on `setup-personal-notes-script` rather than directly on the tooling port, because its own
+
     script sources `github-api.sh`, which exists on no other branch. Scope was assessed rather than
+
     assumed: removing this item's edits to its parent's files leaves about 2,645 lines of standalone
+
     setup infrastructure, so this is ordinary stacking, not a disguised modification of its parent.
 
-    **One real defect, found by reading the script rather than reasoning about the deletions**: the setup
-    check required two constants pointing at files that exist nowhere, and reported them present by name -
-    so it reported needs-setup on a correctly installed checkout. That also fixed fork-overlay for free,
+    **One real defect, found by reading the script rather than reasoning about the deletions**: the
+    setup
+
+    check required two constants pointing at files that exist nowhere, and reported them present by
+    name -
+
+    so it reported needs-setup on a correctly installed checkout. That also fixed fork-overlay for
+    free,
+
     since the overlay file list already named both and an overlay was about to ship tooling with no
+
     instructions.
 
-    The remote inference is deleted here, about 120 lines, closing two threads its parent had left open
-    deliberately. One error class disappears because ambiguity is unreachable once the fork is named;
-    another is renamed at the same exit code so the maintenance skill's step 0 keeps the status it keys
+    The remote inference is deleted here, about 120 lines, closing two threads its parent had left
+    open
+
+    deliberately. One error class disappears because ambiguity is unreachable once the fork is
+    named;
+
+    another is renamed at the same exit code so the maintenance skill's step 0 keeps the status it
+    keys
+
     on. Setup writes the fork repository at install time and *merges* the override file rather than
-    replacing it - both writers exist now, and a whole-file write silently discarded whichever ran first,
+
+    replacing it - both writers exist now, and a whole-file write silently discarded whichever ran
+    first,
+
     a defect nobody had recorded.
 
-    **Four base merges, and the lesson each time is the same one**: the integration break is behind clean
-    markers, not in them. A test arriving from main installed the hook scripts it calls, but this branch
-    had made one script delegate to a new sibling that does not exist on main, so two tests went red only
-    *after* the merge. That happened three times running, which is why `install_hook_scripts` now derives
-    the siblings a script runs from the scripts themselves rather than listing them at each call site -
-    and doing so fixed two of the base's own failures for free. Resolving the markers alone would have
+    **Four base merges, and the lesson each time is the same one**: the integration break is behind
+    clean
+
+    markers, not in them. A test arriving from main installed the hook scripts it calls, but this
+    branch
+
+    had made one script delegate to a new sibling that does not exist on main, so two tests went red
+    only
+
+    *after* the merge. That happened three times running, which is why `install_hook_scripts` now
+    derives
+
+    the siblings a script runs from the scripts themselves rather than listing them at each call
+    site -
+
+    and doing so fixed two of the base's own failures for free. Resolving the markers alone would
+    have
+
     left the suite broken every time.
 
     One conflict was not resolvable by keeping either side: a test parses through main's new
-    environment-scrubbing runner while still passing this branch's check enum, which works only because
+
+    environment-scrubbing runner while still passing this branch's check enum, which works only
+    because
+
     the shared report module takes that enum from its caller and the inline copy did not.
 
-    Scratch fixtures now build their bare repositories at paths naming an owner and name, addressed as
-    `file://` URLs. Not cosmetic: remotes are matched by the repository their URL names, and a bare local
+    Scratch fixtures now build their bare repositories at paths naming an owner and name, addressed
+    as
+
+    `file://` URLs. Not cosmetic: remotes are matched by the repository their URL names, and a bare
+    local
+
     path deliberately names none.
 
-    Both review threads sit inside a pending, unsubmitted review, so GitHub refuses every inline reply -
+    Both review threads sit inside a pending, unsubmitted review, so GitHub refuses every inline
+    reply -
+
     one pending review per user - and submitting that draft is the user's. The replies went into a
+
     conversation comment and both threads stay open; they are answered in code, not outstanding.
 
     626 tests pass. The 5 that fail are a strict subset of the 7 red on the base itself, measured by
-    running the base's own tree: main added a git-identity check that the base's setup script does not
-    record, so a full setup run cannot return 0. Left to the base, whose script it is and which lands
+
+    running the base's own tree: main added a git-identity check that the base's setup script does
+    not
+
+    record, so a full setup run cannot return 0. Left to the base, whose script it is and which
+    lands
+
     first.
 
-    **Blocked as found on 2026-08-30** (session https://claude.ai/code/session_011CSkHuoVfSeyoTxmD2oMTz), on two
+    **Blocked as found on 2026-08-30** (session
+    https://claude.ai/code/session_011CSkHuoVfSeyoTxmD2oMTz), on two
+
     things at once, neither recorded here before this run.
 
-    The pull request was `dirty` against its own base: `claude/setup-personal-notes-script` had advanced by the two
-    commits of its own review round (`5dbdfdc9` naming the tooling's files once, `66ba4f01` naming every label the
+    The pull request was `dirty` against its own base: `claude/setup-personal-notes-script` had
+    advanced by the two
+
+    commits of its own review round (`5dbdfdc9` naming the tooling's files once, `66ba4f01` naming
+    every label the
+
     tooling applies), and this branch had not merged either. Five files conflict -
-    `tests/scratch_repository.py`, `tests/setup_report.py` (add/add), `tests/test_check_setup_sh.py`,
+
+    `tests/scratch_repository.py`, `tests/setup_report.py` (add/add),
+    `tests/test_check_setup_sh.py`,
+
     `tests/test_personal_settings_sync.py`, `tests/test_setup_personal_notes_sh.py`.
 
-    And the pending review the previous session could not reply into has been submitted, which turned two
-    invisible threads into **27 unresolved ones** - 25 of them a new round dated 2026-08-30. They are almost
-    entirely one rule, the same one the base's own round settled: a literal naming a fixed thing where a named
-    definition belongs. The base's `5dbdfdc9` is what makes that answerable rather than a second copy - it
-    created `.claude/hooks/tooling_files.py` and `tests/github_api.py`'s `RepositoryLabel`, so the merge and the
+    And the pending review the previous session could not reply into has been submitted, which
+    turned two
+
+    invisible threads into **27 unresolved ones** - 25 of them a new round dated 2026-08-30. They
+    are almost
+
+    entirely one rule, the same one the base's own round settled: a literal naming a fixed thing
+    where a named
+
+    definition belongs. The base's `5dbdfdc9` is what makes that answerable rather than a second
+    copy - it
+
+    created `.claude/hooks/tooling_files.py` and `tests/github_api.py`'s `RepositoryLabel`, so the
+    merge and the
+
     review round are one piece of work rather than two.
 
-    `test_claude_dev_tooling` is red on the head, which is the base's own five inherited failures, not this
+    `test_claude_dev_tooling` is red on the head, which is the base's own five inherited failures,
+    not this
+
     branch's.
 
-    **Resolved 2026-08-30** (session https://claude.ai/code/session_011CSkHuoVfSeyoTxmD2oMTz), clearing
-    both: the pull request is mergeable against its base again, and all 27 review threads are answered -
+    **Resolved 2026-08-30** (session https://claude.ai/code/session_011CSkHuoVfSeyoTxmD2oMTz),
+    clearing
+
+    both: the pull request is mergeable against its base again, and all 27 review threads are
+    answered -
+
     25 resolved, 2 left open on purpose because they are answered differently from what they asked.
 
     The merge and the round were one piece of work, which is the finding worth carrying. The round's
-    single rule - a literal naming a fixed thing where a named definition belongs - was answerable only
+
+    single rule - a literal naming a fixed thing where a named definition belongs - was answerable
+    only
+
     because the base's own round had just created the definitions those literals were copies of
+
     (`tooling_files.py`, and `RepositoryLabel`). Applying it first would have built a second copy of
+
     exactly what the review objected to having two of.
 
-    The merge found the same shape a fifth time: both branches had independently built the mechanism that
+    The merge found the same shape a fifth time: both branches had independently built the mechanism
+    that
+
     installs a hook script's siblings into the scratch layout. The base's survives, being typed by
-    `HookScript` rather than by file name, with this branch's one extra capability folded in - resolving
+
+    `HookScript` rather than by file name, with this branch's one extra capability folded in -
+    resolving
+
     a sibling named through a configuration constant, the only way `setup-stacked-prs.sh` reaches
+
     `github-api.sh`.
 
-    Two of the round's finds were not literals but retyped copies of a value the run under test had used:
-    the printed configuration, asserted against a dict retyping what the fixture had just set, and the
+    Two of the round's finds were not literals but retyped copies of a value the run under test had
+    used:
+
+    the printed configuration, asserted against a dict retyping what the fixture had just set, and
+    the
+
     overlay branch, a second copy of the script's own default. Both read the definition now.
 
     `Repository` gained `remote_url` and `compare_url` - production, not tests: the GitHub host was
+
     written out in the `git remote add` line the tool prints and again in the promotion compare URL.
 
-    The two open threads are both the same question in two places: whether `GitCommandRunner` should serve
-    every caller. In `test_maintenance.py` it could and does, since that module is under `.claude/stack/tests/`;
+    The two open threads are both the same question in two places: whether `GitCommandRunner` should
+    serve
+
+    every caller. In `test_maintenance.py` it could and does, since that module is under
+    `.claude/stack/tests/`;
+
     from `.claude/hooks/tests/` it cannot without a production `sys.path` insert, which is
-    `bastler-notes-core-python`'s seam. The third is whether the `git remote add` line `stack.py` prints
+
+    `bastler-notes-core-python`'s seam. The third is whether the `git remote add` line `stack.py`
+    prints
+
     should come from a command factory, when nothing ever runs it.
 
-    638 tests pass, from 626 - and the five inherited failures are gone, having been the base's own all
+    638 tests pass, from 626 - and the five inherited failures are gone, having been the base's own
+    all
+
     along. Live label creation is still unverified for the reason that holds across this track.
+
+    **CI red found and fixed 2026-09-01** (session resolving `setup-personal-notes-script`,
+    propagated here per its own request to merge and fix conflicts with this item).
+    `test_claude_dev_tooling` was failing on this branch's merge commit with the same collection
+    error as #107: a stale `SCRUBBED_ENVIRONMENT_PREFIXES` import and a `setup_steps.py` missing
+    from `HookScript`, both inherited from the base.
+
+    Fixed on #107 (`bc53ec33`) and merged into this branch (`c08cde6e`). One conflict, in
+    `tooling_files.py`: this branch's own
+    `HookScript.WRITE_BRANCH_FILES`/`CHECK_STACK_SETUP`/`SETUP_STACKED_PRS` members sit next to
+    where #107 added `SETUP_STEPS` — resolved by keeping both, nothing dropped from either side.
+
+    668 tests pass on the exact CI scope, the same count as before the base's regression (it was
+    already inherited before this branch's own tests ran, so the total is unchanged — the suite just
+    collects and runs again instead of erroring out). PR converted back to draft after the push, per
+    the standing convention.
 
 - id: unfetched-parent-branches
   title: Fetch every parent branch the pass decides about, and refuse to decide from a missing ref
