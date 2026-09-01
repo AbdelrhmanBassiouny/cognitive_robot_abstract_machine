@@ -309,8 +309,8 @@ items:
   title: Promote with a written summary, and report the links as a table rather than a notification
   branch: claude/plan-item-kickoff-workflow-y38l38
   pull_request_number: 162
-  status: blocked
-  session: https://claude.ai/code/session_01RTWnbUYSauqy9peX7JFJUz
+  status: in_progress
+  session: https://claude.ai/code/session_011YSZKEo4k6b18EHERUZDWV
   track: pass
   blockers:
     - >-
@@ -332,39 +332,92 @@ items:
   depends_on:
   - stack-maintenance-executor
   - pinned-stack-tooling
-  notes: |-
-    The user's requirements for a pass's promotion phase: the compare-and-create link must be built by the
-    script rather than assembled by the session; the upstream pull request must open with a title and with
-    a body that always links back to the fork pull request and otherwise carries text the caller supplies;
-    the skill must always supply that text as a point-based summary; neither the skill nor a scheduled run
-    may send a notification; and every promoted branch must be reported as a table in the session the pass
+  notes: >
+    The user's requirements for a pass's promotion phase: the compare-and-create link must be built
+    by the
+
+    script rather than assembled by the session; the upstream pull request must open with a title
+    and with
+
+    a body that always links back to the fork pull request and otherwise carries text the caller
+    supplies;
+
+    the skill must always supply that text as a point-based summary; neither the skill nor a
+    scheduled run
+
+    may send a notification; and every promoted branch must be reported as a table in the session
+    the pass
+
     ran in.
 
-    Three of those already have a home - the link builder owns the encoding, the title passes through, and
-    the "full detail" link back is already appended. **What is missing is the body itself.** It is derived
+    Three of those already have a home - the link builder owns the encoding, the title passes
+    through, and
+
+    the "full detail" link back is already appended. **What is missing is the body itself.** It is
+    derived
+
     from the fork description's first paragraph verbatim, so the upstream reader gets whatever that
-    description happened to open with, and one opening with a heading, a badge or a link opens the upstream
+
+    description happened to open with, and one opening with a heading, a badge or a link opens the
+    upstream
+
     pull request with that. Nobody has written a word for the upstream reader.
 
     **The body cannot be derived, which is what makes this the one model-shaped step in an otherwise
-    mechanical pass**: the script owns the title, the fork link, the encoding, the length budget and the
+
+    mechanical pass**: the script owns the title, the fork link, the encoding, the length budget and
+    the
+
     table, and the session supplies only the bullets. Proposed interface, to settle at kickoff: the
-    commands read summaries from a file keyed by fork pull request number, and a promotable branch with no
-    entry is reported as awaiting one rather than promoted with a body nobody wrote. Two invocations is the
+
+    commands read summaries from a file keyed by fork pull request number, and a promotable branch
+    with no
+
+    entry is reported as awaiting one rather than promoted with a body nobody wrote. Two invocations
+    is the
+
     honest shape, since a summary cannot exist before the pass has decided a branch is promotable.
 
-    The table replaces a hand-assembly the skill asks for today, which is a rendering and therefore belongs
-    to the executor - one command emitting a markdown row per pending promotion. **Notifications off is the
-    reason the table has to exist**: the skill's finish section currently rests on "a scheduled run emails
+    The table replaces a hand-assembly the skill asks for today, which is a rendering and therefore
+    belongs
+
+    to the executor - one command emitting a markdown row per pending promotion. **Notifications off
+    is the
+
+    reason the table has to exist**: the skill's finish section currently rests on "a scheduled run
+    emails
+
     its summary, so the summary *is* the delivery", and that premise goes.
 
-    Open and not to be invented: an already-registered scheduled run's notification setting has no field on
-    the update API, so whether it can be changed in place or needs re-registering has to be checked before
+    Open and not to be invented: an already-registered scheduled run's notification setting has no
+    field on
+
+    the update API, so whether it can be changed in place or needs re-registering has to be checked
+    before
+
     any document tells anyone how to do it.
 
-    The dependency on `pinned-stack-tooling` is a real ordering constraint rather than a courtesy: that
-    branch rewrites every command invocation in the skill and asserts the exact set still run from the
+    The dependency on `pinned-stack-tooling` is a real ordering constraint rather than a courtesy:
+    that
+
+    branch rewrites every command invocation in the skill and asserts the exact set still run from
+    the
+
     working tree, so a command added here must be pinned too.
+
+    Resolved on 2026-09-01. The `integration-conflict` block was `PendingPromotionsCommand` naming
+    itself with `class_property.classproperty`: `manifest-currency-first` (#151) deletes that module
+    when it moves the command base to `.claude/shared/command_line.py`, and because the new class is
+    text only this branch has, the two merge with no conflict and the merged tree fails at import.
+    Fixed here under the `adapt` verdict - the descriptor bought nothing, since `COMMANDS` builds
+    every command and the parser is handed instances. The five sibling commands keep `classproperty`
+    deliberately rather than this branch building #151's conversion a second time. Measured: 579
+    pass on the branch, 697 merged with #151, no conflict. Label removed.
+
+    The rebase onto #151 the review thread asks about is answered and declined: #151 is 0 behind
+    `main` now, so the August objection is gone, but this branch's base is #158, and keeping the
+    chain would mean restacking a branch already promoted upstream for a code-standard conversion
+    that whichever item lands `.claude/shared/` does for all 14 exceptions at once.
 - id: integration-branch
   title: 'Regenerated personal integration branch: build, check, resolve, report'
   branch: claude/plan-item-kickoff-workflow-ixbvxl
