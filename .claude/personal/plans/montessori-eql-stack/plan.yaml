@@ -63,26 +63,9 @@ items:
     pull_request_number: 169
     track: montessori-eql
     depends_on: []
-    status: blocked
+    status: in_progress
     session: https://claude.ai/code/session_01HPQPiabgjE3yuBHd5skUR3
-    blockers:
-      - >-
-          plan-item-resolve 2026-09-01: Fork PR #169 (branch `montessori_fast_inline_monitor`, head
-          `da2e062e3d`) is `mergeable_state: dirty` against `main`, which has advanced 353 commits
-          past the `90c24116` this branch last merged. The newest stacked-pr-maintenance report, on
-          2026-08-31 21:44
-          (https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/169#issuecomment-5485069967),
-          names 25 conflicting files - one more than the 12:29 pass this blocker previously quoted,
-          the addition being `coraplex/src/coraplex/robot_plans/actions/core/placing.py`. A local
-          `git merge origin/main` reproduces exactly those 25, in 68 conflict hunks. The PR carries
-          the `needs-resolution` label, so every pass since 2026-08-22 has skipped the branch rather
-          than retrying it; nine such reports now stand on the PR unanswered.
-      - >-
-          plan-item-resolve 2026-09-01: CI on #169 has not run since 2026-08-18. The last runs on
-          `da2e062e3d` are red in four library jobs (`semantic_digital_twin`, `experiments`,
-          `giskardpy`, `coraplex`) and in six demo/notebook jobs, and no run can happen at all while
-          the pull request has no merge ref. Whether any of those failures survive the main merge is
-          unknown until the merge lands and CI runs again.
+    blockers: []
     notes: >
       Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6) cleared
       the conflicts that had left it dirty, plus the two integration breaks it exposed: the
