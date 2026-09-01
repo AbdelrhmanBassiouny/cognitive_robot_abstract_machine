@@ -1,51 +1,44 @@
 
 # holes-fitted-like-pieces (PR #236, branch claude/plan-item-kickoff-ge8541)
 
-Plan item `holes-fitted-like-pieces` of `knowledge-directed-perception`, stacked on #232
-(`pieces-looked-for-where-expected`). Kicked off 2026-09-01 in `auto` mode.
+Plan item `holes-fitted-like-pieces` of `knowledge-directed-perception`, stacked on #232.
+Kicked off 2026-09-01 in `auto` mode. Built and pushed; waiting on your review.
 
-## The plan
+## What is on the branch
 
-Find the board's six holes by fitting its one rigid, mesh-known layout over the lid -
-three degrees of freedom for all six together, seeded from the board detection - instead
-of classifying each dark contour on its own. Each hole's identity then comes from the
-model, and the fitted placement *is* the board's pose, since the mesh's hole centres are
-in the board's own local frame.
+1. `OutlineFitter` over a `KnownOutline` - `PieceMatcher`'s sweep extracted, bit-identical
+   on a fixed input. `KnownPiece` and `BoardHoleLayout` are both `KnownOutline`s.
+2. `BoardHoleLayout` in `hole_geometry.py`: the mesh's six footprints as one rigid outline,
+   cached, and carrying the size the board actually is.
+3. `BoardDetector` fits that layout - rough over the whole turn, then careful - and the
+   placement *is* the board's pose. `classifier` gone; `BOARD_SCALE` no longer imported.
+4. `BoardDetector.measure_scale` + `recorded_setup.BOARD_SCALE_AGAINST_THE_MESH = 0.865`.
 
-1. Extract `PieceMatcher`'s coarse-then-fine placement sweep into `OutlineFitter` over a
-   `KnownOutline` (declared where both `KnownPiece` and the hole layout can reach it), so
-   the layout fit reuses #232's evaluator rather than writing a second copy.
-2. `BoardHoleLayout` in `hole_geometry.py`: the mesh's six footprints as one rigid
-   outline, cached so the STL is not re-sliced per frame.
-3. `BoardDetector`: the hole-sized dark patches become a *seed* (centre + long axis)
-   rather than classified holes; the layout fit settles the board pose and every reported
-   hole. `classifier` field goes.
-4. Tests at three levels: the layout alone, the rendered scene, then the captures.
+## The finding that changed the item
 
-## Done so far
+The mesh is not cut to the board the captures hold - scale 0.854 by similarity on the four
+unambiguous holes (2.1-2.6 mm residual; 5-10 mm at scale 1), individual holes smaller in
+the same proportion, and no rectification plane closes it without putting the holes below
+the table. Your direction was to treat that as a law broken, find the hypothesis that mends
+it, and persist it - which is what `measure_scale` and the recorded constant do.
 
-- Context gathered: manifest, roadmap in full (2570 lines), dependency readiness
-  (`open_ready` on #232), scope check, parent's code read.
-- Branch re-cut from #232's tip `bc0a17d2` (it had arrived cut from `integration`).
-- Draft PR #236 opened; manifest and roadmap section saved to personal-notes.
+Board now at (0.805, 0.10) within 1.5 degrees in all six captures (parent: 0.791-0.804,
+-5.6 to -29.7 degrees), all six holes over openings.
 
-## Next
+## Outstanding, for you
 
-- Write the failing tests first, then the layout fit.
-- Measure cost as a ratio to a same-run baseline, never in seconds.
-- Report whether the `non_inserted_objects` table-ghost mark actually comes off.
+- **`CrossSectionClassifier` / `FootprintClassifier`** are used by nothing but their own
+  tests now. AGENTS.md says consult before removing; asked on the PR, left standing.
+- **One regression, marked**: `tracy_pickup_demo`'s lid cylinder is displaced by a prism
+  fitted to the round hole's rim, 0.682 against 0.673. Pre-existing ghost that a mis-placed
+  board had been hiding; marked against `competing-explanations`.
+- **Cost**: 0.560 s/frame against 0.370 s, over the node's 0.5 s period. #231's
+  `RectifiedFrame` and a believed place from the previous frame are the two ways back.
+- **0.865 is six looks from one angle.** Measuring the real board would settle it, and would
+  say whether the mesh should simply be re-cut.
 
-## Open, to raise on the PR rather than decide
+## Verified
 
-- `CrossSectionClassifier` / `FootprintClassifier` become used by nothing but their own
-  tests. `AGENTS.md` says consult before removing; asked on the PR, left standing.
-- Whether the board's extent should come from the mesh rather than `BOARD_SCALE` - the
-  last scene constant `pipeline.py` still imports. Taken only if it falls out cleanly.
-
-## Known hazards
-
-- The bootstrap script's four-space indent fault (#231's finding, same family as #160) is
-  unfixed; `plan.yaml` was edited directly.
-- #223's `Footprint` -> `RectifiedFootprint` rename will conflict with `pipeline.py` and
-  `detections.py`, mechanically.
+423 passed, 1 skipped, 5 xfailed across `test/experiments_test/` against 400/1/11 on the
+parent. Environment: `pip install -U uv` first (the PATH `uv` cannot parse the workspace).
 
