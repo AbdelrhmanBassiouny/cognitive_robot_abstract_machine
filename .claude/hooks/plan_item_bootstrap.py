@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bootstrap a plan item before its implementation, rather than after it.
+Keep a plan item's recorded state current, from before its implementation onward.
 
 Everything a session knows the moment an implementation plan is approved - the branch,
 the draft pull request, the item's manifest fields, its roadmap section - is derivable
@@ -9,7 +9,12 @@ For that whole window ``plan.yaml`` says the item is ``not_started`` with no bra
 a branch exists and is being worked, which every dashboard, kickoff and resolve run
 downstream reads as truth.
 
-Two operations, so each caller depends only on the surface it uses:
+The same holds for every later transition - a blocker appearing, a status changing, a
+conclusion that changes what the item means - so writing the entry is not a bootstrap
+step but a standing obligation. ``manifest-staleness.md``, beside the plan-dashboard
+skill, is the rule these operations serve.
+
+Seven operations, so each caller depends only on the surface it uses:
 
 ``record``
     Write or update the item's ``plan.yaml`` entry and append its ``roadmap.md``
@@ -21,6 +26,28 @@ Two operations, so each caller depends only on the surface it uses:
     ``in_progress``. A caller that has already created the pull request passes
     ``--pull-request-number`` and only the recording happens.
 
+``update``
+    Set any of the item's recorded fields without appending a roadmap section, which
+    ``record`` cannot do - it reads the section unconditionally. Most transitions change
+    a field without warranting a section, and ``notes`` and ``blockers`` had no writer
+    at all before this. ``--append-notes`` extends the recorded note rather than
+    replacing it, since the two forms a note reaches this script in separate their
+    paragraphs differently - see :func:`extend_note`.
+
+``check``
+    Report which recorded fields local git contradicts, exiting non-zero when any do.
+    Deliberately local-only: the dashboard already compares the manifest against GitHub
+    after the fact, so what nothing covered was the window before a push.
+
+``resolve``
+    Name the plan and the items a branch belongs to, for a caller that holds a branch
+    rather than an item id - an automated pass over many branches at once.
+
+``block`` / ``unblock``
+    Record or withdraw one caller's own blocker on every item a branch carries, deriving
+    the status from what is left blocking it. The owner is written into the blocker, so
+    a pass replaces and clears its own entries and never a person's.
+
 ``open`` runs before ``record`` when both are wanted: the pull request number does not
 exist until the pull request does.
 
@@ -31,13 +58,23 @@ Usage:
         --branch <branch> --base <branch> --session <url> \\
         (--pull-request-number <number> | --pull-request-title <title> \\
          --pull-request-body <file>)
+    python3 plan_item_bootstrap.py update --plan <plan-id> --item <item-id> \\
+        [--status <status>] [--branch <branch>] [--pull-request-number <number>] \\
+        [--session <url>] [--notes <file> | --append-notes <file>] \\
+        [--blockers <file> ...]
+    python3 plan_item_bootstrap.py check --plan <plan-id> --item <item-id> \\
+        [--remote <remote>]
+    python3 plan_item_bootstrap.py resolve --branch <branch>
+    python3 plan_item_bootstrap.py block --branch <branch> --owner <name> \\
+        --reason <file>
+    python3 plan_item_bootstrap.py unblock --branch <branch> --owner <name>
 
 Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
 the document never has to decode an integer back into a meaning.
 
 .. note::
    Republishing the dashboard is deliberately not done here. Only a live session can
-   call the ``Artifact`` tool, so both operations hand back the ``/plan-dashboard``
+   call the ``Artifact`` tool, so every operation hands back the ``/plan-dashboard``
    command to run instead, exactly as ``save-plan.sh`` already does.
 
 .. note::
@@ -47,7 +84,9 @@ the document never has to decode an integer back into a meaning.
    one-field edit into an unreadable diff across the whole file. Every key, filename and
    status this module writes is named once in :class:`ManifestKey`, :class:`PlanDocument`
    and :class:`ItemStatus`, and every line is rendered by the key that owns it, so no
-   caller - tests included - writes a second copy of a manifest line by hand.
+   caller - tests included - writes a second copy of a manifest line by hand. The depth
+   a line is written at comes from the manifest being edited, through
+   :class:`ItemIndentation`, since YAML admits more than one and plans use both.
 """
 
 from __future__ import annotations
@@ -59,15 +98,24 @@ import re
 import subprocess
 import sys
 import tempfile
+import textwrap
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
+
 import yaml
+
+from command_line import Command, commands_of
+from exceptions import GitCommandFailed
+from git_commands import GitCommandRunner
+from plan_model import ItemStatus
 
 GITHUB_API_ROOT = "https://api.github.com"
 """
@@ -87,15 +135,138 @@ Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shel
 the same tooling; a test holds the two equal so the mirror cannot drift.
 """
 
-ITEM_FIELD_INDENT = "    "
-"""
-The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
-"""
-
 ITEM_MARKER = "  - "
 """
-What opens an item block, the list marker its first field sits behind.
+What opens an item block in a manifest that tracks no item yet to copy the depth from.
 """
+
+INDENTATION_STEP = "  "
+"""
+One level of YAML indentation, which is what separates a key from the lines its own
+value occupies beneath it.
+"""
+
+UNBROKEN_LINE_WIDTH = sys.maxsize
+"""
+A width the dumper can never reach, so a scalar written on its key's own line stays on
+it instead of being wrapped into a continuation.
+"""
+
+MANIFEST_LINE_WIDTH = 100
+"""
+The column a wrapped body line is kept under.
+
+Measured from the manifests this writes rather than chosen: their hand-wrapped body
+lines cluster at 96-99 columns, so a script-written note is indistinguishable from one
+a person wrapped.
+"""
+
+
+def paragraphs_of(text: str) -> list[str]:
+    """
+    The paragraphs a value about to be written breaks into.
+
+    A blank line separates paragraphs; a single newline is a hard-wrapped line within
+    one, which is how a person writes the file a value comes from. Shared with
+    :func:`fold` so that what gets counted and what gets written can never disagree.
+
+    A hyphen immediately before one of those wrapped line breaks closes up rather than
+    becoming a space, because that is where its author wrapped a word they wrote whole -
+    ``blank-\\nline`` is *blank-line*, not *blank- line*. A suspended hyphen keeps its
+    space, since a person types *network- and* on one line rather than breaking after
+    the hyphen. The one shape this reads wrongly is a suspended hyphen a wrap happens to
+    land on, which is why the space is only removed where the author put the break.
+
+    :param text: The value as its author wrote it.
+    :return: Its paragraphs, stripped.
+    """
+    return [
+        re.sub(r"-\n", "-", paragraph.strip())
+        for paragraph in re.split(r"\n\s*\n", text.strip())
+    ]
+
+
+def fold(text: str, indent: str) -> str:
+    """
+    Wrap *text* as the body of a folded scalar, newline-terminated.
+
+    Only ever breaks between words. A folded scalar reads a line break back as a space,
+    so a break placed inside a word - at a hyphen, or anywhere at all in a word too long
+    for one line - returns a different string than it was given, still valid and no
+    longer what anybody wrote. A word wider than the column overflows it instead, which
+    is the one thing wrapping is allowed to get wrong here.
+
+    :param text: The value to wrap, whose own paragraph breaks are preserved.
+    :param indent: The indentation every body line carries.
+    :return: The body's lines.
+    """
+    paragraphs = [
+        textwrap.fill(
+            paragraph,
+            width=MANIFEST_LINE_WIDTH,
+            initial_indent=indent,
+            subsequent_indent=indent,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        for paragraph in paragraphs_of(text)
+    ]
+    return "\n\n".join(paragraphs) + "\n"
+
+
+def render_scalar(key: str, value: Any, style: ValueStyle) -> str:
+    """
+    One ``key: value`` line, written so that it reads back as the value it was given.
+
+    Which quoting a value needs is YAML's rule rather than this module's - a space
+    before ``#`` opens a comment, a trailing colon opens a mapping, and inside double
+    quotes a quote closes the scalar and a backslash escapes what follows - so the
+    dumper decides it. A double-quoted key asks for that style outright, since the
+    quotes there are how the manifest reads rather than something the value needs.
+
+    :param key: The key the line sets.
+    :param value: The value to write, in whatever type it is to be read back as.
+    :param style: How the key's value is written.
+    :return: The line, without its indentation or its newline.
+    """
+    if style is ValueStyle.DOUBLE_QUOTED:
+        written = yaml.safe_dump(
+            str(value),
+            default_style='"',
+            width=UNBROKEN_LINE_WIDTH,
+            allow_unicode=True,
+        )
+        return f"{key}: {written.rstrip()}"
+    return yaml.safe_dump(
+        {key: value},
+        default_flow_style=False,
+        width=UNBROKEN_LINE_WIDTH,
+        allow_unicode=True,
+        sort_keys=False,
+    ).rstrip("\n")
+
+
+def render_sequence_entry(entry: str, indentation: ItemIndentation) -> str:
+    """
+    One entry of a sequence-styled value, newline-terminated.
+
+    An entry that fits on its own line is written as a quoted scalar and a longer one as
+    a folded block, which is how the manifests this writes already read.
+
+    The folded form strips its trailing newline (``>-``), unlike a block-styled *value*,
+    which keeps it: an entry is one item of a list and has to parse back as exactly the
+    string it was given, where a note is a paragraph and every note already in these
+    manifests ends in a newline.
+
+    :param entry: The entry's text.
+    :param indentation: The depth the item this entry belongs to is written at.
+    :return: The entry's lines.
+    """
+    quoted = f'{indentation.nested}- "{entry}"'
+    if "\n" not in entry and len(quoted) <= MANIFEST_LINE_WIDTH and '"' not in entry:
+        return f"{quoted}\n"
+    body = fold(entry, indentation.nested + indentation.body)
+    return f"{indentation.nested}- >-\n{body}"
 
 
 # %% the vocabulary a plan manifest is written in
@@ -175,11 +346,31 @@ class ValueStyle(StrEnum):
 
     BLOCK = "block"
     """
-    A value written across the lines beneath the key - a folded scalar or a sequence.
+    A folded scalar, written across the lines beneath the key.
 
     Anything inserted after such a key would be swallowed by its value, so a new key
     goes before the first block-styled one in an item rather than at the end.
     """
+
+    SEQUENCE = "sequence"
+    """
+    A list, one entry per dash beneath the key.
+
+    Spans the lines beneath the key exactly as :attr:`BLOCK` does; they differ only in
+    what those lines say, which is why writing one is not writing the other. A list with
+    no entries is written inline as ``[]``, since a key with nothing beneath it parses
+    as null rather than as an empty list.
+    """
+
+    @property
+    def spans_lines_beneath(self) -> bool:
+        """
+        Whether this style's value continues below the key's own line.
+
+        The property the insertion point and the replaced span both key on, so neither
+        has to list the styles it means.
+        """
+        return self in {ValueStyle.BLOCK, ValueStyle.SEQUENCE}
 
 
 @dataclass(frozen=True)
@@ -256,9 +447,12 @@ class ManifestKey(KeySpecification, Enum):
     The parallel line of work the item belongs to.
     """
 
-    DEPENDS_ON = ("depends_on",)
+    DEPENDS_ON = ("depends_on", ValueStyle.SEQUENCE)
     """
     The items this one stacks on, by id.
+
+    Written beneath its key like any other sequence, which is what decides how much of
+    the manifest replacing it has to take with it.
     """
 
     STATUS = ("status",)
@@ -276,7 +470,7 @@ class ManifestKey(KeySpecification, Enum):
     Freeform detail, routinely folded over many lines.
     """
 
-    BLOCKERS = ("blockers", ValueStyle.BLOCK)
+    BLOCKERS = ("blockers", ValueStyle.SEQUENCE)
     """
     Why the item is stuck, written as a sequence.
     """
@@ -286,20 +480,36 @@ class ManifestKey(KeySpecification, Enum):
     The manifest's top-level list of items.
     """
 
-    def render(self, value: str, opening_the_item: bool = False) -> str:
+    def render(
+        self,
+        value: str | Sequence[str],
+        indentation: ItemIndentation,
+        opening_the_item: bool = False,
+    ) -> str:
         """
-        The manifest line setting this key to *value*, newline included.
+        The manifest text setting this key to *value*, newline-terminated.
 
-        Quoting comes from the key's own style rather than from the caller.
+        How the value is written comes from the key's own style rather than from the
+        caller, so a style that spans the lines beneath the key returns those lines too
+        rather than a single one.
 
-        :param value: The value to write.
+        :param value: The value to write - a sequence only for a sequence-styled key.
+        :param indentation: The depth the manifest being written writes its items at.
         :param opening_the_item: Whether this is the item block's first line, which
             carries the list marker instead of the key indent.
-        :return: The rendered line.
+        :return: The rendered text.
         """
-        prefix = ITEM_MARKER if opening_the_item else ITEM_FIELD_INDENT
-        written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
-        return f"{prefix}{self.key}: {written}\n"
+        prefix = indentation.marker if opening_the_item else indentation.body
+        if self.style is ValueStyle.SEQUENCE:
+            if not value:
+                return f"{prefix}{self.key}: []\n"
+            entries = "".join(
+                render_sequence_entry(entry, indentation) for entry in value
+            )
+            return f"{prefix}{self.key}:\n{entries}"
+        if self.style is ValueStyle.BLOCK:
+            return f"{prefix}{self.key}: >\n{fold(str(value), indentation.nested)}"
+        return f"{prefix}{render_scalar(self.key, value, self.style)}\n"
 
     @property
     def pattern(self) -> re.Pattern[str]:
@@ -312,7 +522,7 @@ class ManifestKey(KeySpecification, Enum):
 BLOCK_STYLED_KEYS = frozenset(
     manifest_key
     for manifest_key in ManifestKey
-    if manifest_key.style is ValueStyle.BLOCK
+    if manifest_key.style.spans_lines_beneath
 )
 """
 The keys whose values run over the lines beneath them, derived from the keys themselves
@@ -320,47 +530,18 @@ rather than listed a second time.
 """
 
 
-class ItemStatus(StrEnum):
-    """
-    The statuses ``plan.yaml``'s ``status`` field accepts.
-
-    Mirrors ``build_dashboard.py``'s own enum, which lives in the plan-dashboard skill
-    directory and needs jinja2 and markdown to import, so a hook cannot reach it. A test
-    holds the two equal; the one definition both share arrives with the package
-    migration that gives them a home.
-    """
-
-    NOT_STARTED = "not_started"
-    """
-    Nothing has begun.
-    """
-
-    IN_PROGRESS = "in_progress"
-    """
-    The work is underway - what bootstrapping an item sets.
-    """
-
-    BLOCKED = "blocked"
-    """
-    Something outside the item has to move first.
-    """
-
-    DEFERRED = "deferred"
-    """
-    Deliberately parked rather than stuck.
-    """
-
-    DONE = "done"
-    """
-    Landed.
-    """
-
-
-ITEM_START_PATTERN = re.compile(rf"^\s*- {re.escape(ManifestKey.IDENTIFIER.key)}:")
+ITEM_START_PATTERN = re.compile(rf"^(\s*-\s+){re.escape(ManifestKey.IDENTIFIER.key)}:")
 """
-Matches the first line of an item block, which is always its ``id``.
+Matches the first line of an item block, which is always its ``id``, capturing the
+marker that opens it.
 
 Same anchor ``sync_manifest_status.py`` uses to find item boundaries in raw text.
+"""
+
+SEQUENCE_ENTRY_PATTERN = re.compile(r"^\s*-\s")
+"""
+Matches one entry of a block sequence, which YAML lets sit either indented under its key
+or flush with it.
 """
 
 TOP_LEVEL_KEY_PATTERN = re.compile(r"^\S")
@@ -375,6 +556,65 @@ BLOCK_VALUE_PATTERN = re.compile(
 Matches a key whose value may run over the following lines, derived from
 :data:`BLOCK_STYLED_KEYS` rather than listing those keys a second time.
 """
+
+
+@dataclass(frozen=True)
+class ItemIndentation:
+    """
+    The whitespace one manifest writes its item blocks at.
+
+    YAML writes a block sequence either indented under its key or flush with it, and
+    plans are written both ways, so an edit reads the depth off the manifest it is
+    editing. Lines written at any other depth do not parse.
+    """
+
+    marker: str
+    """
+    What opens an item block: the leading whitespace, the ``-``, and the spaces before
+    the item's first key.
+    """
+
+    @property
+    def body(self) -> str:
+        """
+        What every line of the block after its first begins with, which is the column
+        the first key sits at behind the marker.
+        """
+        return " " * len(self.marker)
+
+    @property
+    def nested(self) -> str:
+        """
+        What a line of a value written beneath its own key begins with - a sequence
+        entry's dash, or a folded scalar's body.
+        """
+        return self.body + INDENTATION_STEP
+
+    @classmethod
+    def of_item(cls, item_line: str) -> ItemIndentation:
+        """
+        Read the indentation off an item block's own first line.
+
+        :param item_line: The block's first line, as :func:`locate_item_block` finds it.
+        :return: The indentation that block is written at.
+        """
+        return cls(marker=ITEM_START_PATTERN.match(item_line).group(1))
+
+    @classmethod
+    def of_manifest(cls, manifest_text: str) -> ItemIndentation:
+        """
+        Read the indentation off the manifest's first item, since one manifest writes
+        every item alike.
+
+        :param manifest_text: The manifest's raw text.
+        :return: The indentation its items are written at, or :data:`ITEM_MARKER`'s when
+            it tracks no item yet to copy.
+        """
+        for line in manifest_text.split("\n"):
+            opened = ITEM_START_PATTERN.match(line)
+            if opened:
+                return cls(marker=opened.group(1))
+        return cls(marker=ITEM_MARKER)
 
 
 class ExitCode(IntEnum):
@@ -420,6 +660,29 @@ class ExitCode(IntEnum):
     GitHub rejected the creation; its own message says why.
     """
 
+    MANIFEST_IS_STALE = 9
+    """
+    The check found recorded fields that local git contradicts.
+    """
+
+    BRANCH_TRACKS_NO_ITEM = 10
+    """
+    No plan claims the branch, so there was nothing to resolve or to write.
+
+    A finding rather than a failure - every pull request is supposed to belong to a
+    plan, so a caller acting on the status alone reports it instead of guessing.
+    """
+
+    PLAN_SAVE_FAILED = 11
+    """
+    ``save-plan.sh`` reported an error; its own output says why.
+    """
+
+    PLAN_NOT_WRITTEN = 12
+    """
+    The save reported success, but the notes branch does not carry the edit.
+    """
+
     @property
     def name_for_a_caller(self) -> str:
         """
@@ -429,6 +692,99 @@ class ExitCode(IntEnum):
         carry a name belonging to a different one.
         """
         return self.name.lower()
+
+
+# %% the vocabulary a report is written in
+
+
+class ReportKey(StrEnum):
+    """
+    The keys of the JSON documents these operations print.
+
+    Named here so the reader consuming a report and the code building it cannot drift
+    apart, and so no caller spells one out as a bare string.
+
+    Only the keys this module invents. A key naming a manifest field - ``branch``,
+    ``blockers``, ``pull_request_number``, an item's own ``status`` - is read from
+    :class:`ManifestKey` instead, since that is where a field's name already lives.
+    """
+
+    STATUS = "status"
+    """
+    What the run means, as :attr:`ExitCode.name_for_a_caller` puts it.
+
+    Distinct from an item's own ``status``, which names a point in its lifecycle and
+    comes from :attr:`ManifestKey.STATUS`; the two share a spelling and nothing else.
+    """
+
+    EXIT_CODE = "exit_code"
+    """
+    The status the process exits with, for a caller reading the document rather than
+    waiting on the process.
+    """
+
+    PLAN = "plan"
+    """
+    The plan the operation acted on.
+    """
+
+    ITEM = "item"
+    """
+    The item the operation acted on.
+    """
+
+    ITEMS = "items"
+    """
+    Every item a branch carries, for an operation keyed on a branch.
+    """
+
+    CREATED_ITEM = "created_item"
+    """
+    Whether the item's manifest entry was written for the first time.
+    """
+
+    DASHBOARD_COMMAND = "dashboard_command"
+    """
+    The republish a live session still has to run, since only it can call ``Artifact``.
+    """
+
+    FINDINGS = "findings"
+    """
+    Every recorded field local git contradicts.
+    """
+
+    FIELD = "field"
+    """
+    The manifest field one finding is about.
+    """
+
+    RECORDED = "recorded"
+    """
+    What the manifest says for that field.
+    """
+
+    OBSERVED = "observed"
+    """
+    What git shows for it instead.
+    """
+
+    PREVIOUS_STATUS = "previous_status"
+    """
+    The status an item carried before a write, so a reader sees what changed.
+    """
+
+    PULL_REQUEST_URL = "pull_request_url"
+    """
+    Where an opened pull request lives.
+    """
+
+    NOTE_PARAGRAPHS = "note_paragraphs"
+    """
+    How many paragraphs the item's note ends up with.
+
+    Reported because a file's paragraphs are whatever its blank lines say they are, and
+    a caller who meant several and wrote none has no other way to see it.
+    """
 
 
 # %% failures
@@ -669,6 +1025,68 @@ class NotesBranchUnavailableError(BootstrapError):
         return f"Run {HOOKS_DIRECTORY}/create-personal-notes-branch.sh first."
 
 
+@dataclass
+class PlanSaveFailedError(BootstrapError):
+    """
+    Raised when ``save-plan.sh`` reports an error, carrying what it said.
+    """
+
+    exit_code: ClassVar[ExitCode] = ExitCode.PLAN_SAVE_FAILED
+
+    plan_identifier: str
+    """
+    The plan whose save failed.
+    """
+
+    detail: str
+    """
+    What the script wrote before exiting.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{HookScript.SAVE_PLAN.value} refused to save plan "
+            f"'{self.plan_identifier}':\n{self.detail}"
+        )
+
+    def suggest_correction(self) -> str:
+        return "Nothing was written, so the plan is as it was before the run."
+
+
+@dataclass
+class PlanNotWrittenError(BootstrapError):
+    """
+    Raised when a save that reported success left the notes branch without the edit, so
+    a report of success would be no evidence that anything landed.
+    """
+
+    exit_code: ClassVar[ExitCode] = ExitCode.PLAN_NOT_WRITTEN
+
+    plan_identifier: str
+    """
+    The plan that was meant to be written.
+    """
+
+    documents: tuple[PlanDocument, ...]
+    """
+    The documents the notes branch does not carry the edit to.
+    """
+
+    def error_message(self) -> str:
+        missing = ", ".join(document.value for document in self.documents)
+        return (
+            f"{HookScript.SAVE_PLAN.value} reported success, but plan "
+            f"'{self.plan_identifier}' on the personal-notes branch does not carry "
+            f"the edit to {missing}"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Read the plan off the notes branch before editing it again - another "
+            "write may have landed in between."
+        )
+
+
 # %% the plan on the personal-notes branch
 
 
@@ -678,17 +1096,23 @@ def run_git(*arguments: str, project_root: Path) -> str:
 
     :param arguments: The arguments to pass to git.
     :param project_root: The repository to run within.
-    :raises subprocess.CalledProcessError: If git reports an error.
+    :raises GitCommandFailed: If git reports an error.
     :return: Standard output, stripped of its trailing newline.
     """
-    result = subprocess.run(
-        ["git", *arguments],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.rstrip("\n")
+    return GitCommandRunner(working_directory=project_root).run(*arguments)
+
+
+def branch_is_published(branch: str, remote: str, project_root: Path) -> bool:
+    """
+    Whether *branch* already exists on *remote*.
+
+    :param branch: The branch to look for.
+    :param remote: The remote to ask.
+    :param project_root: The repository to run within.
+    :return: True when the remote already carries it.
+    """
+    listing = run_git("ls-remote", "--heads", remote, branch, project_root=project_root)
+    return bool(listing.strip())
 
 
 def fetch_notes_branch(project_root: Path) -> None:
@@ -762,7 +1186,7 @@ class PlanDocuments:
                     run_git("show", f"FETCH_HEAD:{path}", project_root=project_root)
                     + "\n"
                 )
-            except subprocess.CalledProcessError as error:
+            except GitCommandFailed as error:
                 raise UnknownPlanError(
                     plan_identifier=plan_identifier, manifest_path=path
                 ) from error
@@ -826,12 +1250,18 @@ class PlanDocuments:
 
     def save(self, manifest_text: str, roadmap_text: str, project_root: Path) -> None:
         """
-        Push an edited manifest and roadmap through ``save-plan.sh``.
+        Push an edited manifest and roadmap through ``save-plan.sh``, then read the
+        notes branch back to confirm they landed.
+
+        Both halves are what makes a report of success mean anything: the script's own
+        output explains a refusal instead of being swallowed, and the branch, rather
+        than the exit status, decides whether the edit is there.
 
         :param manifest_text: The full manifest to write.
         :param roadmap_text: The full roadmap to write.
         :param project_root: The repository to run the script from.
-        :raises subprocess.CalledProcessError: If the script reports an error.
+        :raises PlanSaveFailedError: If the script reports an error.
+        :raises PlanNotWrittenError: If the branch does not carry the edit afterwards.
         """
         with tempfile.TemporaryDirectory() as scratch_directory:
             scratch = Path(scratch_directory)
@@ -841,7 +1271,7 @@ class PlanDocuments:
             }
             for document, content in written.items():
                 (scratch / document.value).write_text(content)
-            subprocess.run(
+            saving = subprocess.run(
                 [
                     "bash",
                     HookScript.SAVE_PLAN.path,
@@ -854,7 +1284,38 @@ class PlanDocuments:
                 cwd=project_root,
                 capture_output=True,
                 text=True,
-                check=True,
+            )
+        if saving.returncode != 0:
+            raise PlanSaveFailedError(
+                plan_identifier=self.plan_identifier,
+                detail=(saving.stderr or saving.stdout).strip(),
+            )
+        self.confirm_written(written, project_root)
+
+    def confirm_written(
+        self, written: dict[PlanDocument, str], project_root: Path
+    ) -> None:
+        """
+        Check that the notes branch carries what was just saved.
+
+        :param written: The content each document was saved with.
+        :param project_root: The repository to read within.
+        :raises PlanNotWrittenError: If a document on the branch differs from what was
+            saved.
+        """
+        landed = PlanDocuments.load(self.plan_identifier, project_root)
+        on_the_branch = {
+            PlanDocument.MANIFEST: landed.manifest_text,
+            PlanDocument.ROADMAP: landed.roadmap_text,
+        }
+        unwritten = tuple(
+            document
+            for document, content in written.items()
+            if on_the_branch[document].strip() != content.strip()
+        )
+        if unwritten:
+            raise PlanNotWrittenError(
+                plan_identifier=self.plan_identifier, documents=unwritten
             )
 
 
@@ -914,7 +1375,7 @@ def apply_item_fields(
     manifest_text: str,
     plan_identifier: str,
     item_identifier: str,
-    values_by_key: dict[ManifestKey, str],
+    values_by_key: dict[ManifestKey, Any],
 ) -> str:
     """
     Set each of *values_by_key* on one item, patching an existing line or inserting a new
@@ -933,8 +1394,9 @@ def apply_item_fields(
     """
     lines = manifest_text.split("\n")
     start, end = locate_item_block(lines, plan_identifier, item_identifier)
+    indentation = ItemIndentation.of_item(lines[start])
     for manifest_key, value in values_by_key.items():
-        rendered = manifest_key.render(value).rstrip("\n")
+        rendered = manifest_key.render(value, indentation).rstrip("\n").split("\n")
         existing = next(
             (
                 index
@@ -944,7 +1406,9 @@ def apply_item_fields(
             None,
         )
         if existing is not None:
-            lines[existing] = rendered
+            replaced = value_span(lines, existing, end, manifest_key)
+            lines[existing:replaced] = rendered
+            end += len(rendered) - (replaced - existing)
             continue
         insertion = next(
             (
@@ -954,9 +1418,60 @@ def apply_item_fields(
             ),
             last_populated_line(lines, start, end) + 1,
         )
-        lines.insert(insertion, rendered)
-        end += 1
+        lines[insertion:insertion] = rendered
+        end += len(rendered)
     return "\n".join(lines)
+
+
+def value_span(
+    manifest_lines: list[str], key_line: int, end: int, manifest_key: ManifestKey
+) -> int:
+    """
+    One past the last line a key's value occupies.
+
+    A value written across the lines beneath its key owns every following line indented
+    past the key itself; replacing only the key's own line would leave that body behind,
+    where YAML reads it as a continuation of whatever replaced it.
+
+    A block sequence is the one value that also owns lines at the key's *own* depth,
+    since YAML lets its entries sit flush with the key they belong to - which is where
+    the dumper writes them, so it is the shape every saved manifest has.
+
+    :param manifest_lines: The manifest, split into lines.
+    :param key_line: The line the key sits on.
+    :param end: One past the item block's last line.
+    :param manifest_key: The key whose value is being measured.
+    :return: One past the value's last line.
+    """
+    if not manifest_key.style.spans_lines_beneath:
+        return key_line + 1
+    key_indent = indentation_of(manifest_lines[key_line])
+    entries_sit_flush = manifest_key.style is ValueStyle.SEQUENCE
+    last_value_line = key_line
+    for index in range(key_line + 1, end):
+        line = manifest_lines[index]
+        if not line.strip():
+            continue
+        indent = indentation_of(line)
+        if indent > key_indent:
+            last_value_line = index
+            continue
+        if indent < key_indent or not entries_sit_flush:
+            break
+        if not SEQUENCE_ENTRY_PATTERN.match(line):
+            break
+        last_value_line = index
+    return last_value_line + 1
+
+
+def indentation_of(line: str) -> int:
+    """
+    How many columns a line is indented by.
+
+    :param line: The line to measure.
+    :return: The width of its leading whitespace.
+    """
+    return len(line) - len(line.lstrip())
 
 
 def last_populated_line(manifest_lines: list[str], start: int, end: int) -> int:
@@ -974,11 +1489,12 @@ def last_populated_line(manifest_lines: list[str], start: int, end: int) -> int:
     )
 
 
-def render_new_item(request: ItemRecordRequest) -> str:
+def render_new_item(request: ItemRecordRequest, indentation: ItemIndentation) -> str:
     """
     Render a brand-new item block, in the field order ``plan-schema.md`` documents.
 
     :param request: The item to record.
+    :param indentation: The depth the manifest it is appended to writes its items at.
     :raises IncompleteNewItemError: If a field a new entry cannot omit is missing.
     :return: The block's text, newline-terminated.
     """
@@ -992,14 +1508,16 @@ def render_new_item(request: ItemRecordRequest) -> str:
         )
     body = {
         ManifestKey.TITLE: request.title,
-        ManifestKey.BRANCH: "null",
+        ManifestKey.BRANCH: None,
         ManifestKey.TRACK: request.track,
-        ManifestKey.DEPENDS_ON: "[]",
+        ManifestKey.DEPENDS_ON: (),
         ManifestKey.STATUS: request.status.value,
     }
     return ManifestKey.IDENTIFIER.render(
-        request.item_identifier, opening_the_item=True
-    ) + "".join(manifest_key.render(value) for manifest_key, value in body.items())
+        request.item_identifier, indentation, opening_the_item=True
+    ) + "".join(
+        manifest_key.render(value, indentation) for manifest_key, value in body.items()
+    )
 
 
 def append_item(manifest_text: str, block: str) -> str:
@@ -1099,6 +1617,11 @@ class BootstrapReport:
     Where the opened pull request lives.
     """
 
+    note_paragraphs: int | None = None
+    """
+    How many paragraphs the written note reads as, when one was written.
+    """
+
     @property
     def dashboard_command(self) -> str:
         """
@@ -1107,23 +1630,25 @@ class BootstrapReport:
         """
         return f"/plan-dashboard {self.plan_identifier}"
 
-    def as_document(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Render the report as the JSON a caller reads, led by what it means.
         """
         document: dict[str, Any] = {
-            "status": self.exit_code.name_for_a_caller,
-            "exit_code": int(self.exit_code),
-            "plan": self.plan_identifier,
-            "item": self.item_identifier,
-            "created_item": self.created_item,
-            "dashboard_command": self.dashboard_command,
+            ReportKey.STATUS: self.exit_code.name_for_a_caller,
+            ReportKey.EXIT_CODE: int(self.exit_code),
+            ReportKey.PLAN: self.plan_identifier,
+            ReportKey.ITEM: self.item_identifier,
+            ReportKey.CREATED_ITEM: self.created_item,
+            ReportKey.DASHBOARD_COMMAND: self.dashboard_command,
         }
         if self.branch is not None:
             document[ManifestKey.BRANCH.key] = self.branch
         if self.pull_request_number is not None:
             document[ManifestKey.PULL_REQUEST_NUMBER.key] = self.pull_request_number
-            document["pull_request_url"] = self.pull_request_url
+            document[ReportKey.PULL_REQUEST_URL] = self.pull_request_url
+        if self.note_paragraphs is not None:
+            document[ReportKey.NOTE_PARAGRAPHS] = self.note_paragraphs
         return document
 
 
@@ -1141,7 +1666,12 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
     created_item = not documents.has_item(request.item_identifier)
 
     if created_item:
-        manifest_text = append_item(documents.manifest_text, render_new_item(request))
+        manifest_text = append_item(
+            documents.manifest_text,
+            render_new_item(
+                request, ItemIndentation.of_manifest(documents.manifest_text)
+            ),
+        )
     else:
         manifest_text = apply_item_fields(
             documents.manifest_text,
@@ -1160,6 +1690,596 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
         item_identifier=request.item_identifier,
         created_item=created_item,
     )
+
+
+@dataclass(frozen=True)
+class ItemUpdateRequest:
+    """
+    What updating one item needs: which item, and which fields to set on it.
+
+    Separate from :class:`ItemRecordRequest` because most transitions change a field
+    without warranting a roadmap section, and ``record`` cannot express that - it reads
+    the section unconditionally.
+    """
+
+    plan_identifier: str
+    """
+    The plan the item belongs to.
+    """
+
+    item_identifier: str
+    """
+    The item being updated, which must already be tracked.
+    """
+
+    values_by_key: dict[ManifestKey, Any]
+    """
+    The value to write to each key, in the order they should be applied.
+    """
+
+    notes_to_append: str | None = None
+    """
+    A further paragraph for the item's existing note, rather than a replacement for it.
+    """
+
+
+def extend_note(recorded: str | None, addition: str) -> str:
+    """
+    A recorded note with *addition* as a further paragraph.
+
+    The two sources separate their paragraphs differently, which is why extending a note
+    cannot simply concatenate them. A folded scalar reads its own line breaks back as
+    spaces and a blank line back as one newline, so a note read out of the manifest
+    separates paragraphs with a single newline - which :func:`fold` would take for a
+    hard-wrapped line and run together into one paragraph. A file a caller writes uses a
+    blank line, which :func:`fold` already reads correctly.
+
+    :param recorded: The note the manifest carries, or ``None`` where it carries none.
+    :param addition: The text to add, as its author wrote it.
+    :return: The whole note, separated the way a written note is.
+    """
+    paragraphs = [
+        paragraph
+        for paragraph in re.split(r"\n+", (recorded or "").strip())
+        if paragraph
+    ]
+    paragraphs.append(addition.strip())
+    return "\n\n".join(paragraphs)
+
+
+def note_paragraph_count(note: str) -> int:
+    """
+    How many paragraphs a note will read as once written.
+
+    Counted the way :func:`fold` splits it rather than by counting newlines, since a
+    hard-wrapped line is not a paragraph and counting it as one would report a number
+    the manifest never shows.
+
+    :param note: The note as its author wrote it, before folding.
+    :return: The paragraph count.
+    """
+    return len(paragraphs_of(note))
+
+
+def update_item(request: ItemUpdateRequest, project_root: Path) -> BootstrapReport:
+    """
+    Set one item's recorded fields and push the manifest, leaving the roadmap alone.
+
+    :param request: The item and the fields to set on it.
+    :param project_root: The repository to run within.
+    :raises UnknownPlanError: If the plan has no manifest on the notes branch.
+    :raises UnknownItemError: If the plan tracks no item of that id.
+    :return: What was written.
+    """
+    documents = PlanDocuments.load(request.plan_identifier, project_root)
+    values_by_key = dict(request.values_by_key)
+    if request.notes_to_append is not None:
+        values_by_key[ManifestKey.NOTES] = extend_note(
+            documents.item(request.item_identifier).get(ManifestKey.NOTES.key),
+            request.notes_to_append,
+        )
+    manifest_text = apply_item_fields(
+        documents.manifest_text,
+        request.plan_identifier,
+        request.item_identifier,
+        {key: written_value(value) for key, value in values_by_key.items()},
+    )
+    documents.save(manifest_text, documents.roadmap_text, project_root)
+    written_note = values_by_key.get(ManifestKey.NOTES)
+    return BootstrapReport(
+        exit_code=ExitCode.SUCCESS,
+        plan_identifier=request.plan_identifier,
+        item_identifier=request.item_identifier,
+        note_paragraphs=(
+            note_paragraph_count(written_note) if written_note is not None else None
+        ),
+    )
+
+
+def written_value(value: Any) -> Any:
+    """
+    A caller's value in the form a key renders, so callers can pass what they hold.
+
+    A string subclass is narrowed to :class:`str` - a ``StrEnum`` member is a string
+    the dumper has no representer for - and every other scalar keeps its own type, since
+    that is what it is read back as.
+
+    :param value: The value to write - a status, a number, prose, or a sequence.
+    :return: The value a :class:`ManifestKey` renders.
+    """
+    if isinstance(value, str):
+        return str(value)
+    if not isinstance(value, Sequence):
+        return value
+    return [str(entry) for entry in value]
+
+
+# %% checking what the manifest claims against local git
+
+
+@dataclass(frozen=True)
+class StalenessFinding:
+    """
+    One recorded field that local git contradicts.
+    """
+
+    manifest_key: ManifestKey
+    """
+    The field whose recorded value is stale.
+    """
+
+    recorded: str | None
+    """
+    What the manifest says, or ``None`` where it says nothing.
+    """
+
+    observed: str
+    """
+    What git shows instead, in the terms a reader acts on.
+    """
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        Render the finding as the JSON a caller reads.
+        """
+        return {
+            ReportKey.FIELD: self.manifest_key.key,
+            ReportKey.RECORDED: self.recorded,
+            ReportKey.OBSERVED: self.observed,
+        }
+
+
+@dataclass(frozen=True)
+class StalenessReport:
+    """
+    Which of an item's recorded fields local git contradicts, if any.
+    """
+
+    plan_identifier: str
+    """
+    The plan the item belongs to.
+    """
+
+    item_identifier: str
+    """
+    The item that was checked.
+    """
+
+    findings: list[StalenessFinding]
+    """
+    Every stale field, in the order the fields are checked.
+    """
+
+    @property
+    def exit_code(self) -> ExitCode:
+        """
+        The status the process exits with, so a caller acting on the status alone reads
+        a stale manifest as something to fix rather than as a clean run.
+        """
+        return ExitCode.MANIFEST_IS_STALE if self.findings else ExitCode.SUCCESS
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        Render the report as the JSON a caller reads, led by what it means.
+        """
+        return {
+            ReportKey.STATUS: self.exit_code.name_for_a_caller,
+            ReportKey.EXIT_CODE: int(self.exit_code),
+            ReportKey.PLAN: self.plan_identifier,
+            ReportKey.ITEM: self.item_identifier,
+            ReportKey.FINDINGS: [finding.to_json() for finding in self.findings],
+            ReportKey.DASHBOARD_COMMAND: f"/plan-dashboard {self.plan_identifier}",
+        }
+
+
+def check_item(
+    plan_identifier: str,
+    item_identifier: str,
+    project_root: Path,
+    remote: str = "origin",
+) -> StalenessReport:
+    """
+    Compare one item's recorded fields against what local git actually shows.
+
+    Deliberately local-only. The dashboard already compares the manifest against GitHub
+    after the fact; what nothing covers is the window before a push, where a session
+    knows the branch exists and every other reader still sees ``not_started``. Answering
+    it from git alone also keeps this importable by a hook, which cannot reach
+    ``sync_manifest_status.py`` - that module imports ``build_dashboard``, and so needs
+    jinja2 and markdown.
+
+    :param plan_identifier: The plan the item belongs to.
+    :param item_identifier: The item to check.
+    :param project_root: The repository to run within.
+    :param remote: The remote a branch would be published to.
+    :raises UnknownPlanError: If the plan has no manifest on the notes branch.
+    :raises UnknownItemError: If the plan tracks no item of that id.
+    :return: What is stale, if anything.
+    """
+    documents = PlanDocuments.load(plan_identifier, project_root)
+    item = documents.item(item_identifier)
+    recorded_branch = item.get(ManifestKey.BRANCH.key)
+    findings: list[StalenessFinding] = []
+
+    if recorded_branch and not branch_is_published(
+        recorded_branch, remote=remote, project_root=project_root
+    ):
+        findings.append(
+            StalenessFinding(
+                manifest_key=ManifestKey.BRANCH,
+                recorded=recorded_branch,
+                observed=f"no branch of that name on {remote}",
+            )
+        )
+        return StalenessReport(plan_identifier, item_identifier, findings)
+
+    if not recorded_branch:
+        return StalenessReport(plan_identifier, item_identifier, findings)
+
+    findings.extend(fields_a_published_branch_requires(item, recorded_branch))
+    return StalenessReport(plan_identifier, item_identifier, findings)
+
+
+def fields_a_published_branch_requires(
+    item: dict[str, Any], branch: str
+) -> list[StalenessFinding]:
+    """
+    The fields an item whose branch is published should already carry.
+
+    :param item: The item's parsed manifest mapping.
+    :param branch: The published branch it records.
+    :return: One finding per field the item still leaves unset or contradicts.
+    """
+    observed = f"{branch} is published"
+    findings = [
+        StalenessFinding(
+            manifest_key=manifest_key,
+            recorded=None,
+            observed=observed,
+        )
+        for manifest_key in (ManifestKey.SESSION, ManifestKey.PULL_REQUEST_NUMBER)
+        if item.get(manifest_key.key) is None
+    ]
+    recorded_status = item.get(ManifestKey.STATUS.key)
+    if recorded_status == ItemStatus.NOT_STARTED.value:
+        findings.insert(
+            0,
+            StalenessFinding(
+                manifest_key=ManifestKey.STATUS,
+                recorded=recorded_status,
+                observed=observed,
+            ),
+        )
+    return findings
+
+
+# %% resolving a branch to the items it carries
+
+
+BLOCKER_OWNER_SEPARATOR = ": "
+"""
+What separates the owner of a written blocker from its reason.
+
+An automated caller writes ``<owner>: <reason>`` so that the pass which wrote a blocker
+is the only one that replaces or clears it, and a blocker a person wrote carries no
+owner and is therefore never touched.
+"""
+
+
+def plan_tracking(branch: str, project_root: Path) -> str | None:
+    """
+    The plan that tracks *branch*, per the generated branch index.
+
+    Calls the shell configuration's own lookup rather than reading the index here, so
+    this and every other reader agree on where the index lives and how it is written.
+
+    :param branch: The branch to look up.
+    :param project_root: The repository to run within.
+    :raises NotesBranchUnavailableError: If the notes branch cannot be fetched.
+    :return: The plan's id, or None when no plan claims the branch.
+    """
+    fetch_notes_branch(project_root)
+    lookup = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{HookScript.CONFIGURATION.path}" && plan_id_for_branch "$1"',
+            HookScript.CONFIGURATION.value,
+            branch,
+        ],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
+    return lookup.stdout.strip() or None
+
+
+@dataclass(frozen=True)
+class TrackedItem:
+    """
+    One item a branch carries, in the shape a caller deciding what to write reads it.
+    """
+
+    item_identifier: str
+    """
+    The item's id.
+    """
+
+    status: ItemStatus
+    """
+    The status the manifest records for it right now.
+    """
+
+    blockers: list[str]
+    """
+    What the manifest records as blocking it right now.
+    """
+
+    def blockers_not_owned_by(self, owner: str) -> list[str]:
+        """
+        Every blocker except the ones *owner* wrote, in their recorded order.
+
+        :param owner: The automated caller whose blockers are its own to replace.
+        :return: The blockers it must leave alone.
+        """
+        prefix = f"{owner}{BLOCKER_OWNER_SEPARATOR}"
+        return [blocker for blocker in self.blockers if not blocker.startswith(prefix)]
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        Render the item as the JSON a caller reads.
+        """
+        return {
+            ReportKey.ITEM: self.item_identifier,
+            ManifestKey.STATUS.key: self.status.value,
+            ManifestKey.BLOCKERS.key: self.blockers,
+        }
+
+
+@dataclass(frozen=True)
+class ItemWrite(TrackedItem):
+    """
+    One item's recorded state after a write, and the status it carried before it.
+
+    A written item is still a tracked item - the same id, status and blockers a reader
+    acts on - so a caller reading either operation's report reads one shape.
+    """
+
+    previous_status: ItemStatus
+    """
+    The status the manifest recorded before the write.
+    """
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        Render the write as the JSON a caller reads, naming what changed as well as what
+        the item now says.
+        """
+        return {
+            **super().to_json(),
+            ReportKey.PREVIOUS_STATUS: self.previous_status.value,
+        }
+
+
+@dataclass(frozen=True)
+class BranchReport:
+    """
+    What an operation keyed on a branch found, for every item that branch carries.
+    """
+
+    branch: str
+    """
+    The branch that was looked up.
+    """
+
+    plan_identifier: str | None
+    """
+    The plan tracking it, or None when no plan claims the branch.
+    """
+
+    items: list[TrackedItem]
+    """
+    Every item recording that branch, in manifest order.
+    """
+
+    @property
+    def exit_code(self) -> ExitCode:
+        """
+        The status the process exits with, so a caller acting on the status alone
+        reports an unclaimed branch rather than writing against a plan it guessed.
+        """
+        return ExitCode.SUCCESS if self.items else ExitCode.BRANCH_TRACKS_NO_ITEM
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        Render the report as the JSON a caller reads, led by what it means.
+        """
+        document: dict[str, Any] = {
+            ReportKey.STATUS: self.exit_code.name_for_a_caller,
+            ReportKey.EXIT_CODE: int(self.exit_code),
+            ManifestKey.BRANCH.key: self.branch,
+            ReportKey.PLAN: self.plan_identifier,
+            ReportKey.ITEMS: [item.to_json() for item in self.items],
+        }
+        if self.plan_identifier is not None:
+            document[ReportKey.DASHBOARD_COMMAND] = (
+                f"/plan-dashboard {self.plan_identifier}"
+            )
+        return document
+
+
+def resolve_branch(branch: str, project_root: Path) -> BranchReport:
+    """
+    Find the plan and the items a branch belongs to.
+
+    A branch can carry more than one item - a plan may split what one branch does into
+    several - so every item recording it is answered with, not the first.
+
+    :param branch: The branch to resolve.
+    :param project_root: The repository to run within.
+    :raises UnknownPlanError: If the index names a plan with no manifest on the branch.
+    :return: What the branch belongs to.
+    """
+    plan_identifier = plan_tracking(branch, project_root)
+    if plan_identifier is None:
+        return BranchReport(branch=branch, plan_identifier=None, items=[])
+
+    documents = PlanDocuments.load(plan_identifier, project_root)
+    items = [
+        TrackedItem(
+            item_identifier=item[ManifestKey.IDENTIFIER.key],
+            status=ItemStatus(item[ManifestKey.STATUS.key]),
+            blockers=list(item.get(ManifestKey.BLOCKERS.key) or []),
+        )
+        for item in documents.manifest[ManifestKey.ITEMS.key]
+        if item.get(ManifestKey.BRANCH.key) == branch
+    ]
+    return BranchReport(branch=branch, plan_identifier=plan_identifier, items=items)
+
+
+# %% owning a blocker on every item a branch carries
+
+
+def block_branch(
+    branch: str, owner: str, reason: str, project_root: Path
+) -> BranchReport:
+    """
+    Record *owner*'s blocker on every item a branch carries, and mark them blocked.
+
+    Running it again replaces that owner's own blocker rather than adding a second, so a
+    pass that keeps finding the same conflict keeps writing the same entry.
+
+    :param branch: The branch whose items are blocked.
+    :param owner: The automated caller the blocker belongs to.
+    :param reason: Why the branch is blocked, in a reader's terms.
+    :param project_root: The repository to run within.
+    :return: What was written.
+    """
+    return write_owned_blocker(
+        branch=branch,
+        owner=owner,
+        reason=reason,
+        project_root=project_root,
+    )
+
+
+def unblock_branch(branch: str, owner: str, project_root: Path) -> BranchReport:
+    """
+    Clear *owner*'s blocker from every item a branch carries.
+
+    An item left carrying somebody else's blocker stays blocked; one left carrying none
+    returns to :attr:`ItemStatus.IN_PROGRESS`, since the branch it names exists.
+
+    :param branch: The branch whose items are cleared.
+    :param owner: The automated caller whose blocker is being withdrawn.
+    :param project_root: The repository to run within.
+    :return: What was written.
+    """
+    return write_owned_blocker(
+        branch=branch,
+        owner=owner,
+        reason=None,
+        project_root=project_root,
+    )
+
+
+def write_owned_blocker(
+    branch: str, owner: str, reason: str | None, project_root: Path
+) -> BranchReport:
+    """
+    Rewrite every item on a branch with *owner*'s blocker set or withdrawn.
+
+    Both directions are the same write - replace the owner's entries, leave everyone
+    else's, then derive the status from what is left - so they cannot disagree about
+    which blockers belong to whom.
+
+    Only fields that actually change are written. A pass withdraws its blocker from every
+    branch it finds clean, and most of those it never blocked; recording an empty list on
+    each would spread noise across the manifest one run at a time.
+
+    :param branch: The branch whose items are written.
+    :param owner: The automated caller the blocker belongs to.
+    :param reason: Why the branch is blocked, or None to withdraw the blocker.
+    :param project_root: The repository to run within.
+    :return: What was written.
+    """
+    resolution = resolve_branch(branch, project_root)
+    if not resolution.items:
+        return resolution
+
+    writes: list[TrackedItem] = []
+    for item in resolution.items:
+        blockers = item.blockers_not_owned_by(owner)
+        if reason is not None:
+            blockers.append(f"{owner}{BLOCKER_OWNER_SEPARATOR}{reason}")
+        status = status_beside(blockers, previous=item.status)
+        changed = {
+            manifest_key: value
+            for manifest_key, value, recorded in (
+                (ManifestKey.STATUS, status.value, item.status.value),
+                (ManifestKey.BLOCKERS, blockers, item.blockers),
+            )
+            if value != recorded
+        }
+        if changed:
+            update_item(
+                ItemUpdateRequest(
+                    plan_identifier=resolution.plan_identifier,
+                    item_identifier=item.item_identifier,
+                    values_by_key=changed,
+                ),
+                project_root=project_root,
+            )
+        writes.append(
+            ItemWrite(
+                item_identifier=item.item_identifier,
+                status=status,
+                blockers=blockers,
+                previous_status=item.status,
+            )
+        )
+    return BranchReport(
+        branch=branch, plan_identifier=resolution.plan_identifier, items=writes
+    )
+
+
+def status_beside(blockers: list[str], previous: ItemStatus) -> ItemStatus:
+    """
+    The status an item carries given what is now blocking it.
+
+    Only the blocked/unblocked axis is decided here: an item nothing blocks keeps
+    whatever it already said unless that was :attr:`ItemStatus.BLOCKED`, which the
+    blockers it no longer has were the reason for.
+
+    :param blockers: What blocks the item now.
+    :param previous: The status it recorded before.
+    :return: The status to record.
+    """
+    if blockers:
+        return ItemStatus.BLOCKED
+    if previous is ItemStatus.BLOCKED:
+        return ItemStatus.IN_PROGRESS
+    return previous
 
 
 def append_roadmap_section(roadmap_text: str, section: str) -> str:
@@ -1396,10 +2516,9 @@ class WorkOpener:
         :param branch: The branch to look for.
         :return: True when the remote already carries it.
         """
-        listing = run_git(
-            "ls-remote", "--heads", self.remote, branch, project_root=self.project_root
+        return branch_is_published(
+            branch, remote=self.remote, project_root=self.project_root
         )
-        return bool(listing.strip())
 
     def publish(self, request: WorkOpenRequest) -> None:
         """
@@ -1493,7 +2612,7 @@ def open_work(
         request.item_identifier,
         {
             ManifestKey.BRANCH: request.branch,
-            ManifestKey.PULL_REQUEST_NUMBER: str(created.number),
+            ManifestKey.PULL_REQUEST_NUMBER: created.number,
             ManifestKey.SESSION: request.session_url,
             ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value,
         },
@@ -1512,50 +2631,466 @@ def open_work(
 # %% command line
 
 
+OperationReport = BootstrapReport | BranchReport | StalenessReport
+"""
+What any of the operations answers with: a report carrying both the status the process
+exits with and the JSON a caller reads.
+"""
+
+
+@dataclass(frozen=True)
+class Subcommand(Command):
+    """
+    One operation this command line offers, owning both its flags and the work it runs.
+
+    Adds to the shared :class:`command_line.Command` only what is this tool's own: what
+    a command is handed, and what it answers with.
+    """
+
+    @abstractmethod
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> OperationReport:
+        """
+        Do the work the parsed command line asks for.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What the operation found or wrote.
+        """
+
+
+@dataclass(frozen=True)
+class RecordSubcommand(Subcommand):
+    """
+    Write an item's manifest entry and its roadmap section.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "record"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Write an item's manifest entry and roadmap section"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the item to record and the section to record it with.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--plan", required=True)
+        parser.add_argument("--item", required=True)
+        parser.add_argument("--status", required=True, type=ItemStatus)
+        parser.add_argument("--roadmap-section", required=True, type=Path)
+        parser.add_argument("--title")
+        parser.add_argument("--track")
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
+        """
+        Record the item.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was recorded.
+        """
+        return record_item(
+            ItemRecordRequest(
+                plan_identifier=arguments.plan,
+                item_identifier=arguments.item,
+                status=arguments.status,
+                roadmap_section_path=arguments.roadmap_section,
+                title=arguments.title,
+                track=arguments.track,
+            ),
+            project_root=project_root,
+        )
+
+
+@dataclass(frozen=True)
+class UpdateSubcommand(Subcommand):
+    """
+    Set an item's recorded fields, without demanding a roadmap section.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "update"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Set an item's recorded fields, without a roadmap section"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare every field this command can set.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--plan", required=True)
+        parser.add_argument("--item", required=True)
+        parser.add_argument("--status", type=ItemStatus)
+        parser.add_argument("--branch")
+        parser.add_argument("--pull-request-number", type=int)
+        parser.add_argument("--session")
+        notes = parser.add_mutually_exclusive_group()
+        notes.add_argument(
+            "--notes", type=Path, help="A file whose text becomes the item's notes"
+        )
+        notes.add_argument(
+            "--append-notes",
+            type=Path,
+            help="A file whose text is added to the item's notes as a new paragraph",
+        )
+        parser.add_argument(
+            "--blockers",
+            type=Path,
+            action="append",
+            help="A file whose text becomes one blocker; repeat for each",
+        )
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
+        """
+        Write whichever fields the command line named.
+
+        Prose comes from files rather than the command line, the same way
+        ``--pull-request-body`` already does: a note is routinely longer than a shell
+        invocation should carry.
+
+        ``--append-notes`` extends the recorded note instead of replacing it, so a
+        caller adding to one never has to read it back and restore its paragraph breaks
+        itself - see :func:`extend_note` for why those two forms differ.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was written.
+        """
+        values_by_key: dict[ManifestKey, Any] = {
+            manifest_key: value
+            for manifest_key, value in (
+                (ManifestKey.STATUS, arguments.status),
+                (ManifestKey.BRANCH, arguments.branch),
+                (ManifestKey.PULL_REQUEST_NUMBER, arguments.pull_request_number),
+                (ManifestKey.SESSION, arguments.session),
+            )
+            if value is not None
+        }
+        if arguments.notes:
+            values_by_key[ManifestKey.NOTES] = arguments.notes.read_text()
+        if arguments.blockers:
+            values_by_key[ManifestKey.BLOCKERS] = [
+                blocker.read_text().strip() for blocker in arguments.blockers
+            ]
+        return update_item(
+            ItemUpdateRequest(
+                plan_identifier=arguments.plan,
+                item_identifier=arguments.item,
+                values_by_key=values_by_key,
+                notes_to_append=(
+                    arguments.append_notes.read_text()
+                    if arguments.append_notes
+                    else None
+                ),
+            ),
+            project_root=project_root,
+        )
+
+
+@dataclass(frozen=True)
+class ResolveSubcommand(Subcommand):
+    """
+    Name the plan and the items a branch belongs to.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "resolve"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Name the plan and items a branch belongs to"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the branch to look up.
+
+        :param parser: The subparser to declare it on.
+        """
+        parser.add_argument("--branch", required=True)
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BranchReport:
+        """
+        Look the branch up.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What the branch belongs to.
+        """
+        return resolve_branch(arguments.branch, project_root=project_root)
+
+
+@dataclass(frozen=True)
+class BlockSubcommand(Subcommand):
+    """
+    Record your own blocker on every item a branch carries.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "block"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Record your own blocker on every item a branch carries"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the branch, the blocker's owner, and the reason.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--branch", required=True)
+        parser.add_argument("--owner", required=True)
+        parser.add_argument(
+            "--reason",
+            required=True,
+            type=Path,
+            help="A file whose text is the blocker",
+        )
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BranchReport:
+        """
+        Write the blocker.
+
+        The reason comes from a file for the same reason a note does: it is routinely
+        longer than a shell invocation should carry.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was written.
+        """
+        return block_branch(
+            arguments.branch,
+            owner=arguments.owner,
+            reason=arguments.reason.read_text().strip(),
+            project_root=project_root,
+        )
+
+
+@dataclass(frozen=True)
+class UnblockSubcommand(Subcommand):
+    """
+    Clear your own blocker from every item a branch carries.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "unblock"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Clear your own blocker from every item a branch carries"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the branch and whose blocker to withdraw.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--branch", required=True)
+        parser.add_argument("--owner", required=True)
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BranchReport:
+        """
+        Withdraw the blocker.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was written.
+        """
+        return unblock_branch(
+            arguments.branch, owner=arguments.owner, project_root=project_root
+        )
+
+
+@dataclass(frozen=True)
+class CheckSubcommand(Subcommand):
+    """
+    Report which of an item's recorded fields local git contradicts.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "check"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Report which recorded fields local git contradicts"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the item to check and the remote to measure it against.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--plan", required=True)
+        parser.add_argument("--item", required=True)
+        parser.add_argument("--remote", default="origin")
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> StalenessReport:
+        """
+        Compare the item's recorded fields against local git.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What is stale, if anything.
+        """
+        return check_item(
+            arguments.plan,
+            arguments.item,
+            project_root=project_root,
+            remote=arguments.remote,
+        )
+
+
+@dataclass(frozen=True)
+class OpenSubcommand(Subcommand):
+    """
+    Create the item's branch and draft pull request, and record them.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "open"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Create the item's branch and draft pull request"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the branch to open and how to reach its pull request.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--plan", required=True)
+        parser.add_argument("--item", required=True)
+        parser.add_argument("--branch", required=True)
+        parser.add_argument("--base", required=True)
+        parser.add_argument("--session", required=True)
+        parser.add_argument(
+            "--pull-request-title",
+            help="Required unless --pull-request-number is given",
+        )
+        parser.add_argument(
+            "--pull-request-body",
+            type=Path,
+            help="Required unless --pull-request-number is given",
+        )
+        parser.add_argument(
+            "--pull-request-number",
+            type=int,
+            help=(
+                "Record a pull request the caller already created, instead of "
+                "creating one"
+            ),
+        )
+        parser.add_argument("--remote", default="origin")
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
+        """
+        Open the branch and pull request.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was opened.
+        """
+        return open_work(
+            WorkOpenRequest(
+                plan_identifier=arguments.plan,
+                item_identifier=arguments.item,
+                branch=arguments.branch,
+                base_branch=arguments.base,
+                session_url=arguments.session,
+                pull_request_title=arguments.pull_request_title,
+                pull_request_body=(
+                    arguments.pull_request_body.read_text()
+                    if arguments.pull_request_body
+                    else None
+                ),
+                pull_request_number=arguments.pull_request_number,
+            ),
+            project_root=project_root,
+            remote=arguments.remote,
+        )
+
+
+SUBCOMMANDS: dict[str, Subcommand] = {
+    subcommand.invoked_as: subcommand for subcommand in commands_of(Subcommand)
+}
+"""
+Every operation the command line offers, by the word that selects it.
+
+Found from the subclasses rather than listed, since the list carried nothing a reader
+needs: it is the classes themselves that say what each command is and takes.
+"""
+
+
 def build_parser() -> argparse.ArgumentParser:
     """
-    Build the argument parser for both subcommands.
+    Build the argument parser from the commands themselves.
 
     :return: The parser.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    subcommands = parser.add_subparsers(dest="subcommand", required=True)
-
-    record = subcommands.add_parser(
-        "record", help="Write an item's manifest entry and roadmap section"
-    )
-    record.add_argument("--plan", required=True)
-    record.add_argument("--item", required=True)
-    record.add_argument("--status", required=True, type=ItemStatus)
-    record.add_argument("--roadmap-section", required=True, type=Path)
-    record.add_argument("--title")
-    record.add_argument("--track")
-
-    open_command = subcommands.add_parser(
-        "open", help="Create the item's branch and draft pull request"
-    )
-    open_command.add_argument("--plan", required=True)
-    open_command.add_argument("--item", required=True)
-    open_command.add_argument("--branch", required=True)
-    open_command.add_argument("--base", required=True)
-    open_command.add_argument("--session", required=True)
-    open_command.add_argument(
-        "--pull-request-title", help="Required unless --pull-request-number is given"
-    )
-    open_command.add_argument(
-        "--pull-request-body",
-        type=Path,
-        help="Required unless --pull-request-number is given",
-    )
-    open_command.add_argument(
-        "--pull-request-number",
-        type=int,
-        help="Record a pull request the caller already created, instead of creating one",
-    )
-    open_command.add_argument("--remote", default="origin")
-
+    subparsers = parser.add_subparsers(dest="subcommand", required=True)
+    for subcommand in SUBCOMMANDS.values():
+        subcommand.declare_arguments(
+            subparsers.add_parser(subcommand.invoked_as, help=subcommand.description)
+        )
     return parser
 
 
@@ -1569,42 +3104,12 @@ def main() -> int:
     project_root = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
 
     try:
-        if arguments.subcommand == "record":
-            report = record_item(
-                ItemRecordRequest(
-                    plan_identifier=arguments.plan,
-                    item_identifier=arguments.item,
-                    status=arguments.status,
-                    roadmap_section_path=arguments.roadmap_section,
-                    title=arguments.title,
-                    track=arguments.track,
-                ),
-                project_root=project_root,
-            )
-        else:
-            report = open_work(
-                WorkOpenRequest(
-                    plan_identifier=arguments.plan,
-                    item_identifier=arguments.item,
-                    branch=arguments.branch,
-                    base_branch=arguments.base,
-                    session_url=arguments.session,
-                    pull_request_title=arguments.pull_request_title,
-                    pull_request_body=(
-                        arguments.pull_request_body.read_text()
-                        if arguments.pull_request_body
-                        else None
-                    ),
-                    pull_request_number=arguments.pull_request_number,
-                ),
-                project_root=project_root,
-                remote=arguments.remote,
-            )
+        report = SUBCOMMANDS[arguments.subcommand].run(arguments, project_root)
     except BootstrapError as error:
         print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
         return int(error.exit_code)
 
-    print(json.dumps(report.as_document()))
+    print(json.dumps(report.to_json()))
     return int(report.exit_code)
 
 
