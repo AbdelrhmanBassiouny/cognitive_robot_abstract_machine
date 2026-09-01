@@ -67,60 +67,56 @@ items:
     session: https://claude.ai/code/session_01HPQPiabgjE3yuBHd5skUR3
     blockers:
       - >-
-          stacked-pr-maintenance: Fork PR #169 (branch `montessori_fast_inline_monitor`) conflicts
-          against its base `main` as of the 2026-08-31 stacked-pr-maintenance pass, in:
-          `.github/workflows/ci.yml`, `.github/workflows/ci_reusable.yml`,
-          `.github/workflows/example_demo_reusable.yml`, `.gitignore`, `AGENTS.md`,
-          `cognitive_robot_abstract_machine/exceptions.py`,
-          `cognitive_robot_abstract_machine/orm_interfaces.py`,
-          `coraplex/src/coraplex/robot_plans/actions/core/pick_up.py`, `doc/contributing.rst`,
-          `krrood/src/krrood/ormatic/data_access_objects/dao.py`,
-          `krrood/src/krrood/ormatic/wrapped_table.py`, `scripts/regenerate_all_orm.py`,
-          `segmind/src/segmind/datastructures/events.py`,
-          `semantic_digital_twin/src/semantic_digital_twin/adapters/multi_sim.py`,
-          `semantic_digital_twin/src/semantic_digital_twin/reasoning/predicates.py`,
-          `semantic_digital_twin/src/semantic_digital_twin/robots/armar7.py`,
-          `semantic_digital_twin/src/semantic_digital_twin/spatial_types/spatial_types.py`,
-          `semantic_digital_twin/src/semantic_digital_twin/world_description/geometry.py`,
-          `semantic_digital_twin/src/semantic_digital_twin/world_description/shape_collection.py`,
-          `test/cognitive_robot_abstract_machine_test/dataset/generate_orm.py`,
-          `test/cognitive_robot_abstract_machine_test/test_orm_interfaces.py`,
-          `test/experiments_test/conftest.py`,
-          `test/krrood_test/test_eql/test_verbalization/verbalization_results.py`,
-          `test/semantic_digital_twin_test/test_adapters/test_multi_sim.py`. It carries the
-          `needs-resolution` label and a routine comment on the PR:
-          https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/169#issuecomment-5478370443
-    notes: >-
-      Base of the stack. On 2026-08-18 main was merged in twice. The first
-      merge (608bc7fe6) cleared the conflicts that had left it dirty, plus the
-      two integration breaks it exposed: the giskardpy/executor.py semantic
-      conflict and a pacer built the way main no longer allows. 7a9af9cd0 then
-      fixed the ORMatic bug failing this branch's experiments job at
-      collection, and 9877e5b99 restored PickUpAction's AttachNode and
-      PlacingAction's DetachNode behind Context.update_world_model_attachment,
-      which is what 8cc3cf69 had commented out wholesale. A second main merge
-      (334796ab) followed once main reached 90c241168; its one conflict,
-      Body.has_collision, took the resolution #170 had already settled on, and
-      f44c76d73 brought down the test that pins it. The two demo directories
-      08257863 never committed, coraplex_warehouse_storage_demo and
-      coraplex_wind_farm_service_demo, are no longer a red job: 9877e5b99 gave
-      test_warehouse_storage_layout and test_wind_farm_service_layout a skipif
-      on the directory's absence, following the one test_franka_panda_equipment
-      already uses, so they start running by themselves once the demos land.
-      06582ca32 then made a checkout with no
-      generated ORM interfaces build them instead of failing a world build into
-      the run, porting ijcai-tutorial's OrmInterface/WorkspaceOrmInterfaces into
-      the meta-package and running it as a second pre-flight in
-      run_montessori_demo.sh. The PR description, which was still GitHub's
-      auto-generated one describing unrelated demo scripts, was replaced with
-      the branch's real one in the same round. 232b8ba19 then stopped tracking
-      the generated ormatic_interface.py files altogether, which is what had
-      made every branch switch abort while a checkout held its own generated
-      copy; the whole stack, #175, #176 and #177 were restacked onto it so the
-      fix reaches all of them. Now da2e062e3d, mergeable: after the timeline
-      tab (#175) was folded in, the plan-graph tab (#178) was folded in too, so
-      this PR now carries the whole live-panels tab container, the event
-      timeline and the plan graph on top of the monitor it is named for.
+          plan-item-resolve 2026-09-01: Fork PR #169 (branch `montessori_fast_inline_monitor`, head
+          `da2e062e3d`) is `mergeable_state: dirty` against `main`, which has advanced 353 commits
+          past the `90c24116` this branch last merged. The newest stacked-pr-maintenance report, on
+          2026-08-31 21:44
+          (https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/169#issuecomment-5485069967),
+          names 25 conflicting files - one more than the 12:29 pass this blocker previously quoted,
+          the addition being `coraplex/src/coraplex/robot_plans/actions/core/placing.py`. A local
+          `git merge origin/main` reproduces exactly those 25, in 68 conflict hunks. The PR carries
+          the `needs-resolution` label, so every pass since 2026-08-22 has skipped the branch rather
+          than retrying it; nine such reports now stand on the PR unanswered.
+      - >-
+          plan-item-resolve 2026-09-01: CI on #169 has not run since 2026-08-18. The last runs on
+          `da2e062e3d` are red in four library jobs (`semantic_digital_twin`, `experiments`,
+          `giskardpy`, `coraplex`) and in six demo/notebook jobs, and no run can happen at all while
+          the pull request has no merge ref. Whether any of those failures survive the main merge is
+          unknown until the merge lands and CI runs again.
+    notes: >
+      Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6) cleared
+      the conflicts that had left it dirty, plus the two integration breaks it exposed: the
+      giskardpy/executor.py semantic conflict and a pacer built the way main no longer allows.
+      7a9af9cd0 then fixed the ORMatic bug failing this branch's experiments job at collection, and
+      9877e5b99 restored PickUpAction's AttachNode and PlacingAction's DetachNode behind
+      Context.update_world_model_attachment, which is what 8cc3cf69 had commented out wholesale. A
+      second main merge (334796ab) followed once main reached 90c241168; its one conflict,
+      Body.has_collision, took the resolution #170 had already settled on, and f44c76d73 brought
+      down the test that pins it. The two demo directories 08257863 never committed,
+      coraplex_warehouse_storage_demo and coraplex_wind_farm_service_demo, are no longer a red job:
+      9877e5b99 gave test_warehouse_storage_layout and test_wind_farm_service_layout a skipif on the
+      directory's absence, following the one test_franka_panda_equipment already uses, so they start
+      running by themselves once the demos land. 06582ca32 then made a checkout with no generated
+      ORM interfaces build them instead of failing a world build into the run, porting
+      ijcai-tutorial's OrmInterface/WorkspaceOrmInterfaces into the meta-package and running it as a
+      second pre-flight in run_montessori_demo.sh. The PR description, which was still GitHub's
+      auto-generated one describing unrelated demo scripts, was replaced with the branch's real one
+      in the same round. 232b8ba19 then stopped tracking the generated ormatic_interface.py files
+      altogether, which is what had made every branch switch abort while a checkout held its own
+      generated copy; the whole stack, #175, #176 and #177 were restacked onto it so the fix reaches
+      all of them. Now da2e062e3d, mergeable: after the timeline tab (#175) was folded in, the
+      plan-graph tab (#178) was folded in too, so this PR now carries the whole live-panels tab
+      container, the event timeline and the plan graph on top of the monitor it is named for.
+
+      2026-09-01, plan-item-resolve: the branch has had no push since the plan-graph fold on
+      2026-08-18, while `main` reached `1227a68f`. The conflict is no longer the single
+      `world_entity.py` method earlier rounds recorded: `main` has independently landed a superset
+      of this branch's own ORM-interface work (the same `ijcai-tutorial` lineage, developed further
+      into staleness detection, one-interpreter builds, a progress bar and a pytest `--orm-build`
+      option), renamed `BoundingBox` to `VolumetricBoundingBox` across `semantic_digital_twin`,
+      reworked `MultiSim`'s joint syncing around a `JointBackedConnection`, and rewritten
+      `PickUpAction`/`PlacingAction` with pose thresholds. There are no review threads on #169 at
+      all, so nothing here is waiting on a reviewer.
 
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
