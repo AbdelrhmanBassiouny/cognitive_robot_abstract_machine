@@ -634,13 +634,14 @@ items:
     '
 - id: search-clipped-to-a-predicates-region
   title: Clip the search to the region a spatial predicate allows
-  branch: null
-  pull_request_number: null
+  branch: claude/kdp-search-constraints-pfaph7
+  session: https://claude.ai/code/session_013HJ4gSb7tjesc6vB1GAtwu
+  pull_request_number: 238
   track: request-language
   depends_on:
   - perception-predicates-guide-the-search
   - pieces-looked-for-where-expected
-  status: not_started
+  status: in_progress
   notes: 'The developer''s second mechanism on r3893602153, deferred out of #227 rather than dropped:
     "one can interpret spatial predicates as specifying Regions (like the region class in semdt) with
     extents to look at and excluding other regions, once can clip images and depth to look only inside

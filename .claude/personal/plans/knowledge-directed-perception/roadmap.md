@@ -2694,3 +2694,130 @@ indentation while this plan's `plan.yaml` indents them by two, so `open` produce
 YAML and `save-plan.sh` refused it -- with the error swallowed by `capture_output=True`,
 exactly as #231 recorded on 2026-08-31. Worked around again by editing `plan.yaml`
 directly. It is the same family as #160 and still wants its own bug-fix pull request.
+
+## `search-clipped-to-a-predicates-region`: two parents that had to meet, and where a clip's extent comes from
+
+Kicked off 2026-09-01 in `auto` mode, as pull request #238 off
+`claude/plan-item-kickoff-perception-ogf2g9` (#227). Both dependencies are open and out
+of draft, so `check_dependency_readiness.py` reports `open_ready` for each. The session's
+branch arrived cut from `integration` rather than from anything this plan is stacked on
+-- the hazard #199 exists to refuse, and the sixth time on this plan after #223, #225,
+#227, #232 and #236 -- and was re-cut onto #227's tip before the first commit.
+
+### This is the first item on the plan whose two parents are on different stacks
+
+Every earlier item took one parent and stacked on it. This one cannot: its two
+dependencies diverge at #221 and neither contains the other.
+
+```
+#202 -> #205 -> #221 -> #222 -> #227   the backend, and reading a statement's predicates
+                     \-> #225 -> #232   occupancy, and the believed place
+```
+
+`backend.py`, `scene_request.py` and krrood's `LookRequest` exist only on the first line;
+`hypotheses.py` and `occupancy.py` only on the second. This item needs both, so #232 is
+merged in rather than waited on, which is this plan's standing `depends_on` rule and the
+same move #227 made with #229.
+
+**The merge is two files and both resolve as a union**, measured before the branch was
+opened rather than assumed: `pipeline.py`, where #222 added a request parameter to
+`searched_surfaces`/`detect` and #232 rewrote the same `detect` around hypotheses and the
+occupancy pass; and `test_montessori_perception.py`, where #232's side still carried the
+four `PerceivedObjects` tests #222 retired when the backend replaced them, so the
+resolution takes #232's new tests without that section.
+
+Worth knowing for `expectations-from-events` and `competing-explanations`, which both
+depend across the same divide: whichever of them runs first pays this merge, and it gets
+no cheaper while the two stacks grow.
+
+### What the item is, in one line
+
+#227 narrows a look by a relation the world means rather than by an attribute spelled as
+a string, but the narrowing it buys is *which pass runs*, never *how much picture that
+pass reads*: `rectify` projects every plane over the whole searched patch of table
+whatever the statement asked about. This is where narrowing stops being a filter over
+what a detector returned and becomes less picture to search in the first place -- the
+developer's second mechanism on r3893602153, deferred out of #227 rather than dropped.
+
+### Where a clip's extent comes from, which is not simply the world
+
+The item's own ask names two routes, and measuring the plan's own record settles them
+differently:
+
+- **A predicate that names a region outright.** `InsideRegion(body, region)` carries a
+  `Region` -- a world entity with a pose and an `area` -- so its extent is read directly
+  and is the world's answer.
+- **The supporting-surface predicate.** `SupportedBy(piece, board_lid)` names a body
+  whose surface extent `WorkspaceSurface.of` already reads, from the declared
+  `supporting_surface` region or the body's own widest horizontal face. This is the half
+  the ask asked to check, and the answer is *yes for the table and no for the lid*.
+
+The reason is already on this roadmap. Under *"Finding the surface by looking"* the
+world's board pose is recorded as having drifted from the real one, which is why #221
+took the lid's **height** from the world and its **extent** from the detection, and why
+#225 used the *detected* board rather than the modelled one for what the board hides.
+Clipping the lid pass to the world's declared lid region would reintroduce exactly the
+constant that split removed. So a clip's source follows the same split: the table's
+extent from the world, which does not move; the lid's from the board detection of that
+very frame, grown by enough for a piece standing at the lid's edge still to fit in the
+picture -- a margin read off `KNOWN_PIECES` rather than chosen.
+
+### What is planned
+
+- `WorkspaceRegion` gains intersection and a margin, so two narrowings compose rather
+  than the last one winning.
+- `SceneRequest` gains the stretch of plane a look may search, filled by
+  `MontessoriPerceptionBackend` from the statement's predicates through
+  `LookRequest.related_by` -- the reader #227 built -- for `SupportedBy` and
+  `InsideRegion` alike.
+- `MontessoriPerceptionPipeline.rectify` takes its region from the search rather than
+  always the table's, and `searched_surfaces` resolves each pass's own region.
+
+**The invariant #222 states is kept**: a narrowing is an economy, never what makes an
+answer right. Every clip is a subset of what the statement already asserted, and
+`relations_hold` re-checks over what came back.
+
+### Seeing each condition, and why the viewer is a script and not a test
+
+The developer asked for the constraints to be visible one at a time, and for the viewing
+half not to be a test. Two pieces:
+
+- **`watch_narrowing.py`**, beside the existing `watch_captures.py` and
+  `watch_camera.py`, drawing the picture after each condition is added and holding each
+  step until a key is pressed. Each window is labelled with the statement so far,
+  verbalized through `verbalize_expression` with the perception backend -- so the label
+  reads *"Look for ..."* off the `Directive.LOOK_FOR` #222 added rather than off a
+  hand-written caption, which is the paper's own distinction between recalling and going
+  to look.
+- **A test with no window at all**, so it runs in CI. `ImageDisplay` is already an
+  abstract base with `OpenCvDisplay` as its one implementation, so a recording display
+  makes the step sequence, its labels and its regions assertable headlessly. That is the
+  existing seam being used rather than a new one cut for the test.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause: the region arithmetic
+on its own; the backend reading each predicate into a region; and the pipeline over the
+rendered scene and then the captures, where the measurement that matters is that a
+clipped look reports the same detections an unclipped one does for the surface asked
+about, and costs measurably less. Cost as a ratio to a same-run baseline, never in
+seconds, per what #232 recorded about this container's speed moving between runs by more
+than the difference being measured.
+
+### Landing hazards
+
+#223's `Footprint` -> `RectifiedFootprint` rename conflicts with this branch's edits to
+`pipeline.py` and `orthophoto.py`, the same mechanical way it does with #205, #221, #225,
+#232 and #236. #231 renames `LoosePieceDetector` to `EdgeFitDetector` and adds
+`RectifiedFrame`, which rectifies each plane and reads its edges once per frame; it is a
+sibling off #222, and a per-surface search region is the next thing that wants that
+mechanism, since a region that differs per pass is what makes a shared rectification
+non-trivial. #236 sits on #232 and edits `pipeline.py` too.
+
+### The bootstrap script's indentation fault is still unfixed
+
+`.claude/hooks/plan_item_bootstrap.py` writes item fields at four-space indentation while
+this plan's `plan.yaml` indents them by two, so `open` fails inside `save-plan.sh` with
+the error swallowed by `capture_output=True` -- exactly as #231 recorded on 2026-08-31 and
+#236 again on 2026-09-01. Worked around a third time by editing `plan.yaml` directly. It
+is the same family as #160 and still wants its own bug-fix pull request.
