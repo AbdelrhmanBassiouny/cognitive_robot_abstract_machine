@@ -22,7 +22,7 @@ and centimetre-scale noise, far too coarse to measure a thirty millimetre piece.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import cv2
 import numpy as np
@@ -37,7 +37,10 @@ from experiments.montessori.perception.detections import (
     ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.edges import EdgeDistances
-from experiments.montessori.perception.exceptions import BoardMissingFromWorld
+from experiments.montessori.perception.exceptions import (
+    BoardMissingFromWorld,
+    LookHasNoReferenceFrame,
+)
 from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
     Footprint,
@@ -68,9 +71,15 @@ from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
 from experiments.montessori.world import BOARD_SCALE
 from krrood.patterns.belief_source import BeliefSource
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.geometry import Color
+from semantic_digital_twin.world_description.geometry import (
+    Color,
+    VolumetricBoundingBox,
+)
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
@@ -1034,30 +1043,64 @@ class MontessoriPerceptionPipeline:
         patch = self.table.region if region is None else region
         return OrthophotoProjector(region=patch).project(frame, height)
 
-    def stated_region(self, request: SceneRequest) -> Optional[WorkspaceRegion]:
+    def stated_region(
+        self, request: SceneRequest, search: SurfaceSearch
+    ) -> Optional[WorkspaceRegion]:
         """
-        The stretch of the world a look's own statement says the thing sought lies in.
+        The stretch of one surface's own plane a look's statement says the thing sought
+        lies in.
 
         A relation is stated between things the world holds, so what it leaves in metres
         is read here, where the frame the detections are reported in is known, rather
-        than where the statement was compiled. Several of them compose: what is left is
-        the ground every one of them allows.
-
-        A relation that constrains no axis of this table leaves the patch unbounded
-        along it, which the surface being searched is what bounds.
+        than where the statement was compiled. Each is asked about the stretch this
+        surface was going to read rather than about the world, because a direction read
+        from where the camera stands runs across the world's own axes and no axis-
+        aligned patch holds everything such a direction allows, while the part of one
+        surface's plane on that side of a thing is a patch. Several of them compose,
+        each narrowing what the one before it left.
 
         :param request: What the look was asked for.
-        :return: The patch the statement leaves, or None where it states no placement.
+        :param search: The surface being searched, before this narrowing.
+        :raises LookHasNoReferenceFrame: If the statement says where the thing lies but
+            this pipeline reports its detections in no frame, which leaves the relation
+            nothing to be read against.
+        :return: The patch the statement leaves of this surface, or None where it leaves
+            none of it.
         """
-        if not request.placements:
-            return None
-        allowed = [placement.allowed_space for placement in request.placements]
+        if self.reference_frame is None:
+            raise LookHasNoReferenceFrame(type(request.placements[0]).__name__)
+        allowed = self._space_over(search)
+        for placement in request.placements:
+            allowed = placement.allowed_part_of(allowed)
+            if allowed is None:
+                return None
         return WorkspaceRegion(
-            minimum_x=max(space.x_interval.lower for space in allowed),
-            maximum_x=min(space.x_interval.upper for space in allowed),
-            minimum_y=max(space.y_interval.lower for space in allowed),
-            maximum_y=min(space.y_interval.upper for space in allowed),
+            minimum_x=allowed.x_interval.lower,
+            maximum_x=allowed.x_interval.upper,
+            minimum_y=allowed.y_interval.lower,
+            maximum_y=allowed.y_interval.upper,
             resolution=self.table.region.resolution,
+        )
+
+    def _space_over(self, search: SurfaceSearch) -> VolumetricBoundingBox:
+        """
+        The stretch of the world one pass of a surface reads: how far the surface itself
+        reaches, and how high above it a thing standing on it is reported.
+
+        A relation says where a thing stands rather than where its surface is, so the
+        height matters: read at the plane alone, a direction tilted away from it would
+        leave out ground a thing standing on that plane is allowed.
+
+        :param search: The surface being searched.
+        """
+        reach = search.region
+        standing = search.surface.height + self.piece_detector.piece_height
+        return VolumetricBoundingBox.from_array_bounds(
+            np.array([reach.minimum_x, reach.minimum_y, search.surface.height]),
+            np.array([reach.maximum_x, reach.maximum_y, standing]),
+            HomogeneousTransformationMatrix.from_xyz_rpy(
+                reference_frame=self.reference_frame
+            ),
         )
 
     def searched_surfaces(
@@ -1079,25 +1122,37 @@ class MontessoriPerceptionPipeline:
         :return: One entry per surface a piece can be found on that the request asked
             about and left anything of to search.
         """
-        narrowed_to = self.stated_region(request)
         if board is None:
-            searches = [SurfaceSearch(surface=self.table, narrowed_to=narrowed_to)]
+            searches = [SurfaceSearch(surface=self.table)]
         else:
             searches = [
-                SurfaceSearch(
-                    surface=self.table,
-                    supported_surfaces=(board,),
-                    narrowed_to=narrowed_to,
-                ),
-                SurfaceSearch(
-                    surface=self.lid, boundary=board, narrowed_to=narrowed_to
-                ),
+                SurfaceSearch(surface=self.table, supported_surfaces=(board,)),
+                SurfaceSearch(surface=self.lid, boundary=board),
             ]
-        return [
-            search
-            for search in searches
-            if request.searches(search.surface.name) and search.is_searched
+        asked_about = [
+            search for search in searches if request.searches(search.surface.name)
         ]
+        narrowed = [self._narrowed(search, request) for search in asked_about]
+        return [search for search in narrowed if search is not None]
+
+    def _narrowed(
+        self, search: SurfaceSearch, request: SceneRequest
+    ) -> Optional[SurfaceSearch]:
+        """
+        One surface's search, cut down to the stretch of its own plane the statement
+        allows.
+
+        :param search: The surface being searched, before the statement narrows it.
+        :param request: What the look was asked for.
+        :return: The narrowed search, or None where the statement leaves none of this
+            surface to read.
+        """
+        if not request.placements:
+            return search
+        allowed = self.stated_region(request, search)
+        if allowed is None:
+            return None
+        return replace(search, narrowed_to=allowed)
 
     def table_hidden_by(
         self, board: MontessoriBoardDetection, frame: RgbdFrame
@@ -1185,9 +1240,6 @@ class MontessoriPerceptionPipeline:
         :return: The pieces, the board, and its holes, as far as the request asked for
             them.
         """
-        stated = self.stated_region(request)
-        if stated is not None and not self.table.region.meets(stated):
-            return MontessoriScene(shapes=[], board=None)
         board = self.board_detector.detect(
             self.rectify(frame, self.lid.height, self.table.region),
             self.reference_frame,

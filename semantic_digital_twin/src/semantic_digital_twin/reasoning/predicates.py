@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -646,6 +647,25 @@ class PlacementRelation(Relation, ABC):
         """
         return self.allowed_space.contains(place)
 
+    def allowed_part_of(
+        self, space: VolumetricBoundingBox
+    ) -> Optional[VolumetricBoundingBox]:
+        """
+        The smallest box holding the part of a stretch of the world this relation
+        allows.
+
+        Asked about a stretch that is already bounded rather than about the world, a
+        relation can answer more tightly than :attr:`allowed_space` can: a direction
+        read from where a camera stands runs across the world's own axes, so no axis-
+        aligned box holds everything it allows, while the part of a bounded stretch that
+        lies on that side of a thing is itself bounded.
+
+        :param space: The stretch being narrowed.
+        :return: The part of it this relation allows, or None where it allows none of
+            it.
+        """
+        return space.intersection_with(self.allowed_space)
+
     def _stated(self, operand: Optional[Any], name: str) -> Any:
         """
         :param operand: What the statement holds that operand to be.
@@ -890,6 +910,68 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
             else:
                 upper[index] = place[index]
         return space_between(lower, upper, other.reference_frame)
+
+    def allowed_part_of(
+        self, space: VolumetricBoundingBox
+    ) -> Optional[VolumetricBoundingBox]:
+        """
+        The part of a stretch of the world that lies on this side of the other thing.
+
+        A direction read from anywhere but straight along the world's own axes leaves a
+        half space, which :attr:`allowed_space` can only answer as everything. Cut
+        against a stretch that is already bounded it is bounded too, and its corners are
+        the corners of that stretch on this side of the dividing plane together with
+        wherever that plane crosses its edges.
+
+        :param space: The stretch being narrowed.
+        :return: The part of it on this side, or None where none of it is.
+        """
+        corners = self._corners_of(space)
+        if not np.isfinite(corners).all():
+            return super().allowed_part_of(space)
+        other = position_of(self._stated(self.other, "other")).to_np()[:3]
+        beyond = (corners - other) @ self._direction()
+        allowed = [*corners[beyond > 0.0], *self._crossings(corners, beyond)]
+        if not allowed:
+            return None
+        return space_between(
+            np.min(allowed, axis=0),
+            np.max(allowed, axis=0),
+            space.origin.reference_frame,
+        )
+
+    @staticmethod
+    def _corners_of(space: VolumetricBoundingBox) -> np.ndarray:
+        """
+        :param space: The stretch to read.
+        :return: Its eight corners, as ``(8, 3)`` world coordinates in metres, ordered
+            so that two differing along one axis alone are an edge of it.
+        """
+        intervals = (space.x_interval, space.y_interval, space.z_interval)
+        return np.array(
+            list(
+                itertools.product(
+                    *((interval.lower, interval.upper) for interval in intervals)
+                )
+            )
+        )
+
+    @staticmethod
+    def _crossings(corners: np.ndarray, beyond: np.ndarray) -> List[np.ndarray]:
+        """
+        Where the plane dividing the two sides crosses the edges of a stretch.
+
+        :param corners: The stretch's corners, as :meth:`_corners_of` orders them.
+        :param beyond: How far along the direction each corner lies from the plane.
+        :return: One point per edge the plane crosses.
+        """
+        crossings = []
+        for one, other in itertools.combinations(range(len(corners)), 2):
+            if bin(one ^ other).count("1") != 1 or beyond[one] * beyond[other] >= 0.0:
+                continue
+            reached = beyond[one] / (beyond[one] - beyond[other])
+            crossings.append(corners[one] + reached * (corners[other] - corners[one]))
+        return crossings
 
     def _direction(self) -> np.ndarray:
         """

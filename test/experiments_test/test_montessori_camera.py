@@ -74,6 +74,80 @@ def test_a_frame_whose_images_are_not_registered_is_refused():
         )
 
 
+# %% where the camera looks from
+
+PICTURE_STEP = 0.1
+"""
+How far across the world these tests step to see which way the picture runs, in metres.
+"""
+
+
+def camera_hanging_above_the_origin() -> RgbdFrame:
+    """
+    An empty frame taken by a camera a metre above the world origin looking down, with
+    the picture's own right running along the world's negative y axis.
+    """
+    reference_frame_T_camera = np.array(
+        [
+            [0.0, -1.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, -1.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    return RgbdFrame(
+        color=np.zeros((480, 640, 3), dtype=np.uint8),
+        depth=np.ones((480, 640), dtype=np.float32),
+        intrinsics=CameraIntrinsics(100.0, 100.0, 320.0, 240.0),
+        reference_frame_T_camera=reference_frame_T_camera,
+    )
+
+
+def stepping_from_the_origin(frame: RgbdFrame, axis: int, towards: float) -> np.ndarray:
+    """
+    Where the world origin and a step from it along one of the point of view's own axes
+    land in the picture.
+
+    :param frame: The camera data to read.
+    :param axis: Which axis of the point of view to step along.
+    :param towards: Which way along it to step.
+    :return: The two pixels, as ``(2, 2)`` ``(x, y)`` pairs.
+    """
+    stepped = towards * PICTURE_STEP * frame.point_of_view().to_np()[:3, axis]
+    return frame.project(np.array([[0.0, 0.0, 0.0], stepped]))
+
+
+def test_the_point_of_view_faces_the_way_the_camera_looks():
+    """
+    A pose faces along its own x axis and a camera looks along its optical z axis, so
+    the two are the same direction said in the two conventions.
+    """
+    frame = camera_hanging_above_the_origin()
+
+    point_of_view = frame.point_of_view().to_np()
+
+    assert point_of_view[:3, 0] == pytest.approx(frame.reference_frame_T_camera[:3, 2])
+    assert point_of_view[:3, 3] == pytest.approx(frame.camera_position)
+
+
+def test_what_the_point_of_view_calls_right_runs_right_across_the_picture():
+    frame = camera_hanging_above_the_origin()
+
+    origin, to_the_right = stepping_from_the_origin(frame, axis=1, towards=-1.0)
+
+    assert to_the_right[0] > origin[0]
+    assert to_the_right[1] == pytest.approx(origin[1])
+
+
+def test_what_the_point_of_view_calls_up_runs_up_the_picture():
+    frame = camera_hanging_above_the_origin()
+
+    origin, upwards = stepping_from_the_origin(frame, axis=2, towards=1.0)
+
+    assert upwards[1] < origin[1]
+    assert upwards[0] == pytest.approx(origin[0])
+
+
 # %% reading transport-compressed camera messages
 
 COLOR_FORMAT_FIELD = "rgb8; jpeg compressed bgr8"

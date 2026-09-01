@@ -5,14 +5,16 @@ Run it as::
 
     python -m experiments.montessori.perception.watch_narrowing
 
-A statement is built up condition by condition -- what the piece rests on, which way it
-lies from one of the board's own holes, what colour it is -- and after each one the
-picture that is left to search is drawn: the camera's own image cut to it, and the
-rectified plane the detectors would actually read, with everything but a stated colour
-blacked out. Each window is named by how the statement reads so far, so what is on
-screen and what was asked for are the same sentence, and each step also reports what a
-look answering it finds. Press any key to add the next condition; press ``q`` or escape
-to stop.
+One statement says the whole of it -- what the piece rests on, which way it lies from
+one of the board's own holes, what colour it is, and what those things it is related to
+are -- and it is the reading of that statement that is watched: the backend takes it one
+stated condition at a time, and after each one the picture that is left to search is
+drawn, together with what a look answering that much of it reports. Two pictures per
+step: the camera's own image cut to what is left, and the rectified plane the detectors
+read, turned the way the camera sees it and with everything but a stated colour blacked
+out. Each window is named by how the statement reads so far, so what is on screen and
+what was asked for are the same sentence. Press any key for the next condition; press
+``q`` or escape to stop.
 
 Everything but the drawing is :class:`SearchNarrowing`, so a run with no window at all
 takes the same steps and can be checked without a screen.
@@ -22,21 +24,29 @@ from __future__ import annotations
 
 import argparse
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
 import cv2
 import numpy as np
-from typing_extensions import Any, Callable, List, Optional, Sequence, Tuple
+from typing_extensions import List, Optional, Tuple
 
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.captures import CAPTURE_DIRECTORY, SceneCapture
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
+from experiments.montessori.perception.overlay import (
+    CameraView,
+    DetectionOverlay,
+    DetectionView,
+    RectifiedView,
+    ViewFromAbove,
+)
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.hole_geometry import HOLE_NAME_BY_CATEGORY
 from experiments.montessori.perception.recorded_setup import (
+    SETUP_NAME,
     board_holes_in,
     lid_surface,
     recorded_world,
@@ -52,19 +62,19 @@ from experiments.montessori.perception.viewer import (
     QuitKey,
     scale_to_fit,
 )
-from krrood.entity_query_language.factories import an
+from krrood.entity_query_language.factories import an, variable
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
+    MontessoriScene,
     MontessoriShapeDetection,
 )
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.reasoning.predicates import (
+    Above,
     Colored,
-    InFrontOf,
     SupportedBy,
-)
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
@@ -81,15 +91,6 @@ class NarrowingView(StrEnum):
 
     CAMERA = "camera"
     RECTIFIED = "rectified"
-
-
-StatedCondition = Callable[[Any], Any]
-"""
-Something a statement can say about the thing it is looking for.
-
-Written as a call taking that thing, since a condition is stated about the statement's
-own variable and the variable does not exist until the statement does.
-"""
 
 
 @dataclass(frozen=True)
@@ -184,34 +185,38 @@ class SearchNarrowing:
     def steps(
         self,
         frame: RgbdFrame,
-        conditions: Sequence[StatedCondition],
+        statement: Match[MontessoriShapeDetection],
         board: Optional[MontessoriBoardDetection] = None,
     ) -> List[NarrowingStep]:
         """
-        Take the statement from saying nothing to saying every condition in turn.
+        Read one statement as it grows, from saying nothing about the piece it is
+        looking for to saying everything it says.
+
+        The statement is written whole and interpreted here rather than assembled a
+        condition at a time, so what is watched is one query being read by the backend
+        that answers it.
 
         :param frame: The camera data the look is taken from, which is what says where
             the board stands and so how far its lid reaches.
-        :param conditions: The conditions to add, in the order they are stated.
+        :param statement: What the look is being asked for.
         :param board: The board as this frame shows it, where it has already been found
-            -- which it has whenever a condition names one of its holes -- or None to
+            -- which it has whenever the statement names one of its holes -- or None to
             find it here.
-        :return: One step for the bare statement and one for each condition added.
+        :return: One step per condition the statement states about the piece, plus the
+            bare statement they grow from.
         """
         board = self.board_in(frame) if board is None else board
         backend = MontessoriPerceptionBackend(
             source=RecordedFrame(pipeline=self.pipeline, frame=frame)
         )
-        statement = an(MontessoriShapeDetection)()
-        taken = [self._step(statement, board, backend)]
-        for condition in conditions:
-            statement = statement.where(condition(statement.variable))
-            taken.append(self._step(statement, board, backend))
-        return taken
+        return [
+            self._step(said, board, backend)
+            for said in statement.one_condition_at_a_time()
+        ]
 
     def _step(
         self,
-        statement: Any,
+        statement: Match[MontessoriShapeDetection],
         board: Optional[MontessoriBoardDetection],
         backend: MontessoriPerceptionBackend,
     ) -> NarrowingStep:
@@ -238,18 +243,18 @@ class SearchNarrowing:
     def watch(
         self,
         frame: RgbdFrame,
-        conditions: Sequence[StatedCondition],
+        statement: Match[MontessoriShapeDetection],
         board: Optional[MontessoriBoardDetection] = None,
     ) -> List[NarrowingStep]:
         """
         Take the steps, drawing each one and holding it until a key is pressed.
 
         :param frame: The camera data the look is taken from.
-        :param conditions: The conditions to add, in the order they are stated.
+        :param statement: What the look is being asked for.
         :param board: The board as this frame shows it, where it has already been found.
         :return: The steps taken, however many of them were drawn.
         """
-        taken = self.steps(frame, conditions, board)
+        taken = self.steps(frame, statement, board)
         for step in taken:
             logger.info(
                 "%s -- %.3f m2 left to read, and %s in it",
@@ -267,7 +272,8 @@ class SearchNarrowing:
 
     def draw(self, step: NarrowingStep, frame: RgbdFrame) -> None:
         """
-        Put one step's two pictures on screen, each in a window named by the statement.
+        Put one step's two pictures on screen, each in a window named by the statement,
+        with what a look answering it found marked on both.
 
         A step that narrowed the look away from every surface has nothing to draw, and
         says so by drawing nothing.
@@ -277,18 +283,27 @@ class SearchNarrowing:
         """
         if self.display is None or step.region is None:
             return
+        answer = MontessoriScene(shapes=list(step.found))
+        overlay = DetectionOverlay()
+        camera = self.pipeline.workspace_over(step.region).clip(
+            overlay.draw(CameraView(frame=frame), answer), frame
+        )
+        rectified = overlay.draw(self.rectified_view(step, frame), answer)
         for view, picture in (
-            (
-                NarrowingView.CAMERA,
-                self.pipeline.workspace_over(step.region).clip(frame.color, frame),
-            ),
-            (NarrowingView.RECTIFIED, self._rectified(step, frame)),
+            (NarrowingView.CAMERA, camera),
+            (NarrowingView.RECTIFIED, rectified),
         ):
             self.display.draw(self.window_name(view, step), self._fitted(picture))
 
-    def _rectified(self, step: NarrowingStep, frame: RgbdFrame) -> np.ndarray:
+    def rectified_view(self, step: NarrowingStep, frame: RgbdFrame) -> DetectionView:
         """
-        The plane a step still searches, as the detectors would read it.
+        The plane a step still searches, as the detectors read it and the way round the
+        camera sees it.
+
+        A rectified image is indexed the way its patch is measured, which is a quarter
+        turn from the camera's own view of the same table, so it is turned back before
+        it is shown: a direction stated from where the camera stands is meant to read on
+        screen the way it was said.
 
         A colour is a narrowing like the others, so a step stating one has everything
         else blacked out: what is left is what a look asked for that colour marks.
@@ -297,15 +312,18 @@ class SearchNarrowing:
         :param frame: The camera data the look is taken from.
         """
         rectified = self.pipeline.rectify(frame, step.plane_height, step.region)
-        if step.request.color is None:
-            return rectified.image
-        return cv2.bitwise_and(
-            rectified.image,
-            rectified.image,
-            mask=self.pipeline.piece_detector.colors.color_mask(
-                rectified, step.request.color
-            ),
-        )
+        if step.request.color is not None:
+            rectified = replace(
+                rectified,
+                image=cv2.bitwise_and(
+                    rectified.image,
+                    rectified.image,
+                    mask=self.pipeline.piece_detector.colors.color_mask(
+                        rectified, step.request.color
+                    ),
+                ),
+            )
+        return ViewFromAbove(view=RectifiedView(frame=frame, orthophoto=rectified))
 
     @staticmethod
     def window_name(view: NarrowingView, step: NarrowingStep) -> str:
@@ -326,15 +344,21 @@ class SearchNarrowing:
         return scale_to_fit(picture, self.maximum_width, self.maximum_height)
 
 
-# %% the conditions this demonstration states
+# %% the statement this demonstration narrows
 
 
-def conditions_over(
-    world: World, board: Optional[MontessoriBoardDetection]
-) -> Tuple[StatedCondition, ...]:
+def look_for_the_cube_on_the_lid(
+    world: World, frame: RgbdFrame, board: MontessoriBoardDetection
+) -> Match[MontessoriShapeDetection]:
     """
-    The conditions the demonstration adds, each narrowing what is left of the one
-    before.
+    The statement the demonstration watches, written whole: the piece it is looking for,
+    the things it says that piece stands in relation to, and every one of those
+    relations.
+
+    Nothing is fetched out of the world beforehand. The lid and the hole are described
+    in the statement itself, by what the world calls them, and answering those
+    descriptions is the backend's own first move -- which is what lets the relations
+    that mention them narrow the look at all.
 
     Support first, because it is the narrowing the request language already had and the
     one the digital twin answers by itself: naming the surface names a stretch of a
@@ -343,37 +367,32 @@ def conditions_over(
     colour last, because it narrows what is worth fitting rather than where to fit it,
     and so is the one narrowing a picture of the region cannot show on its own.
 
-    *In front of* rather than *right of*, measured: on ``tracy_pickup_demo`` the cube
-    stands 25 mm in front of the square hole and the cylinder 40 mm behind it, while
-    both stand to the same side of it along the robot's own left-right axis. Which
-    direction is stated is one word, and the two pieces are told apart by this one.
+    The direction is read from where the camera stands, so left, right and above mean
+    what they mean on screen. Which of them tells the two pieces on the lid apart is
+    measured rather than assumed: on ``tracy_pickup_demo`` the cube stands above the
+    square hole in the picture and the cylinder to its right, so *above* leaves the cube
+    and *right of* leaves the cylinder.
 
-    :param world: The world holding the surfaces and holes the conditions name.
+    :param world: The world holding the surfaces the statement describes.
+    :param frame: The camera data the look is taken from, which is what says where the
+        directions are read from.
     :param board: The board as this look found it, which is what says where its holes
-        are, or None where it was not in view.
-    :return: One condition per step.
+        lie; they are put in the world here so the statement can describe one of them.
+    :return: The whole statement.
     """
-    lid = Body(name=lid_surface().name)
-    conditions = [lambda sought: SupportedBy(sought, lid)]
-    if board is not None:
-        square_hole = board_holes_in(world, board)[
-            HOLE_NAME_BY_CATEGORY[MontessoriShapeCategory.CUBE]
-        ]
-        conditions.append(
-            lambda sought: InFrontOf(
-                sought,
-                square_hole,
-                HomogeneousTransformationMatrix.from_xyz_rpy(
-                    reference_frame=world.root
-                ),
-            )
-        )
-    conditions.append(
-        lambda sought: Colored(
-            sought, KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE].color
-        )
+    board_holes_in(world, board)
+    lid = variable(Body, world.bodies)
+    square_hole = variable(Body, world.bodies)
+    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    sought = an(MontessoriShapeDetection)()
+    return sought.where(
+        lid.name == lid_surface().name,
+        square_hole.name
+        == PrefixedName(HOLE_NAME_BY_CATEGORY[cube.category], SETUP_NAME),
+        SupportedBy(sought.variable, lid),
+        Above(sought.variable, square_hole, frame.point_of_view(world.root)),
+        Colored(sought.variable, cube.color),
     )
-    return tuple(conditions)
 
 
 def main() -> None:
@@ -407,8 +426,9 @@ def main() -> None:
     )
     frame = SceneCapture.load(arguments.capture, arguments.directory).to_frame()
     board = narrowing.board_in(frame)
+    statement = look_for_the_cube_on_the_lid(world, frame, board)
     try:
-        narrowing.watch(frame, conditions_over(world, board), board)
+        narrowing.watch(frame, statement, board)
     finally:
         if narrowing.display is not None:
             narrowing.display.close()

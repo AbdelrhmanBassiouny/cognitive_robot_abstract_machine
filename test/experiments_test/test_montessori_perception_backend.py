@@ -193,6 +193,79 @@ def test_a_surface_left_unstated_narrows_nothing(
     assert request.supporting_surface is None
 
 
+def surfaces_of(pipeline: MontessoriPerceptionPipeline):
+    """
+    The bodies a statement can pick a surface out of by describing it.
+
+    :param pipeline: The pipeline whose surfaces they stand for.
+    """
+    return [Body(name=pipeline.table.name), Body(name=pipeline.lid.name)]
+
+
+def test_a_surface_the_statement_describes_is_read_as_the_one_it_describes(
+    pipeline: MontessoriPerceptionPipeline,
+):
+    """
+    A statement can say which surface it means by describing it -- the body the world
+    calls the lid -- rather than by handing that body over.
+
+    The description is answered out of the world it was given before any look is taken,
+    so what the relation says is a relation to something concrete and narrows the search
+    like any other.
+    """
+    surface = variable(Body, surfaces_of(pipeline))
+    statement = an(MontessoriShapeDetection)()
+    statement = statement.where(
+        surface.name == pipeline.lid.name,
+        SupportedBy(statement.variable, surface),
+    )
+
+    request = MontessoriPerceptionBackend.read_request(statement)
+
+    assert (
+        MontessoriPerceptionBackend.supporting_surface_asked_about(request)
+        == pipeline.lid.name
+    )
+
+
+def test_a_described_surface_is_answered_the_same_as_one_handed_over(
+    pipeline: MontessoriPerceptionPipeline, looking: MontessoriPerceptionBackend
+):
+    surface = variable(Body, surfaces_of(pipeline))
+    described = an(MontessoriShapeDetection)()
+    described = described.where(
+        surface.name == pipeline.lid.name,
+        SupportedBy(described.variable, surface),
+    )
+
+    found = list(described.evaluate(backend=looking))
+
+    assert found == list(
+        looking_for_something_supported_by(pipeline.lid).evaluate(backend=looking)
+    )
+
+
+def test_a_description_no_single_thing_answers_is_refused_rather_than_guessed_at(
+    pipeline: MontessoriPerceptionPipeline, looking: MontessoriPerceptionBackend
+):
+    """
+    Which surface a look searches has to be settled before it is taken, so a description
+    several surfaces answer is a condition this backend cannot resolve rather than one
+    of them picked.
+    """
+    surface = variable(Body, surfaces_of(pipeline))
+    statement = an(MontessoriShapeDetection)()
+    statement = statement.where(
+        surface.name.prefix == pipeline.lid.name.prefix,
+        SupportedBy(statement.variable, surface),
+    )
+
+    with pytest.raises(BackendCannotResolveCondition) as raised:
+        list(statement.evaluate(backend=looking))
+
+    assert raised.value.backend_type is MontessoriPerceptionBackend
+
+
 def test_a_condition_about_something_other_than_what_is_looked_for_is_refused(
     looking: MontessoriPerceptionBackend,
 ):

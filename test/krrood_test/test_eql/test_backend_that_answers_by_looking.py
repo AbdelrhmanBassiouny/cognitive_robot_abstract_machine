@@ -275,13 +275,126 @@ def test_an_unstated_attribute_is_what_the_look_fills_in(
     assert results == [CUBE_ON_THE_LID]
 
 
+# %% saying which thing by describing it
+
+
+def looking_for_something_standing_on_the_place_called(name: str):
+    """
+    A statement asking a look for whatever stands on a place it describes rather than
+    hands over.
+
+    :param name: What the world calls the place.
+    """
+    place = variable(Place, [TABLE, LID])
+    statement = an(Sighting)()
+    return statement.where(place.name == name, StandingOn(statement.variable, place))
+
+
+def test_a_thing_the_statement_describes_narrows_the_look_as_one_handed_over_does(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    A statement can say what it wants by relating it to something it describes -- the
+    place the world calls the lid -- rather than by naming that thing outright.
+
+    Nothing
+    is looked for to answer the description: it is answered out of the domain the
+    statement gave it, before the look, so the relation stating it is a relation to
+    something concrete.
+    """
+    results = list(
+        looking_for_something_standing_on_the_place_called(LID.name).evaluate(
+            backend=backend
+        )
+    )
+
+    assert backend.searched_place == LID
+    assert results == [CUBE_ON_THE_LID]
+
+
+def test_a_description_no_single_thing_answers_is_refused_rather_than_guessed_at(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    Which place a look searches has to be settled before it is taken, so a description
+    two places answer is a condition this backend cannot resolve rather than one of them
+    picked.
+    """
+    place = variable(Place, [TABLE, LID])
+    statement = an(Sighting)()
+    statement = statement.where(
+        place.name != "nowhere", StandingOn(statement.variable, place)
+    )
+
+    with pytest.raises(BackendCannotResolveCondition) as raised:
+        list(statement.evaluate(backend=backend))
+
+    assert raised.value.backend_type is BackendThatLooksAtTheWorld
+
+
+# %% reading a statement as it grows
+
+
+def test_a_statement_is_read_from_saying_nothing_to_saying_all_it_says():
+    statement = an(Sighting)()
+    statement = statement.where(
+        StandingOn(statement.variable, LID),
+        statement.variable.label == CUBE_ON_THE_LID.label,
+    )
+
+    said = statement.one_condition_at_a_time()
+
+    assert [len(step._where_conditions_) for step in said] == [0, 1, 2]
+    assert all(step.variable is statement.variable for step in said)
+
+
+def test_a_description_is_carried_by_every_step_rather_than_being_one_of_them():
+    """
+    A description of another thing is what gives a condition about the thing sought its
+    meaning, so it stands in every step rather than counting as a step of its own.
+    """
+    statement = looking_for_something_standing_on_the_place_called(LID.name)
+
+    said = statement.one_condition_at_a_time()
+
+    assert len(said) == 2
+    assert [len(step._where_conditions_) for step in said] == [1, 2]
+
+
+def test_each_condition_of_a_statement_narrows_what_a_look_answers(
+    backend: BackendThatLooksAtTheWorld,
+):
+    statement = an(Sighting)()
+    statement = statement.where(
+        StandingOn(statement.variable, TABLE),
+        statement.variable.label == DISK_ON_THE_TABLE.label,
+    )
+
+    answers = [
+        list(step.evaluate(backend=backend))
+        for step in statement.one_condition_at_a_time()
+    ]
+
+    assert answers == [
+        backend.sightings,
+        [CUBE_ON_THE_TABLE, DISK_ON_THE_TABLE],
+        [DISK_ON_THE_TABLE],
+    ]
+
+
 # %% what it refuses
 
 
-def test_a_condition_about_another_variable_is_refused_rather_than_dropped(
+def test_a_condition_about_a_variable_the_world_cannot_answer_is_refused(
     backend: BackendThatLooksAtTheWorld,
 ):
-    other = variable(Sighting, [CUBE_ON_THE_LID])
+    """
+    A condition about something other than the thing sought is answerable only out of
+    that thing's own domain, since a look cannot go and fetch it.
+
+    One with nothing in it to answer is refused rather than dropped.
+    """
+    other = variable(Sighting, [])
     statement = an(Sighting)()
     statement = statement.where(other.label == CUBE_ON_THE_LID.label)
 

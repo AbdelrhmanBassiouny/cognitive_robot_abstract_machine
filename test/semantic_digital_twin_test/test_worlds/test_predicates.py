@@ -31,6 +31,7 @@ from semantic_digital_twin.reasoning.predicates import (
     PlaceIsOccupied,
     Reachable,
     Stable,
+    space_between,
     SupportedBy,
     Supports,
     ViewDependentSpatialRelation,
@@ -1011,6 +1012,72 @@ def test_a_direction_running_across_the_worlds_axes_narrows_nothing_and_still_an
     assert relation.allowed_space.x_interval.lower == -np.inf
     assert relation.allowed_space.x_interval.upper == np.inf
     assert relation()
+
+
+def stretch_around_the_places(world: World) -> VolumetricBoundingBox:
+    """
+    A bounded stretch of the world holding all three places, which is the kind of thing
+    a search is about to read.
+
+    :param world: The world they stand in.
+    """
+    return space_between(
+        np.array([-1.0, -1.0, -0.5]), np.array([3.0, 1.0, 0.5]), world.root
+    )
+
+
+def test_a_direction_across_the_worlds_axes_narrows_a_stretch_that_is_bounded(
+    three_places,
+):
+    """
+    Asked about the world a tilted direction can answer nothing, since no axis-aligned
+    box holds a half space; asked about a stretch already bounded it answers the part of
+    it on its own side, which is what lets a search read less picture for a direction
+    stated from where a camera stands.
+    """
+    world, near, middle, far = three_places
+    turned = HomogeneousTransformationMatrix.from_xyz_rpy(
+        yaw=np.pi / 4, reference_frame=world.root
+    )
+    relation = InFrontOf(other=middle, point_of_view=turned)
+    stretch = stretch_around_the_places(world)
+
+    narrowed = relation.allowed_part_of(stretch)
+
+    assert narrowed.x_interval.lower > stretch.x_interval.lower
+    assert narrowed.x_interval.upper == pytest.approx(stretch.x_interval.upper)
+    assert narrowed.contains(far.global_pose.to_position())
+
+
+def test_a_stretch_wholly_against_a_direction_is_left_with_nothing_of_it(three_places):
+    world, near, middle, far = three_places
+    relation = Behind(other=middle, point_of_view=looking_along_x(world))
+
+    assert (
+        relation.allowed_part_of(
+            space_between(
+                np.array([1.5, -1.0, -0.5]), np.array([3.0, 1.0, 0.5]), world.root
+            )
+        )
+        is None
+    )
+
+
+def test_a_relation_that_can_say_where_it_allows_narrows_by_meeting_the_stretch(
+    three_places,
+):
+    """
+    A relation whose own stretch is bounded needs no cutting: what it leaves of another
+    is the ground the two share.
+    """
+    world, near, middle, far = three_places
+    relation = Near(place=middle, radius=0.5)
+
+    narrowed = relation.allowed_part_of(stretch_around_the_places(world))
+
+    assert narrowed == relation.allowed_space.intersection_with(
+        stretch_around_the_places(world)
+    )
 
 
 def test_a_relation_stated_about_nothing_says_what_it_allows_but_not_whether_it_holds(
