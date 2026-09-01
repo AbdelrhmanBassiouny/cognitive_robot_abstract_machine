@@ -189,33 +189,14 @@ items:
     session: https://claude.ai/code/session_01VVM3hJmz2nSnyTXmNJCith
     blockers:
       - >-
-          Fork PR #192 (branch `claude/match-query-interface-refactor-l55jym`) conflicts against
-          its base `main`, in:
+          stacked-pr-maintenance: Fork PR #192 (branch
+          `claude/match-query-interface-refactor-l55jym`) conflicts against its base `main` as of
+          the 2026-08-31 stacked-pr-maintenance pass, in:
           `krrood/src/krrood/entity_query_language/core/mapped_variable.py`,
           `krrood/src/krrood/entity_query_language/query/match.py`,
-          `test/krrood_test/test_eql/test_match.py`. Every stacked-pr-maintenance pass since
-          2026-08-28 has reported the identical three files and skipped the branch; the latest is
-          https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/192#issuecomment-5496244516
-          (2026-09-01). The `needs-resolution` label is the pass's own skip signal, not a second
-          blocker.
-      - >-
-          Diagnosed 2026-09-01 and not recorded before: the conflict is the landing-order
-          adjustment sections 13/14/22 predicted, arriving one branch late. This branch's
-          merge base with `main` is `15f31d1e4` - #182's branch *before* #182 merged `main` to
-          take #186's `Index` split - so #192 carries none of that split
-          (`SingleValueMapping`, `IndexByValue`, `IndexByExpression`), while it rewrites the
-          same `mapped_variable.py` into `HasSymbolicOperations`/`CanBehaveLikeAVariable`.
-          `main` has taken 199 commits since, three of them squarely in the conflicting files:
-          `3b4fb1477` (narrow `Index._type_` to a `List[X]` element type), `24664a748`
-          (move `number_like_field` off `CanBehaveLikeAVariable` onto `Attribute`) and
-          `bc8785b70` (`[EQLMatch] correct an to a`) plus the Do-operator work in `match.py`.
-      - >-
-          Not a blocker, recorded so a later pass does not re-derive it: #192 has no review
-          threads at all (`get_review_comments` totalCount 0), and its last CI run is all 23
-          checks green - but on `e9aae10be` of 2026-08-24, against a base nine days stale, so it
-          says nothing about the merged result. #192 carries no `in-review` label and was never
-          promoted, so there is no upstream pull request whose review could be the stall.
-          `where-query-rooted-attribute-no-filter` is `merged` and `is_ready: true`.
+          `test/krrood_test/test_eql/test_match.py`. It carries the `needs-resolution` label and a
+          routine comment on the PR:
+          https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/192#issuecomment-5478367428
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
@@ -305,6 +286,20 @@ items:
       different Sums have different signatures, then read the aggregated
       expression through the field that actually holds it rather than a name
       the class does not define.
+      Self-review round 2026-09-01 (roadmap section 24): the developer left an
+      unresolved thread on the closing assert of
+      test_ranking_names_the_ordered_by_aggregate_not_the_first_selected,
+      proposing the trailing "the sum" be spelled out in full. Measured in an
+      isolated venv: all 17 tests in the file pass as written, and the
+      reduction is correct by AggregatorRule.build's identity-keyed
+      coreference - tax is the same object in both the order key and the
+      selection. The ambiguity is real for a reader regardless (proximity
+      resolves "the sum" to the just-mentioned net, not the frame's tax three
+      clauses back), but fixing it is a second root cause in
+      AggregatorRule.build, not a one-line change to this PR. Replied on the
+      thread with the measurement and left it unresolved pending which of
+      "change the assert here" or "carve out a new item" the developer wants;
+      PR otherwise green and out of blockers, so status is unchanged.
   - id: chain-signature-reads-attribute-only-names
     title: "Bug: a structural signature cannot tell two chains apart unless every step is an attribute"
     branch: null

@@ -1071,3 +1071,46 @@ It is still `needs-resolution`: it conflicted against its old base before this p
 conflicts against `main` after it, and the maintenance pass never resolves a conflict on
 somebody else's branch. The item's blocker was rewritten to name the new base, since the
 one it carried described a parent that no longer exists.
+
+## 24. 2026-09-01: self-review on #196 — the reduction is correct by identity, but ambiguous to a reader
+
+`/plan-item-resolve match-query-ergonomics aggregate-signature-reads-a-missing-attribute`.
+The item had no live blocker — PR #196 is green, out of draft's CI, `mergeable_state:
+clean` — but carried one unresolved review thread, left by the developer on
+`test_set_of_ranking.py:337`, the closing line of
+`test_ranking_names_the_ordered_by_aggregate_not_the_first_selected`: the current assert
+ends `"...the sum of the amount of its net, and the sum"`, and the comment's body is the
+string `", and the sum of the amount of its tax."` — proposing the trailing mention be
+spelled out in full instead of reduced.
+
+**Measured before replying, not assumed.** Built an isolated Python 3.12 venv (`pip
+install -e krrood -e random_events -e probabilistic_model`, running the test file with
+`--confcutdir` to skip the workspace-wide root `conftest.py`, which needs packages this
+plan does not touch): all 17 tests in the file pass as written, this one included. The
+reduction is correct by the mechanism that produces it — `AggregatorRule.build`
+(`verbalization/grammar/aggregation/rules.py`) keys the coreference on object identity
+(`referent_id=node._id_`), and in this test `tax` is the literal same object in both
+`.ordered_by(tax, ...)` and the selection, so the trailing bare "the sum" resolves back to
+the frame's first, full mention of `tax` — exactly what `_highest_aggregate_modifier`'s
+docstring documents.
+
+**The comment is still onto something, just not a code bug.** To a reader, "the sum of the
+amount of its net, and the sum" reads as though the trailing "the sum" refers to the
+noun phrase right before it (net) — proximity is how anaphora normally resolves in
+English, and the true antecedent (tax) is three clauses back, named only in the opening
+superlative frame. That ambiguity is latent in `AggregatorRule.build`'s identity-only
+reduction and only becomes visible once two aggregates of *one kind* are both selected —
+precisely the case #196 adds coverage for. Fixing it needs the reduction to know when an
+identity match is one of several same-kind aggregates in scope and spell it out in full in
+that case, which is a second root cause layered on the one #196 closes, not a one-line
+change to it.
+
+**Left open rather than guessed at.** Replied on the thread
+(https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3908782904)
+with the measurement above and asked whether the developer wants the assert changed in
+this PR anyway, or the ambiguity carved into its own `mapping-semantics` item the way
+`chain-signature-reads-attribute-only-names` was carved out of this same PR's own
+description. Per the personal-notes review-comment convention, the thread stays
+unresolved until that answer lands — resolving it now would claim work not yet done or
+agreed to. No plan.yaml status change: PR #196 is otherwise unblocked, so `in_progress`
+still describes it accurately.
