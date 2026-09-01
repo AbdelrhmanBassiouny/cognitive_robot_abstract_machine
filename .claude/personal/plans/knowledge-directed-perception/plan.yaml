@@ -992,11 +992,12 @@ items:
     it parameters to conclude at all, and that item stacks on #159 in the same stack.'
 - id: episode-replayed-into-the-world
   title: Replay a recorded episode into the world so Segmind can say what happened
-  branch: segmind_rosbag_player
-  pull_request_number: null
+  branch: claude/episode-replayed-world-kickoff-6ye5bb
+  session: https://claude.ai/code/session_01UdpwcAQGVFCKEy8VA2iFwv
+  pull_request_number: 246
   track: events
   depends_on: []
-  status: not_started
+  status: in_progress
   notes: 'An expectation about where a thing now is comes from what was done to it, and on a recording
     nothing has been done to anything until the recording is replayed. Segmind already has the extension
     point: EpisodePlayer -> DataPlayer -> FilePlayer, with CSVEpisodePlayer and JSONPlayer as its two

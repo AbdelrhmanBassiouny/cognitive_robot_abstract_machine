@@ -35,7 +35,7 @@ perception_surface_from_description	knowledge-directed-perception
 claude/choose-detection-method-gf64yp	knowledge-directed-perception
 claude/knowledge-directed-perception-detector-zrm57t	knowledge-directed-perception
 perception_interactive_rule_tuning	knowledge-directed-perception
-segmind_rosbag_player	knowledge-directed-perception
+claude/episode-replayed-world-kickoff-6ye5bb	knowledge-directed-perception
 perception_expectations_from_events	knowledge-directed-perception
 perception_robokudo_detector	knowledge-directed-perception
 tracy_icra	knowledge-directed-perception

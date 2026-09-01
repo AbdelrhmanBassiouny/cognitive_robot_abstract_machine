@@ -3481,3 +3481,130 @@ radius (5), 0.25x for all of them with the colour (5). 460 passed, 1 skipped, 11
 across `test/experiments_test/` against 450 on the round before; krrood's and sdt's
 failing-and-erroring sets byte-identical to it.
 
+## `episode-replayed-into-the-world`: one more player, and the bag it can be measured on
+
+Kicked off 2026-09-01 in `auto` mode, as a draft pull request off
+`sdt_segmind_krrood_from_fast_monitor` (#244). The item depends on nothing in this plan and
+its note says it can start off `main`; it is based on #244 instead at the developer's
+instruction given with the kickoff, so that the segmind detector changes #169 carries - poses
+read numerically, regions tracked beside bodies, hole contact events - sit under it rather
+than colliding with it later. #244 is the library half of #169 (`semantic_digital_twin`,
+`segmind`, `krrood`, and the one `physics_simulators` change the Mujoco adapter needs), split
+out in the same session. Re-basing #169 onto it took the native-stack procedure
+`stacked-pr-maintenance` records (GitHub refuses a base change on a stack member with a 422):
+stack #173 was recorded, dissolved, #169 retargeted, and the stack re-created with #244 at its
+foot; the record is on `montessori-eql-stack`, not here. #244 is a draft,
+which `check_dependency_readiness.py` would not count as ready to stack on; the developer's
+instruction wins over that reading, and the cost is the ordinary one of a stack: this pull
+request shows #244's diff until #244 lands.
+
+The session's branch is `claude/episode-replayed-world-kickoff-6ye5bb`, not the manifest's
+`segmind_rosbag_player`; the manifest now records what exists. It arrived cut from
+`integration` - the #199 hazard, the eighth time on this plan - and was re-cut onto #244's tip
+before the first commit.
+
+`check_scope_overlap.py`'s question is answered without it here: no branch on this plan
+touches `segmind/players`, and the only in-flight branches that touch `segmind` at all are
+#169's stack, whose changes are to the detectors and their tests and are exactly what #244 now
+carries underneath this one. Compared by purpose: `montessori_event_replay` (#165) replays a
+*recorded demo* - its own event log and video - around queried events in the cramera viewer;
+it does not move a world and reads no bag. Nothing to fold.
+
+### What the item is, in one line
+
+A recording of the robot becomes an episode the world can be moved through, so that Segmind
+says what happened in it. `EpisodePlayer -> DataPlayer -> FilePlayer` takes a generator of
+frames, and a frame is a set of body poses; a rosbag player is one more `FilePlayer` and
+`EpisodeSegmenterExecutor` is not changed.
+
+### What a frame is, and where a pose comes from
+
+A bag is a stream of messages on `/tf_static`, `/tf` and `/joint_states`, not frames. The
+player samples it: at a fixed period along the recording's own clock it takes a snapshot of
+the latest transform of every frame and the latest position of every joint (sample-and-hold),
+and that snapshot is one `FrameData`. Its `time` is the bag's time in seconds, so
+`DataPlayer`'s real-time pacing works unchanged.
+
+Which transforms become body poses is decided by the world, not the bag. A transform names a
+frame; the frame names a body of the world (by the same name, or through an explicit mapping
+for a recording whose frame names differ from the world's); and only a body whose parent
+connection is a `Connection6DoF` can be posed at all - a robot link's frame, published by the
+robot state publisher from the very joint states the bag also carries, is a fixed or revolute
+connection in the world and is ignored as a pose. The pose is expressed in the world's root by
+composing the transform chain up to the recording's reference frame (`map`), the same walk
+`experiments`' `RecordedTransformTree.pose_of` does for the camera; that class lives on #202's
+side and reads `rosbag2_py`, so the walk is written once more here, in segmind, and the
+duplication is recorded rather than hidden. A body whose chain does not reach the reference
+frame in a given snapshot is simply not posed in that snapshot.
+
+Joint states are the second half of a frame. `FrameData` gains `joint_positions`, `DataPlayer`
+gains a `get_joint_positions` hook beside `get_objects_poses` (empty by default, which is what
+the CSV and JSON players mean), and one frame's poses and joint positions are applied under a
+single `World.batch_state_changes()` so the world notifies once per frame rather than once per
+degree of freedom. `JSONPlayer`'s dead `get_joint_states` stub goes.
+
+`DataPlayer.process_objects_data` keeps posing only `bodies_with_collision`; the rosbag player
+hands it only bodies it can pose, and the filter's reason (a frame-only body has nothing for a
+detector to see) holds here too.
+
+### Which library reads the bag
+
+`rosbags`, the pure-Python reader, rather than `rosbag2_py`. Three reasons, in order:
+segmind's tests run in CI and in a container with no ROS 2 and must stay able to; the test for
+this player has to *write* a bag, since the recordings are 4.7 GB, gitignored and absent from
+every container, and `rosbags` writes the same `mcap` files it reads; and segmind is a library
+that should not acquire a ROS dependency for a file format. `experiments`' camera reader keeps
+`rosbag2_py` because it deserializes camera messages a ROS installation is there for anyway;
+two readers over one format is a duplication worth folding later, in that direction.
+
+### What is being built
+
+- `segmind/players/rosbag_player.py`: `RosbagPlayer(FilePlayer)`, a `RosbagTopic` enum for
+  the three topics, a transform tree that holds the latest edge per child frame and composes a
+  chain, and the sampling generator.
+- `FrameData.joint_positions`, `DataPlayer.get_joint_positions`, one batched application per
+  frame; the JSON stub removed.
+- `rosbags` declared in `segmind/pyproject.toml`.
+- Exceptions of their own for a recording that carries none of the three topics, and for a
+  reference frame the recording never publishes.
+
+### Deliberately not done here
+
+- **No world is built from the bag.** The player poses bodies of a world it is given, like its
+  two siblings; what the world contains is the caller's.
+- **The camera topics are not read.** That is `experiments`' recordings module, and a capture is
+  the right unit for perception; this item is about motion.
+- **No expectation is armed.** What the events mean for where a thing should be is
+  `expectations-from-events`.
+- **The real bag is not replayed.** Only `tracy_pickup_demo` carries the robot at all (the
+  2026-08-31 measurement on this plan), it is not in any container, and the world it needs is
+  the Tracy world with the board. That run is the demo's, on the machine that holds the bag; this
+  branch makes it a one-line call and records the constraint on the item, as the plan asked.
+
+### The checkable outcome
+
+A bag written by the test with a static edge, a moving free body under it, and a moving joint
+replays into a world built for it: the free body's global pose is the composed chain at the
+last sample, the joint reads the last position, and the robot link frame changed nothing. Over
+the apartment world the detector tests already use, a bag that lifts the milk off its box and
+sets it back down yields `LossOfSupportEvent` and `SupportEvent` from an unchanged
+`EpisodeSegmenterExecutor`, which is the claim of the item.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause: the sampler over a bag
+written into `tmp_path` (frame count, times, the latest-wins rule); the mapping from a frame
+to bodies and joints of a small hand-built world (the chain, the ignored link, the unknown
+frame); the replay end to end (world moved; events logged over the apartment world). Run in
+the `uv sync --extra dev --python 3.12` environment, with `--orm-build never` since the
+giskardpy generator still stops on `DebugExpressionPublisher` here as on unmodified `main`.
+`scripts/format_docstrings.py` over every touched file. The environment this time: the `uv`
+on `PATH` is 0.8.17 and fails on the repository's `pyproject.toml`; `pip install -U uv` puts
+0.12.8 at `/usr/local/bin/uv`, which builds the workspace; `rosbags`, `black` and
+`docformatter` are installed into the venv by hand.
+
+### Landing hazards
+
+None on this plan: no other item touches `segmind/players` or `data_player.py`. On
+`montessori-eql-stack`, `montessori_event_replay` edits `test_segmind_detectors.py` heavily and
+`segmind/detectors`; this branch edits neither.
