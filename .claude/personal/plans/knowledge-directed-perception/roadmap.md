@@ -3121,3 +3121,138 @@ and fails on this repository's own `pyproject.toml`, identically on unmodified `
 That is the fourth different environment four consecutive items have found. `black` and
 `docformatter` are not in the dependency set, and `scripts/format_docstrings.py` shells
 out to them by name, so `.venv/bin` has to be on `PATH` and not merely be the interpreter.
+
+### `holes-fitted-like-pieces`: the law the observations broke, and the size that mends it
+
+Built 2026-09-01 as `172c10209` on #236. 17 new tests; `423 passed, 1 skipped, 5 xfailed`
+across `test/experiments_test/` against `400 passed, 1 skipped, 11 xfailed` on the parent
+-- the 11 layout tests, the 6 scale tests, seven marks off and one on, and nothing else
+moved.
+
+**The layout fit is what the item asked for, and on its own it did not work.** Laid over
+the real captures it settled at (0.755, 0.107) where the board stands at (0.806, 0.10),
+having slid one hole-column; two captures landed a half turn out; and the agreement
+landscape across the lid was flat at about 0.3, so which peak won was arbitrary. Drawn
+onto the picture the fitted outlines sat over the drawer fronts beside the openings.
+
+#### The mesh is not cut to the board these captures hold
+
+Four of the five dark patches the detector finds are unambiguously real holes, and they
+match the mesh's four corresponding hole centres as a **similarity of scale 0.854 with a
+2.1-2.6 mm residual**; forced to scale 1 the residual is 5 to 10 mm. Individual holes are
+smaller in the same proportion -- 40x40 seen as 32x38, 5x48 as 3x43, 36x42 as 27x36,
+22x42 as 17x38.
+
+**No rectification plane accounts for it**, which is what makes this a fact about the
+board rather than about the look. Sweeping the plane from 0.90 to 0.97 moves the ratio
+only from 0.86 to 0.80, monotonically the wrong way, and closing the gap would need the
+holes about 150 mm below the assumed lid -- below the 0.88 table the board stands on.
+Recorded so the plane is not swept again.
+
+#### A law, and the hypothesis that makes it hold
+
+The developer's direction, and it is the shape of the fix: where the holes lie relative to
+one another is cut into the board and cannot vary, so a look no placement of the layout
+reaches is evidence that the board is not the size the mesh was drawn at. The size is then
+the hypothesis that restores the law, and **it is persisted rather than re-derived every
+run** -- his words, "recorded somewhere such that it becomes persisted knowledge".
+
+`BoardDetector.measure_scale` is that measurement: it tries the sizes such a board could
+be and keeps the one whose holes land on the openings actually seen, scoring by the middle
+distance from an opening to the nearest hole rather than by edge agreement, which is far
+better conditioned. Across the six captures the median gap falls from 19 mm at the mesh's
+own size to 3.5 mm at 0.84, and the per-capture answers are 0.82, 0.84, 0.86, 0.87, 0.90
+and 0.92.
+
+Their middle, **0.865**, is `recorded_setup.BOARD_SCALE_AGAINST_THE_MESH`. It sits beside
+the surfaces the recordings were taken over rather than on the detector, because it is
+knowledge about a particular board and not about how a board is looked for: a scene built
+from the mesh is the mesh's own size and reads one, which is why all 29 rendered-scene
+tests pass untouched. `test_the_board_is_smaller_than_the_mesh_that_models_it` runs the
+measurement against each capture, so the number stays answerable rather than only
+asserted.
+
+Worth generalizing: **a model that cannot be fitted is a measurement of the model.** The
+first three hours of this item went into tuning a fit that could not converge, because the
+premise that the mesh gives the outlines "exactly" was read as beyond question. What
+settled it was drawing the fit onto the picture and looking at it.
+
+#### What it delivers, and the one thing it costs
+
+The board is found at **(0.805-0.806, 0.10) within a degree and a half of straight in all
+six captures**, against the parent's (0.791..0.804, 0.128..0.145) at -5.6 to -29.7 degrees;
+all six holes are reported, each verified darker than the board around it, where the parent
+found four or five and called most of them triangular prisms.
+
+`test_every_hole_in_the_board_is_found` needed that second half or it would have stopped
+measuring anything: a detector that reads its holes off a model reports the model's
+categories wherever it puts them, so counting them says only that a board was found. Its
+strict mark and `non_inserted_objects`' table-ghost mark are this item's to remove and both
+come off.
+
+**One mark goes on**, and it is a real regression this branch surfaced rather than caused.
+In `tracy_pickup_demo` a triangular prism laid over the round hole's own rim follows those
+edges at 0.682 against 0.673 for the cylinder sitting in that hole; the two claim one
+place, so the stronger is kept and the real piece is dropped. The ghost is found on the
+table pass before this change too, where a board read as standing forty millimetres from
+where it does happened to hide it. Nine parts in a thousand is not a difference any
+threshold can be set against, which is exactly `competing-explanations`' claim, so the mark
+names that item. Piece accuracy is otherwise unchanged: 7 missed and 4 reported that are
+not there, on both sides.
+
+#### The evaluator was extracted, and it is bit-identical
+
+`PieceMatcher`'s coarse-then-fine sweep is now `OutlineFitter` over a `KnownOutline`, which
+both `KnownPiece` and `BoardHoleLayout` are, and `points_along` moved to
+`planar_geometry.py` beside it. On a fixed input the extracted matcher returns the same
+piece, centre and agreement to six decimals as the parent's, which is what says the
+extraction is a move rather than a rewrite. Every difference the captures show downstream
+of it comes from the board's pose, not from the fit.
+
+Two things the layout needed that a piece does not. It is turned at **half a degree**
+where a piece is content with two: half a degree moves the outermost hole of a layout
+spanning 180 mm by under a millimetre, and two degrees would move it by three -- further
+than the fit's own reach, which is why the first version stalled at 0.75 agreement on
+synthetic edges it should have fitted perfectly. And its coarse pass compares at a third of
+the points, since six outlines are hundreds of them.
+
+#### What it costs, and where the cost is
+
+`detect` runs at **0.560 s per frame against the parent's 0.370 s** in the same run, which
+is over the node's 0.5 s period. Almost all of it is that a board can be stood any way
+round, so the turn must be searched over a whole circle.
+
+The fit is therefore searched twice over -- once roughly over every turn, once carefully
+around the answer. That reproduces the full search's placement **to the millimetre and the
+half degree in all six captures** at a third of its cost; sweeping the circle at the second
+pass's resolution costs 0.91 s and answers the same. Coarsening the position grid instead
+was tried and is not the saving: 6 mm breaks `non_inserted_objects` and 8 mm breaks five of
+six, for 0.2 s.
+
+Two ways to recover what remains, neither this item's: #231's `RectifiedFrame` would share
+the lid plane's edges, which this branch reads a second time; and a board that was found
+last frame is a believed place, which is #232's own mechanism and would replace the circle
+with a few degrees.
+
+#### Deliberately left standing
+
+`CrossSectionClassifier` and its `FootprintClassifier` base are now used by nothing but
+their own tests. `AGENTS.md` says to consult the developer before removing something used
+only in tests, so they are left and the removal is asked on the pull request -- the same
+call `surfaces-from-world` made about the widest-or-highest face.
+
+#### The environment, and the bootstrap fault again
+
+`uv sync --extra dev --python 3.12` works, but the `uv` on this container's `PATH` is
+0.8.17 and cannot parse this repository's `pyproject.toml`; `pip install -U uv` puts 0.12.8
+at `/usr/local/bin/uv`, which can. `docformatter` and `black` must be installed and the
+virtual environment's `bin` put on `PATH` before `scripts/format_docstrings.py` will run,
+and the formatter eats the space in ``:param points: ``(n, 2)``` -- worth a look after
+running it.
+
+`.claude/hooks/plan_item_bootstrap.py` still writes newly-added item fields at four-space
+indentation while this plan's `plan.yaml` indents them by two, so `open` produced invalid
+YAML and `save-plan.sh` refused it, with the error swallowed by `capture_output=True` --
+exactly as #231 recorded on 2026-08-31 and #236 again here. Worked around by editing
+`plan.yaml` directly. It is the same family as #160 and still wants its own bug-fix pull
+request.

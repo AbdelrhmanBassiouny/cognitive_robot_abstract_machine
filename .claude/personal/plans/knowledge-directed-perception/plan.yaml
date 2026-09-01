@@ -258,7 +258,37 @@ items:
   - pieces-looked-for-where-expected
   status: in_progress
   session: https://claude.ai/code/session_01TSK8GxG8qC6udSB7sjwzXf
-  notes: 'Measured again on 2026-08-31, and the item''s premise changed: the holes are not mislabelled,
+  notes: 'Built 2026-09-01 as 172c10209. The layout fit is what the item asked for and it works,
+    but the captures turned up a root cause the item did not know about: the board mesh is not cut
+    to the size of the board the recordings hold. The four dark patches that are unambiguously real
+    holes match the mesh''s four corresponding hole centres only as a similarity of scale 0.854 with
+    a 2.1-2.6 mm residual - 5-10 mm forced to scale 1 - individual holes are smaller in the same
+    proportion, and no rectification plane closes the gap, since doing so would put the holes below
+    the table the board stands on.
+
+    So the observation is evidence about the board rather than about the look, which is the
+    developer''s own direction: a law that must hold, and a hypothesis that makes it hold again.
+    BoardDetector.measure_scale finds the size at which the rigid layout lands on the openings
+    actually seen, answering 0.82, 0.84, 0.86, 0.87, 0.90 and 0.92 on the six captures, and their
+    middle is persisted as recorded_setup.BOARD_SCALE_AGAINST_THE_MESH = 0.865 - knowledge about a
+    particular board, so a scene built from the mesh still reads one. A test keeps that number
+    answerable from the captures rather than only asserted by them.
+
+    With it the board is found at (0.805, 0.10) within a degree and a half of straight in all six
+    captures, against the parent''s (0.791..0.804, 0.128..0.145) at -5.6 to -29.7 degrees, and all
+    six holes are reported over openings rather than five over the drawer fronts. Two expected-to-fail
+    marks come off - every hole found in all six, and non_inserted_objects'' table ghost - and one
+    goes on: in tracy_pickup_demo a prism laid over the round hole''s rim beats the cylinder sitting
+    in that hole by nine parts in a thousand and takes its place, which is competing-explanations''
+    to settle. The ghost is not new; a board read as standing 40 mm from where it does had been
+    hiding it. Piece accuracy is unchanged in aggregate (7 missed, 4 reported that are not there,
+    both sides). detect costs 0.560 s per frame against 0.370 s in the same run, over the node''s
+    0.5 s period; #231''s RectifiedFrame and a believed place carried from the previous frame are the
+    two ways to recover it. 423 passed, 1 skipped, 5 xfailed against 400/1/11 on the parent.
+    CrossSectionClassifier and FootprintClassifier are now used by nothing but their own tests and
+    are left standing, asked on the pull request.
+
+    Measured again on 2026-08-31, and the item''s premise changed: the holes are not mislabelled,
     they are mislocated, so pointing the per-piece fit at each contour in turn would not have fixed them.
     Placing the board mesh''s own six hole footprints at the board pose the detector reports puts them
     across roughly 180 mm of the lid''s length, which is what the board''s 282 mm mesh says; the five
