@@ -26,6 +26,7 @@ from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.spatial_types import Point3, Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.connections import PrismaticConnection
 from semantic_digital_twin.world_description.world_entity import Body
 from coraplex.exceptions import MissingToolFrame, MissingWaypoints
 from coraplex.robot_plans.mixins import (
@@ -154,41 +155,65 @@ class MoveGripperMotion(BaseMotion, GripperStallToleranceParameters):
 
     Setting this closes to the object's *actual* half-width instead (minus
     :attr:`squeeze_margin`), so the fingers stop where the object really is
-    and hold. Only used when :attr:`motion` is ``GripperState.CLOSE``;
-    ``None`` keeps the nominal fully-closed behaviour, which is still what
-    you want when closing an empty gripper.
+    and hold. Only used when :attr:`motion` is ``GripperState.CLOSE`` and the
+    gripper's fingers are prismatic, so that a width in meters is what its
+    joint positions mean (see :meth:`_sizes_goal_to_object`); otherwise the
+    nominal fully-closed goal is kept, which is also what you want when
+    closing an empty gripper.
     """
 
     squeeze_margin: float = 0.001
     """
-    How far past the object's half-width (in meters) the fingers are told to
-    close, so they press into it rather than merely touching. Kept small: it
-    is the *commanded* penetration, and the whole point of sizing the goal to
-    the object is to keep that penetration bounded and deliberate.
+    How far past the object's half-width (in meters) the fingers are told to close, so
+    they press into it rather than merely touching.
+
+    Kept small: it is the *commanded* penetration, and the whole point of sizing the
+    goal to the object is to keep that penetration bounded and deliberate.
     """
 
     def perform(self):
         return
 
+    def _sizes_goal_to_object(self, end_effector: EndEffector) -> bool:
+        """
+        Whether this motion sizes its closing goal to :attr:`grasped_object`.
+
+        The object's half-width is a length in meters, so assigning it to a finger
+        connection only means the intended thing where that connection is prismatic
+        and its position therefore *is* a finger displacement in meters. A revolute
+        gripper -- a Robotiq 85's knuckles, or the PR2's fingers -- states its
+        positions as angles, where the same number denotes something else entirely,
+        so it keeps the fully-closed goal its own model states.
+        """
+        if self.grasped_object is None or self.motion != GripperState.CLOSE:
+            return False
+        state = end_effector.get_joint_state_by_type(self.motion)
+        return all(
+            isinstance(connection, PrismaticConnection)
+            for connection in state.connections
+        )
+
     def _goal_state(self, end_effector: EndEffector) -> JointState:
         """
-        The finger joint state this motion commands: the GripperState's own
-        state, or -- when closing around a known :attr:`grasped_object` -- the
-        same finger connections remapped to that object's half-width.
+        The finger joint state this motion commands: the GripperState's own state, or --
+        when closing around a known :attr:`grasped_object` -- the same finger
+        connections remapped to that object's half-width.
 
-        The object's extent is measured in the gripper's own root frame, in
-        which the fingers slide along the y axis, so the y extent is the width
-        the fingers actually have to span. Measuring it there rather than in
-        the object's own frame keeps this correct for an object approached at
-        an angle, where its bounding box is not axis-aligned with the grasp.
+        The object's extent is measured in the gripper's own root frame, in which the
+        fingers slide along the y axis, so the y extent is the width the fingers
+        actually have to span. Measuring it there rather than in the object's own frame
+        keeps this correct for an object approached at an angle, where its bounding box
+        is not axis-aligned with the grasp.
         """
         state = end_effector.get_joint_state_by_type(self.motion)
-        if self.grasped_object is None or self.motion != GripperState.CLOSE:
+        if not self._sizes_goal_to_object(end_effector):
             return state
 
-        bounding_box = self.grasped_object.collision.as_bounding_box_collection_in_frame(
-            end_effector.root
-        ).bounding_box()
+        bounding_box = (
+            self.grasped_object.collision.as_bounding_box_collection_in_frame(
+                end_effector.root
+            ).bounding_box()
+        )
         half_width = (bounding_box.max_y - bounding_box.min_y) / 2
         opening = max(0.0, half_width - self.squeeze_margin)
         return JointState.from_mapping(
@@ -200,9 +225,7 @@ class MoveGripperMotion(BaseMotion, GripperStallToleranceParameters):
         arm = ViewManager().get_end_effector_view(self.gripper, self.robot)
 
         name = "OpenGripper" if self.motion == GripperState.OPEN else "CloseGripper"
-        closing_on_object = (
-            self.grasped_object is not None and self.motion == GripperState.CLOSE
-        )
+        closing_on_object = self._sizes_goal_to_object(arm)
         goal_state = self._goal_state(arm)
         joint_task = JointPositionList(
             goal_state=goal_state,

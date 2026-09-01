@@ -23,6 +23,7 @@ from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
+from coraplex.view_manager import ViewManager
 from coraplex.robot_plans.motions.gripper import (
     MoveGripperMotion,
     MoveTCPWaypointsMotion,
@@ -111,19 +112,21 @@ def test_pick_up_motion(immutable_model_world):
     assert JointPositionList in motion_charts
 
 
-def test_close_gripper_on_object_uses_a_tight_convergence_threshold(
+def test_a_revolute_gripper_keeps_its_nominal_closed_goal(
     immutable_simple_pr2_world,
 ):
     """
-    The commanded finger target for a grasped object stops only
-    ``squeeze_margin`` short of the object's surface, so the motion must not be
-    considered converged before the fingers are within that same margin -- the
-    default :class:`JointPositionList` threshold (1cm) is 10x looser than the
-    squeeze margin (1mm), which lets the plan advance to lifting before the
-    fingers have actually made contact.
+    Sizing the closing goal to the object assigns a width measured in meters to the
+    finger connections, which only means the intended thing where those connections are
+    prismatic.
+
+    The PR2's fingers are revolute, so the same number would be read as an angle. It
+    keeps the fully-closed goal its own model states instead, exactly as it did before
+    grasped-object sizing existed.
     """
     world, robot_view, context = immutable_simple_pr2_world
     milk = world.get_body_by_name("milk.stl")
+    gripper = ViewManager().get_end_effector_view(Arms.LEFT, robot_view)
 
     motion = MoveGripperMotion(
         motion=GripperState.CLOSE,
@@ -132,7 +135,10 @@ def test_close_gripper_on_object_uses_a_tight_convergence_threshold(
     )
     execute_single(motion, context=context)
 
-    assert motion.motion_chart.threshold <= motion.squeeze_margin * 2
+    assert (
+        motion.motion_chart.goal_state.target_values
+        == gripper.get_joint_state_by_type(GripperState.CLOSE).target_values
+    )
 
 
 def test_move_motion_chart(immutable_model_world):
