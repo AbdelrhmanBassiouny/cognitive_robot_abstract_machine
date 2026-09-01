@@ -2821,3 +2821,128 @@ this plan's `plan.yaml` indents them by two, so `open` fails inside `save-plan.s
 the error swallowed by `capture_output=True` -- exactly as #231 recorded on 2026-08-31 and
 #236 again on 2026-09-01. Worked around a third time by editing `plan.yaml` directly. It
 is the same family as #160 and still wants its own bug-fix pull request.
+
+### `search-clipped-to-a-predicates-region`: what it took, and the clip that was a different picture
+
+Built 2026-09-01 as pull request #238. 23 new tests; `437 passed, 1 skipped, 11 xfailed`
+across `test/experiments_test/` against `414 passed` on the merge of its two parents,
+which is the 23 added here and nothing else moved.
+
+#### A clip that moves the sampling grid is not a clip
+
+**The one finding worth more than the feature.** A rectified pixel samples the world
+point its patch's own lower corner puts it over, so a crop whose corner falls between the
+samples of the patch it came from rectifies *every* point half a pixel away from where
+the uncropped pass had it. That is not less of the same picture; it is a different one.
+
+It showed up as a regression the first run caught: on `tracy_pickup_demo` the lid pass
+reported a second cylinder where the shipped branch reported a cube. What gave the cause
+away was that it was **not monotonic in the size of the crop** -- 0 mm and 100 mm of
+overhang kept the cube, 21 mm and 45 mm lost it -- which no amount of "the crop is too
+tight" explains.
+
+| overhang | unaligned | on the surface's own grid |
+| --- | --- | --- |
+| 0 mm | cube 0.716, cylinder 0.662 | cube 0.664, cylinder 0.673 |
+| 21 mm | cylinder 0.728, cylinder 0.659 | cube 0.664, cylinder 0.673 |
+| 45 mm | cylinder 0.728, cylinder 0.659 | cube 0.664, cylinder 0.673 |
+| 100 mm | cube 0.716, cylinder 0.662 | cube 0.664, cylinder 0.673 |
+
+The right-hand column is what the *unclipped* pass reports for those two pieces,
+agreement for agreement. So `WorkspaceRegion.intersection` answers on its receiver's own
+grid -- the shared ground taken out to the nearest sample, never in -- and every call
+site is arranged so the receiver is the on-lattice one. The cube and the cylinder scoring
+within 0.012 of each other at that seed is what made a half-pixel shift visible at all,
+and that fragility is `competing-explanations`' to fix rather than this item's.
+
+Worth generalizing beyond this item: **anything that re-frames a rectification has to
+land on the same lattice**, and the cheap way to find out that it does not is to vary the
+crop and check the answer is flat rather than merely plausible.
+
+#### What the clip costs, and what it is worth
+
+Measured over all six captures in one run, against the same pipeline with the clip taken
+out, so the columns are comparable:
+
+| what the statement says | unclipped | clipped |
+| --- | --- | --- |
+| nothing | 0.273 s/frame | 0.207 s/frame |
+| supported by the lid | 0.118 s/frame | 0.056 s/frame |
+
+Same 20 and 6 pieces in every column. So the clip halves what #222's supporting-surface
+narrowing already bought, and a look that states the surface costs a fifth of one that
+states nothing and is unclipped. It helps a look that states nothing too, because the lid
+pass is clipped to the board either way.
+
+It is also a precision win the item did not ask for: on that capture the lid pass reports
+6 detections unclipped, three of them the ghost prisms `competing-explanations` owns, and
+2 clipped. Nothing was tuned to get that -- the ghosts simply lie outside the board.
+
+#### Where the extent comes from, as the plan predicted
+
+The kickoff section above called the split -- the table's extent from the world, the
+lid's from the detection -- and building it bore it out. `SurfaceSearch` answers it from
+what it already carried: `boundary` is the lid as it was *seen*, which is exactly the
+extent the drift makes the world unable to state, and the overhang is
+`LARGEST_PIECE_RADIUS`, read off `KNOWN_PIECES` rather than chosen.
+
+#### The board is looked for across everything the statement allows
+
+A look narrowed to the lid still has to find the board, because where the board stands is
+what the lid's own extent is read from. So the board pass is clipped by a stated region
+but never by a stated surface, and one of the three rectifications a frame costs is not
+narrowed by support at all. That is recorded rather than designed around: clipping it to
+the world's declared board region is precisely the constant this plan removed.
+
+#### Two things the build needed that the plan had not
+
+- **`recorded_setup` gained the world its own surfaces describe.** A relation is stated
+  between entities, and a recording carries no world to name any, so a statement about a
+  capture had nothing to be written over -- and a detached `Region` cannot even report
+  its own bounding box, since `transform_to_origin` reads the world off its frame. The
+  two bodies carry the very names `table_surface` and `lid_surface` record, so
+  `WorkspaceSurface.of_body` measures them back to what those functions state.
+- **A source says what frame it reports its detections in.** A backend that declares a
+  relation as narrowing promises to check it over its own answer, and a region can only
+  be read in metres against the frame the things it is stated about are placed in. So
+  `MontessoriSceneSource` answers that frame, and `relations_hold` raises
+  `LookHasNoReferenceFrame` rather than quietly not checking.
+
+#### #229's tip was merged in for four sentences
+
+#227 took #229 in before it fixed the wordings a `Triple` derives from a class name that
+is not verb-first, so a support relation stated here verbalized as *"it supports by a
+specific Body"*. The demonstration names its windows by how the statement reads, so an
+ungrammatical clause is not cosmetic here. Merged rather than waited on, per this plan's
+standing rule; `predicates.py` is byte-identical to #229's tip afterwards, and its one
+failing test and thirteen collection errors reproduce on #229's own branch.
+
+#### Seeing each condition, and why the viewer is a script
+
+`watch_narrowing.py` draws the picture left after each condition and holds it until a key
+is pressed, naming every window by how the statement reads so far -- through
+`verbalize_expression` with the perception backend, so it opens with the
+`Directive.LOOK_FOR` #222 added rather than a caption somebody wrote. On
+`tracy_pickup_demo`: 0.635 m2, then 0.061, then 0.024.
+
+`ImageDisplay` was already an abstract base with `OpenCvDisplay` as its one
+implementation, so the test drives the same run through a display that records what it
+was handed. The step sequence, the window names and the sizes of the pictures are checked
+in CI with no screen, and no test opens a window.
+
+#### The environment, which is worse again than #232 recorded
+
+#232 recorded `/usr/local/bin/uv` (0.12.7) as the way round this repository's
+`pyproject.toml` defeating uv 0.8.17. **There is no such binary in this container**, and
+the `uv` on `PATH` is 0.8.17, which fails identically on unmodified `main`. Installing uv
+0.12.8 from `astral.sh` into a scratch directory builds the whole workspace. Worth
+recording as the third different environment three consecutive items have found.
+
+#### Landing hazard worth more than the mechanical ones
+
+#231's `RectifiedFrame` rectifies each plane and reads its edges once per frame, however
+many detectors ask for them. A region that now differs per pass is what makes that
+sharing non-trivial: two detectors asking for the same plane may no longer be asking for
+the same picture, so what is shared has to be keyed by the region as well as by the
+height. #223's `Footprint` rename conflicts the usual mechanical way, and #236 edits
+`pipeline.py` too.
