@@ -748,12 +748,7 @@ class Connection6DoF(Connection):
             spatial types (e.g. ``Pose``) must be converted with their own
             ``to_homogeneous_matrix()`` before being assigned here.
         """
-        parent_T_child = self._world.transform(transformation, self.parent)
-        local_kinematics = (
-            self.parent_T_connection_expression.inverse()
-            @ parent_T_child
-            @ self.connection_T_child_expression.inverse()
-        )
+        local_kinematics = self._calculate_local_kinematics(transformation)
         position = local_kinematics.to_position()
         orientation = local_kinematics.to_rotation_matrix().to_quaternion()
         with self._world._world_lock:
@@ -848,7 +843,6 @@ class WheeledDrive(ActiveConnection, HasUpdateState, ABC):
     Active DoF describing rotation around the robot's z-axis.
     """
 
-
     @property
     def origin(self) -> HomogeneousTransformationMatrix:
         return super().origin
@@ -877,13 +871,7 @@ class WheeledDrive(ActiveConnection, HasUpdateState, ABC):
 
         :param transformation: The desired parent-to-child origin.
         """
-        if isinstance(transformation, np.ndarray):
-            transformation = HomogeneousTransformationMatrix(data=transformation)
-        local_kinematics = (
-            self.parent_T_connection_expression.inverse()
-            @ transformation
-            @ self.connection_T_child_expression.inverse()
-        )
+        local_kinematics = self._calculate_local_kinematics(transformation)
         position = local_kinematics.to_position()
         roll, pitch, yaw = local_kinematics.to_rotation_matrix().to_rpy()
         with self._world._world_lock:

@@ -181,7 +181,7 @@ class ElevatorNavigation(ActionDescription):
     @property
     def _pose_infront_of_elevator(self):
         return Pose.from_xyz_rpy(
-            x=float(self.elevator.hole_direction.to_np()[0])
+            x=self.elevator.hole_direction[0]
             * (self.elevator.scale.x / 2 + self.exit_clearance),
             z=self._height_in_cabin,
             reference_frame=self.elevator.root,

@@ -102,7 +102,7 @@ from dataclasses import dataclass, field
 class ProduceBox(HasCaseAsRootBody):
     produces: List[Produce] = field(default_factory=list)
     
-    @classmethod
+    @classproperty
     def _hole_direction_axis(self) -> Vector3:
         return Vector3.Z()
 ```

@@ -12,7 +12,7 @@ from typing_extensions import Tuple
 
 
 @dataclass
-class MissingOrmGeneratorError(DataclassException, FileNotFoundError):
+class MissingORMGeneratorError(DataclassException, FileNotFoundError):
     """
     Raised when the script that generates a package's ORM interface is not there.
     """

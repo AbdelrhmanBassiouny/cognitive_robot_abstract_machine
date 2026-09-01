@@ -17,7 +17,6 @@ from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     ShapeSource,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.exceptions import DuplicateEntityNameError
 from semantic_digital_twin.exceptions import WorldHasMultipleTfPublishersError
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World

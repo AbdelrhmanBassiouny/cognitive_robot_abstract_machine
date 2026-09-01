@@ -132,8 +132,7 @@ class RepeatUntil(Goal):
         instead of holding the task at the start line, and the monitor is armed again
         for the next attempt.
         """
-        self.add_node(self.task)
-        self.add_nodes([self.retry_trigger_monitor, self.stop_retry_monitor])
+        self.add_nodes([self.task, self.retry_trigger_monitor, self.stop_retry_monitor])
 
         # Each observation is compared against True, so that an undecided Unknown counts
         # as neither, and the results combine as plain booleans.
@@ -175,16 +174,11 @@ class RepeatUntil(Goal):
             observation=sm.if_cases(
                 cases=[
                     (
-                        sm.Scalar(
-                            self.task.observation_variable == sm.Scalar.const_true()
-                        ),
+                        self.task.observation_variable.is_true(),
                         sm.Scalar.const_true(),
                     ),
                     (
-                        sm.Scalar(
-                            self.stop_retry_monitor.observation_variable
-                            == sm.Scalar.const_true()
-                        ),
+                        self.stop_retry_monitor.observation_variable.is_true(),
                         sm.Scalar.const_false(),
                     ),
                 ],

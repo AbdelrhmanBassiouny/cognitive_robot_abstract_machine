@@ -842,22 +842,6 @@ class World(HasSimulatorProperties):
         """
         return list(self.kinematic_structure.nodes())
 
-    def get_duplicate_kinematic_structure_entity_names(
-        self,
-    ) -> Dict[str, List[KinematicStructureEntity]]:
-        """
-        :return: mapping from name to the entities sharing it, for every name held by
-            more than one kinematic structure entity in this world.
-        """
-        entities_by_name: Dict[str, List[KinematicStructureEntity]] = {}
-        for entity in self.kinematic_structure_entities:
-            entities_by_name.setdefault(str(entity.name), []).append(entity)
-        return {
-            name: entities
-            for name, entities in entities_by_name.items()
-            if len(entities) > 1
-        }
-
     @property
     def kinematic_structure_entities_topologically_sorted(
         self,

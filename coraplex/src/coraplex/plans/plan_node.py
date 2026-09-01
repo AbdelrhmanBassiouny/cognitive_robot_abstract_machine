@@ -649,6 +649,9 @@ class ActionNode(DesignatorNode):
         """
         Create the ExecutionData and logs additional information about the execution of
         this node.
+
+        .. note: With the current implementation, the exact recording of execution data is not possible. So this is
+        not called at the moment.
         """
         robot_pose = self.plan.robot.root.global_pose
         exec_data = ExecutionData(robot_pose, self.plan.world.state._data)
@@ -683,19 +686,12 @@ class ActionNode(DesignatorNode):
         return None
 
     def notify(self):
-        #TODO: Notify is called when the executable is created nut this is not when we want to record the data,
-        # might be good to move this to node callbacks
-
-        self.create_execution_data_pre_perform()
-
         if not self.children:
             self.action.expand()
 
         # recursively expand nested actions, conditions are only evaluated during execution
         for child in self.children:
             child.notify()
-
-        self.update_execution_data_post_perform()
 
     @property
     def body_children(self) -> List[PlanNode]:

@@ -22,7 +22,6 @@ from semantic_digital_twin.callbacks.callback import (
     StateChangeCallback,
     ModelChangeCallback,
 )
-from semantic_digital_twin.exceptions import DuplicateEntityNameError
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
@@ -238,7 +237,6 @@ class TFPublisher(StateChangeCallback):
 
     def __post_init__(self):
         super().__post_init__()
-
 
         self.tf_pub = self.node.create_publisher(TFMessage, self.tf_topic, 10)
         sleep(0.2)

@@ -62,7 +62,7 @@ class PausedWhileTrue(MonitoredGoal):
     """
 
     def wire_monitor(self) -> None:
-        self.monitored_node.pause_condition = self.monitor.observation_variable
+        self.monitored_node.pause_condition = trinary_logic_or(self.monitor.observation_variable, self.monitored_node.pause_condition)
 
 
 @dataclass(repr=False, eq=False)

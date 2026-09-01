@@ -942,25 +942,6 @@ class DuplicateWorldEntityError(UsageError):
             "to retrieve all matches."
         )
 
-
-@dataclass
-class DuplicateEntityNameError(UsageError):
-    duplicate_names: Dict[str, List[KinematicStructureEntity]]
-
-    def error_message(self) -> str:
-        groups = [
-            f"{name!r} ({len(entities)} entities)"
-            for name, entities in self.duplicate_names.items()
-        ]
-        return f"World contains kinematic structure entities with duplicate names: {', '.join(groups)}."
-
-    def suggest_correction(self) -> str:
-        return (
-            "rename the affected entities, or give them distinct prefixes, so that "
-            "each kinematic structure entity has a unique name."
-        )
-
-
 @dataclass
 class DuplicateRobotAssignmentsError(UsageError):
     """

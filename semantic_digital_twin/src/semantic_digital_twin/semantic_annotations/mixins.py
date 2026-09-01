@@ -8,6 +8,7 @@ import numpy as np
 import trimesh
 from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.entity_query_language.factories import variable_from, entity, variable, an
+from krrood.ormatic.utils import classproperty
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import recursive_subclasses
 from probabilistic_model.distributions.gaussian import GaussianDistribution
@@ -1242,7 +1243,7 @@ class HasCaseAsRootBody(HasSupportingSurface):
     A mixin class for semantic annotations that have a case as root body.
     """
 
-    @classmethod
+    @classproperty
     @abstractmethod
     def _hole_direction_axis(cls) -> Vector3:
         """
@@ -1264,7 +1265,7 @@ class HasCaseAsRootBody(HasSupportingSurface):
                 you can put something into the drawer.
         """
         return Vector3.from_iterable(
-            self._hole_direction_axis().to_np(), reference_frame=self.root
+            self._hole_direction_axis.to_np(), reference_frame=self.root
         )
 
     @classmethod
@@ -1281,7 +1282,7 @@ class HasCaseAsRootBody(HasSupportingSurface):
             scale.x - wall_thickness,
             scale.y - wall_thickness,
             scale.z - wall_thickness,
-        ).to_simple_event(cls._hole_direction_axis(), wall_thickness)
+        ).to_simple_event(cls._hole_direction_axis, wall_thickness)
 
         container_event = outer_box.as_composite_set() - inner_box.as_composite_set()
 

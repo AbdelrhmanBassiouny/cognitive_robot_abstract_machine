@@ -160,7 +160,7 @@ class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
     a control panel for selecting wash cycles.
     """
 
-    @classmethod
+    @classproperty
     def _hole_direction_axis(cls) -> Vector3:
         return Vector3.NEGATIVE_X()
 
@@ -658,7 +658,7 @@ class DoubleDoor(SemanticAnnotation):
 
 @dataclass(eq=False)
 class Drawer(Furniture, HasCaseAsRootBody, HasHandle, HasMechanicalJoint):
-    @classmethod
+    @classproperty
     def _hole_direction_axis(cls) -> Vector3:
         return Vector3.Z()
 
@@ -670,7 +670,7 @@ class Elevator(HasCaseAsRootBody, HasDoors, HasMechanicalJoint):
     the elevator to other floors.
     """
 
-    @classmethod
+    @classproperty
     def _hole_direction_axis(cls) -> Vector3:
         return Vector3.NEGATIVE_X()
 
@@ -738,7 +738,7 @@ class CounterTop(Furniture, HasSupportingSurface, HasSink):
 
 @dataclass(eq=False)
 class Cabinet(Furniture, HasCaseAsRootBody, HasDoors, HasDrawers):
-    @classmethod
+    @classproperty
     def _hole_direction_axis(cls) -> Vector3:
         return Vector3.NEGATIVE_X()
 
@@ -1299,7 +1299,7 @@ class TrashCan(HasCaseAsRootBody, Furniture):
     Abstract class for Trash Can.
     """
 
-    @classmethod
+    @classproperty
     def _hole_direction_axis(cls) -> Vector3:
         return Vector3.Z()
 
