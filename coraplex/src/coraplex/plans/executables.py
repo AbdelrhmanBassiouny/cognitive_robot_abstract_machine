@@ -73,6 +73,12 @@ class Executable:
             executable.execute()
 
 
+DEFAULT_MAX_TICKS_PER_MOTION_MAPPING: int = 2000
+"""
+Ticks a single motion mapping is given before the simulated tick loop gives up on it.
+"""
+
+
 @dataclass
 class GiskardExecutable(Executable):
     """
@@ -117,27 +123,24 @@ class GiskardExecutable(Executable):
 
     real_time_pacing: ClassVar[bool] = False
     """
-    Whether the simulated tick loop is paced to wall-clock time
-    (via :class:`~giskardpy.executor.SimulationPacer`) instead of running as fast
-    as the QP solve allows, managed by
+    Whether the simulated tick loop is paced to wall-clock time (via
+    :class:`~giskardpy.executor.SimulationPacer`) instead of running as fast as the QP
+    solve allows, managed by :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+    """
+
+    max_ticks_per_motion_mapping: ClassVar[int] = DEFAULT_MAX_TICKS_PER_MOTION_MAPPING
+    """
+    Per-motion tick budget for :meth:`_execute_simulation`'s tick loop, managed by
     :py:class:`pycram.motion_executor.ExecutionEnvironment`.
-    """
 
-    max_ticks_per_motion_mapping: ClassVar[Optional[int]] = None
-    """
-    Per-motion tick budget for :meth:`_execute_simulation`'s tick loop,
-    managed by :py:class:`pycram.motion_executor.ExecutionEnvironment`.
-    ``None`` lets the loop tick until the motion ends.
-
-    The overall loop bound is this value multiplied by the number of motion
-    mappings, so a stuck motion is bounded to roughly
-    ``max_ticks_per_motion_mapping`` ticks before :class:`MotionDidNotFinish`
-    is raised, instead of hanging (or taking minutes) indefinitely.
+    A motion that never reaches its end monitor gives up after
+    :attr:`tick_limit` ticks and raises :class:`MotionDidNotFinish`, so it can
+    never run forever.
 
     Matters most together with ``real_time_pacing``: a paced tick sleeps for a
-    full control period, so a budget of 2000 ticks per mapping is ~40 s of wall
-    clock *per mapping* before a stuck motion gives up, during which the robot
-    simply appears frozen. Keep it low when pacing is on.
+    full control period, so the default budget is ~40 s of wall clock *per
+    mapping* before a stuck motion gives up, during which the robot simply
+    appears frozen. Keep it low when pacing is on.
     """
 
     _current_motion_state_chart: MotionStatechart = field(init=False, default=None)
@@ -327,20 +330,29 @@ class GiskardExecutable(Executable):
 
     def _build_pacer(self) -> Pacer:
         """
-        The pacer for the control loop: simulated time when the context knows
-        how to read a simulation clock, otherwise wall-clock time if
-        ``real_time_pacing`` is on and no pacing at all if it is not.
+        The pacer for the control loop: simulated time when the context knows how to
+        read a simulation clock, otherwise wall-clock time if ``real_time_pacing`` is on
+        and no pacing at all if it is not.
 
-        Pacing against a simulation that cannot hold real time keeps one
-        control cycle of simulation between commands, rather than letting the
-        controller outrun the plant by however far the simulation happens to
-        be lagging.
+        Pacing against a simulation that cannot hold real time keeps one control cycle
+        of simulation between commands, rather than letting the controller outrun the
+        plant by however far the simulation happens to be lagging.
         """
         if self.context.simulation_clock is not None:
             return SimulationTimePacer(simulation_clock=self.context.simulation_clock)
         if GiskardExecutable.real_time_pacing:
             return RealTimePacer()
         return NoPacing()
+
+    @property
+    def tick_limit(self) -> int:
+        """
+        Ticks the simulated loop gives this executable's motions in total before it
+        gives up on them.
+        """
+        return (
+            len(self.motion_mappings) * GiskardExecutable.max_ticks_per_motion_mapping
+        )
 
     def _execute_simulation(self) -> None:
         """
@@ -360,11 +372,8 @@ class GiskardExecutable(Executable):
         motion_state_chart = self.motion_state_chart
         executor.compile(motion_state_chart)
 
-        budget = GiskardExecutable.max_ticks_per_motion_mapping
-        tick_limit = None if budget is None else len(self.motion_mappings) * budget
-
         counter = 0
-        while tick_limit is None or counter < tick_limit:
+        while counter < self.tick_limit:
             # Interrupting and pausing are handled inside the motion state chart by
             # per-task monitors (see motion_state_chart): an interrupt ends the
             # motion via EndMotion, a pause holds the active task via its

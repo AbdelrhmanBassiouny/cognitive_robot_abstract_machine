@@ -5,7 +5,10 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from coraplex.datastructures.enums import ExecutionType
-from coraplex.plans.executables import GiskardExecutable
+from coraplex.plans.executables import (
+    DEFAULT_MAX_TICKS_PER_MOTION_MAPPING,
+    GiskardExecutable,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +40,12 @@ class ExecutionEnvironment:
 
     real_time_pacing: bool = False
     """
-    Whether the simulated tick loop is paced to wall-clock time instead of
-    running as fast as the QP solve allows. Needed whenever any DOF the motion
-    drives is physically simulated rather than kinematically teleported, so
-    Giskard's belief of that DOF's position does not race ahead of where it has
-    actually, physically settled.
+    Whether the simulated tick loop is paced to wall-clock time instead of running as
+    fast as the QP solve allows.
+
+    Needed whenever any DOF the motion drives is physically simulated rather than
+    kinematically teleported, so Giskard's belief of that DOF's position does not race
+    ahead of where it has actually, physically settled.
     """
 
     previous_type: ExecutionType = field(init=False, default=None)
@@ -62,9 +66,9 @@ class ExecutionEnvironment:
     :py:attr:`~coraplex.plans.executables.GiskardExecutable.max_ticks_per_motion_mapping`
     unchanged.
 
-    Worth setting whenever ``real_time_pacing`` is on: a paced tick sleeps for
-    a full control period, so the default budget takes tens of seconds per
-    motion mapping to give up on a stuck motion.
+    Worth setting whenever ``real_time_pacing`` is on: a paced tick sleeps for a full
+    control period, so the default budget takes tens of seconds per motion mapping to
+    give up on a stuck motion.
     """
 
     previous_real_time_pacing: bool = field(init=False, default=False)
@@ -73,12 +77,11 @@ class ExecutionEnvironment:
     environments.
     """
 
-    previous_max_ticks_per_motion_mapping: Optional[int] = field(
-        init=False, default=None
+    previous_max_ticks_per_motion_mapping: int = field(
+        init=False, default=DEFAULT_MAX_TICKS_PER_MOTION_MAPPING
     )
     """
-    Tick budget before entering this environment, used for nested
-    environments.
+    Tick budget before entering this environment, used for nested environments.
     """
 
     def __enter__(self):
