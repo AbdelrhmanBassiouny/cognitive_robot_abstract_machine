@@ -33,6 +33,7 @@ from experiments.montessori.perception.pipeline import (
 )
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import (
+    KNOWN_PIECE_BY_CATEGORY,
     HUE_RANGE,
     color_of_hue,
     HUE_TOLERANCE,
@@ -40,7 +41,12 @@ from experiments.montessori.pieces import (
     KnownPiece,
     hue_distance,
 )
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import (
+    MontessoriShapeCategory,
+    ShapeSortingBoard,
+)
+from experiments.montessori.world import MontessoriWorld
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.geometry import Color, SurfaceFinish
 from semantic_digital_twin.world_description.world_entity import (
@@ -477,3 +483,42 @@ def test_the_colour_blob_finds_on_a_matte_lid_what_the_edge_fit_finds(
         == [piece.category for piece in found_by[EdgeFitDetector]]
         == [piece_on_the_lid.category]
     )
+
+
+# %% the world's own surfaces deciding the look
+
+
+def test_the_world_states_a_finish_so_a_look_at_its_lid_is_answered_by_colour(rules):
+    montessori = MontessoriWorld()
+    [board] = montessori.world.get_semantic_annotations_by_type(ShapeSortingBoard)
+    lid = WorkspaceSurface.of_body(board.root, montessori.world.root)
+
+    look = TargetOnSurface.of(
+        lid, KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    )
+
+    assert rules.detector_for(look) is rules.color_blob
+
+
+def test_the_worlds_own_table_is_looked_at_by_fitting_edges(rules):
+    montessori = MontessoriWorld()
+    [table] = montessori.world.get_semantic_annotations_by_type(Table)
+    surface = WorkspaceSurface.of_body(table.root, montessori.world.root)
+
+    look = TargetOnSurface.of(
+        surface, KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    )
+
+    assert rules.detector_for(look) is rules.edge_fit
+
+
+def test_a_piece_wearing_the_boards_own_wood_falls_back_to_fitting_edges(rules):
+    montessori = MontessoriWorld()
+    [board] = montessori.world.get_semantic_annotations_by_type(ShapeSortingBoard)
+    lid = WorkspaceSurface.of_body(board.root, montessori.world.root)
+
+    look = TargetOnSurface.of(
+        lid, KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
+    )
+
+    assert rules.detector_for(look) is rules.edge_fit
