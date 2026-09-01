@@ -44,7 +44,6 @@ from krrood.parametrization.random_events_translator import (
 )
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.mapped_variable import Attribute
-    from krrood.entity_query_language.factories import ConditionType
     from krrood.entity_query_language.query.match import Match
     from krrood.parametrization.model_registries import ModelRegistry
 
@@ -90,7 +89,7 @@ class Probability(ProbabilisticQuery):
     See :doc:`/krrood/doc/eql/user/probabilistic_queries` for the full walkthrough.
     """
 
-    condition: ConditionType
+    condition: SymbolicExpression
     """
     The condition to compute the probability of.
     """
