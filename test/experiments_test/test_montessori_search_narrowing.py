@@ -26,7 +26,7 @@ from experiments.montessori.perception.detections import (
 )
 from experiments.montessori.perception.exceptions import LookHasNoReferenceFrame
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
-from experiments.montessori.perception.overlay import DetectionOverlay
+from experiments.montessori.perception.overlay import CameraView, DetectionOverlay
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.hole_geometry import HOLE_NAME_BY_CATEGORY
 from experiments.montessori.perception.recorded_setup import (
@@ -377,7 +377,7 @@ def test_a_placement_a_look_cannot_read_is_refused_rather_than_ignored(
 # %% the pictures the demonstration draws
 
 
-def test_every_step_is_drawn_in_a_window_named_by_the_statement_so_far(
+def test_a_run_draws_two_windows_per_step_and_a_last_one_for_the_answer(
     capture_pipeline: MontessoriPerceptionPipeline,
     capture_frame,
     recorded_scene_world: World,
@@ -398,7 +398,7 @@ def test_every_step_is_drawn_in_a_window_named_by_the_statement_so_far(
         SearchNarrowing.window_name(view, step)
         for step in steps
         for view in (NarrowingView.CAMERA, NarrowingView.RECTIFIED)
-    ]
+    ] + [SearchNarrowing.window_name(NarrowingView.ANSWER, steps[-1])]
 
 
 def test_a_windows_name_says_the_look_is_a_look_and_says_more_at_every_step(
@@ -496,26 +496,52 @@ def test_the_rectified_picture_reads_the_way_the_camera_sees_the_plane(
     )
 
 
-def test_each_picture_marks_what_the_look_answering_it_found(watched, capture_frame):
+def test_a_steps_pictures_are_what_it_left_to_read_and_carry_no_marks(
+    watched, capture_pipeline: MontessoriPerceptionPipeline, capture_frame
+):
     """
-    What is on screen is the answer as well as the search: a step's own pictures carry
-    the pieces a look answering that step's statement reports.
+    A step says where there is still to look, so its two pictures are that stretch of
+    the scene as the camera and the detectors read it, with nothing drawn over them.
     """
     narrowing, display, steps = watched
     step = steps[-1]
 
+    drawn = dict(display.drawn)
+
+    assert np.array_equal(
+        drawn[SearchNarrowing.window_name(NarrowingView.RECTIFIED, step)],
+        narrowing.rectified_view(step, capture_frame).to_image(),
+    )
+    assert np.array_equal(
+        drawn[SearchNarrowing.window_name(NarrowingView.CAMERA, step)],
+        capture_pipeline.workspace_over(step.region).clip(
+            capture_frame.color, capture_frame
+        ),
+    )
+
+
+def test_the_answer_is_marked_in_the_whole_picture_the_narrowing_ends_in(
+    watched, capture_frame
+):
+    """
+    What all the narrowing was for is one piece, so the run ends by putting the camera's
+    whole image back on screen with that piece boxed in it.
+    """
+    _, display, steps = watched
+    answer = steps[-1]
+
     drawn = dict(display.drawn)[
-        SearchNarrowing.window_name(NarrowingView.RECTIFIED, step)
+        SearchNarrowing.window_name(NarrowingView.ANSWER, answer)
     ]
 
-    assert [piece.category for piece in step.found] == [MontessoriShapeCategory.CUBE]
+    assert [piece.category for piece in answer.found] == [MontessoriShapeCategory.CUBE]
     assert np.array_equal(
         drawn,
         DetectionOverlay().draw(
-            narrowing.rectified_view(step, capture_frame),
-            MontessoriScene(shapes=list(step.found)),
+            CameraView(frame=capture_frame), MontessoriScene(shapes=list(answer.found))
         ),
     )
+    assert drawn.shape == capture_frame.color.shape
 
 
 def test_the_demonstration_states_its_way_down_to_the_cube_alone(watched):

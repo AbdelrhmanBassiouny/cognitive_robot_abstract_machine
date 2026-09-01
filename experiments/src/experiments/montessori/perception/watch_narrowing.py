@@ -12,9 +12,11 @@ stated condition at a time, and after each one the picture that is left to searc
 drawn, together with what a look answering that much of it reports. Two pictures per
 step: the camera's own image cut to what is left, and the rectified plane the detectors
 read, turned the way the camera sees it and with everything but a stated colour blacked
-out. Each window is named by how the statement reads so far, so what is on screen and
-what was asked for are the same sentence. Press any key for the next condition; press
-``q`` or escape to stop.
+out. Neither carries a mark, since a step is where there is still to look; the run ends
+by putting the whole image back on screen with a box around what the statement found.
+Each window is named by how the statement reads so far, so what is on screen and what
+was asked for are the same sentence. Press any key for the next condition; press ``q``
+or escape to stop.
 
 Everything but the drawing is :class:`SearchNarrowing`, so a run with no window at all
 takes the same steps and can be checked without a screen.
@@ -86,11 +88,12 @@ logger = logging.getLogger(__name__)
 
 class NarrowingView(StrEnum):
     """
-    The two pictures one step of a narrowing is drawn as.
+    The pictures a narrowing is drawn as: two per step, and the one it ends in.
     """
 
     CAMERA = "camera"
     RECTIFIED = "rectified"
+    ANSWER = "answer"
 
 
 @dataclass(frozen=True)
@@ -267,13 +270,20 @@ class SearchNarrowing:
             self.draw(step, frame)
             pressed = self.display.wait(0)
             if pressed is not None and pressed in QuitKey:
-                break
+                return taken
+        if self.display is None:
+            return taken
+        self.draw_answer(taken[-1], frame)
+        self.display.wait(0)
         return taken
 
     def draw(self, step: NarrowingStep, frame: RgbdFrame) -> None:
         """
-        Put one step's two pictures on screen, each in a window named by the statement,
-        with what a look answering it found marked on both.
+        Put one step's two pictures on screen, each in a window named by the statement.
+
+        A step says where there is still to look, so nothing is drawn over either
+        picture: what the statement ends up finding is marked once, in
+        :meth:`draw_answer`.
 
         A step that narrowed the look away from every surface has nothing to draw, and
         says so by drawing nothing.
@@ -283,17 +293,33 @@ class SearchNarrowing:
         """
         if self.display is None or step.region is None:
             return
-        answer = MontessoriScene(shapes=list(step.found))
-        overlay = DetectionOverlay()
-        camera = self.pipeline.workspace_over(step.region).clip(
-            overlay.draw(CameraView(frame=frame), answer), frame
-        )
-        rectified = overlay.draw(self.rectified_view(step, frame), answer)
+        camera = self.pipeline.workspace_over(step.region).clip(frame.color, frame)
+        rectified = self.rectified_view(step, frame).to_image()
         for view, picture in (
             (NarrowingView.CAMERA, camera),
             (NarrowingView.RECTIFIED, rectified),
         ):
             self.display.draw(self.window_name(view, step), self._fitted(picture))
+
+    def draw_answer(self, step: NarrowingStep, frame: RgbdFrame) -> None:
+        """
+        Put the camera's whole image on screen with a box around every piece the
+        statement found, which is what all the narrowing was for.
+
+        :param step: The step whose statement was read whole.
+        :param frame: The camera data the look is taken from.
+        """
+        if self.display is None:
+            return
+        self.display.draw(
+            self.window_name(NarrowingView.ANSWER, step),
+            self._fitted(
+                DetectionOverlay().draw(
+                    CameraView(frame=frame),
+                    MontessoriScene(shapes=list(step.found)),
+                )
+            ),
+        )
 
     def rectified_view(self, step: NarrowingStep, frame: RgbdFrame) -> DetectionView:
         """
