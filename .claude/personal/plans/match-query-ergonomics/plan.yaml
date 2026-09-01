@@ -185,18 +185,9 @@ items:
     track: match-api
     depends_on:
       - where-query-rooted-attribute-no-filter
-    status: blocked
-    session: https://claude.ai/code/session_01VVM3hJmz2nSnyTXmNJCith
-    blockers:
-      - >-
-          stacked-pr-maintenance: Fork PR #192 (branch
-          `claude/match-query-interface-refactor-l55jym`) conflicts against its base `main` as of
-          the 2026-08-31 stacked-pr-maintenance pass, in:
-          `krrood/src/krrood/entity_query_language/core/mapped_variable.py`,
-          `krrood/src/krrood/entity_query_language/query/match.py`,
-          `test/krrood_test/test_eql/test_match.py`. It carries the `needs-resolution` label and a
-          routine comment on the PR:
-          https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/192#issuecomment-5478367428
+    status: in_progress
+    session: https://claude.ai/code/session_018YHKzF1oZLmsD4rFmhje4K
+    blockers: []
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
@@ -257,6 +248,28 @@ items:
       match involved, which is wave 1's territory - and selecting a match stays item 3's.
       test/krrood_test: 2088 passed, 6 skipped (excluding the Graphviz/flask-dependent
       modules, which fail identically with the diff stashed).
+      Resolved 2026-09-01 (roadmap section 26): the only thing stalling this item was
+      the conflict against main, and its cause was never recorded - the branch's merge
+      base is 15f31d1e4, #182's branch *before* #182 merged main to take #186's Index
+      split, so #192 carried none of that hierarchy while rewriting the same
+      mapped_variable.py. It is the landing-order adjustment sections 13/14/22 predicted,
+      arriving one branch late rather than a new problem. main is merged in and all three
+      conflicts resolved by taking both sides: the operators keep this item's routing
+      through _symbolic_expression_ and take #186's Attribute/Index/Call return types and
+      the IndexByValue/IndexByExpression split; has_cause_attributes and causes() arrive
+      from main's do() operator reading _matches_with_variables_,
+      AttributeMatch.assigned_variable keeps main's fresh-copy branch for a shared
+      Cause/Confounder, and _update_kwargs_from takes main's IndexByValue distinction;
+      test_match.py keeps both sides' tests. One pin moved: the mypy fixture asserted
+      a(Robot).battery as CanBehaveLikeAVariable[Robot], which predates #186 naming what
+      each traced operator builds, and now asserts Attribute[Robot] - narrowing the
+      assertion to the type main landed rather than reverting main's precision, which
+      sections 15/16 settle as this plan's own convention. Nothing else was stalling it:
+      #192 has no review threads at all, was never promoted upstream (no in-review label,
+      so no upstream pull request to read), and its dependency is merged; its previous CI
+      was green but on e9aae10be of 2026-08-24, against a base nine days stale. test_eql
+      1287 passed, 3 skipped; full test/krrood_test 2269 passed, 5 skipped, the two
+      test_object_diagram failures being this container having no Graphviz dot binary.
   - id: aggregate-signature-reads-a-missing-attribute
     title: "Bug: every aggregate of one kind gets the same structural signature"
     branch: claude/plan-item-kickoff-match-query-npzr78
@@ -383,3 +396,10 @@ items:
       writing - while entity(match.expression) works. So the unwrapping has to
       happen in the factories rather than at evaluation, and the entity/set_of
       path needs its own repro alongside the recorded the(match) one.
+      Two more sites, found merging main into #192 on 2026-09-01 (roadmap section 26):
+      exceptions.py's two new causes_effect suggestion strings teach
+      match.variable.status, so main's do() operator added .variable detour text after
+      this plan set out to remove it - it still works through the compatibility
+      property, and rewriting user-facing detour text is this item's scope, not #192's.
+      And has_cause_attributes joins update_fields and create_or_update_variable as a
+      public machinery name on Match that the underscore convention would cover.

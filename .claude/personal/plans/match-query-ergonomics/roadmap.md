@@ -1166,3 +1166,87 @@ Not stacked on #196 either, since it is a draft, which is not what this workflow
 the two touch adjacent lines of one method, so whichever lands second resolves that hunk.
 
 Verification: `test/krrood_test/test_eql` 1276 passed, 3 skipped.
+
+## 26. 2026-09-01: #192's conflict was the landing order, one branch late
+
+`/plan-item-resolve match-query-ergonomics match-underscore-rename-and-forwarding`, in
+auto mode. The item had been `blocked` since 2026-08-28 on a conflict that six identical
+stacked-pr-maintenance comments reported and nobody diagnosed.
+
+**Nothing else was stalling it, and that is worth stating because the blocker did not.**
+#192 has *no* review threads at all (`get_review_comments` returns `totalCount 0`); it
+carries no `in-review` label and was never promoted, so unlike section 22's stall there is
+no upstream pull request whose review could be the cause; its dependency
+`where-query-rooted-attribute-no-filter` is merged and `is_ready: true`; and its last CI
+run was all 23 checks green — but on `e9aae10be` of 2026-08-24, against a base nine days
+stale, which says nothing about the merged result. The conflict was the whole of it.
+
+**The cause is the constraint sections 13, 14 and 22 all wrote down, reaching one branch
+further than any of them said.** #192's merge base with `main` is `15f31d1e4` — #182's
+branch *before* #182 merged `main` to take #186's `Index` split (section 22). So #192 was
+cut from a parent that had not yet absorbed #186, and carried none of the mapping
+hierarchy (`SingleValueMapping`, `IndexByValue`, `IndexByExpression`) while rewriting the
+same `mapped_variable.py` into `HasSymbolicOperations` / `CanBehaveLikeAVariable`. Section
+14 recorded that "whichever lands second moves `_rebuild_on_` onto the concrete
+subclasses"; what it did not anticipate is that a *third* branch, stacked on the first,
+inherits the same adjustment a second time. `main` had also taken 199 commits since, three
+of them squarely in the conflicting files: `3b4fb1477` (narrow `Index._type_` to a
+`List[X]` element type), `24664a748` (move `number_like_field` off
+`CanBehaveLikeAVariable` onto `Attribute`) and `bc8785b70`, plus the `do()` operator work
+in `match.py`.
+
+**All three conflicts resolved by taking both sides, because neither pair actually
+disagreed.**
+
+- `core/mapped_variable.py`: `HasSymbolicOperations.__getattr__`, `__getitem__` and
+  `__call__` keep this item's routing through `_symbolic_expression_` — the whole point,
+  since a match must *build* the operation on its lowered query rather than read it off
+  that query's namespace — and take `main`'s `Attribute[T]` / `Index[T]` / `Call[T]`
+  return types and the `IndexByValue` / `IndexByExpression` split. Where an operator lives
+  is orthogonal to what it is declared to build, so both sides' intent survives intact.
+- `query/match.py`: `has_cause_attributes` and `causes()` arrive from `main`'s `do()`
+  operator and now read `_matches_with_variables_` rather than the public compatibility
+  property, since section 17 migrated every krrood-internal consumer;
+  `AttributeMatch.assigned_variable` keeps `main`'s fresh-copy branch for a shared
+  `Cause`/`Confounder` beside this item's `_variable_` / `_type_` names; and
+  `_update_kwargs_from` takes `main`'s `IndexByValue` distinction, which is the section-16
+  fix that replaced its `assert_never` with `ReadOnlyMapping`.
+- `test_eql/test_match.py`: both sides' tests kept, `main`'s `ReadOnlyMapping` test
+  rewritten against the renamed `AttributeMatch` fields.
+
+**One pin moved, and the roadmap is what decided it.** The merged `__getattr__` failed the
+mypy fixture, which asserted `a(Robot).battery` as `CanBehaveLikeAVariable[Robot]` — the
+pre-#186 type. Two readings were available: revert to the wider type to keep the test
+untouched, or narrow the assertion to what `main` landed. Sections 15 and 16 settle it:
+"return types name what they build" is this plan's own established convention, taken by
+the developer on #186, so reverting it would have been this branch quietly undoing a
+landed improvement. The fixture now asserts `Attribute[Robot]`. What the fixture exists to
+pin — that the overloads return `Union[T, Match[T]]` and that attribute access stays
+symbolic — is unchanged; only its precision moved, and upward.
+
+**Two findings routed to item 3 rather than fixed here**, per section 20's rule that a
+note is not a queue entry. `exceptions.py`'s two new `causes_effect` suggestion strings
+teach `match.variable.status` — `main`'s `do()` operator added `.variable` detour text
+*after* this plan set out to remove it. The spelling still works through the compatibility
+property, and rewriting user-facing detour text is `factories-unwrap-match-and-migrate`'s
+scope. `has_cause_attributes` likewise joins `update_fields` and
+`create_or_update_variable` as a public machinery name on `Match` the underscore
+convention would cover, left to the same pass.
+
+**A stale-save revert, caught mid-run.** The blockers written at the start of this run were
+overwritten by a concurrent session saving a manifest copy loaded before that write, and
+the re-fetch before the second save is the only reason it was noticed. This is the third
+occurrence on record; the recheck-before-save rule earns its keep.
+
+Verification: `test/krrood_test/test_eql` 1287 passed, 3 skipped (up from section 22's
+1202, `main`'s own new tests arriving with it). Full `test/krrood_test`: 2269 passed, 5
+skipped; the two `test_ripple_down_rules/test_object_diagram.py` failures are this
+container having no Graphviz `dot` binary, confirmed by `which dot` finding none.
+
+**Environment note, extending sections 14 and 22.** The container again started with no
+project dependencies. A Python 3.12 venv (3.11 is still too old) with `krrood`,
+`probabilistic_model`, `random_events`, `giskardpy`, `physics_simulators` and
+`semantic_digital_twin` installed editable, plus `objgraph` and `mypy`, is the full set
+`test/conftest.py` and the typing fixture need. `semantic_digital_twin` must be installed
+in the same `pip install` as `giskardpy` and `physics_simulators`, since it declares them
+as requirements and pip cannot resolve them from an index.
