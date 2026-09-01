@@ -2568,3 +2568,129 @@ reversing him silently.
 Worth generalizing: **"stated once and held" is the property that makes a rule tree a rule
 tree**, and it is cheap. A tree that is built where it is read is an `if` with extra steps,
 whichever library spells it.
+
+## `holes-fitted-like-pieces`: one layout, three degrees of freedom, and the board's pose falling out of it
+
+Kicked off 2026-09-01 in `auto` mode, as pull request #236 off
+`claude/plan-item-kickoff-kdp-o4l189` (#232, open and out of draft, so ready to stack on
+-- `check_dependency_readiness.py` reports `open_ready`). It is based on #232's current
+tip `bc0a17d2`, not on the `d8b654433` the item's note records. The session's branch
+arrived cut from `integration` rather than from #232 -- the hazard #199 exists to refuse,
+and the fifth time on this plan after #223, #225, #227 and #232 -- and was re-cut onto
+#232's tip before the first commit.
+
+The mechanical scope check reports every path this touches absent from `main` and shared
+with #232, #225, #222, #227 and #223, which every round on this plan has already
+recorded as expected: every file in this plan is introduced by #202, so path overlap
+alone would fold the whole plan into one item. The purpose check is the one that matters
+here and it comes back clean: #232 measured the board's holes as a source of hypotheses
+and left them out at the developer's decision, recording that the openings it read are
+"the same mislocated hole measurements `holes-fitted-like-pieces` says are wrong". So
+that item deliberately did not do this, and what remains once its edits are removed is a
+rigid layout fit that no earlier item states in any form.
+
+### The evaluator is #232's, and it is extracted rather than written twice
+
+The item's own note says it depends on `pieces-looked-for-where-expected` "because
+fitting a known model at a believed pose is exactly the evaluator that item builds, and
+two branches independently writing the same evaluator is the duplication the personal
+notes already record twice". That is honoured by extraction, not by a second copy:
+`PieceMatcher`'s coarse-then-fine placement sweep becomes an `OutlineFitter` over a
+`KnownOutline` -- something whose outline is known exactly beforehand and can be laid
+over the picture at any placement -- and both `KnownPiece` and the board's hole layout
+are one.
+
+`EdgeDistances.agreement` already scores a batch of outlines of shape
+``(..., points, 2)``, so a layout of six holes is one outline of about three hundred
+points rather than anything new measured. The belief a fit is aimed at is #232's own
+`BelievedPlace` -- a stretch of a named surface and an interval of turns -- which is
+exactly what a seed from the board detection is.
+
+### The placement *is* the board's pose
+
+`HoleFootprint.center` is in the board mesh's own local frame and `cut_board_mesh` builds
+the blank about that origin, so a layout fitted in mesh-local coordinates returns the
+board's own pose directly. Six outlines constrain it where `_board_around` had only
+`minAreaRect` over however many hole centres happened to be found, which is why the
+second expected-to-fail mark below is a consequence of this fit rather than separate work.
+
+### The dark patches stop being classified and become a seed
+
+The board is still *found* the way it is found today -- the largest surface with several
+hole-sized dark patches cut through it, clustered to a board-sized group -- because the
+layout fit needs somewhere to start. What changes is that those patches are no longer
+classified into holes: they supply a centre and a long axis, and the layout fit settles
+everything that is reported. `BoardDetector.classifier` goes with them.
+
+`CrossSectionClassifier` and its `FootprintClassifier` base are then used by nothing but
+their own tests. `AGENTS.md` says to consult the developer before removing something
+used only in tests, so they are left standing and the removal is asked on the pull
+request rather than taken here -- the same call `surfaces-from-world` made about the
+widest-or-highest face. `piece_matcher.py`'s module docstring, which cites the classifier
+as "how the holes in the board's lid are still read", stops being true and is corrected
+either way.
+
+### Two expected-to-fail marks, and only one of them is about holes
+
+Both name this item and both are this item's to remove, which the benchmark module's own
+docstring states as the contract:
+
+- `test_every_hole_in_the_board_is_found` -- all six holes, with the categories the mesh
+  was cut with.
+- `test_only_the_pieces_resting_on_the_table_are_detected_there` on
+  `non_inserted_objects`, where #225 measured the board reported at -29.7 degrees against
+  -7.6 in the other five about the same centre, so the stretch of table it is taken to
+  hide is turned with it. That mark comes off only if the fitted pose is actually right,
+  which is measured rather than assumed; if it does not, that is a finding to record and
+  the mark stays, re-pointed at whatever the measurement says owns it.
+
+### What is deliberately not attempted
+
+- **Deciding a detection by what else could have produced its edges.** A prism template
+  reaches 0.85 to 0.89 on the board's middle with no prism there, and no threshold
+  separates that from a genuine piece. That is `competing-explanations`, which depends on
+  this item precisely because a settled layout is what predicts the edges the board
+  itself produces.
+- **Arming the holes as a source of piece hypotheses.** #232 built it, measured it twice
+  and left it out at the developer's decision; correcting the hole measurements is what
+  this item does, and whether that changes the trade is a re-measurement for the item
+  that owns the belief, not a re-opening of a decision already taken.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause:
+
+- The layout on its own: its outline at a turn is the mesh's own six footprints placed
+  rigidly, asserted against `detect_hole_footprints()` rather than a retyped copy of it;
+  a layout fitted over edges drawn at a known placement recovers that placement.
+- The pipeline over the rendered scene: every hole is reported, at the renderer's own
+  placed centres, with the model's categories rather than a classifier's guess.
+- The captures, which is the measurement that matters: the two marks above, and no
+  regression of `test_every_piece_resting_on_the_table_is_found` or of the other five
+  captures' table readings.
+
+Cost is measured as a ratio to a same-run baseline, never in seconds against the 0.5 s
+period -- what #232 recorded about this container's speed moving between runs by more
+than the difference being measured. The lid plane's edges are read once per frame by the
+board detector, which is a second `EdgeDistances.of` on a plane the piece passes do not
+share; #231's `RectifiedFrame` is what removes that duplication and is not on this
+branch's stack, so the cost is reported rather than designed around.
+
+Run under the environment #232 recorded: `/usr/local/bin/uv` (0.12.7), since the `uv`
+first on this container's `PATH` cannot parse this repository's `pyproject.toml`.
+
+### Landing hazards
+
+#223's `Footprint` -> `RectifiedFootprint` rename conflicts with this branch's edits to
+`pipeline.py` and `detections.py`, the same mechanical way it does with #205, #221, #225
+and #232. #231 renames `LoosePieceDetector` to `EdgeFitDetector` and hands the detectors
+a frame's shared edges; a board detector that reads its own lid-plane edges is the next
+thing that wants that mechanism, which is worth knowing when the two meet.
+
+### The bootstrap script's indentation fault is unfixed, and it is the same one #231 hit
+
+`.claude/hooks/plan_item_bootstrap.py` still writes newly-added item fields at four-space
+indentation while this plan's `plan.yaml` indents them by two, so `open` produced invalid
+YAML and `save-plan.sh` refused it -- with the error swallowed by `capture_output=True`,
+exactly as #231 recorded on 2026-08-31. Worked around again by editing `plan.yaml`
+directly. It is the same family as #160 and still wants its own bug-fix pull request.

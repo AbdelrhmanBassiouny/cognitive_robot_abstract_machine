@@ -251,12 +251,13 @@ items:
     centres and only five of six holes are found, so the ground it is taken to hide is turned with it.'
 - id: holes-fitted-like-pieces
   title: Find the board's holes by fitting its whole known layout, not one contour at a time
-  branch: perception_holes_fitted_like_pieces
-  pull_request_number: null
+  branch: claude/plan-item-kickoff-ge8541
+  pull_request_number: 236
   track: surfaces
   depends_on:
   - pieces-looked-for-where-expected
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_01TSK8GxG8qC6udSB7sjwzXf
   notes: 'Measured again on 2026-08-31, and the item''s premise changed: the holes are not mislabelled,
     they are mislocated, so pointing the per-piece fit at each contour in turn would not have fixed them.
     Placing the board mesh''s own six hole footprints at the board pose the detector reports puts them
