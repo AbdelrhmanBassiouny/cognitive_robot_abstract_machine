@@ -21,6 +21,7 @@ Commands (run from the repo root; ``--help`` on any of them for its flags)::
     python .claude/stack/stack.py next --porcelain    # machine-readable: one 'name<TAB>pr' line per branch
     python .claude/stack/stack.py restack-plan   # bottom-up restack plan as JSON
     python .claude/stack/stack.py configuration  # every resolved setting, including the remotes
+    python .claude/stack/stack.py pin-tooling    # copy this tool out of the working tree
     python .claude/stack/stack.py labels         # the complete label set a write must send
     python .claude/stack/stack.py check-move      # may these commits move onto that branch?
     python .claude/stack/stack.py promotion-link # the upstream compare-and-create URL for a branch
@@ -32,15 +33,24 @@ label write replaces the whole set, a push whose two sides name different branch
 commits, an unencoded compare URL loses its prefill, and a landed parent is decided by git ancestry
 rather than by pull-request state. ``landed`` reports only - GitHub closes a pull request as merged
 by itself once its head is contained in its base, so nothing here has to close one.
+
+``pin-tooling`` exists because this directory is tracked content: whichever branch a checkout is on
+decides which version of the tool answers, so a run that switches branches can be driven by two
+versions without noticing. It copies the tool where no checkout carries it and prints the copy to
+invoke, so what starts a run is what finishes it.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -440,6 +450,179 @@ def _personal_configuration_overrides() -> dict[str, object]:
     return tomllib.loads(
         _git("show", f"FETCH_HEAD:{PERSONAL_STACK_CONFIGURATION_PATH}")
     )
+
+
+# %% pinning the tool
+
+
+TOOLING_DIRECTORY = Path(__file__).parent
+"""The directory holding this tool and every module and configuration file it runs on."""
+
+ENTRY_POINT_NAME = Path(__file__).name
+"""This file's own name, which a pinned copy keeps so that a copy is invoked exactly as
+the original is."""
+
+PINNED_TOOLING_ROOT = Path(tempfile.gettempdir()) / "stacked-pr-tooling"
+"""Where pinned copies are kept - outside any checkout, since a copy inside one is a copy
+a branch switch can still reach."""
+
+PINNED_COPY_NAME_LENGTH = 16
+"""How much of a copy's digest names its directory: enough that two versions of the tool
+cannot collide, short enough to read back in a command."""
+
+DIGEST_FIELD_SEPARATOR = b"\0"
+"""Separates a file's name from its contents while digesting, so that two directories
+cannot digest alike by moving bytes from the one into the other."""
+
+
+def _inserts_on_the_import_path(called: ast.expr) -> bool:
+    """
+    :param called: What a call names.
+    :return: Whether it is ``sys.path.insert``.
+    """
+    return (
+        isinstance(called, ast.Attribute)
+        and called.attr == "insert"
+        and isinstance(called.value, ast.Attribute)
+        and called.value.attr == "path"
+        and isinstance(called.value.value, ast.Name)
+        and called.value.value.id == "sys"
+    )
+
+
+@dataclass(frozen=True)
+class PinnedTooling:
+    """A copy of the tool that no checkout carries, and so no checkout can replace."""
+
+    directory: Path
+    """Where the copy lives."""
+
+    @property
+    def entry_point(self) -> Path:
+        """:return: The copy's own ``stack.py``, the path a caller invokes; the
+        maintenance executor and the modules both import sit beside it."""
+        return self.directory / ENTRY_POINT_NAME
+
+
+@dataclass(frozen=True)
+class WorkingTreeTooling:
+    """The tool where a checkout carries it, and so where a branch switch replaces it.
+
+    This directory is tracked content, so a branch carrying its own version of it swaps
+    the tool the moment it is checked out: the commands a run resolved at the start need
+    not be the commands answering it later. :meth:`pin_to` is what makes that stop
+    mattering.
+    """
+
+    directory: Path = TOOLING_DIRECTORY
+    """Where the tool is, defaulting to wherever the running copy of it is."""
+
+    @property
+    def imported_directories(self) -> tuple[Path, ...]:
+        """The sibling directories the tool's own modules put on the import path.
+
+        Read out of the modules rather than listed beside them: a module that begins
+        importing from a new sibling is pinned with it, and a copy cannot fall behind
+        what the tool actually reaches.
+
+        :return: Each sibling, in a fixed order.
+        """
+        beside = self.directory.parent
+        return tuple(
+            sorted(
+                {
+                    candidate
+                    for name in self._names_put_on_the_import_path()
+                    if (candidate := beside / name).is_dir()
+                }
+            )
+        )
+
+    def _names_put_on_the_import_path(self) -> set[str]:
+        """:return: Every name a ``sys.path`` insertion in this tool spells out."""
+        names: set[str] = set()
+        for module in self.directory.glob("*.py"):
+            for node in ast.walk(ast.parse(module.read_text())):
+                if not isinstance(node, ast.Call) or not _inserts_on_the_import_path(
+                    node.func
+                ):
+                    continue
+                names.update(
+                    spelled.value
+                    for spelled in ast.walk(node)
+                    if isinstance(spelled, ast.Constant)
+                    and isinstance(spelled.value, str)
+                )
+        return names
+
+    @property
+    def files(self) -> tuple[Path, ...]:
+        """Every file the tool needs to run: the modules and configuration beside it,
+        plus whatever it imports from a sibling directory.
+
+        The exported board is not one of them. It is one pass's snapshot of the fork's
+        pull requests, so a copy of it would be stale for every pass after - and stale in
+        a way nothing downstream could tell from a fresh one.
+
+        :return: The files to copy, in a fixed order.
+        """
+        return tuple(
+            sorted(
+                path
+                for directory in (self.directory, *self.imported_directories)
+                for path in directory.iterdir()
+                if path.is_file() and path.name != BOARD_PATH.name
+            )
+        )
+
+    def copied_as(self, path: Path) -> Path:
+        """Where one file sits inside a copy, relative to the copy's own root.
+
+        The layout is kept rather than flattened, because an insertion the tool makes is
+        relative to the module making it: flattened, the same line would resolve outside
+        the copy and find whatever happened to be there.
+
+        :param path: A file this tool is made of.
+        :return: Its path within a copy.
+        """
+        return path.relative_to(self.directory.parent)
+
+    @property
+    def digest(self) -> str:
+        """:return: A short digest of the files' paths and contents, telling one version
+        of the tool from another."""
+        fingerprint = hashlib.sha256()
+        for path in self.files:
+            fingerprint.update(
+                str(self.copied_as(path)).encode()
+                + DIGEST_FIELD_SEPARATOR
+                + path.read_bytes()
+            )
+        return fingerprint.hexdigest()[:PINNED_COPY_NAME_LENGTH]
+
+    def pin_to(self, root: Path = PINNED_TOOLING_ROOT) -> PinnedTooling:
+        """Copy the tool out of the working tree, and name the copy to invoke instead.
+
+        A copy is named for its own digest, so pinning one version twice keeps a single
+        copy while two versions in flight at once each keep their own. It is assembled
+        beside its destination and moved there whole, so a caller never invokes one that
+        is half written.
+
+        :param root: The directory pinned copies are kept in.
+        :return: The copy to invoke.
+        """
+        root.mkdir(parents=True, exist_ok=True)
+        destination = root / self.digest
+        staged = Path(tempfile.mkdtemp(dir=root))
+        for path in self.files:
+            copy = staged / self.copied_as(path)
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, copy)
+        if destination.exists():
+            shutil.rmtree(staged)
+        else:
+            staged.rename(destination)
+        return PinnedTooling(destination / self.directory.name)
 
 
 # %% domain model
@@ -1372,6 +1555,17 @@ def print_configuration(configuration: Configuration) -> None:
         print(f"{name}\t{value}")
 
 
+def print_pinned_tooling(pinned: PinnedTooling) -> None:
+    """Print the pinned copy's entry point, and nothing else.
+
+    One bare path rather than a labelled field: this is the one output a caller has to
+    carry into every command it runs afterwards.
+
+    :param pinned: The copy that was made.
+    """
+    print(pinned.entry_point)
+
+
 class Command(StrEnum):
     """Every command this tool answers, named once so no caller spells one out."""
 
@@ -1405,6 +1599,9 @@ class Command(StrEnum):
     PROMOTION_LINK = "promotion-link"
     """Build the upstream compare-and-create link for one branch."""
 
+    PIN_TOOLING = "pin-tooling"
+    """Copy the tool out of the working tree, and name the copy to invoke instead."""
+
     @property
     def needs_a_board(self) -> bool:
         """Whether answering this command means deriving the stack.
@@ -1418,6 +1615,7 @@ class Command(StrEnum):
             Command.CONFIGURATION,
             Command.LABELS,
             Command.PROMOTION_LINK,
+            Command.PIN_TOOLING,
         }
 
 
@@ -1476,6 +1674,11 @@ def _argument_parser() -> argparse.ArgumentParser:
     )
     commands.add_parser(
         Command.LANDED, help="open pull requests whose branch has landed"
+    )
+
+    commands.add_parser(
+        Command.PIN_TOOLING,
+        help="copy this tool out of the working tree; print the copy to invoke",
     )
 
     configuration = commands.add_parser(
@@ -1557,6 +1760,9 @@ def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> Exi
         print_label_write(
             LabelWrite.replacing(arguments.current, arguments.add, arguments.remove)
         )
+        return ExitCode.SUCCESS
+    if command is Command.PIN_TOOLING:
+        print_pinned_tooling(WorkingTreeTooling().pin_to())
         return ExitCode.SUCCESS
     if command is Command.CONFIGURATION:
         print_configuration(
