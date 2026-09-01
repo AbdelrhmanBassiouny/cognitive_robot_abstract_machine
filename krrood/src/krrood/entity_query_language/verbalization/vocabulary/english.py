@@ -214,11 +214,13 @@ class Keywords(VocabEnum):
 class Directive(VocabEnum):
     """
     The imperative verb that opens a request: *"Find"* a match in the domain,
-    or *"Generate"* an underspecified one.
+    *"Generate"* an underspecified one, or *"Look for"* one that is not recorded
+    anywhere yet and has to be observed.
     """
 
     FIND = KeyWord("Find")
     GENERATE = KeyWord("Generate")
+    LOOK_FOR = KeyWord("Look for")
 
 
 class Logicals(VocabEnum):
