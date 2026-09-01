@@ -269,3 +269,59 @@ that thread, and keeps the configuration that has never crashed.
   `numeric_global_pose` / `numeric_global_transform`.
 - No PR opened yet.
 
+
+### Round 21 -- the 2026-09-01 merge of main (`/plan-item-resolve`)
+
+Thirteen days without a push while `main` reached `1227a68f`, 353 commits on. Nine
+`stacked-pr-maintenance` passes had reported the conflict on #169 and skipped the branch.
+Merged as `3e9f3847`; #169 went `dirty` -> `unstable`.
+
+What the 25 conflicts actually were, and how they went:
+
+- **The ORM interfaces**: `main` had ported the same `ijcai-tutorial` machinery and
+  carried it much further (staleness detection, one interpreter for every generator, a
+  progress bar, a pytest `--orm-build` option). Took `main`'s whole side, losing
+  `ensure_generated`. Kept `scripts/ensure_orm_interfaces.py` as the demo's pre-flight,
+  rewritten over `is_outdated` + `regenerate`, because a demo run is not a test run.
+- **The bounding boxes**: `main` renamed `BoundingBox` -> `VolumetricBoundingBox`, added
+  `PlanarBoundingBox`, and factored `AxisAlignedBox` out -- absorbing this branch's own
+  `Bounds`/`to_array_bounds` generically. Carried the numeric origin onto that base
+  rather than one subclass, replaced its symbolic `transform_to_origin` with the numeric
+  one over a new abstract `axis_bounds`, and dropped `axis_intervals`/`origin_translation`
+  as redundant once the origin holds numbers. Fixed both `__eq__`s, which compared
+  origins with `np.allclose` (no array once the origin is a `NumericTransform`); two new
+  tests on `PlanarBoundingBox` fail without the fix.
+- **MuJoCo syncing**: `main`'s `JointBackedConnection` + model-lock structure taken, this
+  branch's setpoint ramping kept on top, with `_measure_command_interval` before the push.
+  Kept this branch's `_compute_keyframe_qpos` (walks the compiled model's joint order).
+- Smaller: `PickUp`/`Placing` take `main`'s thresholds and still gate their attach/detach
+  nodes; `forward_axis` is a `classproperty` now; krrood's tuple-collection fixes went to
+  `main`'s wording (the branch's `COLUMN_VALUE_TYPES` ORMatic fix auto-merged and stays);
+  experiments conftest took `main`'s `CEREAL_NAME`.
+
+### Environment (this container)
+
+Claude Code on the web, no CRAM workspace at all: Python 3.11 as `python3` (repo needs
+3.12, which is installed as `python3.12`), no numpy, no sqlalchemy, no ROS. Nothing could
+be run. The static battery that *is* available here and was used:
+`python3.12 -m py_compile`, `pyflakes` in a hand-built 3.12 venv, `black`+`docformatter`
+via `scripts/format_docstrings.py` (needs the venv's `bin` on `PATH`), and
+`git merge-tree` against `main`.
+
+The pyflakes differential needs both line numbers *and* "from line N" back-references
+stripped, or the `Color` re-definitions in `geometry.py` show up as eight false
+positives.
+
+The `.claude/` tooling on this branch predates `plan_item_bootstrap.py update`, so the
+manifest writes were run from a scratch worktree of a branch that has the current
+tooling.
+
+### Next
+
+- CI on `3e9f3847` is the real check; nothing about the merge was verified dynamically.
+- The five branches stacked above this one, plus #176, #177 and #178, are stale by this
+  merge and need restacking.
+- `cramera/requirements.txt` is now the last of its kind (`main` deleted fourteen and
+  moved to inline `pyproject` dependencies). Left alone so as not to conflict with #168.
+- Earlier "Next" items below still stand: the head-to-head soak, `rotational_error`,
+  `TFPublisher`, `MujocoSimulator.add_entity`, `body.global_pose`.
