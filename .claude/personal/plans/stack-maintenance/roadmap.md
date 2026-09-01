@@ -179,6 +179,26 @@ and re-applies its delta.
   would have produced anyway. The bound that remains is a budget, plus the one case that genuinely
   cannot continue - a search that blamed no single tip, which would rebuild the same failing tree.
 
+- **A block whose recorded comment names the pair but not the cause is a diagnosis nobody can act
+  on.** #162 sat labelled `integration-conflict` for a day against #151 with the comment saying only
+  that the two merge cleanly and fail together. One merge and one suite run named it in two minutes:
+  `PendingPromotionsCommand` declares itself with `classproperty`, and #151 deletes that module when
+  it moves the command base to `.claude/shared/command_line.py`. The class is text only #162 has, so
+  the two edits never touch the same lines and the merged file keeps a decorator whose import the
+  other branch removed - which is why no conflict and no per-branch check could see it. Recording the
+  reproduction rather than the pair is what makes the next such block one somebody picks up.
+- **A fix for a cross-branch break has to be checked against the merge, not only against its own
+  branch.** The first attempt here was green on both trees and still wrong: the reproduction test
+  landed next to a block #151 deletes, so the merged tree conflicted instead of breaking. That trades
+  a silent failure for a loud one and fixes nothing - the build skips the tip either way. Placing it
+  between two tests #151 leaves byte-identical is what made the merge clean, and only re-running the
+  merge showed the difference.
+- **Adapting to an unlanded sibling means adopting its shape, never rebuilding it.** #162 converts
+  the one command it introduces and leaves its five siblings on `classproperty` deliberately:
+  converting them is #151's change, and a branch that makes it twice is the duplicated-artifact
+  pattern this stack has already paid for. The inconsistency is real and self-clearing - once #151
+  lands, every command is a plain property and the converted one is the consistent one.
+
 ## The integration branch's design, stated once
 
 - **It gates nothing.** Promotion asks whether a branch is ready for upstream review; integration asks
@@ -262,7 +282,9 @@ green build was otherwise the one that would have ended the automation.
 ## Open
 
 - Whether an already-registered scheduled run's notification setting can be changed in place, which
-  `promotion-summaries-and-table` must know before any document tells anyone how to do it.
+  `promotion-summaries-and-table` must know before any document tells anyone how to do it. Still open;
+  the 2026-09-01 resolve cleared that item's integration block and answered its rebase question, and
+  touched neither this nor the item's own remaining work.
 - The git-command vocabulary question, answered with measurements and deliberately left to
   `bastler-notes-core-python`, which owns the git seam by name and has four callers waiting - one with
   a deliberately opposite contract. Deciding the ergonomics before the raise-versus-answer-nothing
