@@ -38,7 +38,7 @@ def test_distribution_narrowed_to_selected_variables():
 
     x = a(Coin)(a=..., b=..., c=1.5)
     x.where(x.variable.a > 0.2)
-    result = distribution_of(x, x.variable.a).first(backend=backend)
+    result = distribution_of(x, marginalize_for=(x.variable.a,)).first(backend=backend)
 
     assert {v.name for v in result.variables} == {"Coin.a"}
     a_range = SimpleEvent.from_data({var_a: closed(0.2, 1)}).as_composite_set()

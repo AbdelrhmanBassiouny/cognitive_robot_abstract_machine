@@ -123,7 +123,9 @@ def set_of(*selected_variables: Union[Selectable[T], Any]) -> SetOf:
     return SetOf(_selected_variables_=selected_variables)
 
 
-def distribution_of(match: Match, *variables: Attribute) -> Distribution:
+def distribution_of(
+    match: Match, *, marginalize_for: Tuple[Attribute, ...] = ()
+) -> Distribution:
     """
     Request the distribution a match's conditions describe -- the probabilistic
     interpretation of :py:func:`a`/:py:func:`an`/:py:func:`the`. Literal-valued kwargs
@@ -139,13 +141,13 @@ def distribution_of(match: Match, *variables: Attribute) -> Distribution:
     sampling instances from it.
 
     :param match: The match whose conditions describe the distribution.
-    :param variables: Optionally, a subset of the match's free variables to narrow the
-        result to (further marginalization), e.g. ``distribution_of(match,
-        match.variable.outcome)``. Without them, every one of the match's free
-        variables is kept.
+    :param marginalize_for: Optionally, a subset of the match's free variables to
+        narrow the result to (further marginalization), e.g. ``distribution_of(match,
+        marginalize_for=(match.variable.outcome,))``. Without it, every one of the
+        match's free variables is kept.
     :return: Distribution descriptor.
     """
-    return Distribution(match=match, variables=variables)
+    return Distribution(match=match, marginalize_for=marginalize_for)
 
 
 def probability_of(condition: ConditionType) -> Probability:

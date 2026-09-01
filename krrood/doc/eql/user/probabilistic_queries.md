@@ -164,7 +164,7 @@ print(result.probability(temperature_range))
 To narrow down to temperature specifically:
 
 ```python
-narrowed = distribution_of(match, match.variable.temperature).first(backend=backend)
+narrowed = distribution_of(match, marginalize_for=(match.variable.temperature,)).first(backend=backend)
 print({v.name for v in narrowed.variables})
 # {'Robot.temperature'}
 ```
@@ -177,11 +177,11 @@ print({v.name for v in narrowed.variables})
 - **`probability_of(condition)`** -- counts a real fleet's matching robots when one is
   on hand, or reads the exact answer straight off the model when there's only a fitted
   model. Accepts any condition a `.where(...)` clause does.
-- **`distribution_of(match, *variables)`** -- the same match that would normally
-  *generate* robots, answered with the shape of the distribution instead of samples
-  from it. Optional `*variables` narrow which readings the answer covers. Unlike the
-  other two, there's no batch-counting equivalent for a whole distribution, so this
-  one only ever works with a fitted model behind it.
+- **`distribution_of(match, marginalize_for=...)`** -- the same match that would
+  normally *generate* robots, answered with the shape of the distribution instead of
+  samples from it. Optional `marginalize_for` narrows which readings the answer
+  covers. Unlike the other two, there's no batch-counting equivalent for a whole
+  distribution, so this one only ever works with a fitted model behind it.
 
 Two of the names should look familiar already: `distribution_of`/`average` are how
 `a(...)`/`an(...)`/`the(...)` and `average(...)` already read, just capable of being

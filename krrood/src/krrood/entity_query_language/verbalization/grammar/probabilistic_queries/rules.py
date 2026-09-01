@@ -46,9 +46,9 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 class DistributionRule(PhraseRule):
     """
     Realise ``distribution_of(match)`` as *"The distribution over <match subject>,
-    given that …, where …"*, and ``distribution_of(match, *variables)`` (marginalized
-    to a subset of the match's free variables) as *"The distribution over the
-    <variables> of <match subject>, given that …, where …"*.
+    given that …, where …"*, and ``distribution_of(match, marginalize_for=...)``
+    (marginalized to a subset of the match's free variables) as *"The distribution
+    over the <variables> of <match subject>, given that …, where …"*.
 
     Reuses the match's own *"given that"*/*"where"* grammar (see
     :class:`~krrood.entity_query_language.verbalization.grammar.match.assembler.MatchAssembler`),
@@ -61,16 +61,16 @@ class DistributionRule(PhraseRule):
     *"and predict its … value(s)"* clause is dropped entirely rather than reworded --
     "the distribution over a Coin" already means "over every attribute not given", the
     same way an unqualified marginal does, so nothing is lost by omitting them. When
-    ``*variables`` narrows that default, they're named directly in the subject (*"the
-    battery of a Robot"*) -- not a trailing qualifier like *"restricted to"*, which
-    reads like a truncation (a ``where``), not a choice of which variables the joint is
-    even over.
+    ``marginalize_for`` narrows that default, they're named directly in the subject
+    (*"the battery of a Robot"*) -- not a trailing qualifier like *"restricted to"*,
+    which reads like a truncation (a ``where``), not a choice of which variables the
+    joint is even over.
 
     >>> from krrood.entity_query_language.factories import a, distribution_of
     >>> match = a(Robot)(name="R2", battery=...)
     >>> verbalize_expression(distribution_of(match))
     "The distribution over a Robot given that its name is 'R2'"
-    >>> verbalize_expression(distribution_of(match, match.variable.battery))
+    >>> verbalize_expression(distribution_of(match, marginalize_for=(match.variable.battery,)))
     "The distribution over the battery of a Robot given that its name is 'R2'"
     """
 
@@ -82,13 +82,13 @@ class DistributionRule(PhraseRule):
         plan = assembler.plan(node.match)
 
         subject = context.child(plan.selection)
-        if node.variables:
+        if node.marginalize_for:
             variable_list = oxford_comma(
                 [
                     RoleFragment.for_attribute(
                         attribute._owner_class_, attribute._attribute_name_
                     )
-                    for attribute in node.variables
+                    for attribute in node.marginalize_for
                 ],
                 Conjunctions.AND.as_fragment(),
             )

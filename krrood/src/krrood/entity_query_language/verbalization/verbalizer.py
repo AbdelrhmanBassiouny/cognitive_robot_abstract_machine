@@ -8,10 +8,6 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.operators.probabilistic_queries import (
-    Distribution,
-    Probability,
-)
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.context import MicroplanningServices
 from krrood.entity_query_language.verbalization.engine import fold, root_context
@@ -63,19 +59,10 @@ class EQLVerbalizer:
         """
         # A match is not a foldable EQL node but a builder; it routes to its own assembler and
         # everything inside it (selection, values, conditions) is scanned/folded through its
-        # resolved query expression. Distribution/Probability are Evaluable-only (not
-        # SymbolicExpression), so the referring-expression scan needs the SymbolicExpression they
-        # actually wrap instead -- the underlying match's resolved query, or the condition
-        # (Probability.__post_init__ already normalizes a bare bool into a Literal, so
-        # .condition is always a real SymbolicExpression here).
-        if isinstance(expression, Match):
-            scan_target = expression.expression
-        elif isinstance(expression, Distribution):
-            scan_target = expression.match.expression
-        elif isinstance(expression, Probability):
-            scan_target = expression.condition
-        else:
-            scan_target = expression
+        # resolved query expression. Match/Distribution/Probability all implement
+        # HasExpression, so the referring-expression scan can ask any of them for the
+        # SymbolicExpression they actually wrap without an isinstance chain here.
+        scan_target = expression._get_expression_()
         if services is None:
             services = MicroplanningServices.from_expression(scan_target)
         if performative is not None:

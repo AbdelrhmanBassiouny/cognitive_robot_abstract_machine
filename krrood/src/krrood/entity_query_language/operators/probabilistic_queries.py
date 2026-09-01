@@ -20,10 +20,13 @@ same base, the same shape ``operators/aggregators.py`` bundles ``Sum``/``Max``/`
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing_extensions import Any, Iterator, Tuple, TYPE_CHECKING
 
-from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.base_expressions import (
+    HasExpression,
+    SymbolicExpression,
+)
 from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
@@ -40,16 +43,19 @@ if TYPE_CHECKING:
         UnderspecifiedParameters,
     )
 
-# krrood.parametrization.parameterizer reaches back to this module's own package
-# (krrood.entity_query_language.factories imports Distribution/Probability from here),
-# so importing it at module level -- like operators/causal.py's leaf-module imports --
-# would be circular. Each _resolve_ imports it locally instead, deferred until a
-# ProbabilisticBackend actually evaluates the query, by which point every module
-# involved has finished loading.
+# Every local import below (inside a method body, not at module level) exists to avoid
+# a circular import: krrood.entity_query_language.factories imports Distribution/
+# Probability from this module, so anything imported here at module level that reaches
+# back to factories -- directly (factories.count/entity) or indirectly
+# (krrood.parametrization.parameterizer, which itself imports from factories) -- would
+# cycle. Deferring those imports into each method body instead (matching
+# operators/causal.py's existing leaf-module pattern) delays them until a backend
+# actually evaluates the query, by which point every module involved has finished
+# loading.
 
 
 @dataclass(eq=False, repr=False)
-class ProbabilisticQuery(Evaluable, ABC):
+class ProbabilisticQuery(Evaluable, HasExpression, ABC):
     """
     Shared base for EQL constructs that query a probabilistic model directly --
     ``distribution_of``, ``probability_of`` -- rather than selecting or generating
@@ -80,34 +86,13 @@ class ProbabilisticQuery(Evaluable, ABC):
 @dataclass(eq=False, repr=False)
 class Probability(ProbabilisticQuery):
     """
-    Requests the probability of a condition, e.g. ``probability_of(x.A > 5)`` for
-    ``x = variable(MyClass)``. The condition may be any expression a ``.where(...)``
-    condition already accepts (comparators combined with ``and_``/``or_``/``not_``,
-    ranges, ...) -- it is translated into a
-    {py:class}`~random_events.product_algebra.Event` the same way.
+    The probability of a condition, e.g. ``probability_of(x.A > 5)`` for
+    ``x = variable(MyClass)``. Accepts any condition a ``.where(...)`` clause does.
 
-    Unlike :class:`Distribution`, this one resolves two ways: exactly, in closed form
-    via :meth:`_resolve_`, under a
-    :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`; or, under
-    any other backend, natively via :meth:`_evaluate_natively_` -- a probability is
-    definitionally the fraction of a domain's rows the condition holds for, so that's
-    counted directly, the same way any other EQL query counts matching rows. The
-    native path needs an enumerable domain (e.g. ``x = variable(MyClass, domain=...)``
-    ) to count over; the closed-form path needs a fitted model instead. Whichever
-    ``.evaluate(backend=...)``/``.first(backend=...)`` is given decides which one
-    runs.
-
-    ``ConditionType`` also allows a bare ``bool`` (``probability_of(True)``); a plain
-    Python ``bool`` carries no attribute/chain, so it's wrapped in a
-    :class:`~krrood.entity_query_language.core.variable.Literal` on construction, the
-    same normalization ``and_``/``or_``/``not_`` already apply to a bare-bool operand
-    -- this keeps ``condition`` always a real EQL expression, so it verbalizes (*"the
-    probability that True"*) with no special-casing needed downstream. It still won't
-    *evaluate*, though, either way: a content-free condition names no class, so there
-    is neither a model to resolve it against nor a domain to count rows over --
-    :class:`~krrood.parametrization.exceptions.JointQueryAcrossClassesNotSupported`
-    (empty ``owner_classes``) is raised at resolution time, same as any other
-    condition that references no attributes.
+    Resolves two ways: exactly via :meth:`_resolve_` under a
+    :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`, or by
+    counting matching rows via :meth:`_evaluate_natively_` under any other backend.
+    See :doc:`/krrood/doc/eql/user/probabilistic_queries` for the full walkthrough.
     """
 
     condition: ConditionType
@@ -121,22 +106,13 @@ class Probability(ProbabilisticQuery):
 
     def _evaluate_natively_(self) -> Iterator[float]:
         """
-        Fallback for every backend other than
-        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`: a
-        probability is, definitionally, the fraction of a domain's rows that satisfy
-        the condition -- counted the same way any other EQL query counts matching
-        rows, via ``entity(count(root)).where(condition)`` (see
-        ``test_eql/test_core/test_aggregations.py::test_count`` for the same pattern),
-        so this reuses whatever backend support ``count``/``.where()`` already have,
-        rather than reimplementing counting itself. Unlike
-        :meth:`_resolve_`'s exact, closed-form answer, this is only as good as the
-        variable's domain (all of it must be enumerable) -- it's the estimate
-        :meth:`_resolve_` computes exactly instead, when a
-        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend` is used.
+        Counts matching rows via ``entity(count(root)).where(condition)`` instead of
+        resolving a model -- works under any backend with an enumerable domain.
 
         :raises JointQueryAcrossClassesNotSupported: If the condition references
             attributes reached from more than one ``variable(...)`` root, or none.
         """
+        # See the module-level comment above for why these are local imports.
         from krrood.entity_query_language.factories import count, entity
         from krrood.parametrization.exceptions import (
             JointQueryAcrossClassesNotSupported,
@@ -160,11 +136,15 @@ class Probability(ProbabilisticQuery):
         yield matching_count / total_count
 
     def _resolve_(self, model_registry: ModelRegistry) -> float:
+        # See the module-level comment above for why this is a local import.
         from krrood.parametrization.parameterizer import ConditionParameters
 
         parameters = ConditionParameters(self.condition)
         model = model_registry.get_model(parameters)
         return model.probability(parameters.event)
+
+    def _get_expression_(self) -> SymbolicExpression:
+        return self.condition
 
     def __repr__(self) -> str:
         return f"probability_of({self.condition!r})"
@@ -186,10 +166,10 @@ class Distribution(ProbabilisticQuery):
     ``distribution_of(a(Pick)(arm=0.3, outcome=...))`` -- the distribution over
     ``outcome`` given ``arm == 0.3``.
 
-    Optional trailing ``*variables`` narrow the result to a subset of the match's free
-    variables (further marginalization), e.g.
-    ``distribution_of(match, match.variable.outcome)``. Without them, every one of the
-    match's free variables is kept.
+    Optional keyword-only ``marginalize_for`` narrows the result to a subset of the
+    match's free variables (further marginalization), e.g.
+    ``distribution_of(match, marginalize_for=(match.variable.outcome,))``. Without it,
+    every one of the match's free variables is kept.
     """
 
     match: Match
@@ -197,13 +177,14 @@ class Distribution(ProbabilisticQuery):
     The match whose conditions describe the distribution.
     """
 
-    variables: Tuple[Attribute, ...] = ()
+    marginalize_for: Tuple[Attribute, ...] = field(default_factory=tuple)
     """
     The match's variables to narrow the result to. Empty keeps every one of the
     match's free variables.
     """
 
     def _resolve_(self, model_registry: ModelRegistry) -> Any:
+        # See the module-level comment above for why this is a local import.
         from krrood.parametrization.parameterizer import UnderspecifiedParameters
 
         parameters = UnderspecifiedParameters(self.match)
@@ -212,14 +193,23 @@ class Distribution(ProbabilisticQuery):
         if result is None:
             raise NoSolutionFound(self)
 
-        if self.variables:
-            selected = [parameters.variables[v._name_] for v in self.variables]
+        if self.marginalize_for:
+            selected = [
+                parameters.variables[v._name_] for v in self.marginalize_for
+            ]
             result = result.marginal(selected)
             if result is None:
                 raise NoSolutionFound(self)
 
         return result
 
+    def _get_expression_(self) -> SymbolicExpression:
+        return self.match._get_expression_()
+
     def __repr__(self) -> str:
-        args = "".join(f", {v!r}" for v in self.variables)
+        args = (
+            f", marginalize_for={self.marginalize_for!r}"
+            if self.marginalize_for
+            else ""
+        )
         return f"distribution_of({self.match!r}{args})"

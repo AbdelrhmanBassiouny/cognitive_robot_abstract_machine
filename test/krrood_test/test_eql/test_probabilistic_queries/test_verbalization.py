@@ -31,7 +31,7 @@ def test_verbalize_distribution_of_select_all():
 def test_verbalize_distribution_of_narrowed_to_variables():
     match = a(Coin)(a=..., b=..., c=1.5)
 
-    text = verbalize_expression(distribution_of(match, match.variable.a))
+    text = verbalize_expression(distribution_of(match, marginalize_for=(match.variable.a,)))
 
     # marginalization narrows which variable(s) the joint is over -- named directly in
     # the subject, not a trailing "restricted to" qualifier (that reads like a
