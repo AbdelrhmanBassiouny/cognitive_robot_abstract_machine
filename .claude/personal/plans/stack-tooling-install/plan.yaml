@@ -146,81 +146,182 @@ items:
   depends_on:
   - setup-personal-notes-pr101
   - stack-tooling-on-main
-  notes: |-
-    Extracts the mechanical half of `/setup-personal-notes` into a script, leaving the skill only the
+  notes: >
+    Extracts the mechanical half of `/setup-personal-notes` into a script, leaving the skill only
+    the
+
     questions.
 
     **The item's original premise is disproved and no longer applies.** Two steps recorded as
-    session-only are both scriptable - the login and the label read and create are all plain API calls,
-    and the "no create-label tool" limit is true of MCP, not of the API. So the whole setup runs with no
+
+    session-only are both scriptable - the login and the label read and create are all plain API
+    calls,
+
+    and the "no create-label tool" limit is true of MCP, not of the API. So the whole setup runs
+    with no
+
     session, and the skill became a thin question-asking wrapper (238 lines to 153) rather than the
+
     "script plus two API steps" split originally described.
 
-    Based on its parent branch rather than main, the user having overridden this item's "requires the
-    base merged" rule - which was never really about ordering, since all six files it builds on arrive
-    with that pull request. Restacked so the upstream wave is one linear chain rather than two siblings:
-    the next item needs both `.claude/stack/*` and `github-api.sh`, and a diamond would have been
-    invisible to a restack plan that derives exactly one parent per branch from the pull request base.
+    Based on its parent branch rather than main, the user having overridden this item's "requires
+    the
 
-    Carries two incidental fixes as their own commits, both hard prerequisites: an upstream-remote lookup
-    returning git's exit 128 instead of "no upstream", which aborted branch creation on any branch never
+    base merged" rule - which was never really about ordering, since all six files it builds on
+    arrive
+
+    with that pull request. Restacked so the upstream wave is one linear chain rather than two
+    siblings:
+
+    the next item needs both `.claude/stack/*` and `github-api.sh`, and a diamond would have been
+
+    invisible to a restack plan that derives exactly one parent per branch from the pull request
+    base.
+
+    Carries two incidental fixes as their own commits, both hard prerequisites: an upstream-remote
+    lookup
+
+    returning git's exit 128 instead of "no upstream", which aborted branch creation on any branch
+    never
+
     pushed with `-u`, and a test helper that hid an executable by dropping its whole `PATH` entry.
 
     Still unverified for the same reason throughout this track: live label creation, since this
-    environment's token is a fine-grained installation token, so the create call is exercised only through
+
+    environment's token is a fine-grained installation token, so the create call is exercised only
+    through
+
     a stub.
 
     **Resolved 2026-08-30** (sessions https://claude.ai/code/session_01RR4BLkfHBADKRuiTYh2Pv3), over
+
     two review rounds, clearing both blockers.
 
     The CI red was this branch's own and the first round is what surfaced it: merging `main` gave
-    `session-start.sh` a companion it sources, while each test module named the scripts to install into
-    the scratch layout by hand, so only the module whose list omitted it broke. `install_hook_scripts`
-    reads a script's own dependencies now - a shell `source` of a quoted path, or, for a hook written in
-    Python, an import of a sibling module read from the syntax tree. The Python half was forced rather
+
+    `session-start.sh` a companion it sources, while each test module named the scripts to install
+    into
+
+    the scratch layout by hand, so only the module whose list omitted it broke.
+    `install_hook_scripts`
+
+    reads a script's own dependencies now - a shell `source` of a quoted path, or, for a hook
+    written in
+
+    Python, an import of a sibling module read from the syntax tree. The Python half was forced
+    rather
+
     than foreseen: moving `HookScript` into a shared module made `plan_item_bootstrap.py` import
-    something no caller names, so the defect the round was fixing produced a new instance of itself one
-    layer down. Fourth occurrence of the shape on this track - a fix applied three times at three call
+
+    something no caller names, so the defect the round was fixing produced a new instance of itself
+    one
+
+    layer down. Fourth occurrence of the shape on this track - a fix applied three times at three
+    call
+
     sites is a missing mechanism, not three bugs.
 
-    First round, sixteen threads and one rule: a literal naming a fixed thing where a named definition
-    already exists. `.claude/hooks/tooling_files.py` became the one place production and tests both
-    resolve a tooling file from; `github_api.py` names the shell functions, labels and remote-URL forms
-    with a runner that makes the calls; `setup_report.py` holds the report vocabulary two modules parse.
-    Fifteen resolved. One is answered differently and stays open: whether one git runner should serve
-    every caller, which is `bastler-notes-core-python`'s seam by name and now has five callers waiting.
+    First round, sixteen threads and one rule: a literal naming a fixed thing where a named
+    definition
 
-    `--name`/`--email` (the user's call, offered against two alternatives) is what lets a full run reach
+    already exists. `.claude/hooks/tooling_files.py` became the one place production and tests both
+
+    resolve a tooling file from; `github_api.py` names the shell functions, labels and remote-URL
+    forms
+
+    with a runner that makes the calls; `setup_report.py` holds the report vocabulary two modules
+    parse.
+
+    Fifteen resolved. One is answered differently and stays open: whether one git runner should
+    serve
+
+    every caller, which is `bastler-notes-core-python`'s seam by name and now has five callers
+    waiting.
+
+    `--name`/`--email` (the user's call, offered against two alternatives) is what lets a full run
+    reach
+
     exit 0 again now that main's `check-setup.sh` has a `git_identity` check. Both halves required
-    together, refused before anything is written; given neither, the run finishes everything else and
+
+    together, refused before anything is written; given neither, the run finishes everything else
+    and
+
     leaves that row to the report rather than guessing what somebody's commits should say.
 
     Second round, one thread: the label list named only the three the dashboard reads while the
+
     stacked-PR workflow applies three more nothing was creating. It names all six now, each with a
-    description of its own. The fork's own labels are the evidence for why that matters - the three the
-    reviewer named each carry a hand-written description, so they were created by hand, while `in-review`
+
+    description of its own. The fork's own labels are the evidence for why that matters - the three
+    the
+
+    reviewer named each carry a hand-written description, so they were created by hand, while
+    `in-review`
+
     is the default grey with none and `rebase` does not exist at all despite 21 references. So what
+
     creating one ahead of time buys is that it explains itself to whoever meets it later.
 
-    Two defects fell out of adding them: a `*)` fallback that would have given a newly declared label a
-    sentence saying nothing, and a description resolved inside the creation call's arguments, where a
+    Two defects fell out of adding them: a `*)` fallback that would have given a newly declared
+    label a
+
+    sentence saying nothing, and a description resolved inside the creation call's arguments, where
+    a
+
     failing command substitution still runs the command with an empty one. The test enum became
+
     `RepositoryLabel`, since it is no longer the dashboard's set - that is what the dashboard
+
     *interprets*, this is what the tooling *applies*.
 
     `integration-conflict` is deliberately left out: it lives only on the integration-branch pull
-    requests, so nothing here or on `main` applies it, and a list naming labels no code applies stops
-    being something a test can hold to anything. Left open on the thread for the user, along with two
-    judgement calls - that this widens `/setup-personal-notes` into creating labels for a workflow it
-    does not configure, and that `cram2-link-sent` is a plain constant rather than a setting, so unlike
+
+    requests, so nothing here or on `main` applies it, and a list naming labels no code applies
+    stops
+
+    being something a test can hold to anything. Left open on the thread for the user, along with
+    two
+
+    judgement calls - that this widens `/setup-personal-notes` into creating labels for a workflow
+    it
+
+    does not configure, and that `cram2-link-sent` is a plain constant rather than a setting, so
+    unlike
+
     its neighbours its name is fixed and names a particular upstream.
 
-    577 tests pass across the four directories CI runs, from 555. Ten mutations checked across the two
+    577 tests pass across the four directories CI runs, from 555. Ten mutations checked across the
+    two
+
     rounds, each caught by the test naming its rule - and one that was not, which is the part worth
+
     carrying: the test asserting the run *says* how to record an identity passed with that guidance
-    deleted, because `check-setup.sh`'s own row already names both flags. Accidental coverage of somebody
-    else's message. The same class recurred in the second round, where a description parser splitting on
+
+    deleted, because `check-setup.sh`'s own row already names both flags. Accidental coverage of
+    somebody
+
+    else's message. The same class recurred in the second round, where a description parser
+    splitting on
+
     whitespace read only each sentence's first word, which happened to be distinct.
+
+    **CI red found and fixed 2026-09-01** (session resolving this item via `/plan-item-resolve`).
+    `test_claude_dev_tooling` was failing on the pushed head with a collection error, not a genuine
+    test failure: `test_setup_steps.py` still imported `SCRUBBED_ENVIRONMENT_PREFIXES` from
+    `scratch_repository`, the name the 2026-08-30 review round renamed to
+    `SCRUBBED_VARIABLE_PREFIXES` when it moved the constant onto `stub_executables.py`'s enum —
+    missed because that round never touched this test module. Separately, `setup_steps.py` had no
+    `HookScript` member of its own, so the one test that installs it through `install_hook_scripts`
+    (which derives a script's dependencies from `HookScript` members) was passed a bare string where
+    an enum member was required.
+
+    Both fixed in `bc53ec33`, pushed. 607 tests pass on the exact CI scope, up from a hard
+    collection failure. PR converted back to draft after the push, per the standing convention.
+
+    Then merged into `setup-stacked-prs-skill` (#110), which is based on this branch and inherited
+    the same break: one conflict, in `tooling_files.py`, where #110's own `HookScript` additions sit
+    next to the new `SETUP_STEPS` member — resolved by keeping both. 668 tests pass there afterward;
+    see that item's own notes.
 - id: setup-stacked-prs-skill
   title: 'PR 2: /setup-stacked-prs guided one-command setup skill'
   branch: claude/setup-stacked-prs-skill
