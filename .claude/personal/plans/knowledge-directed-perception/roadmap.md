@@ -3405,3 +3405,79 @@ takes `related_thing` as a constructor argument (the two tests that built one no
 relation type and the related thing directly, which is the stronger form), and a look narrowed to a
 stretch now reads an overhang past it, which is what its test asserts.
 
+
+### `search-clipped-to-a-predicates-region`: one statement, read from where the camera stands
+
+Third round, 2026-09-01, at the developer's ask, and it moved three things: which way *right*
+is, how the demonstration says what it wants, and what its pictures show.
+
+#### A direction means what it means on screen
+
+The second round read every direction from the world's own frame, so *right of* meant the
+robot's right and a person watching the windows had to translate. `RgbdFrame.point_of_view`
+turns the camera's optical frame -- x across the picture, y down it, z along the axis it
+looks down -- into the convention a pose is stated in, which is what a relation reads its
+axes from: x the way the looker faces, y to its left, z up. A direction stated from there
+means what the picture shows.
+
+**That alone would have narrowed nothing**, and the reason is worth keeping: a direction read
+from where a camera stands runs across the world's own axes, and **no axis-aligned box holds
+a half space**. `allowed_space` is right to answer everything there, and useless as a clip.
+So `PlacementRelation.allowed_part_of(space)` answers the part of a stretch *already bounded*
+that the relation allows -- for a direction, the corners of that stretch on this side of the
+dividing plane together with wherever that plane crosses its edges -- and each surface's
+search is narrowed against the stretch it was about to read (its own reach, and how high
+above it a thing standing on it is reported) rather than against the world. With it, a camera
+-relative direction narrows exactly as well as a world-axis one did: 0.036 m² of lid left
+against 0.061 unnarrowed, and 0.40x the cost of an unnarrowed look.
+
+The `detect` early exit that refused a look narrowed off the table went with the change. It
+contradicted the same method's own rule that the board is found wherever the pipeline looks
+at all, and per-surface narrowing does its work: a surface the statement leaves nothing of is
+simply not searched.
+
+#### The demonstration is one query, interpreted
+
+`watch_narrowing` assembled its statement from a list of separate conditions and fetched the
+lid and the hole out of the world by hand. Both are gone. The statement is written once and
+whole, and the things it is about are **described in it** -- the body the world calls the
+lid, the body it calls the square hole -- so nothing is fetched before it.
+
+`PerceptionBackend` answers those descriptions out of the domain the statement gave them,
+before any look is taken, which is what lets a relation stating one narrow the search exactly
+as a relation to a body handed over does. A description no single thing answers is left
+unanswered, so the condition stating it stays one the backend refuses rather than one of the
+candidates being picked silently. `Match.one_condition_at_a_time()` then reads such a
+statement as it grows, carrying whatever it says about anything else through every step,
+since a description is what gives a condition its meaning rather than a step of its own.
+
+**One existing krrood test changed with it**, deliberately: a condition about another
+variable is refused only when nothing in that variable's own domain answers it. A dangling
+description that *is* answerable is now answered rather than refused, which is what native
+evaluation would have done with it anyway.
+
+#### Right of the square hole leaves the cylinder, and the pictures now say so
+
+The developer expected *right of the square hole* to leave the cube alone. Measured on
+`tracy_pickup_demo`, from the camera's own point of view, it does not: the cylinder stands
+34 mm to the right of that hole in the picture and 36 mm below it, while the cube stands
+28 mm **above** it and 6 mm to its left. So the demonstration states *above* -- one word --
+and a test pins both answers. Neither piece is above the other in the *world*; they rest on
+one lid, which is exactly what a direction read from where the camera stands is for.
+
+Two things made the earlier run look as though the narrowing had not worked, and both are
+fixed. The rectified window was drawn the way a rectified patch is *indexed*, a quarter turn
+from the camera's own view of the table, so a stated direction did not read on screen the way
+it was said; it is now drawn through the `ViewFromAbove` the overlay already had. And the
+picture reaches an overhang past a stated stretch, so both cyan pieces stayed visible after a
+step that reported only one -- the pictures now carry the pieces a look answering that step
+found, so what is on screen is the answer as well as the search.
+
+#### Numbers
+
+Over all six captures in one run, against an unnarrowed look at 0.333 s/frame reporting 20
+pieces: 0.25x for the surface (6), 0.40x for the direction alone (6), 0.30x for a 50 mm
+radius (5), 0.25x for all of them with the colour (5). 460 passed, 1 skipped, 11 xfailed
+across `test/experiments_test/` against 450 on the round before; krrood's and sdt's
+failing-and-erroring sets byte-identical to it.
+

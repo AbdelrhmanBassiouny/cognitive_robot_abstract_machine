@@ -712,7 +712,37 @@ items:
     of that hole along the robot''s left-right axis while the cube stands 25 mm in front of it and
     the cylinder 40 mm behind. So watch_narrowing states *in front of*, and a test pins both
     answers. Cost against an unnarrowed look in one run: 0.28x for the surface, 0.43x for a
-    direction stated alone, 0.30x for a radius, 0.26x for all of them with the colour.'
+    direction stated alone, 0.30x for a radius, 0.26x for all of them with the colour.
+
+
+    Third round (2026-09-01), at the developer''s ask, and it moves three things. A direction is
+    read from where the *camera* stands rather than from the world''s own axes, so left, right and
+    above mean what they mean on screen: RgbdFrame.point_of_view turns the optical frame into the
+    convention a pose is stated in. That needed PlacementRelation.allowed_part_of, since a
+    direction read from a camera runs across the world''s axes and no axis-aligned box holds a half
+    space - asked about a stretch already bounded it answers the part of it that it allows, and
+    each surface is now narrowed against the stretch it was about to read rather than against the
+    world. Without it a stated direction would have narrowed nothing at all.
+
+
+    The demonstration states one whole statement, and what is watched is the backend reading it:
+    the lid and the hole are *described* in the query rather than fetched beforehand, and
+    PerceptionBackend answers those descriptions out of the domain the statement gave them before
+    any look is taken; Match.one_condition_at_a_time reads the statement as it grows, carrying what
+    it says about anything else through every step. A description no single thing answers stays a
+    condition the backend refuses.
+
+
+    And the pictures show the answer as well as the search: each step draws what a look answering it
+    found, and the rectified plane is drawn through the overlay''s own ViewFromAbove, so it reads
+    the way the camera sees the table instead of a quarter turn from it.
+
+
+    Measured again with the camera as the point of view: *right of* the square hole leaves the
+    cylinder (34 mm to the right in the picture, 36 mm below) and *above* leaves the cube (28 mm up,
+    6 mm to the left), so the demonstration states *above* and a test pins both. Cost over the six
+    captures in one run: 0.25x for the surface, 0.40x for the direction alone, 0.30x for a 50 mm
+    radius, 0.25x for all of them with the colour.'
 - id: imagination-world-rejects-what-a-predicate-refuses
   title: Reject what a predicate refuses, by testing it in a copy of the world
   branch: null
