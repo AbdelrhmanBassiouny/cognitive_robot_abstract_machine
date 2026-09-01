@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Any, Callable, Union, assert_type
 
-from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
+from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.factories import a, an, entity, the
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Entity
@@ -44,8 +44,8 @@ assert_type(the(Robot), Union[Robot, Match[Robot]])
 
 # %% attribute access resolves to the class's own field types
 
-assert_type(an(Robot).battery, Union[int, CanBehaveLikeAVariable[Robot]])
-assert_type(the(Robot).name, Union[str, CanBehaveLikeAVariable[Robot]])
+assert_type(an(Robot).battery, Union[int, Attribute[Robot]])
+assert_type(the(Robot).name, Union[str, Attribute[Robot]])
 
 # %% Callable[..., T] overload: T inferred from the factory's own return annotation
 

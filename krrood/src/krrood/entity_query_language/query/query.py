@@ -297,7 +297,7 @@ class Query(
             return self._expression_.evaluate()
         return MultiArityExpressionThatPerformsACartesianProduct.evaluate(self)
 
-    def _correlate_conditions_(
+    def _reroot_conditions_(
         self, *conditions: ConditionType
     ) -> Tuple[ConditionType, ...]:
         """
@@ -313,9 +313,9 @@ class Query(
         :return: The conditions, with every chain rooted at this query re-rooted onto its
             selection.
         """
-        return tuple(self._correlate_condition_(condition) for condition in conditions)
+        return tuple(self._reroot_condition_(condition) for condition in conditions)
 
-    def _correlate_condition_(self, condition: ConditionType) -> ConditionType:
+    def _reroot_condition_(self, condition: ConditionType) -> ConditionType:
         """
         Re-root every attribute chain that one condition takes from this query.
 
@@ -423,7 +423,7 @@ class Query(
             object.
         :return: This query.
         """
-        conditions = self._correlate_conditions_(*conditions)
+        conditions = self._reroot_conditions_(*conditions)
         if self._where_builder_ is None:
             self._where_builder_ = WhereBuilder(conditions=conditions, query=self)
         else:
@@ -440,7 +440,7 @@ class Query(
             object.
         :return: This query.
         """
-        conditions = self._correlate_conditions_(*conditions)
+        conditions = self._reroot_conditions_(*conditions)
         if self._having_builder_ is None:
             self._having_builder_ = HavingBuilder(conditions=conditions, query=self)
         else:

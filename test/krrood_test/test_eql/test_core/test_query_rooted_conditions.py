@@ -161,7 +161,7 @@ def test_query_rooted_condition_keeps_one_flattening_shared(
     assert query.tolist() == variable_rooted.tolist()
 
 
-# %% conditions that must keep their uncorrelated meaning
+# %% conditions that must keep their subquery meaning
 
 
 def test_condition_rooted_at_another_query_stays_a_subquery(

@@ -5,6 +5,7 @@ from typing_extensions import Tuple
 
 from krrood.entity_query_language.factories import (
     entity,
+    flat_variable,
     set_of,
     variable,
     the,
@@ -16,6 +17,7 @@ from krrood.entity_query_language.exceptions import (
     CalledMatchMultipleTimes,
     PositionalArgumentsInMatchPattern,
     MatchTypeCannotBeDetermined,
+    ReadOnlyMapping,
     SymbolicDunderAccessError,
 )
 from krrood.entity_query_language.predicate import HasType
@@ -25,12 +27,13 @@ from krrood.entity_query_language.core.mapped_variable import (
 )
 from krrood.entity_query_language.operators.arithmetic import ArithmeticOperation
 from krrood.entity_query_language.operators.comparator import Comparator
-from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.query.match import AttributeMatch, Match
 from krrood.entity_query_language.query.query_modifiers import HasQueryModifiers
 from krrood.entity_query_language.core.base_expressions import UnificationDict
-from krrood.parametrization.random_events_translator import is_literal_comparator
 from ..dataset.example_classes import KRROODPositions, KRROODPosition
 from ..dataset.semantic_world_like_classes import (
+    Cabinet,
+    Drawer,
     FixedConnection,
     Container,
     Handle,
@@ -287,7 +290,7 @@ def test_match_without_domain_selects_from_symbol_graph():
     Generation requires an explicit generative backend.
     """
     existing = KRROODPosition(1.0, 2.0, 3.0)
-    result = an(KRROODPosition)(x=1.0, y=2.0, z=3.0).tolist()
+    result = a(KRROODPosition)(x=1.0, y=2.0, z=3.0).tolist()
     # the existing object itself is returned (selection), not a freshly-built equal one
     assert any(r is existing for r in result)
     assert all(isinstance(r, KRROODPosition) and r == existing for r in result)
@@ -635,3 +638,24 @@ def test_a_second_pattern_still_raises_when_the_matched_class_is_not_callable():
     match = a(KRROODPosition)(x=1.0)
     with pytest.raises(CalledMatchMultipleTimes):
         match(y=2.0)
+
+
+# %% writing an attribute value back into a match
+
+
+def test_writing_through_a_flattened_attribute_of_a_match_is_rejected():
+    """
+    A flattening reaches every element of a collection without naming one, so a match
+    whose attribute is reached through one has no single place to write the value.
+    """
+    drawer = Drawer(handle=Handle(name="Handle1"), container=Container(name="Drawer1"))
+    match = a(Cabinet)(container=Container(name="Container1"), drawers=[drawer])
+    attribute_match = AttributeMatch(
+        _parent_=match,
+        attribute_name="handle",
+        assigned_value=Handle(name="Handle9"),
+        _variable_=flat_variable(match._variable_.drawers).handle,
+    )
+
+    with pytest.raises(ReadOnlyMapping):
+        attribute_match._update_kwargs_from(match)

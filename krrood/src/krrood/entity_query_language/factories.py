@@ -27,6 +27,10 @@ from krrood.entity_query_language.core.base_expressions import (
     TruthValueOperator,
     OperationResult,
 )
+from krrood.entity_query_language.operators.causal import (
+    cause,
+    confounder,
+)
 from krrood.entity_query_language.core.helpers import _resolve_domain
 from krrood.entity_query_language.core.mapped_variable import (
     FlatVariable,
@@ -168,6 +172,12 @@ def variable_from(
     return Variable(_domain_=domain)
 
 
+# %% Causal Constructs
+
+# `cause` and `confounder` (see operators/causal.py) are re-exported here so query-
+# building imports can come from this one module, alongside `a`, `an`, `set_of`, and
+# the rest of this file's factories.
+
 # %% Operators on Variables
 
 
@@ -215,7 +225,13 @@ def flat_variable(
 
     This returns a DomainMapping that, when evaluated, yields one solution per inner
     element (similar to SQL UNNEST), keeping existing variable bindings intact.
+
+    Each call yields a variable of its own, so two flattenings of the same collection
+    range over its elements independently and a condition can relate one element to
+    another.
     """
+    # Constructed directly rather than through `_get_mapped_variable_`, whose cache
+    # would give every flattening of one collection the same identity.
     return FlatVariable(var)
 
 
