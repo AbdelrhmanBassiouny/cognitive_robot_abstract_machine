@@ -602,7 +602,7 @@ def test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen(
     """
     Read from where the camera stands, a direction means what it means on screen.
 
-    Measured on this capture: the cube stands 25 mm above the square hole in the picture
+    Measured on this capture: the cube stands 28 mm above the square hole in the picture
     and the cylinder 34 mm to its right, so *right of* leaves the cylinder and the cube
     is told from it by *above* -- which the two of them standing on one table is what
     makes possible, since neither is above the other in the world.
