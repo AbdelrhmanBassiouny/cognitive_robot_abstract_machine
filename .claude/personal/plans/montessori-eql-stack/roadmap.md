@@ -1428,3 +1428,28 @@ required a reference frame since before the merge base. It is the one failure th
 roadmap has recorded as pre-existing for many rounds, it reproduces on
 `stutter_montessori`, and chasing it needs the workspace this container does not have.
 Left alone rather than guessed at.
+
+## 2026-09-01: the long-standing falling-shape failure was one missing frame
+
+The section above left
+`test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion` red as
+"needs the workspace to chase". The developer asked for it fixed, skipped or xfailed,
+and it turned out to need none of those three as a judgement call: the cause is in the
+test and it is a single argument.
+
+`move_to` assigned a frameless `HomogeneousTransformationMatrix` to the shape's
+connection origin. That setter transforms the value into the connection's parent frame
+and therefore has to be told which frame it is in, so the *first* call raised
+`MissingReferenceFrameError` -- the test never reached the movement it exists to
+exercise, and its three assertions had not run in a long time. It reproduced on
+`stutter_montessori` because the setter's requirement predates both branches.
+
+Which frame is not a guess. The coordinates are read off `global_transform` two lines
+above, so they are the world root's; and the world root is also the connection's
+parent, because `MontessoriWorld._spawn_free_body` joints a movable shape straight to
+`world.root` and writes its own origin with `reference_frame=self.world.root`. Stating
+it transforms through an identity, so the poses the test means are unchanged --
+which is what makes the fix safe to push from a container that cannot run it.
+
+`085f160f9`. Whether the assertions themselves hold is now a real question for the
+first time, and CI answers it rather than this session.
