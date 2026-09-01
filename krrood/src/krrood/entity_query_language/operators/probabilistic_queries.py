@@ -33,6 +33,10 @@ from krrood.entity_query_language.exceptions import (
     BackendCannotEvaluateProbabilisticQuery,
     NoSolutionFound,
 )
+from krrood.parametrization.exceptions import JointQueryAcrossClassesNotSupported
+from krrood.parametrization.random_events_translator import (
+    WhereExpressionToRandomEventTranslator,
+)
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.mapped_variable import Attribute
     from krrood.entity_query_language.factories import ConditionType
@@ -43,15 +47,18 @@ if TYPE_CHECKING:
         UnderspecifiedParameters,
     )
 
-# Every local import below (inside a method body, not at module level) exists to avoid
-# a circular import: krrood.entity_query_language.factories imports Distribution/
-# Probability from this module, so anything imported here at module level that reaches
-# back to factories -- directly (factories.count/entity) or indirectly
-# (krrood.parametrization.parameterizer, which itself imports from factories) -- would
-# cycle. Deferring those imports into each method body instead (matching
-# operators/causal.py's existing leaf-module pattern) delays them until a backend
-# actually evaluates the query, by which point every module involved has finished
-# loading.
+# krrood.entity_query_language.factories imports Distribution/Probability from this
+# module, so anything imported here at module level that reaches back to factories
+# would cycle. JointQueryAcrossClassesNotSupported/WhereExpressionToRandomEventTranslator
+# (imported above) don't -- neither krrood.parametrization.exceptions nor
+# krrood.parametrization.random_events_translator import factories.py at runtime (only
+# under TYPE_CHECKING, for a type hint neither ever needs at runtime). The two imports
+# below stay local instead: factories.count/entity is a direct runtime dependency on
+# factories.py itself, and krrood.parametrization.parameterizer imports factories.and_
+# for real (not just a type hint) -- both would cycle if hoisted, so they're deferred
+# into each method body instead (matching operators/causal.py's existing leaf-module
+# pattern), delaying them until a backend actually evaluates the query, by which point
+# every module involved has finished loading.
 
 
 @dataclass(eq=False, repr=False)
@@ -112,14 +119,8 @@ class Probability(ProbabilisticQuery):
         :raises JointQueryAcrossClassesNotSupported: If the condition references
             attributes reached from more than one ``variable(...)`` root, or none.
         """
-        # See the module-level comment above for why these are local imports.
+        # See the module-level comment above for why this is a local import.
         from krrood.entity_query_language.factories import count, entity
-        from krrood.parametrization.exceptions import (
-            JointQueryAcrossClassesNotSupported,
-        )
-        from krrood.parametrization.random_events_translator import (
-            WhereExpressionToRandomEventTranslator,
-        )
 
         referenced_attributes = WhereExpressionToRandomEventTranslator(
             self.condition

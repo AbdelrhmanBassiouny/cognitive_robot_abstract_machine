@@ -1,11 +1,20 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 
-from typing_extensions import Any, List, Set, Type
+from typing_extensions import Any, List, Set, TYPE_CHECKING, Type
 
 import random_events.variable
 from krrood.entity_query_language.core.variable import Variable
-from krrood.entity_query_language.factories import ConditionType
 from krrood.exceptions import DataclassException, InputError
+
+if TYPE_CHECKING:
+    # None of these exceptions construct a Probability/Distribution -- ConditionType is
+    # only ever a dataclass field annotation here, so importing krrood.entity_query_
+    # language.factories at runtime (which would cycle back through
+    # operators/probabilistic_queries.py, which factories.py imports Distribution/
+    # Probability from) isn't needed.
+    from krrood.entity_query_language.factories import ConditionType
 
 
 @dataclass
