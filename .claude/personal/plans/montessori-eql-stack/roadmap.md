@@ -1359,3 +1359,72 @@ alone -- converting it would conflict with #168, which declares `rapidfuzz` ther
 
 The `needs-resolution` label is still on the pull request; the routine that applies it
 clears it on its next pass now that the branch merges cleanly.
+
+## 2026-09-01: what CI said about the main merge
+
+`3e9f3847` was pushed with only static verification behind it, and CI came back red in
+six jobs. Fixed in `82a2c0a8e`. Three of the four causes were the merge's own, and all
+three are the same shape: `main` moved something, the auto-merge kept the branch's use
+of where it used to be, and `git` said nothing.
+
+- **`insert_shape_action.py` called two things that had moved.**
+  `translate_free_space_to_where_condition` became
+  `GraphOfBoundingBoxes.constrain_to_free_space` (`1a6d4206e`), which attaches the
+  condition to the variable's own query rather than returning it, and
+  `navigation_map_at_target` became a classmethod of `PlanarGraphOfBoundingBoxes`. The
+  first killed three montessori test modules at import. Ported the way `main` ported
+  its own caller in `sage10k_actions.py`, including the third thing that commit fixed
+  there and this file also had: a planar map asked for a node by a full 3D position
+  rather than by the pose's floor-plane projection.
+- **`PickUpAction` passed a view where a body was wanted.** `main` made
+  `object_designator` a view and took `.root` at every use; this branch's
+  `grasped_object=self.object_designator` was added after that and was missed in the
+  resolution, so both coraplex demo jobs died on `'Milk' object has no attribute
+  'collision'`.
+- **The `experiments` ORM interface lost a declared dependency.** Taking `main`'s
+  `WORKSPACE_ORM_INTERFACES` whole dropped `segmind`, which this branch's generator
+  imports, and `main`'s own `test_declared_dependencies_are_the_ones_the_generator_imports`
+  caught it.
+
+The fourth was **the thing this merge decided not to do**. `cramera` resolved its
+dependencies from a `requirements.txt`; the merge left it alone as "valid setuptools,
+so not worth conflicting with #168". `main` had landed
+`test_dependency_declarations.py`, which fails exactly that. It declares them inline
+now, `experiments` declares the `cramera` and `segmind` it imports, and the
+requirements file is gone. The lesson is narrow and worth keeping: a convention `main`
+has moved to is a convention `main` may be testing, so the check for "is the old way
+still allowed" is to look for a test of it, not to reason about whether it still works.
+
+Three more failures were the branch's own, red before the merge and left red by it:
+`apply_grasp_contact_parameters` has taken a `friction` argument since `72a9c186d`
+while its two tests still called it without one, `MontessoriLiveEventSource` has taken
+the run's clock since the timeline work while one of its tests still built it without
+one, and two test processes reaching `parse_panda` at once downloaded the same mesh
+into the same directory under one temporary name, so whichever renamed first took the
+file out from under the other. All three fixed; the mesh one is pinned by two tests
+verified to fail against the shared name.
+
+### The check the pyflakes differential was missing
+
+`pyflakes` is per-file, so it sees an undefined *name* and never sees that
+`from x import y` names something `x` does not define. That is precisely the shape of
+the `insert_shape_action` breakage, and of the two `giskardpy/executor.py` rounds this
+roadmap already records -- the import-shaped ones happened to be caught only because
+the *use* was also undefined in the same file.
+
+The differential now has a second half: parse every
+`from <workspace module> import <name>` in the tree, resolve the module to its file,
+and report a name that file does not define, following `import *` re-exports through
+`__init__.py`. Run against the merge and against the branch before it, the two sets
+come out identical -- 41 findings either way, all long-standing (generated segmind
+SCRDR model files, and ROS shims the resolver cannot see through). The signal is the
+*difference*, exactly as with pyflakes.
+
+### Still red, and not this merge's
+
+`test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion` writes a
+frameless `HomogeneousTransformationMatrix` into a connection origin whose setter has
+required a reference frame since before the merge base. It is the one failure this
+roadmap has recorded as pre-existing for many rounds, it reproduces on
+`stutter_montessori`, and chasing it needs the workspace this container does not have.
+Left alone rather than guessed at.
