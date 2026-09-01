@@ -6,6 +6,7 @@ import numpy as np
 import giskardpy
 import giskardpy.qp.solvers
 import semantic_digital_twin.orm.ormatic_interface
+from giskardpy.motion_statechart.graph_node import Goal, MotionStatechartNode
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from krrood.ormatic.custom_types import NumpyType
 from krrood.ormatic.ormatic import ORMatic
@@ -25,9 +26,19 @@ dependencies = [semantic_digital_twin.orm.ormatic_interface]
 
 type_mappings = {np.ndarray: NumpyType}
 
+# classes that a dependent package (e.g. coraplex) subclasses: give them SQLAlchemy
+# joined-table-inheritance polymorphism here even though they have no children within
+# this package, since the dependent package is generated later and has no way to add
+# it retroactively (see ORMatic.always_polymorphic_classes)
+always_polymorphic_classes = {Goal, MotionStatechartNode}
+
 
 ormatic = ORMatic.from_package(
-    [giskardpy], dependencies, ignored_classes, type_mappings
+    [giskardpy],
+    dependencies,
+    ignored_classes,
+    type_mappings,
+    always_polymorphic_classes=always_polymorphic_classes,
 )
 logging.getLogger("krrood").setLevel(logging.DEBUG)
 

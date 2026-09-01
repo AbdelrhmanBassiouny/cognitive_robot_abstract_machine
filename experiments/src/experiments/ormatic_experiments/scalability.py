@@ -48,7 +48,7 @@ def build_cram_class_sets() -> Tuple[Set[Type], List[Type], dict]:
     :return: Tuple of (classes, alternative_mappings, type_mappings) ready to pass to
         :func:`run_scalability_experiment`.
     """
-    classes, alternative_mappings, type_mappings = get_classes_of_ormatic_interface(
+    classes, alternative_mappings, type_mappings, _ = get_classes_of_ormatic_interface(
         coraplex.orm.ormatic_interface
     )
     classes = set(classes)

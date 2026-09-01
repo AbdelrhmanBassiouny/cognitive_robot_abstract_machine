@@ -31,7 +31,7 @@ from krrood.ormatic.sqlalchemy_generator import SQLAlchemyGenerator
 from krrood.ormatic.type_dict import TypeDict
 from krrood.ormatic.utils import InheritanceStrategy, classes_of_package
 from krrood.utils import module_and_class_name, recursive_subclasses, get_module_of_type
-from krrood.ormatic.wrapped_table import WrappedTable, AssociationObject
+from krrood.ormatic.wrapped_table import WrappedTable, ExternalTable, AssociationObject
 from krrood.adapters.json_serializer import SubclassJSONSerializer, JSONData
 from krrood.class_diagrams.class_diagram import (
     ClassDiagram,
@@ -80,6 +80,36 @@ class ORMatic:
     The inheritance strategy to use.
     """
 
+    externally_mapped_classes: Dict[Type, Type] = field(default_factory=dict)
+    """
+    Maps a domain class already mapped by an ormatic-interface dependency to the
+    :class:`DataAccessObject` subclass that maps it there. Classes found here are
+    imported and reused instead of being regenerated as a new table.
+    """
+
+    ormatic_interface_dependencies: List[ModuleType] = field(default_factory=list)
+    """
+    The already-generated ormatic-interface modules this interface builds on, if any.
+
+    When non-empty, the generated file imports and reuses the sole dependency's
+    declarative ``Base`` instead of declaring a new one, so both files share one
+    SQLAlchemy registry and ``MetaData``.
+    """
+
+    always_polymorphic_classes: Set[Type] = field(default_factory=set)
+    """
+    Root classes (no local parent) to give SQLAlchemy joined-table-inheritance
+    polymorphism (a discriminator column and ``polymorphic_on``) even though they
+    have no children in this run.
+
+    A class only needs this when it is known to be subclassed by a *different*,
+    dependent package: that package is generated later, in its own run, so this
+    package has no way to discover the subclass on its own and would otherwise
+    generate a plain, non-polymorphic table for it. Without this, loading the class
+    polymorphically still mostly works, but SQLAlchemy rejects assigning the
+    subclass to a relationship typed at this class (``FlushError``).
+    """
+
     foreign_key_postfix = "_id"
     """
     The postfix that will be added to foreign key columns (not the relationships).
@@ -109,6 +139,16 @@ class ORMatic:
     The wrapped tables instances for the SQLAlchemy conversion.
     """
 
+    external_tables: Dict[WrappedClass, ExternalTable] = field(
+        default_factory=dict, init=False
+    )
+    """
+    Lookup-only stand-ins for classes already mapped by an ormatic-interface
+    dependency (see :attr:`externally_mapped_classes`). Never rendered by the
+    generator; consulted only to resolve foreign keys, relationships, and parent
+    classes that point at them.
+    """
+
     association_objects: List[AssociationObject] = field(
         default_factory=list, init=False
     )
@@ -118,6 +158,8 @@ class ORMatic:
 
     def __post_init__(self):
         self.imported_modules.add(get_module_of_type(TypeDict))
+        for dependency in self.ormatic_interface_dependencies:
+            self.imported_modules.add(dependency.__name__)
         self._fill_type_mappings()
         self._create_inheritance_graph()
         self._add_alternative_mappings_to_class_diagram()
@@ -126,6 +168,17 @@ class ORMatic:
 
         for wrapped_table in self.wrapped_tables.values():
             self.imported_modules.add(get_module_of_type(wrapped_table.wrapped_clazz.clazz))
+
+    @property
+    def base_source_module(self) -> Optional[str]:
+        """
+        :return: The dotted module name to import the shared declarative ``Base``
+            from, or ``None`` if this interface has no dependency and therefore owns
+            (declares) its own ``Base``.
+        """
+        if not self.ormatic_interface_dependencies:
+            return None
+        return self.ormatic_interface_dependencies[0].__name__
 
     def _fill_type_mappings(self):
         """
@@ -145,6 +198,13 @@ class ORMatic:
 
     def _create_wrapped_tables(self):
         for wrapped_clazz in self.wrapped_classes_in_topological_order:
+
+            # already mapped by a dependency: reuse it instead of regenerating it
+            if dao_class := self.externally_mapped_classes.get(wrapped_clazz.clazz):
+                self.external_tables[wrapped_clazz] = ExternalTable(
+                    wrapped_clazz=wrapped_clazz, dao_class=dao_class
+                )
+                continue
 
             # check if the class has an alternative mapping
             if alternative_mapping := self.get_alternative_mapping(wrapped_clazz):
@@ -250,7 +310,21 @@ class ORMatic:
 
     @property
     def mapped_classes(self) -> List[Type]:
-        return [key.clazz for key in self.wrapped_tables.keys()]
+        return [key.clazz for key in self.wrapped_tables.keys()] + [
+            key.clazz for key in self.external_tables.keys()
+        ]
+
+    def table_for(self, wrapped_class: WrappedClass):
+        """
+        :param wrapped_class: The wrapped class to find the table of.
+        :return: The :class:`WrappedTable` generated for it, or the
+            :class:`ExternalTable` standing in for it if it is already mapped by a
+            dependency.
+        :raises KeyError: If neither exists for the given class.
+        """
+        if wrapped_class in self.wrapped_tables:
+            return self.wrapped_tables[wrapped_class]
+        return self.external_tables[wrapped_class]
 
     def make_all_tables(self):
         for table in self.wrapped_tables.values():
@@ -288,6 +362,7 @@ class ORMatic:
         ignored_classes: Set[Type],
         type_mappings: Dict[Type, Type],
         ignore_krrood_test_classes: bool = True,
+        always_polymorphic_classes: Set[Type] = frozenset(),
     ):
         """
         Create an instance from a list of packages, dependencies, and ignored classes.
@@ -298,20 +373,36 @@ class ORMatic:
         :param type_mappings: The type mappings that should be used.
         :param ignore_krrood_test_classes: Rather to ignore classes from the krrood test
             package.
+        :param always_polymorphic_classes: Classes from ``packages`` that a *different*,
+            dependent package is known to subclass. See
+            :attr:`ORMatic.always_polymorphic_classes`.
         :return: The ORMatic instance.
         """
-        all_classes, all_alternative_mappings, all_type_mappings = set(), set(), {}
+        if len(ormatic_interface_dependencies) > 1:
+            raise ValueError(
+                "ORMatic currently supports at most one ormatic_interface_dependencies "
+                "entry: every generated interface shares a single declarative Base "
+                "with its dependency, and merging independent declarative registries "
+                "isn't supported."
+            )
 
-        # import classes from the existing interface
+        all_classes, all_alternative_mappings, all_type_mappings = set(), set(), {}
+        all_externally_mapped_classes: Dict[Type, Type] = {}
+
+        # classes already mapped by the dependency are kept in the class diagram (so
+        # inheritance/association edges to them still resolve) but are not remapped:
+        # they are imported and reused via `externally_mapped_classes` instead.
         for ormatic_interface in ormatic_interface_dependencies:
             (
                 interface_classes,
                 interface_alternative_mappings,
                 interface_type_mappings,
+                interface_externally_mapped_classes,
             ) = get_classes_of_ormatic_interface(ormatic_interface)
             all_classes |= set(interface_classes)
             all_alternative_mappings |= set(interface_alternative_mappings)
             all_type_mappings.update(interface_type_mappings)
+            all_externally_mapped_classes.update(interface_externally_mapped_classes)
 
         for package in packages:
             all_classes |= set(classes_of_package(package))
@@ -347,5 +438,8 @@ class ORMatic:
             class_diagram,
             type_mappings=TypeDict(all_type_mappings),
             alternative_mappings=list(all_alternative_mappings),
+            externally_mapped_classes=all_externally_mapped_classes,
+            ormatic_interface_dependencies=list(ormatic_interface_dependencies),
+            always_polymorphic_classes=set(always_polymorphic_classes),
         )
         return ormatic

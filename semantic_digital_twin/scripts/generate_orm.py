@@ -32,6 +32,8 @@ from semantic_digital_twin.world import (
     WorldStateBatchContextManager,
 )
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
+from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.geometry import Bounds, Sphere, Cylinder
 
 # remove classes that should not be mapped
 ignore_classes = {
@@ -46,6 +48,12 @@ ignore_classes = {
     SemanticDirection,
     SubclassJSONSerializer,
 }
+
+# classes that a dependent package (e.g. coraplex, experiments) subclasses: give them
+# SQLAlchemy joined-table-inheritance polymorphism here even though they have no
+# children within this package, since the dependent package is generated later and
+# has no way to add it retroactively (see ORMatic.always_polymorphic_classes)
+always_polymorphic_classes = {Pose, Bounds, Sphere, Cylinder}
 
 
 def generate_orm():
@@ -62,6 +70,7 @@ def generate_orm():
         type_mappings={
             trimesh.Trimesh: semantic_digital_twin.orm.model.TrimeshType,
         },
+        always_polymorphic_classes=always_polymorphic_classes,
     )
     ormatic.make_all_tables()
     ormatic_interface_path = (

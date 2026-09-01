@@ -14,7 +14,7 @@ def test_extension(tmp_path):
     Test that existing ormatic interfaces can be extended.
     """
     # import classes from the existing interface
-    classes, alternative_mappings, type_mappings = get_classes_of_ormatic_interface(
+    classes, alternative_mappings, type_mappings, _ = get_classes_of_ormatic_interface(
         ormatic_interface
     )
     assert type_mappings == ormatic_interface.Base.type_mappings
@@ -45,7 +45,7 @@ def test_extension(tmp_path):
     sys.modules[spec.name] = module  # make it discoverable during exec
     spec.loader.exec_module(module)
 
-    new_classes, new_alternative_mappings, new_type_mappings = (
+    new_classes, new_alternative_mappings, new_type_mappings, _ = (
         get_classes_of_ormatic_interface(module)
     )
 

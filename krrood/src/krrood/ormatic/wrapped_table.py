@@ -14,6 +14,7 @@ from typing_extensions import (
     Optional,
     Set,
     Type,
+    Union,
     get_origin,
 )
 
@@ -179,6 +180,69 @@ class AssociationObject:
 
 
 @dataclass
+class ExternalTable:
+    """
+    A lookup-only stand-in for a class already mapped by an ormatic-interface
+    dependency.
+
+    It is never rendered by the generator — its columns already exist in the
+    dependency's generated file. It exists purely so that local tables which use it
+    as a foreign key target, relationship target, or parent class can resolve it,
+    the same way they would resolve a locally generated :class:`WrappedTable`.
+    """
+
+    wrapped_clazz: WrappedClass
+    """
+    The wrapped (domain) class that this stands in for.
+    """
+
+    dao_class: Type
+    """
+    The ``DataAccessObject`` subclass that already maps ``wrapped_clazz`` in the
+    dependency's generated interface.
+    """
+
+    @property
+    def tablename(self) -> str:
+        """
+        :return: The DAO class's bare name, exactly as used inside quoted SQLAlchemy
+            strings (``ForeignKey('X.id')``, ``relationship('X')``). Those resolve
+            against the shared ``Base``/``MetaData``/class registry, so no module
+            qualification is needed here.
+        """
+        return self.dao_class.__name__
+
+    @property
+    def qualified_reference(self) -> str:
+        """
+        :return: The DAO class's fully qualified ``module.ClassName`` reference, for
+            use as bare (unquoted) Python source, e.g. as a base class or inside an
+            unquoted ``ForeignKey(X.id)`` expression.
+        """
+        return module_and_class_name(self.dao_class)
+
+    @cached_property
+    def primary_key_name(self) -> str:
+        return sqlalchemy.inspect(self.dao_class).primary_key[0].name
+
+    @property
+    def full_primary_key_name(self) -> str:
+        return f"{self.tablename}.{self.primary_key_name}"
+
+    @property
+    def qualified_full_primary_key_name(self) -> str:
+        return f"{self.qualified_reference}.{self.primary_key_name}"
+
+    @cached_property
+    def mapped_field_names(self) -> Set[str]:
+        """
+        :return: Every ORM attribute name already mapped on ``dao_class``, including
+            ones inherited from its own (possibly external) ancestors.
+        """
+        return {prop.key for prop in sqlalchemy.inspect(self.dao_class).attrs}
+
+
+@dataclass
 class WrappedTable:
     """
     A class that wraps a dataclass and contains all the information needed to create a
@@ -240,7 +304,9 @@ class WrappedTable:
     @property
     def primary_key(self):
         if self.parent_table is not None:
-            column_type = f"ForeignKey({self.parent_table.full_primary_key_name})"
+            column_type = (
+                f"ForeignKey({self.parent_table.qualified_full_primary_key_name})"
+            )
         else:
             column_type = "Integer"
 
@@ -281,8 +347,13 @@ class WrappedTable:
         return False
 
     def create_mapper_args(self):
-        # this is the root of an inheritance structure
-        if self.parent_table is None and self.has_children:
+        # this is the root of an inheritance structure, either locally (it already
+        # has children in this run) or because a dependent package is known to
+        # subclass it later (see ORMatic.always_polymorphic_classes)
+        if self.parent_table is None and (
+            self.has_children
+            or self.wrapped_clazz.clazz in self.ormatic.always_polymorphic_classes
+        ):
             self.custom_columns.append(
                 (
                     ColumnConstructor(
@@ -310,7 +381,7 @@ class WrappedTable:
             if self.ormatic.inheritance_strategy == InheritanceStrategy.JOINED:
                 self.mapper_args.update(
                     {
-                        "'inherit_condition'": f"{self.primary_key_name} == {self.parent_table.full_primary_key_name}",
+                        "'inherit_condition'": f"{self.primary_key_name} == {self.parent_table.qualified_full_primary_key_name}",
                         # batch subclass-table loads instead of one SELECT per instance
                         "'polymorphic_load'": "'selectin'",
                     }
@@ -320,6 +391,20 @@ class WrappedTable:
     def full_primary_key_name(self):
         return f"{self.tablename}.{self.primary_key_name}"
 
+    @property
+    def qualified_reference(self) -> str:
+        """
+        :return: Same as :attr:`tablename`. A local table is defined in the same file
+            it is referenced from, so it never needs module qualification; this exists
+            only so callers can use one name uniformly across ``WrappedTable`` and
+            :class:`ExternalTable`.
+        """
+        return self.tablename
+
+    @property
+    def qualified_full_primary_key_name(self) -> str:
+        return self.full_primary_key_name
+
     @cached_property
     def tablename(self):
         result = self.wrapped_clazz.name
@@ -327,7 +412,7 @@ class WrappedTable:
         return result
 
     @cached_property
-    def parent_table(self) -> Optional[WrappedTable]:
+    def parent_table(self) -> Optional[Union[WrappedTable, ExternalTable]]:
         """
         Resolve the parent DAO table for this table.
 
@@ -355,17 +440,17 @@ class WrappedTable:
                     )
                 )
 
-                if (
-                    isinstance(edge_data, Inheritance)
-                    and parent_wrapped in self.ormatic.wrapped_tables
+                if isinstance(edge_data, Inheritance) and (
+                    parent_wrapped in self.ormatic.wrapped_tables
+                    or parent_wrapped in self.ormatic.external_tables
                 ):
-                    return self.ormatic.wrapped_tables[parent_wrapped]
+                    return self.ormatic.table_for(parent_wrapped)
         except (AttributeError, KeyError):
             pass
 
         direct_parent = self._find_direct_parent_wrapped()
         if direct_parent is not None:
-            return self.ormatic.wrapped_tables[direct_parent]
+            return self.ormatic.table_for(direct_parent)
 
         if not self.is_alternatively_mapped:
             return None
@@ -421,10 +506,10 @@ class WrappedTable:
                 # Skip classes that are not in the class diagram
                 continue
 
-            # Check if this wrapped class exists in wrapped_tables
-            if (
-                parent_wrapped is not None
-                and parent_wrapped in self.ormatic.wrapped_tables
+            # Check if this wrapped class exists in wrapped_tables or external_tables
+            if parent_wrapped is not None and (
+                parent_wrapped in self.ormatic.wrapped_tables
+                or parent_wrapped in self.ormatic.external_tables
             ):
                 return parent_wrapped
 
@@ -518,6 +603,11 @@ class WrappedTable:
         inherited_mapped_names: set[str] = set()
         p = self.parent_table
         while p is not None:
+            if isinstance(p, ExternalTable):
+                # Its dependency's own ancestry (local or external) is already baked
+                # into its live mapped attributes, so one introspection covers it all.
+                inherited_mapped_names.update(p.mapped_field_names)
+                break
             # Check what the parent actually created
             inherited_mapped_names.update(c.name for c in p.builtin_columns)
             inherited_mapped_names.update(c.name for c in p.custom_columns)
@@ -533,8 +623,13 @@ class WrappedTable:
         ]
 
         # If the parent table is alternatively mapped, drop fields that do not exist
-        # in the original parent class (compare by name as well)
-        if self.parent_table is not None and self.parent_table.is_alternatively_mapped:
+        # in the original parent class (compare by name as well). An external parent's
+        # `mapped_field_names` above already reflects exactly what it maps, so this
+        # reconciliation only applies to locally generated parents.
+        if (
+            isinstance(self.parent_table, WrappedTable)
+            and self.parent_table.is_alternatively_mapped
+        ):
             og_parent_class = self.parent_table.wrapped_clazz.clazz.original_class()
             wrapped_og_parent_class = (
                 self.ormatic.class_dependency_graph.get_wrapped_class(og_parent_class)
@@ -698,17 +793,18 @@ class WrappedTable:
             ColumnConstructor(column_name, column_type, column_constructor)
         )
 
-    def get_table_of_wrapped_field(self, wrapped_field: WrappedField) -> WrappedTable:
+    def get_table_of_wrapped_field(
+        self, wrapped_field: WrappedField
+    ) -> Union[WrappedTable, ExternalTable]:
         """
         :param wrapped_field: The wrapped field to get the table for.
         :return: The wrapped table for the given wrapped field.
         """
         type_endpoint = wrapped_field.type_endpoint
         try:
-            result = self.ormatic.wrapped_tables[
+            return self.ormatic.table_for(
                 self.ormatic.class_dependency_graph.get_wrapped_class(type_endpoint)
-            ]
-            return result
+            )
         except KeyError:
             raise WrappedTableNotFound(type_=type_endpoint, wrapped_field=wrapped_field)
 
@@ -860,8 +956,10 @@ class WrappedTable:
     @property
     def base_class_name(self):
         if self.parent_table is not None:
-            return self.parent_table.tablename
+            return self.parent_table.qualified_reference
         else:
+            # "Base" is always in scope here, whether this file declares it or
+            # imports it from a dependency (see ORMatic.base_source_module).
             return "Base"
 
     def __hash__(self):
