@@ -326,27 +326,45 @@ items:
     modules and two stubs into `test/bastler_test`, the repository-root `sys.path` inserts and the
     second CI invocation deleted. The seventeen code-quality threads are applied in the same pass,
     since each one reshapes code the fold is already moving.
+
+    **Folded 2026-09-02** (23f54b22, d6b8035a): #185's head merged in, base retargeted to
+    `claude/plan-item-kickoff-workflow-cuare2`, `development_tooling` gone - `bastler.pr_state`,
+    `bastler.personal_notes`, `bastler.build_site`, tests and stubs in `test/bastler_test`, 698
+    tests in `test_bastler`'s one invocation. The seventeen code-quality threads are applied and
+    resolved: pr_state's loose functions are the classes `CheckRollup`, `ClaudeSessionLink`,
+    `ChangeSize`, `PullRequestExport`, `RepositoryEndpoints`, `PullRequestFetcher` and
+    `LocalGitProbe`; every payload key, list filter, check state, board key and pr_data key is a
+    StrEnum; constants are ClassVars; `PersonalNotesBranch` fetches through the shell function
+    `bastler.stack` already used, which moved there; `build_site` parses the manifest through the
+    dashboard's validated `Plan` and reports through dataclasses with to_json/from_json; tests build
+    payloads through `PullRequestDetailPayload`, use `ScratchRepository`, read the plan from a
+    dataset file, and every fake is a dataclass. `CredentialVariable` in `maintenance_constants` is
+    the one home of the two token variables.
+
+    Two things learned in the fold worth keeping. The merge brought no stray main commits into the
+    diff because #185 already contained this branch's last merge of main - check `git merge-base
+    --is-ancestor` before choosing merge over re-cut. And `format_docstrings.py` declines a file
+    whenever docformatter would expand a one-line member docstring at the end of a class, because
+    the expansion eats the blank line black then restores; a new file converges only if its member
+    docstrings are already in the three-line form the tool produces, which is what the branch's new
+    modules now carry. `stack.py` and `build_dashboard.py` were already declined on #185's head and
+    stay black-only.
+
+    Still this item's own: the stack chip read from the pull request's native stack object,
+    specified 2026-07-31 and not implemented.
   blockers:
     - >-
-      Cross-plan dependency, not representable in depends_on: this branch stacks onto
-      bastler-package (#185, bastler-package plan) and folds its modules into the package under
-      bastler's naming. As of 2026-09-02 #185 is open, out of draft and promoted upstream
+      Cross-plan dependency, not representable in depends_on: this branch is stacked on
+      bastler-package (#185, bastler-package plan) since 2026-09-02 - its base is that branch and
+      its modules are folded into the package. #185 is open, out of draft and promoted upstream
       (cram2-link-sent) but unmerged, and itself carries needs-resolution against main (a
-      file-location conflict on test/bastler_test/test_setup_steps.py, 37 main commits behind). This
-      item lands only after it does.
+      file-location conflict on test/bastler_test/test_setup_steps.py). This item lands only after
+      it does; GitHub retargets the base to main by itself when it merges.
     - >-
-      Nineteen unresolved review threads from the owner's 2026-08-30 review of head cf9b5c15, none
-      recorded here until 2026-09-02. Two ask for the rebase onto bastler; seventeen are
-      code-quality asks - StrEnums for payload keys, states and check conclusions, dataclasses for
-      every class, module constants grouped where they are found, member docstrings, loose functions
-      moved into classes, inline test data moved into files, a shared constants module for paths,
-      environment variables as one StrEnum, a Claude session-link factory for tests, and
-      GitCommandRunner in place of a hand-rolled run_git.
-    - >-
-      Conflicts against main in three files (build_dashboard.py, stack.py, ci.yml; 436 commits
-      behind) as of the 2026-09-02 probe. A merge of main is not the fix: the base moves to #185's
-      head, whose package layout supersedes all three conflicting files, and the routine will then
-      restack this branch on #185 rather than on main.
+      Two review threads from the 2026-08-30 round are left open on purpose, each answered on the
+      thread and waiting on the user: GitCommandRunner in the tests (answered with
+      ScratchRepository, because GitCommandRunner imports bastler.stack, which imports pr_state) and
+      the "discuss the rebase options" thread (three options and the one taken are on it).
 - id: ready-to-promote-upstream-links
   title: 'PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links'
   branch: null
