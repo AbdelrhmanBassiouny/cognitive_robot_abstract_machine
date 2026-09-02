@@ -24,7 +24,7 @@ from integration_verdict import (
     read_checks,
 )
 
-from integration_block_record import BlockRecords, BlockStanding, published_heads
+from integration_block_record import BlockRecords, BlockStanding
 from integration_constants import BUILD_NAME_FORMAT, POINTER_BRANCH
 from integration_pass_record import PassedChecks, RecordedSubject
 from integration_plans import PlanFilter
@@ -254,7 +254,7 @@ class BranchChecks:
         :return: What the fork has each of its branches pointing at, read in one call
             rather than one per branch.
         """
-        return published_heads(self.git, self.remote)
+        return self.git.remote_branch_heads(self.remote)
 
 
 def stack_to_build(
@@ -287,11 +287,11 @@ def stack_to_build(
     )
     blocks = BlockRecords.read(run.git, remote)
     stack = run.stack(fork)
-    if not restack_first:
-        return blocks.annotate(checks.annotate(stack))
-    restack(stack, run.git, fork)
-    run.refresh_remotes()
-    return blocks.annotate(checks.annotate(run.stack(fork)))
+    if restack_first:
+        restack(stack, run.git, fork)
+        run.refresh_remotes()
+        stack = run.stack(fork)
+    return blocks.forget_lifted(stack).annotate(checks.annotate(stack))
 
 
 def tips_of(stack: Stack, plans: PlanFilter | None = None) -> list[Branch]:

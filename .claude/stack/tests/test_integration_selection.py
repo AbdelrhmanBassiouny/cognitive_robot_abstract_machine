@@ -7,8 +7,11 @@ repository involved.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
+
+from git_commands import ReferenceUpdate
 
 import pytest
 
@@ -345,6 +348,11 @@ class GitWithNothingPublished:
         :return: Nothing, which is what an empty listing looks like."""
         return ""
 
+    def remote_branch_heads(self, remote: str) -> dict[str, str]:
+        """:param remote: Ignored.
+        :return: No branch at all."""
+        return {}
+
 
 @dataclass
 class RunReadingStacksInTurn:
@@ -538,11 +546,22 @@ class GitWithOneBranchPublished:
     pushes: list[tuple[str, ...]] = field(default_factory=list)
     """Every push made through it, which writing a record adds one to."""
 
+    def remote_branch_heads(self, remote: str) -> dict[str, str]:
+        """:param remote: Ignored; there is one fork.
+        :return: The one branch and its head."""
+        return {self.branch: self.head}
+
+    def write_remote_references(
+        self, remote: str, updates: Sequence[ReferenceUpdate]
+    ) -> None:
+        """:param remote: The remote written to.
+        :param updates: What each reference is left at, remembered rather than pushed.
+        """
+        self.pushes.append(("push", remote, *(str(update) for update in updates)))
+
     def run(self, *arguments: str) -> str:
         """:param arguments: What git was asked to do.
         :return: What the fork answers."""
-        if arguments[0] == "for-each-ref":
-            return f"{self.branch} {self.head}"
         if arguments[0] == "ls-remote":
             if not self.already_passed:
                 return ""

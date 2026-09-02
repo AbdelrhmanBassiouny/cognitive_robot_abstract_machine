@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from git_commands import ReferenceUpdate
 from stack import Branch, Configuration, LabelWrite, Stack, resolve_ref
 
 from maintenance_board import PullRequestField
@@ -183,23 +184,6 @@ class BlockRecord:
         )
 
 
-def published_heads(git: MaintenanceGitCommandRunner, remote: str) -> dict[str, str]:
-    """
-    Read what the fork has each of its branches pointing at, in one call rather than
-    one per branch.
-
-    :param git: The runner to read through.
-    :param remote: The fork remote.
-    :return: The head per branch name.
-    """
-    listed = git.run(
-        "for-each-ref",
-        "--format=%(refname:strip=3) %(objectname)",
-        f"refs/remotes/{remote}/",
-    )
-    return dict(line.split(" ", 1) for line in listed.splitlines() if " " in line)
-
-
 @dataclass(frozen=True)
 class BlockRecords:
     """
@@ -299,12 +283,15 @@ class BlockRecords:
         dropped = tuple(
             record for record in replaced if record.reference not in rewritten
         )
-        self.git.run(
-            "push",
-            "--force",
+        self.git.write_remote_references(
             self.remote,
-            *(f"{record.commit}:{record.reference}" for record in written),
-            *(f":{record.reference}" for record in dropped),
+            [
+                *(
+                    ReferenceUpdate(record.reference, record.commit)
+                    for record in written
+                ),
+                *(ReferenceUpdate(record.reference) for record in dropped),
+            ],
         )
         return BlockRecords(
             git=self.git,
@@ -325,14 +312,39 @@ class BlockRecords:
         recorded = self.about(blocked_pull_request_number)
         if not recorded:
             return self
-        self.git.run(
-            "push", self.remote, *(f":{record.reference}" for record in recorded)
+        self.git.write_remote_references(
+            self.remote, [ReferenceUpdate(record.reference) for record in recorded]
         )
         return BlockRecords(
             git=self.git,
             remote=self.remote,
             records=tuple(record for record in self.records if record not in recorded),
         )
+
+    def forget_lifted(self, stack: Stack) -> BlockRecords:
+        """
+        Drop the records of every block that is gone: a pull request that has lost the
+        label, or has left the board.
+
+        A block lifted by a reproduction test, or by hand, cannot drop its own record -
+        neither writes to the fork - and a record with no label is read against nothing
+        until the branch is labelled again, when it would answer for a tree nothing
+        measured. The build is the one reader that can drop it, so it does.
+
+        :param stack: The derived stack, naming what is on the board and what it carries.
+        :return: What the fork now holds.
+        """
+        label = stack.configuration.integration_conflict_label
+        still_blocked = {
+            branch.pull_request_number
+            for branch in stack.branches
+            if label in branch.labels
+        }
+        records = self
+        for number in {record.blocked_pull_request_number for record in self.records}:
+            if number not in still_blocked:
+                records = records.forget(number)
+        return records
 
     def annotate(self, stack: Stack) -> Stack:
         """
@@ -342,7 +354,7 @@ class BlockRecords:
         :param stack: The derived stack.
         :return: The same stack, those branches carrying the standing of their block.
         """
-        heads = published_heads(self.git, self.remote)
+        heads = self.git.remote_branch_heads(self.remote)
         by_pull_request = {
             branch.pull_request_number: heads[branch.name]
             for branch in stack.branches

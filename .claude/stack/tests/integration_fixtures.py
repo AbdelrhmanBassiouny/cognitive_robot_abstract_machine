@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from git_commands import BranchPublication, ProposedPush
+from git_commands import BranchPublication, ProposedPush, ReferenceUpdate
 from stack import Branch, BranchStatus, IntegrationStrategy, PullRequest, Stack
 
 from integration_carried_pipeline import PIPELINE_PATHS
@@ -393,11 +393,24 @@ class GitAnsweringForTheFork:
     Every push made through it, in order.
     """
 
+    def remote_branch_heads(self, remote: str) -> dict[str, str]:
+        """:param remote: Ignored; there is one fork.
+        :return: What it has each branch pointing at."""
+        return dict(self.heads)
+
+    def write_remote_references(
+        self, remote: str, updates: Sequence[ReferenceUpdate]
+    ) -> None:
+        """:param remote: The remote written to.
+        :param updates: What each reference is left at, remembered rather than pushed.
+        """
+        self.pushes.append(
+            ("push", "--force", remote, *(str(update) for update in updates))
+        )
+
     def run(self, *arguments: str) -> str:
         """:param arguments: What git was asked to do.
         :return: What the fork answers."""
-        if arguments[0] == "for-each-ref":
-            return "\n".join(f"{branch} {head}" for branch, head in self.heads.items())
         if arguments[0] == "ls-remote":
             pattern = arguments[-1]
             return "\n".join(

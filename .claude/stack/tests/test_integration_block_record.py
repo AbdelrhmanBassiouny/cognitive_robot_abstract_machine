@@ -14,6 +14,7 @@ import dataclasses
 
 import pytest
 
+from git_commands import ReferenceUpdate
 from stack import DefaultLabel, LabelWrite, PullRequest
 
 from integration_block_record import (
@@ -28,6 +29,7 @@ from integration_build_commands import BlockBranchCommand, BuildCommand
 from integration_exit_codes import IntegrationExitCode
 from integration_report import IntegrationReport
 from integration_reproduction import CLEARED_COMMENT_PREFIX
+from integration_selection import stack_to_build
 from integration_tips import ReadmittedBranch
 
 from test_maintenance import (
@@ -103,6 +105,50 @@ def two_published_tips(checkout: ForkCheckout) -> tuple[MeasuredHead, MeasuredHe
         MeasuredHead(SECOND_TIP, A_PULL_REQUEST_NUMBER, blocked),
         MeasuredHead(FIRST_TIP, A_PARTNER_NUMBER, partner),
     )
+
+
+# %% the two things the runner does for a record
+
+
+def test_the_runner_reads_what_the_fork_has_each_branch_pointing_at(
+    fork_checkout: ForkCheckout,
+):
+    """
+    One call answers for every branch, which is what lets a rebuild compare a record
+    against the fork without asking about each branch in turn.
+    """
+    blocked, partner = two_published_tips(fork_checkout)
+
+    heads = fork_checkout.git.remote_branch_heads(A_FORK_REMOTE)
+
+    assert heads == {
+        UPSTREAM_BASE: fork_checkout.published_commit(A_FORK_REMOTE, UPSTREAM_BASE),
+        blocked.branch: blocked.commit,
+        partner.branch: partner.commit,
+    }
+
+
+def test_the_runner_writes_and_deletes_the_references_a_record_is_kept_as(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A record is a reference the fork is asked to hold, and later asked to drop.
+    """
+    blocked, _ = two_published_tips(fork_checkout)
+    reference = (
+        f"{BLOCK_RECORD_NAMESPACE}/{A_PULL_REQUEST_NUMBER}/{A_PULL_REQUEST_NUMBER}"
+    )
+
+    fork_checkout.git.write_remote_references(
+        A_FORK_REMOTE, [ReferenceUpdate(reference, blocked.commit)]
+    )
+    written = references_on(fork_checkout)
+    fork_checkout.git.write_remote_references(
+        A_FORK_REMOTE, [ReferenceUpdate(reference)]
+    )
+
+    assert written == {reference: blocked.commit}
+    assert references_on(fork_checkout) == {}
 
 
 # %% what a block is kept as
@@ -321,6 +367,125 @@ def test_annotating_a_stack_reads_each_blocked_branch_against_the_fork_s_heads()
     assert partner.block_standing is None
 
 
+# %% a record whose block is gone
+
+
+def a_recorded_block_on(checkout: ForkCheckout) -> None:
+    """
+    :param checkout: The fork to record a block on, over two published tips.
+    """
+    records_on(checkout).record(
+        create_integration_test_failure(measured_over=two_published_tips(checkout))
+    )
+
+
+def test_a_record_whose_pull_request_has_lost_its_label_is_dropped_when_the_stack_is_read(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A block lifted by a reproduction test, or by hand, leaves its record behind, since
+    neither can write to the fork - and a record with no label is read against nothing
+    until the branch is labelled again, when it would answer for a tree nothing
+    measured. The build drops it, being the one reader that can.
+    """
+    a_recorded_block_on(fork_checkout)
+    unlabelled = create_branch_object(SECOND_TIP, A_PULL_REQUEST_NUMBER)
+
+    BlockRecords.read(fork_checkout.git, A_FORK_REMOTE).forget_lifted(
+        create_stack_object([unlabelled])
+    )
+
+    assert references_on(fork_checkout) == {}
+
+
+def test_a_record_whose_pull_request_still_carries_the_label_is_kept(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The record is what the label means; dropping it would turn every standing block into
+    one no build can lift.
+    """
+    a_recorded_block_on(fork_checkout)
+    labelled = create_branch_object(
+        SECOND_TIP,
+        A_PULL_REQUEST_NUMBER,
+        labels=[make_configuration().integration_conflict_label],
+    )
+    before = references_on(fork_checkout)
+
+    BlockRecords.read(fork_checkout.git, A_FORK_REMOTE).forget_lifted(
+        create_stack_object([labelled])
+    )
+
+    assert references_on(fork_checkout) == before
+
+
+def test_a_record_whose_pull_request_has_left_the_board_is_dropped(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A closed or merged pull request has no block left to be about.
+    """
+    a_recorded_block_on(fork_checkout)
+
+    BlockRecords.read(fork_checkout.git, A_FORK_REMOTE).forget_lifted(
+        create_stack_object([])
+    )
+
+    assert references_on(fork_checkout) == {}
+
+
+def test_the_stack_a_build_is_made_from_drops_the_records_of_lifted_blocks():
+    """
+    The dropping happens where the standing is read, so every command that reads the
+    stack the build's way tidies what the clearing job could not.
+    """
+    unlabelled = create_branch_object("unlabelled", A_PULL_REQUEST_NUMBER)
+    stale = BlockRecord(A_PULL_REQUEST_NUMBER, A_PULL_REQUEST_NUMBER, A_HEAD)
+    git = GitAnsweringForTheFork(
+        heads={unlabelled.name: A_HEAD}, references={stale.reference: A_HEAD}
+    )
+    run = RunReadingAStack(create_stack_object([unlabelled]), git)
+
+    stack_to_build(run, RecordingFork(), restack_first=False)
+
+    assert [argument for push in git.pushes for argument in push].count(
+        str(ReferenceUpdate(stale.reference))
+    ) == 1
+
+
+@dataclasses.dataclass
+class RunReadingAStack:
+    """
+    An :class:`~integration_run.IntegrationRun` stand-in handing out one stack.
+    """
+
+    given: object
+    """
+    The stack it hands out.
+    """
+
+    git: GitAnsweringForTheFork
+    """
+    The runner the fork is read and written through.
+    """
+
+    configuration: object = dataclasses.field(default_factory=make_configuration)
+    """
+    The resolved configuration.
+    """
+
+    def stack(self, fork: object) -> object:
+        """:param fork: Ignored.
+        :return: The stack."""
+        return self.given
+
+    def refresh_remotes(self) -> None:
+        """
+        Fetches nothing.
+        """
+
+
 # %% lifting a block the build has outgrown
 
 
@@ -512,7 +677,8 @@ def test_a_blocked_branch_whose_head_moved_is_carried_again_and_unblocked_on_a_g
     fork_checkout: ForkCheckout, capsys
 ):
     """
-    The whole defect in one build: a branch blocked in a tree that no longer exists is
+    The whole defect in one build: a branch blocked in a tree that no longer exists is.
+
     tried again, and the suite passing over a build carrying it is what lifts the label
     - with nobody having written a reproduction test.
     """
