@@ -44,8 +44,22 @@ is still specified-not-implemented; it is the item's remaining feature work afte
 
 ## Done so far
 
-- Context gathered; manifest corrected (status in_progress, session, 3 precise blockers, notes).
+- Context gathered; manifest corrected (status in_progress, session, precise blockers, notes);
+  dashboard republished.
+- Steps 1-4 done 2026-09-02: merge commit 23f54b22 (fold + review round) and d6b8035a (two
+  docstrings the formatter split) pushed; PR #111 base -> `claude/plan-item-kickoff-workflow-cuare2`,
+  description rewritten, still draft; 17 threads replied to and resolved, 2 replied to and left
+  open on purpose (GitCommandRunner-in-tests answered with ScratchRepository; the "discuss the
+  rebase options" thread carries the three options and the choice). 698 bastler tests pass;
+  format_docstrings converges on every new file.
+- Formatter finding: docformatter expands one-line member docstrings and eats the blank line
+  after the last member of a class, so a new file converges only when its member docstrings are
+  already three-line. stack.py and build_dashboard.py were already declined on #185's head.
+- Step 5: manifest blockers/notes updated; dashboard republished.
 
 ## Next
 
-- Steps 1-5 above, in order.
+- Nothing until the user answers the two open threads or #185 lands (the routine restacks this
+  branch on #185 from now on; GitHub retargets the base to main when #185 merges).
+- Remaining feature work for this item, not started: the stack chip (REST read of the native
+  stack object with the 2026-03-10 API version header).
