@@ -64,6 +64,19 @@ resolution_source() {
   fi
 }
 
+# git_identity_precedence_note: prints where to go looking when the identity a
+# commit would carry isn't the one recorded on the notes branch. Which of the
+# two answers applies is not guessable from the mismatch alone: the environment
+# variables outrank every git config file, so a clone whose config is exactly
+# right still commits as whatever they say.
+git_identity_precedence_note() {
+  if [ -n "${GIT_AUTHOR_NAME:-}" ] || [ -n "${GIT_AUTHOR_EMAIL:-}" ]; then
+    printf 'GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL are set in this environment, which outranks every git config file\n'
+  else
+    printf 'check user.name and user.email in git config --local and --global\n'
+  fi
+}
+
 # %% the tooling itself
 
 # Everything below assumes this checkout actually carries the agent tooling.
@@ -71,9 +84,9 @@ resolution_source() {
 # file at a time, instead of here with a single clear answer.
 MISSING_TOOLING=""
 for tooling_path in \
-    "${BUILD_DASHBOARD_SCRIPT}" \
+    "${BASTLER_PACKAGE_DIRECTORY}/__init__.py" \
     "${REFRESH_DASHBOARD_SCRIPT}" \
-    "${PLAN_DASHBOARD_REQUIREMENTS_FILE}" \
+    "${BASTLER_PYPROJECT_FILE}" \
     "${PLAN_SCHEMA_DOCUMENT}"; do
   [ -f "${tooling_path}" ] || MISSING_TOOLING="${MISSING_TOOLING} ${tooling_path}"
 done
@@ -81,7 +94,7 @@ if [ -n "${MISSING_TOOLING}" ]; then
   report tooling_files needs-setup \
     "this checkout is missing:${MISSING_TOOLING} - merge the plan-dashboard tooling into your fork's default branch first"
 else
-  report tooling_files ok "plan-dashboard scripts, schema reference and requirements are all present"
+  report tooling_files ok "the bastler package, its metadata, the refresh entry point and the schema reference are all present"
 fi
 
 # %% session-start wiring
@@ -122,46 +135,61 @@ if fetch_personal_notes_branch; then
     report notes_file needs-setup \
       "'${NOTES_BRANCH}' exists but has no '${NOTES_PATH}' - session-start.sh will write no notes"
   fi
+
+  # %% who commits here would be authored as
+
+  # Reported in terms of the identity a commit would really carry (see
+  # effective_git_identity), never `git config --get user.name`: an agent
+  # session typically has the assistant's identity in global config and the
+  # contributor's in the environment, where the environment wins - so the
+  # config value can say one thing while every commit says another, and only
+  # the resolved one is worth reporting.
+  if ! EFFECTIVE_GIT_IDENTITY="$(effective_git_identity)"; then
+    report git_identity needs-setup \
+      "git cannot determine an author identity here at all - commits will fail until user.name and user.email are set"
+  else
+    IFS=$'\t' read -r EFFECTIVE_NAME EFFECTIVE_EMAIL <<< "${EFFECTIVE_GIT_IDENTITY}"
+    EFFECTIVE_DISPLAY="$(format_git_identity "${EFFECTIVE_NAME}" "${EFFECTIVE_EMAIL}")"
+    if ! RECORDED_GIT_IDENTITY="$(recorded_git_identity)"; then
+      report git_identity needs-setup \
+        "no complete '${PERSONAL_GIT_IDENTITY_PATH}' on '${NOTES_BRANCH}' - commits here are authored as ${EFFECTIVE_DISPLAY}, and a fresh clone gets no identity at all - run ./save-git-identity.sh --name <your name> --email <your email>"
+    elif [ "${RECORDED_GIT_IDENTITY}" = "${EFFECTIVE_GIT_IDENTITY}" ]; then
+      report git_identity ok \
+        "commits here are authored as ${EFFECTIVE_DISPLAY}, matching '${PERSONAL_GIT_IDENTITY_PATH}' on '${NOTES_BRANCH}'"
+    else
+      IFS=$'\t' read -r RECORDED_NAME RECORDED_EMAIL <<< "${RECORDED_GIT_IDENTITY}"
+      report git_identity needs-setup \
+        "'${PERSONAL_GIT_IDENTITY_PATH}' records $(format_git_identity "${RECORDED_NAME}" "${RECORDED_EMAIL}"), but commits here are authored as ${EFFECTIVE_DISPLAY} - $(git_identity_precedence_note)"
+    fi
+  fi
 else
   report notes_branch needs-setup \
     "no '${NOTES_BRANCH}' branch on any of: ${ATTEMPTED_NOTES_REMOTES} - run ./create-personal-notes-branch.sh (after pointing the remote at your own fork if it isn't already)"
   report notes_file needs-setup "not checked - the branch that would hold it doesn't exist yet"
+  report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 
 # %% plan-dashboard dependencies
 
-# Derived from requirements.txt itself rather than a second hand-written list
-# of import names, which would silently go stale the moment that file changes.
-# Distribution names are what requirements.txt states, so they're what gets
-# looked up - no pyyaml/yaml-style mapping to maintain anywhere.
+# Reported rather than installed here: this script is read-only, and running
+# it must never change the answer it gives. ./session-start.sh installs them
+# (see install_dependencies in ./resolve-personal-notes-config.sh), so on a
+# clone whose notes branch resolves, this row reports what that run just did.
+#
+# The lookup itself is missing_dependencies, beside that installer, so both
+# read the same declaration the same way. What stays here is the two reasons
+# it can answer nothing, because they are this script's rows to word.
 if ! command -v python3 > /dev/null 2>&1; then
-  report dashboard_dependencies needs-setup "python3 is not on PATH, so the plan-dashboard scripts cannot run at all"
-elif [ ! -f "${PLAN_DASHBOARD_REQUIREMENTS_FILE}" ]; then
-  report dashboard_dependencies needs-setup "cannot check: ${PLAN_DASHBOARD_REQUIREMENTS_FILE} is missing"
+  report dashboard_dependencies needs-setup "python3 is not on PATH, so the plan-dashboard modules cannot run at all"
+elif [ ! -f "${BASTLER_PYPROJECT_FILE}" ]; then
+  report dashboard_dependencies needs-setup "cannot check: ${BASTLER_PYPROJECT_FILE} is missing"
 else
-  MISSING_DEPENDENCIES="$(python3 - "${PLAN_DASHBOARD_REQUIREMENTS_FILE}" <<'PYTHON'
-import re
-import sys
-from importlib.metadata import PackageNotFoundError, distribution
-
-missing = []
-for line in open(sys.argv[1], encoding="utf-8"):
-    requirement = line.split("#", 1)[0].strip()
-    if not requirement:
-        continue
-    name = re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0]
-    try:
-        distribution(name)
-    except PackageNotFoundError:
-        missing.append(name)
-print(" ".join(missing))
-PYTHON
-)"
+  MISSING_DEPENDENCIES="$(missing_dependencies)"
   if [ -z "${MISSING_DEPENDENCIES}" ]; then
-    report dashboard_dependencies ok "every requirement in ${PLAN_DASHBOARD_REQUIREMENTS_FILE} is installed"
+    report dashboard_dependencies ok "every dependency ${BASTLER_PYPROJECT_FILE} declares is installed"
   else
     report dashboard_dependencies needs-setup \
-      "not installed:${MISSING_DEPENDENCIES// / } - run: pip install -r ${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
+      "not installed:${MISSING_DEPENDENCIES// / } - run: pip install ${MISSING_DEPENDENCIES}"
   fi
 fi
 

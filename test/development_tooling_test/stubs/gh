@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-# Stands in for the GitHub CLI in tests: records the arguments it was invoked with
-# and prints a canned response, so no test ever talks to GitHub.
-set -euo pipefail
-printf '%s\n' "$*" >> "${GH_STUB_ARGUMENTS_FILE}"
-cat "${GH_STUB_RESPONSE_FILE}"

@@ -109,6 +109,23 @@ set -euo pipefail
 # the notes branch, a detached HEAD - see branch_can_hold_plan_item), where
 # the right answer is silence rather than a prompt.
 #
+# Git identity: the notes branch can also carry the contributor's own git
+# identity (.claude/personal/git-identity), which is written into this clone's
+# repository-local config so its commits are authored by the person working in
+# it. A fresh clone otherwise inherits whatever global git config the
+# environment provides, which in an agent session is the agent's own identity -
+# a default, not an oversight, and so not something discipline alone fixes.
+# Only ever fills a gap: a clone that already has a repository-local identity
+# keeps it, and global config is never touched. See ./save-git-identity.sh to
+# record one, and ./README.md for the two cases a hook cannot reach.
+#
+# Dependencies: the package's own are installed on every start, for anyone
+# whose notes branch resolved - the same audience everything else here serves.
+# Only what is missing gets installed, so the usual run costs an import check
+# and nothing more, and a failure is reported rather than allowed to end the
+# run. See install_dependencies in ./resolve-personal-notes-config.sh, and
+# bastler/README.md, which tells a reader this happens.
+#
 # Setup: the summary also carries ./check-setup.sh's verdict, naming any
 # check that still needs setup. It is reported rather than left to be run on
 # purpose because remembering to run it is the step that gets skipped - after
@@ -180,9 +197,10 @@ WROTE_ANYTHING=0
 # session to describe secondhand, in its own prose, what the hook did.
 SUMMARY_NOTES="not found"
 SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
-# SUMMARY_PLAN and SUMMARY_SETUP get no default on purpose: every path below
-# assigns one, so `set -u` turns a path that forgets into a loud failure rather
-# than the silently uninformative report this hook used to print.
+# SUMMARY_PLAN, SUMMARY_GIT_IDENTITY, SUMMARY_DEPENDENCIES and SUMMARY_SETUP
+# get no default on purpose: every path below assigns one, so `set -u` turns a
+# path that forgets into a loud failure rather than the silently uninformative
+# report this hook used to print.
 
 if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
   cat <<HEADER >> "${OUTPUT_FILE}"
@@ -342,6 +360,33 @@ else
   rm -f "${OUTPUT_FILE}"
 fi
 
+# Git identity, from the notes branch - so a fresh clone commits as the person
+# working in it rather than as whatever the environment's global git config
+# happens to be. Only ever fills a gap: a clone that already has its own
+# repository-local identity keeps it, and nothing here touches global config.
+#
+# Written before the setup check below, so check-setup.sh's git_identity row
+# reports on the identity this run has just set rather than the absence it was
+# about to fix - the same ordering, for the same reason, as CLAUDE.local.md.
+if ! recorded_git_identity_exists; then
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_not_recorded \
+    "${NOTES_BRANCH}" "${PERSONAL_GIT_IDENTITY_PATH}")"
+elif ! RECORDED_GIT_IDENTITY="$(recorded_git_identity)"; then
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_incomplete \
+    "${PERSONAL_GIT_IDENTITY_PATH}" "${NOTES_BRANCH}")"
+elif LOCAL_GIT_IDENTITY="$(repository_local_git_identity)"; then
+  IFS=$'\t' read -r LOCAL_NAME LOCAL_EMAIL <<< "${LOCAL_GIT_IDENTITY}"
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_already_set \
+    "$(format_git_identity "${LOCAL_NAME}" "${LOCAL_EMAIL}")")"
+else
+  IFS=$'\t' read -r RECORDED_NAME RECORDED_EMAIL <<< "${RECORDED_GIT_IDENTITY}"
+  git config --local user.name "${RECORDED_NAME}"
+  git config --local user.email "${RECORDED_EMAIL}"
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_written "${NOTES_BRANCH}" \
+    "${PERSONAL_GIT_IDENTITY_PATH}" \
+    "$(format_git_identity "${RECORDED_NAME}" "${RECORDED_EMAIL}")")"
+fi
+
 # Personal settings: unlike everything above, these don't go into CLAUDE.local.md -
 # they are copied verbatim to .claude/settings.local.json, the file Claude Code
 # itself reads as this project's local settings (see PERSONAL_SETTINGS_PATH in
@@ -363,6 +408,37 @@ if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
     record_personal_settings_sync
     SUMMARY_SETTINGS="synced to ${LOCAL_SETTINGS_RELATIVE_PATH}"
   fi
+fi
+
+# Dependencies: install whatever of the package's own this clone is missing,
+# so nothing downstream has to run without them. Reached only after the notes
+# branch resolved above, which is the signal that this is somebody who has run
+# the setup - a clone that never did installs nothing.
+#
+# Run before the setup check below, so check-setup.sh's dashboard_dependencies
+# row reports on what this run has just installed rather than on the absence it
+# was about to fix - the same ordering, for the same reason, as CLAUDE.local.md
+# and the git identity.
+#
+# Only when something is actually missing: the common case then costs one
+# import check and no installer at all, which is what makes doing this on
+# every session start affordable.
+#
+# Never fatal. An installer that is absent, offline or refused by an
+# externally managed environment reports here and the run carries on: a hook
+# that dies at this point takes the notes, the plan and the setup verdict with
+# it, and says nothing about why.
+if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
+  SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
+elif [ -z "${MISSING_DEPENDENCIES}" ]; then
+  SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed "${BASTLER_PYPROJECT_FILE}")"
+elif install_dependencies "${MISSING_DEPENDENCIES}"; then
+  SUMMARY_DEPENDENCIES="$(dependencies_line_installed \
+    "${MISSING_DEPENDENCIES}" "${BASTLER_PYPROJECT_FILE}")"
+else
+  SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
+    "${MISSING_DEPENDENCIES}" \
+    "$(printf '%s' "${DEPENDENCY_INSTALL_OUTPUT}" | tail -1)")"
 fi
 
 # Setup verdict, from ./check-setup.sh - the single read-only source of truth
@@ -405,6 +481,8 @@ session-start.sh summary:
   local settings:  ${SUMMARY_SETTINGS}
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
+  git identity:    ${SUMMARY_GIT_IDENTITY}
+  dependencies:    ${SUMMARY_DEPENDENCIES}
   setup:           ${SUMMARY_SETUP}
   plan state SHA:  $(git rev-parse FETCH_HEAD) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

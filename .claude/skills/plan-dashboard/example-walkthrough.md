@@ -18,11 +18,16 @@ files, not just prose. You can render them yourself with no GitHub access at
 all:
 
 ```bash
-cd .claude/skills/plan-dashboard
-pip install -r requirements.txt
-python3 build_dashboard.py --plan example/plan.yaml --roadmap example/roadmap.md \
-  --pr-data example/pr_data.json --output /tmp/example-dashboard.html
+pip install ./bastler
+python3 -m bastler.build_dashboard \
+  --plan .claude/skills/plan-dashboard/example/plan.yaml \
+  --roadmap .claude/skills/plan-dashboard/example/roadmap.md \
+  --pr-data .claude/skills/plan-dashboard/example/pr_data.json \
+  --output /tmp/example-dashboard.html
 ```
+
+Run it from the repository root: `bastler` is a plain top-level directory, importable
+with no install, and `-m` is what puts the root on the import path.
 
 ## 1. Start with the idea, in plan mode
 
@@ -153,6 +158,18 @@ A few things worth noticing in this one small example:
 - **Done items are hidden by default** — the sidebar's "Show done / merged
   items" checkbox reveals `retry-backoff-strategy` and `retry-fallback-queue`
   when you want them back.
+- **A `bug` chip** — `retry-fallback-queue`'s pull request carries the `bug`
+  label, so its sidebar entry is marked as a bug fix. The chip appears
+  wherever the item already sits; being a bug fix is a property of the work,
+  not a next action, so it never moves an item between groups.
+
+When you only care about the bug fixes, the "Bug fixes only" checkbox hides
+every other entry — and any group left with nothing in it:
+
+![The "What to do next" card with "Bug fixes only" ticked, leaving one entry](./example/screenshots/dashboard-bug-filter.png)
+
+The checkbox only appears when at least one entry is a bug fix, and each
+group's count switches to the number it is actually showing.
 
 ## 5. Kick off, resolve, or review a specific item
 

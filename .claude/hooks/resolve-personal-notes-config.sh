@@ -174,6 +174,79 @@ pr_progress_path() {
   printf '.claude/personal/pr-progress/%s.md\n' "${branch}"
 }
 
+# PERSONAL_GIT_IDENTITY_PATH: where the human contributor's git identity is
+# recorded on the notes branch, so a fresh clone can be given one instead of
+# inheriting whatever the environment's global git config happens to be. Fixed
+# convention, never overridden - same reasoning as the plan paths below.
+#
+# Stored in git's own config format and read back with `git config --file`
+# rather than parsed here: the format already has a parser, and writing it
+# with the same tool that reads it means the two can never disagree.
+PERSONAL_GIT_IDENTITY_PATH=".claude/personal/git-identity"
+
+# format_git_identity: prints a name and email in the one form every message
+# about an identity uses, so the same pair can't be rendered two ways in two
+# different reports.
+format_git_identity() {
+  printf '%s <%s>\n' "$1" "$2"
+}
+
+# effective_git_identity: prints "<name><TAB><email>" for the identity a commit
+# made here right now would actually carry, and returns 0. Returns 1 (prints
+# nothing) if git cannot determine one at all.
+#
+# Resolved via `git var GIT_AUTHOR_IDENT`, which applies git's real precedence -
+# GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL, then repository-local config, then global.
+# `git config --get user.name` deliberately not used: it reports the global
+# value even in a clone whose commits are correctly authored from the
+# environment, which is the one wrong answer a check about commit authorship
+# must never give.
+effective_git_identity() {
+  local author_identity
+  author_identity="$(git var GIT_AUTHOR_IDENT 2>/dev/null)" || return 1
+  # GIT_AUTHOR_IDENT is "<name> <<email>> <timestamp> <timezone>"; the trailing
+  # two fields are when the commit would be made, not who by.
+  printf '%s\n' "${author_identity}" \
+    | sed -E 's/^(.*) <(.*)> [0-9]+ [-+][0-9]{4}$/\1\t\2/'
+}
+
+# repository_local_git_identity: prints "<name><TAB><email>" for the identity
+# configured in this clone's own config, and returns 0. Returns 1 (prints
+# nothing) unless both halves are set - half an identity cannot author a commit,
+# so it is not an identity.
+repository_local_git_identity() {
+  local name email
+  name="$(git config --local --get user.name || true)"
+  email="$(git config --local --get user.email || true)"
+  [ -n "${name}" ] && [ -n "${email}" ] || return 1
+  printf '%s\t%s\n' "${name}" "${email}"
+}
+
+# recorded_git_identity_exists / recorded_git_identity: whether the notes branch
+# carries a git identity at all, and what it records. Caller must have already
+# fetched NOTES_BRANCH successfully (see fetch_personal_notes_branch) - these
+# read FETCH_HEAD directly rather than fetching again themselves.
+#
+# Two functions rather than one for the same reason as plan_branch_index_exists
+# above: "nothing is recorded yet" and "what is recorded cannot be used" are
+# different answers needing different advice, and a single failing lookup
+# collapses them into one.
+recorded_git_identity_exists() {
+  git cat-file -e "FETCH_HEAD:${PERSONAL_GIT_IDENTITY_PATH}" 2>/dev/null
+}
+
+recorded_git_identity() {
+  recorded_git_identity_exists || return 1
+  local identity_file name email
+  identity_file="$(mktemp)"
+  git show "FETCH_HEAD:${PERSONAL_GIT_IDENTITY_PATH}" > "${identity_file}"
+  name="$(git config --file "${identity_file}" --get user.name || true)"
+  email="$(git config --file "${identity_file}" --get user.email || true)"
+  rm -f "${identity_file}"
+  [ -n "${name}" ] && [ -n "${email}" ] || return 1
+  printf '%s\t%s\n' "${name}" "${email}"
+}
+
 # PLANS_DIR / PLAN_MANIFEST_FILENAME / PLAN_ROADMAP_FILENAME: the one,
 # shared definition of where a plan's files live, so no caller re-derives
 # these path fragments itself (session-start.sh and save-plan.sh both used
@@ -206,74 +279,111 @@ plan_roadmap_path() {
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
-# PLAN_DASHBOARD_DIRECTORY / *_SCRIPT / *_FILE / *_DOC: the canonical
-# location of every script, hook, requirements file, and reference doc the
-# plan-dashboard/plan-item-*/CI tooling invokes or reads - defined once,
-# here, so refresh_dashboard.sh, every plan-*/SKILL.md, and
-# .github/workflows/ci.yml source this file and use these variables instead
-# of each carrying its own separately-typed literal path (exactly the drift
-# risk a reviewer flagged after those paths had already been duplicated
-# across all of them). Relative to the project root, which sourcing this
-# file already `cd`s into (see PROJECT_ROOT above) - so every caller can
-# use these directly, with no further path arithmetic of its own.
-PLAN_DASHBOARD_DIRECTORY=".claude/skills/plan-dashboard"
-# build_dashboard.py: renders one plan's dashboard HTML from its manifest
-# and live GitHub data - see the script's own module docstring.
-BUILD_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_dashboard.py"
-# build_index.py: renders the master index page listing every plan.
-BUILD_INDEX_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_index.py"
-# sync_manifest_status.py: auto-corrects a plan.yaml's item statuses to
-# "done" wherever GitHub confirms the item's pull request is merged.
-SYNC_MANIFEST_STATUS_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/sync_manifest_status.py"
-# check_dependency_readiness.py: classifies one item's dependencies as
-# ready or not-ready to build on - see dependency-readiness.md below.
-CHECK_DEPENDENCY_READINESS_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/check_dependency_readiness.py"
-# refresh_dashboard.sh: orchestrates sync_manifest_status.py, the
-# conditional push of its correction, then build_dashboard.py - the whole
-# refresh sequence /plan-dashboard runs for one plan.
-REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
-# refresh_dashboard_support.py: the JSON-plumbing helpers
-# refresh_dashboard.sh calls between its two script calls.
-REFRESH_DASHBOARD_SUPPORT_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard_support.py"
-# requirements.txt: the PyYAML/Jinja2/markdown dependencies every script
-# above needs - installed by both CI and a session running them directly.
-PLAN_DASHBOARD_REQUIREMENTS_FILE="${PLAN_DASHBOARD_DIRECTORY}/requirements.txt"
-# tests/: the pytest suite covering every script above - the exact
-# directory CI and a session both run against.
-PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
-# hooks/tests/: the pytest suite covering plan_manifest_tools.py (the one
-# hook-directory script with non-trivial logic worth testing the same way).
-HOOKS_TESTS_DIRECTORY=".claude/hooks/tests"
+# DASHBOARD_URL_CACHE_PATH: the generated cache mapping each plan id (plus
+# "_index" for the master index) to the Artifact URL its dashboard is
+# published at, so /plan-dashboard updates that page instead of minting a
+# second one. Named here rather than typed into plan-dashboard/SKILL.md,
+# same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
+DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 
-# STACK_DIRECTORY / *_SCRIPT / *_CONFIG_FILE / *_TESTS_DIRECTORY: the
-# stacked-PR fork-staging/cram2-review tooling's canonical location, same
-# defined-once reasoning as the PLAN_DASHBOARD_* block above - so the
-# setup-stacked-prs skill and the shared pr_state module reference these
-# instead of retyping the literal paths.
-STACK_DIRECTORY=".claude/stack"
-# stack.py: read-only stacked-PR status tool (status/check/next/restack-plan)
+# BASTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every Python entry point in
+# this system, and the package holding them - defined once, here, so
+# refresh_dashboard.sh, every plan-*/SKILL.md, and .github/workflows/ci.yml
+# source this file and use these variables instead of each carrying its own
+# separately-typed literal (exactly the drift risk a reviewer flagged after
+# those paths had already been duplicated across all of them). Relative to
+# the project root, which sourcing this file already `cd`s into (see
+# PROJECT_ROOT above) - so every caller can use these directly, with no
+# further path arithmetic of its own.
+#
+# A *_MODULE is an import path rather than a file path, and is run as
+# `python3 -m "${SOME_MODULE}"`. Running one by its file path instead would
+# put the package's own directory on sys.path in place of the project root,
+# so its absolute imports of its siblings would not resolve.
+BASTLER_PACKAGE_DIRECTORY="bastler"
+# build_dashboard: renders one plan's dashboard HTML from its manifest
+# and live GitHub data - see the module's own docstring.
+BUILD_DASHBOARD_MODULE="bastler.build_dashboard"
+# build_index: renders the master index page listing every plan.
+BUILD_INDEX_MODULE="bastler.build_index"
+# build_site: the headless static-site build (every plan dashboard plus the
+# master index) a Pages workflow runs with no live session.
+BUILD_SITE_MODULE="bastler.build_site"
+# sync_manifest_status: auto-corrects a plan.yaml's item statuses to
+# "done" wherever GitHub confirms the item's pull request is merged.
+SYNC_MANIFEST_STATUS_MODULE="bastler.sync_manifest_status"
+# check_dependency_readiness: classifies one item's dependencies as
+# ready or not-ready to build on - see dependency-readiness.md below.
+CHECK_DEPENDENCY_READINESS_MODULE="bastler.check_dependency_readiness"
+# refresh_dashboard_support: the JSON-plumbing helpers
+# refresh_dashboard.sh calls between its two module calls.
+REFRESH_DASHBOARD_SUPPORT_MODULE="bastler.refresh_dashboard_support"
+# record_dashboard_url: writes one key's published Artifact URL into
+# DASHBOARD_URL_CACHE_PATH, resolving that URL from the account's live
+# Artifact listing so a URL nobody published cannot be recorded.
+RECORD_DASHBOARD_URL_MODULE="bastler.record_dashboard_url"
+# plan_item_bootstrap: opens an item's branch and draft pull request and
+# records its manifest entry - invoked from plan-item-kickoff/SKILL.md and
+# add-plan-item/SKILL.md.
+PLAN_ITEM_BOOTSTRAP_MODULE="bastler.plan_item_bootstrap"
+# plan_item_mode: resolves whether a plan-item skill asks, plans, or
+# implements on its own - invoked from plan-item-mode/SKILL.md and from
+# plan-item-kickoff/plan-item-resolve via execution-modes.md.
+PLAN_ITEM_MODE_MODULE="bastler.plan_item_mode"
+# plan_manifest_tools: reads a plan id out of a manifest and regenerates
+# the branch index - the manifest plumbing save-plan.sh calls.
+PLAN_MANIFEST_TOOLS_MODULE="bastler.plan_manifest_tools"
+# plan_updates_since_support: renders the plan-state delta
+# plan-updates-since.sh reports.
+PLAN_UPDATES_SINCE_SUPPORT_MODULE="bastler.plan_updates_since_support"
+# stack: read-only stacked-PR status tool (status/check/next/restack-plan)
 # - see its own module docstring and STACK_DIRECTORY/README.md.
-STACK_SCRIPT="${STACK_DIRECTORY}/stack.py"
+STACK_MODULE="bastler.stack"
+# maintenance: the deterministic maintenance executor a stacked-PR pass
+# runs - board export, fast-forward, restack, promote, run-report.
+MAINTENANCE_MODULE="bastler.maintenance"
+# check_scope_overlap: reports which of an item's paths a given branch
+# already touches - the mechanical half of add-plan-item's scope decision.
+CHECK_SCOPE_OVERLAP_MODULE="bastler.check_scope_overlap"
+# upstream_reviews: reports the review threads a fork branch's upstream
+# pull request has collected, run by the upstream-reviews Action.
+UPSTREAM_REVIEWS_MODULE="bastler.upstream_reviews"
+# dependencies: prints the package's declared dependencies this environment
+# does not have - what missing_dependencies below calls.
+BASTLER_DEPENDENCIES_MODULE="bastler.dependencies"
+# pyproject.toml: the package's own metadata, and the one place its
+# PyYAML/Jinja2/markdown/nh3 dependencies are declared - installed by CI, by an
+# Actions workflow running a module, and by ./session-start.sh on every session
+# start (see install_dependencies below).
+BASTLER_PYPROJECT_FILE="${BASTLER_PACKAGE_DIRECTORY}/pyproject.toml"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
-STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
-# tests/: the pytest suite covering stack.py, including its personal-notes
-# config-layering behaviour (via the hooks tests' ScratchRepository).
-STACK_TESTS_DIRECTORY="${STACK_DIRECTORY}/tests"
+STACK_CONFIG_FILE="${BASTLER_PACKAGE_DIRECTORY}/stack.toml"
+# plan-item-modes.toml: the committed execution-mode defaults plan_item_mode
+# layers a personal-notes .claude/personal/plan-item-modes.toml override on
+# top of - the same committed-defaults/personal-override split as stack.toml.
+PLAN_ITEM_MODES_CONFIG_FILE="${BASTLER_PACKAGE_DIRECTORY}/plan-item-modes.toml"
+PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
+# test/bastler_test/: the one pytest suite covering every module above -
+# the exact directory CI and a session both run against. One directory
+# rather than the three this suite was merged from, since one package has
+# one test tree.
+BASTLER_TESTS_DIRECTORY="test/bastler_test"
 
-# DEVELOPMENT_TOOLING_*: the development_tooling Python package - the shared
-# import home for the PR-state fetch/compute layer and the Python side of
-# personal-notes resolution. A plain repository-root directory importable
-# with no install; see its own package docstring.
-DEVELOPMENT_TOOLING_DIRECTORY="development_tooling"
-# build_site.py: the headless static-site build (every plan dashboard plus
-# the master index) a Pages workflow runs with no live session.
-BUILD_SITE_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_site.py"
-# test/development_tooling_test/: the package's pytest suite, under the
-# standard test/ directory. Run it with
-# --confcutdir="${DEVELOPMENT_TOOLING_TESTS_DIRECTORY}" so the repository
-# root test/conftest.py (which imports the robotics stack) is not loaded.
-DEVELOPMENT_TOOLING_TESTS_DIRECTORY="test/development_tooling_test"
+# PLAN_DASHBOARD_DIRECTORY / REFRESH_DASHBOARD_SCRIPT: what the
+# plan-dashboard skill still keeps outside the package - Claude Code
+# discovers a skill and its reference documents by path, and the shell
+# entry point sits with the skill it belongs to.
+PLAN_DASHBOARD_DIRECTORY=".claude/skills/plan-dashboard"
+# refresh_dashboard.sh: orchestrates sync_manifest_status, the
+# conditional push of its correction, then build_dashboard - the whole
+# refresh sequence /plan-dashboard runs for one plan.
+REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
+
+# STACK_DIRECTORY: where the stacked-PR workflow's own README lives. Its
+# Python moved into the package above; the document stays, because it is
+# read rather than run.
+STACK_DIRECTORY=".claude/stack"
 
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
@@ -316,6 +426,17 @@ SETUP_PREREQUISITE_DOCUMENT="${SETUP_PERSONAL_NOTES_DIRECTORY}/prerequisite-chec
 # conventions instead of an empty file.
 STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 
+# ADD_PLAN_ITEM_DIRECTORY / SCOPE_DECISION_DOCUMENT: what the add-plan-item
+# skill keeps outside the package - the skill someone runs when describing new
+# work (/add-plan-item) and the shared scope rule all four plan skills defer to
+# instead of each restating it. Its Python moved into the package above, as
+# CHECK_SCOPE_OVERLAP_MODULE.
+ADD_PLAN_ITEM_DIRECTORY=".claude/skills/add-plan-item"
+# scope-decision.md: the shared "is this new work, or a change to work already
+# in flight?" rule that plan-create, plan-item-kickoff, plan-item-resolve and
+# add-plan-item each reference in a line rather than each spelling it out.
+SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
+
 # SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
 # save-plan.sh - unlike the other hook scripts in this directory (which are
 # always run directly by a human, once, per hooks/README.md's own setup
@@ -324,11 +445,19 @@ STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 # duplication risk, just for a hook script instead of a plan-dashboard one.
 SAVE_PLAN_SCRIPT=".claude/hooks/save-plan.sh"
 
-# PLAN_ITEM_BOOTSTRAP_SCRIPT: same reasoning again, for the script that opens
-# an item's branch and draft pull request and records its manifest entry -
-# invoked from plan-item-kickoff/SKILL.md and add-plan-item/SKILL.md, so it is
-# a path this codebase controls rather than one a human types once.
-PLAN_ITEM_BOOTSTRAP_SCRIPT=".claude/hooks/plan_item_bootstrap.py"
+# EXECUTION_MODES_DOCUMENT: the shared "which mode is in force, what it
+# obliges, and when auto mode still asks" procedure that plan-item-kickoff and
+# plan-item-resolve both reference instead of each restating it - same
+# reasoning as DEPENDENCY_READINESS_DOCUMENT above.
+EXECUTION_MODES_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/execution-modes.md"
+
+# PLAN_ITEM_GATHERING_DOCUMENT: the shared "what is already known and already
+# decided about this item?" procedure - the setup check, resolving the item off
+# the notes branch, the tracking-issue subscription, the full roadmap read, the
+# dependency chain and the standing conventions. plan-item-kickoff and
+# plan-item-resolve both run it in full and then add only what their own
+# situation needs, instead of each carrying its own copy.
+PLAN_ITEM_GATHERING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-item-gathering.md"
 
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
 # MCP tools every pr_data.json-gathering procedure in this system calls
@@ -405,6 +534,43 @@ tracked_plan_count() {
   plan_branch_index_exists || { printf '0\n'; return 0; }
   git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
     | awk -F'\t' 'NF >= 2 { seen[$2] = 1 } END { print length(seen) }'
+}
+
+# %% the package's own dependencies
+
+# missing_dependencies: prints the requirement specifiers
+# BASTLER_PYPROJECT_FILE declares that are not installed, space separated, and
+# nothing at all when every one of them is. Returns 1 without printing when the
+# file or python3 is missing, which is a caller's problem to word rather than
+# this function's.
+#
+# The reading is BASTLER_DEPENDENCIES_MODULE's rather than a snippet written
+# out here: it parses a declaration, and parsing embedded in a shell string is
+# code nothing can run on its own or test.
+missing_dependencies() {
+  command -v python3 > /dev/null 2>&1 || return 1
+  [ -f "${BASTLER_PYPROJECT_FILE}" ] || return 1
+  local missing
+  # Its failure is reported rather than echoed, since an empty answer is what
+  # a caller reads as "nothing to install".
+  missing="$(python3 -m "${BASTLER_DEPENDENCIES_MODULE}")" || return 1
+  # Unquoted so the module's one-specifier-per-line output is word split and
+  # printed back as one space separated line.
+  # shellcheck disable=SC2086
+  echo ${missing}
+}
+
+# install_dependencies: installs the specifiers named in $1, leaving pip's own
+# output (both streams) in DEPENDENCY_INSTALL_OUTPUT for a caller to report,
+# and returning pip's exit status.
+#
+# The specifiers rather than the package itself: installing ./bastler would put
+# a second copy of these modules in site-packages beside the clone's own, and
+# the clone's copy is what the zero-install contract says a caller imports.
+install_dependencies() {
+  local specifiers="$1"
+  # shellcheck disable=SC2086 # each specifier is its own argument to pip.
+  DEPENDENCY_INSTALL_OUTPUT="$(pip install ${specifiers} 2>&1)"
 }
 
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
