@@ -25,26 +25,29 @@ Pushed as `f8288bcd` and `6429626f`:
 
 Replied on all six threads; resolved the three answered exactly as asked.
 
-## Outstanding, and all of it is the developer's call
+## The three threads he settled, same day
 
-1. **r3915277277** - `show_step_by_step(query)`: done as
-   `show_step_by_step(statement_about_a_look, capture)`, since a statement about this scene
-   cannot be built before the look is taken. Left open. If he wants it literal, either
-   `RecordedLook` carries the statement or the function becomes a method on the look.
-2. **r3915356623** - why answering a query needs a pipeline; discuss; consider EQL-RDRs
-   (#159 open/ready, #77 open/ready but `integration-conflict`). Proposed as a new plan
-   item - *"a look is planned from the request, not configured"* - stacked on #159. Not
-   added: adding an item is structural.
-3. **r3915631447** - rename to `DetectedMontessoriShape` and make it a `Role` for
-   `MontessoriShape`. Rename is 51 references / 10 files and a conflict for #232, #236,
-   #239; the role needs the look to spawn what it found into a world, which is
-   `imagination-world-rejects-what-a-predicate-refuses`. Recommended both halves in that
-   item; not taken.
+All three of the open threads went to him in session, and all three are answered:
+
+1. **r3915277277** - `show_step_by_step(query)`: he accepted the shape as built
+   (`show_step_by_step(look_for_the_cube_on_the_lid, WatchedCapture.from_command_line())`).
+   Left open on the pull request, since closing a thread answered differently is his.
+2. **r3915356623** - became the new plan item `how-to-look-concluded-from-the-request`,
+   `request-language` track, `depends_on: [choose-detection-method,
+   detector-parameters-from-knowledge]`, stacking on #159 through #239.
+3. **r3915631447** - rename *and* role both folded into
+   `imagination-world-rejects-what-a-predicate-refuses`, so the type is named once and
+   #232 / #236 / #239 inherit no rename conflict.
+
+Manifest saved as `9653daeb`; dashboard republished; the structural record is #201's
+comment `5513403099`. All three threads carry a reply saying where each went; the two that
+schedule a move are left open, per the precedent #202's plan-item threads set.
 
 ## Next
 
-Nothing until he answers 1-3. This session's obligation to the PR ended with the push,
-the replies and the description update.
+Nothing. The round is closed on both sides - the code is pushed, the description matches
+it, the manifest and roadmap carry the outcome, and the only open threads are his to close.
+Anything further on this branch starts from a new prompt.
 
 ## Environment
 
