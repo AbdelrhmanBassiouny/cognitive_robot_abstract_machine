@@ -111,3 +111,47 @@ items:
     P4''s sdt surface work.
 
     '
+- id: aggregate-repeat-reduction-ignores-same-kind-siblings
+  title: "Bug: reducing a repeated aggregate mention to \"the sum\" is ambiguous when another aggregate of the same kind is also selected"
+  branch: null
+  pull_request_number: null
+  track: framework-migration
+  depends_on:
+  - p2-operand-naming
+  status: not_started
+  notes: >
+    Found and measured on match-query-ergonomics's PR #196
+    (aggregate-signature-reads-a-missing-attribute) self-review round: a ranked
+    set_of selecting two aggregates of one kind (two Sums) verbalizes as "...the
+    sum of the amount of its net, and the sum" - the trailing "the sum" is a
+    correct-by-identity repeat mention of the aggregate named in the ranking
+    frame several clauses earlier (AggregatorRule.build's referent_id=node._id_,
+    verbalization/grammar/aggregation/rules.py), but reads to a human as
+    referring to the just-mentioned net instead, since proximity is how anaphora
+    normally resolves. All 17 tests in test_set_of_ranking.py pass with the
+    text as generated; this is a wording-ambiguity bug, not a test failure.
+    Not fixed on #196 itself: that PR's fix is _expression_signature reading
+    the aggregator's _child_ (verbalization/grammar/query/assembler.py), a
+    different file and a different mechanism from the one this item owns.
+    Placed in eql-verbalization rather than match-query-ergonomics (developer
+    decision, AskUserQuestion 2026-09-02, PR #196 review threads
+    https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3908782904
+    and
+    https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3919032569):
+    the reduction that produces the ambiguous text lives in
+    CoreferenceProcessor/DistinguisherIndex (verbalization/rendering/coreference_processor.py,
+    verbalization/microplanning/referring.py) - the exact "same-noun-group
+    disambiguation" machinery P2 built for repeated nouns of one type ("a Robot"
+    / "another Robot"), and p5-first-mention-type-annotation already sits in
+    this same track for an analogous refinement of that machinery ("belongs in
+    the ReferringExpressions/coreference machinery P2 built, not in any one
+    package's ... wordings"). check_scope_overlap.py against every open pull
+    request touching aggregation/rules.py, coreference_processor.py or
+    referring.py (match-underscore-rename-and-forwarding #192,
+    chain-signature-reads-attribute-only-names #248, p4-sdt-migration #33)
+    reports no shared paths and no duplicate intent. The fix likely needs
+    AggregatorRule.build's reduction (or the coreference pass itself) to know
+    when an identity match is one of several same-kind aggregates in the same
+    scope and spell it out in full in that case rather than reducing on
+    identity alone - the design is not yet worked out, only the symptom and
+    its mechanism are measured.

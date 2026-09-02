@@ -175,3 +175,60 @@ sentences before anyone read them.
 Worth carrying into the rebase: `Triple` derives its verb from the class name, so a
 relation named for its object must state its own clause - inheriting `Triple` and saying
 nothing is what produced *"a Body supports by another Body"* on #229.
+
+## New item: aggregate-repeat-reduction-ignores-same-kind-siblings (2026-09-02)
+
+Found on `match-query-ergonomics`'s PR #196 (`aggregate-signature-reads-a-missing-attribute`)
+during its self-review round: the developer flagged the closing assert of
+`test_ranking_names_the_ordered_by_aggregate_not_the_first_selected`
+(`test_set_of_ranking.py:337`), proposing the trailing bare *"the sum"* be spelled out in
+full as *"the sum of the amount of its tax"*.
+
+**Measured, not guessed at.** All 17 tests in the file pass as written, including this one:
+`tax` is the literal same object in both the ranking frame (`.ordered_by(tax, ...)`) and the
+selection, so `AggregatorRule.build`'s coreference (`referent_id=node._id_` in
+`verbalization/grammar/aggregation/rules.py`) resolves the trailing *"the sum"* back to the
+frame's `tax` mention by identity — exactly what `_highest_aggregate_modifier`'s docstring
+says it should do. #196's own fix (`_expression_signature` reading `_child_` instead of the
+undefined `_chain_expression_`) is what makes that resolution *correct* in the first place;
+it is not the same bug.
+
+**The concern is real independent of code correctness.** To a reader, *"the sum of the
+amount of its net, and the sum"* reads as though the trailing *"the sum"* refers to the
+noun phrase right before it (`net`) — proximity is how anaphora normally resolves, and the
+`tax` antecedent is three clauses back in the ranking frame. That ambiguity only surfaces
+once two aggregates of *one kind* are both selected, which is exactly the case #196 adds
+coverage for.
+
+**The developer's follow-up** (PR #196, review thread
+[r3919032569](https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3919032569)):
+*"ok make fixing it an item of its own, I am unsure though if this should be in
+match-query-ergonomics or another plan or a new plan."*
+
+**Placement, via `/add-plan-item`.** `check_scope_overlap.py` against every open pull
+request whose changed paths could plausibly touch this (`match-underscore-rename-and-forwarding`
+#192, `chain-signature-reads-attribute-only-names` #248, `p4-sdt-migration` #33) over
+`verbalization/grammar/aggregation/rules.py`, `verbalization/rendering/coreference_processor.py`
+and `verbalization/microplanning/referring.py` reports no shared paths and no duplicate
+intent — nothing unlanded already owns this. Between the three candidates the skill's
+step 5 offers (fold into `match-query-ergonomics`, new item here, or a new plan of its own),
+put to the developer via `AskUserQuestion` with the evidence for each: `eql-verbalization`
+was chosen. The bug lives in `CoreferenceProcessor`/`DistinguisherIndex` — the *"same-noun-group
+disambiguation (`'another Robot'`, `'a second Robot'`)"* machinery P2 built, per that class's
+own docstring — not in the underscore-naming convention `match-query-ergonomics` is
+refactoring; the connection to #196 is only "found while extending its test coverage," not a
+shared root cause. `p5-first-mention-type-annotation` already sits in this exact track for an
+analogous refinement of the same machinery ("belongs in the ReferringExpressions/coreference
+machinery P2 built, not in any one package's ... wordings" — decision 12 / P5's own item
+note), which is the precedent this new item follows: `track: framework-migration`,
+`depends_on: [p2-operand-naming]` (merged), `status: not_started`.
+
+**Not designed yet, only measured.** The fix likely means `AggregatorRule.build`'s reduction
+(or the coreference pass that consumes its `referent_id`) needs to know when an identity
+match is one of several same-kind aggregates in the current scope, and spell the repeat
+mention out in full in that case rather than reducing on identity alone — but whether that
+belongs in `AggregatorRule.build`, in `CoreferenceProcessor`, or in `DistinguisherIndex`
+itself is an open question for whoever picks this item up.
+
+Replied on PR #196's thread with this outcome and resolved it, since the developer's ask —
+*"make fixing it an item of its own"* — is now done.
