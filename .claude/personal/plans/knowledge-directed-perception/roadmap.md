@@ -3840,3 +3840,63 @@ the things a relation is written over, which is why `relations_hold` re-checks o
 the backend narrowed by and refuses any other. A detection that *is* a role of a world entity
 gives every predicate a real subject, so nothing has to be refused for want of one — which is the
 same thing that item's rejection sampler needed, arriving as a type rather than as a mechanism.
+
+### `perception-backend`: the restack of 2026-09-02, and a conflict that was not its parent's
+
+Resolved 2026-09-02 in `auto` mode. **This is the first stall on this plan that was not a
+review comment.** The four before it — `surfaces-from-world`, #222's own round,
+`choose-detection-method`, `search-clipped-to-a-predicates-region` — were each a comment
+nobody had turned into state. This one was the opposite: every one of #222's nine review
+threads is now resolved, including r3893312001 and its two follow-ups that the item recorded
+as deliberately open, so its own `blockers` had gone stale in the other direction, describing
+an obstacle that had since been cleared. CI was green on all 23 checks and the pull request
+was out of draft.
+
+What actually withheld it was `mergeable_state: dirty` and the `needs-resolution` label the
+maintenance routine set at 00:45 that morning, reporting that
+`perception_per_supporting_surface` would not merge in. **Worth recording as a signal in its
+own right:** that label is machine-set state that says exactly what is wrong, and unlike a
+review thread it also removes the branch from every later promotion pass, so a branch carrying
+it is stalled silently rather than noisily.
+
+#### The conflict was with `main`, not with #221
+
+The parent's tip had moved only by taking `main` in — `5d3615b1` merging `6a2f1199`, the
+`eql-probabilistic-qa` work — so none of the three conflicted files were touched by
+`detect-per-supporting-surface` at all. Every conflict was `main`'s probabilistic-query work
+meeting this branch's own additions to `backends.py`, `exceptions.py` and
+`vocabulary/english.py`: two sides adding beside each other, neither changing what the other
+wrote. All three were resolved by keeping both, and the merged result needed no new code.
+
+The one place the two sides genuinely met is `Directive`. `main` had rewritten its docstring
+for `DISTRIBUTION_OVER`, whose point is that it is *not* an imperative — *"the two imperatives
+ask for rows, the third asks for a description of the query"* — while this branch had added a
+third imperative, `LOOK_FOR`. Keeping `main`'s framing and correcting the count is what makes
+the enum readable with all four members in it; keeping this branch's "the imperative verb that
+opens a request" would have been wrong about `DISTRIBUTION_OVER`.
+
+#### What this says about the stack
+
+`main`'s entity query language moves under every branch in the `request-language` track, and
+this is the first time it has landed on one. #227, #238 and everything stacked past them will
+meet the same three files when the merge reaches them, and the resolution is recorded here so
+it is not re-derived four times.
+
+#### Verification
+
+`test/krrood_test/test_eql/`: **1110 passed** against **1087** on this branch's pre-merge tip
+`9eb4d747` — the 23 probabilistic-query tests the merge brings in — with a failing-and-erroring
+set identical to that tip's, **178 lines on both**, diffed by name rather than compared by
+count. The baseline was taken in a worktree with its own `*/src` on `PYTHONPATH`, the precaution
+this branch's previous round recorded after nearly measuring itself against itself.
+`test/experiments_test/`: **362 passed**, 1 skipped, 16 xfailed, unchanged by the merge.
+
+`--continue-on-collection-errors` was needed on both sides: `test_backends.py` imports the
+generated ORM interface, which is absent here, and it is one of the 178.
+
+#### The environment, for the sixth time
+
+`/usr/local/bin/uv` does not exist in this container until `pip install -U uv` puts 0.12.9
+there, and the `uv` first on `PATH` is 0.8.17, which cannot parse this repository's
+`pyproject.toml` — so the working `uv` has to be called by its full path rather than found.
+`black` and `docformatter` are again not in the dependency set and go in by hand.
