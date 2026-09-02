@@ -672,6 +672,31 @@ items:
   - perception-predicates-guide-the-search
   - pieces-looked-for-where-expected
   status: in_progress
+  blockers:
+  - 'Six review threads opened by the developer on #238 on 2026-09-02, all unresolved, and
+    none of them recorded here before this resolve run - the fourth time on this plan that
+    the cause of a stall was a review comment nobody turned into state. Nothing else is
+    wrong with the branch: it has no CI at all (a fork pull request based on another fork
+    branch runs no workflow, so `get_check_runs` and `get_status` both come back empty),
+    no pending review blocking replies this time, and both dependencies - #227 and #232 -
+    are open and out of draft.'
+  - 'Four of the six are wording and shape, and are this session''s to do: r3914749821
+    (backend.py:66, simplify the narrowing_relations docstring into plain English),
+    r3915123230 (pipeline.py:681, `_is_this_surfaces` is not English - it asks whether the
+    piece is on the surface), r3915599909 (spatial_types.py:192, put `_POSE_NOUN` and
+    `_frame_noun` inside the verbalization method rather than beside it), and r3915277277
+    (watch_narrowing.py, the demonstration should read `show_step_by_step(query)` with
+    everything it needs in the source files).'
+  - 'Two of the six are the developer''s to decide and are not this session''s to settle.
+    r3915356623 asks why answering a query needs a pipeline at all rather than only the
+    request, the camera and the images, calls the present shape rigid, asks to discuss how
+    to make it general, and asks whether the EQL-RDR engine (the stack whose tip is #77)
+    can generalize it. r3915631447 asks that `MontessoriShapeDetection` be renamed
+    `DetectedMontessoriShape` and made a `Role` for `MontessoriShape` - which needs a
+    `MontessoriShape` role taker to exist for every detection, so the look would have to
+    spawn what it finds into the world. That is the premise of the separate item
+    imagination-world-rejects-what-a-predicate-refuses, so the ask reaches past this item''s
+    recorded contract.'
   notes: 'The developer''s second mechanism on r3893602153, deferred out of #227 rather than dropped:
     "one can interpret spatial predicates as specifying Regions (like the region class in semdt) with
     extents to look at and excluding other regions, once can clip images and depth to look only inside
