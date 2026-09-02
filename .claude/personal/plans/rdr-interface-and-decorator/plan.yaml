@@ -261,3 +261,20 @@ items:
     guides' code cells were extracted and executed, which is not optional for the user guide since
     `test_eql_documentation.sh` runs it as a CI job. CI has never run on this branch's current
     stack, so every figure is a local measurement.
+
+    2026-09-02 (integration): the `integration-conflict` block from 2026-08-31 is cleared - the
+    break no longer reproduces. It was recorded with no named partner (`breaks_against` null), so
+    there was never a second branch to re-check against; what could be re-measured is whether a
+    current build still carries the failure, and it does not. Merging this branch's head
+    `6d97d494` into the published build `dabaf6f2` (`integration-20260901-200409`) is
+    conflict-free and brings the whole `D-core-backend` to `D-deco` stack in, none of which that
+    build carried; the configured integration suite gives 1041 passed, 0 failed on that tree and
+    1041 passed, 0 failed on the build without it, over the same collected set, since this branch
+    adds no `.claude/` tests. The tree the 08-31 failure was found in no longer exists: this
+    branch was restacked on 2026-09-02 21:12, and `D-store`, `D-ui` and `D-ui-rendering` the same
+    day.
+
+    Nothing could have lifted that block on its own. No reproduction test was pushed onto the
+    branch when it was blocked, and `clear-fixed-breaks` reads an empty reproduction run as
+    nothing recorded rather than everything fixed, so a branch withheld from every build is
+    exactly the one nobody re-measures. See roadmap decision 15.

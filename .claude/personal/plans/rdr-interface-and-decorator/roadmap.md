@@ -168,6 +168,24 @@ half of that test a leftover contradicting the engine. Only `...` means no
 rule fired now, and a test pins it. A sentinel rename is the moment to ask
 what the old sentinel was also standing in for.
 
+**15. A blocked branch is the one nobody re-measures.** #77 was labelled
+`integration-conflict` on 2026-08-31 for breaking the integration build in
+combination with the other tips, and the label held it out of every build
+after that. Two things then made the block self-sustaining. No reproduction
+test was pushed onto the branch when it was blocked, and `clear-fixed-breaks`
+reads an empty reproduction run as *nothing recorded* rather than *everything
+fixed*, so the one mechanism that lifts such a label could never fire. And a
+withheld branch contributes to no build, so nothing re-tested it: the branch
+was restacked on 2026-09-02 and its whole stack with it, and no build noticed.
+Re-measured on 2026-09-02 by merging `6d97d494` into the published build
+`dabaf6f2` — conflict-free, and the configured suite gives 1041 passed, 0
+failed both with the branch and without it, on the same collected set. The
+break was gone, and had been since the restack. The recorded failure named no
+partner (`breaks_against` null), so there was never a second branch to
+re-check against either; the only answerable question was whether a current
+build still carried it. Push the reproduction test at the moment of blocking,
+or the block outlives what it was for.
+
 ## The lesson this plan is the case study for
 
 **Six weeks on a dead base costs three moved interfaces, and none of it is
