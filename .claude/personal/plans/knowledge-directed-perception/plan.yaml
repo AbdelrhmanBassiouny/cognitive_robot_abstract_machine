@@ -485,66 +485,85 @@ items:
   session: https://claude.ai/code/session_01MotUMLrQxbZKQWs4BADwkj
   blockers:
     - >-
-      A restack conflict, not a review comment, and not what this item last recorded. Every one of
-      #222's nine review threads is now resolved - the developer resolved r3893312001 and its two
-      follow-ups after this item's previous blocker was written, so the "one still unresolved" it
-      records is stale. CI is green on all 23 checks (9eb4d747, 2026-09-01) and #222 is out of
-      draft. What withholds it is `mergeable_state: dirty`: the maintenance routine reported on
-      2026-09-02 00:45 that merging `perception_per_supporting_surface` into
-      `perception_eql_backend` conflicts in `krrood/src/krrood/entity_query_language/backends.py`,
-      `exceptions.py` and `verbalization/vocabulary/english.py`, skipped the branch and labelled it
-      `needs-resolution`, which holds it out of every later promotion pass. The conflict is not with
-      #221's own work: the parent moved only by taking `main` in, so the collision is between
-      upstream's probabilistic-query work (#575) and this branch's own additions to those three
-      files, each side adding beside the other.
-  notes: "Resolved 2026-08-31 in `auto` mode, and the round changed two things the manifest and roadmap\
-    \ had recorded as settled, both at the developer's direction.\nThe backend is *generative*, not selective.\
-    \ The developer's reasoning, which overrode this session's recommendation to stay selective: with\
-    \ the instances already believed in we are only asking perception for the pose, which is an underspecified\
-    \ statement; with no belief yet, the look is what brings the instance into existence. Neither is selection\
-    \ from a domain the statement was handed. So a statement is a Match - an(MontessoriShapeDetection)(\
-    \ supporting_surface=lid, pose=...) - and an attribute stated as ... narrows nothing and rejects nothing,\
-    \ because it is the statement saying the look must supply it.\nThe general half now lives in krrood,\
-    \ not in experiments: PerceptionBackend and LookRequest sit beside the other backends and carry how\
-    \ a statement is read, narrowed and checked; MontessoriPerceptionBackend carries only that a look\
-    \ is taken by the Montessori pipeline and that its search narrows by the supporting surface. krrood\
-    \ gains no dependency on experiments. This reverses what the roadmap recorded (\"the backend in experiments,\
-    \ only the exception and the Directive member in krrood\").\nTwo measurements the redesign turned\
-    \ up, neither of which the plan knew: native evaluation returns nothing at all for a Match carrying\
-    \ an ellipsis attribute, so the ellipsis attributes have to be dropped from the check and the stated\
-    \ ones re-applied; and native evaluation does not narrow a domain by the variable's declared type,\
-    \ so the backend does it. Both are covered by tests rather than assumed.\nThe predicate and semantic-annotation\
-    \ redesign the other five threads ask for is not here - it is the new item perception-predicates-guide-the-search,\
-    \ which is the developer's own suggestion on r3893312001 that it be \"a separate PR that this one\
-    \ here is stacked under\".\nRound replied to and partly resolved on 2026-08-31 once the developer\
-    \ submitted his pending review, which had blocked every inline reply while it sat unsubmitted (GitHub\
-    \ allows one pending review per user and the API acts as that account). Four threads resolved - generative,\
-    \ the krrood placement, the Montessori type out of the general half, and the AttributeEqualityToLiteral\
-    \ rename. Five left open on purpose: four schedule the predicate redesign rather than asking for a\
-    \ change here, and one carries a question back.\n\n      A PerceptionBackend beside EntityQueryLanguageBackend\
-    \ and\nSQLAlchemyBackend, so evaluating a query runs perception rather than a pipeline being called\
-    \ by hand. SQLAlchemyBackend already sets the shape - eql_to_sql translates the query into another\
-    \ engine's plan and runs it there - and the compiler from a query to a detection pipeline is the same\
-    \ move against a camera. Conditions are split the way a query planner splits them: those that can\
-    \ be pushed down shape the search (which surface to rectify, which piece models are candidates, what\
-    \ seeds segmentation - via is_supported_by, is_body_in_region, InsideOf, the selected type and the\
-    \ appearance constraints), and those that cannot are kept as a residual filter over the detections\
-    \ that come back, so nothing is silently ignored. A condition that can be neither raises a typed exception\
-    \ alongside SelectiveBackendCannotResolveEllipsisMatch. Also gives the backend its own opening_directive\
-    \ so a query answered by looking verbalizes as \"Look for ...\" rather than \"Find ...\", which needs\
-    \ one Directive member in krrood. Narrowed for the deadline: support exactly the condition forms the\
-    \ demo writes - the selected type and is_supported_by - push those down, filter the rest as residuals,\
-    \ and raise on anything else. A general compiler is not what the claim needs. PerceivedObjects, the\
-    \ domain that runs the whole pipeline on iteration and yields everything, is retired by it: a query\
-    \ then runs only what it asked for.\nNoted 2026-08-31, for whoever carries this further rather than\
-    \ for the branch in flight: the items added that day need a look to be narrowed by a believed *place*\
-    \ - the region and yaw interval an object is expected in - as well as by a type and a surface. Written\
-    \ before that day's review round, this named SceneRequest; the narrowing now lives in krrood's LookRequest,\
-    \ and SceneRequest.admits was removed by the move. The correction is worth more than the note, because\
-    \ the round's own reversal is what makes the belief natural rather than an addition: a generative\
-    \ statement asking `pose=...` of an instance already believed in is exactly the pose-only question\
-    \ a believed place answers, which is the shape expectations-from-events and pieces-looked-for-where-expected\
-    \ were already written around."
+      Nothing on the branch. #222 is green on all 23 checks, `mergeable_state: clean` since the
+      restack of 2026-09-02, out of draft, and all nine of its review threads are resolved. It still
+      carries the `needs-resolution` label the maintenance routine set on the conflict; that label
+      is cleared by the routine's own next pass now that the branch merges cleanly, and until it is,
+      the branch is withheld from promotion.
+  notes: >
+    Resolved 2026-08-31 in `auto` mode, and the round changed two things the manifest and roadmap
+    had recorded as settled, both at the developer's direction.
+
+    The backend is *generative*, not selective. The developer's reasoning, which overrode this
+    session's recommendation to stay selective: with the instances already believed in we are only
+    asking perception for the pose, which is an underspecified statement; with no belief yet, the
+    look is what brings the instance into existence. Neither is selection from a domain the
+    statement was handed. So a statement is a Match - an(MontessoriShapeDetection)(
+    supporting_surface=lid, pose=...) - and an attribute stated as ... narrows nothing and rejects
+    nothing, because it is the statement saying the look must supply it.
+
+    The general half now lives in krrood, not in experiments: PerceptionBackend and LookRequest sit
+    beside the other backends and carry how a statement is read, narrowed and checked;
+    MontessoriPerceptionBackend carries only that a look is taken by the Montessori pipeline and
+    that its search narrows by the supporting surface. krrood gains no dependency on experiments.
+    This reverses what the roadmap recorded ("the backend in experiments, only the exception and the
+    Directive member in krrood").
+
+    Two measurements the redesign turned up, neither of which the plan knew: native evaluation
+    returns nothing at all for a Match carrying an ellipsis attribute, so the ellipsis attributes
+    have to be dropped from the check and the stated ones re-applied; and native evaluation does not
+    narrow a domain by the variable's declared type, so the backend does it. Both are covered by
+    tests rather than assumed.
+
+    The predicate and semantic-annotation redesign the other five threads ask for is not here - it
+    is the new item perception-predicates-guide-the-search, which is the developer's own suggestion
+    on r3893312001 that it be "a separate PR that this one here is stacked under".
+
+    Round replied to and partly resolved on 2026-08-31 once the developer submitted his pending
+    review, which had blocked every inline reply while it sat unsubmitted (GitHub allows one pending
+    review per user and the API acts as that account). Four threads resolved - generative, the
+    krrood placement, the Montessori type out of the general half, and the
+    AttributeEqualityToLiteral rename. Five left open on purpose: four schedule the predicate
+    redesign rather than asking for a change here, and one carries a question back.
+
+    A PerceptionBackend beside EntityQueryLanguageBackend and
+
+    SQLAlchemyBackend, so evaluating a query runs perception rather than a pipeline being called by
+    hand. SQLAlchemyBackend already sets the shape - eql_to_sql translates the query into another
+    engine's plan and runs it there - and the compiler from a query to a detection pipeline is the
+    same move against a camera. Conditions are split the way a query planner splits them: those that
+    can be pushed down shape the search (which surface to rectify, which piece models are
+    candidates, what seeds segmentation - via is_supported_by, is_body_in_region, InsideOf, the
+    selected type and the appearance constraints), and those that cannot are kept as a residual
+    filter over the detections that come back, so nothing is silently ignored. A condition that can
+    be neither raises a typed exception alongside SelectiveBackendCannotResolveEllipsisMatch. Also
+    gives the backend its own opening_directive so a query answered by looking verbalizes as "Look
+    for ..." rather than "Find ...", which needs one Directive member in krrood. Narrowed for the
+    deadline: support exactly the condition forms the demo writes - the selected type and
+    is_supported_by - push those down, filter the rest as residuals, and raise on anything else. A
+    general compiler is not what the claim needs. PerceivedObjects, the domain that runs the whole
+    pipeline on iteration and yields everything, is retired by it: a query then runs only what it
+    asked for.
+
+    Noted 2026-08-31, for whoever carries this further rather than for the branch in flight: the
+    items added that day need a look to be narrowed by a believed *place* - the region and yaw
+    interval an object is expected in - as well as by a type and a surface. Written before that
+    day's review round, this named SceneRequest; the narrowing now lives in krrood's LookRequest,
+    and SceneRequest.admits was removed by the move. The correction is worth more than the note,
+    because the round's own reversal is what makes the belief natural rather than an addition: a
+    generative statement asking `pose=...` of an instance already believed in is exactly the
+    pose-only question a believed place answers, which is the shape expectations-from-events and
+    pieces-looked-for-where-expected were already written around.
+
+    Restacked 2026-09-02 in `auto` mode. `main`'s entity query language now moves under this track:
+    the parent's tip had advanced only by taking `main` in, so the three-file conflict the
+    maintenance routine reported was `main`'s probabilistic-query work meeting this branch's own
+    additions to `backends.py`, `exceptions.py` and `vocabulary/english.py` - two sides adding
+    beside each other, resolved by keeping both, with no new code needed. The one real meeting is
+    `Directive`, where `main` had rewritten the docstring around `DISTRIBUTION_OVER` not being an
+    imperative while this branch was adding a third imperative, `LOOK_FOR`; `main`'s framing is kept
+    and its count corrected. #227, #238 and everything stacked past them meet the same three files
+    when the merge reaches them, and roadmap.md records the resolution so it is not re-derived.
 - id: perception-predicates-guide-the-search
   title: Guide the search by predicates and annotations, not by attribute names
   branch: claude/plan-item-kickoff-perception-ogf2g9
