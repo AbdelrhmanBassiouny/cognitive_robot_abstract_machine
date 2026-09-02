@@ -482,15 +482,21 @@ items:
   - surfaces-from-world
   - detect-per-supporting-surface
   status: in_progress
-  session: https://claude.ai/code/session_01DBkGLKmju56tuBNdrSxitR
+  session: https://claude.ai/code/session_01MotUMLrQxbZKQWs4BADwkj
   blockers:
-  - 'One of #222''s nine review threads is still unresolved, not five. The developer resolved four of
-    the five this item recorded as deliberately open, on 2026-08-31 after submitting his pending review:
-    r3893160382 (the attribute-name string), r3893576773 (the mimic''s copy of it), r3893463818 (algorithm
-    capabilities, recorded on choose-detection-method) and r3893476097 (the inline import, whose question
-    back he closed by resolving). What remains open is r3893312001 with its two follow-ups r3893499716
-    and r3893602153 - the predicate ask itself, which is now the item perception-predicates-guide-the-search,
-    in progress on #227 as of 2026-08-31. Nothing on this pull request is this item''s work to do.'
+    - >-
+      A restack conflict, not a review comment, and not what this item last recorded. Every one of
+      #222's nine review threads is now resolved - the developer resolved r3893312001 and its two
+      follow-ups after this item's previous blocker was written, so the "one still unresolved" it
+      records is stale. CI is green on all 23 checks (9eb4d747, 2026-09-01) and #222 is out of
+      draft. What withholds it is `mergeable_state: dirty`: the maintenance routine reported on
+      2026-09-02 00:45 that merging `perception_per_supporting_surface` into
+      `perception_eql_backend` conflicts in `krrood/src/krrood/entity_query_language/backends.py`,
+      `exceptions.py` and `verbalization/vocabulary/english.py`, skipped the branch and labelled it
+      `needs-resolution`, which holds it out of every later promotion pass. The conflict is not with
+      #221's own work: the parent moved only by taking `main` in, so the collision is between
+      upstream's probabilistic-query work (#575) and this branch's own additions to those three
+      files, each side adding beside the other.
   notes: "Resolved 2026-08-31 in `auto` mode, and the round changed two things the manifest and roadmap\
     \ had recorded as settled, both at the developer's direction.\nThe backend is *generative*, not selective.\
     \ The developer's reasoning, which overrode this session's recommendation to stay selective: with\
