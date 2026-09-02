@@ -155,6 +155,14 @@ class ORMatic:
         for wrapped_table in self.wrapped_tables.values():
             self.imported_modules.add(get_module_of_type(wrapped_table.wrapped_clazz.clazz))
 
+        # an externally-mapped class referenced here (e.g. as a base class or a
+        # relationship target) may be mapped several hops further up the dependency
+        # chain than the immediate ormatic_interface_dependencies entry, whose module
+        # is the only one added above -- its qualified_reference needs its own module
+        # imported too, or the generated file references an unbound name.
+        for external_table in self.external_tables.values():
+            self.imported_modules.add(get_module_of_type(external_table.dao_class))
+
     @property
     def base_source_module(self) -> Optional[str]:
         """
