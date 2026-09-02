@@ -1,76 +1,51 @@
-# PR 3: shared pr_state module + LOC/CI/conflict chips (workflow-unification / shared-pr-state-chips)
+# PR 3: shared pr_state module + LOC/CI/conflict chips (plan-dashboards / shared-pr-state-chips)
 
-Branch `claude/shared-pr-state-chips`, based on `claude/stack-tooling-on-main` (#106's head,
-sibling of #107). Kickoff session: https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr
-Approved kickoff plan (decisions settled with the user: package named `development_tooling`;
-headless site build also pushes merged→done manifest corrections).
+Branch `claude/shared-pr-state-chips`, PR #111 (draft). Kickoff session:
+https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr. Resolve session (2026-09-02):
+https://claude.ai/code/session_01VATBfAq9Rd7jdU46rw3hvd.
 
-## Plan
+## History (condensed)
 
-1. `development_tooling/` package at repo root (zero-install import; pyproject inside the
-   directory for optional install) with `pr_state` as first module — compute layer ported from
-   old `dev/stack.py` (CI rollup reduction, session-URL parse, LOC-vs-threshold; no stack-turn).
-2. Fetch layer: gh-else-token dual backend (decision 9), bulk list + per-PR GETs for
-   additions/deletions/mergeable; git-based `_loc_changed`/`_conflicts_onto` ports.
-3. `.claude/stack/stack.py` regains `export`, backed by the package (repo-root sys.path insert,
-   interim until dev-tooling-python-package).
-4. Dashboard chips: optional pr_data fields (ci/additions/deletions/mergeable/session_url),
-   `PullRequestRecord` defaults keep old pr_data working, chips in `.item-badges`.
-5. Headless `build_site.py` in the plan-dashboard skill dir: discovers plans from personal-notes,
-   fetches via pr_state, runs refresh_dashboard.sh per plan (incl. correction push), build_index;
-   writes `_site/`.
-6. Tests TDD throughout: `test/development_tooling_test/` + stack tests + plan-dashboard tests
-   (backward-compat, ScratchRepository for build_site). CI: new constants + add test dir to
-   test_claude_dev_tooling job.
+- 2026-07-30: created the `development_tooling` package with `pr_state` + `personal_notes`,
+  restored `stack.py export`, added CI/LOC/conflict chips to dashboard items, added
+  `build_site.py` (headless static build), 44 package tests + 258 tooling tests. Stacked on #106.
+- 2026-08-05: #106 landed; resolved the first main conflict by re-applying deltas in main's idiom.
+- 2026-08-20: bastler pivot (decision 13): #185 creates the package off main; this PR rebases onto
+  it and folds its modules in under the `bastler` name. Left needs-resolution since (3 files vs main).
+- 2026-08-30: owner review, 19 threads (2 "rebase onto bastler", 17 code-quality). Never recorded
+  in the manifest until the resolve run.
+
+## Resolution plan (2026-09-02, auto mode)
+
+1. Merge `origin/claude/plan-item-kickoff-workflow-cuare2` (#185 head) into this branch - a merge,
+   not a rewrite; #185 already contains this branch's last main merge, so no stray main commits
+   enter the diff. Resolve: delete the two per-directory test conftests; take bastler's README /
+   ci.yml / build_dashboard.py / stack.py and re-apply this PR's deltas as `bastler.pr_state`
+   imports (no sys.path inserts); move the four location-conflicted test files into
+   `test/bastler_test/`.
+2. Fold: `development_tooling/pr_state.py` -> `bastler/pr_state.py`, `personal_notes.py` ->
+   `bastler/personal_notes.py`, `build_site.py` -> `bastler/build_site.py`; tests + stubs into
+   `test/bastler_test/` (gh stub merged into the shared `gh.sh`); delete `development_tooling/`,
+   `test/development_tooling_test/`, the second CI invocation and the `DEVELOPMENT_TOOLING_*` shell
+   constants (`BUILD_SITE_MODULE` replaces `BUILD_SITE_SCRIPT`).
+3. Apply the 17 code-quality threads while re-homing: loose functions grouped into classes
+   (check rollup, session link, change size, fetcher, local git probe, endpoint paths);
+   StrEnums for payload keys / list filter / check display / mergeable display / environment
+   variables; module constants as ClassVars; member docstrings; test data files under
+   `dataset/`; ScratchRepository instead of hand-rolled git; fakes as dataclasses; a session-link
+   factory for tests.
+4. Verify: `python -m pytest test/bastler_test --confcutdir=test/bastler_test`, format_docstrings,
+   every entry point answers `--help`. Push; retarget #111 to `claude/plan-item-kickoff-workflow-cuare2`;
+   update the description; reply on and resolve each addressed thread; keep draft.
+5. Record: roadmap addendum, manifest blockers trimmed, dashboard republished.
+
+Deferred, stated on the PR: the stack chip (REST read of the pull request's native stack object)
+is still specified-not-implemented; it is the item's remaining feature work after this round.
 
 ## Done so far
 
-- Kickoff research + approved plan; branch created; plan.yaml kept current throughout;
-  dashboard republished (now itself showing the new CI/LOC/conflict chips, fetched live
-  through the new pr_state module).
-- All six steps implemented TDD, 5 commits, pushed; **draft PR #111 opened** (base
-  claude/stack-tooling-on-main), subscribed to its activity. 302 tests green across the
-  two CI invocations (was 254): plan-dashboard+hooks+stack (258) and
-  test/development_tooling_test (44, separate invocation with --confcutdir because
-  test/conftest.py imports the robotics stack).
-- Notable findings while porting: merge-tree exits 1 for both a conflict and a missing
-  reference (old probe reported a typo as a conflict - fixed with explicit rev-parse
-  verification); a test fetched the real personal-notes remote via the session's
-  CLAUDE_PERSONAL_NOTES_REMOTE env leak - both personal_notes and build_site test
-  modules now strip those vars via an autouse fixture.
-- Verified contracts: zero-install import from repo root, stack.py CLI (export listed),
-  `pip install ./development_tooling` (package-dir mapping works), and a live pr_state
-  fetch of PRs 101/106/107/109/110/111 (chips data correct).
+- Context gathered; manifest corrected (status in_progress, session, 3 precise blockers, notes).
 
 ## Next
 
-- 2026-08-05: #106's chain landed on main, GitHub retargeted #111 to main, and the
-  maintenance pass reported a real conflict (needs-resolution) in stack.py, README.md,
-  build_dashboard.py. Resolved by taking main's re-reviewed versions and re-applying
-  this PR's deltas in their idiom (export as a Command member via
-  Configuration.fork_repository, own URL helper deleted in favour of
-  Repository.from_remote_url, ExitCode.GITHUB_UNAVAILABLE 6, personal-notes resolver
-  delegation kept, from_mapping keeps #119's guard + chip fields). 401 tests green
-  (357 .claude suites + 44 development_tooling); pushed merge 52e3ede4; replied on the
-  PR; label clears on the next maintenance pass.
-- Watch CI on the merge commit; the known test_world_sim_state_sync flake may still red
-  the semantic_digital_twin job (fails on main too - already noted once on the thread).
-- 2026-08-05 (later): the pass merged main again (2b316dc5, clean - #492 gripper
-  params); run 31044969651's robokudo job red on infrastructure only (uni GitLab
-  unreachable while downloading test data; noted on the thread). That run is superseded
-  by later heads; its rerun cue no longer applies.
-- 2026-08-10: maintenance merges continued (head now 8fad3a1b, local fast-forwarded).
-  Run 31393449301: test_claude_dev_tooling green; semantic_digital_twin and segmind
-  jobs red on a new repo-wide infra break - the just-published greenlet 3.5.5 has no
-  manylinux wheel, and greenlet is an unpinned transitive dep (nowhere in the repo, no
-  lock file), so every job installing the robotics stack fails at env install on every
-  branch. Reported once on the thread (comment 5241109619) with the pin-below-3.5.5 /
-  required-environments fix offered as its own bug PR; not fixed here (repo-wide,
-  outside this PR's scope). Reruns pointless until greenlet ships Linux wheels or a
-  pin lands - skip further events for this failure class as duplicates.
-- 2026-08-10 (later): run 31393448822 (prebuilt-container leg, no uv install, so not
-  greenlet-blocked) red on coraplex/scripts/test_notebook_examples.sh with the known
-  "Kernel died before replying to kernel_info" notebook-kernel flake (same class #135
-  hit; unrelated to this diff). Noted once on the thread (comment 5241177836); skip
-  further events of this class as duplicates too.
-- Keep the PR draft until told otherwise; self-review pass before undrafting, when asked.
+- Steps 1-5 above, in order.
