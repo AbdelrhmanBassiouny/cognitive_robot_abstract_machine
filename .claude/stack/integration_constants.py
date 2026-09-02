@@ -218,6 +218,22 @@ class ReportKey(StrEnum):
     The earlier tip the culprit fails against alone.
     """
 
+    MEASURED_OVER = "measured_over"
+    """
+    The heads a break was found between, which is the tree its block is about.
+    """
+
+    COMMIT = "commit"
+    """
+    What the fork had a branch pointing at when a break was measured over it.
+    """
+
+    READMITTED = "readmitted"
+    """
+    The branches a build carried although a label withholds them, because the tree
+    their block was measured in is gone.
+    """
+
     BLOCKED = "blocked"
     """
     The branch a block-branch run labelled.
@@ -241,6 +257,12 @@ class ReportKey(StrEnum):
     CLEARED = "cleared"
     """
     The branches whose block a clearing run lifted.
+    """
+
+    RECORDED_BREAKS = "recorded_breaks"
+    """
+    Every branch a reproduction run had a break recorded against, and whether each break
+    still reproduces.
     """
 
     TAKEN_DOWN = "taken_down"

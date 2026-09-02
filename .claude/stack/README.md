@@ -197,10 +197,17 @@ The labels are the ones a maintenance pass writes, so run `build --restack` and 
 verdict decides what the build carries; a build reads the stack again afterwards, since the restack
 is what writes those labels.
 
-Everything left out is named in the report - as `blocked` or `unreviewed`, distinct from a tip the
-build tried to integrate and could not - so a build that integrated nine branches out of nineteen
-says which nine and why, rather than saying so only by omission. Leaving either out is the rule
-working, so it is not a failing build and does not change the exit status.
+**A branch blocked for breaking another is held out only while the tree the break was found in
+still exists.** The block records the heads it was measured over, as references under
+`refs/integration/blocked/` on the fork; once one of them has moved, the build carries the branch
+again on trial and reports it as `readmitted`, and its suite passing is what lifts the label. A
+label with no such record is reported as `blocked-without-record`, since no build can lift it.
+
+Everything left out is named in the report - as `blocked`, `blocked-without-record` or
+`unreviewed`, distinct from a tip the build tried to integrate and could not - so a build that
+integrated nine branches out of nineteen says which nine and why, rather than saying so only by
+omission. Leaving any of them out is the rule working, so it is not a failing build and does not
+change the exit status.
 
 Two branches can also merge perfectly and still not work together - one removing what another's
 test imports, one adding a dependency another's fixture does not provide. No per-branch check can

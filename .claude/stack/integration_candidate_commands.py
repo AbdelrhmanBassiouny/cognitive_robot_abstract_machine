@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,7 +18,7 @@ from stack import Configuration
 from maintenance_board import PullRequestField
 from maintenance_github import ForkPullRequests
 from integration_reproduction import (
-    ClearedBranchReport,
+    ClearingReport,
     ReproductionRun,
     clear_fixed_breaks,
 )
@@ -660,45 +659,30 @@ class ClearFixedBreaksCommand(IntegrationCommand):
         :param arguments: The parsed command line.
         :return: The process exit code.
         """
-        cleared = self.clear(arguments.report, run.configuration, run.fork())
+        clearing = self.clear(arguments.report, run.configuration, run.fork())
         if arguments.json:
-            print(self.as_json(cleared))
+            print(clearing.as_json())
         else:
-            for unblocked in cleared:
-                print(f"{unblocked.branch}\tunblocked\t{unblocked.label}")
+            print("\n".join(clearing.as_lines()))
         return IntegrationExitCode.SUCCESS
 
     @staticmethod
     def clear(
         report: Path, configuration: Configuration, fork: ForkPullRequests
-    ) -> tuple[ClearedBranchReport, ...]:
+    ) -> ClearingReport:
         """
         Read what the reproduction run found, and act on it.
+
+        Answered with the run as well as the lifting, since a run that lifted nothing
+        has two different things it can mean.
 
         :param report: The document the reproduction run wrote.
         :param configuration: The resolved configuration, naming the label to remove.
         :param fork: The fork to label and comment on.
-        :return: What was written where, one entry per branch unblocked.
+        :return: What the run established, and what was written where.
         """
-        return clear_fixed_breaks(
-            ReproductionRun.from_json(report.read_text()), configuration, fork
-        )
-
-    @staticmethod
-    def as_json(cleared: Sequence[ClearedBranchReport]) -> str:
-        """:param cleared: The branches unblocked.
-        :return: Them as one machine-readable document."""
-        return json.dumps(
-            {
-                ReportKey.CLEARED: [
-                    {
-                        ReportKey.BRANCH: unblocked.branch,
-                        ReportKey.PULL_REQUEST_NUMBER: unblocked.pull_request_number,
-                        ReportKey.LABEL: unblocked.label,
-                        ReportKey.COMMENT: unblocked.comment,
-                    }
-                    for unblocked in cleared
-                ]
-            },
-            indent=2,
+        reproduced = ReproductionRun.from_json(report.read_text())
+        return ClearingReport(
+            run=reproduced,
+            cleared=clear_fixed_breaks(reproduced, configuration, fork),
         )

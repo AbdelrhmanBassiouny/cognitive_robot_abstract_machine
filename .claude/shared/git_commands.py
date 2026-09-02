@@ -10,6 +10,7 @@ are here: :meth:`GitCommandRunner.attempt` reports, :meth:`GitCommandRunner.run`
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -136,6 +137,30 @@ class BranchPublication:
 
     def __str__(self) -> str:
         return f"{self.source}:{BRANCH_REFERENCE_PREFIX}{self.branch}"
+
+
+@dataclass(frozen=True)
+class ReferenceUpdate:
+    """
+    One reference on a remote, and what to leave it pointing at.
+
+    For the references a record is kept as, below ``refs/`` and outside ``refs/heads/``,
+    which are overwritten by design; a branch is published through
+    :class:`BranchPublication`, which decides whether history may be rewritten.
+    """
+
+    reference: str
+    """
+    The fully qualified reference.
+    """
+
+    commit: str | None = None
+    """
+    The commit to leave it at, or ``None`` to delete it.
+    """
+
+    def __str__(self) -> str:
+        return f"{self.commit or ''}:{self.reference}"
 
 
 @dataclass(frozen=True)
@@ -317,6 +342,21 @@ class GitCommandRunner:
         """
         return self.run("ls-remote", remote, reference)
 
+    def remote_branch_heads(self, remote: str) -> dict[str, str]:
+        """
+        Read what a remote has each of its branches pointing at, as this checkout last
+        fetched them, in one call rather than one per branch.
+
+        :param remote: The remote to read.
+        :return: The head per branch name.
+        """
+        listed = self.run(
+            "for-each-ref",
+            "--format=%(refname:strip=3) %(objectname)",
+            f"refs/remotes/{remote}/",
+        )
+        return dict(line.split(" ", 1) for line in listed.splitlines() if " " in line)
+
     def remote_branch_names(self, remote: str, pattern: str) -> tuple[str, ...]:
         """
         Ask a remote which of its branches match a shape, without fetching from it.
@@ -429,6 +469,22 @@ class GitCommandRunner:
         :return: The finished push, whose failure the caller reports rather than forces.
         """
         return self.attempt("push", "--quiet", *proposed.as_arguments())
+
+    def write_remote_references(
+        self, remote: str, updates: Sequence[ReferenceUpdate]
+    ) -> None:
+        """
+        Leave a remote's references where the updates say, in one push.
+
+        Overwrites whatever each reference held: these are the references a record is
+        kept as, never branches, so there is no history to protect.
+
+        :param remote: The remote to write to.
+        :param updates: What each reference is left pointing at, or that it is deleted.
+        """
+        self.run(
+            "push", "--quiet", "--force", remote, *(str(update) for update in updates)
+        )
 
     def delete_branch(self, remote: str, branch: str) -> GitCommandResult:
         """
