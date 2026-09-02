@@ -15,7 +15,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Aper
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.spatial_types.numeric import NumericPose
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
-from semantic_digital_twin.world_description.world_entity import Body, Region
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    KinematicStructureEntity,
+)
 
 
 @dataclass
@@ -53,18 +56,20 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
     tracked_object: Body
     """The primary object involved in this event."""
 
-    with_object: Optional[Body | Region] = None
+    with_object: Optional[KinematicStructureEntity] = None
     """
     The secondary object involved in this event, if any.
 
-    Usually a :class:`Body`; a hole-related event (e.g. contact with an
+    Usually a :class:`~semantic_digital_twin.world_description.world_entity.Body`; a
+    hole-related event (e.g. contact with an
     :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture`)
-    sets this to that aperture's own :class:`Region` root instead, since an aperture is
-    a virtual opening rather than a collidable body.
+    sets this to that aperture's own
+    :class:`~semantic_digital_twin.world_description.world_entity.Region` root instead,
+    since an aperture is a virtual opening rather than a collidable body.
     """
 
     @property
-    def tracked_objects(self) -> List[Body | Region]:
+    def tracked_objects(self) -> List[KinematicStructureEntity]:
         """
         :return: the primary object, plus the secondary object when present.
         """
@@ -282,14 +287,13 @@ class InsertionEvent(EventWithTrackedObjects):
     Represents an event where an object is inserted into another object.
     """
 
-    inserted_into_objects: List[Body | Region] = field(default_factory=list)
+    inserted_into_objects: List[KinematicStructureEntity] = field(default_factory=list)
     """
     List of objects into which the object was inserted.
 
     A hole-related insertion sets this to the hole's own ``Region`` root (see
     :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture`),
-    not a ``Body``, matching :attr:`~EventWithTrackedObjects.with_object`'s own
-    ``Body | Region`` type.
+    not a ``Body``, which is why this is stated over their common base.
     """
 
     through_hole: Optional[Aperture] = None
