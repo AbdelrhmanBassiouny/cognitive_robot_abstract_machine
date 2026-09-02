@@ -10,11 +10,13 @@ in, so nothing can tell when that tree is gone and selection honours it for ever
 pipeline blocks automatically (RefreshPipeline._build), so refusing a block without a
 reproduction test is not an option - the lifting has to be automatic too.
 
-Fix: record the heads the break was measured over as refs/integration/blocked/<pr>/<pr>
-(like refs/integration/passed); a build honours the block only while every recorded head is
-still the fork's head; once one moved, the branch is carried again on trial and reported as
-readmitted; a green suite over a build carrying it lifts the label and forgets the record.
-A label with no record is reported as blocked-without-record so a hand-lifted block is loud.
+Fix (implemented): integration_block_record.py records the heads the break was measured
+over as refs/integration/blocked/<blocked pr>/<pr>; stack_to_build annotates
+Branch.block_standing; select_for_build carries a stale-blocked branch again and names it
+in BuildSelection.readmitted / IntegrationReport.readmitted; BuildCommand lifts the label and
+forgets the record when the suite passes over a build the branch reached; a label with no
+record is reported as blocked-without-record. locate-failure / block-branch read the stack
+the way the build does, so the search covers a readmitted branch.
 
-Done: reading, design. Next: failing tests (block record, selection, failure, build,
-lifting), then implementation, skill doc, format_docstrings, full suite, commit, push, PR.
+Done: tests (failing first), implementation, skill + README, format_docstrings.
+Next: full suite green -> commit -> push -> draft PR (bug label, session link) -> stop.
