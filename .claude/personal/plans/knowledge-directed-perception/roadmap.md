@@ -3670,3 +3670,117 @@ the giskardpy ORM generator still stops on `DebugExpressionPublisher` here as on
 `NotSet`), also independent of the branch, and is ignored. `.claude/hooks/plan_item_bootstrap.py
 open` failed at `save-plan.sh` exactly as #231, #236, #238 and #239 recorded; worked around by
 editing `plan.yaml` directly.
+
+### `search-clipped-to-a-predicates-region`: the review round of 2026-09-02
+
+Resolved 2026-09-02 in `auto` mode. **Nothing was wrong with the branch, and nothing was
+running to say so either.** #238 has no CI at all -- a fork pull request based on another
+fork branch runs no workflow, so `get_check_runs` and `get_status` both come back empty --
+its two dependencies #227 and #232 are open and out of draft, and unlike #222's round there
+was no pending review blocking replies. What kept it open was six review threads opened
+that afternoon, of which the item's own `blockers` recorded none. That is the fourth time on
+this plan that the cause of a stall was a review comment nobody had turned into state, and
+writing them down was again the first thing the resolve did, before any code.
+
+Worth adding to what the earlier rounds recorded about that pattern: **an item stacked deep
+enough has no CI to be red, so a green pull request says even less here than it did on
+#222.** The only signals #238 carries are its review threads and its own local runs.
+
+#### Three answered exactly as asked, and resolved
+
+- `narrowing_relations` explained the economy each of its three relations buys. It now says
+  what they are for: *"which surface to search, which part of it to read, and which colour
+  to look for."*
+- `_is_this_surfaces` is `_is_on_this_surface`. The developer's own reading of it --
+  *"this checks if the piece is on the surface right?"* -- is right, and is what the first
+  docstring line now says.
+- `_POSE_NOUN` and `_frame_noun` moved off `spatial_types.py`'s module level and into
+  `_verbalization_noun_phrase_`, where the frame's noun phrase is a value built once rather
+  than a function called twice. Nothing else read either of them.
+
+#### The demonstration is one call, and the argument is not quite a query
+
+*"I would like this to just be `show_step_by_step(query)` and all needed things should be in
+the source files."* Done as far as it goes: `watch_narrowing.py` is the statement the
+demonstration states plus
+
+```python
+show_step_by_step(look_for_the_cube_on_the_lid, WatchedCapture.from_command_line())
+```
+
+and everything the file used to do itself -- building the world and the pipeline, loading
+the capture, finding the board, placing the camera, making the backend, verbalizing, opening
+and closing the display -- is `step_by_step.py`'s.
+
+**Where it is answered differently, and why.** The first argument is a function of a look
+rather than a `Match` already stated. A statement about this scene is written over things a
+world holds (`variable(Body, world.bodies)`, the two hole sub-queries) and over the spot the
+look was taken from (`look.seen_from`), and none of those exist until the look has been
+taken -- which is precisely what this function is for. A query built beforehand would put
+the world, the capture and the board back in the caller's hands, which is the setup the
+thread asks to remove. Left open for the developer, per the standing convention.
+
+Two values carry what was setup. `WatchedCapture` is which shipped capture is watched, where
+the captures lie and whether anything is drawn, and reads all three off the command line;
+`RecordedLook` is the world, the pipeline, the pictures, the board they show and the spot
+they were taken from. And **finding the board moved onto the pipeline**: `board_in` belongs
+to whatever rectifies the plane the board stands in, and `detect` now reads it there rather
+than spelling the same two lines a second time.
+
+#### Two design asks that reach past this item, both put back to the developer
+
+**"Why does evaluating a query need a pipeline?"** The honest answer is that
+`MontessoriPerceptionPipeline` is the residue of everything not yet knowledge-directed. Of
+its six fields, `table`/`lid` and `world`/`reference_frame` are knowledge that `of_world`
+already reads from the world -- a recording simply has no world, which is why
+`recorded_setup` writes them down -- `headroom` is #239's to conclude, and only the two
+detectors are genuinely hand-wired. A backend taking the request, the camera and the frames
+alone needs three things that are already items: `surfaces-found-by-looking` for surfaces
+read from the picture rather than from a model, #231 for which detector answers, #239 for
+the numbers it answers with.
+
+On the EQL-RDR half, checked live rather than repeated: **#159 is open, out of draft and
+carries no blocking label; #77 is open, out of draft and `mergeable_state: clean` but
+carries `integration-conflict`.** So the engine is available to stack on, and what it would
+buy here is not the detector choice (#231 has that with EQL-native rule trees) but a rule
+tree concluding *how to answer a look*, grown by an expert when a new kind of request turns
+up. What it costs on this branch is what #231 already refused: 9,236 lines over 50 files
+merged into a pull request whose own change is a few hundred. Proposed as an item of its own
+-- *"a look is planned from the request, not configured"* -- and not added, since adding one
+is structural and the developer's.
+
+**"Rename to `DetectedMontessoriShape` and make it a `Role` for `MontessoriShape`."** The
+rename is 51 references across 10 files and mechanical; the role is not. `Role[T]` is pure
+composition and takes its role taker explicitly, so every detection would need a
+`MontessoriShape` -- a `HasRootBody` annotation over a body in a world -- and a look reports
+what it saw before anything of the sort is in the world. **Spawning what was found into a
+copy of the world is `imagination-world-rejects-what-a-predicate-refuses`**, the sibling
+item from the developer's own r3893499716, so the ask is right and the mechanism it needs
+belongs there rather than here. It would also close the gap #227 left open: a detection that
+*is* a role of a world entity gives every predicate a real subject, so nothing has to be
+refused for want of one. Three ways to take it were put to the developer -- rename here and
+role there, both there, or both here -- with both-there recommended and none taken.
+
+#### Verification
+
+**467 passed, 1 skipped, 11 xfailed** across `test/experiments_test/` against **464 passed,
+1 skipped, 11 xfailed** on this branch's previous tip in the same container, which is the
+three tests this round adds and nothing else moved. `semantic_digital_twin`'s
+failing-and-erroring set over `test_spatial_types.py`, `test_predicates.py`,
+`test_color.py` and `test_prefixed_name.py` is byte-identical to that tip's, 14 lines,
+diffed by name.
+
+Six of the experiments modules do not collect at all under `--noconftest` --
+`test_control_loop_benchmark`, `test_control_loop_runtime`, `test_montessori_bag_replay`,
+`test_real_stretch_demo_process_boundary`, `test_sage10k` and `test_scalability`, each
+needing ROS or `rosbag2_py` -- and were excluded from both sides of the comparison. That is
+this container rather than the branch: `test/experiments_test/conftest.py` imports `rclpy`,
+so a run of that directory with the conftest cannot start here at all.
+
+#### The environment, which is different again for the fifth time
+
+`/usr/local/bin/uv` does not exist in this container either and the `uv` on `PATH` is 0.8.17,
+which cannot parse this repository's `pyproject.toml`; `pip install -U uv` puts 0.12.9 there
+and `uv sync --extra dev --python 3.12` builds the whole workspace. `black` and
+`docformatter` are not in the dependency set and go in by hand, with the virtual
+environment's `bin` on `PATH`, before `scripts/format_docstrings.py` will run.

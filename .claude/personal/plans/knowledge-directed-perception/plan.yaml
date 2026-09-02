@@ -673,30 +673,28 @@ items:
   - pieces-looked-for-where-expected
   status: in_progress
   blockers:
-  - 'Six review threads opened by the developer on #238 on 2026-09-02, all unresolved, and
-    none of them recorded here before this resolve run - the fourth time on this plan that
-    the cause of a stall was a review comment nobody turned into state. Nothing else is
-    wrong with the branch: it has no CI at all (a fork pull request based on another fork
-    branch runs no workflow, so `get_check_runs` and `get_status` both come back empty),
-    no pending review blocking replies this time, and both dependencies - #227 and #232 -
-    are open and out of draft.'
-  - 'Four of the six are wording and shape, and are this session''s to do: r3914749821
-    (backend.py:66, simplify the narrowing_relations docstring into plain English),
-    r3915123230 (pipeline.py:681, `_is_this_surfaces` is not English - it asks whether the
-    piece is on the surface), r3915599909 (spatial_types.py:192, put `_POSE_NOUN` and
-    `_frame_noun` inside the verbalization method rather than beside it), and r3915277277
-    (watch_narrowing.py, the demonstration should read `show_step_by_step(query)` with
-    everything it needs in the source files).'
-  - 'Two of the six are the developer''s to decide and are not this session''s to settle.
-    r3915356623 asks why answering a query needs a pipeline at all rather than only the
-    request, the camera and the images, calls the present shape rigid, asks to discuss how
-    to make it general, and asks whether the EQL-RDR engine (the stack whose tip is #77)
-    can generalize it. r3915631447 asks that `MontessoriShapeDetection` be renamed
-    `DetectedMontessoriShape` and made a `Role` for `MontessoriShape` - which needs a
-    `MontessoriShape` role taker to exist for every detection, so the look would have to
-    spawn what it finds into the world. That is the premise of the separate item
-    imagination-world-rejects-what-a-predicate-refuses, so the ask reaches past this item''s
-    recorded contract.'
+  - 'Three of the six review threads the developer opened on #238 on 2026-09-02 are still
+    open after the resolve of that day, and none of them is code this session should write.
+    r3915277277 asked the demonstration to read `show_step_by_step(query)`; it now reads
+    `show_step_by_step(look_for_the_cube_on_the_lid, WatchedCapture.from_command_line())`,
+    whose first argument is how to state the query about a look rather than a Match already
+    stated - answered differently in part, so it is the developer''s to close.'
+  - 'r3915356623 asks why answering a query needs a pipeline at all rather than only the
+    request, the camera and the images, and asks to discuss making it general, possibly
+    through the EQL-RDR engine. The answer put to him: the pipeline is the residue of
+    everything not yet knowledge-directed, and the three items that between them remove it
+    are surfaces-found-by-looking, choose-detection-method (#231) and
+    detector-parameters-from-knowledge (#239). A rule tree concluding how to answer a look,
+    stacked on #159, is proposed as a new item rather than built here, since merging #159
+    adds 9,236 lines over 50 files to a pull request whose own change is a few hundred.
+    Adding an item is structural and his to confirm.'
+  - 'r3915631447 asks that MontessoriShapeDetection be renamed DetectedMontessoriShape and
+    made a Role for MontessoriShape. The rename is 51 references across 10 files and would
+    be a conflict #232, #236 and #239 each inherit; the role needs a MontessoriShape role
+    taker to exist for every detection, which means the look spawning what it found into a
+    copy of the world - the premise of the separate item
+    imagination-world-rejects-what-a-predicate-refuses. Three ways to split it were put to
+    the developer, with both halves in that item recommended, and none taken.'
   notes: 'The developer''s second mechanism on r3893602153, deferred out of #227 rather than dropped:
     "one can interpret spatial predicates as specifying Regions (like the region class in semdt) with
     extents to look at and excluding other regions, once can clip images and depth to look only inside
@@ -767,7 +765,30 @@ items:
     cylinder (34 mm to the right in the picture, 36 mm below) and *above* leaves the cube (28 mm up,
     6 mm to the left), so the demonstration states *above* and a test pins both. Cost over the six
     captures in one run: 0.25x for the surface, 0.40x for the direction alone, 0.30x for a 50 mm
-    radius, 0.25x for all of them with the colour.'
+    radius, 0.25x for all of them with the colour.
+    Review round of 2026-09-02, resolved the same day in `auto` mode. Six threads, of which
+    three were answered exactly as asked and resolved: the narrowing_relations docstring now
+    says which surface, which part of it and which colour rather than the economy each buys;
+    _is_this_surfaces is _is_on_this_surface, which is the developer''s own reading of what
+    it checks; and _POSE_NOUN and _frame_noun moved off spatial_types.py''s module level into
+    the verbalization method, where the frame''s noun phrase is a value built once.
+
+
+    The demonstration is one call now. watch_narrowing.py is the statement it states plus
+    show_step_by_step(look_for_the_cube_on_the_lid, WatchedCapture.from_command_line()); the
+    world, the pipeline, the capture, the board, the camera, the backend, the verbalizing and
+    the display all moved into step_by_step.py. WatchedCapture is what is watched and how, and
+    reads the command line; RecordedLook is one look at the recorded setup, so a statement is
+    stated about a look rather than about three arguments. Finding the board became
+    MontessoriPerceptionPipeline.board_in, which detect now reads rather than spelling twice.
+
+
+    467 passed, 1 skipped, 11 xfailed across test/experiments_test/ against 464 on the
+    previous tip in the same container, which is the three tests this round adds and nothing
+    else moved; sdt''s failing-and-erroring set over its spatial-types, predicate, colour and
+    prefixed-name tests is byte-identical to that tip''s. The branch has no CI of its own -
+    a fork pull request based on another fork branch runs no workflow - so its review threads
+    and its local runs are the only signals it carries.'
 - id: imagination-world-rejects-what-a-predicate-refuses
   title: Reject what a predicate refuses, by testing it in a copy of the world
   branch: null
