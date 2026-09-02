@@ -13,10 +13,6 @@ from krrood.ormatic.data_access_objects.dao import DataAccessObject, Association
 from krrood.ormatic.custom_types import TypeType
 
 {% if ormatic.base_source_module %}
-# This interface builds on {{ ormatic.base_source_module }}, so it reuses that
-# module's declarative Base instead of declaring its own: they need to share one
-# SQLAlchemy registry and MetaData for cross-file inheritance, foreign keys, and
-# relationships to resolve.
 from {{ ormatic.base_source_module }} import Base
 {% if ormatic.type_annotation_map %}
 Base.type_mappings.update({

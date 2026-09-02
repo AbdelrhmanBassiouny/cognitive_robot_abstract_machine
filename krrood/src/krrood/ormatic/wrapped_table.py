@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from inspect import isclass
@@ -14,7 +15,6 @@ from typing_extensions import (
     Optional,
     Set,
     Type,
-    Union,
     get_origin,
 )
 
@@ -179,8 +179,36 @@ class AssociationObject:
         ]
 
 
+class TableLike(ABC):
+    """
+    Common interface of :class:`WrappedTable` and :class:`ExternalTable`: something
+    that names a SQLAlchemy table, whether generated in this run or already mapped by
+    a dependency.
+    """
+
+    @property
+    @abstractmethod
+    def tablename(self) -> str: ...
+
+    @property
+    @abstractmethod
+    def qualified_reference(self) -> str: ...
+
+    @property
+    @abstractmethod
+    def primary_key_name(self) -> str: ...
+
+    @property
+    def full_primary_key_name(self) -> str:
+        return f"{self.tablename}.{self.primary_key_name}"
+
+    @property
+    @abstractmethod
+    def qualified_full_primary_key_name(self) -> str: ...
+
+
 @dataclass
-class ExternalTable:
+class ExternalTable(TableLike):
     """
     A lookup-only stand-in for a class already mapped by an ormatic-interface
     dependency.
@@ -204,30 +232,15 @@ class ExternalTable:
 
     @property
     def tablename(self) -> str:
-        """
-        :return: The DAO class's bare name, exactly as used inside quoted SQLAlchemy
-            strings (``ForeignKey('X.id')``, ``relationship('X')``). Those resolve
-            against the shared ``Base``/``MetaData``/class registry, so no module
-            qualification is needed here.
-        """
         return self.dao_class.__name__
 
     @property
     def qualified_reference(self) -> str:
-        """
-        :return: The DAO class's fully qualified ``module.ClassName`` reference, for
-            use as bare (unquoted) Python source, e.g. as a base class or inside an
-            unquoted ``ForeignKey(X.id)`` expression.
-        """
         return module_and_class_name(self.dao_class)
 
     @cached_property
     def primary_key_name(self) -> str:
         return sqlalchemy.inspect(self.dao_class).primary_key[0].name
-
-    @property
-    def full_primary_key_name(self) -> str:
-        return f"{self.tablename}.{self.primary_key_name}"
 
     @property
     def qualified_full_primary_key_name(self) -> str:
@@ -243,7 +256,7 @@ class ExternalTable:
 
 
 @dataclass
-class WrappedTable:
+class WrappedTable(TableLike):
     """
     A class that wraps a dataclass and contains all the information needed to create a
     SQLAlchemy table from it.
@@ -317,12 +330,7 @@ class WrappedTable:
         )
 
     def create_mapper_args(self):
-        # Every root table is set up as a polymorphic base unconditionally, whether or
-        # not it has children in *this* run. Under the "import instead of copy"
-        # interface architecture, any package that later imports and extends this
-        # interface can subclass any of its classes -- there is no way for this run to
-        # know in advance which roots a downstream package will subclass, so every root
-        # must already be ready to act as one.
+        # every root is unconditionally polymorphic-ready: a downstream package can subclass it
         if self.parent_table is None:
             self.custom_columns.append(
                 (
@@ -357,18 +365,8 @@ class WrappedTable:
                     }
                 )
 
-    @cached_property
-    def full_primary_key_name(self):
-        return f"{self.tablename}.{self.primary_key_name}"
-
     @property
     def qualified_reference(self) -> str:
-        """
-        :return: Same as :attr:`tablename`. A local table is defined in the same file
-            it is referenced from, so it never needs module qualification; this exists
-            only so callers can use one name uniformly across ``WrappedTable`` and
-            :class:`ExternalTable`.
-        """
         return self.tablename
 
     @property
@@ -382,7 +380,7 @@ class WrappedTable:
         return result
 
     @cached_property
-    def parent_table(self) -> Optional[Union[WrappedTable, ExternalTable]]:
+    def parent_table(self) -> Optional[TableLike]:
         """
         Resolve the parent DAO table for this table.
 
@@ -768,7 +766,7 @@ class WrappedTable:
 
     def get_table_of_wrapped_field(
         self, wrapped_field: WrappedField
-    ) -> Union[WrappedTable, ExternalTable]:
+    ) -> TableLike:
         """
         :param wrapped_field: The wrapped field to get the table for.
         :return: The wrapped table for the given wrapped field.
