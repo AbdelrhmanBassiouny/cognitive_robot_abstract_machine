@@ -186,8 +186,19 @@ items:
     depends_on:
       - where-query-rooted-attribute-no-filter
     status: in_progress
-    session: https://claude.ai/code/session_018YHKzF1oZLmsD4rFmhje4K
-    blockers: []
+    session: https://claude.ai/code/session_01F65KD9BwwgdgxZgKKmXj61
+    blockers: >
+      Conflicted against main again since 2026-09-02T00:46Z, one day after the
+      section-26 merge: PR #192 reads mergeable_state dirty and carries the
+      needs-resolution label a seventh stacked-pr-maintenance comment added.
+      The conflicting file is krrood/src/krrood/entity_query_language/query/match.py
+      alone - main took cram2#575 (probabilistic queries), whose HasExpression
+      mixin adds a base to the same Match class statement this item rewrites with
+      HasQueryModifiers/HasSymbolicOperations. Nothing else is stalling it: #192
+      still has no review threads (get_review_comments totalCount 0), carries no
+      in-review label and was never promoted upstream, its dependency
+      where-query-rooted-attribute-no-filter is merged and is_ready true, and all
+      23 checks were green on its current head ff5414e0.
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
