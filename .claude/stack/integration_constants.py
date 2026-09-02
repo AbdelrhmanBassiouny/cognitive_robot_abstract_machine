@@ -259,6 +259,12 @@ class ReportKey(StrEnum):
     The branches whose block a clearing run lifted.
     """
 
+    RECORDED_BREAKS = "recorded_breaks"
+    """
+    Every branch a reproduction run had a break recorded against, and whether each break
+    still reproduces.
+    """
+
     TAKEN_DOWN = "taken_down"
     """
     The build branches a run deleted because nothing was judging them any more.
