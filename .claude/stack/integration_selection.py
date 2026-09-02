@@ -24,6 +24,7 @@ from integration_verdict import (
     read_checks,
 )
 
+from integration_block_record import BlockRecords, BlockStanding, published_heads
 from integration_constants import BUILD_NAME_FORMAT, POINTER_BRANCH
 from integration_pass_record import PassedChecks, RecordedSubject
 from integration_plans import PlanFilter
@@ -53,6 +54,15 @@ class BuildSelection:
     nineteen and says so only by omission reads as having covered everything.
     """
 
+    readmitted: tuple[Branch, ...] = ()
+    """
+    The integrated branches a label withholds, carried anyway because the tree their
+    block was measured in is gone.
+
+    Named because the label is still there: what lifts it is the suite passing over a
+    build these reached, and nothing else knows they were carried on trial.
+    """
+
 
 def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSelection:
     """
@@ -70,6 +80,12 @@ def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSele
     restack rewrites every stale tip's head, so requiring green would empty the build
     whenever one ran.
 
+    A branch blocked for breaking another is held out only while the tree the break was
+    measured in still exists. Once a head in it has moved the block is stale, and the
+    branch is carried again on trial: the suite over that build is the first
+    measurement of the break since, and a green one lifts the label. A block nothing
+    recorded a tree for is honoured, and reported as one no build can lift.
+
     A build asked for particular plans holds a branch out the same way again, so one
     plan's branches can be judged on their own without a build of their own.
 
@@ -82,6 +98,7 @@ def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSele
     in_the_stack = {branch.name for branch in stack.branches}
     integrated: list[Branch] = []
     integrated_names: set[str] = set()
+    readmitted: list[Branch] = []
     left_out: list[PullRequestStackTipOutcome] = []
     reasons: dict[str, tuple[TipStatus, str]] = {}
     for branch in order(stack):
@@ -90,12 +107,12 @@ def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSele
             or branch.parent not in in_the_stack
             or stack.has_landed_upstream(branch.parent)
         )
-        blocked = stack.is_blocked(branch)
+        withheld = withholding_status(stack, branch)
         red = branch.ci == ChecksVerdict.FAILED
         outside_the_plans = filtering.leaves_out(branch.name)
         carried = (
             branch.status.is_out_of_draft
-            and not blocked
+            and withheld is None
             and not red
             and outside_the_plans is None
             and stands_on_integrated_work
@@ -103,9 +120,11 @@ def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSele
         if carried:
             integrated.append(branch)
             integrated_names.add(branch.name)
+            if stack.is_blocked(branch):
+                readmitted.append(branch)
             continue
-        if blocked:
-            reason = (TipStatus.BLOCKED, branch.name)
+        if withheld is not None:
+            reason = (withheld, branch.name)
         elif red:
             reason = (TipStatus.CHECKS_FAILED, branch.name)
         elif not branch.status.is_out_of_draft:
@@ -124,7 +143,40 @@ def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSele
                 attributed_to=None if held_out_by == branch.name else held_out_by,
             )
         )
-    return BuildSelection(integrated=tuple(integrated), left_out=tuple(left_out))
+    return BuildSelection(
+        integrated=tuple(integrated),
+        left_out=tuple(left_out),
+        readmitted=tuple(readmitted),
+    )
+
+
+def withholding_status(stack: Stack, branch: Branch) -> TipStatus | None:
+    """
+    Say whether a label holds a branch out of a build, and which status says so.
+
+    The base-conflict label always holds: the maintenance pass lifts it on evidence of
+    its own. The break label holds only while its block stands - a stale block carries
+    the branch on trial, and one nothing recorded a tree for is reported as such. A
+    standing nothing has read is honoured, since a selection that never asked the fork
+    has no grounds to carry a labelled branch.
+
+    :param stack: The derived stack, naming the labels.
+    :param branch: The branch to decide for.
+    :return: The status the branch is left out with, or ``None`` when no label holds it.
+    """
+    if not stack.is_blocked(branch):
+        return None
+    configuration = stack.configuration
+    other_labels = set(configuration.blocking_labels) - {
+        configuration.integration_conflict_label
+    }
+    if other_labels.intersection(branch.labels):
+        return TipStatus.BLOCKED
+    if branch.block_standing == BlockStanding.STALE:
+        return None
+    if branch.block_standing == BlockStanding.UNRECORDED:
+        return TipStatus.BLOCKED_WITHOUT_RECORD
+    return TipStatus.BLOCKED
 
 
 @dataclass
@@ -202,12 +254,7 @@ class BranchChecks:
         :return: What the fork has each of its branches pointing at, read in one call
             rather than one per branch.
         """
-        listed = self.git.run(
-            "for-each-ref",
-            "--format=%(refname:strip=3) %(objectname)",
-            f"refs/remotes/{self.remote}/",
-        )
-        return dict(line.split(" ", 1) for line in listed.splitlines() if " " in line)
+        return published_heads(self.git, self.remote)
 
 
 def stack_to_build(
@@ -221,10 +268,15 @@ def stack_to_build(
     it again is what lets :func:`select_for_build` leave out the branch this very pass
     has just blocked.
 
+    Every command that assembles tips reads the stack this way, so a search for the
+    branch that broke a build assembles the tips the build carried - a readmitted branch
+    included - rather than some other set.
+
     :param run: What this run has resolved.
     :param fork: The fork to read the open pull requests from.
     :param restack_first: Whether to bring stale tips forward before reading.
-    :return: The stack to build from, annotated with each branch's own checks.
+    :return: The stack to build from, annotated with each branch's own checks and the
+        standing of its block.
     """
     remote = run.configuration.fork_remote
     checks = BranchChecks(
@@ -233,12 +285,13 @@ def stack_to_build(
         remote=remote,
         recorded=PassedChecks.read(run.git, remote),
     )
+    blocks = BlockRecords.read(run.git, remote)
     stack = run.stack(fork)
     if not restack_first:
-        return checks.annotate(stack)
+        return blocks.annotate(checks.annotate(stack))
     restack(stack, run.git, fork)
     run.refresh_remotes()
-    return checks.annotate(run.stack(fork))
+    return blocks.annotate(checks.annotate(run.stack(fork)))
 
 
 def tips_of(stack: Stack, plans: PlanFilter | None = None) -> list[Branch]:

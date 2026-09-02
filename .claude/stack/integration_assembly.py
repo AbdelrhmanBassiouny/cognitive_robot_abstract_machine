@@ -8,6 +8,7 @@ first one would leave nothing to work from.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from stack import (
@@ -32,7 +33,12 @@ from integration_plans import PlanFilter
 from integration_report import IntegrationReport
 from integration_selection import select_for_build, tips_of
 from integration_suite import run_tests
-from integration_tips import PullRequestStackTipOutcome, ResolutionProvenance, TipStatus
+from integration_tips import (
+    PullRequestStackTipOutcome,
+    ReadmittedBranch,
+    ResolutionProvenance,
+    TipStatus,
+)
 
 
 @dataclass(frozen=True)
@@ -210,10 +216,37 @@ def build_integration(
                 included.append(tip.name)
         git.run("branch", "--force", POINTER_BRANCH, build_branch)
         tests_passed = run_tests(test_command, build.git.working_directory)
+    reached = branches_carried_by(stack, included)
     return IntegrationReport(
         build_branch=build_branch,
         base=stack.configuration.upstream_base,
         tips=tuple(outcomes),
         tests_passed=tests_passed,
         left_out=selection.left_out,
+        readmitted=tuple(
+            ReadmittedBranch(branch.name, branch.pull_request_number)
+            for branch in selection.readmitted
+            if branch.name in reached
+        ),
     )
+
+
+def branches_carried_by(stack: Stack, tips: Sequence[str]) -> set[str]:
+    """
+    Every branch in a build: each merged tip and everything it stands on in the stack.
+
+    A tip contains its stack, so a branch below a merged tip reached the build under the
+    tip's name.
+
+    :param stack: The derived stack, whose parents are walked.
+    :param tips: The tips that reached the build.
+    :return: The names of every branch the build carries.
+    """
+    by_name = {branch.name: branch for branch in stack.branches}
+    carried: set[str] = set()
+    for tip in tips:
+        name = tip
+        while name in by_name and name not in carried:
+            carried.add(name)
+            name = by_name[name].parent
+    return carried

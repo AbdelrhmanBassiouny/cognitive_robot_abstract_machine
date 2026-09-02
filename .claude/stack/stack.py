@@ -622,6 +622,13 @@ class Branch:
     """What the checks on this branch's head amount to, as an
     ``integration_verdict.ChecksVerdict`` value, or None where nothing has read them."""
 
+    block_standing: str | None = None
+    """Whether the tree the break this branch is blocked for was measured in still
+    exists, as an ``integration_block_record.BlockStanding`` value, or None where nothing
+    has read that or no such block withholds it.
+
+    Named rather than imported, since that module reads this one."""
+
     session: str | None = None
     """URL of the Claude session working this PR, if any."""
 

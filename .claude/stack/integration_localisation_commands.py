@@ -19,6 +19,7 @@ from workflow_document import WorkflowFile
 
 from integration_constants import POINTER_BRANCH, ReportKey
 from integration_exit_codes import IntegrationExitCode
+from integration_block_record import BlockRecords
 from integration_failure import BlockedBranchReport, IntegrationTestFailure
 from integration_localisation import (
     Localisation,
@@ -95,7 +96,9 @@ class LocateCandidateFailureCommand(IntegrationCommand):
         fork = run.fork()
         run.refresh_remotes()
         assembly = ProbeAssembly(
-            stack=run.stack(fork),
+            stack=BlockRecords.read(run.git, run.configuration.fork_remote).annotate(
+                run.stack(fork)
+            ),
             git=run.git,
             provenance=ResolutionProvenance.read(run.provenance_path()),
             named_at=datetime.now(timezone.utc),
@@ -217,13 +220,20 @@ class LocateCandidateFailureCommand(IntegrationCommand):
         if suspect is None:
             self._print(arguments, localisation, IntegrationExitCode.SUCCESS)
             return IntegrationExitCode.SUCCESS
-        failure = IntegrationTestFailure(
-            culprit=suspect.branch,
-            culprit_pull_request_number=suspect.pull_request_number,
+        by_name = {branch.name: branch for branch in assembly.stack.branches}
+        failure = IntegrationTestFailure.measured(
+            git=run.git,
+            configuration=run.configuration,
+            culprit=by_name[suspect.branch],
             already_included=suspect.already_included,
             breaks_against=localisation.breaks_against,
+            by_name=by_name,
         )
-        blocked = failure.block_the_branch_that_causes_it(run.configuration, fork)
+        blocked = failure.block_the_branch_that_causes_it(
+            run.configuration,
+            fork,
+            BlockRecords.read(run.git, run.configuration.fork_remote),
+        )
         self._print(arguments, localisation, IntegrationExitCode.TESTS_FAILED, blocked)
         return IntegrationExitCode.TESTS_FAILED
 
