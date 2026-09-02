@@ -6,7 +6,7 @@ from typing_extensions import Optional, Any, Dict
 
 from coraplex.config.action_conf import ActionConfig
 from coraplex.datastructures.dataclasses import Context
-from coraplex.exceptions import WrongLevelException
+from coraplex.exceptions import NotOnASingleLevelException
 from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.factories import execute_single, pause_until, sequential
 from coraplex.plans.plan_node import PlanNode
@@ -173,9 +173,9 @@ class ElevatorNavigation(ActionDescription):
             if InsideOf(self.robot.bodies_with_collision[0], floor.root)() > 0.9
         ]
         if len(current_floor) == 0:
-            raise WrongLevelException("Robot is not on any recognized floor.")
+            raise NotOnASingleLevelException("Robot is not on any recognized floor.")
         if len(current_floor) > 1:
-            raise WrongLevelException("Robot is on multiple floors at once.")
+            raise NotOnASingleLevelException("Robot is on multiple floors at once.")
         return current_floor[0]
 
     @property

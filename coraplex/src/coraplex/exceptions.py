@@ -318,7 +318,10 @@ class PerceptionSourceUnavailable(PerceptionException):
         return "start the perception pipeline before running the plan."
 
 @dataclass
-class WrongLevelException(DataclassException):
+class NotOnASingleLevelException(DataclassException):
+    """
+    Raised when an entity is detected to be on None or multiple levels at the same time.
+    """
 
     message: str
 
