@@ -1,8 +1,9 @@
 """
-Tests for the compute half of :mod:`bastler.pr_state`: reducing a check rollup to one.
+Tests for the compute half of :mod:`bastler.pr_state`.
 
-conclusion, finding the session link a description carries, and classifying a change's
-size. Pure functions of their inputs - no git, no network.
+Reducing a check rollup to one conclusion, finding the session link a description
+carries, and classifying a change's size. Pure functions of their inputs - no git, no
+network.
 """
 
 from __future__ import annotations

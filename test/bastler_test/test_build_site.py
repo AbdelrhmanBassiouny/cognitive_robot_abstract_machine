@@ -1,9 +1,9 @@
 """
-Tests for the headless static-site build: discovering plans from a personal-notes.
+Tests for the headless static-site build.
 
-remote, fetching their pull request data through an injected GitHub transport, driving
-one dashboard refresh per plan, and rendering the master index - the pipeline a Pages
-workflow runs with no live session.
+Discovering plans from a personal-notes remote, fetching their pull request data through
+an injected GitHub transport, driving one dashboard refresh per plan, and rendering the
+master index - the pipeline a Pages workflow runs with no live session.
 
 The notes remote is a scratch bare repository, the GitHub side is an in-memory fake, and
 the per-plan refresh is a recorded stub - ``refresh_dashboard.sh``'s own behaviour is
