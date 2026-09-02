@@ -41,8 +41,8 @@ from probabilistic_model.probabilistic_circuit.relational.exceptions import (
 )
 from probabilistic_model.probabilistic_circuit.relational.helper import (
     find_lowest_product_nodes_that_model_variables,
+    rename_variables_with_part_prefix,
 )
-from krrood.utils import get_class_and_attribute_name
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
     ProductUnit,
@@ -66,31 +66,6 @@ def _is_concrete_statistic(variable: Variable, value: Any) -> bool:
     if isinstance(composite, Interval):
         return composite.is_singleton()
     return len(composite.simple_sets) == 1
-
-
-def _rename_variables_with_part_prefix(
-    circuit: ProbabilisticCircuit,
-    prefix: str,
-    excluded_variables: list[Variable],
-) -> None:
-    """
-    Rename each variable in the circuit to include ``prefix`` as a namespace.
-
-    Produces names of the form ``"{prefix}.{variable.name}"``. Variables listed in
-    ``excluded_variables`` are left unchanged.
-
-    :param circuit: The circuit whose variables are renamed in-place.
-    :param prefix: String prefix to prepend to every variable name.
-    :param excluded_variables: Variables that should keep their current names.
-    """
-    variable_renames = {
-        variable: type(variable)(
-            get_class_and_attribute_name(prefix, variable.name), domain=variable.domain
-        )
-        for variable in circuit.variables
-        if variable not in excluded_variables
-    }
-    circuit.update_variables(variable_renames)
 
 
 @dataclass
@@ -147,7 +122,7 @@ class ExchangeableDistributionTemplate:
             if isinstance(part, AbstractMatchExpression)
             else str(index)
         )
-        _rename_variables_with_part_prefix(part_circuit, prefix, self.latent_variables)
+        rename_variables_with_part_prefix(part_circuit, prefix, self.latent_variables)
         if len(part_circuit.nodes()) == 0:
             raise ValueError("The grounding of the part failed.")
         return part_circuit

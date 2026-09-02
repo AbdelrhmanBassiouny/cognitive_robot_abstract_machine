@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy.typing as npt
 from typing_extensions import TYPE_CHECKING, List, Type
 
 from krrood.exceptions import DataclassException
@@ -77,3 +78,44 @@ class UndeterminedLatentsNotModeledError(DataclassException):
             "Ensure the class circuit is fitted with these aggregation statistics "
             "as latent variables before grounding."
         )
+
+
+@dataclass
+class NotAProbabilityDistributionError(DataclassException):
+    """
+    Raised when an array meant to hold a probability distribution has negative entries,
+    or does not sum to 1 along its last axis.
+    """
+
+    name: str
+    """
+    The name of the invalid field (e.g. ``"starting_distribution"``).
+    """
+
+    values: npt.NDArray
+    """
+    The offending array.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.name} is not a valid probability distribution: every entry must "
+            f"be non-negative and it must sum to 1 along its last axis, but got "
+            f"{self.values}."
+        )
+
+    def suggest_correction(self) -> str:
+        return f"Ensure {self.name} contains non-negative entries summing to 1."
+
+
+@dataclass
+class EmptyMarkovChainError(DataclassException):
+    """
+    Raised when a ``MarkovChainDistributionTemplate`` is grounded with no parts.
+    """
+
+    def error_message(self) -> str:
+        return "Cannot ground a Markov chain template with zero parts."
+
+    def suggest_correction(self) -> str:
+        return "Pass at least one part to `ground`."
