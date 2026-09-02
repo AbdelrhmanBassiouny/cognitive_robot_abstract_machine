@@ -74,6 +74,14 @@ items:
       changes nothing in its tree. Now the foot of the stack: #169 depends on it, and the
       knowledge-directed-perception item episode-replayed-into-the-world (#246) is based on it too.
       Landing hazard: #229 rewrites reasoning/predicates.py and edits geometry.py, both changed here.
+      2026-09-02 review round: the Body | Region union in segmind's events.py restated as their
+      common base KinematicStructureEntity, and AxisAlignedBox.axis_bounds returns the existing
+      Bounds dataclass per axis rather than positional (float, float) pairs.
+      Should be split further before it is reviewed in earnest: at 54 files it carries three
+      unrelated topics - sdt's numeric geometry and the Panda, segmind's hole events, and krrood's
+      EQL/ORM fixes - and only the sdt half is what #169, #246 and the rest of stack #247 are
+      waiting on. Not split yet because #169, #246 and #247 are all based on this branch, so
+      splitting it now means re-cutting the whole stack a second time.
 
   - id: montessori_fast_inline_monitor
     title: "A monitor tick cheap enough to stay on the planning thread"

@@ -1652,3 +1652,37 @@ Landing hazard for #244: #229 (`sdt_predicates_answer_whether_they_hold`) rewrit
 `reasoning/predicates.py` and edits `world_description/geometry.py`, both changed by #244; whichever
 lands second takes the other's structure and keeps the bounds rejection and the numeric containment
 ratio on top.
+
+## 2026-09-02: #244's first review round, and why it should be split again
+
+Two review comments, both about saying a type properly rather than about behaviour, fixed in
+`f38b9e87`:
+
+- The `Body | Region` union `segmind`'s `datastructures/events.py` introduced in three places -
+  `with_object`, `tracked_objects`' return and `InsertionEvent.inserted_into_objects` - is now
+  `KinematicStructureEntity`, the base both derive from. That base already declares
+  `combined_mesh`, `numeric_global_transform` and `numeric_global_pose`, which is everything
+  `AbstractContactEvent.__post_init__` reads off the object, so the wider type costs nothing.
+  The three `Union[Body, Region]` parameters in `semantic_digital_twin/adapters/multi_sim.py`
+  are the same shape but already on `main` and untouched here, so they were left alone and the
+  thread asking for "everywhere else" was left open rather than resolved.
+- `AxisAlignedBox.axis_bounds` returned `Tuple[Tuple[float, float], ...]`, a pair per axis whose
+  positions carried the meaning. It now returns the `Bounds` dataclass already defined in
+  `geometry.py`, one per axis, and `corner_coordinates` - its only consumer - enumerates each
+  axis through a new `Bounds.ends`. The reviewer asked for "a Bound dataclass"; `Bound` itself
+  was not available as a name, since `random_events.interval.Bound` (the `CLOSED`/`OPEN` enum)
+  is imported into that module, and reusing `Bounds` avoided a second one anyway.
+
+### This pull request should be split further
+
+At 54 files it is three unrelated topics under one review: `semantic_digital_twin`'s numeric
+geometry and the Panda robot, `segmind`'s hole events, and `krrood`'s EQL/ORM and verbalization
+fixes. Only the `semantic_digital_twin` half is what #169, #246 and the rest of stack #247 are
+actually waiting on, so a reviewer of any one topic reads two others to get to it. The first
+review round bears this out: the two comments landed in two different packages.
+
+Not done now because #169, #246 and the whole of stack #247 are based on this branch, so
+splitting means dissolving and re-creating the stack a second time - the same procedure the
+2026-09-01 entry records. The natural cut is one pull request per package, in the order they
+are already committed (`krrood`, then `segmind`, then `semantic_digital_twin`), each off `main`,
+with the stack re-footed on the last of them.
