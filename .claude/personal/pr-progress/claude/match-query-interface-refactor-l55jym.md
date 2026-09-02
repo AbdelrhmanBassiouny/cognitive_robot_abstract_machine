@@ -55,6 +55,17 @@ the full record and the reasoning.
        would have undone a landed improvement. `test_eql` 1287 passed, 3 skipped; full
        `test/krrood_test` 2269 passed, 5 skipped.
 
+9. [x] Merged `main` again, 2026-09-02 (roadmap section 27), `9482a62c`. `main` took
+       cram2#575 (probabilistic queries) the day before, whose `HasExpression` mixin adds
+       a base to the same `class Match(...)` statement this PR rewrites - the only
+       conflict in the 1,518 lines it brought. Both sides kept: `HasSymbolicOperations`
+       and `HasQueryModifiers` say what can be written *on* a match, `HasExpression` says
+       what a match *resolves to* for a caller that only wants the expression to scan or
+       build, and `Match` owes both answers. Nothing else needed adjusting - #575's new
+       code reads a match only through `expression`, the compatibility property this PR
+       keeps, so section 6's silent-miss hazard had nothing to catch. `test_eql` 1310
+       passed, 3 skipped; full `test/krrood_test` 1916 passed, 5 skipped.
+
 ## Outstanding
 
 - The PR is a draft, as always; the developer marks it ready.
@@ -63,9 +74,18 @@ the full record and the reasoning.
   assembler bug, `argument-position-correlation` (#137, behind `binding-order-planner`)
   for a query evaluated uncorrelated in an argument position, and the already-existing
   `factories-unwrap-match-and-migrate` for selecting a match. None of them blocks #192.
-- CI is running on `ff5414e0a` (`mergeable_state` went `dirty` -> `unstable` on the push).
-  The previous run was all 23 checks green, but on `e9aae10be` of 2026-08-24 against a base
-  nine days stale, so it said nothing about the merged result.
+- CI is running on `9482a62c` (`mergeable_state` went `dirty` -> `unstable` on the push).
+  The run on `ff5414e0a` was all 23 checks green, but that was against `main` before
+  cram2#575, so it says nothing about this merge.
+- Open for the developer, on #192 and on #181: `HasExpression._get_expression_` and
+  `HasSymbolicOperations._symbolic_expression_` return the same object on every class that
+  has both, with different declared contracts (`_symbolic_expression_` must be
+  variable-like; `_get_expression_` may be any expression, which is how
+  `ProbabilisticQuery` implements it). Unifying them would change an interface `main`
+  landed the day before, which is above the bar auto mode decides on its own.
+- Three more `.variable` detour sites for item 3, from #575's `marginalize_for` docs
+  (`factories.py:149`, `operators/probabilistic_queries.py:153`,
+  `verbalization/grammar/probabilistic_queries/rules.py:73`); recorded in that item's notes.
 - The `needs-resolution` label is left in place: the stack tooling clears it itself once
   the branch merges cleanly again, and hand-clearing it would be managing a signal that is
   not this session's.
@@ -74,6 +94,13 @@ the full record and the reasoning.
   territory), and selecting a match (`entity(match)`, `the(match)`), which is item 3's.
 
 ## Environment
+
+A narrower set is enough when the workspace-root `test/conftest.py` is skipped: a
+python3.12 venv with editable `random_events probabilistic_model krrood` plus `mypy`, run
+as `pytest test/krrood_test --confcutdir=test/krrood_test`, covers the whole krrood suite
+including the typing fixture. `test_rustworkx_utils` and `test_symbolic_math` still need
+`flask` and `casadi`, and `test_object_diagram` still needs the Graphviz `dot` binary.
+The fuller set below is what the root `conftest.py` itself needs.
 
 No project dependencies in this container. Scratch venv (python3.12 - 3.11 is too old) at
 `$SCRATCHPAD/venv`, plus `objgraph mypy black docformatter` and editable `krrood
