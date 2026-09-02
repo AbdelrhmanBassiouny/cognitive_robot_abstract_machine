@@ -437,7 +437,10 @@ class WrappedTable:
             original_parent
         )
         key = self._to_wrapped_tables_key(resolved_parent_wrapped)
-        return self.ormatic.wrapped_tables.get(key)
+        # the resolved parent may itself be mapped by a dependency rather than locally
+        if key not in self.ormatic.wrapped_tables and key not in self.ormatic.external_tables:
+            return None
+        return self.ormatic.table_for(key)
 
     # %% helper methods
 

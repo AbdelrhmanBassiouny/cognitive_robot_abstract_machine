@@ -386,6 +386,15 @@ class ORMatic:
             all_type_mappings.update(interface_type_mappings)
             all_externally_mapped_classes.update(interface_externally_mapped_classes)
 
+        # `interface_classes` above only covers classes classes_of_module() can see
+        # literally defined in the immediate dependency's own generated file. A class
+        # mapped further up the chain that the immediate dependency never referenced
+        # by name (e.g. AbstractRobot, needed only by a *field type* several packages
+        # down) would otherwise never become a class-diagram node here at all, so it
+        # could never resolve as a relationship: `externally_mapped_classes` is fully
+        # transitive (see get_classes_of_ormatic_interface), so add its keys too.
+        all_classes |= set(all_externally_mapped_classes.keys())
+
         for package in packages:
             all_classes |= set(classes_of_package(package))
 
