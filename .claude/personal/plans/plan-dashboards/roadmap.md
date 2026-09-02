@@ -82,3 +82,25 @@ modules in under the package's naming. What stays this item's own is the feature
   plans, recorded as blockers rather than `depends_on`, so they lose their dependency chips and
   automatic readiness. A `<plan-id>:<item-id>` reference in the schema would restore it - code rather
   than data, and a candidate item for this plan.
+
+## shared-pr-state-chips: the fold onto bastler, 2026-09-02
+
+The manifest called this item blocked on the bastler dependency and on a `main` conflict; what
+had actually stalled it was the 2026-08-30 review round - nineteen threads the manifest never
+mentioned. Recorded first, resolved second.
+
+The resolution was the fold decision 13 already described, done as a merge of #185's head rather
+than a re-cut: #185 already contained this branch's last merge of `main`, so the merge brought no
+stray `main` commits into the diff against the new base. Check
+`git merge-base --is-ancestor <this branch's main merge-base> <parent head>` before choosing
+merge over re-cut; it decides whether the diff stays clean.
+
+Two threads were answered differently from what they asked and are left open for the user:
+`GitCommandRunner` in the tests, and the request to discuss the rebase options.
+
+**The formatter hazard above, explained.** `format_docstrings.py` declines a file whenever
+docformatter would expand a one-line member docstring at the end of a class body: the expansion
+eats the blank line black then restores, and the script keeps the black-only result. A file
+converges only if its member docstrings already carry the three-line form the tool produces. The
+position matters only because the last member of a class is where the eaten blank line sits.
+`stack.py` and `build_dashboard.py` were already declined on #185's head and stay black-only.
