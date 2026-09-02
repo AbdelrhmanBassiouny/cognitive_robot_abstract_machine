@@ -25,6 +25,9 @@ from experiments.montessori.perception.exceptions import (
     UndecodableCompressedImage,
     UnsupportedImageEncoding,
 )
+from experiments.montessori.perception.recorded_setup import CAMERA_NAME, SETUP_NAME
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.world_entity import Body
 
 # %% reading camera messages
 
@@ -146,6 +149,18 @@ def test_what_the_point_of_view_calls_up_runs_up_the_picture():
 
     assert upwards[1] < origin[1]
     assert upwards[0] == pytest.approx(origin[0])
+
+
+def test_the_point_of_view_is_of_the_camera_it_is_told_about():
+    """
+    A pose is of something, and where the world knows the camera, the point of view is
+    of it -- which is what lets a direction read from here say what it was seen from.
+    """
+    frame = camera_hanging_above_the_origin()
+    camera = Body(name=PrefixedName(CAMERA_NAME, SETUP_NAME))
+
+    assert frame.point_of_view(camera=camera).child_frame is camera
+    assert frame.point_of_view().child_frame is None
 
 
 # %% reading transport-compressed camera messages

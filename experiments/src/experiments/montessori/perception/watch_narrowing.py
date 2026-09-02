@@ -54,6 +54,7 @@ from experiments.montessori.perception.overlay import (
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import (
     board_holes_in,
+    camera_in,
     lid_surface,
     recorded_world,
     perception_pipeline,
@@ -70,7 +71,10 @@ from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
-from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+from krrood.entity_query_language.verbalization.pipeline import (
+    verbalize_expression,
+    VerbalizationPipeline,
+)
 from semantic_digital_twin.reasoning.predicates import (
     Above,
     Colored,
@@ -408,6 +412,7 @@ def look_for_the_cube_on_the_lid(
     :return: The whole statement.
     """
     board_holes_in(world, board)
+    seen_from = frame.point_of_view(world.root, camera_in(world, frame))
     lid = variable(Body, world.bodies)
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     triangle = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
@@ -423,12 +428,8 @@ def look_for_the_cube_on_the_lid(
     return sought.where(
         lid.name == lid_surface().name,
         SupportedBy(sought.variable, lid),
-        LeftOf(
-            sought.variable, square_hole.expression, frame.point_of_view(world.root)
-        ),
-        Above(
-            sought.variable, triangle_hole.expression, frame.point_of_view(world.root)
-        ),
+        LeftOf(sought.variable, square_hole.expression, seen_from),
+        Above(sought.variable, triangle_hole.expression, seen_from),
         Colored(sought.variable, cube.color),
     )
 
@@ -458,13 +459,23 @@ def main() -> None:
     arguments = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     world = recorded_world()
+    pipeline = perception_pipeline(world)
     narrowing = SearchNarrowing(
-        pipeline=perception_pipeline(world),
+        pipeline,
         display=None if arguments.without_windows else OpenCvDisplay(),
     )
     frame = SceneCapture.load(arguments.capture, arguments.directory).to_frame()
     board = narrowing.board_in(frame)
     statement = look_for_the_cube_on_the_lid(world, frame, board)
+    backend = MontessoriPerceptionBackend(
+        source=RecordedFrame(pipeline=pipeline, frame=frame)
+    )
+    verbalization = VerbalizationPipeline.ansi(hierarchical=True).verbalize(
+        statement, backend=backend
+    )
+    print("=====================================================")
+    print(verbalization)
+    print("=====================================================")
     try:
         narrowing.watch(frame, statement, board)
     finally:

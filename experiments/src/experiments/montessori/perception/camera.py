@@ -233,7 +233,9 @@ class RgbdFrame:
         return self.reference_frame_T_camera[:3, 3]
 
     def point_of_view(
-        self, reference_frame: Optional[KinematicStructureEntity] = None
+        self,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+        camera: Optional[KinematicStructureEntity] = None,
     ) -> HomogeneousTransformationMatrix:
         """
         Where the camera looks from, in the way round a direction is read.
@@ -246,10 +248,13 @@ class RgbdFrame:
 
         :param reference_frame: The frame the answer is expressed in, which is the one
             this frame gives the camera's pose in.
+        :param camera: The camera itself, where the world knows one, so that a direction
+            read from here says it was seen from the camera rather than from a pose.
         """
         return HomogeneousTransformationMatrix(
             self.reference_frame_T_camera @ VIEW_T_OPTICAL,
             reference_frame=reference_frame,
+            child_frame=camera,
         )
 
     @property

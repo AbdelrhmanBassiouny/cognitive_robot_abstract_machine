@@ -16,6 +16,7 @@ import math
 from pathlib import Path
 
 from experiments.montessori.hole_geometry import detect_hole_footprints, hole_names
+from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import MontessoriBoardDetection
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
@@ -36,6 +37,11 @@ from typing_extensions import Dict, Optional, Tuple
 SETUP_NAME = "tracy"
 """
 Prefix naming the physical setup these surfaces were measured on.
+"""
+
+CAMERA_NAME = "camera"
+"""
+What the world calls the camera these recordings were taken with.
 """
 
 TABLE_HEIGHT = 0.88
@@ -210,6 +216,32 @@ def region_over(world: World, patch: WorkspaceRegion, name: str) -> Region:
         )
     world.update_forward_kinematics()
     return region
+
+
+def camera_in(world: World, frame: RgbdFrame) -> Body:
+    """
+    The camera, placed in the world where the look it took was taken from.
+
+    A direction like *left of* holds from where it is read rather than of the world, so
+    a statement saying one has to name that spot. A recording carries no camera, only
+    the pose the look was taken at, so the camera is put in the world from the look
+    itself -- the same move :func:`board_holes_in` makes for the board's holes.
+
+    :param world: The world to place it in, from :func:`recorded_world`.
+    :param frame: The camera data of the look, which is what says where it stood.
+    :return: The camera, as a body a statement can say it was seen from.
+    """
+    camera = Body(name=PrefixedName(CAMERA_NAME, SETUP_NAME))
+    with world.modify_world():
+        world.add_connection(
+            FixedConnection(
+                parent=world.root,
+                child=camera,
+                parent_T_connection_expression=frame.point_of_view(world.root, camera),
+            )
+        )
+    world.update_forward_kinematics()
+    return camera
 
 
 def board_holes_in(world: World, board: MontessoriBoardDetection) -> Dict[str, Body]:

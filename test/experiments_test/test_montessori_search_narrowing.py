@@ -31,6 +31,9 @@ from experiments.montessori.perception.pipeline import MontessoriPerceptionPipel
 from experiments.montessori.hole_geometry import HOLE_NAME_BY_CATEGORY
 from experiments.montessori.perception.recorded_setup import (
     board_holes_in,
+    camera_in,
+    CAMERA_NAME,
+    SETUP_NAME,
     lid_surface,
     perception_pipeline,
     recorded_world,
@@ -47,6 +50,8 @@ from experiments.montessori.perception.watch_narrowing import (
 )
 from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -751,3 +756,46 @@ def test_a_piece_is_found_in_a_stretch_smaller_than_the_piece_itself(
 
     assert reach < cube.radius
     assert _as_read(narrowed) == _as_read(unnarrowed)
+
+
+# %% how the statement the demonstration watches reads
+
+
+def test_the_camera_is_put_in_the_world_where_the_look_was_taken_from(
+    recorded_scene_world: World, capture_frame
+):
+    """
+    A direction is read from somewhere, and a recording carries no camera, so the camera
+    is placed in the world from the look itself -- at the very spot that look was taken
+    from, and named so a statement can say it was seen from there.
+    """
+    camera = camera_in(recorded_scene_world, capture_frame)
+
+    assert camera.name == PrefixedName(CAMERA_NAME, SETUP_NAME)
+    assert camera.global_pose.to_np() == pytest.approx(
+        capture_frame.point_of_view(recorded_scene_world.root).to_np()
+    )
+
+
+def test_the_statement_reads_as_one_look_taken_from_the_camera(
+    recorded_scene_world: World,
+    capture_frame,
+    capture_board,
+    capture_pipeline: MontessoriPerceptionPipeline,
+):
+    """
+    The whole statement is one look: the things it relates the piece to are described
+    inside it rather than opening looks of their own, and every direction it states says
+    the camera it was read from rather than the matrix that camera's pose is kept as.
+    """
+    statement = look_for_the_cube_on_the_lid(
+        recorded_scene_world, capture_frame, capture_board
+    )
+    looking = MontessoriPerceptionBackend(
+        source=RecordedFrame(pipeline=capture_pipeline, frame=capture_frame)
+    )
+
+    text = verbalize_expression(statement, backend=looking)
+
+    assert text.count(Directive.LOOK_FOR.value.text) == 1
+    assert text.count(f"as seen from the {CAMERA_NAME}") == 2
