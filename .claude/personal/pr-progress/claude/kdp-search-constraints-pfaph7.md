@@ -1,111 +1,58 @@
-# `search-clipped-to-a-predicates-region` — PR #238
+# #238 - Clip the search to the region a spatial predicate allows
 
-Plan item of `knowledge-directed-perception` (tracking issue #201).
-Branch `claude/kdp-search-constraints-pfaph7`, draft PR #238, based on #227
-with #232 and #229's tip merged in.
+Plan item `search-clipped-to-a-predicates-region` of `knowledge-directed-perception`
+(tracking issue #201). Branch `claude/kdp-search-constraints-pfaph7`, stacked on #227,
+with #232 and #229's tip merged in. Draft.
 
-**The work is built and pushed.** What remains is review.
+## What this session did
 
-## Steps
+Resolved the review round of 2026-09-02 (`/plan-item-resolve`, `auto` mode). Six threads,
+none of which the item's `blockers` recorded before this run - the fourth time on this plan
+that a stall was a review comment nobody turned into state. They were written into the
+manifest before any code, and the dashboard republished.
 
-- [x] Re-cut the branch off #227 (it arrived cut from `integration`).
-- [x] Merge #232 in; two files conflicted, both resolved as a union.
-- [x] Open draft PR #238, record manifest state, append the roadmap section.
-- [x] `WorkspaceRegion` narrowing arithmetic, tests first.
-- [x] `SurfaceSearch` answers the stretch its own pass rectifies.
-- [x] `SceneRequest` carries the statement's placements; the backend reads
-      them, the pipeline turns them into metres.
-- [x] Merge #229's tip, for the four relation wordings.
-- [x] `recorded_setup.recorded_world()`, so a statement about a capture has
-      entities to be written over.
-- [x] `watch_narrowing.py` and its headless test.
-- [x] Measure the cost against the unclipped pass in one run.
-- [x] **Second round (2026-09-01), at the developer's ask**: every relation
-      that says where a thing may be, not only support and containment.
-  - [x] `PlacementRelation` in sdt: the stretch it leaves, and the exact check.
-  - [x] The six directional relations over entities, as an axis and a side.
-  - [x] `Between`, `Near`, `Colored`.
-  - [x] krrood's `Relation` above `Triple`, so a three-operand relation is
-        read whole; `StatedRelation.constraint()`.
-  - [x] The colour narrowing through to the detector's hues.
-  - [x] `board_holes_in`, so a statement can name the square hole.
-  - [x] `watch_narrowing` states support, a direction, then the colour, and
-        reports what each step finds.
-  - [x] Re-measure the cost; push; rewrite the PR description and the roadmap.
-- [x] **Third round (2026-09-01), at the developer's ask**: one whole query,
-      read from where the camera stands, with pictures that show the answer.
-  - [x] `RgbdFrame.point_of_view`: the optical frame in the convention a pose
-        is stated in, so *right* is right on screen.
-  - [x] `PlacementRelation.allowed_part_of`, since no box holds the half space
-        a camera-relative direction leaves; each surface narrowed against the
-        stretch it was about to read.
-  - [x] The backend answers the things a statement *describes*, so the lid and
-        the hole are named in the query rather than fetched.
-  - [x] `Match.one_condition_at_a_time`, and `SearchNarrowing` reading one
-        statement instead of a list of conditions.
-  - [x] Draw what each step found, and the rectified plane through
-        `ViewFromAbove` so it reads the way the camera sees it.
-  - [x] Re-measure; push; rewrite the PR description, the roadmap and this.
+Pushed as `f8288bcd` and `6429626f`:
 
-## What the build found, beyond the plan
+- `narrowing_relations`' docstring says what the three relations are for, plainly.
+- `_is_this_surfaces` -> `_is_on_this_surface`.
+- `_POSE_NOUN` / `_frame_noun` inlined into
+  `HomogeneousTransformationMatrix._verbalization_noun_phrase_`.
+- The demonstration is one call: `step_by_step.py` holds `show_step_by_step`,
+  `WatchedCapture`, `RecordedLook` and everything the narrowing draws with;
+  `watch_narrowing.py` is the statement plus `main`. `board_in` moved onto the pipeline.
+- Three new tests. 467 passed, 1 skipped, 11 xfailed against 464 on the previous tip;
+  sdt's failing set byte-identical, 14 lines by name.
 
-- **A clip that moves the sampling grid is not a clip.** A crop whose lower
-  corner falls between the samples of the patch it came from rectifies every
-  point half a pixel away — on `tracy_pickup_demo` that turned a cube into a
-  second cylinder, non-monotonically in the size of the crop. Fixed by having
-  `WorkspaceRegion.intersection` answer on its receiver's own grid; the clip
-  is then behaviour-preserving to three decimals of agreement.
-- **A stated stretch says where the *thing* is, not which pixels may be read.**
-  A cube 25 mm inside the stretch a statement allowed was never fitted, its
-  rectified silhouette crossing the boundary. The picture now reaches an
-  overhang past a stated stretch as it already did past a surface's boundary.
-  This was a fault in the first round's clip, `InsideRegion` included.
-- **The board pass is narrowed by nothing**, since where the board stands is
-  what every surface's extent is read from. Clipping it by a statement about
-  what rests on it would let that statement decide how far the lid reaches.
-- **Right of the square hole leaves the cylinder, not the cube**, from the
-  camera's own point of view as well as from the robot's: the cylinder stands
-  34 mm to the right of that hole in the picture and 36 mm below it, the cube
-  28 mm above it and 6 mm to its left. So the demonstration states *above*,
-  and a test pins both answers.
-- **A camera-relative direction narrows nothing on its own.** It runs across
-  the world's axes, and no axis-aligned box holds a half space, so the clip
-  has to be asked about a stretch that is already bounded. That is
-  `allowed_part_of`, and without it the direction step would have left the
-  picture exactly as it found it.
-- **Cost, one run, all six captures**, against an unnarrowed look at 0.333
-  s/frame: 0.25x for the surface, 0.40x for a direction alone, 0.30x for a
-  50 mm radius, 0.25x for all of them with the colour. 20 pieces unnarrowed,
-  5 with everything.
+Replied on all six threads; resolved the three answered exactly as asked.
 
-## Notes to keep
+## Outstanding, and all of it is the developer's call
 
-- **The invariant**: a clip is an economy, never what makes an answer right.
-  `relations_hold` re-checks every stated relation exactly — by the relation
-  itself, not by its box — and raises `LookHasNoReferenceFrame` rather than
-  quietly not checking.
-- **Cube and cylinder are both cyan** in this set, so colour never separates
-  those two. What it narrows is two hues to one and six candidates to two.
-- **A rectified patch is indexed a quarter turn from the camera's view**, so a
-  window drawn straight off it makes a stated direction read wrong on screen.
-  `overlay.ViewFromAbove` already turned it; the demonstration uses it now.
-- **A description answerable from its own domain is answered, not refused.**
-  That reverses one krrood test's premise, deliberately: what a look cannot do
-  is *fetch* another variable, not read one the statement already gave a
-  domain for.
-- **First item on this plan with parents on two different stacks.** #227 and
-  #232 diverge at #221. `expectations-from-events` and
-  `competing-explanations` face the same divide and it only grows.
-- **Landing hazard worth more than the mechanical ones**: #231's
-  `RectifiedFrame` shares a rectified plane across detectors, and a region
-  that differs per pass means the sharing has to be keyed by region as well
-  as height.
-- **Environment**: no `/usr/local/bin/uv` in this container, against what
-  #232 recorded; the `uv` on `PATH` is 0.8.17 and cannot parse this repo's
-  `pyproject.toml`. Install uv 0.12.8 from `astral.sh` into a scratch dir.
-- **Tooling**: `plan_item_bootstrap.py`'s four-space indent still breaks
-  `open`/`record` on this plan's two-space `plan.yaml` (third time, after
-  #231 and #236). Worked around by editing `plan.yaml` directly.
-- Tracking-issue subscription was refused by the permission classifier this
-  session, so structural changes on #201 do not arrive as events here.
+1. **r3915277277** - `show_step_by_step(query)`: done as
+   `show_step_by_step(statement_about_a_look, capture)`, since a statement about this scene
+   cannot be built before the look is taken. Left open. If he wants it literal, either
+   `RecordedLook` carries the statement or the function becomes a method on the look.
+2. **r3915356623** - why answering a query needs a pipeline; discuss; consider EQL-RDRs
+   (#159 open/ready, #77 open/ready but `integration-conflict`). Proposed as a new plan
+   item - *"a look is planned from the request, not configured"* - stacked on #159. Not
+   added: adding an item is structural.
+3. **r3915631447** - rename to `DetectedMontessoriShape` and make it a `Role` for
+   `MontessoriShape`. Rename is 51 references / 10 files and a conflict for #232, #236,
+   #239; the role needs the look to spawn what it found into a world, which is
+   `imagination-world-rejects-what-a-predicate-refuses`. Recommended both halves in that
+   item; not taken.
+
+## Next
+
+Nothing until he answers 1-3. This session's obligation to the PR ended with the push,
+the replies and the description update.
+
+## Environment
+
+`pip install -U uv` (0.12.9 at `/usr/local/bin/uv`), then
+`uv sync --extra dev --python 3.12`. Tests need `--noconftest` - the experiments conftest
+imports `rclpy` - and six modules must be excluded because they do not collect without it:
+`test_control_loop_benchmark`, `test_control_loop_runtime`, `test_montessori_bag_replay`,
+`test_real_stretch_demo_process_boundary`, `test_sage10k`, `test_scalability`.
+`black` and `docformatter` go into the venv by hand, with `.venv/bin` on `PATH`, before
+`scripts/format_docstrings.py` runs.
 
