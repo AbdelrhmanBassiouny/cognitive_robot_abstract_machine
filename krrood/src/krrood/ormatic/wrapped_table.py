@@ -20,7 +20,6 @@ from typing_extensions import (
 
 from krrood.adapters.json_serializer import JSONData
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
-from krrood.ormatic.utils import InheritanceStrategy
 from krrood.class_diagrams.class_diagram import (
     WrappedClass,
     Inheritance,
@@ -353,17 +352,11 @@ class WrappedTable(TableLike):
             self.mapper_args.update(
                 {
                     "'polymorphic_identity'": f"'{self.tablename}'",
+                    "'inherit_condition'": f"{self.primary_key_name} == {self.parent_table.qualified_full_primary_key_name}",
+                    # batch subclass-table loads instead of one SELECT per instance
+                    "'polymorphic_load'": "'selectin'",
                 }
             )
-            # only needed for joined-table inheritance
-            if self.ormatic.inheritance_strategy == InheritanceStrategy.JOINED:
-                self.mapper_args.update(
-                    {
-                        "'inherit_condition'": f"{self.primary_key_name} == {self.parent_table.qualified_full_primary_key_name}",
-                        # batch subclass-table loads instead of one SELECT per instance
-                        "'polymorphic_load'": "'selectin'",
-                    }
-                )
 
     @property
     def qualified_reference(self) -> str:

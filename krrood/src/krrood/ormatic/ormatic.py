@@ -33,7 +33,7 @@ from krrood.ormatic.data_access_objects.dao import DataAccessObject
 
 from krrood.ormatic.sqlalchemy_generator import SQLAlchemyGenerator
 from krrood.ormatic.type_dict import TypeDict
-from krrood.ormatic.utils import InheritanceStrategy, classes_of_package
+from krrood.ormatic.utils import classes_of_package
 from krrood.utils import module_and_class_name, recursive_subclasses, get_module_of_type
 from krrood.ormatic.wrapped_table import (
     WrappedTable,
@@ -77,11 +77,6 @@ class ORMatic:
     )
     """
     The alternative mappings, type mappings, and externally-mapped classes to use.
-    """
-
-    inheritance_strategy: InheritanceStrategy = InheritanceStrategy.JOINED
-    """
-    The inheritance strategy to use.
     """
 
     ormatic_interface_dependencies: List[ModuleType] = field(default_factory=list)
