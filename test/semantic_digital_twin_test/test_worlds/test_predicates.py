@@ -927,6 +927,20 @@ def test_a_relation_named_for_its_object_still_reads_as_a_sentence(relation, sen
     assert verbalize_expression(relation(**operands)) == sentence
 
 
+def test_a_direction_says_where_it_was_read_from():
+    """
+    A direction holds from somewhere rather than of the world, so it says so and names
+    the frame it was read from, instead of the matrix that frame's pose is stored as.
+    """
+    camera = Body(name=PrefixedName("camera", "tracy"))
+    operands = placeholder_operands(LeftOf)
+    operands["point_of_view"] = HomogeneousTransformationMatrix(child_frame=camera)
+
+    assert verbalize_expression(LeftOf(**operands)).endswith(
+        f"as seen from the {camera.name.name}"
+    )
+
+
 # %% where a relation allows a thing to be
 
 

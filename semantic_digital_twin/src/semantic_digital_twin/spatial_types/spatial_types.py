@@ -23,6 +23,16 @@ from typing_extensions import (
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import SubclassJSONSerializer, from_json, to_json
+from krrood.entity_query_language.verbalization.fragments.base import (
+    NounPhrase,
+    RoleFragment,
+    VerbalizationFragment,
+    WordFragment,
+)
+from krrood.entity_query_language.verbalization.fragments.features import Definiteness
+from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
+from krrood.entity_query_language.verbalization.self_naming_value import SelfNamingValue
+from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
 from krrood.symbolic_math.exceptions import (
     WrongDimensionsError,
     UnsupportedOperationError,
@@ -179,9 +189,27 @@ class SpatialType:
         return result
 
 
+_POSE_NOUN = "pose"
+"""
+What a spot in the world is called where no frame of the world names it.
+"""
+
+
+def _frame_noun(frame: KinematicStructureEntity) -> NounPhrase:
+    """
+    :param frame: The frame to name.
+    :return: The definite noun phrase a reader calls it by, which is the name it goes by in
+        its own namespace.
+    """
+    return NounPhrase(
+        head=RoleFragment(text=frame.name.name, role=SemanticRole.VARIABLE),
+        definiteness=Definiteness.DEFINITE,
+    )
+
+
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
-    sm.SymbolicMathType, SpatialType, SubclassJSONSerializer
+    sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, SelfNamingValue
 ):
     """
     Represents a 4x4 transformation matrix used in kinematics and transformations.
@@ -216,6 +244,26 @@ class HomogeneousTransformationMatrix(
         else:
             self.casadi_sx = sm.to_sx(data)
         super().__post_init__()
+
+    def _verbalization_noun_phrase_(self) -> VerbalizationFragment:
+        """
+        Reads as the frame this pose is of (*"the camera"*), which is what a reader calls
+        the spot it states; a pose of no frame in particular is a spot in the frame it was
+        read in, and one that names neither frame is a spot and nothing more.
+
+        :return: The noun phrase this pose reads as.
+        """
+        if self.child_frame is not None:
+            return _frame_noun(self.child_frame)
+        if self.reference_frame is None:
+            return NounPhrase(head=WordFragment(text=_POSE_NOUN))
+        return NounPhrase(
+            head=WordFragment(text=_POSE_NOUN),
+            modifiers=[
+                Prepositions.IN.as_fragment(),
+                _frame_noun(self.reference_frame),
+            ],
+        )
 
     def _verify_type(self):
         if self.shape != (4, 4):

@@ -846,8 +846,8 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
         """
-        Reads as *"the point is left of the other point, seen from the point of view"*,
-        with the direction taken from the relation's own name.
+        Reads as *"the point is left of the other point, as seen from the point of
+        view"*, with the direction taken from the relation's own name.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
@@ -857,6 +857,8 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
             Copula(),
             Adjective(direction),
             Noun(fields["other"]),
+            Prepositions.AS,
+            Adjective("seen"),
             Prepositions.FROM,
             Noun(fields["point_of_view"]),
         )
