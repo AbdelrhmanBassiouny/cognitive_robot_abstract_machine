@@ -1,20 +1,28 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from typing_extensions import Optional
 
 from krrood.entity_query_language.predicate import Symbol
+from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
 
 
 @dataclass
 class PrefixedName(Symbol):
-    name: str
+    name: str = field(
+        metadata=GrammarMetadata(stands_for_its_owner=True).as_dict(),
+    )
     """
     The local name identifying the entity.
+
+    A prefixed name is a name and the namespace telling it apart from an equal one
+    elsewhere, so this field is the whole of what it is: reading it says the name it
+    belongs to and stops, rather than saying the word twice.
     """
 
     prefix: Optional[str] = None
     """
-    Optional namespace that disambiguates the name from equally named entities in other scopes.
+    Optional namespace that disambiguates the name from equally named entities in other
+    scopes.
     """
 
     def __hash__(self):
