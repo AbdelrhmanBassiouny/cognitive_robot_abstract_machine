@@ -189,24 +189,6 @@ class SpatialType:
         return result
 
 
-_POSE_NOUN = "pose"
-"""
-What a spot in the world is called where no frame of the world names it.
-"""
-
-
-def _frame_noun(frame: KinematicStructureEntity) -> NounPhrase:
-    """
-    :param frame: The frame to name.
-    :return: The definite noun phrase a reader calls it by, which is the name it goes by in
-        its own namespace.
-    """
-    return NounPhrase(
-        head=RoleFragment(text=frame.name.name, role=SemanticRole.VARIABLE),
-        definiteness=Definiteness.DEFINITE,
-    )
-
-
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
     sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, SelfNamingValue
@@ -253,16 +235,21 @@ class HomogeneousTransformationMatrix(
 
         :return: The noun phrase this pose reads as.
         """
+        spot = WordFragment(text="pose")
+        named_frame = (
+            self.child_frame if self.child_frame is not None else self.reference_frame
+        )
+        if named_frame is None:
+            return NounPhrase(head=spot)
+        frame_noun = NounPhrase(
+            head=RoleFragment(text=named_frame.name.name, role=SemanticRole.VARIABLE),
+            definiteness=Definiteness.DEFINITE,
+        )
         if self.child_frame is not None:
-            return _frame_noun(self.child_frame)
-        if self.reference_frame is None:
-            return NounPhrase(head=WordFragment(text=_POSE_NOUN))
+            return frame_noun
         return NounPhrase(
-            head=WordFragment(text=_POSE_NOUN),
-            modifiers=[
-                Prepositions.IN.as_fragment(),
-                _frame_noun(self.reference_frame),
-            ],
+            head=spot,
+            modifiers=[Prepositions.IN.as_fragment(), frame_noun],
         )
 
     def _verify_type(self):

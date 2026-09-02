@@ -63,8 +63,8 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         Colored,
     )
     """
-    A look here searches one supporting surface at a time, only the stretch of it a
-    statement allows, and only for the pieces of the colour it asks about.
+    What a look here can be narrowed by: which surface to search, which part of it to
+    read, and which colour to look for.
     """
 
     def look(
