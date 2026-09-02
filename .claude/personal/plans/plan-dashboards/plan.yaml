@@ -267,38 +267,86 @@ items:
   title: 'PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards'
   branch: claude/shared-pr-state-chips
   pull_request_number: 111
-  status: blocked
-  session: https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr
+  status: in_progress
+  session: https://claude.ai/code/session_01VATBfAq9Rd7jdU46rw3hvd
   track: live-state
   depends_on: []
-  notes: |-
+  notes: >
     One pull-request-state fetch/compute module - CI rollup, lines changed against base, mergeable
-    probe, session-link parse - shared by `stack.py` and the dashboard's own pull-request data fetching,
-    plus board-semantics chips on dashboard items and a headless static-HTML build entry point for the
-    Pages Action, with the Artifact path still working during the transition. `pr_state` also reads a
-    pull request's native stack object through REST, GraphQL being unusable from sessions, and renders a
+
+    probe, session-link parse - shared by `stack.py` and the dashboard's own pull-request data
+    fetching,
+
+    plus board-semantics chips on dashboard items and a headless static-HTML build entry point for
+    the
+
+    Pages Action, with the Artifact path still working during the transition. `pr_state` also reads
+    a
+
+    pull request's native stack object through REST, GraphQL being unusable from sessions, and
+    renders a
+
     stack chip when the pull request is a stack member; that addition is specified but not yet
+
     implemented.
 
-    One old bug was fixed in the port and is worth not reintroducing: `merge-tree` exits 1 for both a
-    conflict and a missing reference, so the old probe reported a typo as a conflict. The port verifies
+    One old bug was fixed in the port and is worth not reintroducing: `merge-tree` exits 1 for both
+    a
+
+    conflict and a missing reference, so the old probe reported a typo as a conflict. The port
+    verifies
+
     references first.
 
     **Re-scoped 2026-08-20 by the bastler pivot.** This pull request no longer creates the tooling
-    package - `bastler-package` does, off `main` - and the dependency inverted: once that branch exists,
-    #111 rebases onto it and folds its `development_tooling` modules and test suite into `bastler` under
+
+    package - `bastler-package` does, off `main` - and the dependency inverted: once that branch
+    exists,
+
+    #111 rebases onto it and folds its `development_tooling` modules and test suite into `bastler`
+    under
+
     its naming, deleting the repository-root `sys.path` insert. What stays this item's own is the
+
     feature half: the chips, the `pr_state` module itself, and `build_site.py`.
 
     Its dependency on `stack-tooling-on-main` is merged and now lives in the `stack-tooling-install`
-    plan, so it is dropped from `depends_on`. The live dependency on `bastler-package` crosses a plan
+
+    plan, so it is dropped from `depends_on`. The live dependency on `bastler-package` crosses a
+    plan
+
     boundary and is recorded as a blocker instead.
+
+    **Resolved 2026-09-02 on the state actually found, not the state recorded.** The manifest called
+    this item blocked on the bastler dependency and on a main conflict; the stall was the 2026-08-30
+    review round, which the manifest never mentioned. The two "rebase onto bastler" threads are
+    answered by decision 13 itself, so the resolution is the fold: base moved to #185's head,
+    `development_tooling` deleted and its two modules re-homed as `bastler.pr_state` and
+    `bastler.personal_notes`, `build_site.py` re-homed as `bastler.build_site`, the four test
+    modules and two stubs into `test/bastler_test`, the repository-root `sys.path` inserts and the
+    second CI invocation deleted. The seventeen code-quality threads are applied in the same pass,
+    since each one reshapes code the fold is already moving.
   blockers:
-  - 'Cross-plan dependency, not representable in depends_on: this branch rebases onto bastler-package
-    (#185, bastler-package plan) and folds its modules into the package under bastler''s naming.'
-  - Conflicts against its base main as of the 2026-08-29 stacked-pr-maintenance pass, carrying the
-    needs-resolution label. That pass did not attempt a fresh merge, having already withheld it from
-    a previous one.
+    - >-
+      Cross-plan dependency, not representable in depends_on: this branch stacks onto
+      bastler-package (#185, bastler-package plan) and folds its modules into the package under
+      bastler's naming. As of 2026-09-02 #185 is open, out of draft and promoted upstream
+      (cram2-link-sent) but unmerged, and itself carries needs-resolution against main (a
+      file-location conflict on test/bastler_test/test_setup_steps.py, 37 main commits behind). This
+      item lands only after it does.
+    - >-
+      Nineteen unresolved review threads from the owner's 2026-08-30 review of head cf9b5c15, none
+      recorded here until 2026-09-02. Two ask for the rebase onto bastler; seventeen are
+      code-quality asks - StrEnums for payload keys, states and check conclusions, dataclasses for
+      every class, module constants grouped where they are found, member docstrings, loose functions
+      moved into classes, inline test data moved into files, a shared constants module for paths,
+      environment variables as one StrEnum, a Claude session-link factory for tests, and
+      GitCommandRunner in place of a hand-rolled run_git.
+    - >-
+      Conflicts against main in three files (build_dashboard.py, stack.py, ci.yml; 436 commits
+      behind) as of the 2026-09-02 probe. A merge of main is not the fix: the base moves to #185's
+      head, whose package layout supersedes all three conflicting files, and the routine will then
+      restack this branch on #185 rather than on main.
 - id: ready-to-promote-upstream-links
   title: 'PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links'
   branch: null
