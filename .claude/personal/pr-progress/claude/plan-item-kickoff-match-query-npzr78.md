@@ -55,3 +55,38 @@ the prior session ended.
 - Did not touch the test/code to match the comment's literal suggested text,
   since it would make the file's own tests fail and contradicts the design
   the existing docstrings state - flagged instead of guessed at.
+
+## Round 2 (2026-09-02) - "handle latest review on 196"
+
+The developer replied on the thread: "ok make fixing it an item of its own,
+I am unsure though if this should be in match-query-ergonomics or another
+plan or a new plan." PR #196 had also been flipped from draft to
+ready-for-review by the developer themselves in the meantime (their own
+"PR's job ends" signal per personal notes) - proceeded anyway since this
+round was an explicit ask in-session, and left the PR's ready state alone
+(did not re-draft it, per the stated exception for a PR the developer
+marked ready themselves).
+
+- Ran `/add-plan-item` to decide placement rather than guessing: scope check
+  (`check_scope_overlap.py`, base `origin/main`) against every open PR that
+  could plausibly touch `verbalization/grammar/aggregation/rules.py`,
+  `verbalization/rendering/coreference_processor.py`, or
+  `verbalization/microplanning/referring.py` (#192, #248, #33) found no
+  shared paths and no duplicate intent.
+- Put the three-way choice (match-query-ergonomics / eql-verbalization / new
+  plan) to the developer via `AskUserQuestion` with the evidence for each -
+  they picked `eql-verbalization`: the ambiguous reduction lives in
+  `CoreferenceProcessor`/`DistinguisherIndex`, the same "same-noun-group
+  disambiguation" machinery that plan's P2 built, and
+  `p5-first-mention-type-annotation` already sits in that exact track for an
+  analogous refinement of the same machinery.
+- New item `aggregate-repeat-reduction-ignores-same-kind-siblings` recorded
+  on `eql-verbalization`'s `plan.yaml` (track `framework-migration`,
+  `depends_on: [p2-operand-naming]`, `not_started`) and its own roadmap
+  section, via `save-plan.sh --manifest/--roadmap` (hand-edited scratch
+  files, this session doesn't steward that plan). Structural-change comment
+  posted on its tracking issue (#104), matching the convention. Dashboard
+  republished: https://claude.ai/code/artifact/44efa6b1-3a07-4423-a3eb-9809b9c5d6cd
+- Replied on PR #196's thread with the outcome and resolved it - the
+  developer's ask ("make fixing it an item of its own") is done, and no code
+  touched #196 itself for this.
