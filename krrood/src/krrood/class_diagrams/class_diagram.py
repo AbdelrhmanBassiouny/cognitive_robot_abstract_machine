@@ -443,7 +443,13 @@ class ClassDiagram:
             if is_dataclass(get_origin(clazz)):
                 generics.append(clazz)
                 clazz = get_origin(clazz)
-            self.add_node(WrappedClass(clazz=clazz))
+            # Pass the bare class, not an already-wrapped one: add_node() only
+            # dedupes against an existing node by consulting _cls_wrapped_cls_map,
+            # and get_wrapped_class() skips that lookup entirely when it's handed a
+            # WrappedClass already. A specialized generic's bare origin (just above)
+            # can otherwise be re-added as a second, separate node if that same bare
+            # class also appears in `classes` in its own right.
+            self.add_node(clazz)
         self._create_nodes_for_specialized_generic_type_hints(generics)
         self._create_all_relations()
 

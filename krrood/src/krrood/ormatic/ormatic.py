@@ -96,20 +96,6 @@ class ORMatic:
     SQLAlchemy registry and ``MetaData``.
     """
 
-    always_polymorphic_classes: Set[Type] = field(default_factory=set)
-    """
-    Root classes (no local parent) to give SQLAlchemy joined-table-inheritance
-    polymorphism (a discriminator column and ``polymorphic_on``) even though they
-    have no children in this run.
-
-    A class only needs this when it is known to be subclassed by a *different*,
-    dependent package: that package is generated later, in its own run, so this
-    package has no way to discover the subclass on its own and would otherwise
-    generate a plain, non-polymorphic table for it. Without this, loading the class
-    polymorphically still mostly works, but SQLAlchemy rejects assigning the
-    subclass to a relationship typed at this class (``FlushError``).
-    """
-
     foreign_key_postfix = "_id"
     """
     The postfix that will be added to foreign key columns (not the relationships).
@@ -362,7 +348,6 @@ class ORMatic:
         ignored_classes: Set[Type],
         type_mappings: Dict[Type, Type],
         ignore_krrood_test_classes: bool = True,
-        always_polymorphic_classes: Set[Type] = frozenset(),
     ):
         """
         Create an instance from a list of packages, dependencies, and ignored classes.
@@ -373,9 +358,6 @@ class ORMatic:
         :param type_mappings: The type mappings that should be used.
         :param ignore_krrood_test_classes: Rather to ignore classes from the krrood test
             package.
-        :param always_polymorphic_classes: Classes from ``packages`` that a *different*,
-            dependent package is known to subclass. See
-            :attr:`ORMatic.always_polymorphic_classes`.
         :return: The ORMatic instance.
         """
         if len(ormatic_interface_dependencies) > 1:
@@ -440,6 +422,5 @@ class ORMatic:
             alternative_mappings=list(all_alternative_mappings),
             externally_mapped_classes=all_externally_mapped_classes,
             ormatic_interface_dependencies=list(ormatic_interface_dependencies),
-            always_polymorphic_classes=set(always_polymorphic_classes),
         )
         return ormatic

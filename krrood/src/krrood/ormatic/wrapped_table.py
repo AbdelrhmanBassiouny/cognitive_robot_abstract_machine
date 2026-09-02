@@ -316,44 +316,14 @@ class WrappedTable:
             f"mapped_column({column_type}, primary_key=True, use_existing_column=True)",
         )
 
-    @property
-    def child_tables(self) -> List[WrappedTable]:
-        return [
-            self.ormatic.class_dependency_graph._dependency_graph[index]
-            for index in self.ormatic.inheritance_graph.successors(
-                self.wrapped_clazz.index
-            )
-        ]
-
-    @property
-    def has_children(self) -> bool:
-        """
-        Indicate whether this table has subclasses in the generated DAO model.
-
-        The check is performed in two simple steps:
-        - Use the inheritance graph to determine direct children of this wrapped class.
-        - Additionally, scan existing wrapped tables for any table that resolves this
-          instance as its ``parent_table`` (covers alternative-mapping hierarchies).
-        """
-        if len(self.child_tables) > 0:
-            return True
-
-        # Fallback: look for any table that points to this table as its parent
-        for table in self.ormatic.wrapped_tables.values():
-            if table is self:
-                continue
-            if table.parent_table is self:
-                return True
-        return False
-
     def create_mapper_args(self):
-        # this is the root of an inheritance structure, either locally (it already
-        # has children in this run) or because a dependent package is known to
-        # subclass it later (see ORMatic.always_polymorphic_classes)
-        if self.parent_table is None and (
-            self.has_children
-            or self.wrapped_clazz.clazz in self.ormatic.always_polymorphic_classes
-        ):
+        # Every root table is set up as a polymorphic base unconditionally, whether or
+        # not it has children in *this* run. Under the "import instead of copy"
+        # interface architecture, any package that later imports and extends this
+        # interface can subclass any of its classes -- there is no way for this run to
+        # know in advance which roots a downstream package will subclass, so every root
+        # must already be ready to act as one.
+        if self.parent_table is None:
             self.custom_columns.append(
                 (
                     ColumnConstructor(
