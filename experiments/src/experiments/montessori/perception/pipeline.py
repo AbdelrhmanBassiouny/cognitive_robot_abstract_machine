@@ -668,7 +668,7 @@ class LoosePieceDetector(BeliefSource):
             *self._colors_seen_in(orthophoto, top_orthophoto, search, color),
             *expected,
         ]:
-            if not self._is_this_surfaces(hypothesis, search):
+            if not self._is_on_this_surface(hypothesis, search):
                 continue
             piece = self._piece_at(
                 hypothesis, orthophoto, edges, frame, reference_frame, search
@@ -678,9 +678,9 @@ class LoosePieceDetector(BeliefSource):
         return pieces
 
     @staticmethod
-    def _is_this_surfaces(hypothesis: PieceHypothesis, search: SurfaceSearch) -> bool:
+    def _is_on_this_surface(hypothesis: PieceHypothesis, search: SurfaceSearch) -> bool:
         """
-        Whether a hypothesis is one this pass may report.
+        Whether the piece a hypothesis expects rests on the surface being searched.
 
         A belief names the surface it is about, and a position on this plane belongs to
         this surface only where nothing standing on it reaches -- which is what the
@@ -1209,6 +1209,19 @@ class MontessoriPerceptionPipeline:
             )
         return placed
 
+    def board_in(self, frame: RgbdFrame) -> Optional[MontessoriBoardDetection]:
+        """
+        The board as one frame shows it, which is what says how far its lid reaches and
+        where each of its holes lies.
+
+        :param frame: The camera data to search.
+        :return: The board, or None if it was not in view.
+        """
+        return self.board_detector.detect(
+            self.rectify(frame, self.lid.height, self.table.region),
+            self.reference_frame,
+        )
+
     def detect(
         self, frame: RgbdFrame, request: SceneRequest = SceneRequest()
     ) -> MontessoriScene:
@@ -1240,10 +1253,7 @@ class MontessoriPerceptionPipeline:
         :return: The pieces, the board, and its holes, as far as the request asked for
             them.
         """
-        board = self.board_detector.detect(
-            self.rectify(frame, self.lid.height, self.table.region),
-            self.reference_frame,
-        )
+        board = self.board_in(frame)
         expected = self.expected_pieces()
         pieces = []
         if request.wants(MontessoriShapeDetection):

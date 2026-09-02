@@ -43,9 +43,15 @@ from experiments.montessori.perception.recorded_setup import (
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import FixedScene, RecordedFrame
 from experiments.montessori.perception.viewer import ImageDisplay
-from experiments.montessori.perception.watch_narrowing import (
+from experiments.montessori.perception.step_by_step import (
+    DEMONSTRATION_CAPTURE,
     NarrowingView,
+    RecordedLook,
     SearchNarrowing,
+    WatchedCapture,
+    show_step_by_step,
+)
+from experiments.montessori.perception.watch_narrowing import (
     look_for_the_cube_on_the_lid,
 )
 from krrood.entity_query_language.factories import an
@@ -71,9 +77,10 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
-CAPTURE_NAME = "tracy_pickup_demo"
+CAPTURE_NAME = DEMONSTRATION_CAPTURE
 """
-The shipped capture these tests read, which holds pieces on the table and on the lid.
+The shipped capture these tests read, which is the demonstration's own: it holds pieces
+on the table and on the lid, so a narrowing has something to leave out.
 """
 
 # %% a display that draws nowhere
@@ -146,7 +153,29 @@ def capture_board(
     """
     The board as that capture shows it, which is what says where its holes lie.
     """
-    return SearchNarrowing(pipeline=capture_pipeline).board_in(capture_frame)
+    return capture_pipeline.board_in(capture_frame)
+
+
+@pytest.fixture
+def capture_look(
+    recorded_scene_world: World,
+    capture_pipeline: MontessoriPerceptionPipeline,
+    capture_frame,
+    capture_board,
+) -> RecordedLook:
+    """
+    The look these tests state their statements over: the capture's own world, the
+    pipeline reading it, its pictures, and the board they show.
+    """
+    return RecordedLook(
+        world=recorded_scene_world,
+        pipeline=capture_pipeline,
+        frame=capture_frame,
+        board=capture_board,
+        seen_from=capture_frame.point_of_view(
+            recorded_scene_world.root, camera_in(recorded_scene_world, capture_frame)
+        ),
+    )
 
 
 @pytest.fixture
@@ -215,16 +244,14 @@ def test_a_look_saying_nothing_reads_the_whole_searched_table(
 def test_no_stated_condition_leaves_more_of_the_table_to_read(
     capture_pipeline: MontessoriPerceptionPipeline,
     capture_frame,
-    recorded_scene_world: World,
     capture_board,
+    capture_look: RecordedLook,
 ):
     narrowing = SearchNarrowing(pipeline=capture_pipeline)
 
     steps = narrowing.steps(
         capture_frame,
-        look_for_the_cube_on_the_lid(
-            recorded_scene_world, capture_frame, capture_board
-        ),
+        look_for_the_cube_on_the_lid(capture_look),
         capture_board,
     )
 
@@ -385,17 +412,15 @@ def test_a_placement_a_look_cannot_read_is_refused_rather_than_ignored(
 def test_a_run_draws_two_windows_per_step_and_a_last_one_for_the_answer(
     capture_pipeline: MontessoriPerceptionPipeline,
     capture_frame,
-    recorded_scene_world: World,
     capture_board,
+    capture_look: RecordedLook,
 ):
     display = RecordingDisplay()
     narrowing = SearchNarrowing(pipeline=capture_pipeline, display=display)
 
     steps = narrowing.watch(
         capture_frame,
-        look_for_the_cube_on_the_lid(
-            recorded_scene_world, capture_frame, capture_board
-        ),
+        look_for_the_cube_on_the_lid(capture_look),
         capture_board,
     )
 
@@ -409,16 +434,14 @@ def test_a_run_draws_two_windows_per_step_and_a_last_one_for_the_answer(
 def test_a_windows_name_says_the_look_is_a_look_and_says_more_at_every_step(
     capture_pipeline: MontessoriPerceptionPipeline,
     capture_frame,
-    recorded_scene_world: World,
     capture_board,
+    capture_look: RecordedLook,
 ):
     narrowing = SearchNarrowing(pipeline=capture_pipeline)
 
     steps = narrowing.steps(
         capture_frame,
-        look_for_the_cube_on_the_lid(
-            recorded_scene_world, capture_frame, capture_board
-        ),
+        look_for_the_cube_on_the_lid(capture_look),
         capture_board,
     )
 
@@ -432,8 +455,8 @@ def test_a_windows_name_says_the_look_is_a_look_and_says_more_at_every_step(
 def watched(
     capture_pipeline: MontessoriPerceptionPipeline,
     capture_frame,
-    recorded_scene_world: World,
     capture_board,
+    capture_look: RecordedLook,
 ) -> Tuple[SearchNarrowing, RecordingDisplay, List]:
     """
     The demonstration's own statement watched at full size, with every picture kept.
@@ -447,9 +470,7 @@ def watched(
     )
     steps = narrowing.watch(
         capture_frame,
-        look_for_the_cube_on_the_lid(
-            recorded_scene_world, capture_frame, capture_board
-        ),
+        look_for_the_cube_on_the_lid(capture_look),
         capture_board,
     )
     return narrowing, display, steps
@@ -574,13 +595,11 @@ def test_the_demonstration_states_its_way_down_to_the_cube_alone(watched):
 def test_a_run_with_no_display_draws_nothing_and_still_takes_every_step(
     capture_pipeline: MontessoriPerceptionPipeline,
     capture_frame,
-    recorded_scene_world: World,
     capture_board,
+    capture_look: RecordedLook,
 ):
     narrowing = SearchNarrowing(pipeline=capture_pipeline)
-    statement = look_for_the_cube_on_the_lid(
-        recorded_scene_world, capture_frame, capture_board
-    )
+    statement = look_for_the_cube_on_the_lid(capture_look)
 
     watched = narrowing.watch(capture_frame, statement, capture_board)
 
@@ -778,19 +797,16 @@ def test_the_camera_is_put_in_the_world_where_the_look_was_taken_from(
 
 
 def test_the_statement_reads_as_one_look_taken_from_the_camera(
-    recorded_scene_world: World,
     capture_frame,
-    capture_board,
     capture_pipeline: MontessoriPerceptionPipeline,
+    capture_look: RecordedLook,
 ):
     """
     The whole statement is one look: the things it relates the piece to are described
     inside it rather than opening looks of their own, and every direction it states says
     the camera it was read from rather than the matrix that camera's pose is kept as.
     """
-    statement = look_for_the_cube_on_the_lid(
-        recorded_scene_world, capture_frame, capture_board
-    )
+    statement = look_for_the_cube_on_the_lid(capture_look)
     looking = MontessoriPerceptionBackend(
         source=RecordedFrame(pipeline=capture_pipeline, frame=capture_frame)
     )
@@ -799,3 +815,57 @@ def test_the_statement_reads_as_one_look_taken_from_the_camera(
 
     assert text.count(Directive.LOOK_FOR.value.text) == 1
     assert text.count(f"as seen from the {CAMERA_NAME}") == 2
+
+
+# %% the demonstration is one call, and everything it needs is a source file's
+
+
+def test_a_capture_named_on_the_command_line_is_the_one_watched():
+    """
+    Which capture a run watches, and whether it draws anything, is what the command line
+    says, and the demonstration's own capture where it says nothing.
+    """
+    asked_for = WatchedCapture.from_command_line(["some_capture", "--without-windows"])
+    unasked = WatchedCapture.from_command_line([])
+
+    assert asked_for.name == "some_capture"
+    assert asked_for.draws_windows is False
+    assert unasked.name == DEMONSTRATION_CAPTURE
+    assert unasked.draws_windows is True
+
+
+def test_a_look_taken_from_a_capture_carries_the_board_that_capture_shows(
+    capture_pipeline: MontessoriPerceptionPipeline, capture_frame
+):
+    """
+    A statement is written over a look rather than over a capture name, so taking one
+    settles the world it is described in, the pictures it reads and the board they show.
+    """
+    look = RecordedLook.taken_from(
+        WatchedCapture(name=CAPTURE_NAME, draws_windows=False)
+    )
+
+    assert look.pipeline.table.name == capture_pipeline.table.name
+    assert look.board.pose.to_position().to_np() == pytest.approx(
+        capture_pipeline.board_in(capture_frame).pose.to_position().to_np()
+    )
+
+
+def test_watching_a_statement_step_by_step_needs_nothing_but_the_statement(
+    capture_look: RecordedLook,
+):
+    """
+    The demonstration names the statement and nothing else: the capture, the world, the
+    pipeline and the display are the watching's rather than the caller's.
+    """
+    watched = show_step_by_step(
+        look_for_the_cube_on_the_lid,
+        WatchedCapture(name=CAPTURE_NAME, draws_windows=False),
+    )
+
+    taken_by_hand = SearchNarrowing(pipeline=capture_look.pipeline).steps(
+        capture_look.frame,
+        look_for_the_cube_on_the_lid(capture_look),
+        capture_look.board,
+    )
+    assert [step.label for step in watched] == [step.label for step in taken_by_hand]
