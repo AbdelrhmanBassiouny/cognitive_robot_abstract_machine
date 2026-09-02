@@ -3784,3 +3784,59 @@ which cannot parse this repository's `pyproject.toml`; `pip install -U uv` puts 
 and `uv sync --extra dev --python 3.12` builds the whole workspace. `black` and
 `docformatter` are not in the dependency set and go in by hand, with the virtual
 environment's `bin` on `PATH`, before `scripts/format_docstrings.py` will run.
+
+## Two structural changes out of #238's round (2026-09-02)
+
+Both are the developer's decisions, taken the same day the round was resolved, on the two threads
+that reach past `search-clipped-to-a-predicates-region`.
+
+### A new item: how a look is answered is concluded, not configured
+
+r3915356623 — *"why does evaluating a query needs a pipeline? why do we need anything specified
+other than the request and the camera and the feed (images input)?"* — becomes
+**`how-to-look-concluded-from-the-request`**, in the `request-language` track, depending on
+`choose-detection-method` and `detector-parameters-from-knowledge`.
+
+What settled it is what the pipeline turns out to be. `MontessoriPerceptionPipeline` has six
+fields and they are not one kind of thing: `table`/`lid` and `world`/`reference_frame` are
+knowledge `of_world` already reads from the world, `headroom` is #239's to conclude, and only the
+two detectors are genuinely hand-wired. **The pipeline is the residue of everything not yet
+knowledge-directed**, rather than a second configuration surface beside the world — so the ask is
+not a redesign of the backend but the last step of the three items that between them empty it.
+
+The item's own work is the piece none of those three covers: a rule tree concluding *how to answer
+a look* from the request — which detectors run over which surfaces — grown by an expert when a new
+kind of request turns up. That is the half of #231's *"extensibility with new situations through
+interaction with an expert"* that #231 answered only for the choice of detector.
+
+It stacks on **#159** and reaches it through #239, which already merges #159 in. Doing it on #238
+was refused for the reason #231 refused it: merging #159 there adds 9,236 lines over 50 files to a
+pull request whose own change is a few hundred. Live state that day, checked rather than repeated
+from the 2026-08-31 correction: **#159 open, out of draft, no blocking label; #77 open, out of
+draft, `mergeable_state: clean`, carrying `integration-conflict`.**
+
+`surfaces-found-by-looking` is deliberately *not* a dependency. Surfaces are already read from the
+world, so a live look needs nothing from it; what that item removes is the last model-read surface
+for a *recording*, and this item can be demonstrated without it.
+
+### The detection becomes a role, in the item that can give it a role taker
+
+r3915631447 — rename `MontessoriShapeDetection` to `DetectedMontessoriShape` and make it a `Role`
+for `MontessoriShape` — is folded into
+**`imagination-world-rejects-what-a-predicate-refuses`**, both halves, rather than split across
+that item and #238.
+
+`Role[T]` is pure composition and takes its role taker explicitly, so every detection would need a
+`MontessoriShape` — a `HasRootBody` annotation over a body in a world — and a look reports what it
+saw before anything of the sort is in the world. Spawning what was found into a copy of the world
+is precisely what that item builds, so it is where a role taker first exists.
+
+Doing the rename alone on #238 was the cheaper-looking option and was refused on two counts: it is
+51 references across 10 files that #232, #236 and #239 would each inherit as a conflict, and the
+type would be named twice — once now and once when it becomes what it will finally be.
+
+**It also closes the gap #227 left open, by construction.** A look reports sightings rather than
+the things a relation is written over, which is why `relations_hold` re-checks only the relations
+the backend narrowed by and refuses any other. A detection that *is* a role of a world entity
+gives every predicate a real subject, so nothing has to be refused for want of one — which is the
+same thing that item's rejection sampler needed, arriving as a type rather than as a mechanism.

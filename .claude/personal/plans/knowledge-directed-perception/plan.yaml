@@ -673,28 +673,16 @@ items:
   - pieces-looked-for-where-expected
   status: in_progress
   blockers:
-  - 'Three of the six review threads the developer opened on #238 on 2026-09-02 are still
-    open after the resolve of that day, and none of them is code this session should write.
-    r3915277277 asked the demonstration to read `show_step_by_step(query)`; it now reads
-    `show_step_by_step(look_for_the_cube_on_the_lid, WatchedCapture.from_command_line())`,
-    whose first argument is how to state the query about a look rather than a Match already
-    stated - answered differently in part, so it is the developer''s to close.'
-  - 'r3915356623 asks why answering a query needs a pipeline at all rather than only the
-    request, the camera and the images, and asks to discuss making it general, possibly
-    through the EQL-RDR engine. The answer put to him: the pipeline is the residue of
-    everything not yet knowledge-directed, and the three items that between them remove it
-    are surfaces-found-by-looking, choose-detection-method (#231) and
-    detector-parameters-from-knowledge (#239). A rule tree concluding how to answer a look,
-    stacked on #159, is proposed as a new item rather than built here, since merging #159
-    adds 9,236 lines over 50 files to a pull request whose own change is a few hundred.
-    Adding an item is structural and his to confirm.'
-  - 'r3915631447 asks that MontessoriShapeDetection be renamed DetectedMontessoriShape and
-    made a Role for MontessoriShape. The rename is 51 references across 10 files and would
-    be a conflict #232, #236 and #239 each inherit; the role needs a MontessoriShape role
-    taker to exist for every detection, which means the look spawning what it found into a
-    copy of the world - the premise of the separate item
-    imagination-world-rejects-what-a-predicate-refuses. Three ways to split it were put to
-    the developer, with both halves in that item recommended, and none taken.'
+  - 'One of the six review threads of 2026-09-02 is still open, and it is the developer''s to close
+    rather than work for this item. r3915277277 asked the demonstration to read
+    `show_step_by_step(query)`; it reads `show_step_by_step(look_for_the_cube_on_the_lid,
+    WatchedCapture.from_command_line())`, whose first argument is how to state the query about a look
+    rather than a Match already stated, because the statement is written over bodies of a world and
+    over where the camera stood and neither exists before the look is taken. He accepted that shape on
+    2026-09-02 and the thread is left open only because resolving a thread answered differently is his
+    call. The other two open threads stopped being this item''s on the same day: r3915356623 became the
+    item how-to-look-concluded-from-the-request, and r3915631447 was folded into
+    imagination-world-rejects-what-a-predicate-refuses.'
   notes: 'The developer''s second mechanism on r3893602153, deferred out of #227 rather than dropped:
     "one can interpret spatial predicates as specifying Regions (like the region class in semdt) with
     extents to look at and excluding other regions, once can clip images and depth to look only inside
@@ -809,7 +797,66 @@ items:
     so nothing has to be refused for want of a subject.
 
     Duplicates nothing: the roadmap''s "Two items that meet at one type" records this mechanism as this
-    item''s alone.'
+    item''s alone.
+
+
+    Widened 2026-09-02 at the developer''s decision, taking r3915631447 from #238: MontessoriShapeDetection
+    is renamed DetectedMontessoriShape and made a Role for MontessoriShape, and both halves belong here
+    rather than on #238. Role[T] is pure composition and takes its role taker explicitly, so every detection
+    needs a MontessoriShape - a HasRootBody annotation over a body in a world - and a look reports what it
+    saw before anything of the sort is in the world. Spawning what was found into a copy of the world is
+    exactly what this item builds, so this is where the role taker first exists. It also makes the gap above
+    close by construction: a detection that is a role of a world entity gives every predicate a real subject,
+    so nothing has to be refused for want of one.
+
+
+    The rename waits here rather than landing on #238 for a second reason the developer weighed: it is 51
+    references across 10 files, and #232, #236 and #239 would each inherit it as a conflict. Naming the type
+    once, when it is what it will finally be, costs those three branches nothing.'
+- id: how-to-look-concluded-from-the-request
+  title: Work out how to answer a look from the request, instead of being handed a pipeline
+  branch: null
+  pull_request_number: null
+  track: request-language
+  depends_on:
+  - choose-detection-method
+  - detector-parameters-from-knowledge
+  status: not_started
+  notes: 'Raised by the developer on #238 (r3915356623) and added at his direction on 2026-09-02: "why
+    does evaluating a query needs a pipeline? why do we need anything specified other than the request
+    and the camera and the feed (images input)? this feels rigid and hard designed and coded ... Also
+    check if we can make use of EQL-RDRs in there to generalize this (the rdr in pull requests stack
+    which has pr 77 as the tip)."
+
+
+    He is right, and what the pipeline is explains why. MontessoriPerceptionPipeline has six fields and
+    they are not one kind of thing: table and lid, world and reference_frame are knowledge that of_world
+    already reads from the world - a recording simply has no world, which is why recorded_setup writes
+    them down; headroom is detector-parameters-from-knowledge''s to conclude; and only the two detectors
+    are genuinely hand-wired. So the pipeline is the residue of everything not yet knowledge-directed
+    rather than a second configuration surface beside the world, and a backend taking the request, the
+    camera and the frames alone is what removing that residue looks like.
+
+
+    What this item builds is the last piece: a rule tree that concludes *how to answer a look* from the
+    request itself - which detectors run over which surfaces - grown by an expert when a new kind of
+    request turns up, rather than a pipeline configured in advance. That is the half of "extensibility
+    with new situations through interaction with an expert" that #231 answered only for the choice of
+    detector and left open for the choice of everything else.
+
+
+    It stacks on #159 (EQLSingleClassRDR), whose fit, render_tree, corner-case store and model file are
+    what the item is written around, and reaches it through detector-parameters-from-knowledge (#239),
+    which already merges #159 in. Doing it on #238 was refused for the reason #231 refused it: merging
+    #159 there adds 9,236 lines over 50 files to a pull request whose own change is a few hundred. Live
+    state on 2026-09-02: #159 open, out of draft, no blocking label; #77 open, out of draft,
+    mergeable_state clean, carrying integration-conflict.
+
+
+    depends_on names the two items that supply what the pipeline carries and are hand-wired today.
+    surfaces-found-by-looking is deliberately not a dependency: surfaces are already read from the world
+    by of_world, so a live look needs nothing from it - what that item removes is the last model-read
+    surface for a *recording*, which this item can be demonstrated without.'
 - id: surface-finish-annotation
   title: Say in the digital twin how a surface takes light
   branch: sdt_surface_finish_annotation
