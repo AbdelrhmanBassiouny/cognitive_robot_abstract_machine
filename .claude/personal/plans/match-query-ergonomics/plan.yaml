@@ -187,18 +187,7 @@ items:
       - where-query-rooted-attribute-no-filter
     status: in_progress
     session: https://claude.ai/code/session_01F65KD9BwwgdgxZgKKmXj61
-    blockers: >
-      Conflicted against main again since 2026-09-02T00:46Z, one day after the
-      section-26 merge: PR #192 reads mergeable_state dirty and carries the
-      needs-resolution label a seventh stacked-pr-maintenance comment added.
-      The conflicting file is krrood/src/krrood/entity_query_language/query/match.py
-      alone - main took cram2#575 (probabilistic queries), whose HasExpression
-      mixin adds a base to the same Match class statement this item rewrites with
-      HasQueryModifiers/HasSymbolicOperations. Nothing else is stalling it: #192
-      still has no review threads (get_review_comments totalCount 0), carries no
-      in-review label and was never promoted upstream, its dependency
-      where-query-rooted-attribute-no-filter is merged and is_ready true, and all
-      23 checks were green on its current head ff5414e0.
+    blockers: []
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
@@ -281,6 +270,23 @@ items:
       was green but on e9aae10be of 2026-08-24, against a base nine days stale. test_eql
       1287 passed, 3 skipped; full test/krrood_test 2269 passed, 5 skipped, the two
       test_object_diagram failures being this container having no Graphviz dot binary.
+      Resolved 2026-09-02 (roadmap section 27): conflicted again one day later, and again
+      the whole of it was one class statement - main took cram2#575 (probabilistic
+      queries), whose HasExpression mixin adds a base to the same class Match(...) this
+      item rewrites with HasQueryModifiers/HasSymbolicOperations. That line is the only
+      conflict in the 1,518 lines #575 brought. Both sides kept: the two interfaces say
+      what can be written on a match, HasExpression says what a match resolves to for a
+      caller that only wants the expression to scan or build, and Match owes both answers.
+      Checked before touching it, so the record names the cause this time: no review
+      threads, no in-review label and never promoted upstream, dependency merged and ready,
+      23 checks green on ff5414e0. #575's new code reads a match only through the public
+      expression property, so section 6's silent-miss hazard had nothing to catch. Left as
+      a question on #192 and #181 rather than decided here: HasExpression._get_expression_
+      and HasSymbolicOperations._symbolic_expression_ return the same object on every class
+      that has both, with different declared contracts, and unifying them would change an
+      interface main landed the day before. test_eql 1310 passed, 3 skipped; full
+      test/krrood_test 1916 passed, 5 skipped (excluding the flask/casadi modules), the two
+      test_object_diagram failures being this container's missing Graphviz dot binary.
   - id: aggregate-signature-reads-a-missing-attribute
     title: "Bug: every aggregate of one kind gets the same structural signature"
     branch: claude/plan-item-kickoff-match-query-npzr78
@@ -414,3 +420,9 @@ items:
       property, and rewriting user-facing detour text is this item's scope, not #192's.
       And has_cause_attributes joins update_fields and create_or_update_variable as a
       public machinery name on Match that the underscore convention would cover.
+      Three more, found merging main into #192 on 2026-09-02 (roadmap section 27):
+      cram2#575's marginalize_for documentation teaches
+      distribution_of(match, marginalize_for=(match.variable.outcome,)) in factories.py:149,
+      operators/probabilistic_queries.py:153 and
+      verbalization/grammar/probabilistic_queries/rules.py:73 - stale the moment #192 lands,
+      since match.outcome becomes the spelling.

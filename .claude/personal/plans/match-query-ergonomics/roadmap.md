@@ -1250,3 +1250,73 @@ project dependencies. A Python 3.12 venv (3.11 is still too old) with `krrood`,
 `test/conftest.py` and the typing fixture need. `semantic_digital_twin` must be installed
 in the same `pip install` as `giskardpy` and `physics_simulators`, since it declares them
 as requirements and pip cannot resolve them from an index.
+
+## 27. 2026-09-02: a third interface on the same class statement
+
+`/plan-item-resolve match-query-ergonomics match-underscore-rename-and-forwarding`, in
+auto mode. One day after section 26 merged `main` into #192, the branch was conflicted
+again and carrying `needs-resolution` for the seventh time.
+
+**The whole of the stall was one class statement.** `main` took cram2#575 (probabilistic
+queries) on 2026-09-01, whose `HasExpression` mixin adds a base to `class Match(...)` -
+the very statement this item rewrites with `HasQueryModifiers` and
+`HasSymbolicOperations`. Of the 1,518 lines that arrived with #575, that line is the only
+conflict; `backends.py`, `base_expressions.py`, `exceptions.py`, `factories.py` and
+`parameterizer.py` all merged cleanly.
+
+Everything else was checked before touching it, since the previous section's lesson is
+that a blocker which does not name its cause is what keeps an item still: #192 has no
+review threads (`get_review_comments` returns `totalCount 0`), carries no `in-review`
+label and was never promoted, so there is no upstream review to read; its dependency
+`where-query-rooted-attribute-no-filter` is merged and `is_ready: true`; and all 23
+checks were green on its head `ff5414e0`.
+
+**Both sides kept, because `Match` owes both answers.** `HasSymbolicOperations` and
+`HasQueryModifiers` say what can be *written on* a match; `HasExpression` says what a
+match *resolves to* for a caller that only wants the expression to scan or build - which
+is how #575's verbalization and parametrization steps reach a match, a
+`ProbabilisticQuery` and a plain expression through one call instead of an `isinstance`
+chain. `Match._get_expression_` arrived from `main` returning the lowered query, which is
+the same object `_symbolic_expression_` reports.
+
+**Nothing else needed adjusting, and that was measured rather than assumed.** #575's new
+code reads a match only through `expression`, which this branch keeps as a public
+compatibility property - so section 6's silent-miss hazard (a missed rename becomes a
+truthy symbolic attribute rather than an `AttributeError`) had nothing to catch here. The
+sweep also found no new reader of the fields this item renamed without a compatibility
+property.
+
+**Two names for one value, left as a question rather than a commit.**
+`HasExpression._get_expression_` and `HasSymbolicOperations._symbolic_expression_` return
+the same object on every class that has both: a variable and a `SymbolicExpression` report
+themselves, a match reports its lowered query. Their declared contracts differ -
+`_symbolic_expression_` must be variable-like, since `_get_mapped_variable_` builds on it,
+while `_get_expression_` may be any expression, which is how `ProbabilisticQuery`
+implements it - so they are not simply one operation under two names, and the AGENTS rule
+does not settle it either way. What is true is that a class implementing both can make
+them disagree and nothing says it may not. Unifying them would change an interface `main`
+landed the day before, which is above the bar auto mode decides on its own, so it is on
+#192 and on #181 for the developer.
+
+**Three more `.variable` detour sites for item 3, found the same way section 26 found the
+two in `exceptions.py`.** #575's docs for `marginalize_for` teach
+`distribution_of(match, marginalize_for=(match.variable.outcome,))` in three places -
+`factories.py:149`, `operators/probabilistic_queries.py:153` and
+`verbalization/grammar/probabilistic_queries/rules.py:73`. This item is what makes
+`match.outcome` the spelling, so the text is stale the moment it lands; rewriting
+user-facing detour prose is `factories-unwrap-match-and-migrate`'s scope, and recorded in
+its notes rather than fixed here.
+
+Verification: `test/krrood_test/test_eql` 1310 passed, 3 skipped - up from section 26's
+1287 because #575's own `test_probabilistic_queries` arrive with it - the mypy typing
+fixture included. Full `test/krrood_test` 1916 passed, 5 skipped, excluding
+`test_rustworkx_utils` and `test_symbolic_math`, which need `flask` and `casadi`; the two
+`test_ripple_down_rules/test_object_diagram.py` failures are this container having no
+Graphviz `dot` binary, `which dot` finding none.
+
+**Environment note, narrowing sections 14, 22 and 26.** A Python 3.12 venv with
+`random_events`, `probabilistic_model` and `krrood` installed editable plus `mypy` is
+enough for the whole of `test/krrood_test` when pytest is given
+`--confcutdir=test/krrood_test`, which skips the workspace-root `conftest.py` and its
+`semantic_digital_twin` / `objgraph` imports. The heavier set the previous sections
+installed is only needed when that root conftest is in play.
