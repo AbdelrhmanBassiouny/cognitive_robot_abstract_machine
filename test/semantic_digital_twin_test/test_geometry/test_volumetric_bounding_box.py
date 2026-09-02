@@ -10,7 +10,10 @@ from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix,
 from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
+from semantic_digital_twin.world_description.geometry import (
+    Bounds,
+    VolumetricBoundingBox,
+)
 from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
 )
@@ -279,3 +282,44 @@ def test_transforming_a_box_between_frames_touches_no_symbolic_value(monkeypatch
         expected.min_z,
     )
     assert transformed.simple_event == expected.simple_event
+
+
+# %% axis bounds
+
+
+def test_volumetric_axis_bounds_name_the_ends_of_every_axis():
+    """
+    A box's extent along one axis reads as a named lower and upper, so nothing has to
+    remember which position of a pair meant which end.
+    """
+    bb = VolumetricBoundingBox(
+        -0.5, -1, 0, 0.5, 1, 2, HomogeneousTransformationMatrix.from_xyz_rpy()
+    )
+
+    assert bb.axis_bounds == (Bounds(-0.5, 0.5), Bounds(-1, 1), Bounds(0, 2))
+
+
+def test_volumetric_axis_bounds_follow_the_order_of_the_axes():
+    bb = VolumetricBoundingBox(
+        -0.5, -1, 0, 0.5, 1, 2, HomogeneousTransformationMatrix.from_xyz_rpy()
+    )
+
+    assert len(bb.axis_bounds) == len(VolumetricBoundingBox.axes())
+    z_axis = VolumetricBoundingBox.axes().index(SpatialVariables.z)
+    assert bb.axis_bounds[z_axis] == Bounds(0, 2)
+
+
+def test_volumetric_corner_coordinates_span_both_ends_of_every_axis():
+    """
+    The corners are read off :attr:`axis_bounds`, so every combination of the two ends
+    has to still come out of it.
+    """
+    bb = VolumetricBoundingBox(
+        -0.5, -1, 0, 0.5, 1, 2, HomogeneousTransformationMatrix.from_xyz_rpy()
+    )
+
+    corners = bb.corner_coordinates()
+
+    assert sorted(corner[:3].tolist() for corner in corners) == sorted(
+        [x, y, z] for x in (-0.5, 0.5) for y in (-1.0, 1.0) for z in (0.0, 2.0)
+    )

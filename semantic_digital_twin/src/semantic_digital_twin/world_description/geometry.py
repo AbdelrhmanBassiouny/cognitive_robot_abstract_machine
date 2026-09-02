@@ -1209,6 +1209,13 @@ class Bounds(Generic[T], SubClassSafeGeneric):
     The corner with the largest coordinate on every axis.
     """
 
+    @property
+    def ends(self) -> Tuple[T, T]:
+        """
+        :return: Both corners, lower first, for enumerating over the pair.
+        """
+        return self.lower, self.upper
+
     @classmethod
     def from_points(cls, points: npt.NDArray[np.float64]) -> Bounds[np.ndarray]:
         """
@@ -1346,7 +1353,7 @@ class AxisAlignedBox(ABC):
 
     @property
     @abstractmethod
-    def axis_bounds(self) -> Tuple[Tuple[float, float], ...]:
+    def axis_bounds(self) -> Tuple[Bounds[float], ...]:
         """
         :return: This box's lower and upper bound along each of :meth:`axes`, in the
             same order and relative to :attr:`origin`.
@@ -1448,7 +1455,10 @@ class AxisAlignedBox(ABC):
         bounds = self.axis_bounds
         padding = (0.0,) * (SPATIAL_AXIS_COUNT - len(bounds))
         return np.array(
-            [[*corner, *padding, 1.0] for corner in itertools.product(*bounds)]
+            [
+                [*corner, *padding, 1.0]
+                for corner in itertools.product(*(axis.ends for axis in bounds))
+            ]
         )
 
     def transform_to_origin(self, reference_T_new_origin: NumericTransform) -> Self:
@@ -1563,11 +1573,11 @@ class VolumetricBoundingBox(AxisAlignedBox):
         return (SpatialVariables.x, SpatialVariables.y, SpatialVariables.z)
 
     @property
-    def axis_bounds(self) -> Tuple[Tuple[float, float], ...]:
+    def axis_bounds(self) -> Tuple[Bounds[float], ...]:
         return (
-            (self.min_x, self.max_x),
-            (self.min_y, self.max_y),
-            (self.min_z, self.max_z),
+            Bounds(self.min_x, self.max_x),
+            Bounds(self.min_y, self.max_y),
+            Bounds(self.min_z, self.max_z),
         )
 
     @property
@@ -1876,8 +1886,11 @@ class PlanarBoundingBox(AxisAlignedBox):
         return (SpatialVariables.x, SpatialVariables.y)
 
     @property
-    def axis_bounds(self) -> Tuple[Tuple[float, float], ...]:
-        return ((self.min_x, self.max_x), (self.min_y, self.max_y))
+    def axis_bounds(self) -> Tuple[Bounds[float], ...]:
+        return (
+            Bounds(self.min_x, self.max_x),
+            Bounds(self.min_y, self.max_y),
+        )
 
     @property
     def _ordered_intervals(self) -> Tuple[SimpleInterval, ...]:
