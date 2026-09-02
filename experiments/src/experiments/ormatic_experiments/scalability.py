@@ -29,7 +29,10 @@ from experiments.experiment_definitions import (
 )
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
-from krrood.ormatic.helper import get_classes_of_ormatic_interface
+from krrood.ormatic.helper import (
+    get_classes_of_ormatic_interface,
+    OrmaticInterfaceInformation,
+)
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.type_dict import TypeDict
 from krrood.utils import recursive_subclasses
@@ -228,8 +231,10 @@ def _ormatic_scalability_experiment(
 
     ormatic = ORMatic(
         class_diagram,
-        type_mappings=TypeDict(type_mappings),
-        alternative_mappings=alternative_mappings,
+        interface_information=OrmaticInterfaceInformation(
+            type_mappings=TypeDict(type_mappings),
+            alternative_mappings=alternative_mappings,
+        ),
     )
     ormatic.make_all_tables()
 

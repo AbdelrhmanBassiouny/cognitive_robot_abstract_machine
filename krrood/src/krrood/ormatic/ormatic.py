@@ -13,7 +13,10 @@ import rustworkx as rx
 import sqlalchemy
 import krrood.ormatic.custom_types  # type: ignore
 import krrood.ormatic.data_access_objects.alternative_mappings  # type: ignore
-from krrood.ormatic.helper import get_classes_of_ormatic_interface
+from krrood.ormatic.helper import (
+    get_classes_of_ormatic_interface,
+    OrmaticInterfaceInformation,
+)
 from sortedcontainers import SortedSet
 from sqlalchemy import JSON
 from typing_extensions import List, Type, Dict
@@ -69,28 +72,16 @@ class ORMatic:
     The class diagram to add the orm for.
     """
 
-    alternative_mappings: List[Type[AlternativeMapping]] = field(default_factory=list)
+    interface_information: OrmaticInterfaceInformation = field(
+        default_factory=OrmaticInterfaceInformation
+    )
     """
-    List of alternative mappings that should be used to map classes.
-    """
-
-    type_mappings: TypeDict = field(default_factory=TypeDict)
-    """
-    A dict that maps classes to custom types that should be used to save the classes.
-
-    They keys of the type mappings must be disjoint with the classes given..
+    The alternative mappings, type mappings, and externally-mapped classes to use.
     """
 
     inheritance_strategy: InheritanceStrategy = InheritanceStrategy.JOINED
     """
     The inheritance strategy to use.
-    """
-
-    externally_mapped_classes: Dict[Type, Type] = field(default_factory=dict)
-    """
-    Maps a domain class already mapped by an ormatic-interface dependency to the
-    :class:`DataAccessObject` subclass that maps it there. Classes found here are
-    imported and reused instead of being regenerated as a new table.
     """
 
     ormatic_interface_dependencies: List[ModuleType] = field(default_factory=list)
@@ -175,6 +166,18 @@ class ORMatic:
         if not self.ormatic_interface_dependencies:
             return None
         return self.ormatic_interface_dependencies[0].__name__
+
+    @property
+    def alternative_mappings(self) -> List[Type[AlternativeMapping]]:
+        return self.interface_information.alternative_mappings
+
+    @property
+    def type_mappings(self) -> TypeDict:
+        return TypeDict(self.interface_information.type_mappings)
+
+    @property
+    def externally_mapped_classes(self) -> Dict[Type, Type]:
+        return self.interface_information.externally_mapped_classes
 
     def _fill_type_mappings(self):
         """
@@ -447,9 +450,11 @@ class ORMatic:
         # Create an ORMatic object with the classes to be mapped
         ormatic = ORMatic(
             class_diagram,
-            type_mappings=TypeDict(all_type_mappings),
-            alternative_mappings=list(all_alternative_mappings),
-            externally_mapped_classes=all_externally_mapped_classes,
+            interface_information=OrmaticInterfaceInformation(
+                alternative_mappings=list(all_alternative_mappings),
+                type_mappings=all_type_mappings,
+                externally_mapped_classes=all_externally_mapped_classes,
+            ),
             ormatic_interface_dependencies=list(ormatic_interface_dependencies),
         )
         return ormatic
