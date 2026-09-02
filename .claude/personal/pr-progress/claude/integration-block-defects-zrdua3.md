@@ -18,5 +18,10 @@ forgets the record when the suite passes over a build the branch reached; a labe
 record is reported as blocked-without-record. locate-failure / block-branch read the stack
 the way the build does, so the search covers a readmitted branch.
 
-Done: tests (failing first), implementation, skill + README, format_docstrings.
-Next: full suite green -> commit -> push -> draft PR (bug label, session link) -> stop.
+Done: tests (failing first), implementation, skill + README, format_docstrings, full suite
+1002 passed (from 963), commit 3d9fba88d pushed, draft PR #249 opened against #211's branch
+with the bug label and the session link.
+
+Outstanding / for the user: decide whether to fold #249 into #211 (merge the draft) or keep
+it stacked; existing blocks with no record (#77) show as blocked-without-record until the
+label is removed by hand; clear-fixed-breaks output left unchanged on purpose.
