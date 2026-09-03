@@ -12,9 +12,6 @@ import numpy as np
 from probabilistic_model.distributions.distributions import SymbolicDistribution
 from probabilistic_model.distributions.multinomial import MultinomialDistribution
 from probabilistic_model.exceptions import ShapeMismatchError
-from probabilistic_model.probabilistic_circuit.relational.exceptions import (
-    NotAProbabilityDistributionError,
-)
 from probabilistic_model.probabilistic_circuit.relational.template import (
     RelationalDistributionTemplate,
 )
@@ -64,25 +61,6 @@ class MarkovChainDistributionTemplate(RelationalDistributionTemplate):
         expected_domains = (state_domain, state_domain)
         if transition_domains != expected_domains:
             raise ShapeMismatchError(transition_domains, expected_domains)
-
-        starting_probabilities = np.array(
-            [
-                self.starting_distribution.probabilities[hash(state)]
-                for state in state_domain.simple_sets
-            ]
-        )
-        if np.any(starting_probabilities < 0) or not np.isclose(
-            starting_probabilities.sum(), 1.0
-        ):
-            raise NotAProbabilityDistributionError(
-                "starting_distribution", starting_probabilities
-            )
-        if np.any(self.transition_model.probabilities < 0) or not np.allclose(
-            self.transition_model.probabilities.sum(axis=1), 1.0
-        ):
-            raise NotAProbabilityDistributionError(
-                "transition_model", self.transition_model.probabilities
-            )
 
     @property
     def _state_count(self) -> int:

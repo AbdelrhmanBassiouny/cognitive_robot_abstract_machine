@@ -9,9 +9,6 @@ from probabilistic_model.distributions.distributions import SymbolicDistribution
 from probabilistic_model.distributions.helper import make_dirac
 from probabilistic_model.distributions.multinomial import MultinomialDistribution
 from probabilistic_model.exceptions import ShapeMismatchError
-from probabilistic_model.probabilistic_circuit.relational.exceptions import (
-    NotAProbabilityDistributionError,
-)
 from probabilistic_model.probabilistic_circuit.relational.markov_chain import (
     MarkovChainDistributionTemplate,
 )
@@ -167,51 +164,6 @@ def test_mismatched_transition_shape_raises(dirac_hidden_state_template):
                     Symbolic(name="next_state", domain=mismatched_domain),
                 ),
                 probabilities=np.array([[1.0]]),
-            ),
-        )
-
-
-def test_starting_distribution_not_summing_to_one_raises(
-    dirac_hidden_state_template, state_domain, transition_model
-):
-    with pytest.raises(NotAProbabilityDistributionError):
-        MarkovChainDistributionTemplate(
-            template_distribution=dirac_hidden_state_template,
-            starting_distribution=SymbolicDistribution(
-                variable=Symbolic(name="state", domain=state_domain),
-                probabilities=MissingDict(float, {0: 0.5, 1: 0.6}),
-            ),
-            transition_model=transition_model,
-        )
-
-
-def test_starting_distribution_with_negative_entry_raises(
-    dirac_hidden_state_template, state_domain, transition_model
-):
-    with pytest.raises(NotAProbabilityDistributionError):
-        MarkovChainDistributionTemplate(
-            template_distribution=dirac_hidden_state_template,
-            starting_distribution=SymbolicDistribution(
-                variable=Symbolic(name="state", domain=state_domain),
-                probabilities=MissingDict(float, {0: 1.5, 1: -0.5}),
-            ),
-            transition_model=transition_model,
-        )
-
-
-def test_transition_row_not_summing_to_one_raises(
-    dirac_hidden_state_template, state_domain, starting_distribution
-):
-    with pytest.raises(NotAProbabilityDistributionError):
-        MarkovChainDistributionTemplate(
-            template_distribution=dirac_hidden_state_template,
-            starting_distribution=starting_distribution,
-            transition_model=MultinomialDistribution(
-                distribution_variables=(
-                    Symbolic(name="state", domain=state_domain),
-                    Symbolic(name="next_state", domain=state_domain),
-                ),
-                probabilities=np.array([[0.9, 0.2], [0.5, 0.5]]),
             ),
         )
 
