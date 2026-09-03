@@ -94,6 +94,37 @@ put it in the default sync.
 - **Grep for the claim, not for its expected callers.** Three module docstrings kept a justification
   a review round had already shown false, because nothing looked for the sentence.
 
+## What actually stalled the extraction, found 2026-09-03
+
+The manifest called `bastler-package` in progress and still a draft. Both were wrong, and the second
+one is what hid the first: **#185 has been out of draft since 2026-08-23**, which in this workflow is
+the promotion approval rather than a loose end, and it has carried `needs-resolution` since
+2026-08-22, which withholds a branch from promotion. So the work was finished and approved, and held
+at the last step for twelve days by a conflict nothing in the plan recorded.
+
+The conflict is one file and one kind: `.claude/hooks/tests/test_setup_steps.py` was added on `main`
+inside a directory this branch renamed, so git reports `CONFLICT (file location)` and declines to
+place it. Its silent half is the one this plan's own process note already warns about twice:
+`.claude/hooks/setup_steps.py` merges with **no conflict at all**, because this branch moved
+`.claude/hooks/*.py` file by file rather than renaming that directory - and left where it lands it
+breaks the branch's own "no `.py` remains under `.claude/`" contract. Third occurrence. The check is
+still `git ls-tree -r origin/main --name-only .claude/ | grep '\.py$'` against the merged tree, and
+nothing runs it automatically.
+
+`bastler-first-time-setup` landing is what produced both files: upstream #577, merged into `main` at
+`017be2aa2` on 2026-09-01, while the manifest carried it as `in_progress`. This is the
+whichever-lands-second convention working exactly as the landing hazards section says it does.
+
+Two tooling defects turned up alongside, and neither belongs to this plan:
+
+- The maintenance routine's own comment promises that "later passes skip it rather than re-reporting
+  the same conflict". It re-reported 20 times between 2026-08-31 and 2026-09-03, roughly every two
+  hours. The label suppresses promotion but evidently not the report.
+- `plan-item-resolve/SKILL.md` instructs a session to record its findings with
+  `plan_item_bootstrap update` and to follow `${MANIFEST_STALENESS_DOCUMENT}`. Neither exists - the
+  script has only `record` and `open`, and no `manifest-staleness.md` is on any branch. The findings
+  here were written by editing `plan.yaml` directly instead.
+
 ## Open
 
 - Whether the package is ever published, and whether agent-provider plugins ship with it. Left to
