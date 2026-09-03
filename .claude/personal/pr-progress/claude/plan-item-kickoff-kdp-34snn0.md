@@ -1,58 +1,49 @@
 # `surfaces-found-by-looking` - PR #259 (draft)
 
 `knowledge-directed-perception`, `method-selection` track. Branch
-`claude/plan-item-kickoff-kdp-34snn0`, based on **#231**
-(`claude/choose-detection-method-gf64yp`), not on #222: `WorkspaceSurface.finish`
-and `.color` are #231's fields and the capability/rule-tree mechanism is #231's,
-so `depends_on` now records `choose-detection-method` alongside #222 and #216.
-#231 already carries #216.
+`claude/plan-item-kickoff-kdp-34snn0`, one commit (`f87d0b17`) off **#231**
+(`claude/choose-detection-method-gf64yp`) - not #222, because
+`WorkspaceSurface.finish` and the capability/rule-tree mechanism are #231's.
+`depends_on` now records `choose-detection-method` alongside #222 and #216.
 
-## The plan
+## Built
 
-Replace the tuned rectangle (`recorded_setup.searched_workspace()`) and the model
-read (`WorkspaceSurface.of_body`) with a surface *described* by what the twin
-states - a large horizontal plane, mirror-finished, colourless, of about the
-modelled size - and a finder compiled from that description.
+- `surface_finding.py`: `SoughtSurface`, `SurfaceFinder` +
+  `ModelledSurfaceFinder`/`MeasuredSurfaceFinder`, `SurfaceRules`.
+- `pipeline.table_in(frame)`, used by `detect` and by the drawn windows;
+  `rectify` takes a surface, `searched_surfaces` takes the table it searches.
+- `recorded_setup` states that Tracy's table is brushed steel.
+- `orthophoto`: `ImageWindow` + `WorkspaceBox.window_in`, with `clip` rewritten
+  in terms of them.
 
-1. `SurfaceFinder` family, each member declaring what it can find as an EQL
-   condition, mirroring `PieceDetector.capability`.
-2. Two members: the model read (base rule, always answerable) and a plane
-   measured in the depth image (refinement, only where the description says
-   enough to recognise one).
-3. `SurfaceRules` - the live tree, stated once, grown by `add_rule`, following
-   `DetectorRules`.
-4. Pipeline and `recorded_setup` ask the rules instead of reading the tuned file.
-5. `recorded_setup` states the recorded table's finish and colour beside
-   `TABLE_HEIGHT` (a recording carries no world; #239 owns saying the same about
-   the world).
+## Measured
 
-## Verification, tests first
+- Searched stretch 0.635 m2 (tuned) -> ~0.51 m2, and the untuned 1.2 m2 reaches
+  the **same** answer on all six captures. The tuning no longer decides.
+- 5/6 captures bit-identical to the parent; the 6th moves one prism 0.15 mm /
+  0.02 agreement, a two-valued fit that exists on the parent too.
+- `detect` 1.07x the parent, same-run interleaved. Measurement 0.061 s/frame
+  after reading only the pixels the surface's own space covers (was 0.100).
+- 429 passed / 1 skipped / 16 xfailed vs 390 / 1 / 16 on the parent.
 
-- Plane measurement alone: synthetic depth of a known plane with clutter recovers
-  its height and extent; no dominant plane raises.
-- Rules alone: described surface -> measurement, undescribed -> model, and a rule
-  added while the tree is in use changes the next answer (#231's behavioural test).
-- Captures: measured region strictly inside `WIDEST_WORKSPACE`, holds every
-  detection reported on all six, same detections measured as tuned. Extents read
-  from the run, never retyped. Cost as a ratio to a same-run baseline.
+## Decided along the way
 
-## Done so far
+- Only the extent is measured; the height stays the world's (it is recorded as
+  agreeing, and the lid's plane is derived from it).
+- Measured corners land on the modelled region's own grid - #238's lattice rule,
+  now pinned by a test.
+- The measurement declares it needs depth: #231's rendered fixture draws none.
 
-- Context gathered; roadmap read in full; deps `open_ready`; scope check run.
-- Branch cut off #231's tip (it arrived from `integration` - the #199 hazard, the
-  ninth time on this plan).
-- Draft PR #259 opened; manifest + roadmap section saved to personal-notes.
+## Outstanding
 
-## Next
+- `tune_workspace` is used by nothing but its own tests now; removal **asked on
+  the PR**, not taken.
+- #239 states the same finish on the twin's own surfaces - complementary, not a
+  duplicate; whichever merge happens first keeps #239's for the world.
+- Tracking-issue subscription was refused by the permission classifier, so this
+  session sees no structural plan changes as they arrive.
+- `plan_item_bootstrap.py open` hit the known 4-space indentation fault (7th
+  round on this plan); `plan.yaml` edited directly.
 
-- Write the failing tests for the plane measurement and the rules.
-- Build `SurfaceFinder`, its two members, and `SurfaceRules`.
-- Wire the pipeline and `recorded_setup`; measure over the six captures.
-- Ask on the PR whether `tune_workspace` should be removed (used only by its own
-  tests once this lands).
-
-## Flags
-
-- Tracking-issue subscription refused by the permission classifier - no push
-  channel for concurrent structural changes this round.
-- `plan_item_bootstrap.py open` failed on the known indentation fault (7th round).
+Per my notes: opening the PR ends this session's obligation to it. No watching,
+no scheduled checks.
