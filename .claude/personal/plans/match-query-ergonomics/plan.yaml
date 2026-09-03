@@ -308,7 +308,7 @@ items:
       AttributeMatch._symbolic_expression_ has no reader anywhere, left as a question.
       test/krrood_test 1919 passed, 5 skipped.
 
-      Resolved 2026-09-03, second round (roadmap section 29): conflicted an eighth time and reviewed
+      Resolved 2026-09-03, second round (roadmap section 30): conflicted an eighth time and reviewed
       a second time, and section 28's own report was again nine hours older than the review it said
       did not exist. The conflict was one hunk of cram2#590 (Markov-chain template), which extracted
       the part-prefix logic out of rspn.py into RelationalDistributionTemplate._prefix_for_part over
