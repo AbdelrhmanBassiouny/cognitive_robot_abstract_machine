@@ -1565,6 +1565,8 @@ Verification: full `test/krrood_test` 1925 passed, 5 skipped, excluding
 `test_object_diagram` failures are this container having no Graphviz `dot` binary,
 `which dot` finding none.
 
+## 31. 2026-09-03: the type a query reports, and the name it does not
+
 The developer's answer to the question section 30 left open: teach `Query` to report the
 type of the variable it selects, in its own pull request off `main`, then merge it into
 #192 and drop the `_variable_` it was standing in for. Done as
