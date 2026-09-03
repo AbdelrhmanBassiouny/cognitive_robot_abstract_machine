@@ -1686,3 +1686,25 @@ splitting means dissolving and re-creating the stack a second time - the same pr
 2026-09-01 entry records. The natural cut is one pull request per package, in the order they
 are already committed (`krrood`, then `segmind`, then `semantic_digital_twin`), each off `main`,
 with the stack re-footed on the last of them.
+
+## 2026-09-03: #169 is dirty against #244, and the record said it was healthy
+
+`/plan-item-resolve` found the item's manifest entry claiming `blockers: []` while the
+pull request has reported `dirty` since #244 moved. What is actually true of #169 right
+now, before anything is resolved:
+
+- **CI is green.** All 24 checks on the head `c8bf6f05` succeeded on 2026-09-02, coraplex
+  and the Tracy demo included. The gripper round (`7fa4b1936`) was the last real failure
+  and it is fixed.
+- **There are no review threads on it at all**, and no reviewer is waiting.
+- **The blocker is one merge.** #244 merged `main` a second time as `95f8483b`; #169 last
+  took #244 at `f38b9e87`. Five files conflict, and every one of them is the shape this
+  roadmap has now recorded six times: `main` moved something, and this branch's work sits
+  on where it used to be.
+
+The cross-plan comment on tracking issue #174 (`icra-experiments`, 2026-09-03) states that
+"#169's last CI round left three coraplex failures, a hanging Tracy demo job on
+`ExecutionType.REAL`, and `SimulationTimePacer.sleep()` with no bound". The first two are
+out of date — the gripper fix cleared both, and the demo job passes. `SimulationTimePacer.
+sleep()` is still unbounded and still a policy question for the developer, so that third
+item stands.

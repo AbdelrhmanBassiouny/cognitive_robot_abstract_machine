@@ -90,8 +90,22 @@ items:
     track: montessori-eql
     depends_on: [sdt_segmind_krrood_from_fast_monitor]
     status: in_progress
-    session: https://claude.ai/code/session_01CgSACpWiXinUgDRxzKX2X8
-    blockers: []
+    session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
+    blockers:
+      - >-
+        2026-09-03: the pull request reports `dirty` against its base #244. #244 merged
+        `main` again as `95f8483b` after #169 last took it at `f38b9e87`, and five files
+        conflict: `coraplex/plans/executables.py`, `robot_plans/actions/core/pick_up.py`
+        and `.../placing.py`, `experiments/ormatic_experiments/scalability.py`, and
+        `test/coraplex_test/test_plan/test_executables.py`. All five are collisions of
+        purpose, not of wording: `main` replaced `AttachNode`/`DetachNode` with
+        `ReAttachNode` and moved the action bodies into `sequential(...)`, rewrote the
+        motion state chart's monitors, and gave `get_classes_of_ormatic_interface` a
+        structured return, while this branch's tick budget, its
+        `Context.update_world_model_attachment` gating and its `grasped_object` sizing
+        all sit on the old shapes. Nothing outside the item has to move first, and CI on
+        the current head `c8bf6f05` is green in all 24 checks, so the conflict is the
+        whole of the blocker.
     notes: >
       Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6) cleared
       the conflicts that had left it dirty, plus the two integration breaks it exposed: the
