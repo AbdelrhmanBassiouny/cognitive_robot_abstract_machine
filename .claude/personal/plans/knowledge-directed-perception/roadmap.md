@@ -4023,3 +4023,97 @@ for, so `plan.yaml` was edited directly and pushed with `save-plan.sh --manifest
 the sixth round on this plan to work around that script, and the second distinct reason —
 the indentation fault #231, #236, #238, #239 and this item's own kickoff hit is one; a
 checkout older than the skill that calls it is another.
+
+## `imagination-world-rejects-what-a-predicate-refuses`: the plan, and the world a sighting is given a body in
+
+Kicked off 2026-09-03 in `auto` mode, as pull request #255. Dependency
+`perception-predicates-guide-the-search` (#227) reports `open_ready`, so it is ready to
+stack on.
+
+### It is based on #238, not on #227, and that is what the fold decided
+
+The item's `depends_on` names only #227, but the rename folded here on 2026-09-02 is
+counted on **#238's** tree: 53 references across 11 files there against 21 across 5 on
+#227, and the item's own note says "51 references across 10 files" -- #238's tree, a day
+earlier. Six of those files (`occupancy.py`, `step_by_step.py`, `watch_narrowing.py` and
+three test modules) exist on #238 and not on #227. Renaming on #227 would therefore name
+the type on half its readers and hand #238 the other half as a conflict, which is the one
+outcome the fold was taken to avoid. So `search-clipped-to-a-predicates-region` is a real
+dependency of this item and is recorded as one.
+
+### What is actually refused today, measured rather than assumed
+
+`PerceptionBackend._check_what_was_found` refuses a condition in exactly one case: it
+constrains a variable besides the thing sought, that variable is not one the statement
+described out of the world, and the look does not narrow itself by the relation
+(`narrowing_relations`, which for the Montessori backend is `SupportedBy`,
+`PlacementRelation` and `Colored`). Everything else it keeps as a residual condition and
+re-evaluates natively.
+
+That leaves two distinct faults, and the role fixes both:
+
+- **A relation stated about the thing sought and something the world holds** -- *in
+  contact with the board* -- is refused outright, because the look reports a sighting the
+  relation has nothing to be written over.
+- **A relation stated about the thing sought alone** -- *supporting something* -- is not
+  refused at all: it is kept as a residual and evaluated natively, where it reaches for
+  `_world` on a dataclass and raises. A refusal that is not even a refusal is the worse
+  half of the same fault.
+
+### What is built
+
+1. **`DetectedMontessoriShape`**, a `Role` for `MontessoriShape`, replacing
+   `MontessoriShapeDetection`. The role taker is the piece as the world would hold it: a
+   `HasRootBody` annotation over a body carrying the known piece's own geometry, standing
+   at the pose the look measured.
+2. **The imagined world**: one look spawns what it recognised into a copy of the world it
+   was taken in, so the original world is untouched and every detection has a subject.
+   Where the pipeline has no world, the copy is an empty one -- a sighting still needs a
+   body to be a body.
+3. **A relation the look could not narrow itself by is checked over what came back**
+   instead of refused, which is one change in `krrood`: the things a statement described
+   are pinned to the domain that answered them, so a condition relating the thing sought
+   to one of them evaluates natively. A condition constraining a variable that is neither
+   the thing sought nor described stays refused -- there is still nothing to evaluate it
+   against.
+4. **What the statement rejects is deleted**, through a `discard` on `PerceptionBackend`
+   that does nothing by default and, for the Montessori backend, removes the rejected
+   detections' bodies from the imagined world. The world a look leaves behind is then
+   exactly the answer.
+
+### Deliberately not built here
+
+- **Answering a description out of the look itself** -- *left of another object that has a
+  cyan colour*, where the other object is also only found by looking. It needs the second
+  variable to be answered by the same look rather than out of the world, which is a
+  mechanism of its own beyond giving a sighting a body, and the budget section directs
+  every item to the narrowest form that demonstrates its claim.
+- **Re-reading the narrowing relations against the bodies.** `relations_hold` still checks
+  a placement as a point and support by the surface's name, which is what the look
+  established. Reading them off the spawned bodies instead is a change to what #238 built
+  and is left to it.
+
+### Verification
+
+Tests first, at two levels so each failure names its own cause:
+
+- **`krrood`**, through the existing mimic `BackendThatLooksAtTheWorld` and its dataset
+  module, per krrood's self-containment rule: a statement stating a relation the look does
+  not narrow itself by is answered rather than refused; a sighting the relation rejects is
+  neither returned nor left in what the backend holds; a condition over a variable neither
+  sought nor described still raises `BackendCannotResolveCondition`.
+- **`experiments`**: a detection is a role whose taker stands at the measured pose in the
+  imagined world; the world the look was taken in is unchanged by it; and, end to end over
+  a capture, a statement stating a relation the backend cannot narrow itself by is answered
+  by evaluating it against the spawned bodies.
+
+Run under the environment five previous items recorded: `pip install -U uv` first, since
+the `uv` on `PATH` is 0.8.17 and cannot parse this repository's `pyproject.toml`, then
+`/usr/local/bin/uv sync --extra dev --python 3.12`.
+
+### Landing hazard
+
+The rename touches `occupancy.py`, `pipeline.py` and `detections.py`, which #232 and #236
+also change; they meet it when the merge reaches them. That cost was weighed when the fold
+was taken and is why the rename happens once, here, in the name the type will finally
+carry.

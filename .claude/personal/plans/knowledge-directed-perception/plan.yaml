@@ -804,12 +804,14 @@ items:
     and its local runs are the only signals it carries.'
 - id: imagination-world-rejects-what-a-predicate-refuses
   title: Reject what a predicate refuses, by testing it in a copy of the world
-  branch: null
-  pull_request_number: null
+  branch: claude/knowledge-directed-perception-imagination-g9hsnr
+  pull_request_number: 255
   track: request-language
   depends_on:
   - perception-predicates-guide-the-search
-  status: not_started
+  - search-clipped-to-a-predicates-region
+  status: in_progress
+  session: https://claude.ai/code/session_01WDteX4z7jQUBG4FZqMKG5m
   notes: 'The developer''s third mechanism on r3893499716, deferred out of #227 as a second pull request''s
     worth of work: a predicate no search algorithm covers is still answerable, by detecting what the other
     conditions do reach, spawning what was found into a copy of the world, evaluating the predicate there
