@@ -1479,3 +1479,86 @@ test asking for it, so neither test waits on another having run and two tests ru
 by side no longer write one path. The module under `-n 4` from a clean state goes from
 1 failed 5/5 runs to green 5/5. It is not a plan item - one pull request, in a suite this
 plan does not otherwise touch.
+
+`/plan-item-resolve match-query-ergonomics match-underscore-rename-and-forwarding`, in
+auto mode. Two things were live and the manifest recorded neither: the eighth
+`needs-resolution` conflict, and a second review round left at 14:45-14:54 on the same
+day section 28's own report went up at 06:01. That is the second consecutive round in
+which the developer's review arrived within hours of a report saying there was none -
+section 28 recorded it happening fourteen minutes later, this one nine hours - so it is
+a pattern rather than an accident, and re-reading the threads is now the first thing a
+resolve on this item should do rather than a step it can reach after the conflict.
+
+**The conflict was one hunk, and main's side is simply better.** `main` took cram2#590
+(a Markov-chain template), which extracted the part-prefix logic out of `rspn.py` into
+`RelationalDistributionTemplate._prefix_for_part` and turned the module-level
+`_rename_variables_with_part_prefix` into a circuit method. This branch had renamed
+`part.variable` to `part._variable_` on those same lines. Nothing disagreed: main
+restructured where the prefix is computed, this branch changed what it reads, so the
+resolution takes main's extraction and the extracted helper reads `_variable_`.
+
+**Section 6's hazard finally had something to catch, in a test main landed.** Sections
+26 and 27 both swept for new readers of the renamed fields and both found none, because
+#575's code reached a match only through the public `expression` this branch still kept.
+#590 is the first arrival after section 28 removed all three properties, and it reads two
+of the renamed names:
+
+- `test_markov_chain.py:146` builds its parts from `room_query.kwargs["objects"]`. With
+  `kwargs` behind the convention, that is a symbolic `Attribute` indexed by a string, so
+  `ground` was handed an `IndexByValue` and died on `len()` - loud, and only because
+  `ground` happens to measure its argument first.
+- `test_markov_chain.py:186,217,255` interpolate `f"{part.variable}.type"` into a
+  variable name. That one is silent: the f-string renders the repr of a symbolic
+  attribute, so the lookup finds nothing and the test fails on an empty match rather
+  than on the name being wrong.
+- `template.py:52` reads `str(part.variable)` for the namespace prefix. Silent in the
+  same way, and in production code rather than a test.
+
+All three now read `_variable_` / `_kwargs_`. The lesson is the sweep's, not the
+hazard's: a clean sweep on one merge says nothing about the next one, and it was clean
+twice only because the property removal had not landed yet.
+
+**The review round: three threads taken, one refused with a measurement.**
+
+*The `_variable_` detour in `test_causes_effect.py` was a rename that should have been a
+migration.* The round that migrated that file's evaluation tests to read the match
+directly left its six construction tests spelled `._variable_`, which is the mechanical
+`.variable` -> `._variable_` rename applied where the migration was meant to go. All six
+read the match now and all six still pass, the four `rejects` ones proving it rather than
+the two `accepts` ones, since only a rejection pins that the comparator was really built
+and really validated. The binding is also renamed `arm` -> `pick`: it was never an arm,
+and `arm.arm == 0.3` is what a wrong name reads like once it is written twice.
+
+*The `.resolve()` statements divide in two, and only measuring separates them.* In the
+match-verbalization tests they are redundant - `MatchPlanner` calls `match.resolve()`
+itself, so the test was forcing a lowering the code under test forces - and all three
+come out with every expected string unchanged. In the feature-extraction tests they are
+load-bearing: without `room_query.resolve()` the grounded circuit carries `SceneObject.type`
+instead of the per-position `SceneRoom.objects[i].type`, and seven tests fail. One of
+those, `test_feature_extraction_with_aggregations`, keeps its call while asserting only
+`model.is_valid()`, which passes either way - so removing it there would have changed
+what is grounded without anything noticing, which is why "it still passes" was not
+accepted as the answer.
+
+**What a query-rooted chain still cannot do, measured rather than assumed.** The
+developer's "remove `_variable_` in all similar ones" does not reach the four
+`translate()` sites in `test_random_events_translator.py`, and the reason is not the
+match. `Query._type_` is `None` - `SymbolicExpression._type__` delegates to `self._var_`
+and a query *is* its own `_var_`, so the delegation never fires - and therefore every
+attribute chain built on a query carries no type. `WhereExpressionToRandomEventTranslator`
+reads `comparator.left._type_` to build its random-events variable, so a match-rooted
+chain reaches it with `_type_ = None` and it raises `TypeError: issubclass() arg 1 must
+be a class`. Confirmed pre-existing on `main`, with no match involved:
+`entity(v).position.x._type_` is `None` there too, and so is
+`a(Pose).expression.position.x._type_`. Inside a `where` it never shows, because #182
+re-roots the chain onto the variable at attachment and the re-rooted chain has the type;
+it shows exactly where a chain is used away from the query it was taken from - the same
+place section 28's `marginalize_for` bug lived, one layer down. Fixing it means teaching
+`Query` to report the type of the variable it selects, which changes a class `main` owns
+for every query in the language, so per section 20's rule it is left as a finding for the
+developer to route rather than folded in here.
+
+Verification: full `test/krrood_test` 1925 passed, 5 skipped, excluding
+`test_rustworkx_utils` and `test_symbolic_math` (`flask`/`casadi`); the two
+`test_object_diagram` failures are this container having no Graphviz `dot` binary,
+`which dot` finding none.
