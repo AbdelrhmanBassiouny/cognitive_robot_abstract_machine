@@ -11,10 +11,12 @@ dynamic = ["version"]
 dependencies = [
     "line_profiler",
     "opencv-python>=4.11.0.86",  # The Montessori perception package decodes and rectifies camera frames with it
+    "flask",  # The Montessori event dashboard serves its live event page with it
     "coraplex",
     "giskardpy",
     "krrood",
     "random_events",
+    "segmind",
     "semantic_digital_twin",
 ]
 

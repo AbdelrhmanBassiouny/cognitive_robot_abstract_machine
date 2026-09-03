@@ -15,7 +15,7 @@ from segmind.datastructures.object_tracker import (
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body, Region
 
 
 @dataclass
@@ -53,11 +53,18 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
     tracked_object: Body
     """The primary object involved in this event."""
 
-    with_object: Optional[Body] = None
-    """The secondary object involved in this event, if any."""
+    with_object: Optional[Body | Region] = None
+    """
+    The secondary object involved in this event, if any.
+
+    Usually a :class:`Body`; an event involving a hole (e.g. contact with an
+    :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture`)
+    sets this to that aperture's own :class:`Region` root instead, since an aperture is a
+    virtual opening rather than a collidable body.
+    """
 
     @property
-    def tracked_objects(self) -> List[Body]:
+    def tracked_objects(self) -> List[Body | Region]:
         """
         :return: the primary object, plus the secondary object when present.
         """
@@ -177,6 +184,24 @@ class StopRotationEvent(MotionEvent):
     ...
 
 
+@dataclass(init=False, unsafe_hash=True)
+class LiftEvent(MotionEvent):
+    """
+    Represents an event where a grasped object starts moving upward along the Z axis.
+    """
+
+    ...
+
+
+@dataclass(init=False, unsafe_hash=True)
+class StopLiftEvent(MotionEvent):
+    """
+    Represents an event where a lifted object stops moving upward.
+    """
+
+    ...
+
+
 @dataclass(unsafe_hash=True)
 class AbstractContactEvent(EventWithTrackedObjects, ABC):
     """
@@ -216,15 +241,18 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     """
 
     def __post_init__(self):
+        # combined_mesh (not tracked_object.collision.combined_mesh directly) so this
+        # also works when with_object is a hole's Region root, which exposes its
+        # geometry via .area rather than .collision.
         self.bounding_box = VolumetricBoundingBox.from_mesh(
-            self.tracked_object.collision.combined_mesh,
+            self.tracked_object.combined_mesh,
             origin=self.tracked_object.global_pose.to_homogeneous_matrix(),
         )
         self.pose = self.tracked_object.global_pose
 
         if self.with_object is not None:
             self.with_object_bounding_box = VolumetricBoundingBox.from_mesh(
-                self.with_object.collision.combined_mesh,
+                self.with_object.combined_mesh,
                 origin=self.with_object.global_pose.to_homogeneous_matrix(),
             )
             self.with_object_pose = self.with_object.global_pose
@@ -243,6 +271,30 @@ class ContactEvent(AbstractContactEvent):
 class LossOfContactEvent(AbstractContactEvent):
     """
     Represents an event where two objects are no longer in contact with each other.
+    """
+
+    ...
+
+
+@dataclass(unsafe_hash=True)
+class GraspEvent(EventWithTrackedObjects):
+    """
+    Represents an event where an object starts being held by a gripper: in contact with
+    both of the gripper's fingers, and close to its tool center point.
+
+    :attr:`~EventWithTrackedObjects.with_object` is the gripper's own tool center point
+    body (its ``tool_frame``), not either finger individually.
+    """
+
+    ...
+
+
+@dataclass(unsafe_hash=True)
+class LossOfGraspEvent(EventWithTrackedObjects):
+    """
+    Represents an event where an object previously held by a gripper (see
+    :class:`GraspEvent`) is no longer in contact with both of its fingers and close to
+    its tool center point.
     """
 
     ...
@@ -277,9 +329,16 @@ class InsertionEvent(EventWithTrackedObjects):
     List of objects into which the object was inserted.
     """
 
-    @property
-    def through_hole(self) -> Aperture:
-        return self.with_object.get_semantic_annotations_by_type(type_=Aperture)[0]
+    through_hole: Optional[Aperture] = None
+    """
+    The aperture :attr:`~EventWithTrackedObjects.with_object` (its own ``Region`` root)
+    was detected passing through.
+
+    Set directly by the detector that builds this event, which already has the
+    aperture in hand (via ``SegmindContext.hole_regions``) rather than derived from
+    ``with_object`` here: a hole's root is a virtual ``Region``, not a ``Body``, and has
+    no reliable way to look its owning annotation back up on its own.
+    """
 
     def __str__(self) -> str:
         with_object_name = " - " + " - ".join(

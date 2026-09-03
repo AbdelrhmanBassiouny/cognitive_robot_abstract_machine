@@ -15,6 +15,18 @@ same rviz the physical robot renders in (via ``WorldSynchronizer``), so its posi
 be checked against the real cube before the pickup runs -- the script pauses for that
 check right after spawning it.
 
+Each pick is watched by a SegMind :func:`~experiments.tracy_experiments.montessori.
+event_monitoring.build_pick_monitor` monitor -- support, grasp, lift and pick-up, but
+no hole-contact or insertion, since the shapes here are bare bodies with no board model.
+Its events stream to the live dashboard at ``http://127.0.0.1:5000`` while the demo
+runs, and a per-shape yes/no verdict is logged after each pick.
+
+While a shape is carried to its hole, the left gripper's knuckle joint is watched for
+slip: the close is re-commanded a little past fully closed on a fixed period and, if the
+fingers then travel past where the grasp first settled, the shape has left the pads (see
+:mod:`~experiments.tracy_experiments.montessori.gripper_feedback`). Each poll's verdict
+is logged, and a slip also shows on the dashboard as a ``GripperSlipEvent``.
+
 Run with (``iai_tracy_description`` and the Giskard/world-fetcher ROS stack must be
 running)::
 
@@ -37,6 +49,7 @@ import signal
 import subprocess
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -76,8 +89,34 @@ from experiments.montessori.world import (
     _shape_body,
 )
 from experiments.tracy_experiments.equipment import table_top_z as read_table_top_z
+from experiments.tracy_experiments.montessori.event_dashboard import (
+    EventFeed,
+    run_dashboard,
+)
+from experiments.tracy_experiments.montessori.event_monitoring import (
+    MontessoriEventMonitor,
+    build_pick_monitor,
+)
 from experiments.tracy_experiments.montessori.grasp_widths import GraspCloseTable
+from experiments.tracy_experiments.montessori.gripper_feedback import (
+    GraspVerdict,
+    GripperJointStateListener,
+    GripperSlipEvent,
+    LiveGraspGuard,
+    confirm_grasp,
+    reclose_setpoint_for,
+)
 from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperController
+from segmind.datastructures.events import (
+    DetectionEvent,
+    GraspEvent,
+    LiftEvent,
+    LossOfGraspEvent,
+    LossOfSupportEvent,
+    PickUpEvent,
+    SupportEvent,
+)
+from segmind.detectors.base import SegmindContext
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
@@ -122,8 +161,7 @@ world's root frame.
 
 BOARD_TABLE_CLEARANCE = 0
 """
-Vertical offset added to the read table-top height when seating the board, matching the
-same correction :func:`_add_cube` applies to the cube.
+Vertical offset added to the read table-top height when seating the board.
 """
 
 PLACE_HOVER = 0.04
@@ -131,10 +169,34 @@ PLACE_HOVER = 0.04
 Height above the board's top surface at which a shape is released over its hole.
 """
 
-SHAPE_TABLE_CLEARANCE = 0.04
+GRASP_HEIGHT_OFFSET = 0.04
 """
-Vertical offset added to the read table-top height when seating a loose shape, so its
-model rests where the real object does.
+Height, in metres, the reach, grasp and lift are aimed above a loose shape's own centre.
+
+The shapes and cube are spawned resting on the table (:func:`_add_montessori_shape`,
+:func:`_add_cube`), so the model sits where the real object does and SegMind's own
+model-based support and contact detectors see it on the table. This offset then lifts
+the grasp target back up by the same distance the shapes used to be spawned hovering, so
+the arm still reaches where it did before the spawn was lowered. A starting point to
+tune on hardware, not a measured value.
+"""
+
+SLIP_WATCH_INTERVAL_SECONDS = 1.0
+"""
+Seconds between the slip watch's re-closes while a shape is carried to its hole (see
+:class:`~experiments.tracy_experiments.montessori.gripper_feedback.LiveGraspGuard`).
+"""
+
+POST_LIFT_SETTLE_SECONDS = 5.0
+"""
+Seconds to hold still after the lift before the grasp is read and the slip watch starts.
+
+The knuckle keeps moving for a moment after the shape leaves the table: the fingers take
+up the piece's weight and it settles between the pads. Reading immediately catches that
+transient, which both seeds
+:class:`~experiments.tracy_experiments.montessori.gripper_feedback.SlipDetector` from a
+position the grasp has not actually reached and risks a first poll that reads the
+still-settling travel as a slip.
 """
 
 
@@ -211,7 +273,7 @@ def _add_cube(world: World, mounted_table_top_z: float) -> Body:
             ]
         ),
     )
-    cube_center_z = mounted_table_top_z + CUBE_SIZE / 2 + SHAPE_TABLE_CLEARANCE
+    cube_center_z = mounted_table_top_z + CUBE_SIZE / 2
     with world.modify_world():
         world.add_kinematic_structure_entity(cube)
         world.add_connection(
@@ -264,6 +326,17 @@ def _hole_place_pose(
     )
 
 
+def _grasp_target_pose(body: Body, grasp_height_offset: float) -> Pose:
+    """
+    :return: The pose the reach, grasp and lift are aimed at: ``body``'s own origin
+        raised by ``grasp_height_offset`` (see :data:`GRASP_HEIGHT_OFFSET`).
+
+    The shapes are spawned resting on the table, with no roll or pitch, so the offset
+    along the body frame's own vertical is the offset along the world's.
+    """
+    return Pose.from_xyz_rpy(0.0, 0.0, grasp_height_offset, reference_frame=body)
+
+
 def _add_montessori_shape(
     world: World, mounted_table_top_z: float, target: PickTarget
 ) -> Body:
@@ -279,7 +352,7 @@ def _add_montessori_shape(
     body = _shape_body(
         PrefixedName(target.name), target.category, _hole_footprint(target.category)
     )
-    shape_center_z = mounted_table_top_z + target.half_height + SHAPE_TABLE_CLEARANCE
+    shape_center_z = mounted_table_top_z + target.half_height
     with world.modify_world():
         world.add_kinematic_structure_entity(body)
         world.add_connection(
@@ -324,6 +397,41 @@ def _add_montessori_board(world: World, mounted_table_top_z: float) -> Body:
     return board
 
 
+REPORTED_PICK_EVENT_TYPES: tuple[type, ...] = (
+    SupportEvent,
+    LossOfSupportEvent,
+    GraspEvent,
+    LossOfGraspEvent,
+    LiftEvent,
+    PickUpEvent,
+)
+"""
+Event types :func:`_log_pick_events` reports a yes/no on after each shape's pick.
+"""
+
+
+def _log_pick_events(body: Body, monitor: MontessoriEventMonitor) -> None:
+    """
+    Log which of :data:`REPORTED_PICK_EVENT_TYPES` SegMind detected for ``body``.
+
+    :param body: The shape body the monitor tracked.
+    :param monitor: The stopped monitor that tracked it.
+    """
+    events = monitor.events
+
+    def detected(event_type: type) -> bool:
+        return any(
+            isinstance(event, event_type) and event.tracked_object is body
+            for event in events
+        )
+
+    verdicts = ", ".join(
+        f"{event_type.__name__}={detected(event_type)}"
+        for event_type in REPORTED_PICK_EVENT_TYPES
+    )
+    logger.info("segmind for %s: %s", body.name, verdicts)
+
+
 @dataclass
 class _SortingRig:
     """
@@ -337,8 +445,17 @@ class _SortingRig:
     world: World
     """The live, fetched world."""
 
+    robot: Tracy
+    """The robot doing the sorting, for the SegMind grasp and lift detectors."""
+
+    feed: EventFeed
+    """Sink the per-shape SegMind events are streamed to for the live dashboard."""
+
     gripper: RobotiqGripperController
     """Direct Robotiq gripper control, bypassing Giskard."""
+
+    gripper_listener: GripperJointStateListener
+    """Live knuckle-position feed for the pick arm, read by the slip watch."""
 
     grasp_description: GraspDescription
     """Grasp used for every shape."""
@@ -352,6 +469,15 @@ class _SortingRig:
     close_table: GraspCloseTable = field(default_factory=GraspCloseTable)
     """Per-shape close setpoint the grasp is sized to."""
 
+    grasp_height_offset: float = GRASP_HEIGHT_OFFSET
+    """Height the reach, grasp and lift are aimed above a shape's own centre."""
+
+    slip_watch_interval: float = SLIP_WATCH_INTERVAL_SECONDS
+    """Seconds between the slip watch's re-closes while carrying a shape."""
+
+    post_lift_settle: float = POST_LIFT_SETTLE_SECONDS
+    """Seconds to let the grasp settle after the lift before it is read."""
+
     def sort(
         self, body: Body, category: MontessoriShapeCategory, half_height: float
     ) -> None:
@@ -361,20 +487,23 @@ class _SortingRig:
 
         The gripper is opened and closed through :attr:`gripper` rather than a plan
         node, since Giskard cannot command Tracy's real fingers, and the close is sized
-        to ``category`` via :attr:`close_table`.
+        to ``category`` via :attr:`close_table`. The reach and lift are aimed
+        :attr:`grasp_height_offset` above ``body``'s own centre, since the shape is
+        spawned resting on the table.
 
         :param body: The shape to sort, already spawned on the table.
         :param category: The board hole the shape belongs to, and the shape whose close
             setpoint the grasp uses.
         :param half_height: Half the shape's own height, for seating it above the hole.
         """
+        grasp_target = _grasp_target_pose(body, self.grasp_height_offset)
         reach = ReachAction(
-            target_pose=Pose(reference_frame=body),
+            target_pose=grasp_target,
             object_designator=body,
             arm=PICK_ARM,
             grasp_description=self.grasp_description,
         )
-        _, _, lift_to_pose = self.grasp_description.grasp_pose_sequence(body)
+        _, _, lift_to_pose = self.grasp_description.pose_sequence(grasp_target, body)
         place_target = _hole_place_pose(
             self.world, self.table_top_z, category, half_height
         )
@@ -425,13 +554,98 @@ class _SortingRig:
             context=self.context,
         ).plan
 
-        self.gripper.move(PICK_ARM, GripperState.OPEN)
-        reach_plan.perform()
-        self.gripper.close_to(PICK_ARM, self.close_table.setpoint_for(category))
-        lift.perform()
-        place.perform()
-        self.gripper.move(PICK_ARM, GripperState.OPEN)
-        retract_and_park.perform()
+        monitor = build_pick_monitor(
+            world=self.world, tracked_body=body, robot=self.robot, arm=PICK_ARM
+        )
+        shape_name = body.name.name
+        monitor.context.require_extension(SegmindContext).logger.add_callback(
+            DetectionEvent,
+            lambda event, name=shape_name: self.feed.publish(name, event),
+        )
+        close_setpoint = self.close_table.setpoint_for(category)
+        monitor.start()
+        try:
+            self.gripper.move(PICK_ARM, GripperState.OPEN)
+            reach_plan.perform()
+            self.gripper.close_to(PICK_ARM, close_setpoint)
+            lift.perform()
+            self._carry_watching_for_slip(body, close_setpoint, place.perform)
+            self.gripper.move(PICK_ARM, GripperState.OPEN)
+            retract_and_park.perform()
+        finally:
+            monitor.stop()
+        _log_pick_events(body, monitor)
+
+    def _carry_watching_for_slip(
+        self, body: Body, close_setpoint: float, carry: Callable[[], None]
+    ) -> None:
+        """
+        Run ``carry`` -- the transport and release -- while watching the left gripper's
+        knuckle joint for ``body`` slipping out.
+
+        The grasp is first given :attr:`post_lift_settle` seconds to settle: the lift has
+        just transferred the shape's weight onto the fingers and the knuckle is still
+        moving, so a reading taken now would seed the slip detector from a position the
+        grasp never reaches. Then the close is firmed to ``close_setpoint`` and the
+        knuckle read once: an empty
+        gripper (the grasp missed) skips the watch. Otherwise a re-close just past
+        ``close_setpoint`` is commanded every :attr:`slip_watch_interval` seconds for as
+        long as ``carry`` runs; each
+        poll's verdict is logged, and a slip also streams a
+        :class:`~experiments.tracy_experiments.montessori.gripper_feedback.
+        GripperSlipEvent` to the dashboard.
+
+        :param body: The shape being carried.
+        :param close_setpoint: The shape's own close setpoint, re-commanded to firm the
+            grasp before the knuckle is read.
+        :param carry: Runs the transport-and-place motion.
+        """
+        shape_name = body.name.name
+        time.sleep(self.post_lift_settle)
+        self.gripper.close_to(PICK_ARM, close_setpoint)
+        confirmation = confirm_grasp(self.gripper_listener.latest_closure)
+        logger.info("%s: grasp check -> %s.", shape_name, confirmation.verdict)
+        if confirmation.slip_detector is None:
+            carry()
+            return
+
+        guard = LiveGraspGuard(
+            controller=self.gripper,
+            listener=self.gripper_listener,
+            arm=PICK_ARM,
+            slip_detector=confirmation.slip_detector,
+            period=self.slip_watch_interval,
+            reclose_setpoint=reclose_setpoint_for(close_setpoint),
+        )
+        carry_done = threading.Event()
+        watcher = threading.Thread(
+            target=guard.watch,
+            args=(
+                lambda: not carry_done.is_set(),
+                lambda verdict: self._report_slip_verdict(body, verdict),
+            ),
+            daemon=True,
+            name=f"slip-watch-{shape_name}",
+        )
+        watcher.start()
+        try:
+            carry()
+        finally:
+            carry_done.set()
+            watcher.join(timeout=2.0)
+
+    def _report_slip_verdict(self, body: Body, verdict: GraspVerdict) -> None:
+        """
+        Log one slip-watch poll and, if ``body`` has slipped, stream a
+        :class:`~experiments.tracy_experiments.montessori.gripper_feedback.
+        GripperSlipEvent` for it to the dashboard.
+
+        :param body: The shape being carried.
+        :param verdict: The poll's held-or-slipped verdict.
+        """
+        logger.info("%s: slip watch -> %s.", body.name.name, verdict)
+        if verdict is GraspVerdict.OBJECT_SLIPPED:
+            self.feed.publish(body.name.name, GripperSlipEvent(tracked_object=body))
 
 
 def _parse_arguments() -> argparse.Namespace:
@@ -481,6 +695,9 @@ def main() -> None:
 
     arguments = _parse_arguments()
 
+    feed = EventFeed()
+    run_dashboard(feed)
+
     rclpy.init()
     node = rclpy.create_node("tracy_pickup_demo_real")
     executor = MultiThreadedExecutor()
@@ -529,9 +746,18 @@ def main() -> None:
     # still runs through the plan; the gripper is driven straight through its Robotiq
     # action server instead.
     gripper = RobotiqGripperController(node)
+    gripper_listener = GripperJointStateListener(node=node, arm=PICK_ARM)
     tool_frame = ViewManager.get_end_effector_view(PICK_ARM, robot).tool_frame
     rig = _SortingRig(
-        context, world, gripper, grasp_description, tool_frame, table_top_z
+        context,
+        world,
+        robot,
+        feed,
+        gripper,
+        gripper_listener,
+        grasp_description,
+        tool_frame,
+        table_top_z,
     )
 
     park = sequential([ParkArmsAction(PICK_ARM)], context=context).plan
