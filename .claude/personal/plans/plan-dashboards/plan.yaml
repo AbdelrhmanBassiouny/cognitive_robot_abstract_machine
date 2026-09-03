@@ -400,6 +400,22 @@ items:
     an identifier it cannot resolve, so a mistyped dependency counts as ready. After this
     item an unresolvable entry is a validation error, never silently ready.
 
+    Review round 2026-09-03, seven threads plus a note about context, all applied in
+    b9e53be9. Its substance changed three things the plan above described differently.
+    PlanDirectory reads one manifest on demand rather than every manifest up front, and
+    the skill extracts manifests and the URL cache only, never another plan's roadmap -
+    the reviewer's point being that a per-plan size budget is defeated the moment one
+    plan's dashboard run drags in another's contents. The resolver's list carries no
+    None: Dependency is a family, ResolvedDependency plus UnresolvedDependency, which
+    keeps every entry countable without a hole and moves readiness, the chip and
+    live-state classification onto it - so items_by_reference became DependencyResolver,
+    shared with check_dependency_readiness.py, whose own duplicate _resolve is gone. The
+    union-graph walk and its cycle search became DependencyGraph and CycleSearch, no
+    nested functions. Fixed strings got one home each: ManifestKey, PlanFile,
+    SUPPORTED_SCHEMA_VERSION, and a DependencyReadiness dataclass behind the readiness
+    JSON; the tests read every fixture value back out of the manifests that declare it,
+    through a shared tests/fixture_plans.py.
+
     Done when the recorded cross-plan blockers become references and render as chips:
     icra-experiments' integrated-simulation-pipeline ->
     montessori-eql-stack/montessori_fast_inline_monitor, its failure-taxonomy-and-typing and

@@ -176,3 +176,46 @@ rather than matched as a string. The `TextOfElementsWithClass` helper that does 
 lives on `#184`'s branch, so this branch asserts the chip's own fields and leaves adopting
 that helper to the merge - building a second copy of it is how two branches end up with
 one artifact twice.
+
+Note for that merge: `items_by_reference` is now `DependencyResolver`, so the one path the
+two branches should converge on is a class, not a dict.
+
+### What the review round settled, 2026-09-03
+
+Seven threads and one note on the review itself, applied in `b9e53be9`. Three of them
+changed a decision recorded above rather than only the code, so they belong here.
+
+**Read what a reference names, not what the directory holds.** The first cut loaded every
+manifest under the plans directory up front. The reviewer's objection is the one this
+plan's sibling `plan-size-limits` exists for: a per-plan budget is defeated the moment one
+plan's dashboard run pulls in every other plan's contents. `PlanDirectory` now opens the
+directory - reading only the small URL cache - and reads one manifest the first time
+something names its plan, so a plan nothing depends on costs what an absent plan costs.
+The skill's extraction narrowed to match: `*/plan.yaml` and the URL cache, never a
+roadmap, and step 1 now says in as many words not to read any of them by hand. What
+reaches the page from a foreign plan was already bounded to one chip - reference, title,
+plan title, live state - and `plan-schema.md` now writes that down so it stays that way.
+
+**An entry that names nothing is a class, not a hole.** The silent-ready fault was fixed
+by returning `None` per unresolvable entry and having every caller refuse to treat `None`
+as satisfied - which works, and puts the same guard in three places. `Dependency` is now
+an ABC over `ResolvedDependency` and `UnresolvedDependency`: an entry always resolves to
+*something*, the something answers `False` to both readiness questions, and the guards,
+the `zip` over `depends_on` and the renderer's `_dashboard_url_of` all disappear. The
+general lesson, since it is the third time this file has hit it: when a hole in a
+collection needs the same check at every reader, the hole wanted to be a subclass.
+
+**One resolver means one class, not one dict.** `items_by_reference` was a dict the
+renderer built and every reader indexed; `check_dependency_readiness.py` had its own
+`_resolve` doing the same job beside it. Both are `DependencyResolver` now, so the claim
+that every reader of `depends_on` goes through one resolver is enforced rather than
+observed.
+
+The rest were fixed strings and nested functions: `ManifestKey`, `PlanFile`,
+`SUPPORTED_SCHEMA_VERSION`, `DependencyReadiness`/`ReadinessField` in place of a
+four-key dict written twice, and `DependencyGraph`/`CycleSearch`/`VisitState` in place of
+a function holding two closures and three bare integers. On the test side the rule that
+paid off is worth keeping: **assert against the file that declares the value, not a
+retyped copy** - the fixture plans' repository, titles and pull request numbers are read
+back out of their manifests through a shared `tests/fixture_plans.py`, and only the ids
+are named in code, because an id is how a test points at a fixture at all.
