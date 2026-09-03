@@ -324,24 +324,36 @@ which #196 is currently changing, so reusing it would couple this branch to an u
 
 **Steps, tests first.**
 
-1. `test_set_of_ranking.py` — the two end-to-end wordings above, asserted in full.
-2. `test_coreference.py` — a unit test of the new `ReferringExpressions` state (that file's
-   stated subject is exactly the pre-computed / cross-build state).
-3. `microplanning/referring.py` — record which aggregation words name more than one aggregate.
-4. `grammar/aggregation/rules.py` — give the noun phrase a `referent_id` only when its
-   aggregation word names one aggregate.
+1. The two end-to-end wordings above, asserted in full, plus a unit test of the new
+   `ReferringExpressions` state. Planned for `test_set_of_ranking.py` and `test_coreference.py`;
+   both moved into one new module during implementation, for the reason in the next section.
+2. `microplanning/referring.py` — record which aggregations more than one aggregate is built from.
+3. `grammar/aggregation/rules.py` — give the noun phrase a `referent_id` only when its
+   aggregation names one aggregate.
 
-Verification: `pytest test/krrood_test/test_eql/test_verbalization` (767 passed / 3 skipped
+Verification: `pytest test/krrood_test/test_eql/test_verbalization` (768 passed / 3 skipped
 before the change), which includes `test_rule_doctests.py`, plus
 `scripts/format_docstrings.py` on the modified files.
 
-**Scope overlap, recorded rather than resolved.** `check_scope_overlap.py --base origin/main`
-over the four paths this touches reports one shared path with unlanded #196:
-`test_set_of_ranking.py`, where both append a new test section at the tail. Removing the
-overlapping edits still leaves the whole source fix, so this is real separate work and not a
-fold; whichever lands second resolves a trivial tail-of-file conflict. The two tests added
-here rank by the *first* selected aggregate on purpose, so their expected text is the same
-before and after #196 lands. #248, #192, #254 and #33 share no paths.
+**Scope overlap: avoided rather than accepted.** The first draft of this plan put the tests in
+`test_set_of_ranking.py`, which unlanded #196 is also appending to, and recorded the resulting
+tail-of-file conflict as a cost to pay. Writing #196's added tests out showed the collision was
+worse than that: it defines an `Invoice` mimic with exactly the fields this item needs
+(`period`, `net`, `tax`), so the two branches would have defined the same fixture in the same
+module. The tests therefore live in a module of their own,
+`test_eql/test_verbalization/test_aggregate_reference.py`, named for the behaviour — how a
+computed quantity is referred back to — rather than for `set_of` ranking, which is the file's
+subject and not this one's. `check_scope_overlap.py --base origin/main` over the three files this
+branch touches now reports no shared path with #196, #248, #192, #254 or #33.
+
+**What shipped.** `ReferringExpressions.shared_aggregations` records the aggregations more than
+one aggregate in the scanned expression is built from; `AggregatorRule.build` gives its noun
+phrase a `referent_id` only when the aggregation names one aggregate, so an aggregate with a
+same-word sibling is described in full at every mention. Six tests, written first and failing:
+the two ambiguous wordings, the two cases that must still shorten (a lone sum; a sum beside an
+average), and the pre-scan itself. `test_eql/test_verbalization` 768 -> 774 passed with 3 skipped
+and no existing expectation changed; `test_eql` 1291 passed (`test_typing` needs `mypy`, absent
+from this environment).
 
 **Tooling note, not this item's work.** `plan_item_bootstrap.py open` could not record this
 item: it writes `branch` / `pull_request_number` / `status` / `session` at a four-space indent
