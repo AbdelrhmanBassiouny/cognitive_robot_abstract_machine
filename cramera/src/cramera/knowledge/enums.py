@@ -108,12 +108,17 @@ class PlanNodeGroup(LabelledGroup):
         """
         The group a coraplex plan-node class belongs to.
 
+        Coraplex states a re-parent as ``ReAttachNode``; ``AttachNode`` and
+        ``DetachNode``, the two classes it replaced, are still what bundles recorded
+        before that carry.
+
         :param kind: The plan node's own class name, as recorded or observed live.
         """
         return {
             "ActionNode": cls.ACTION,
             "MotionNode": cls.MOTION,
             "ConditionNode": cls.CONDITION,
+            "ReAttachNode": cls.ATTACHMENT,
             "AttachNode": cls.ATTACHMENT,
             "DetachNode": cls.ATTACHMENT,
         }.get(kind or "", cls.OTHER)

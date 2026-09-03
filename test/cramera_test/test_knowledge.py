@@ -9,6 +9,7 @@ import pytest
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
 from coraplex.datastructures.enums import Arms  # noqa: E402
+from coraplex.plans.attachment_nodes import ReAttachNode  # noqa: E402
 
 from semantic_digital_twin.datastructures.prefixed_name import (
     PrefixedName,
@@ -416,7 +417,9 @@ class TestPlanGroups:
         self, fixture_scene, monkeypatch
     ):
         """
-        Coraplex's real class is ``AttachNode``, not ``AttachmentNode``.
+        ``AttachNode`` is one of the two names a bundle recorded before coraplex
+        replaced both with :class:`~coraplex.plans.attachment_nodes.ReAttachNode` still
+        carries.
         """
         bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
@@ -445,7 +448,7 @@ class TestPlanGroups:
         self, fixture_scene, monkeypatch
     ):
         """
-        Coraplex's real class is ``DetachNode``, not ``DetachmentNode``.
+        ``DetachNode`` is the other name such a recorded bundle carries.
         """
         bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
@@ -467,6 +470,34 @@ class TestPlanGroups:
             n
             for n in GraphPanelViews.of_active_scene().for_tab("plan").nodes
             if n.label == "DetachNode"
+        )
+        assert node.group == PlanNodeGroup.ATTACHMENT
+
+    def test_the_attachment_node_coraplex_emits_renders_in_the_attachment_group(
+        self, fixture_scene, monkeypatch
+    ):
+        """
+        The class name is read off coraplex rather than spelled out, so a rename there
+        fails this test instead of silently dropping every attachment step into
+        :attr:`PlanNodeGroup.OTHER` -- which is what the two tests above, each naming a
+        class coraplex no longer has, could not catch.
+        """
+        kind = ReAttachNode.__name__
+        bundle = SceneBundle.of_active_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
+        scene["planTrees"][0]["children"].append(
+            {"kind": kind, "label": kind, "status": "CREATED", "children": []}
+        )
+        monkeypatch.setattr(
+            SceneBundle,
+            "of_scene",
+            lambda scene_name=None: SceneBundle(scene, trajectory),
+        )
+        EpisodeKnowledgeBase.reset()
+        node = next(
+            n
+            for n in GraphPanelViews.of_active_scene().for_tab("plan").nodes
+            if n.label == kind
         )
         assert node.group == PlanNodeGroup.ATTACHMENT
 
