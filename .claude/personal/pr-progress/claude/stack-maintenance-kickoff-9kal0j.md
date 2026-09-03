@@ -3,38 +3,45 @@
 Based on #211's branch `claude/plan-item-kickoff-workflow-unification-wg4w4x`; six of the nine
 paths do not exist on `main`. Both dependencies are `open_ready` and both are #211.
 
-## The plan
+## What was built
 
-1. `.claude/stack/integration_integrated_label.py` (new) - the record and the reconciler.
-   `INTEGRATED_RECORD_NAMESPACE = "refs/integration/carried"`; `IntegratedTipRecord`
-   (build_branch, pull_request_number, commit) with `reference` / `named_by`;
-   `IntegratedTipRecords` with `read`, `carried_by`, `record`, `forget`, `forget_taken_down`;
-   `reconcile_integrated_label(...)` returning the writes it made.
-2. `stack.py` - `DefaultLabel.INTEGRATED = "integrated"` plus `Configuration.integrated_label`.
-   `load_configuration` derives the field name from the member, so nothing else changes.
-3. `stack.toml` - the committed default and why the label exists.
-4. `integration_build_commands.BuildCommand.run` - record the integrated tips of the report it
-   just produced, unconditionally, keyed by `report.build_branch`.
-5. `integration_candidate_commands` - call the reconciler from
-   `SettleCandidateCommand._publish_what_passed` and `PublishRecordedPassCommand.run`, the two
-   sites that reach `publish()`; print the writes to standard error.
-6. `README.md` - the label in the workflow's own vocabulary.
+- `.claude/stack/integration_integrated_label.py` (new) - `IntegratedTipRecord` /
+  `IntegratedTipRecords` under `refs/integration/carried/<build branch>/<pull request>`, plus
+  `reconcile_integrated_label`.
+- `stack.py` - `DefaultLabel.INTEGRATED` and `Configuration.integrated_label`; `stack.toml` -
+  the committed default and why it exists.
+- `integration_build_commands.BuildCommand._record_what_it_carried` - records at assemble time.
+- `integration_candidate_commands.publish` - reconciles the label after the pointer moves, and
+  drops the records of builds the fork no longer carries.
+- `README.md` - the label in the source-of-truth table and the integration section.
 
 ## Design calls (recorded in roadmap.md)
 
 - Reconcile to an exact set rather than persisting both sides of the outcome: that is what covers
   a pull request labelled by an earlier run and absent from this report.
-- A build branch with no records reconciles nothing, the way `BlockStanding.UNRECORDED` works.
-- Records are kept while their build branch is; the existing take-down rule clears them.
+- A build nothing recorded reconciles nothing, the way `BlockStanding.UNRECORDED` works.
+- Records are kept while their build branch is; publishing deletes it and the take-down handles
+  the rest, so `forget_dropped_builds` needs no knowledge of how a run ended.
+- **The reconciler is called from `publish()` itself, not from the two commands.** The roadmap
+  said "one reconciler called from two sites"; `publish()` is the one function both sites reach,
+  and the pipeline guard already lives there for the same stated reason. Same outcome, one seam.
 - No comment per labelled pull request - ten branches four times a day.
 
 ## Status
 
 - [x] Context gathered, dependencies checked, scope check re-run against `origin/main`.
-- [x] Branch, draft PR #260, manifest entry, roadmap section.
-- [ ] Tests first: `test_integration_integrated_label.py`.
-- [ ] The module, the label, the two call sites.
-- [ ] Run `.claude/stack/tests` + `format_docstrings.py`; push; keep #260 a draft.
+- [x] Branch, draft PR #260, manifest entry, roadmap section, dashboard republished.
+- [x] Tests first: 16 in `test_integration_integrated_label.py`, eight mutations checked.
+- [x] The module, the label, the record, the reconciliation, the README.
+- [x] `format_docstrings.py` on every touched Python file.
+- [ ] Full tooling suite green, then push and leave #260 a draft.
+
+## Worth flagging on the PR
+
+- `integration.py build` now writes to the fork on every run (one reference per carried tip),
+  where before it only wrote when a readmitted branch's block was lifted.
+- `publish-recorded-pass` now needs a credential, because reconciling reads the fork's open pull
+  requests. It only ever runs inside the pipeline, which provisions one.
 
 ## Met and not fixed here
 
