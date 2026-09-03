@@ -138,6 +138,7 @@ items:
     track: integration
     depends_on: []
     status: done
+    session: https://claude.ai/code/session_016LPo74ksuCPpkqgpvpz7eY
     notes: >-
       Merge tracy_icra_segmind into tracy_icra. Not a fast-forward: tracy_icra has moved 20-odd commits
       past their merge base e034fa791, taking the knowledge-directed-perception work with it, so this is
