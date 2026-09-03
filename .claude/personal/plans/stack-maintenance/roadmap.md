@@ -293,3 +293,44 @@ green build was otherwise the one that would have ended the automation.
   dropped: with writer and reader both reading the same enum, a value rename changes both identically.
   The place to close it is a consumer that actually runs.
 - `integration.py`'s own line count against the 400-line rule, offered rather than done.
+
+## The `integrated` label, and why it is a reconciliation
+
+Placed by `/add-plan-item` rather than assumed into the integration track. The scope
+check ran against `origin/main`: seven of the nine paths the work touches do not exist
+on the base at all, and #211 shares all nine, so it stacks on #211 rather than branching
+off `main`.
+
+It is a new item rather than a fold because it survives the trigger-to-look test in both
+directions. Strip the edits to #211's files and a new subject remains — persisting a
+build's per-tip outcomes and reconciling a label across every pull request the build
+considered — while the edit half is one call at the publish moment plus a `StackLabel`
+member and a `stack.toml` default. And once #211 lands it stands alone: it adds a
+capability rather than correcting what #211 introduced.
+
+**Written at publish, not at assemble, and that is what makes persistence necessary.**
+`RefreshPipeline.run` settles the *previous* run's candidate before assembling this
+run's build, so the published build's report is not in memory when the pointer moves.
+A label written at assemble time would claim membership of a build that may go red and
+never be adopted — which is the one thing the label must never say. So each build's
+per-tip outcome is recorded under a `refs/` namespace on the fork, keyed by build
+branch, reusing the shape `integration_block_record.py` and the pass record already
+use rather than adding a second persistence mechanism.
+
+**Removal is the half that makes it a reconciliation rather than a write.** It has to
+cover every pull request the build *considered*, `report.left_out` included, whose tips
+were never attempted. A pull request labelled by an earlier run and merely absent from
+this one's report is exactly the case the label exists to clear. This is what
+distinguishes it from every label write the tooling already has: `integration-conflict`,
+the promotion link and a block lift are each one branch and one subject.
+
+`TipStatusSpecification.integrated` already answers, per status, whether a tip's commits
+reached the finished branch, and is deliberately answered per status so a status added
+later has to declare which it is. That predicate is reused, not re-derived.
+
+Two publish paths move the pointer — `SettleCandidateCommand._publish_what_passed` and
+`_publish_recorded_pass` for a build whose tree already passed — so both label, through
+one reconciler called from two sites.
+
+The read side is deliberately out of scope: the dashboard renderer has its own
+`PullRequestLabel` enum, which belongs to `plan-dashboards`. This item owns the write.

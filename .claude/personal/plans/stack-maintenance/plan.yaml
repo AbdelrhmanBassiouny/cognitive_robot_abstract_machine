@@ -1033,3 +1033,10 @@ items:
     from `stack.toml`, and nothing takes one per run. The dedicated per-plan branch is this item, and the deferral
     still holds for the reason it was written - the pipeline has published nothing, so nine sub-branches and
     nine candidate cycles would multiply a defect nobody has seen a clean cycle of yet.'
+
+- id: integrated-label
+  title: "Label every pull request the integration branch carries, and unlabel the ones it drops"
+  branch: null
+  track: integration
+  depends_on: []
+  status: not_started
