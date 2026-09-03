@@ -17,6 +17,8 @@ from experiments.montessori.perception.hypotheses import (
 from experiments.montessori.perception.exceptions import NothingIsHiddenFromBelow
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.planar_geometry import PlanarPoint
+from experiments.montessori.perception.imagination import ImaginedWorld
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -83,8 +85,12 @@ def piece_at(
     """
     height = 0.03
     resting_on = PrefixedName("table", "occupancy_test")
+    pose = Pose.from_xyz_rpy(x, y, surface_height + height / 2)
     return DetectedMontessoriShape(
-        pose=Pose.from_xyz_rpy(x, y, surface_height + height / 2),
+        role_taker=ImaginedWorld.copied_from(None).spawn(
+            KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE], pose
+        ),
+        pose=pose,
         footprint=Footprint(
             area=PIECE_WIDTH**2,
             width=PIECE_WIDTH,

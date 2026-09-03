@@ -20,20 +20,29 @@ from experiments.montessori.perception.detections import (
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_request import SceneRequest
-from experiments.montessori.perception.scene_source import FixedScene
+from experiments.montessori.perception.scene_source import FixedScene, RecordedFrame
 from experiments.montessori.perception.surfaces import WorkspaceSurface
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from semantic_digital_twin.reasoning.predicates import (
     Between,
     Colored,
+    InContactWith,
     InsideRegion,
     Near,
     PlacementRelation,
     RightOf,
     SupportedBy,
 )
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
@@ -472,3 +481,156 @@ def test_a_statement_answered_by_looking_verbalizes_as_looking(
     text = verbalize_expression(entity(piece), backend=looking)
 
     assert text.startswith(Directive.LOOK_FOR.value.text)
+
+
+# %% what the search cannot narrow itself by
+
+
+TABLE_THICKNESS = 0.05
+"""
+How thick the table the rendered scene stands on is, in metres, which only has to be
+enough for a piece resting on it to touch it and one on the lid not to.
+"""
+
+
+@pytest.fixture
+def world_the_look_is_taken_in(renderer: MontessoriSceneRenderer) -> World:
+    """
+    A world holding the table the rendered scene's pieces rest on.
+
+    A relation the search cannot narrow itself by is read off bodies, so the thing a
+    statement states it about has to be something the world holds rather than a
+    measurement of it.
+    """
+    world = World()
+    table = Body.from_shape_collection(
+        PrefixedName("table", "montessori_scene"),
+        ShapeCollection([Box(scale=Scale(4.0, 4.0, TABLE_THICKNESS))]),
+    )
+    with world.modify_world():
+        world.add_body(Body(name=PrefixedName("ground", "montessori_scene")))
+        world.add_connection(
+            FixedConnection(
+                parent=world.root,
+                child=table,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    z=renderer.table_height - TABLE_THICKNESS / 2,
+                    reference_frame=world.root,
+                ),
+            )
+        )
+    return world
+
+
+@pytest.fixture
+def looking_in_a_world(
+    pipeline: MontessoriPerceptionPipeline,
+    world_the_look_is_taken_in: World,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
+    piece_on_the_lid: PlacedPiece,
+) -> MontessoriPerceptionBackend:
+    """
+    A backend answering by looking afresh at a scene laid out in a world, so what it
+    finds comes to stand in a copy of that world.
+    """
+    pipeline.world = world_the_look_is_taken_in
+    return MontessoriPerceptionBackend(
+        source=RecordedFrame(
+            pipeline=pipeline,
+            frame=renderer.render([*placed_pieces, piece_on_the_lid]),
+        )
+    )
+
+
+def touching_the_table(world: World):
+    """
+    A statement asking a look for a piece that is touching the table it was laid out on.
+
+    Contact is read off two bodies' collision geometry, so no search narrows a look by
+    it: it is answered in the world the look stood its findings in, or not at all.
+
+    :param world: The world the look is taken in, which holds the table.
+    """
+    statement = an(DetectedMontessoriShape)()
+    return statement.where(
+        InContactWith(statement.variable.root, world.get_body_by_name("table"))
+    )
+
+
+def test_a_relation_the_search_cannot_narrow_itself_by_is_answered_rather_than_refused(
+    looking_in_a_world: MontessoriPerceptionBackend,
+    world_the_look_is_taken_in: World,
+    placed_pieces: list[PlacedPiece],
+):
+    """
+    A look reports what it saw, and what it saw now stands in a world as a body, so a
+    relation the search could not act on is evaluated over something real instead of
+    being refused for want of a subject.
+    """
+    found = list(
+        touching_the_table(world_the_look_is_taken_in).evaluate(
+            backend=looking_in_a_world
+        )
+    )
+
+    assert {piece.category for piece in found} == {
+        placed.category for placed in placed_pieces
+    }
+
+
+def test_what_the_relation_rejects_is_taken_out_of_the_world_the_look_stood_it_in(
+    looking_in_a_world: MontessoriPerceptionBackend,
+    world_the_look_is_taken_in: World,
+):
+    """
+    The piece standing on the board's lid is not touching the table, so the world the
+    look stood its findings in is left holding exactly what the statement answered.
+    """
+    found = list(
+        touching_the_table(world_the_look_is_taken_in).evaluate(
+            backend=looking_in_a_world
+        )
+    )
+
+    standing = looking_in_a_world.seen.imagined.world.get_semantic_annotations_by_type(
+        MontessoriShape
+    )
+    assert standing == [piece.role_taker for piece in found]
+
+
+def touching_the_table_the_world_calls(name: PrefixedName, world: World):
+    """
+    The same statement, naming the table by describing it rather than handing it over.
+
+    :param name: What the world calls the table.
+    :param world: The world the look is taken in, whose bodies answer the description.
+    """
+    surface = variable(Body, world.bodies)
+    statement = an(DetectedMontessoriShape)()
+    return statement.where(
+        surface.name == name,
+        InContactWith(statement.variable.root, surface),
+    )
+
+
+def test_a_relation_to_something_the_statement_describes_is_answered_too(
+    looking_in_a_world: MontessoriPerceptionBackend,
+    world_the_look_is_taken_in: World,
+    placed_pieces: list[PlacedPiece],
+):
+    """
+    A statement can say which body it means by describing it, and a relation to that
+    body is checked over what came back like any other -- the description is answered
+    out of the world before the look, so what is left is a relation to something
+    concrete.
+    """
+    found = list(
+        touching_the_table_the_world_calls(
+            PrefixedName("table", "montessori_scene"), world_the_look_is_taken_in
+        ).evaluate(backend=looking_in_a_world)
+    )
+
+    assert {piece.category for piece in found} == {
+        placed.category for placed in placed_pieces
+    }

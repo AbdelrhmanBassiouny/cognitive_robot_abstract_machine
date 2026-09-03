@@ -280,11 +280,16 @@ def test_a_reading_taken_off_the_table_the_board_hides_is_not_reported(
     scene = pipeline.detect(frame)
     occupancy = Occupancy()
     occupancy.claim(pipeline.table_hidden_by(scene.board, frame))
+    against_the_board_pose = Pose.from_xyz_rpy(
+        *scene.board.pose.to_position().to_np()[:2],
+        pipeline.table.height + 0.015,
+    )
     against_the_board = DetectedMontessoriShape(
-        pose=Pose.from_xyz_rpy(
-            *scene.board.pose.to_position().to_np()[:2],
-            pipeline.table.height + 0.015,
+        role_taker=scene.imagined.spawn(
+            KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE],
+            against_the_board_pose,
         ),
+        pose=against_the_board_pose,
         footprint=scene.shapes[0].footprint,
         hypothesis=scene.shapes[0].hypothesis,
         outline=scene.board.outline,
@@ -385,7 +390,7 @@ def pieces_on_the_lid(
             frame, pipeline.lid.height + pipeline.piece_detector.piece_height
         ),
         frame,
-        pipeline.reference_frame,
+        pipeline.imagine(),
         search,
         expected,
     )
