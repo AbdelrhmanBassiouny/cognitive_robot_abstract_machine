@@ -7,15 +7,16 @@ the few messages it needs into a bag of its own and replays that.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 from rosbags.rosbag2 import StoragePlugin, Writer
-from rosbags.typesys import Stores, get_typestore
-from typing_extensions import Dict, List, Tuple
+from typing_extensions import Any, Dict, List, Tuple
 
 from segmind.players.rosbag_player import (
+    MESSAGE_DEFINITIONS,
     NANOSECONDS_PER_SECOND,
     RosbagMessageType,
     RosbagTopic,
@@ -23,26 +24,57 @@ from segmind.players.rosbag_player import (
 
 # %% messages
 
-typestore = get_typestore(Stores.ROS2_HUMBLE)
-"""
-The message definitions the bag is written with.
-"""
-
 BAG_FORMAT_VERSION = 9
 """
 The rosbag2 metadata version written.
 """
 
+UNSTAMPED_FRAME = ""
+"""
+The frame a message that describes no frame of its own states in its header.
+"""
 
-def _stamp(time: float):
+
+def stamp_of(time: float) -> Any:
+    """
+    Build the time message for an instant of the recording's own clock.
+
+    :param time: The time in seconds.
+    """
     seconds = int(time)
-    return typestore.types["builtin_interfaces/msg/Time"](
+    return MESSAGE_DEFINITIONS.types[RosbagMessageType.TIME](
         sec=seconds, nanosec=int(round((time - seconds) * NANOSECONDS_PER_SECOND))
     )
 
 
-def _header(time: float, frame: str):
-    return typestore.types["std_msgs/msg/Header"](stamp=_stamp(time), frame_id=frame)
+def header_of(time: float, frame: str) -> Any:
+    """
+    Build the header a stamped message carries.
+
+    :param time: The time in seconds the message is published at.
+    :param frame: The frame the message states its content in.
+    """
+    return MESSAGE_DEFINITIONS.types[RosbagMessageType.HEADER](
+        stamp=stamp_of(time), frame_id=frame
+    )
+
+
+def nanoseconds_of(time: float) -> int:
+    """
+    The instant a bag stamps a message at, from the time in seconds.
+
+    :param time: The time in seconds.
+    """
+    return int(round(time * NANOSECONDS_PER_SECOND))
+
+
+def serialized(message: Any) -> bytes:
+    """
+    The bytes a bag stores a message as.
+
+    :param message: The message to serialize.
+    """
+    return MESSAGE_DEFINITIONS.serialize_cdr(message, message.__msgtype__)
 
 
 # %% what an episode holds
@@ -75,55 +107,92 @@ class RecordedTransform:
     w)``.
     """
 
-    def to_message(self, time: float):
+    def to_message(self, time: float) -> Any:
         """
         Build the stamped transform message for this transform at a time.
 
         :param time: The time in seconds the transform is published at.
         """
-        types = typestore.types
-        return types["geometry_msgs/msg/TransformStamped"](
-            header=_header(time, self.parent_frame),
+        types = MESSAGE_DEFINITIONS.types
+        return types[RosbagMessageType.STAMPED_TRANSFORM](
+            header=header_of(time, self.parent_frame),
             child_frame_id=self.child_frame,
-            transform=types["geometry_msgs/msg/Transform"](
-                translation=types["geometry_msgs/msg/Vector3"](*self.translation),
-                rotation=types["geometry_msgs/msg/Quaternion"](*self.rotation),
+            transform=types[RosbagMessageType.TRANSFORM](
+                translation=types[RosbagMessageType.VECTOR](*self.translation),
+                rotation=types[RosbagMessageType.QUATERNION](*self.rotation),
             ),
         )
 
 
 @dataclass(frozen=True)
-class TransformsAt:
+class PublishedMessage(ABC):
+    """
+    One message of the episode, and the time it is published at.
+    """
+
+    time: float
+    """
+    The time in seconds the message is published at.
+    """
+
+    @property
+    def stamped_at(self) -> int:
+        """
+        The instant the bag stamps the message at, in nanoseconds.
+        """
+        return nanoseconds_of(self.time)
+
+    @abstractmethod
+    def to_message(self) -> Any:
+        """
+        Build the message, of the type its own topic carries.
+        """
+
+
+@dataclass(frozen=True)
+class TransformsAt(PublishedMessage):
     """
     The transforms one message publishes at one time.
     """
 
-    time: float
-    """
-    The time in seconds the message is published at.
-    """
-
-    transforms: List[RecordedTransform]
+    transforms: List[RecordedTransform] = field(default_factory=list)
     """
     The transforms the message carries.
     """
 
+    def to_message(self) -> Any:
+        """
+        Build the transform message publishing all of them at this time.
+        """
+        return MESSAGE_DEFINITIONS.types[RosbagMessageType.TRANSFORMS](
+            transforms=[
+                transform.to_message(self.time) for transform in self.transforms
+            ]
+        )
+
 
 @dataclass(frozen=True)
-class JointPositionsAt:
+class JointPositionsAt(PublishedMessage):
     """
     The joint positions one message publishes at one time.
     """
 
-    time: float
-    """
-    The time in seconds the message is published at.
-    """
-
-    positions: Dict[str, float]
+    positions: Dict[str, float] = field(default_factory=dict)
     """
     The position of each joint, by the joint's name.
     """
+
+    def to_message(self) -> Any:
+        """
+        Build the joint state message publishing all of them at this time.
+        """
+        return MESSAGE_DEFINITIONS.types[RosbagMessageType.JOINT_STATES](
+            header=header_of(self.time, UNSTAMPED_FRAME),
+            name=list(self.positions),
+            position=np.array(list(self.positions.values()), dtype=float),
+            velocity=np.array([], dtype=float),
+            effort=np.array([], dtype=float),
+        )
 
 
 @dataclass
@@ -163,66 +232,60 @@ class RecordedEpisode:
         return directory
 
     def _write_static_transforms(self, writer: Writer) -> None:
+        """
+        Write the static transforms as one message, stamped at the episode's start.
+
+        :param writer: The writer of the bag being built.
+        """
         if not self.static_transforms:
             return
-        connection = writer.add_connection(
-            str(RosbagTopic.STATIC_TRANSFORMS),
-            str(RosbagMessageType.TRANSFORMS),
-            typestore=typestore,
-        )
-        time = self._first_time()
-        message = typestore.types[str(RosbagMessageType.TRANSFORMS)](
-            transforms=[
-                transform.to_message(time) for transform in self.static_transforms
-            ]
-        )
-        writer.write(connection, _nanoseconds(time), _serialized(message))
+        published = TransformsAt(self._first_time(), self.static_transforms)
+        self._write(writer, RosbagTopic.STATIC_TRANSFORMS, [published])
 
     def _write_transforms(self, writer: Writer) -> None:
-        if not self.transforms:
-            return
-        connection = writer.add_connection(
-            str(RosbagTopic.TRANSFORMS),
-            str(RosbagMessageType.TRANSFORMS),
-            typestore=typestore,
-        )
-        for published in self.transforms:
-            message = typestore.types[str(RosbagMessageType.TRANSFORMS)](
-                transforms=[
-                    transform.to_message(published.time)
-                    for transform in published.transforms
-                ]
-            )
-            writer.write(connection, _nanoseconds(published.time), _serialized(message))
+        """
+        Write one transform message per time the episode publishes transforms at.
+
+        :param writer: The writer of the bag being built.
+        """
+        self._write(writer, RosbagTopic.TRANSFORMS, self.transforms)
 
     def _write_joint_positions(self, writer: Writer) -> None:
-        if not self.joint_positions:
+        """
+        Write one joint state message per time the episode publishes positions at.
+
+        :param writer: The writer of the bag being built.
+        """
+        self._write(writer, RosbagTopic.JOINT_STATES, self.joint_positions)
+
+    @staticmethod
+    def _write(
+        writer: Writer, topic: RosbagTopic, published: List[PublishedMessage]
+    ) -> None:
+        """
+        Write every message of one topic, opening a connection only if there are any.
+
+        :param writer: The writer of the bag being built.
+        :param topic: The topic to publish them on.
+        :param published: What is published, each carrying the time it is published at.
+        """
+        if not published:
             return
         connection = writer.add_connection(
-            str(RosbagTopic.JOINT_STATES),
-            str(RosbagMessageType.JOINT_STATES),
-            typestore=typestore,
+            str(topic),
+            str(topic.message_type),
+            typestore=MESSAGE_DEFINITIONS,
         )
-        for published in self.joint_positions:
-            message = typestore.types[str(RosbagMessageType.JOINT_STATES)](
-                header=_header(published.time, ""),
-                name=list(published.positions),
-                position=np.array(list(published.positions.values()), dtype=float),
-                velocity=np.array([], dtype=float),
-                effort=np.array([], dtype=float),
+        for message in published:
+            writer.write(
+                connection, message.stamped_at, serialized(message.to_message())
             )
-            writer.write(connection, _nanoseconds(published.time), _serialized(message))
 
     def _first_time(self) -> float:
+        """
+        The time of the earliest message the episode publishes over time.
+        """
         times = [published.time for published in self.transforms] + [
             published.time for published in self.joint_positions
         ]
         return min(times, default=0.0)
-
-
-def _nanoseconds(time: float) -> int:
-    return int(round(time * NANOSECONDS_PER_SECOND))
-
-
-def _serialized(message) -> bytes:
-    return typestore.serialize_cdr(message, message.__msgtype__)

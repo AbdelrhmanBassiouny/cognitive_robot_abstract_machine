@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 from rosbags.rosbag2 import Reader
 from rosbags.typesys import Stores, get_typestore
-from typing_extensions import Dict, Iterator, List, Optional
+from typing_extensions import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
 from segmind.exceptions import RecordingHoldsNothingToReplay, ReferenceFrameNotRecorded
 from segmind.players.data_player import FilePlayer, FrameData, FrameDataGenerator
@@ -31,7 +31,56 @@ from semantic_digital_twin.world_description.connections import (
 )
 from semantic_digital_twin.world_description.world_entity import Body
 
+if TYPE_CHECKING:
+    from rosbags.interfaces import Connection
+
 # %% what a recording carries
+
+
+class RosbagMessageType(StrEnum):
+    """
+    The message types a recording carries, as its type store names them.
+    """
+
+    TRANSFORMS = "tf2_msgs/msg/TFMessage"
+    """
+    Every transform published at one instant, on either transform topic.
+    """
+
+    JOINT_STATES = "sensor_msgs/msg/JointState"
+    """
+    The position of every joint published at one instant.
+    """
+
+    STAMPED_TRANSFORM = "geometry_msgs/msg/TransformStamped"
+    """
+    One frame's pose in its parent, with the time and the parent frame it holds for.
+    """
+
+    TRANSFORM = "geometry_msgs/msg/Transform"
+    """
+    A pose, as a translation and a rotation.
+    """
+
+    VECTOR = "geometry_msgs/msg/Vector3"
+    """
+    Three coordinates.
+    """
+
+    QUATERNION = "geometry_msgs/msg/Quaternion"
+    """
+    An orientation, as ``(x, y, z, w)``.
+    """
+
+    HEADER = "std_msgs/msg/Header"
+    """
+    The time and the frame a stamped message holds for.
+    """
+
+    TIME = "builtin_interfaces/msg/Time"
+    """
+    An instant, as whole seconds and nanoseconds.
+    """
 
 
 class RosbagTopic(StrEnum):
@@ -40,17 +89,38 @@ class RosbagTopic(StrEnum):
     """
 
     STATIC_TRANSFORMS = "/tf_static"
+    """
+    Transforms published once, holding for the whole recording.
+    """
+
     TRANSFORMS = "/tf"
+    """
+    Transforms published again whenever they change.
+    """
+
     JOINT_STATES = "/joint_states"
-
-
-class RosbagMessageType(StrEnum):
     """
-    The message types published on the replayed topics.
+    Joint positions published again whenever they change.
     """
 
-    TRANSFORMS = "tf2_msgs/msg/TFMessage"
-    JOINT_STATES = "sensor_msgs/msg/JointState"
+    @property
+    def message_type(self) -> RosbagMessageType:
+        """
+        The type of message published on this topic.
+        """
+        if self is RosbagTopic.JOINT_STATES:
+            return RosbagMessageType.JOINT_STATES
+        return RosbagMessageType.TRANSFORMS
+
+    @property
+    def advances_the_clock(self) -> bool:
+        """
+        Whether a message on this topic states a time the recording is sampled along.
+
+        A static transform holds for the whole recording, so when it happens to be
+        published says nothing about when the episode is.
+        """
+        return self is not RosbagTopic.STATIC_TRANSFORMS
 
 
 NANOSECONDS_PER_SECOND = 1_000_000_000
@@ -63,10 +133,11 @@ DEFAULT_REFERENCE_FRAME = "map"
 The frame the recordings root their transform tree in unless another is named.
 """
 
-message_definitions = get_typestore(Stores.ROS2_HUMBLE)
+MESSAGE_DEFINITIONS = get_typestore(Stores.ROS2_HUMBLE)
 """
 The message definitions a recording is read with.
 """
+
 
 # %% the transform tree
 
@@ -87,11 +158,11 @@ class TransformTree:
     Each frame's pose in its parent, as a 4x4 homogeneous transformation.
     """
 
-    def record(self, transform) -> None:
+    def record(self, transform: Any) -> None:
         """
         Keep a stamped transform as the latest pose of its child frame.
 
-        :param transform: The ``geometry_msgs/msg/TransformStamped`` message.
+        :param transform: A :attr:`RosbagMessageType.STAMPED_TRANSFORM` message.
         """
         translation = transform.transform.translation
         rotation = transform.transform.rotation
@@ -111,6 +182,8 @@ class TransformTree:
     def knows(self, frame: str) -> bool:
         """
         Whether the recording has published a transform to or from a frame.
+
+        :param frame: The frame asked about.
         """
         return frame in self.parent_of or frame in self.parent_of.values()
 
@@ -144,6 +217,239 @@ class TransformTree:
             if pose is not None:
                 poses[frame] = pose
         return poses
+
+
+# %% what the recording has said so far
+
+
+@dataclass(frozen=True)
+class RecordedMessage:
+    """
+    One message of a recording, on a topic a replay reads.
+    """
+
+    topic: RosbagTopic
+    """
+    The topic it was published on.
+    """
+
+    content: Any
+    """
+    The deserialized message, of the topic's own :attr:`RosbagTopic.message_type`.
+    """
+
+    time: float
+    """
+    The instant of the recording's own clock it was published at, in seconds.
+    """
+
+    @classmethod
+    def of(cls, connection: Connection, timestamp: int, raw: bytes) -> RecordedMessage:
+        """
+        Read one message as the reader hands it over.
+
+        :param connection: The connection it arrived on.
+        :param timestamp: The instant it was published at, in nanoseconds.
+        :param raw: The serialized message.
+        """
+        return cls(
+            topic=RosbagTopic(connection.topic),
+            content=MESSAGE_DEFINITIONS.deserialize_cdr(raw, connection.msgtype),
+            time=timestamp / NANOSECONDS_PER_SECOND,
+        )
+
+
+@dataclass
+class RecordedState:
+    """
+    Where every frame stands and how every joint is positioned, as the recording has
+    said so far.
+    """
+
+    transform_tree: TransformTree = field(default_factory=TransformTree)
+    """
+    The latest transform published to each frame.
+    """
+
+    joint_positions: Dict[str, float] = field(default_factory=dict)
+    """
+    The latest position published for each joint, by the joint's name.
+    """
+
+    def record(self, message: RecordedMessage) -> None:
+        """
+        Keep a message as the latest state of the frames or the joints it names.
+
+        :param message: The message to read.
+        """
+        if message.topic is RosbagTopic.JOINT_STATES:
+            self.joint_positions.update(
+                zip(message.content.name, message.content.position)
+            )
+            return
+        for transform in message.content.transforms:
+            self.transform_tree.record(transform)
+
+    def frame_at(self, time: float, index: int, reference_frame: str) -> FrameData:
+        """
+        Take a frame of the state as it stands, holding it against later messages.
+
+        :param time: The time of the recording's own clock the frame stands at.
+        :param index: How many frames were taken before it.
+        :param reference_frame: The frame the poses are expressed in.
+        """
+        return FrameData(
+            time=time,
+            objects_data=self.transform_tree.poses_in(reference_frame),
+            frame_idx=index,
+            joint_positions=dict(self.joint_positions),
+        )
+
+
+# %% sampling a recording into frames
+
+
+@dataclass
+class RecordingSampler:
+    """
+    Turns a recording's message stream into frames taken at a fixed period along the
+    recording's own clock.
+
+    A frame is the latest transform of every frame and the latest position of every
+    joint at that instant, so a period shorter than the message spacing repeats the held
+    state between messages.
+    """
+
+    recording: Path
+    """
+    The directory of the recording.
+    """
+
+    reference_frame: str
+    """
+    The frame of the recording that poses are expressed in.
+    """
+
+    sampling_period: timedelta
+    """
+    How far apart along the recording's clock the frames are taken.
+    """
+
+    state: RecordedState = field(default_factory=RecordedState, init=False)
+    """
+    What the recording has said up to the message being read.
+    """
+
+    first_sample_time: Optional[float] = field(default=None, init=False)
+    """
+    The time of the first frame, which is the first message that advances the clock.
+    """
+
+    samples_taken: int = field(default=0, init=False)
+    """
+    How many frames have been taken.
+    """
+
+    @property
+    def replayed_topics(self) -> List[RosbagTopic]:
+        """
+        The topics a replay reads that this recording actually carries.
+        """
+        with Reader(self.recording) as reader:
+            return [topic for topic in RosbagTopic if str(topic) in reader.topics]
+
+    def frames(self) -> Iterator[FrameData]:
+        """
+        Every frame of the recording, in order.
+
+        :raises ReferenceFrameNotRecorded: If the recording never publishes a transform
+            to or from the reference frame.
+        """
+        last_message_time: Optional[float] = None
+        for message in self._messages():
+            if message.topic.advances_the_clock:
+                yield from self._frames_due_before(message.time)
+                last_message_time = message.time
+            self.state.record(message)
+        if last_message_time is not None:
+            yield from self._frames_due_through(last_message_time)
+
+    def _messages(self) -> Iterator[RecordedMessage]:
+        """
+        Every message the recording carries on a topic a replay reads.
+        """
+        with Reader(self.recording) as reader:
+            for connection, timestamp, raw in reader.messages(
+                connections=self._replayed_connections_of(reader)
+            ):
+                yield RecordedMessage.of(connection, timestamp, raw)
+
+    @staticmethod
+    def _replayed_connections_of(reader: Reader) -> List[Connection]:
+        """
+        The reader's connections on the topics a replay reads.
+
+        :param reader: The reader of the recording.
+        """
+        replayed = {str(topic) for topic in RosbagTopic}
+        return [
+            connection
+            for connection in reader.connections
+            if connection.topic in replayed
+        ]
+
+    def _frames_due_before(self, message_time: float) -> Iterator[FrameData]:
+        """
+        The frames standing before a message, of the state as it stands without it.
+
+        :param message_time: The time the message about to be read was published at.
+        """
+        if self.first_sample_time is None:
+            self.first_sample_time = message_time
+        while self._next_sample_time < message_time:
+            yield self._take_sample()
+
+    def _frames_due_through(self, last_message_time: float) -> Iterator[FrameData]:
+        """
+        The frames standing up to and including the recording's last message.
+
+        :param last_message_time: The time of the last message that advanced the clock.
+        """
+        while self._next_sample_time <= last_message_time:
+            yield self._take_sample()
+
+    @property
+    def _next_sample_time(self) -> float:
+        """
+        The time of the frame to be taken next.
+        """
+        return (
+            self.first_sample_time
+            + self.samples_taken * self.sampling_period.total_seconds()
+        )
+
+    def _take_sample(self) -> FrameData:
+        """
+        Take the frame due next and count it.
+
+        :raises ReferenceFrameNotRecorded: If the recording never publishes a transform
+            to or from the reference frame.
+        """
+        self._require_a_recorded_reference_frame()
+        frame = self.state.frame_at(
+            self._next_sample_time, self.samples_taken, self.reference_frame
+        )
+        self.samples_taken += 1
+        return frame
+
+    def _require_a_recorded_reference_frame(self) -> None:
+        """
+        :raises ReferenceFrameNotRecorded: If the recording never publishes a transform
+            to or from the reference frame, so no pose can be expressed in it.
+        """
+        if self.state.transform_tree.knows(self.reference_frame):
+            return
+        raise ReferenceFrameNotRecorded(self.reference_frame, self.recording)
 
 
 # %% the player
@@ -187,15 +493,16 @@ class RosbagPlayer(FilePlayer):
         :raises RecordingHoldsNothingToReplay: If the recording carries none of the
             replayed topics.
         """
-        with Reader(self.recording) as reader:
-            recorded_topics = [
-                topic for topic in RosbagTopic if str(topic) in reader.topics
-            ]
-        if not recorded_topics:
+        sampler = RecordingSampler(
+            recording=self.recording,
+            reference_frame=self.reference_frame,
+            sampling_period=self.sampling_period,
+        )
+        if not sampler.replayed_topics:
             raise RecordingHoldsNothingToReplay(
                 self.recording, [str(topic) for topic in RosbagTopic]
             )
-        return self._sample()
+        return sampler.frames()
 
     @property
     def recording(self) -> Path:
@@ -203,57 +510,6 @@ class RosbagPlayer(FilePlayer):
         The directory of the recording.
         """
         return Path(self.file_path)
-
-    def _sample(self) -> Iterator[FrameData]:
-        tree = TransformTree()
-        joint_positions: Dict[str, float] = {}
-        first_sample_time: Optional[float] = None
-        sample_count = 0
-        last_message_time = 0.0
-        period = self.sampling_period.total_seconds()
-
-        def next_sample_time() -> float:
-            return first_sample_time + sample_count * period
-
-        def frame_at(sample_time: float) -> FrameData:
-            if not tree.knows(self.reference_frame):
-                raise ReferenceFrameNotRecorded(self.reference_frame, self.recording)
-            return FrameData(
-                time=sample_time,
-                objects_data=tree.poses_in(self.reference_frame),
-                frame_idx=sample_count,
-                joint_positions=dict(joint_positions),
-            )
-
-        with Reader(self.recording) as reader:
-            connections = [
-                connection
-                for connection in reader.connections
-                if connection.topic in {str(topic) for topic in RosbagTopic}
-            ]
-            for connection, timestamp, raw in reader.messages(connections=connections):
-                message = message_definitions.deserialize_cdr(raw, connection.msgtype)
-                if connection.topic == RosbagTopic.STATIC_TRANSFORMS:
-                    for transform in message.transforms:
-                        tree.record(transform)
-                    continue
-                message_time = timestamp / NANOSECONDS_PER_SECOND
-                last_message_time = message_time
-                if first_sample_time is None:
-                    first_sample_time = message_time
-                while next_sample_time() < message_time:
-                    yield frame_at(next_sample_time())
-                    sample_count += 1
-                if connection.topic == RosbagTopic.TRANSFORMS:
-                    for transform in message.transforms:
-                        tree.record(transform)
-                else:
-                    joint_positions.update(zip(message.name, message.position))
-            if first_sample_time is None:
-                return
-            while next_sample_time() <= last_message_time:
-                yield frame_at(next_sample_time())
-                sample_count += 1
 
     def get_objects_poses(self, frame_data: FrameData) -> Dict[Body, Pose]:
         """
@@ -295,15 +551,28 @@ class RosbagPlayer(FilePlayer):
         }
 
     def _free_body_named_by(self, frame: str) -> Optional[Body]:
+        """
+        The free body a frame of the recording names, if the world holds one.
+
+        :param frame: The frame of the recording.
+        :return: The body, or ``None`` if the world has none of that name or its parent
+            connection does not let it be posed.
+        """
         body = self._bodies_by_name().get(self.body_name_of_frame.get(frame, frame))
         if body is None or not isinstance(body.parent_connection, Connection6DoF):
             return None
         return body
 
     def _bodies_by_name(self) -> Dict[str, Body]:
+        """
+        Every body of the world, by the name the world knows it as.
+        """
         return {body.name.name: body for body in self.world.bodies}
 
     def _joints_by_name(self) -> Dict[str, ActiveConnection1DOF]:
+        """
+        Every joint of the world that can be positioned, by its own name.
+        """
         return {
             connection.name.name: connection
             for connection in self.world.connections
