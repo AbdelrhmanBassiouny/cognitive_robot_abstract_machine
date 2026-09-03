@@ -1708,3 +1708,72 @@ The cross-plan comment on tracking issue #174 (`icra-experiments`, 2026-09-03) s
 out of date — the gripper fix cleared both, and the demo job passes. `SimulationTimePacer.
 sleep()` is still unbounded and still a policy question for the developer, so that third
 item stands.
+
+### How it was resolved
+
+Merged as `3150229e`, and the pull request reports `clean` again. Every one of the five
+conflicts was coraplex's reworked plan executables arriving through #244:
+
+- **The motion state chart is a field, not a property.** `main` has parsing fill it in
+  and a new `prepare_for_execution` terminate it, keeps `_add_condition_monitors` but
+  calls it from nowhere while the rework is in progress, and deleted the pause/interrupt
+  monitors along with `GiskardExecutable.is_paused` and `is_interrupted`. Its structure
+  was taken; this branch's `DEFAULT_MAX_TICKS_PER_MOTION_MAPPING` / `tick_limit` and its
+  pacer keep their place in the loop, so round 25's bound survives intact.
+- **`AttachNode` and `DetachNode` are one `ReAttachNode`.** `PickUpAction` and
+  `PlacingAction` state the new node and keep gating it on
+  `Context.update_world_model_attachment`; the pick-up keeps its `grasped_object` sizing.
+- **`get_classes_of_ormatic_interface` answers an `OrmaticInterfaceInformation`.**
+  `scalability.py` reads through it and keeps the local import of
+  `coraplex.orm.ormatic_interface`, whose comment is the reason it is local.
+- **`test_plan/test_executables.py` was rewritten upstream**, so `main`'s file was taken
+  whole and this branch's two tick-budget tests re-appended.
+
+### The silent conflict, and the first one no name check could find
+
+`PlanNodeGroup.of_plan_node_kind` maps the attachment colour from the *class-name
+strings* `"AttachNode"` and `"DetachNode"`. With coraplex emitting `ReAttachNode`, every
+attachment step of a live plan fell to `PlanNodeGroup.OTHER` and lost its colour in the
+plan-graph tab — and git merged both sides without touching either line.
+
+This is the fifth silent conflict the stack has recorded and the first that is not
+import-shaped, so neither half of the undefined-name differential could see it: the
+stale name is a dict key, not an identifier. What did find it was the sweep the #168
+round wrote down as a rule — after a merge, list every call site of whatever the
+incoming side renamed or centralised — extended by one word: *including the ones spelled
+as strings*.
+
+Neither existing test caught it because both spell one of the dead names out, which is
+exactly the failure AGENTS.md describes ("a literal retyped into the test is a second
+copy of the thing the test exists to check, and it keeps passing when the original
+changes"). The new test reads the name off `ReAttachNode.__name__`. The two old names
+stay mapped: a bundle recorded before the rename carries them, and that method reads
+recorded plans as well as live ones. `dd790c80`.
+
+### What the merge deliberately gave up
+
+**Coraplex's plan-level pause and interrupt now reach nothing.** `PlanNode.pause()` and
+`PlanNode.is_paused` are still there and `pause_while` / `pause_until` still build, but
+`main` removed both the per-task monitors that wired them into the chart and the
+`GiskardExecutable.is_paused` the tick loop read. Keeping the loop's guard alone would
+have meant reviving a property `main` deleted to serve monitors that no longer exist.
+Checked before dropping it: its only reader was the loop, and the montessori demo pauses
+between plans through `SortingRunControl.wait_while_paused`, never through the executor.
+So the merge follows `main` and the gap is stated in the pull request rather than
+papered over.
+
+`semantic_digital_twin/adapters/multi_sim.py` still names `AttachNode`/`DetachNode` in
+four docstrings. That file belongs to #244 since the split, so it was left alone rather
+than pulled back into this diff — worth passing to whoever next touches #244.
+
+### Verified
+
+Statically, plus one thing that did run. No CRAM workspace in this container, so no
+suite: byte-compilation under 3.12, `scripts/format_docstrings.py` (checked first that
+`main`'s own copies of the five files are already black-clean, so it could only touch
+the resolutions), and both halves of the undefined-name differential — pyflakes per
+file, and the cross-module resolver over every `from <workspace module> import <name>` —
+each empty against both parents. The attachment bug itself was reproduced and its fix
+confirmed by importing `cramera.knowledge.enums` on its own, which needs nothing but
+`typing_extensions`: `of_plan_node_kind('ReAttachNode')` answered `other_plan_node`
+before and `attachment` after. CI on `dd790c80` is the real check for the rest.

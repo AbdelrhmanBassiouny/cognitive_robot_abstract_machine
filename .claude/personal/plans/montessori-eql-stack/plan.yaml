@@ -91,21 +91,7 @@ items:
     depends_on: [sdt_segmind_krrood_from_fast_monitor]
     status: in_progress
     session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
-    blockers:
-      - >-
-        2026-09-03: the pull request reports `dirty` against its base #244. #244 merged
-        `main` again as `95f8483b` after #169 last took it at `f38b9e87`, and five files
-        conflict: `coraplex/plans/executables.py`, `robot_plans/actions/core/pick_up.py`
-        and `.../placing.py`, `experiments/ormatic_experiments/scalability.py`, and
-        `test/coraplex_test/test_plan/test_executables.py`. All five are collisions of
-        purpose, not of wording: `main` replaced `AttachNode`/`DetachNode` with
-        `ReAttachNode` and moved the action bodies into `sequential(...)`, rewrote the
-        motion state chart's monitors, and gave `get_classes_of_ormatic_interface` a
-        structured return, while this branch's tick budget, its
-        `Context.update_world_model_attachment` gating and its `grasped_object` sizing
-        all sit on the old shapes. Nothing outside the item has to move first, and CI on
-        the current head `c8bf6f05` is green in all 24 checks, so the conflict is the
-        whole of the blocker.
+    blockers: []
     notes: >
       Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6) cleared
       the conflicts that had left it dirty, plus the two integration breaks it exposed: the
@@ -218,6 +204,25 @@ items:
       goal and the tightened threshold. The third failure was this branch's own test of a fix that
       was never written: `demonstrations.py` is byte-identical to `main`'s, so the spin thread
       still let `ExternalShutdownException` escape; it now ends quietly on it. `7fa4b1936`.
+
+      2026-09-03, round 27: CI on `c8bf6f05` was green in all 24 checks and the branch had no
+      review threads, so the only thing stalling it was a `dirty` merge state against #244, which
+      had merged `main` a second time as `95f8483b`. Merged as `3150229e`; the pull request reports
+      `clean` again. The five conflicts were coraplex's reworked plan executables: `main` made the
+      motion state chart a field that parsing fills in and `prepare_for_execution` terminates,
+      dropped the pause/interrupt monitors together with `GiskardExecutable.is_paused`, replaced
+      `AttachNode`/`DetachNode` with one `ReAttachNode`, and gave `get_classes_of_ormatic_interface`
+      a structured return. `main`'s structure was taken throughout, with this branch's tick budget,
+      its pacer, its `Context.update_world_model_attachment` gating and its `grasped_object` sizing
+      kept on top. The merge also exposed a silent conflict of a shape this stack had not recorded
+      before: `PlanNodeGroup.of_plan_node_kind` keys the attachment colour on the class-name strings
+      `AttachNode` and `DetachNode`, so every attachment step of a live plan lost its colour once
+      coraplex emitted `ReAttachNode` - reproduced directly and fixed in `dd790c80`, with a test
+      that reads the name off the class instead of spelling it out. Consequence to keep in view:
+      coraplex's plan-level pause and interrupt now reach nothing. `PlanNode.pause()` survives, but
+      `main` removed the monitors and the executor property that carried it, and says the rework is
+      in progress. Nothing here depends on it - the montessori demo pauses between plans through
+      `wait_while_paused` - so the merge follows `main` rather than reviving half a mechanism.
 
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
