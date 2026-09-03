@@ -234,11 +234,12 @@ items:
   # %% long-term-memory
   - id: run-results-recorded-into-sql
     title: "Where a run records its results, and the plan-and-events schema it records"
-    branch: null
-    pull_request_number: null
+    branch: claude/montessori-results-recording-jnrgfy
+    pull_request_number: 262
     track: long-term-memory
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01Hye1f4d5KoNGxtFtWF3XV7
     notes: >-
       Cut the recording half of montessori-eql-stack's montessori_monitor_and_recording (#256) as a pull
       request of its own, off main. Three modules and about 700 lines: results_database.py resolves

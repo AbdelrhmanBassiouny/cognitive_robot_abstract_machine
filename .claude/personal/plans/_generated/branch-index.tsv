@@ -20,6 +20,7 @@ claude/eql-verbalization-p3-albw76	eql-verbalization
 eql-symbolic-function-sdt	eql-verbalization
 tracy_icra	icra-experiments
 claude/icra-experiments-scenario-domain-n7zwpr	icra-experiments
+claude/montessori-results-recording-jnrgfy	icra-experiments
 montessori_perception_on_main	knowledge-directed-perception
 perception_surfaces_from_world	knowledge-directed-perception
 perception_per_supporting_surface	knowledge-directed-perception
