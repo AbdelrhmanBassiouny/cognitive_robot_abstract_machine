@@ -433,3 +433,80 @@ package, since its segmind third is exactly the colliding part.
 absent from `tracy_icra`; the attachment gate in particular exists so a simulator holding
 objects by contact does not leave the world model believing they are welded, which the MuJoCo
 demos may well want - left as the integration item's call rather than pulled in here.
+
+## 2026-09-03: the recording branch, cut and what it had to rewrite on the way
+
+`run-results-recorded-into-sql` is #262, `claude/montessori-results-recording-jnrgfy`,
+off `main` with no dependencies. It takes exactly the file list the extraction analysis
+above settled on and nothing else, so the branch that lands is the measured ~700 lines
+rather than a judgement call made file by file at implementation time.
+
+**Taken, verbatim except for the docstrings:** `experiments/montessori/__init__.py`
+(empty), `results_database.py`, `results_recording.py`, `sorting_results.py`, the three
+test modules that cover them, the `montessori_results_session` fixture in
+`test/experiments_test/conftest.py`, and the four declarations - `experiments` declaring
+`("coraplex", "segmind")` in `orm_interfaces.py`, `generate_orm.py` importing
+`segmind.orm.ormatic_interface`, and `experiments/pyproject.toml` declaring `segmind`.
+
+**Confirmed before cutting, not assumed:** every import the three modules make resolves
+on `main` already - `coraplex.plans.plan.Plan`, `segmind.datastructures.events`,
+`krrood.ormatic.data_access_objects.helper.to_dao`, `krrood.ormatic.utils.create_engine`
+and `krrood.exceptions.DataclassException` are all there, and
+`experiments/src/experiments/montessori/` exists on neither `main` nor #244. So the
+branch is additive: it creates the directory and edits four existing files by a line
+each.
+
+### The dangling references were wider than the item's notes named
+
+The item asked for the three modules' docstrings to be rewritten because they name
+`franka_montessori_demo`, `insertion_experience` and `run_montessori_demo.sh`, none of
+which exist on `main`. Reading them through turned up two more of the same kind, both
+outside a docstring:
+
+- `DEFAULT_DATABASE_URI`'s docstring cites `coraplex_panda_demo/demo3.py` as the
+  precedent for reusing the `semantic_digital_twin` role. That path does not exist on
+  `main` either. The reasoning is kept and the citation dropped.
+- Both `suggest_correction()` methods tell the reader to provision the database "as
+  described in `experiments/src/experiments/montessori/README.md`". That README exists
+  on no branch at all - not even #256. These are strings a user reads at a failure, so
+  they are repointed at
+  `semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql`,
+  which does exist on `main` and is what `DEFAULT_DATABASE_URI`'s own docstring already
+  names as the provisioning step.
+
+The `franka_montessori_sorting_results` database name in `DEFAULT_DATABASE_URI` is
+*not* renamed. It is a value rather than a reference, three tests assert it appears in
+the failure messages, and renaming it would silently point this branch at a different
+database from the demo branch that records to the same one.
+
+### The __init__.py, and why a test rather than a comment proves it
+
+`pkgutil.walk_packages` skips a directory with no `__init__.py`, so without that empty
+file the ORM generator is never offered `SortingIterationResult` and `to_dao` has no DAO
+to find - the recording could not work at all. That is demonstrated rather than asserted
+in prose: `test_montessori_sorting_results.py` imports `ShapeInsertionResultDAO` from the
+generated `experiments.orm.ormatic_interface` and round-trips a result through it, so
+deleting the `__init__.py` fails a test rather than quietly disabling the feature. This
+is the defect #256 carried until `589aceefd`.
+
+### Verification, and what it does not cover
+
+`scripts/regenerate_all_orm.py`, then the three new test modules plus
+`test/version_test/test_dependency_declarations.py` - the last being what proves the
+`pyproject.toml` line is not merely cosmetic, since `sorting_results.py` is the first
+file under `experiments/src` to import `segmind`.
+
+Not covered, and deliberately: nothing here exercises a Postgres database. The tests
+reach a Postgres URI only on a port nothing listens on, to prove an unreachable database
+falls back rather than fails, so CI needs no credentials and no service.
+
+### The Footprint collision is recorded on the pull request, not fixed on it
+
+The `__init__.py` is what will eventually trigger it: it makes ORMatic walk
+`experiments/montessori`, and on `tracy_icra` that directory holds
+`perception/footprint.py`, whose `Footprint` collides with
+`semantic_digital_twin...graph_of_convex_sets.plotting.Footprint` - two `FootprintDAO`
+classes, and SQLAlchemy refuses the mapping. Nothing on `main` triggers it today.
+#223 already renames the perception one to `RectifiedFootprint`, so this branch writes
+no second rename; #262's description carries the hazard for whichever branch first puts
+the two together.
