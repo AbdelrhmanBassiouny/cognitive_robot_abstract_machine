@@ -403,6 +403,14 @@ items:
     chip's label reads `checks passing` rather than `ci passing` - display text rather
     than a key, so outside what was asked, and flagged on the thread as such. 731 tests
     pass.
+
+    **Out of draft 2026-09-03 19:45, by the user**, having merged #185's newer head in
+    at 19:35 (`61139c04a`, on top of `477f4dc34`). Under the personal-notes convention
+    that is the record of the changes having been read and accepted, and it ends the
+    session's work on the pull request - so the two 2026-08-30 threads below stay open
+    for the user rather than being chased, and the stack chip stays unimplemented. The
+    item is still `in_progress` rather than `done`: out of draft is not merged, and
+    landing still waits on #185.
   blockers:
     - >-
       Cross-plan dependency, not representable in depends_on: this branch is stacked on
