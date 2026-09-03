@@ -411,6 +411,24 @@ items:
       ranking-level repro over two aggregates of one kind (`sum(o.lines[0].price)` vs
       `sum(o.lines[1].price)`) only becomes observable once #196 lands; this item is pinned at the
       level it actually changes - the structural key of a chain and of each mapping in it.
+
+      Review round 2026-09-03 (roadmap section 29): six threads, five of them one question -
+      why each `_structural_key_` names its class literally instead of reading `type(self)`.
+      Taken in 3e48901b6: a subclass that did not restate its key would report its base's kind
+      and collide with it, which is this item's own bug one level down. No behaviour change
+      today, there being no subclass of any of the five. The sixth asks whether the structural
+      key duplicates the mapped-variable cache key, or whether the cache should use it;
+      answered with the measurement and left open as a question - the cache key holds the
+      child and the structural key must not, the cache key is computed before the node exists
+      so it cannot call an instance property, and the two disagree on `FlatVariable`
+      deliberately, since two flattenings of one attribute have equal cache keys and different
+      structural keys. `test_eql` 1299 passed, 3 skipped, on the branch with `main` merged in.
+
+      The CI red recorded on this item was diagnosed as a second root cause in the RDR test
+      suite and is now fixed on its own branch at the developer's instruction: PR #251,
+      `claude/rdr-world-saved-model-fixture`, off `main`, draft with the `bug` label. Not a
+      plan item - it is one pull request in a different suite, tracked only in its own
+      PR-progress note.
   - id: factories-unwrap-match-and-migrate
     title: "Factories accept a Match directly; migrate consumers and docs off the detours"
     branch: claude/match-query-interface-refactor-l55jym

@@ -1423,3 +1423,60 @@ and `test_rule_doctests` both run in that total. `test_gcs.py` and `test_spatial
 were edited but need `semantic_digital_twin`, which this venv does not carry; both edits are
 one-line spelling changes and were syntax-checked.
 
+
+## 29. 2026-09-03: the kind of a step is read off the step
+
+The developer's review of #248 left six threads, and five of them are one question asked
+five times: why does each `_structural_key_` name its own class literally, rather than
+`type(self)`?
+
+Taken. The literal is the weaker spelling for exactly the reason the property exists: a
+class subclassing `Attribute` and not restating its key would report `Attribute` and so
+compare equal to a plain attribute step - the collision this pull request closes, one
+level down. `type(self)` reports the concrete kind, so the worst a subclass that forgets
+to restate its key can do is drop its own new argument; it can no longer be mistaken for
+its base. Behaviour is unchanged today, since a repository-wide search finds no subclass
+of any of the five, and the tests keep asserting against the class member they already
+did. `test_eql` 1299 passed, 3 skipped.
+
+**The sixth is a question, and the answer is three differences, one of them deliberate.**
+Asked whether the structural key duplicates `CanBehaveLikeAVariable`'s cache keys, or
+whether the cache should use it, measured rather than argued:
+
+```
+world.bodies[1]
+  _structural_key_          (IndexByValue, 1)
+  MappedVariableCacheItem   (IndexByValue, ('_child_', World.bodies), ('_key_', 1))
+
+flat_variable(cabinet.drawers) vs flat_variable(cabinet.drawers)
+  structural keys equal?    False
+  cache keys equal?         True
+```
+
+The cache key holds the child, because it answers "has this mapping on *this* child been
+built"; the signature compares chains step by step, so a step must say only what that step
+does. The cache key is computed from the constructor arguments *before* the node exists,
+so it cannot call an instance property of a thing it may not construct. And they disagree
+on `FlatVariable` on purpose - which is why `flat_variable` constructs outside the cache
+(section 13): keying the cache on the structural key would give every flattening its own
+entry, and keying the signature on the cache key would collapse two flattenings into one
+step, the bug #186 fixed.
+
+What they *could* share is `identify_argument`: the structural key identifies an
+expression-valued argument by `_id_`, the cache holds the object and hashes it by
+identity, so the cache misses a rebuilt copy that preserves `_id_` where the structural
+key matches it. That widens what is shared at query-build time, which is not a signature
+bug fix, so it is on the thread for the developer rather than in the diff.
+
+**The CI red became its own pull request.** The `test_each_lib (krrood)` failure recorded
+on this item was measured to be a second root cause in the RDR test suite:
+`test_draw_evaluated_tree_for_drawer_cabinet_rdr` loads the model
+`test_save_and_load_drawer_cabinet_rdr` writes, `test_results/` is gitignored, and CI runs
+`pytest -n auto`, so the reader can start before the writer has written. At the developer's
+instruction it is fixed on `claude/rdr-world-saved-model-fixture` (PR #251, draft, `bug`):
+a `saved_drawer_cabinet_rdr` fixture writes the classifier into a directory named after the
+test asking for it, so neither test waits on another having run and two tests running side
+by side no longer write one path. The module under `-n 4` from a clean state goes from
+1 failed 5/5 runs to green 5/5. It is not a plan item - one pull request, in a suite this
+plan does not otherwise touch.
+
