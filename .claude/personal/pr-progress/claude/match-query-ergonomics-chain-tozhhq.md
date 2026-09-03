@@ -31,3 +31,12 @@ branch `claude/match-query-ergonomics-chain-tozhhq` off `main` at 2318e206.
   resolves one hunk. Recorded on both pull requests.
 - The user-visible ranking repro over two aggregates of one kind needs #196 *and* this
   one; neither alone closes it.
+- CI red on `test_each_lib (krrood)`, and it is not this diff:
+  `test_draw_evaluated_tree_for_drawer_cabinet_rdr` loads an RDR model that
+  `test_save_and_load_drawer_cabinet_rdr` writes, `test_results/` is gitignored, and CI
+  runs `pytest -n auto`, so the loader can start before the saver has written anything.
+  Measured both ways - the test alone with the generated directory removed fails
+  identically with the diff reverted to `main` 2318e206, and the module under `-n 4` from
+  a clean state fails 5/5 on the branch and 3/3 reverted. Diagnosis and a proposed fixture
+  fix commented on #248; failed jobs re-run once. Not bundled in, being a second root
+  cause in the RDR test suite - worth its own item if the developer wants it tracked.
