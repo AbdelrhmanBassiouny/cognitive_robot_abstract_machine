@@ -105,3 +105,74 @@ eats the blank line black then restores, and the script keeps the black-only res
 converges only if its member docstrings already carry the three-line form the tool produces. The
 position matters only because the last member of a class is where the eaten blank line sits.
 `stack.py` and `build_dashboard.py` were already declined on #185's head and stay black-only.
+
+## cross-plan-dependencies: the settled plan, 2026-09-03
+
+Kicked off in `auto` mode, so this is the record the approval step never produced.
+
+**The reference form** is `<plan-id>/<item-id>`, decided by the developer; a bare id keeps
+meaning this plan, and a reference naming this plan's own id is rejected rather than
+accepted as a synonym, so one item has one spelling. A second separator is malformed
+rather than read as a nested path.
+
+**Validation resolves, it does not trust.** `validate_plan` gains the referenced plans as
+a second input and rejects an unknown plan, an unknown foreign item, a self-plan
+reference and a malformed reference. Because a reference cannot be resolved without the
+other manifests, a cross-plan entry with no plans directory available is itself rejected -
+the alternative, passing it unchecked, is the same silent-ready fault this item fixes.
+The cycle check runs over the union graph, keyed by canonical reference; a node in the
+plan under validation keeps its bare id, so a same-plan cycle is reported exactly as it
+was before.
+
+**The plans directory is the one new input**, and the dashboard URL cache is read from
+inside it (`_generated/dashboard-urls.yaml`) rather than passed separately: it already
+lives in the directory the plans live in, so a second argument would be a second way to
+say the same thing. Threaded through `build_dashboard.py`,
+`check_dependency_readiness.py` and - found by reading rather than assumed -
+`sync_manifest_status.py`, which validates the manifest too and would otherwise fail the
+refresh before rendering. `refresh_dashboard.sh` passes it on.
+
+**One resolver, `items_by_reference`**, serves every reader of `depends_on`, so the
+readiness rule, the chips, the two sidebar lists and the readiness script cannot disagree
+about what a reference means. A foreign item is classified against its own plan's
+`default_repository`.
+
+**Stacking depth stays same-plan.** An indent level is a position on this page, and a
+foreign parent is not on it.
+
+**The latent fault fixed on the way**: `_dependencies_are_ready` skipped an identifier it
+could not resolve, so a mistyped dependency counted as ready and its dependent got a
+"Start now" button.
+
+### What is deliberately not in this pull request
+
+The five recorded cross-plan blockers this item exists to convert - `icra-experiments`'
+`integrated-simulation-pipeline`, `failure-taxonomy-and-typing` and
+`experiment-c-in-simulation`, this plan's `shared-pr-state-chips`, and
+`rdr-explanation`'s `rdr-why-answer` - are plan data on the personal-notes branch, not
+code on this branch. They are also **sequenced after this lands**: every session runs the
+tooling from its own checkout, so a manifest carrying `<plan-id>/<item-id>` before `main`
+can resolve it fails validation on every `/plan-dashboard` run for those plans. All five
+target ids were checked to resolve: `montessori-eql-stack/montessori_fast_inline_monitor`,
+`knowledge-directed-perception/expectations-from-events`,
+`bastler-package/bastler-package` (#185) and `rdr-core-engine/d-core-backend` (#210).
+
+### Landing hazards, both recorded rather than pre-resolved
+
+`#185` moves every `.claude/` Python module into the `bastler` package, and `#184`, `#157`,
+`#206` and `#111` also edit `build_dashboard.py`. The track's rule is that whichever lands
+second merges, so this is based off `main`.
+
+Worth naming because it is the same idea under a different name: `#184` introduces
+`_resolved_dependencies_of`, absorbing the `depends_on`-resolution comprehension its
+callers each wrote out. That is the resolution *call site*; `items_by_reference` is what a
+reference resolves *through*. Whichever lands second should compose them into one path
+rather than leave two, and `#184`'s `stall_reason` becomes another reader of the resolver
+in that merge.
+
+`#184`'s review also produced two conventions this item follows without importing their
+code: rendered wording is never pinned by a test, and a rendered page is read by class
+rather than matched as a string. The `TextOfElementsWithClass` helper that does the second
+lives on `#184`'s branch, so this branch asserts the chip's own fields and leaves adopting
+that helper to the merge - building a second copy of it is how two branches end up with
+one artifact twice.
