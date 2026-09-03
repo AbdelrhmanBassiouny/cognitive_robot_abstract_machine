@@ -569,3 +569,39 @@ cause is visible in the test source is worth reading before it is deferred.
   own copies of the five conflicted files are already black-clean, so it could only
   touch the resolutions.
 
+### Round 28 -- the monitor half split out as #256
+
+142. The developer asked whether everything `icra-experiments` needs from #169 could move
+    into #244. It can, and it should not: #244 is already slated to split into three, and
+    #169 is 164 cramera files out of 272. So a third pull request between them, **#256
+    `montessori_monitor_and_recording`** -- 35 files, no `cramera` import anywhere.
+143. **`tracy_icra` is what settled the cut.** The ICRA demo branch has no cramera and its
+    own `montessori_demo.py`, so the demo entry point never had to cross. Worth the check
+    before scoping a split: ask what the consumer actually runs, not what its notes name.
+144. Three imports pointed the wrong way. `MethodPatch` -> `krrood.patterns.method_patch`;
+    `sorting_progress` reads `NumericPose` from sdt, where it is defined, not from
+    cramera's re-export; the one test driving a monitor into `MontessoriLiveEventSource`
+    stayed with that adapter.
+145. `SortingRunControl` **subclasses cramera's `LiveRunControl` ABC** and its clock is
+    `cramera.live.run_clock.RunClock`. Only `title`/`state`/`apply` (~40 lines) speak
+    cramera's vocabulary; the rest is demo state pointing the wrong way. Inverting it is
+    the price of moving the demo entry point, and it was not paid.
+146. Second native-stack dissolve on this plan. #247 recorded, unstacked, #169 retargeted,
+    re-created as **#258**: `244, 256, 169, 170, 164, 165, 167, 168`. The
+    `stacked-pr-maintenance` procedure worked verbatim; `GH_TOKEN` is set in this
+    container, so the curl half is available here.
+147. `format_docstrings.py` split the `:py:attr:` target
+    `GiskardExecutable.max_ticks_per_motion_mapping` across a line again -- **third time on
+    this line of work**. Reverted on #256 so the two branches stay identical.
+
+### What runs in this container (updated)
+
+- `test/version_test/test_dependency_declarations.py` runs with `--noconftest` in a
+  hand-built 3.12 venv: 20 passed, and it is what pins the `segmind` declaration
+  `experiments` needed once it imported segmind.
+- `cramera.knowledge.enums` and `krrood.patterns.method_patch` import standalone with only
+  `typing_extensions`, which is how the attachment-colour bug was reproduced rather than
+  argued.
+- The cross-module import resolver is the check that a *subset* dangles nothing. Run it
+  against both parents and compare; 13 long-standing findings either way here.
+
