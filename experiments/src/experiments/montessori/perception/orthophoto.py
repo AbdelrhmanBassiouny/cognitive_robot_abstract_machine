@@ -173,6 +173,47 @@ class WorkspaceRegion(SubclassJSONSerializer):
 
 
 @dataclass(frozen=True)
+class ImageWindow:
+    """
+    The rectangle of a camera image something reaches into.
+
+    Named rather than counted, so a reader of a crop knows which corner it was taken
+    from and can put a pixel of it back where it came from in the whole image.
+    """
+
+    left: int
+    """
+    Column of the image the rectangle starts at.
+    """
+
+    top: int
+    """
+    Row of the image the rectangle starts at.
+    """
+
+    width: int
+    """
+    How many columns it spans.
+    """
+
+    height: int
+    """
+    How many rows it spans.
+    """
+
+    def cut_from(self, image: np.ndarray) -> np.ndarray:
+        """
+        The part of an image this rectangle covers.
+
+        :param image: An image of the size the rectangle was measured against, of any
+            number of channels.
+        """
+        return image[
+            self.top : self.top + self.height, self.left : self.left + self.width
+        ]
+
+
+@dataclass(frozen=True)
 class WorkspaceBox:
     """
     The stretch of table perception looks at, together with the room above it that
@@ -221,6 +262,31 @@ class WorkspaceBox:
         """
         return cv2.convexHull(frame.project(self.corners).astype(np.float32))
 
+    def covered_in(self, frame: RgbdFrame) -> np.ndarray:
+        """
+        Which pixels of a camera image this box reaches, as a mask.
+
+        :param frame: The camera data, carrying the camera's own pose.
+        :return: The mask, shape ``(height, width)``, non-zero where the box reaches.
+        """
+        covered = np.zeros((frame.height, frame.width), dtype=np.uint8)
+        cv2.fillConvexPoly(
+            covered, np.round(self.outline_in(frame)).astype(np.int32), 255
+        )
+        return covered
+
+    def window_in(self, frame: RgbdFrame) -> ImageWindow:
+        """
+        The rectangle of a camera image this box reaches into.
+
+        :param frame: The camera data, carrying the camera's own pose.
+        :raises WorkspaceOutOfView: If the box falls outside the image entirely.
+        """
+        left, top, width, height = cv2.boundingRect(self.covered_in(frame))
+        if width == 0 or height == 0:
+            raise WorkspaceOutOfView((frame.height, frame.width))
+        return ImageWindow(left=left, top=top, width=width, height=height)
+
     def clip(self, image: np.ndarray, frame: RgbdFrame) -> np.ndarray:
         """
         Cut a camera image down to the part of it this box covers.
@@ -228,19 +294,15 @@ class WorkspaceBox:
         :param image: An image taken through ``frame``'s camera, of any number of
             channels.
         :param frame: The camera data the image was taken with.
+        :raises WorkspaceOutOfView: If the box falls outside the image entirely.
         :return: The image cropped to the box, blacked out where the box does not reach.
         """
-        covered = np.zeros(image.shape[:2], dtype=np.uint8)
-        cv2.fillConvexPoly(
-            covered, np.round(self.outline_in(frame)).astype(np.int32), 255
-        )
-        left, top, width, height = cv2.boundingRect(covered)
-        if width == 0 or height == 0:
-            raise WorkspaceOutOfView(image.shape[:2])
+        covered = self.covered_in(frame)
+        window = self.window_in(frame)
         kept = np.zeros_like(image)
         inside = covered > 0
         kept[inside] = image[inside]
-        return kept[top : top + height, left : left + width]
+        return window.cut_from(kept)
 
 
 # %% the rectified view

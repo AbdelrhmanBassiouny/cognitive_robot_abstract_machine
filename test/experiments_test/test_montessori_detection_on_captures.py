@@ -15,6 +15,7 @@ quietly passing.
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 
 import pytest
 from typing_extensions import List
@@ -22,7 +23,9 @@ from typing_extensions import List
 from experiments.montessori.hole_geometry import detect_hole_footprints
 from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.detections import MontessoriScene
+from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.recorded_setup import WIDEST_WORKSPACE
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
@@ -46,6 +49,15 @@ def detections_on(
     return Counter(
         shape.category for shape in scene.shapes if shape.supporting_surface == surface
     )
+
+
+def area_of(region: WorkspaceRegion) -> float:
+    """
+    How much of a plane a stretch of it covers, in square metres.
+
+    :param region: The stretch to measure.
+    """
+    return (region.maximum_x - region.minimum_x) * (region.maximum_y - region.minimum_y)
 
 
 @pytest.fixture(params=sorted(CAPTURE_TRUTHS), ids=sorted(CAPTURE_TRUTHS))
@@ -178,3 +190,69 @@ def test_every_piece_resting_on_the_lid_is_found(
         )
     found = detections_on(scene, capture_pipeline.lid.name)
     assert not (Counter(truth.pieces_on_lid) - found)
+
+
+# %% the table the look measured for itself
+
+
+def test_the_table_is_measured_smaller_than_the_stretch_the_world_allows(
+    capture: SceneCapture, capture_pipeline: MontessoriPerceptionPipeline
+) -> None:
+    """
+    A look reads the table rather than a rectangle drawn around it, so it searches less
+    of the picture than the setup allows it to.
+    """
+    modelled = capture_pipeline.table.region
+    measured = capture_pipeline.table_in(capture.to_frame()).region
+    assert area_of(measured) < area_of(modelled)
+
+
+def test_the_measured_table_stays_inside_the_stretch_the_world_allows(
+    capture: SceneCapture, capture_pipeline: MontessoriPerceptionPipeline
+) -> None:
+    """
+    The measurement narrows what the world states and never grows it, so a run only ever
+    searches ground the world had already described.
+    """
+    modelled = capture_pipeline.table.region
+    measured = capture_pipeline.table_in(capture.to_frame()).region
+    assert modelled.contains(measured.minimum_x, measured.minimum_y) and (
+        modelled.contains(measured.maximum_x, measured.maximum_y)
+    )
+
+
+def test_tuning_the_workspace_no_longer_changes_what_a_look_searches(
+    capture: SceneCapture, capture_pipeline: MontessoriPerceptionPipeline
+) -> None:
+    """
+    What this item replaces: the searched stretch used to be whatever a person had
+    dragged the sliders to, and it is now what the camera shows, so starting from the
+    whole stretch the camera looks over reaches the same answer as starting from a
+    workspace already cut down by hand.
+    """
+    untuned = replace(
+        capture_pipeline,
+        table=replace(capture_pipeline.table, region=WIDEST_WORKSPACE),
+    )
+    frame = capture.to_frame()
+    assert untuned.table_in(frame).region == capture_pipeline.table_in(frame).region
+
+
+def test_every_piece_reported_stands_on_the_table_that_was_measured(
+    capture: SceneCapture,
+    capture_pipeline: MontessoriPerceptionPipeline,
+    scene: MontessoriScene,
+) -> None:
+    """
+    Nothing is reported outside the stretch the look measured, which is what says the
+    narrowing threw away picture rather than pieces.
+    """
+    measured = capture_pipeline.table_in(capture.to_frame()).region
+    outside = [
+        shape.label
+        for shape in scene.shapes
+        if not measured.contains(
+            float(shape.pose.to_position().x), float(shape.pose.to_position().y)
+        )
+    ]
+    assert outside == []
