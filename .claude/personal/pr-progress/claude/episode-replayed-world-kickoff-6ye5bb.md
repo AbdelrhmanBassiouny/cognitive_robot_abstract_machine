@@ -1,23 +1,46 @@
-# episode-replayed-into-the-world (knowledge-directed-perception) - PR #246
+# #246 — `episode-replayed-into-the-world` (plan `knowledge-directed-perception`, track `events`)
 
-Branch `claude/episode-replayed-world-kickoff-6ye5bb`, based on `sdt_segmind_krrood_from_fast_monitor` (#244),
-the sdt/segmind/krrood/physics_simulators half of #169 split out at the developer's request (this session);
-#169 stacks on #244 (native stack #173 dissolved, re-created as #247 with #244 at its foot).
+Branch `claude/episode-replayed-world-kickoff-6ye5bb`, based on #244. Draft, and
+staying a draft. This session resolved the review round of 2026-09-03; the item was
+built in session `01Udpwca`.
 
-## Done (2026-09-01, this session)
-- #244 opened (3 commits, byte-identical to #169's tip on those paths); #169 re-based on it; stack #247 re-created.
-  eql-stack manifest/roadmap saved (new item `sdt_segmind_krrood_from_fast_monitor`); issue #174 comment; dashboard republished.
-- #246 opened; manifest (branch/session/PR/in_progress), kickoff and what-it-took roadmap sections saved; issue #201
-  comment; dashboard republished.
-- Implementation pushed as `195c271a`: `RosbagPlayer`, `segmind/exceptions.py`, `FrameData.joint_positions` +
-  `DataPlayer.get_joint_positions`/`apply_frame`, `rosbags` dependency, 9 tests (`test/segmind_test`: 48 passed,
-  1 skipped; 39/1 before). Descriptions of #246, #244 and #169 updated.
-- Local baseline for #244 against `main` (worktree, PYTHONPATH): failing sets identical by name except
-  `test_world_pr2.py` (env / copied generated ORM interface). Recorded in #244's description.
+## What was stalling it
 
-## Next (nothing owed by this session; for whoever picks it up)
-- Wait for CI on #246 and #244. Replaying the real `tracy_pickup_demo` bag needs the bag on disk and the Tracy world.
-- `expectations-from-events` reads the events a replay produces; it depends on this item.
-- Env recipe: `pip install -U uv` -> `/usr/local/bin/uv sync --extra dev --python 3.12`;
-  `uv pip install --python .venv/bin/python rosbags docformatter`; pytest `--orm-build never`;
-  ignore `test_robots/test_pose_facing.py`; run the formatter with `.venv/bin` on PATH.
+Four review threads opened 2026-09-03 17:50–17:55, none of them recorded in the item's
+`blockers`. Nothing else: CI green on all 23 checks, `mergeable_state` clean, base #244
+open and out of draft. Fifth time on this plan that a stall was a review comment nobody
+had turned into state.
+
+## Done
+
+- `3b3e3f53` — `RosbagPlayer._sample` (50 lines, two nested functions closing over four
+  pieces of state) became `RecordedMessage`, `RecordedState` and `RecordingSampler`, plus
+  `RosbagTopic.advances_the_clock` and `.message_type` for the branch that was in the
+  message loop. Six ROS message-type strings became `RosbagMessageType` members, reused by
+  both the reader and the test dataset. Docstrings and type hints everywhere missing.
+  `TransformsAt`/`JointPositionsAt` share a `PublishedMessage` base. Five tests added,
+  each mutation-checked.
+- `f9a961fc` — the JSON player's `_pause`/`_resume` docstrings and `UNROOTED_FRAME`, the
+  last two gaps an AST sweep found.
+- Replied to all four threads; resolved three. Manifest `blockers`/`notes` updated,
+  roadmap section appended, dashboard republished, PR description rewritten.
+
+`test/segmind_test`: 53 passed, 1 skipped (48 passed, 1 skipped before).
+
+## Outstanding — the developer's, not this session's
+
+- **r3927219116 left open on purpose.** Two places are deliberately undocumented: the two
+  new exceptions' `error_message`/`suggest_correction` overrides (no `DataclassException`
+  subclass in the workspace documents theirs, and the abstract base states both contracts)
+  and `DataPlayer.__post_init__`/`FilePlayer.__post_init__` (untouched by this branch).
+  Offered on the thread to add either.
+- CI was still running on `f9a961fc` when this session finished; `mergeable_state` was
+  `unstable` for that reason rather than for a red check.
+
+## Environment, for whoever picks this up
+
+`pip install -U uv` → 0.12.9 at `/usr/local/bin/uv`; `uv sync --extra dev --python 3.12`
+builds the workspace and now brings `rosbags` with it. `black` and `docformatter` by hand
+with `.venv/bin` on `PATH`. Tests with `--orm-build never`.
+`plan_item_bootstrap.py` in this branch's checkout has no `update` subcommand, so the
+manifest was edited directly and pushed with `save-plan.sh --manifest`.
