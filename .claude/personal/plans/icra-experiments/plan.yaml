@@ -106,6 +106,9 @@ items:
     track: integration
     depends_on: []
     status: not_started
+    blockers:
+      - >-
+        Cross-plan: montessori-eql-stack's montessori_fast_inline_monitor (#169) is merged in here, and its last CI round left three coraplex failures, a hanging Tracy demo job and an unbounded SimulationTimePacer.sleep. That plan owns the fix; this item cannot be called done while it is red.
     notes: >-
       The foot of the plan. Cut off main and merge in, in this order, the
       library half of the monitor stack (#244), the monitor itself (#169, which
@@ -332,6 +335,9 @@ items:
     track: failure
     depends_on: [scenario-domain-model]
     status: not_started
+    blockers:
+      - >-
+        Cross-plan: the violated-expectation input comes from knowledge-directed-perception's expectations-from-events (not started there), which that plan owns. Typing from the plan's failure and the segmind events can be built first; the expectation-derived type waits on it.
     notes: >-
       A FailureType enum with the four members, and the rule that assigns
       one to a finished trial from the plan's own failure, the segmind
@@ -524,6 +530,9 @@ items:
       - failure-predicted-from-the-query
       - episodes-queried-by-eql
     status: not_started
+    blockers:
+      - >-
+        Cross-plan: the failure-detection story (perception looks where the action promised and reports the difference) is knowledge-directed-perception's expectations-from-events, which that plan owns and has not started. Without it Experiment C reports typed failures but not detected ones.
     notes: >-
       The insertion trial from a randomised start pose under every
       condition, board-level completion reported too, every failure typed

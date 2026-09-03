@@ -167,6 +167,41 @@ no-narrowing ablation → a second setup → fewer random scenes → B's injecti
 half. Never cut: the temporal scenarios, the perturbation conditions, the
 hybrid VLM baseline, the failure-prediction metric, the determinism runs.
 
+## Cross-plan prerequisites
+
+Decided on 2026-09-03: work the paper needs that another plan already owns
+stays in that plan, and the item here that needs it carries a blocker naming
+it. What the deadline still needs from each plan:
+
+- **knowledge-directed-perception.** Everything in its `surfaces`,
+  `request-language` and `method-selection` tracks that is built (#202, #205,
+  #216, #221, #222, #225, #227, #229, #231, #232, #236, #238, and #239's
+  knowledge-half commit) is consumed by `integrated-simulation-pipeline`; the
+  paper does not wait for those pull requests to land. Still needed and not
+  started there: `expectations-from-events`, which is the failure-detection
+  story and blocks `failure-taxonomy-and-typing`'s expectation-derived type
+  and `experiment-c-in-simulation`. Its three demo items are satisfied by
+  `tracy-demo-takes-the-integrated-branch` and the robot experiments here,
+  and its `imagination-world-rejects-what-a-predicate-refuses` item is
+  covered in narrow form by `physics-verification-backend`. Not needed for
+  the paper: `competing-explanations`, `how-to-look-concluded-from-the-request`,
+  `surfaces-found-by-looking`, `tune-detection-rules-against-the-camera`,
+  `robokudo-detector`, the rule-tree half of #239, and
+  `episode-replayed-into-the-world` (#246) unless a recording has to be
+  replayed for the temporal questions.
+- **montessori-eql-stack.** #244 and #169 are merged into the integrated
+  pipeline; #169's open CI debt blocks `integrated-simulation-pipeline` and
+  that plan owns it. The console stack above #169 (#170, #164, #165, #167,
+  #168) is not needed for any number in the paper; #168's presets are reused
+  by `question-set-and-ground-truth` as EQL text only. The video may want the
+  console; that is a 12 to 13 September decision.
+- **eql-verbalization.** #33's reviewed scene wordings are what
+  `working-memory-verbalised` renders with; the item does not wait for #33 to
+  rebase or land. The two wording decisions open on #33 are the developer's.
+- **Not on the deadline path:** eql-performatives, eql-existential-semantics,
+  match-query-ergonomics (#192 is the developer's own), the rdr-* plans, and
+  every tooling plan.
+
 ## What this plan takes priority over
 
 Until 2026-09-15, the following in-flight work waits unless it unblocks an
