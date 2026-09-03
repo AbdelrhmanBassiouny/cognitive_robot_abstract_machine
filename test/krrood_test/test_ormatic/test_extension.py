@@ -21,8 +21,9 @@ def test_extension(tmp_path):
     alternative_mappings = interface_info.alternative_mappings
     type_mappings = interface_info.type_mappings
     assert type_mappings == ormatic_interface.Base.type_mappings
-    # specify new classes
-    classes += [CustomPosition, AggregatorOfExternalInstances]
+    # specify new classes; the pre-existing ones stay externally mapped, not regenerated
+    new_domain_classes = [CustomPosition, AggregatorOfExternalInstances]
+    classes += new_domain_classes
 
     # create the new ormatic interface
     class_diagram = ClassDiagram(
@@ -33,6 +34,7 @@ def test_extension(tmp_path):
         interface_information=OrmaticInterfaceInformation(
             type_mappings=type_mappings,
             alternative_mappings=alternative_mappings,
+            externally_mapped_classes=interface_info.externally_mapped_classes,
         ),
     )
     instance.make_all_tables()
@@ -44,20 +46,23 @@ def test_extension(tmp_path):
 
     # Import the generated module
     spec = importlib.util.spec_from_file_location(
-        "ormatic_interface", new_interface_file
+        "extended_ormatic_interface", new_interface_file
     )
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module  # make it discoverable during exec
     spec.loader.exec_module(module)
 
     new_interface_info = get_classes_of_ormatic_interface(module)
-    new_classes = new_interface_info.classes
-    new_alternative_mappings = new_interface_info.alternative_mappings
 
-    assert set(cls.__name__ for cls in classes) == set(
-        cls.__name__ for cls in new_classes
+    # only the genuinely new classes are (re)declared in the extended interface
+    assert set(cls.__name__ for cls in new_interface_info.classes) == set(
+        cls.__name__ for cls in new_domain_classes
     )
 
-    assert set(cls.__name__ for cls in alternative_mappings) == set(
-        cls.__name__ for cls in new_alternative_mappings
+    # everything the base interface already mapped is still reachable, just reused
+    assert set(cls.__name__ for cls in classes).issubset(
+        {cls.__name__ for cls in new_interface_info.externally_mapped_classes}
+    )
+    assert set(cls.__name__ for cls in alternative_mappings).issubset(
+        {cls.__name__ for cls in new_interface_info.externally_mapped_classes}
     )

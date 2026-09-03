@@ -5,11 +5,9 @@ from inspect import isclass
 from types import ModuleType
 from typing import List, Type, Dict
 
-from sqlalchemy.orm import DeclarativeBase
-
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
 from krrood.ormatic.data_access_objects.dao import DataAccessObject
-from krrood.ormatic.utils import classes_of_module, is_direct_subclass
+from krrood.ormatic.utils import classes_of_module
 
 
 @dataclass
@@ -78,10 +76,7 @@ def get_classes_of_ormatic_interface(
                 dao_class, information.externally_mapped_classes
             )
 
-    # get the type mappings from the direct subclass of declarative base
-    for cls in filter(
-        lambda x: is_direct_subclass(x, DeclarativeBase), classes_of_ormatic_interface
-    ):
-        information.type_mappings.update(cls.type_mappings)
+    # every interface shares one Base, so its type_mappings already include everything upstream
+    information.type_mappings.update(interface.Base.type_mappings)
 
     return information

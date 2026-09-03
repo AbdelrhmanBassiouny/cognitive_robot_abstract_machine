@@ -13,6 +13,7 @@ import rustworkx as rx
 import sqlalchemy
 import krrood.ormatic.custom_types  # type: ignore
 import krrood.ormatic.data_access_objects.alternative_mappings  # type: ignore
+from krrood.ormatic.base import Base as SharedBase
 from krrood.ormatic.helper import (
     get_classes_of_ormatic_interface,
     OrmaticInterfaceInformation,
@@ -83,9 +84,8 @@ class ORMatic:
     """
     The already-generated ormatic-interface modules this interface builds on, if any.
 
-    When non-empty, the generated file imports and reuses the sole dependency's
-    declarative ``Base`` instead of declaring a new one, so both files share one
-    SQLAlchemy registry and ``MetaData``.
+    Every generated interface shares one declarative ``Base``
+    (:class:`krrood.ormatic.base.Base`), so any number of dependencies can be listed.
     """
 
     foreign_key_postfix = "_id"
@@ -136,6 +136,7 @@ class ORMatic:
 
     def __post_init__(self):
         self.imported_modules.add(get_module_of_type(TypeDict))
+        self.imported_modules.add("krrood.ormatic.base")
         for dependency in self.ormatic_interface_dependencies:
             self.imported_modules.add(dependency.__name__)
         self._fill_type_mappings()
@@ -150,17 +151,6 @@ class ORMatic:
         # externally-mapped classes may live further up the chain than the immediate dependency
         for external_table in self.external_tables.values():
             self.imported_modules.add(get_module_of_type(external_table.dao_class))
-
-    @property
-    def base_source_module(self) -> Optional[str]:
-        """
-        :return: The dotted module name to import the shared declarative ``Base``
-            from, or ``None`` if this interface has no dependency and therefore owns
-            (declares) its own ``Base``.
-        """
-        if not self.ormatic_interface_dependencies:
-            return None
-        return self.ormatic_interface_dependencies[0].__name__
 
     @property
     def alternative_mappings(self) -> List[Type[AlternativeMapping]]:
@@ -388,27 +378,24 @@ class ORMatic:
             package.
         :return: The ORMatic instance.
         """
-        if len(ormatic_interface_dependencies) > 1:
-            raise ValueError(
-                "ORMatic currently supports at most one ormatic_interface_dependencies "
-                "entry: every generated interface shares a single declarative Base "
-                "with its dependency, and merging independent declarative registries "
-                "isn't supported."
-            )
-
         all_classes, all_alternative_mappings, all_type_mappings = set(), set(), {}
         all_externally_mapped_classes: Dict[Type, Type] = {}
 
-        # classes already mapped by the dependency are kept in the class diagram but
-        # not remapped: they are imported and reused via externally_mapped_classes.
+        # every interface shares one Base, so anything already mapped anywhere in the
+        # running process must be reused, not just what an explicit dependency mapped
+        for mapper in SharedBase.registry.mappers:
+            if issubclass(mapper.class_, DataAccessObject):
+                cls.register_externally_mapped_class(
+                    mapper.class_, all_externally_mapped_classes
+                )
+
+        # classes already mapped by a dependency are kept in the class diagram but not
+        # remapped, so inheritance/association edges to them still resolve
         for ormatic_interface in ormatic_interface_dependencies:
             interface_info = get_classes_of_ormatic_interface(ormatic_interface)
             all_classes |= set(interface_info.classes)
             all_alternative_mappings |= set(interface_info.alternative_mappings)
             all_type_mappings.update(interface_info.type_mappings)
-            all_externally_mapped_classes.update(
-                interface_info.externally_mapped_classes
-            )
 
         # externally_mapped_classes is transitive across the whole chain, unlike classes above
         all_classes |= set(all_externally_mapped_classes.keys())
