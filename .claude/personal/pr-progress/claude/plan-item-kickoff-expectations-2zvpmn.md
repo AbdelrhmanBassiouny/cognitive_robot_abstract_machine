@@ -1,68 +1,61 @@
 # expectations-from-events (#257, draft) - knowledge-directed-perception
 
-Kicked off 2026-09-03 in `auto` mode. Branch
-`claude/plan-item-kickoff-expectations-2zvpmn`, cut from #232
-(`claude/plan-item-kickoff-kdp-o4l189`). Full reasoning is in the plan's
-`roadmap.md` section of the same name; this note is the working state.
-
-## The base, and why
-
-Three dependencies on three stacks. Base #232 (the believed place is defined
-there), merge #222 in (SceneRequest, how an expectation reaches a look) and
-#246 in (the events, and #244 under it which removes the geometry_msgs import
-that stops segmind collecting without ROS 2). Basing on #238 would have cost
-one merge instead of two and was refused: it carries 6,853 lines of another
-item's diff into this review.
-
-Measured: #246 into #232 clean; #222 into #232 five hunks in `pipeline.py` and
-`test_montessori_perception.py`, the merge #238 already recorded as resolving
-as a union.
-
-## Plan
-
-1. Merge #222, then #246, into the branch. Resolve the two files as a union,
-   reading #238's recorded resolution rather than re-deriving it.
-2. Tests first for `perception/expectations.py`: `Expectation` (a named piece
-   at a `BelievedPlace`, and what put it there), `ExpectedPlaces` (the store,
-   propagated by the three rules), the violated-part report.
-3. Build it. Three propagation rules from the item's notes: released over a
-   hole -> believed at that hole, any turn, within the release spread; still
-   grasped -> the gripper's pose; acted on by nothing -> where it was last
-   seen. Segmind's five events confirm or refute.
-4. `SceneRequest` carries what is expected; `pipeline.detect` evaluates it
-   beside `expected_pieces()`.
-5. The captures: state the insertion's declared effect in `recorded_setup` for
-   the three cube-at-a-hole captures, and measure which of #232's four lid
-   expected-to-fail marks come off. Whether all four do is a measurement, not
-   a promise.
-6. `scripts/format_docstrings.py` over every touched file; run the suite and
-   compare failing sets by name, not by count.
+Kicked off and built 2026-09-03 in `auto` mode. Branch
+`claude/plan-item-kickoff-expectations-2zvpmn`, cut from #232. Full reasoning
+is in the plan's `roadmap.md` sections of the same name.
 
 ## Done
 
-- Branch cut from #232's tip, bootstrap commit pushed.
-- Draft #257 opened, manifest recorded (`in_progress`, branch, PR, session),
-  roadmap section written, plan saved to personal-notes (`7ca44d498`).
+- Branch cut from #232's tip; **#222 and #246 merged in** (the #222 merge was
+  five hunks in `pipeline.py` and `test_montessori_perception.py`, resolved as
+  the union #238 recorded; #246 was clean).
+- `perception/expectations.py`: `Expectation`, `ExpectedProperty`,
+  `ExpectationReport`, `Expectations`, `SUPPORT_AFTER_EVENT`.
+- `SceneRequest.expected`; `pipeline.detect` evaluates it beside
+  `expected_pieces()`.
+- `piece_matcher.offsets_within` - the grid fix a stated reach exposed.
+- `LID_PIECES_STILL_MISSED`'s recorded reason re-pointed (no assertion
+  changed).
+- 482 passed / 453 baseline, failing set identical by name, four rules
+  mutation-checked, docstrings formatted, pushed, PR description rewritten to
+  match, manifest + roadmap saved, dashboard republished.
 
-## Next
+## The two things worth remembering
 
-Step 1 - the two merges.
+1. **A stated reach exposed a real fault.** Every belief before this one
+   reached exactly `SEED_REACH`, so nothing varied a radius. The sweep's grid
+   was laid out from `-radius`, so its phase moved with the reach: the cube is
+   fitted at 20 mm and 40 mm and not at 24 mm or 30 mm. Same shape as #238's
+   lattice finding. Fixed; the "reach is a bound" test caught an overshoot the
+   first fix introduced.
+2. **The lid marks deliberately did not come off.** Armed, the cube *is*
+   fitted in both cube-at-a-hole captures - but at 0.645 against a ghost
+   cylinder's 0.641, so which reach works is not stable. Stating a reach that
+   happens to work is the tuning this plan refused three times.
+   `competing-explanations` owns it, and the marks now say so.
+
+## Next, if anything
+
+Nothing outstanding on the branch. Open for review; the two questions put to
+the developer on the PR are the store's placement (experiments vs krrood/sdt,
+overturned twice on #222) and whether the re-pointed mark reasons read right.
 
 ## Watch out
 
+- **I clobbered 66 lines of #255's roadmap section on one `save-plan.sh`**, by
+  building the file from a fetch taken before writing rather than immediately
+  before saving - the exact failure the notes warn about. Restored by merging
+  their version with mine and re-saving; verified nothing is lost. Fetch
+  *immediately* before every save, not at the start of the edit.
 - `plan_item_bootstrap.py open` fails here (four-space `ITEM_FIELD_INDENT`
-  against this plan's two-space item fields, error swallowed by
-  `capture_output=True`); the manifest was edited directly. Sixth time.
+  against this plan's two-space fields, error swallowed by
+  `capture_output=True`). Sixth time; manifest edited directly.
 - The tracking-issue subscription was refused by the permission classifier, so
-  read #201's comments directly before any later round. Doing so at kickoff is
-  what turned up `icra-experiments`' 2026-09-03 cross-plan record, which this
-  plan's roadmap did not carry: this item is the one thing that plan still
-  needs and the only critical-path item with no branch.
-- #255 (kicked off the same day) renames `MontessoriShapeDetection` to
-  `DetectedMontessoriShape` across `pipeline.py`, `detections.py` and
-  `occupancy.py`. This branch edits `pipeline.py`, so it inherits it.
-- `InsertMontessoriShapeAction` is on `tracy_icra` only; the declared effect is
-  a rule this item owns and the action calls, not an edit to the action.
-- Open and stated on the PR rather than decided silently: whether the belief
-  store belongs in `experiments` or generally in krrood/sdt. Review overturned
-  that placement twice on #222.
+  read #201's comments directly. Doing so at kickoff is what turned up
+  `icra-experiments`' cross-plan record: this item is the one thing that plan
+  still needs and its only critical-path item that had no branch.
+- The artifact wake subscription could not register in this session, so a
+  republish elsewhere will not notify it.
+- #255 renames `MontessoriShapeDetection` across `pipeline.py`,
+  `detections.py` and `occupancy.py`; this branch edits `pipeline.py` and
+  `piece_matcher.py` and inherits it.
