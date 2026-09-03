@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-Path("sync_manifest_status_invocation.json").write_text(json.dumps(sys.argv[1:]))
+Path(f"{Path(__file__).stem}_invocation.json").write_text(json.dumps(sys.argv[1:]))
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--plan")

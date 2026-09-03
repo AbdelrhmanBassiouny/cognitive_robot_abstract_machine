@@ -35,19 +35,21 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from build_dashboard import (
-    DependencyReference,
+    Dependency,
+    DependencyResolver,
+    LiveState,
     Plan,
     PlanDirectory,
     PlanValidationError,
     PullRequestsByRepository,
-    ResolvedDependency,
-    classify_live_state,
     load_pull_requests_by_repository,
     validate_plan,
 )
@@ -59,12 +61,78 @@ class UnknownItemError(ValueError):
     """
 
 
+class ReadinessField(StrEnum):
+    """
+    The keys one dependency's readiness carries once serialized.
+    """
+
+    IDENTIFIER = "identifier"
+    TITLE = "title"
+    LIVE_STATE = "live_state"
+    IS_READY = "is_ready"
+
+
+@dataclass(frozen=True)
+class DependencyReadiness:
+    """
+    One ``depends_on`` entry, and whether it is safe to build on.
+    """
+
+    identifier: str
+    """
+    The entry, as the manifest wrote it.
+    """
+
+    title: str | None
+    """
+    The referenced item's title, or ``None`` when nothing resolves it.
+    """
+
+    live_state: LiveState | None
+    """
+    The referenced item's live GitHub state, or ``None`` when nothing resolves it.
+    """
+
+    is_ready: bool
+    """
+    Whether a dependent can safely stack its own branch on it.
+    """
+
+    @classmethod
+    def of(cls, dependency: Dependency) -> DependencyReadiness:
+        """
+        Report one dependency whose live state has already been classified.
+
+        :param dependency: The dependency to report.
+        :return: That dependency's readiness.
+        """
+        return cls(
+            identifier=dependency.reference.text,
+            title=dependency.title,
+            live_state=dependency.live_state,
+            is_ready=dependency.is_ready_to_unblock_dependents(),
+        )
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        This readiness as the one entry the script prints for it.
+        """
+        return {
+            ReadinessField.IDENTIFIER.value: self.identifier,
+            ReadinessField.TITLE.value: self.title,
+            ReadinessField.LIVE_STATE.value: (
+                self.live_state.value if self.live_state else None
+            ),
+            ReadinessField.IS_READY.value: self.is_ready,
+        }
+
+
 def dependency_readiness(
     plan: Plan,
     item_identifier: str,
     pull_requests_by_repository: PullRequestsByRepository,
     plan_directory: PlanDirectory | None = None,
-) -> list[dict[str, Any]]:
+) -> list[DependencyReadiness]:
     """
     Classify every dependency of ``item_identifier`` as ready or not.
 
@@ -76,69 +144,20 @@ def dependency_readiness(
     :param plan_directory: The other plans a ``<plan-id>/<item-id>`` dependency resolves
         against, or ``None`` when only this plan's own items are available.
     :raises UnknownItemError: If ``item_identifier`` isn't in the plan.
-    :return: One ready-to-serialize dict per entry in the item's ``depends_on``, in that
-        order.
+    :return: One readiness per entry in the item's ``depends_on``, in that order.
     """
-    items_by_identifier = {item.identifier: item for item in plan.items}
-    item = items_by_identifier.get(item_identifier)
+    item = next(
+        (item for item in plan.items if item.identifier == item_identifier), None
+    )
     if item is None:
         raise UnknownItemError(f"no item {item_identifier!r} in plan {plan.id!r}")
 
-    results: list[dict[str, Any]] = []
-    for dependency_identifier in item.depends_on:
-        dependency = _resolve(
-            dependency_identifier, plan, items_by_identifier, plan_directory
-        )
-        if dependency is None:
-            results.append(
-                {
-                    "identifier": dependency_identifier,
-                    "title": None,
-                    "live_state": None,
-                    "is_ready": False,
-                }
-            )
-            continue
-        dependency.item.live_state = classify_live_state(
-            dependency.item.pull_request_number,
-            dependency.repository,
-            pull_requests_by_repository,
-        )
-        results.append(
-            {
-                "identifier": dependency.reference.text,
-                "title": dependency.item.title,
-                "live_state": dependency.item.live_state.value,
-                "is_ready": dependency.item.is_ready_to_unblock_dependents(),
-            }
-        )
-    return results
-
-
-def _resolve(
-    dependency_identifier: str,
-    plan: Plan,
-    items_by_identifier: dict[str, Any],
-    plan_directory: PlanDirectory | None,
-) -> ResolvedDependency | None:
-    """
-    Resolve one ``depends_on`` entry to the item it names.
-
-    :param dependency_identifier: The entry, as the manifest wrote it.
-    :param plan: The plan the entry is written in.
-    :param items_by_identifier: That plan's own items, keyed by effective identifier.
-    :param plan_directory: The other plans a cross-plan entry resolves against.
-    :return: The resolved dependency, or ``None`` if nothing resolves it.
-    """
-    reference = DependencyReference.from_text(dependency_identifier)
-    if reference.names_another_plan:
-        if plan_directory is None:
-            return None
-        return plan_directory.resolve(reference)
-    dependency = items_by_identifier.get(reference.item_identifier)
-    if dependency is None:
-        return None
-    return ResolvedDependency(reference=reference, item=dependency, plan=plan)
+    resolver = DependencyResolver(plan=plan, plan_directory=plan_directory)
+    resolver.classify_live_states(pull_requests_by_repository)
+    return [
+        DependencyReadiness.of(dependency)
+        for dependency in resolver.dependencies_of(item)
+    ]
 
 
 def main() -> int:
@@ -168,7 +187,7 @@ def main() -> int:
     arguments = parser.parse_args()
 
     plan_directory = (
-        PlanDirectory.load(Path(arguments.plans_dir)) if arguments.plans_dir else None
+        PlanDirectory.at(Path(arguments.plans_dir)) if arguments.plans_dir else None
     )
     raw_plan = yaml.safe_load(Path(arguments.plan).read_text())
     try:
@@ -191,7 +210,7 @@ def main() -> int:
         print(str(error), file=sys.stderr)
         return 1
 
-    print(json.dumps(results))
+    print(json.dumps([readiness.to_json() for readiness in results]))
     return 0
 
 

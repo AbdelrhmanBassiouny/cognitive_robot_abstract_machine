@@ -213,7 +213,7 @@ def main() -> int:
     plan_text = plan_path.read_text()
     plan = yaml.safe_load(plan_text)
     plan_directory = (
-        PlanDirectory.load(Path(arguments.plans_dir)) if arguments.plans_dir else None
+        PlanDirectory.at(Path(arguments.plans_dir)) if arguments.plans_dir else None
     )
 
     try:

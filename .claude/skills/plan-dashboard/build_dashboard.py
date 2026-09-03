@@ -46,7 +46,7 @@ import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -60,6 +60,9 @@ from render_common import (
 
 MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
 """Same-track dependency chains deeper than this wrap back to indent level 0."""
+
+SUPPORTED_SCHEMA_VERSION = 1
+"""The only ``schema_version`` a plan.yaml may declare."""
 
 PLAN_REFERENCE_SEPARATOR = "/"
 """Separates the plan id from the item id in a ``depends_on`` entry naming an
@@ -157,6 +160,43 @@ class PullRequestLabel(StrEnum):
     BUG = "bug"
 
 
+class ManifestKey(StrEnum):
+    """Every key a plan.yaml carries.
+
+    The manifest's vocabulary written once, so a reader and a test spell a
+    key the same way and renaming one renames both.
+    """
+
+    SCHEMA_VERSION = "schema_version"
+    ID = "id"
+    TITLE = "title"
+    DESCRIPTION = "description"
+    DEFAULT_REPOSITORY = "default_repository"
+    TRACKING_ISSUE = "tracking_issue"
+    WAVES = "waves"
+    TRACKS = "tracks"
+    ITEMS = "items"
+    NAME = "name"
+    WAVE = "wave"
+    TRACK = "track"
+    BRANCH = "branch"
+    STATUS = "status"
+    PULL_REQUEST_NUMBER = "pull_request_number"
+    REPOSITORY = "repository"
+    SESSION = "session"
+    NOTES = "notes"
+    DEPENDS_ON = "depends_on"
+    BLOCKERS = "blockers"
+
+
+class PlanFile(StrEnum):
+    """The fixed filenames one plan's own directory carries, neither of them
+    configurable."""
+
+    MANIFEST = "plan.yaml"
+    ROADMAP = "roadmap.md"
+
+
 @dataclass(frozen=True)
 class DependencyReference:
     """One parsed ``depends_on`` entry: an item of the plan the entry is
@@ -247,14 +287,18 @@ class InvalidManifestRoot(ValidationProblem):
 
 @dataclass
 class InvalidSchemaVersion(ValidationProblem):
-    """The manifest's ``schema_version`` is missing or not ``1``."""
+    """The manifest's ``schema_version`` is missing or not
+    :data:`SUPPORTED_SCHEMA_VERSION`."""
 
     actual_value: Any
     """Whatever ``schema_version`` actually held."""
 
     def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
-        return f"schema_version must be 1, got {self.actual_value!r}"
+        return (
+            f"schema_version must be {SUPPORTED_SCHEMA_VERSION}, "
+            f"got {self.actual_value!r}"
+        )
 
 
 @dataclass
@@ -498,114 +542,210 @@ def _dependency_problem(
         return MissingPlanDirectory(item_identifier, dependency_identifier)
     if plan_directory.plan(reference.plan_id) is None:
         return UnknownDependencyPlan(item_identifier, dependency_identifier)
-    if plan_directory.resolve(reference) is None:
+    if not isinstance(plan_directory.resolve(reference), ResolvedDependency):
         return UnknownDependency(item_identifier, dependency_identifier)
     return None
 
 
-def _reachable_dependency_graph(
-    plan_id: Any,
-    references_by_identifier: dict[str, list[DependencyReference]],
-    plan_directory: PlanDirectory | None,
-) -> dict[str, list[str]]:
-    """Build the ``depends_on`` graph reachable from the validated plan's own items.
+class VisitState(Enum):
+    """Where a depth-first walk has got to with one node."""
+
+    UNVISITED = auto()
+    """Not reached yet."""
+
+    IN_PROGRESS = auto()
+    """On the current path - reaching it again closes a cycle."""
+
+    DONE = auto()
+    """Fully explored, and on no cycle."""
+
+
+@dataclass
+class CycleSearch:
+    """One depth-first search of a dependency graph for a cycle."""
+
+    edges_by_node: dict[str, list[str]]
+    """Each node's own outgoing edges. An edge naming a node the graph
+    doesn't hold is a separate, already-reported problem and is not
+    followed."""
+
+    state_by_node: dict[str, VisitState] = field(init=False)
+    """How far the walk has got with each node."""
+
+    path: list[str] = field(default_factory=list)
+    """The nodes on the walk's current path, in order."""
+
+    def __post_init__(self) -> None:
+        self.state_by_node = {node: VisitState.UNVISITED for node in self.edges_by_node}
+
+    def find(self) -> list[str] | None:
+        """Walk the whole graph.
+
+        :return: One cycle's nodes in order, with the first repeated at the
+            end, or ``None`` if the graph is acyclic.
+        """
+        for node in self.edges_by_node:
+            if self.state_by_node[node] is not VisitState.UNVISITED:
+                continue
+            cycle = self._visit(node)
+            if cycle is not None:
+                return cycle
+        return None
+
+    def _visit(self, node: str) -> list[str] | None:
+        """Walk one node and everything it reaches.
+
+        :param node: The node to walk from.
+        :return: One cycle through it, or ``None`` if it is on none.
+        """
+        self.state_by_node[node] = VisitState.IN_PROGRESS
+        self.path.append(node)
+        for target in self.edges_by_node.get(node, []):
+            if target not in self.state_by_node:
+                continue
+            if self.state_by_node[target] is VisitState.IN_PROGRESS:
+                return [*self.path[self.path.index(target) :], target]
+            if self.state_by_node[target] is VisitState.UNVISITED:
+                cycle = self._visit(target)
+                if cycle is not None:
+                    return cycle
+        self.path.pop()
+        self.state_by_node[node] = VisitState.DONE
+        return None
+
+
+@dataclass
+class DependencyGraph:
+    """The ``depends_on`` graph reachable from one plan's own items.
 
     Each node is keyed the way a manifest names it: a bare id for an item of
-    the validated plan, ``<plan-id>/<item-id>`` for an item of another plan.
-    Only what this plan can reach is walked, so a cycle wholly inside some
-    other plan is that plan's own to report.
-
-    :param plan_id: The validated plan's own id.
-    :param references_by_identifier: Each of its items' parsed ``depends_on``.
-    :param plan_directory: The plans a cross-plan reference resolves against.
-    :return: Each reachable node's own outgoing edges, keyed as above.
+    that plan, ``<plan-id>/<item-id>`` for an item of another plan. Only what
+    the plan can reach is walked, so a cycle wholly inside some other plan is
+    that plan's own to report.
     """
 
-    def key_of(reference: DependencyReference, holding_plan_id: str | None) -> str:
-        """The graph key for one reference written inside *holding_plan_id*."""
-        target_plan_id = reference.plan_id or holding_plan_id
-        if target_plan_id is None or target_plan_id == plan_id:
+    plan_id: Any
+    """The validated plan's own id."""
+
+    plan_directory: PlanDirectory | None = None
+    """The plans a cross-plan reference resolves against."""
+
+    edges_by_node: dict[str, list[str]] = field(default_factory=dict)
+    """Each node reached so far, and its own outgoing edges."""
+
+    @classmethod
+    def reachable_from(
+        cls,
+        plan_id: Any,
+        references_by_identifier: dict[str, list[DependencyReference]],
+        plan_directory: PlanDirectory | None,
+    ) -> DependencyGraph:
+        """Build the graph one plan's own items reach.
+
+        :param plan_id: The validated plan's own id.
+        :param references_by_identifier: Each of its items' parsed
+            ``depends_on``.
+        :param plan_directory: The plans a cross-plan reference resolves
+            against.
+        :return: The built graph.
+        """
+        graph = cls(plan_id=plan_id, plan_directory=plan_directory)
+        for identifier, references in references_by_identifier.items():
+            graph.add_node(identifier, None, references)
+        return graph
+
+    def find_cycle(self) -> list[str] | None:
+        """Find one cycle in this graph, if any exists.
+
+        :return: The cycle's nodes in order, with the first repeated at the
+            end, or ``None`` if the graph is acyclic.
+        """
+        return CycleSearch(edges_by_node=self.edges_by_node).find()
+
+    def add_node(
+        self,
+        node_key: str,
+        holding_plan_id: str | None,
+        references: list[DependencyReference],
+    ) -> None:
+        """Record one node's edges, then walk the foreign items it names.
+
+        :param node_key: This node's key in the graph.
+        :param holding_plan_id: The plan whose manifest wrote *references*,
+            or ``None`` for the validated plan itself.
+        :param references: That node's own parsed ``depends_on``.
+        """
+        if node_key in self.edges_by_node:
+            return
+        self.edges_by_node[node_key] = [
+            self.key_of(reference, holding_plan_id) for reference in references
+        ]
+        for reference in references:
+            self._add_node_in_another_plan(reference, holding_plan_id)
+
+    def key_of(
+        self, reference: DependencyReference, holding_plan_id: str | None
+    ) -> str:
+        """The graph key for one reference.
+
+        :param reference: The reference to key.
+        :param holding_plan_id: The plan whose manifest wrote it, or ``None``
+            for the validated plan itself.
+        :return: A bare id for an item of the validated plan, the full
+            ``<plan-id>/<item-id>`` reference otherwise.
+        """
+        target_plan_id = self._plan_holding(reference, holding_plan_id)
+        if target_plan_id is None:
             return reference.item_identifier
         return DependencyReference(
             item_identifier=reference.item_identifier, plan_id=target_plan_id
         ).text
 
-    graph: dict[str, list[str]] = {}
-
-    def visit(
-        node_key: str,
-        holding_plan_id: str | None,
-        references: list[DependencyReference],
+    def _add_node_in_another_plan(
+        self, reference: DependencyReference, holding_plan_id: str | None
     ) -> None:
-        """Record one node's edges, then walk the foreign items it names."""
-        if node_key in graph:
+        """Walk one reference onwards, if it names an item of another plan.
+
+        :param reference: One parsed ``depends_on`` entry.
+        :param holding_plan_id: The plan whose manifest wrote it, or ``None``
+            for the validated plan itself.
+        """
+        if self.plan_directory is None:
             return
-        graph[node_key] = [
-            key_of(reference, holding_plan_id) for reference in references
-        ]
-        if plan_directory is None:
+        target_plan_id = self._plan_holding(reference, holding_plan_id)
+        if target_plan_id is None:
             return
-        for reference in references:
-            target_plan_id = reference.plan_id or holding_plan_id
-            if target_plan_id is None or target_plan_id == plan_id:
-                continue
-            resolved = plan_directory.resolve(reference)
-            if resolved is None:
-                continue
-            visit(
-                key_of(reference, holding_plan_id),
-                target_plan_id,
-                [
-                    DependencyReference.from_text(entry)
-                    for entry in resolved.item.depends_on
-                ],
+        dependency = self.plan_directory.resolve(
+            DependencyReference(
+                item_identifier=reference.item_identifier, plan_id=target_plan_id
             )
+        )
+        if not isinstance(dependency, ResolvedDependency):
+            return
+        self.add_node(
+            self.key_of(reference, holding_plan_id),
+            target_plan_id,
+            [
+                DependencyReference.from_text(entry)
+                for entry in dependency.item.depends_on
+            ],
+        )
 
-    for identifier, references in references_by_identifier.items():
-        visit(identifier, None, references)
-    return graph
+    def _plan_holding(
+        self, reference: DependencyReference, holding_plan_id: str | None
+    ) -> str | None:
+        """Which other plan holds the item one reference names.
 
-
-def _find_dependency_cycle(
-    item_identifiers: list[str], depends_on_by_identifier: dict[str, list[str]]
-) -> list[str] | None:
-    """Find one cycle in the ``depends_on`` graph, if any exists.
-
-    :param item_identifiers: Every node of the graph, as
-        :func:`_reachable_dependency_graph` keys them.
-    :param depends_on_by_identifier: Each node's own outgoing edges (an edge
-        naming something outside ``item_identifiers`` is a separate,
-        already-reported problem and is skipped here rather than followed).
-    :return: The cycle's nodes in order, with the first repeated at the end,
-        or ``None`` if the graph is acyclic.
-    """
-    UNVISITED, IN_PROGRESS, DONE = 0, 1, 2
-    state = {identifier: UNVISITED for identifier in item_identifiers}
-    path: list[str] = []
-
-    def visit(identifier: str) -> list[str] | None:
-        state[identifier] = IN_PROGRESS
-        path.append(identifier)
-        for dependency_identifier in depends_on_by_identifier.get(identifier, []):
-            if dependency_identifier not in state:
-                continue
-            if state[dependency_identifier] == IN_PROGRESS:
-                cycle_start = path.index(dependency_identifier)
-                return [*path[cycle_start:], dependency_identifier]
-            if state[dependency_identifier] == UNVISITED:
-                cycle = visit(dependency_identifier)
-                if cycle is not None:
-                    return cycle
-        path.pop()
-        state[identifier] = DONE
-        return None
-
-    for identifier in item_identifiers:
-        if state[identifier] == UNVISITED:
-            cycle = visit(identifier)
-            if cycle is not None:
-                return cycle
-    return None
+        :param reference: The reference to place.
+        :param holding_plan_id: The plan whose manifest wrote it, or ``None``
+            for the validated plan itself.
+        :return: That plan's id, or ``None`` when the item belongs to the
+            plan being validated.
+        """
+        target_plan_id = reference.plan_id or holding_plan_id
+        if target_plan_id == self.plan_id:
+            return None
+        return target_plan_id
 
 
 def validate_plan(
@@ -631,11 +771,12 @@ def validate_plan(
 
     problems: list[ValidationProblem] = []
 
-    if plan.get("schema_version") != 1:
-        problems.append(InvalidSchemaVersion(plan.get("schema_version")))
+    if plan.get(ManifestKey.SCHEMA_VERSION) != SUPPORTED_SCHEMA_VERSION:
+        problems.append(InvalidSchemaVersion(plan.get(ManifestKey.SCHEMA_VERSION)))
 
     item_identifiers = [
-        item.get("id") or item.get("branch") for item in plan.get("items", [])
+        item.get(ManifestKey.ID) or item.get(ManifestKey.BRANCH)
+        for item in plan.get(ManifestKey.ITEMS, [])
     ]
     if len(item_identifiers) != len(set(item_identifiers)):
         seen: set[str] = set()
@@ -646,18 +787,24 @@ def validate_plan(
         }
         problems.append(DuplicateItemId(sorted(duplicate_identifiers)))
 
-    track_identifiers = {track["id"] for track in plan.get("tracks", [])}
-    wave_identifiers = {wave["id"] for wave in plan.get("waves", [])}
+    track_identifiers = {
+        track[ManifestKey.ID] for track in plan.get(ManifestKey.TRACKS, [])
+    }
+    wave_identifiers = {
+        wave[ManifestKey.ID] for wave in plan.get(ManifestKey.WAVES, [])
+    }
     item_identifier_set = set(item_identifiers)
     references_by_identifier: dict[str, list[DependencyReference]] = {}
 
-    for item in plan.get("items", []):
-        item_identifier = item.get("id") or item.get("branch")
-        if item.get("track") not in track_identifiers:
-            problems.append(UnknownTrack(item_identifier, item.get("track")))
-        if item.get("status") not in {status.value for status in ItemStatus}:
-            problems.append(UnknownStatus(item_identifier, item.get("status")))
-        depends_on = item.get("depends_on")
+    for item in plan.get(ManifestKey.ITEMS, []):
+        item_identifier = item.get(ManifestKey.ID) or item.get(ManifestKey.BRANCH)
+        if item.get(ManifestKey.TRACK) not in track_identifiers:
+            problems.append(UnknownTrack(item_identifier, item.get(ManifestKey.TRACK)))
+        if item.get(ManifestKey.STATUS) not in {status.value for status in ItemStatus}:
+            problems.append(
+                UnknownStatus(item_identifier, item.get(ManifestKey.STATUS))
+            )
+        depends_on = item.get(ManifestKey.DEPENDS_ON)
         if depends_on is not None and not isinstance(depends_on, list):
             problems.append(InvalidDependsOn(item_identifier, type(depends_on)))
         else:
@@ -670,27 +817,29 @@ def validate_plan(
                 problem = _dependency_problem(
                     item_identifier,
                     dependency_identifier,
-                    plan.get("id"),
+                    plan.get(ManifestKey.ID),
                     item_identifier_set,
                     plan_directory,
                 )
                 if problem is not None:
                     problems.append(problem)
 
-        blockers = item.get("blockers")
+        blockers = item.get(ManifestKey.BLOCKERS)
         if blockers is not None and not isinstance(blockers, list):
             problems.append(InvalidBlockers(item_identifier, type(blockers)))
 
-    graph = _reachable_dependency_graph(
-        plan.get("id"), references_by_identifier, plan_directory
+    graph = DependencyGraph.reachable_from(
+        plan.get(ManifestKey.ID), references_by_identifier, plan_directory
     )
-    cycle = _find_dependency_cycle(list(graph), graph)
+    cycle = graph.find_cycle()
     if cycle is not None:
         problems.append(DependencyCycle(cycle))
 
-    for track in plan.get("tracks", []):
-        if track.get("wave") not in wave_identifiers:
-            problems.append(UnknownWave(track["id"], track.get("wave")))
+    for track in plan.get(ManifestKey.TRACKS, []):
+        if track.get(ManifestKey.WAVE) not in wave_identifiers:
+            problems.append(
+                UnknownWave(track[ManifestKey.ID], track.get(ManifestKey.WAVE))
+            )
 
     if problems:
         raise PlanValidationError(problems)
@@ -839,9 +988,9 @@ class Wave:
         called after :func:`validate_plan` has already confirmed the data
         is well-formed."""
         return cls(
-            id=data["id"],
-            name=data["name"],
-            description=data.get("description"),
+            id=data[ManifestKey.ID],
+            name=data[ManifestKey.NAME],
+            description=data.get(ManifestKey.DESCRIPTION),
         )
 
 
@@ -868,10 +1017,10 @@ class Track:
         called after :func:`validate_plan` has already confirmed the data
         is well-formed."""
         return cls(
-            id=data["id"],
-            name=data["name"],
-            wave=data["wave"],
-            description=data.get("description"),
+            id=data[ManifestKey.ID],
+            name=data[ManifestKey.NAME],
+            wave=data[ManifestKey.WAVE],
+            description=data.get(ManifestKey.DESCRIPTION),
         )
 
 
@@ -1126,19 +1275,19 @@ class Item:
         """Build an item from one entry of plan.yaml's ``items[]`` - only
         called after :func:`validate_plan` has already confirmed the data
         is well-formed."""
-        notes = data.get("notes")
+        notes = data.get(ManifestKey.NOTES)
         return cls(
-            title=data["title"],
-            branch=data["branch"],
-            track=data["track"],
-            status=ItemStatus(data["status"]),
-            id=data.get("id"),
-            pull_request_number=data.get("pull_request_number"),
-            repository=data.get("repository"),
-            session=sanitize_http_url(data.get("session")),
+            title=data[ManifestKey.TITLE],
+            branch=data[ManifestKey.BRANCH],
+            track=data[ManifestKey.TRACK],
+            status=ItemStatus(data[ManifestKey.STATUS]),
+            id=data.get(ManifestKey.ID),
+            pull_request_number=data.get(ManifestKey.PULL_REQUEST_NUMBER),
+            repository=data.get(ManifestKey.REPOSITORY),
+            session=sanitize_http_url(data.get(ManifestKey.SESSION)),
             notes=notes.strip() if notes else None,
-            depends_on=list(data.get("depends_on") or []),
-            blockers=list(data.get("blockers") or []),
+            depends_on=list(data.get(ManifestKey.DEPENDS_ON) or []),
+            blockers=list(data.get(ManifestKey.BLOCKERS) or []),
         )
 
     def is_effectively_done(self) -> bool:
@@ -1206,26 +1355,84 @@ class Plan:
         """Build a plan from a freshly-loaded plan.yaml - only called after
         :func:`validate_plan` has already confirmed the data is well-formed."""
         return cls(
-            id=data["id"],
-            title=data["title"],
-            description=data["description"],
-            default_repository=data["default_repository"],
-            waves=[Wave.from_mapping(wave) for wave in data.get("waves", [])],
-            tracks=[Track.from_mapping(track) for track in data.get("tracks", [])],
-            items=[Item.from_mapping(item) for item in data.get("items", [])],
-            tracking_issue=data.get("tracking_issue"),
+            id=data[ManifestKey.ID],
+            title=data[ManifestKey.TITLE],
+            description=data[ManifestKey.DESCRIPTION],
+            default_repository=data[ManifestKey.DEFAULT_REPOSITORY],
+            waves=[Wave.from_mapping(wave) for wave in data.get(ManifestKey.WAVES, [])],
+            tracks=[
+                Track.from_mapping(track) for track in data.get(ManifestKey.TRACKS, [])
+            ],
+            items=[Item.from_mapping(item) for item in data.get(ManifestKey.ITEMS, [])],
+            tracking_issue=data.get(ManifestKey.TRACKING_ISSUE),
         )
 
 
 @dataclass(frozen=True)
-class ResolvedDependency:
-    """One ``depends_on`` entry, resolved to the item it names and the plan
-    holding that item - what every reader of ``depends_on`` works from, so
-    the readiness rule, the chips and the sidebar lists cannot disagree
-    about what a reference means."""
+class Dependency(ABC):
+    """One ``depends_on`` entry, seen from the side that reads it - what
+    every reader of ``depends_on`` works from, so the readiness rule, the
+    chips and the sidebar lists cannot disagree about what an entry means.
+
+    An entry that names nothing is a :class:`UnresolvedDependency` rather
+    than a missing one, so a caller always gets one dependency per entry and
+    can never skip past a mistyped entry as if the item had one dependency
+    fewer.
+    """
 
     reference: DependencyReference
-    """The entry that resolved to this item."""
+    """The entry this dependency was read from."""
+
+    @property
+    def is_in_another_plan(self) -> bool:
+        """Whether this dependency lives outside the plan being rendered."""
+        return self.reference.names_another_plan
+
+    @property
+    @abstractmethod
+    def title(self) -> str | None:
+        """The referenced item's title, or ``None`` when nothing resolves
+        this entry."""
+
+    @property
+    @abstractmethod
+    def live_state(self) -> LiveState | None:
+        """The referenced item's live GitHub state as last classified, or
+        ``None`` when nothing resolves this entry."""
+
+    @abstractmethod
+    def is_ready_to_unblock_dependents(self) -> bool:
+        """Whether a dependent item can safely start stacking its own branch
+        on this dependency."""
+
+    @abstractmethod
+    def is_ready_for_dependent_review(self) -> bool:
+        """Whether a dependent item's own pull request is worth reviewing
+        behind this dependency."""
+
+    @abstractmethod
+    def chip(self, plan_directory: PlanDirectory | None) -> DependencyChip:
+        """Render this dependency as a ``needs`` chip on its dependent's card.
+
+        :param plan_directory: The plans loaded for this render, holding the
+            dashboard URL a cross-plan chip links to.
+        """
+
+    @abstractmethod
+    def classify_live_state(
+        self, pull_requests_by_repository: PullRequestsByRepository
+    ) -> None:
+        """Fill in the live GitHub state of the item this dependency names,
+        against the repository that item's own plan uses.
+
+        :param pull_requests_by_repository: Live pull request state, keyed by
+            repository.
+        """
+
+
+@dataclass(frozen=True)
+class ResolvedDependency(Dependency):
+    """A ``depends_on`` entry that named an item, and the plan holding it."""
 
     item: Item
     """The item the entry names."""
@@ -1234,48 +1441,127 @@ class ResolvedDependency:
     """The plan holding that item."""
 
     @property
-    def is_in_another_plan(self) -> bool:
-        """Whether this dependency lives outside the plan being rendered."""
-        return self.reference.names_another_plan
-
-    @property
     def repository(self) -> str:
         """The repository this dependency's pull request lives in: its own
         override, else its plan's default."""
         return self.item.repository or self.plan.default_repository
 
+    @property
+    def title(self) -> str | None:
+        """See :attr:`Dependency.title`."""
+        return self.item.title
+
+    @property
+    def live_state(self) -> LiveState | None:
+        """See :attr:`Dependency.live_state`."""
+        return self.item.live_state
+
+    def is_ready_to_unblock_dependents(self) -> bool:
+        """See :meth:`Dependency.is_ready_to_unblock_dependents` - the
+        referenced item's own answer."""
+        return self.item.is_ready_to_unblock_dependents()
+
+    def is_ready_for_dependent_review(self) -> bool:
+        """See :meth:`Dependency.is_ready_for_dependent_review` - the
+        referenced item's own answer."""
+        return self.item.is_ready_for_dependent_review()
+
+    def chip(self, plan_directory: PlanDirectory | None) -> DependencyChip:
+        """See :meth:`Dependency.chip` - linked to the other plan's dashboard
+        when this dependency is foreign and that plan has one published."""
+        dashboard_url = (
+            plan_directory.dashboard_url(self.plan.id)
+            if self.is_in_another_plan and plan_directory is not None
+            else None
+        )
+        return DependencyChip.of_dependency(self, dashboard_url)
+
+    def classify_live_state(
+        self, pull_requests_by_repository: PullRequestsByRepository
+    ) -> None:
+        """See :meth:`Dependency.classify_live_state`."""
+        self.item.live_state = classify_live_state(
+            self.item.pull_request_number,
+            self.repository,
+            pull_requests_by_repository,
+        )
+
+
+@dataclass(frozen=True)
+class UnresolvedDependency(Dependency):
+    """A ``depends_on`` entry that named nothing - a plan, or an item, that
+    doesn't exist.
+
+    Never ready, in either sense: an entry nobody can resolve used to be
+    skipped and so counted as satisfied, which handed a mistyped dependency's
+    dependent a "Start now" button. :func:`validate_plan` rejects such an
+    entry outright, so one only reaches a reader that renders without
+    validating first.
+    """
+
+    @property
+    def title(self) -> str | None:
+        """See :attr:`Dependency.title` - always ``None``."""
+        return None
+
+    @property
+    def live_state(self) -> LiveState | None:
+        """See :attr:`Dependency.live_state` - always ``None``."""
+        return None
+
+    def is_ready_to_unblock_dependents(self) -> bool:
+        """See :meth:`Dependency.is_ready_to_unblock_dependents` - always
+        ``False``."""
+        return False
+
+    def is_ready_for_dependent_review(self) -> bool:
+        """See :meth:`Dependency.is_ready_for_dependent_review` - always
+        ``False``."""
+        return False
+
+    def chip(self, plan_directory: PlanDirectory | None) -> DependencyChip:
+        """See :meth:`Dependency.chip` - the entry's own text, marked unmet."""
+        return DependencyChip.unresolved(self.reference.text)
+
+    def classify_live_state(
+        self, pull_requests_by_repository: PullRequestsByRepository
+    ) -> None:
+        """See :meth:`Dependency.classify_live_state` - nothing to classify,
+        since this entry named no item."""
+
 
 @dataclass
 class PlanDirectory:
-    """Every plan manifest under one plans directory, and where each one's
-    dashboard is published - what a cross-plan ``depends_on`` entry resolves
-    against."""
+    """The directory holding every plan's own ``<plan-id>/`` subdirectory -
+    what a cross-plan ``depends_on`` entry resolves against.
 
-    plans_by_id: dict[str, Plan]
-    """Each manifest found, keyed by its own ``id``."""
+    A manifest is read the first time a reference names its plan, and never
+    otherwise: a plan that nothing here depends on is exactly as expensive as
+    a plan that isn't in the directory at all, which is what keeps one plan's
+    dashboard from pulling in every other plan's contents.
+    """
+
+    directory: Path
+    """Where the plans live, one subdirectory per plan, named by its id."""
 
     dashboard_urls_by_plan_id: dict[str, str] = field(default_factory=dict)
     """Each plan's published dashboard URL, for the plans the cache names."""
 
-    MANIFEST_FILENAME: ClassVar[str] = "plan.yaml"
-    """The fixed filename every plan's manifest carries."""
+    plans_by_id: dict[str, Plan] = field(default_factory=dict)
+    """The manifests read so far, keyed by plan id - filled in on demand by
+    :meth:`plan`, so a plan appears here only once something named it."""
 
     DASHBOARD_URL_CACHE_PATH: ClassVar[str] = "_generated/dashboard-urls.yaml"
     """Where the dashboard-URL cache sits inside a plans directory."""
 
     @classmethod
-    def load(cls, directory: Path) -> PlanDirectory:
-        """Read every ``<plan-id>/plan.yaml`` under one plans directory.
+    def at(cls, directory: Path) -> PlanDirectory:
+        """Open one plans directory, reading its dashboard-URL cache.
 
         :param directory: The directory holding one subdirectory per plan.
-        :return: The loaded plans, plus whatever the URL cache names - a
-            missing cache is an ordinary state, since a plan's first publish
-            happens before one exists.
+        :return: The open directory - a missing URL cache is an ordinary
+            state, since a plan's first publish happens before one exists.
         """
-        plans_by_id: dict[str, Plan] = {}
-        for manifest_path in sorted(directory.glob(f"*/{cls.MANIFEST_FILENAME}")):
-            plan = Plan.from_mapping(yaml.safe_load(manifest_path.read_text()))
-            plans_by_id[plan.id] = plan
         cache_path = directory / cls.DASHBOARD_URL_CACHE_PATH
         cached_urls = (
             yaml.safe_load(cache_path.read_text()) if cache_path.is_file() else None
@@ -1286,32 +1572,42 @@ class PlanDirectory:
             if sanitized_url is not None:
                 dashboard_urls_by_plan_id[plan_id] = sanitized_url
         return cls(
-            plans_by_id=plans_by_id,
+            directory=directory,
             dashboard_urls_by_plan_id=dashboard_urls_by_plan_id,
         )
 
     def plan(self, plan_id: str | None) -> Plan | None:
-        """Look one plan up by id.
+        """Look one plan up by id, reading its manifest the first time.
 
-        :param plan_id: The plan's own ``id``.
+        :param plan_id: The plan's own ``id``, which is also its directory's
+            name.
         :return: That plan, or ``None`` if the directory doesn't hold it.
         """
-        return self.plans_by_id.get(plan_id)
+        if plan_id is None:
+            return None
+        if plan_id in self.plans_by_id:
+            return self.plans_by_id[plan_id]
+        manifest_path = self.directory / plan_id / PlanFile.MANIFEST
+        if not manifest_path.is_file():
+            return None
+        plan = Plan.from_mapping(yaml.safe_load(manifest_path.read_text()))
+        self.plans_by_id[plan_id] = plan
+        return plan
 
-    def resolve(self, reference: DependencyReference) -> ResolvedDependency | None:
+    def resolve(self, reference: DependencyReference) -> Dependency:
         """Resolve one cross-plan reference to the item it names.
 
         :param reference: A reference naming another plan's item.
-        :return: The resolved dependency, or ``None`` if either half of the
-            reference doesn't exist.
+        :return: The resolved dependency, or an :class:`UnresolvedDependency`
+            if either half of the reference doesn't exist.
         """
         plan = self.plan(reference.plan_id)
         if plan is None:
-            return None
+            return UnresolvedDependency(reference=reference)
         for item in plan.items:
             if item.identifier == reference.item_identifier:
                 return ResolvedDependency(reference=reference, item=item, plan=plan)
-        return None
+        return UnresolvedDependency(reference=reference)
 
     def dashboard_url(self, plan_id: str) -> str | None:
         """Where one plan's dashboard is published.
@@ -1320,6 +1616,81 @@ class PlanDirectory:
         :return: Its URL, or ``None`` if the cache doesn't name one.
         """
         return self.dashboard_urls_by_plan_id.get(plan_id)
+
+
+@dataclass
+class DependencyResolver:
+    """Every ``depends_on`` entry one plan writes, resolved to the item it
+    names.
+
+    The single place an entry becomes a dependency, so the readiness rule,
+    the chips and the sidebar lists cannot disagree about what an entry
+    means. Only the plans some entry actually names are read; the rest of the
+    plans directory is never touched.
+    """
+
+    plan: Plan
+    """The plan whose entries are being resolved."""
+
+    plan_directory: PlanDirectory | None = None
+    """The other plans a ``<plan-id>/<item-id>`` entry resolves against, or
+    ``None`` when only this plan's own items are available."""
+
+    dependencies_by_reference: dict[str, Dependency] = field(init=False)
+    """What each entry resolved to, keyed by the entry that names it: each of
+    this plan's own items by its bare id, plus every entry its items write."""
+
+    def __post_init__(self) -> None:
+        self.dependencies_by_reference = {
+            item.identifier: ResolvedDependency(
+                reference=DependencyReference(item_identifier=item.identifier),
+                item=item,
+                plan=self.plan,
+            )
+            for item in self.plan.items
+        }
+        for item in self.plan.items:
+            self.dependencies_of(item)
+
+    def resolve(self, dependency_identifier: str) -> Dependency:
+        """Resolve one ``depends_on`` entry to the item it names.
+
+        :param dependency_identifier: The entry, as the manifest wrote it.
+        :return: The dependency it names, or an :class:`UnresolvedDependency`
+            when nothing does - never nothing at all, so no reader can skip
+            past a mistyped entry as though the item had one dependency
+            fewer.
+        """
+        known = self.dependencies_by_reference.get(dependency_identifier)
+        if known is not None:
+            return known
+        reference = DependencyReference.from_text(dependency_identifier)
+        resolved: Dependency = UnresolvedDependency(reference=reference)
+        if reference.names_another_plan and self.plan_directory is not None:
+            resolved = self.plan_directory.resolve(reference)
+        self.dependencies_by_reference[dependency_identifier] = resolved
+        return resolved
+
+    def dependencies_of(self, item: Item) -> list[Dependency]:
+        """Resolve one item's whole ``depends_on``.
+
+        :param item: The depending item.
+        :return: One dependency per entry, in the order the manifest wrote
+            them.
+        """
+        return [self.resolve(entry) for entry in item.depends_on]
+
+    def classify_live_states(
+        self, pull_requests_by_repository: PullRequestsByRepository
+    ) -> None:
+        """Fill in the live GitHub state of every item some entry here names,
+        each against its own plan's repository.
+
+        :param pull_requests_by_repository: Live pull request state, keyed by
+            repository.
+        """
+        for dependency in self.dependencies_by_reference.values():
+            dependency.classify_live_state(pull_requests_by_repository)
 
 
 @dataclass
@@ -1459,36 +1830,15 @@ class DashboardRenderer:
     items_by_identifier: dict[str, Item] = field(init=False)
     """Every item of this plan, keyed by :attr:`Item.identifier`."""
 
-    items_by_reference: dict[str, ResolvedDependency] = field(init=False)
-    """Everything a ``depends_on`` entry of this plan can resolve to, keyed by
-    the entry that names it: each of this plan's own items by its bare id,
-    plus each item another plan holds that some entry here names. The one
-    resolver every reader of ``depends_on`` goes through, so an entry means
-    the same thing to all of them."""
+    dependencies: DependencyResolver = field(init=False)
+    """The one resolver every reader of ``depends_on`` goes through, so an
+    entry means the same thing to all of them."""
 
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}
-        self.items_by_reference = {
-            item.identifier: ResolvedDependency(
-                reference=DependencyReference(item_identifier=item.identifier),
-                item=item,
-                plan=self.plan,
-            )
-            for item in self.plan.items
-        }
-        if self.plan_directory is None:
-            return
-        for item in self.plan.items:
-            for dependency_identifier in item.depends_on:
-                if dependency_identifier in self.items_by_reference:
-                    continue
-                reference = DependencyReference.from_text(dependency_identifier)
-                if not reference.names_another_plan:
-                    continue
-                resolved = self.plan_directory.resolve(reference)
-                if resolved is None:
-                    continue
-                self.items_by_reference[dependency_identifier] = resolved
+        self.dependencies = DependencyResolver(
+            plan=self.plan, plan_directory=self.plan_directory
+        )
 
     def render(self) -> tuple[str, DashboardSummary]:
         """Classify live state/drift for every item, then render the full page.
@@ -1552,14 +1902,7 @@ class DashboardRenderer:
                 item.live_state is LiveState.OPEN_DRAFT
                 and item.status is not ItemStatus.DEFERRED
             )
-        for dependency in self.items_by_reference.values():
-            if not dependency.is_in_another_plan:
-                continue
-            dependency.item.live_state = classify_live_state(
-                dependency.item.pull_request_number,
-                dependency.repository,
-                self.pull_requests_by_repository,
-            )
+        self.dependencies.classify_live_states(self.pull_requests_by_repository)
         for item in self.plan.items:
             item.dependency_chips = self._dependency_chips_of(item)
             item.action = self._action_for(item)
@@ -1605,60 +1948,23 @@ class DashboardRenderer:
             item_identifier=item.identifier,
         )
 
-    def _dependencies_of(self, item: Item) -> list[ResolvedDependency | None]:
-        """Resolve :attr:`Item.depends_on` through :attr:`items_by_reference`.
-
-        :param item: The depending item.
-        :return: One entry per ``depends_on`` entry, in that order, and
-            ``None`` wherever an entry resolves to nothing - never treated as
-            satisfied by any caller, since a mistyped dependency used to be
-            skipped and so counted as ready. :func:`validate_plan` rejects
-            such an entry outright, so ``None`` only reaches a caller that
-            renders without validating first.
-        """
-        return [
-            self.items_by_reference.get(dependency_identifier)
-            for dependency_identifier in item.depends_on
-        ]
-
     def _dependencies_are_ready(self, item: Item) -> bool:
         """Whether every entry in :attr:`Item.depends_on` resolves to an item
         that's itself ready to be built upon
-        (:meth:`Item.is_ready_to_unblock_dependents`) - vacuously true for
-        an item with no dependencies."""
+        (:meth:`Dependency.is_ready_to_unblock_dependents`) - vacuously true
+        for an item with no dependencies."""
         return all(
-            dependency is not None and dependency.item.is_ready_to_unblock_dependents()
-            for dependency in self._dependencies_of(item)
+            dependency.is_ready_to_unblock_dependents()
+            for dependency in self.dependencies.dependencies_of(item)
         )
 
     def _dependency_chips_of(self, item: Item) -> list[DependencyChip]:
         """Build one ready-to-render :class:`DependencyChip` per entry in
-        :attr:`Item.depends_on`, resolving each through
-        :attr:`items_by_reference`."""
-        chips: list[DependencyChip] = []
-        for dependency_identifier, dependency in zip(
-            item.depends_on, self._dependencies_of(item)
-        ):
-            if dependency is None:
-                chips.append(DependencyChip.unresolved(dependency_identifier))
-                continue
-            chips.append(
-                DependencyChip.of_dependency(
-                    dependency, self._dashboard_url_of(dependency)
-                )
-            )
-        return chips
-
-    def _dashboard_url_of(self, dependency: ResolvedDependency) -> str | None:
-        """Where one dependency's own plan is published, for a chip to link to.
-
-        :param dependency: The resolved dependency.
-        :return: That plan's dashboard URL, or ``None`` for a dependency of
-            this plan or a plan the URL cache doesn't name.
-        """
-        if not dependency.is_in_another_plan or self.plan_directory is None:
-            return None
-        return self.plan_directory.dashboard_url(dependency.plan.id)
+        :attr:`Item.depends_on`."""
+        return [
+            dependency.chip(self.plan_directory)
+            for dependency in self.dependencies.dependencies_of(item)
+        ]
 
     def _live_state_of(self, item: Item) -> LiveState:
         """Classify one item's live GitHub state from :attr:`pull_requests_by_repository`."""
@@ -1722,16 +2028,14 @@ class DashboardRenderer:
         ready_to_start: list[Item] = []
         blocker_maybe_cleared: list[Item] = []
         for item in self.plan.items:
-            dependencies = self._dependencies_of(item)
             if item.status not in (
                 ItemStatus.NOT_STARTED,
                 ItemStatus.BLOCKED,
             ):
                 continue
             ready_count = sum(
-                dependency is not None
-                and dependency.item.is_ready_to_unblock_dependents()
-                for dependency in dependencies
+                dependency.is_ready_to_unblock_dependents()
+                for dependency in self.dependencies.dependencies_of(item)
             )
             if item.status is ItemStatus.NOT_STARTED and self._dependencies_are_ready(
                 item
@@ -1754,9 +2058,8 @@ class DashboardRenderer:
             if not item.needs_review or item.status is ItemStatus.BLOCKED:
                 continue
             if all(
-                dependency is not None
-                and dependency.item.is_ready_for_dependent_review()
-                for dependency in self._dependencies_of(item)
+                dependency.is_ready_for_dependent_review()
+                for dependency in self.dependencies.dependencies_of(item)
             ):
                 ready_to_review.append(item)
         return ready_to_review
@@ -1938,7 +2241,7 @@ def main() -> int:
     roadmap_text = Path(arguments.roadmap).read_text()
     raw_pull_request_data = json.loads(Path(arguments.pr_data).read_text())
     plan_directory = (
-        PlanDirectory.load(Path(arguments.plans_dir)) if arguments.plans_dir else None
+        PlanDirectory.at(Path(arguments.plans_dir)) if arguments.plans_dir else None
     )
 
     try:

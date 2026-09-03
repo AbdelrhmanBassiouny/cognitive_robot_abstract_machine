@@ -78,18 +78,26 @@ git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/plan.yaml" > /tmp/plan.yam
 git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/roadmap.md" > /tmp/roadmap.md  # roadmap.md is always the fixed filename, never configurable
 ```
 
-Also extract every plan, into one directory — a `depends_on` entry may name
-an item in another plan (`<plan-id>/<item-id>`, see `plan-schema.md`), and
-that plan's own manifest is the only thing that can resolve it. This is one
+Also extract every plan's manifest, into one directory — a `depends_on` entry
+may name an item in another plan (`<plan-id>/<item-id>`, see `plan-schema.md`),
+and that plan's own manifest is the only thing that can resolve it. This is one
 extraction whether the manifest uses the form or not, so do it every run
 rather than reading the manifest first to find out:
 
 ```bash
 mkdir -p /tmp/plans
-git archive FETCH_HEAD "${PLANS_DIR}" | tar -x --strip-components=3 -C /tmp/plans
+git archive FETCH_HEAD "${PLANS_DIR}" \
+  | tar -x --strip-components=3 -C /tmp/plans --wildcards \
+      '*/plan.yaml' '*/dashboard-urls.yaml'
 ```
 
-That also brings the dashboard-URL cache along at
+Manifests only, and no roadmaps: the tooling opens a plan's manifest only when
+a `depends_on` entry names that plan, and never reads another plan's roadmap at
+all. Do not read any of these files yourself — the point of a per-plan size
+budget is lost the moment one plan's dashboard run pulls another plan's
+contents into the session.
+
+The second pattern brings the dashboard-URL cache along at
 `/tmp/plans/_generated/dashboard-urls.yaml`, which is where a cross-plan chip's
 link to the other plan's dashboard comes from — and where step 3 reads the URL
 to publish under.

@@ -5,26 +5,43 @@ not-ready to build on, via build_dashboard.py's own live-state rule.
 
 import json
 import sys
-from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
 from build_dashboard import (
-    DependencyReference,
     Item,
     ItemStatus,
     LiveState,
+    ManifestKey,
     Plan,
     PlanDirectory,
     PlanValidationError,
     PullRequestRecord,
     PullRequestState,
+    SUPPORTED_SCHEMA_VERSION,
     Track,
     Wave,
     validate_plan,
 )
-from check_dependency_readiness import UnknownItemError, dependency_readiness, main
+from check_dependency_readiness import (
+    DependencyReadiness,
+    ReadinessField,
+    UnknownItemError,
+    dependency_readiness,
+    main,
+)
+from fixture_plans import (
+    FIXTURE_PLANS_DIRECTORY,
+    FixturePlanId,
+    ForeignItemId,
+    PLAN_UNDER_TEST_ID,
+    fixture_item,
+    fixture_pull_request_number,
+    fixture_repository,
+    foreign_reference,
+)
 
 
 def make_plan(items: list[Item]) -> Plan:
@@ -35,7 +52,7 @@ def make_plan(items: list[Item]) -> Plan:
     :param items: The plan's items.
     """
     return Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -87,7 +104,12 @@ def test_done_dependency_is_ready():
     )
     results = dependency_readiness(plan, "b", {})
     assert results == [
-        {"identifier": "a", "title": "a", "live_state": "none", "is_ready": True}
+        DependencyReadiness(
+            identifier="a",
+            title="a",
+            live_state=LiveState.NO_PULL_REQUEST,
+            is_ready=True,
+        )
     ]
 
 
@@ -103,12 +125,12 @@ def test_open_ready_dependency_is_ready():
     )
     results = dependency_readiness(plan, "b", pull_requests_by_repository)
     assert results == [
-        {
-            "identifier": "a",
-            "title": "a",
-            "live_state": "open_ready",
-            "is_ready": True,
-        }
+        DependencyReadiness(
+            identifier="a",
+            title="a",
+            live_state=LiveState.OPEN_READY,
+            is_ready=True,
+        )
     ]
 
 
@@ -124,12 +146,12 @@ def test_open_draft_dependency_is_not_ready():
     )
     results = dependency_readiness(plan, "b", pull_requests_by_repository)
     assert results == [
-        {
-            "identifier": "a",
-            "title": "a",
-            "live_state": "open_draft",
-            "is_ready": False,
-        }
+        DependencyReadiness(
+            identifier="a",
+            title="a",
+            live_state=LiveState.OPEN_DRAFT,
+            is_ready=False,
+        )
     ]
 
 
@@ -137,7 +159,9 @@ def test_unresolvable_dependency_identifier_is_reported_not_ready():
     plan = make_plan([item("b", ItemStatus.NOT_STARTED, depends_on=["ghost"])])
     results = dependency_readiness(plan, "b", {})
     assert results == [
-        {"identifier": "ghost", "title": None, "live_state": None, "is_ready": False}
+        DependencyReadiness(
+            identifier="ghost", title=None, live_state=None, is_ready=False
+        )
     ]
 
 
@@ -150,8 +174,8 @@ def test_multiple_dependencies_reported_in_order():
         ]
     )
     results = dependency_readiness(plan, "c", {})
-    assert [entry["identifier"] for entry in results] == ["b", "a"]
-    assert [entry["is_ready"] for entry in results] == [False, True]
+    assert [entry.identifier for entry in results] == ["b", "a"]
+    assert [entry.is_ready for entry in results] == [False, True]
 
 
 # %% main
@@ -159,31 +183,52 @@ def test_multiple_dependencies_reported_in_order():
 
 def _minimal_plan_mapping():
     return {
-        "schema_version": 1,
-        "id": "test-plan",
-        "title": "Test Plan",
-        "description": "A plan.",
-        "default_repository": "owner/repo",
-        "waves": [{"id": "wave-1", "name": "Wave 1"}],
-        "tracks": [{"id": "track-1", "name": "Track 1", "wave": "wave-1"}],
-        "items": [
+        ManifestKey.SCHEMA_VERSION.value: SUPPORTED_SCHEMA_VERSION,
+        ManifestKey.ID.value: PLAN_UNDER_TEST_ID,
+        ManifestKey.TITLE.value: "Test Plan",
+        ManifestKey.DESCRIPTION.value: "A plan.",
+        ManifestKey.DEFAULT_REPOSITORY.value: "owner/repo",
+        ManifestKey.WAVES.value: [
+            {ManifestKey.ID.value: "wave-1", ManifestKey.NAME.value: "Wave 1"}
+        ],
+        ManifestKey.TRACKS.value: [
             {
-                "id": "a",
-                "title": "Item A",
-                "branch": "a",
-                "track": "track-1",
-                "status": "done",
-            },
-            {
-                "id": "b",
-                "title": "Item B",
-                "branch": "b",
-                "track": "track-1",
-                "status": "not_started",
-                "depends_on": ["a"],
-            },
+                ManifestKey.ID.value: "track-1",
+                ManifestKey.NAME.value: "Track 1",
+                ManifestKey.WAVE.value: "wave-1",
+            }
+        ],
+        ManifestKey.ITEMS.value: [
+            _manifest_item("a", "Item A", ItemStatus.DONE),
+            _manifest_item("b", "Item B", ItemStatus.NOT_STARTED, depends_on=["a"]),
         ],
     }
+
+
+def _manifest_item(
+    identifier: str,
+    title: str,
+    status: ItemStatus,
+    depends_on: list[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Build one raw, plan.yaml-shaped item ``dict``, keyed by :class:`ManifestKey`.
+
+    :param identifier: The item's ``id``, also used as its ``branch``.
+    :param title: Its title.
+    :param status: Its manifest status.
+    :param depends_on: Its ``depends_on``, left out when omitted.
+    """
+    entry = {
+        ManifestKey.ID.value: identifier,
+        ManifestKey.TITLE.value: title,
+        ManifestKey.BRANCH.value: identifier,
+        ManifestKey.TRACK.value: "track-1",
+        ManifestKey.STATUS.value: status.value,
+    }
+    if depends_on is not None:
+        entry[ManifestKey.DEPENDS_ON.value] = depends_on
+    return entry
 
 
 def test_main_prints_the_dependency_readiness_of_the_requested_item(
@@ -210,7 +255,12 @@ def test_main_prints_the_dependency_readiness_of_the_requested_item(
     assert exit_code == 0
     results = json.loads(capsys.readouterr().out)
     assert results == [
-        {"identifier": "a", "title": "Item A", "live_state": "none", "is_ready": True}
+        DependencyReadiness(
+            identifier="a",
+            title="Item A",
+            live_state=LiveState.NO_PULL_REQUEST,
+            is_ready=True,
+        ).to_json()
     ]
 
 
@@ -267,68 +317,53 @@ def test_main_rejects_an_unknown_item_id(tmp_path, monkeypatch, capsys):
 # %% cross-plan references
 
 
-FIXTURE_PLANS_DIRECTORY = Path(__file__).parent / "fixtures" / "plans"
-"""
-The same two-manifest plans directory test_build_dashboard.py resolves cross-plan
-references against.
-"""
-
-
-def foreign_reference(item_identifier: str, plan_id: str = "other-plan") -> str:
-    """
-    The ``depends_on`` text naming one item of another plan.
-
-    :param item_identifier: The foreign item's own id.
-    :param plan_id: The plan holding it.
-    """
-    return DependencyReference(item_identifier=item_identifier, plan_id=plan_id).text
-
-
 def test_foreign_dependency_is_read_against_its_own_plans_repository():
-    # 91 exists only under other-plan's repository, so reading it against
-    # this plan's own would report not_found rather than open_ready.
-    reference = foreign_reference("foreign-ready")
+    # The foreign pull request number exists only under other-plan's own
+    # repository, so reading it against this plan's would report not_found
+    # rather than open_ready.
+    reference = foreign_reference(ForeignItemId.READY)
     plan = make_plan([item("b", ItemStatus.NOT_STARTED, depends_on=[reference])])
     results = dependency_readiness(
         plan,
         "b",
         {
-            "other/owner-repo": {
-                "91": PullRequestRecord(state=PullRequestState.OPEN, draft=False)
+            fixture_repository(FixturePlanId.OTHER): {
+                fixture_pull_request_number(
+                    FixturePlanId.OTHER, ForeignItemId.READY
+                ): PullRequestRecord(state=PullRequestState.OPEN, draft=False)
             }
         },
-        PlanDirectory.load(FIXTURE_PLANS_DIRECTORY),
+        PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
     )
     assert results == [
-        {
-            "identifier": reference,
-            "title": "A foreign item whose pull request is out of draft",
-            "live_state": LiveState.OPEN_READY.value,
-            "is_ready": True,
-        }
+        DependencyReadiness(
+            identifier=reference,
+            title=fixture_item(FixturePlanId.OTHER, ForeignItemId.READY)[
+                ManifestKey.TITLE
+            ],
+            live_state=LiveState.OPEN_READY,
+            is_ready=True,
+        )
     ]
 
 
 def test_foreign_dependency_is_not_ready_without_a_plans_directory():
     # Nothing can resolve it, and an unresolvable dependency is never ready.
-    reference = foreign_reference("foreign-ready")
+    reference = foreign_reference(ForeignItemId.READY)
     plan = make_plan([item("b", ItemStatus.NOT_STARTED, depends_on=[reference])])
     assert dependency_readiness(plan, "b", {}) == [
-        {
-            "identifier": reference,
-            "title": None,
-            "live_state": None,
-            "is_ready": False,
-        }
+        DependencyReadiness(
+            identifier=reference, title=None, live_state=None, is_ready=False
+        )
     ]
 
 
 def test_main_resolves_a_cross_plan_dependency_against_the_plans_directory(
     tmp_path, monkeypatch, capsys
 ):
-    reference = foreign_reference("foreign-done")
+    reference = foreign_reference(ForeignItemId.DONE)
     plan_mapping = _minimal_plan_mapping()
-    plan_mapping["items"][1]["depends_on"] = [reference]
+    plan_mapping[ManifestKey.ITEMS][1][ManifestKey.DEPENDS_ON.value] = [reference]
     plan_path = tmp_path / "plan.yaml"
     plan_path.write_text(yaml.dump(plan_mapping))
     pull_request_data_path = tmp_path / "pr_data.json"
@@ -350,5 +385,5 @@ def test_main_resolves_a_cross_plan_dependency_against_the_plans_directory(
     )
     assert main() == 0
     results = json.loads(capsys.readouterr().out)
-    assert [entry["identifier"] for entry in results] == [reference]
-    assert [entry["is_ready"] for entry in results] == [True]
+    assert [entry[ReadinessField.IDENTIFIER] for entry in results] == [reference]
+    assert [entry[ReadinessField.IS_READY] for entry in results] == [True]

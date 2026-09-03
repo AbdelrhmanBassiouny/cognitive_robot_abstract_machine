@@ -138,6 +138,13 @@ Indentation is unaffected: an item's indent level is its depth in the
 **same-plan** dependency chain, since an item in another plan has no card on
 this page to indent under.
 
+Only the plans some entry actually names are read, and only their manifests —
+never their roadmaps, and never a plan nothing here depends on. What reaches
+the page from a foreign plan is one chip per reference: the reference text, the
+foreign item's title, its plan's title, and its live state. Keeping one plan's
+dashboard from carrying another plan's contents is the whole point of a
+per-plan size budget.
+
 ### Why items are flat, not nested under wave/track
 
 A track can span or reprioritize across waves, and `depends_on` needs to
