@@ -285,3 +285,63 @@ cleared them, and all 24 checks passed on #169's `c8bf6f05`. Only the unbounded 
 stands, and it is a policy question rather than a bug to guess at: no test reaches it,
 only the demo scripts set `context.simulation_clock`, but a stalled simulation blocks a
 tick forever.
+
+## 2026-09-03: what the scenario domain model is, and what migrates onto it
+
+`scenario-domain-model` (#261, off `main`, no dependencies) settled on this shape,
+drafted from the item's own notes and from what `control_loop_experiments` and
+`experiment_definitions` already do.
+
+**The model**, in `experiments/src/experiments/scenarios/`:
+
+- `Scenario` builds its world, names its ordered steps, carries its `Goal` and says
+  whether it runs simulated or on the robot (`ExecutionKind`, defaulting to simulated,
+  because the plan runs every scenario in simulation first). Which robot it runs on is
+  the second bound generic parameter, read back through `SubClassSafeGeneric`, so the
+  robot is part of the type rather than an attribute that can disagree with it.
+- `Goal` answers whether the trial succeeded, from the world the trial finished in.
+- `Condition` switches one knowledge source off before a trial runs, so an ablation is
+  never a code branch inside an action.
+- `Perturbation` names the step it is applied at and the change it makes to the world.
+  A step is identified by a member of the scenario family's own `StepName` enum, so
+  neither the runner nor a perturbation carries a step spelled as a bare string.
+- `Metric` reads one number off a finished `Trial`; `Report` gathers a metric over the
+  trials as a mean, a standard deviation and a `ConfidenceInterval`.
+- `ScenarioRunner` runs the trials: build the world, apply the conditions, perform each
+  step with the perturbations due at it, ask the goal for the outcome, and record every
+  one of those as a typed entry of the trial's log.
+
+**Decisions taken while drafting it:**
+
+- *Conditions and perturbations belong to a run, not to a scenario.* The runner takes
+  them per run, so the same `Scenario` is what Experiment C runs under every ablation
+  and what Experiment A runs unablated. `knowledge-ablations` and `perturbations` add
+  members, not a second scenario each.
+- *The trial log is structured objects, not text.* One class per kind of entry, each
+  carrying its own subject, so `episodes-recorded-through-ormatic` maps them rather than
+  parsing them back out of a string. Nothing here writes them to a file or a database:
+  that is that item's, and this one only builds the record.
+- *The report is rendered by what already renders the experiments.* `Report` produces
+  `ExperimentResult` rows into an `ExperimentsTable` and renders through `TypstRenderer`;
+  `ConfidenceInterval` joins `MeanAndStandardDeviation` in `experiment_definitions`
+  rather than starting a second reporting vocabulary in the new package.
+- *The confidence interval is the normal approximation of the mean's standard error*,
+  built on `statistics.NormalDist` the way `free_space_volume_estimation`'s Wilson-score
+  interval already is. The Wilson interval stays where it is: it bounds a proportion, it
+  has its own tests, and moving it would be an unrelated refactor.
+- *The new classes stay out of the experiments ORM generation*, alongside the
+  control-loop scenario modules that are already ignored there. What of a trial and its
+  log becomes a mapped record is `episodes-recorded-through-ormatic`'s call, not a side
+  effect of adding the model.
+
+**What migrates onto it:** `BenchmarkScenario` becomes a `Scenario`, keeping its seed
+configuration, its world preparation and its motion statechart, and the control-loop's
+own `ScenarioRunner` becomes a subclass of the model's runner that measures the control
+loop while the motion step runs, so one name means one operation across the workspace.
+The plotter mode and target frequency move from the runner onto the scenario, which is
+where "how to build the world" now lives.
+
+**A caveat worth knowing at review time:** the control-loop tests that actually drive a
+runner are `@pytest.mark.slow`, and the default CI selection is `-m "not slow"`, so CI
+proves that the migrated benchmark imports, collects and aggregates, not that it still
+measures a motion. The benchmark wants one manual run before it is trusted.
