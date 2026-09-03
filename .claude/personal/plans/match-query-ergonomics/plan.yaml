@@ -188,13 +188,15 @@ items:
     status: in_progress
     session: https://claude.ai/code/session_01Hg8944NTdj8WMSGFqV4mq8
     blockers:
-      - >
-        One review thread left open on purpose: match.py:383 asks why
-        Match._is_own_name_ is needed, which is a question rather than a change, so
-        it is answered on the thread with the measurement (deleting the override
-        turns every missing underscore name into a symbolic Attribute) and left for
-        the developer to close. The other five threads of the 2026-09-02 round are
-        addressed and resolved.
+      - >-
+          Two things, both live when this run started and neither recorded: a merge conflict against
+          main in probabilistic_model/.../relational/rspn.py (the eighth needs-resolution round,
+          reported 2026-09-03 14:51), and a second review round the developer left at 14:45-14:54
+          the same day - four unresolved threads, three asking for _variable_ to go from
+          test_causes_effect.py:24,29,34 and one asking whether the .resolve() statements in
+          test_match_verbalization.py:198 are needed and to remove them everywhere if not. The
+          blocker written by the 2026-09-03 round named only the one _is_own_name_ thread left open
+          on purpose, which the developer has since resolved.
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
