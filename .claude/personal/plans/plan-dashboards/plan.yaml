@@ -367,11 +367,12 @@ items:
       the "discuss the rebase options" thread (three options and the one taken are on it).
 - id: cross-plan-dependencies
   title: "Let depends_on name an item in another plan, resolved live at dashboard time"
-  branch: null
-  pull_request_number: null
+  branch: claude/plan-dashboards-cross-dependencies-h3icfd
+  pull_request_number: 253
   track: corrections
+  session: https://claude.ai/code/session_01U2r4CGpBKiD551i2FE5NXW
   depends_on: []
-  status: not_started
+  status: in_progress
   notes: >-
     Decided by the developer on 2026-09-03, taking the roadmap's open entry "Cross-plan
     dependencies are not representable" and choosing the reference form `<plan-id>/<item-id>`
