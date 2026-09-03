@@ -1038,5 +1038,7 @@ items:
   title: "Label every pull request the integration branch carries, and unlabel the ones it drops"
   branch: null
   track: integration
-  depends_on: []
+  depends_on:
+  - integration-branch-ci-verdict
+  - red-candidate-localisation
   status: not_started
