@@ -78,10 +78,11 @@ modules in under the package's naming. What stays this item's own is the feature
 - **No recorded rule for an ambiguous title.** The recorder refuses when two artifacts share a plan's
   title and demands an explicit URL, which is right, but leaves the caller with nothing to choose by.
   Most-recently-updated is what both hand corrections have used.
-- **Cross-plan dependencies are not representable.** Two items here have real preconditions in other
-  plans, recorded as blockers rather than `depends_on`, so they lose their dependency chips and
-  automatic readiness. A `<plan-id>:<item-id>` reference in the schema would restore it - code rather
-  than data, and a candidate item for this plan.
+- **Cross-plan dependencies are not representable** - now the item `cross-plan-dependencies`,
+  added 2026-09-03 at the developer's direction with the reference form `<plan-id>/<item-id>`
+  (the colon suggested here earlier is superseded). Until it lands, a precondition in another plan
+  stays a `blockers` entry, as `shared-pr-state-chips`, rdr-explanation's `rdr-why-answer` and
+  three items of `icra-experiments` record today.
 
 ## shared-pr-state-chips: the fold onto bastler, 2026-09-02
 

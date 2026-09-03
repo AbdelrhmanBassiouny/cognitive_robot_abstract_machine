@@ -365,6 +365,51 @@ items:
       thread and waiting on the user: GitCommandRunner in the tests (answered with
       ScratchRepository, because GitCommandRunner imports bastler.stack, which imports pr_state) and
       the "discuss the rebase options" thread (three options and the one taken are on it).
+- id: cross-plan-dependencies
+  title: "Let depends_on name an item in another plan, resolved live at dashboard time"
+  branch: null
+  pull_request_number: null
+  track: corrections
+  depends_on: []
+  status: not_started
+  notes: >-
+    Decided by the developer on 2026-09-03, taking the roadmap's open entry "Cross-plan
+    dependencies are not representable" and choosing the reference form `<plan-id>/<item-id>`
+    (a slash cannot occur in either kebab-case id, so a bare id keeps meaning this plan). Not
+    a bug fix: tooling that never existed, so no `bug` label.
+
+    What it changes. The schema (plan-schema.md) admits the form. validate_plan resolves a
+    cross-plan entry against that plan's manifest and rejects an unknown plan or item with
+    the same shape of error as UnknownDependency; a reference to the plan's own id is
+    rejected too (use the bare id); the cycle check runs over the union graph. build_dashboard
+    and refresh_dashboard.sh take the directory holding every plan (the personal-notes
+    checkout save-plan.sh already extracts for the branch index, via plan_manifest_tools'
+    walk) so the referenced manifests load; pr-data-fetching.md widens the fetch to every
+    pull request a cross-plan dependency names, and the foreign item's repository defaults
+    to its own plan's default_repository. One resolver, items_by_reference, serves every
+    reader of depends_on: _dependencies_are_ready, _dependency_chips_of, the
+    ready-to-review rule (the dependency needs an open pull request), #184's stall_reason,
+    and check_dependency_readiness.py (which gains the same directory argument, so
+    plan-item-kickoff and plan-item-resolve see readiness the dashboard sees). The chip
+    reads `plan-id/item-id`, its tooltip carries the foreign item's title, plan and live
+    state, and it links to that plan's dashboard from the URL cache when the cache has one.
+    Stacking depth counts same-plan edges only; a foreign parent is not on the page.
+
+    One latent fault fixed on the way rather than left: _dependencies_are_ready today skips
+    an identifier it cannot resolve, so a mistyped dependency counts as ready. After this
+    item an unresolvable entry is a validation error, never silently ready.
+
+    Done when the recorded cross-plan blockers become references and render as chips:
+    icra-experiments' integrated-simulation-pipeline ->
+    montessori-eql-stack/montessori_fast_inline_monitor, its failure-taxonomy-and-typing and
+    experiment-c-in-simulation -> knowledge-directed-perception/expectations-from-events,
+    this plan's shared-pr-state-chips -> the bastler-package item carrying #185, and
+    rdr-explanation's rdr-why-answer -> the rdr-core-engine item carrying #210. Tests: the
+    validation cases, resolution against a second fixture manifest, a foreign draft versus a
+    foreign ready dependency in the ready-to-start lists, the chip, the readiness script, and
+    the shell entry point's new argument. Off main; #184, #157, #206 and #111 also edit
+    build_dashboard.py, and the track's rule is that whichever lands second merges.
+
 - id: ready-to-promote-upstream-links
   title: 'PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links'
   branch: null
