@@ -46,16 +46,45 @@ regenerate the ORM interfaces, and run the three new test modules plus
 - Setup: installed the plan-dashboard dependencies (`markdown`, `nh3`).
 - Branch cut off `origin/main`, pushed, draft PR #262 opened.
 - Manifest: `branch`, `session`, `pull_request_number`, `status: in_progress`
-  recorded; roadmap section appended.
+  recorded; roadmap section appended, then a second section on what the session
+  container could and could not verify. Dashboard republished.
+- All eleven files added/edited and committed (`bd618b94d`), pushed. The three
+  test modules are byte-identical to #256's; only the three source modules
+  differ, and only in their docstrings and the two `suggest_correction()`
+  strings.
+- PR description updated to match, including the verification section below.
+
+## Verified
+
+- `test/version_test/test_dependency_declarations.py`: 20 passed. Also checked
+  red - removing the `segmind` line fails
+  `test_imported_workspace_members_are_declared[experiments]`.
+- `test/cognitive_robot_abstract_machine_test/`: 61 passed, covering the
+  `("coraplex", "segmind")` declaration and generation order.
+- The `__init__.py` claim, demonstrated: `pkgutil.walk_packages` over
+  `experiments` yields the three montessori modules with the file, nothing
+  without it.
+- `scripts/format_docstrings.py` run on every modified source file.
+
+## Not verifiable in this container
+
+`scripts/regenerate_all_orm.py` and the three new test modules need ROS: the
+generator dies on giskardpy's `DebugExpressionPublisher`,
+`segmind.datastructures.events` imports `geometry_msgs`, and the
+`experiments_test` conftest imports `rclpy`. The regeneration fails identically
+on unmodified `main` here, so it is the environment, not the change. CI runs
+both inside the ROS image.
 
 ## Next
 
-1. Add the three test modules and the conftest fixture first (TDD), red.
-2. Add the four modules with rewritten docstrings, and the four declarations.
-3. `scripts/regenerate_all_orm.py`, then run the four test modules.
-4. Commit, push, keep the PR a draft, republish the dashboard.
+Nothing outstanding in this session. Waiting on CI in the ROS image to run the
+three test modules and the ORM regeneration. Per the notes, this session does
+not watch the PR.
 
 ## Outstanding
 
 - Subscribing to tracking issue #252 was denied by the auto-mode permission
   classifier, so this session is not watching it.
+- The artifact wake subscription for the dashboard could not be registered
+  (the artifact service refuses them from this session), so a republish
+  elsewhere will not reach here.
