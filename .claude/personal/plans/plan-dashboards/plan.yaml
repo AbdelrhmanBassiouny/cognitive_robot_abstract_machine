@@ -264,11 +264,11 @@ items:
     not done: the overview screenshot predates the button, and re-rendering it headlessly would leave it
     visually inconsistent with the two beside it.
 - id: shared-pr-state-chips
-  title: 'PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards'
+  title: 'PR 3: shared pull_request_state module + LOC/CI/conflict chips in plan dashboards'
   branch: claude/shared-pr-state-chips
   pull_request_number: 111
   status: in_progress
-  session: https://claude.ai/code/session_01VATBfAq9Rd7jdU46rw3hvd
+  session: https://claude.ai/code/session_01PDkiMhjnoromH2KP2z8Koy
   track: live-state
   depends_on: []
   notes: >
@@ -370,21 +370,40 @@ items:
     them - `PullRequestLabel.IN_REVIEW`, `PullRequestLabel.BUG`, and `BOARD_DOCUMENT_NAME`
     for `board.json`, which `BOARD_PATH` is now built from. 730 tests pass.
 
-    One half is deliberately not done and is the open thread: the `"ci"` each renamed enum
-    member carries as its *value*. That string is the on-disk key in `board.json` and
-    `pr_data.json`, and two readers outside this pull request's diff already spell it -
-    `stack.py`'s `ForkPullRequest.ci` and `maintenance_board.py`, both pre-existing on
-    #185's head. Because every chip field is optional by design, a writer/reader mismatch
-    would render already-fetched data chipless rather than error, so it is not a change to
-    make silently.
+    One half was deliberately left and asked about on the thread: the `"ci"` each renamed
+    enum member carries as its *value*, the on-disk key in `board.json` and `pr_data.json`.
+
+    **The value renamed too, 2026-09-03 evening** (477f4dc34), the user answering "yes
+    rename it everywhere and also in any existing files that will be read", plus three
+    further threads restating it and the `Payload` one. Both key enums carry
+    `"continuous_integration"` now. The board key turned out not to be written through the
+    enum at all - `maintenance_board.as_json` serializes `stack.PullRequest` with `asdict`,
+    so the *field name* is the key - so `stack.PullRequest.ci` and `stack.Branch.ci` are
+    renamed as well, and their readers in `stack.py` and `maintenance_board.py` follow.
+    Both documents' schemas are re-spelled where they are written down:
+    `.claude/stack/README.md` and `pr-data-fetching.md`. No `ci` identifier or key is left
+    in `bastler/` or `test/bastler_test/`.
+
+    `pr_data.json` had no test holding its writer and its reader to the same keys - they
+    sit in different modules, and every other test builds its mapping *through* the key
+    enum, so a one-sided rename passed the whole suite while silently blanking every chip.
+    Added first, and checked to fail on a one-sided rename before the rename was made;
+    `board.json` already had its equivalent, which is what would have caught the `asdict`
+    half.
+
+    `PullRequestPayload` is `PullRequestResponse` in `pull_request_responses.py`. The
+    previous round dropped "Detail" and kept "Payload", which was half the ask;
+    "response" is the word the module had already settled on, in the fake transport's
+    `responses` field. `check_runs_payload` and the production `CheckRollup.from_payload`
+    follow it.
+
+    Two hand-spelled strings found in files the rename already touched:
+    `maintenance_board.as_json` spelled `pull_requests` one line below the enum that owns
+    it, and `test_stack.py` spelled `"failure"` where `CheckConclusion` exists. The check
+    chip's label reads `checks passing` rather than `ci passing` - display text rather
+    than a key, so outside what was asked, and flagged on the thread as such. 731 tests
+    pass.
   blockers:
-    - >-
-      One review thread from the 2026-09-03 round is left open on purpose, answered on the thread
-      and waiting on the user: whether the "ci" *value* behind the renamed
-      CONTINUOUS_INTEGRATION members should change too. It is the on-disk key in board.json and
-      pr_data.json, read by stack.py's pre-existing ForkPullRequest.ci and by
-      maintenance_board.py, so changing it widens this pull request into files it does not
-      otherwise touch. The other six threads of that round are applied and resolved in 9dc34b3a.
     - >-
       Cross-plan dependency, not representable in depends_on: this branch is stacked on
       bastler-package (#185, bastler-package plan) since 2026-09-02 - its base is that branch and
@@ -396,8 +415,10 @@ items:
     - >-
       Two review threads from the 2026-08-30 round are left open on purpose, each answered on the
       thread and waiting on the user: GitCommandRunner in the tests (answered with
-      ScratchRepository, because GitCommandRunner imports bastler.stack, which imports pr_state) and
-      the "discuss the rebase options" thread (three options and the one taken are on it).
+      ScratchRepository, because GitCommandRunner imports bastler.stack, which imports
+      pull_request_state) and the "discuss the rebase options" thread (three options and the one
+      taken are on it). These are the item's only open threads: every thread of both 2026-09-03
+      rounds is applied and resolved.
 - id: cross-plan-dependencies
   title: "Let depends_on name an item in another plan, resolved live at dashboard time"
   branch: claude/plan-dashboards-cross-dependencies-h3icfd

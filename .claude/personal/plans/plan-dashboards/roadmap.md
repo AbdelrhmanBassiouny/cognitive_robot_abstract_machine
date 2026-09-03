@@ -243,13 +243,18 @@ renders `to_list_entry()` as well as `to_json()`, so naming it after one endpoin
 half of what it does. The rest were strings that already had enums and were being spelled by
 hand anyway: `in-review`, `bug`, and `board.json`.
 
-**The line the rename stops at, and why it is a line.** An enum member's *name* is an
-identifier; its *value* is a wire format. `CONTINUOUS_INTEGRATION = "ci"` therefore satisfies
-the no-abbreviations rule in full while leaving `board.json` and `pr_data.json` readable by
-`stack.py`'s `ForkPullRequest.ci` and `maintenance_board.py`, which this branch does not
-otherwise touch. It is left open rather than decided, because the chip fields are all optional:
-a writer and reader disagreeing about the key would render already-fetched data chipless
-instead of failing, which is the kind of change that must be asked about rather than made.
+**The line the rename stopped at, and the developer's overrule.** The round drew a line at the
+enum member's *value*: a name is an identifier, a value is a wire format, so
+`CONTINUOUS_INTEGRATION = "ci"` satisfied the no-abbreviations rule while leaving `board.json`
+and `pr_data.json` readable by `stack.py`'s `ForkPullRequest.ci` and `maintenance_board.py`.
+Left open rather than decided, because every chip field is optional, so a writer and reader
+disagreeing about the key renders already-fetched data chipless instead of failing.
+
+**The developer answered no line: "yes rename it everywhere and also in any existing files that
+will be read."** The distinction was real but not the one that decides it - a stored key with
+two spellings in the repository is worse than a rename that reaches two extra files. The rule
+to carry forward is the narrower one that survived: *asking* was right, because the failure
+mode was silent; drawing the line unasked would not have been.
 
 **The convergence check the formatter hazard needs.** `format_docstrings.py` prints nothing for
 a file it does not have to touch, and its decline message shares a line with the progress bar -
@@ -258,3 +263,32 @@ convergence *in the repository*, never on a copy in a scratch directory: black r
 length from the nearest `pyproject.toml`, so a scratch copy reports a conflict the real file
 does not have. A clean `git worktree` at the commit in question is what answers the question
 "was this already declined, or did I just break it?"
+
+## shared-pr-state-chips: the value rename, same evening
+
+Four threads: the answer above, two restating it on the two enum members, and one asking why
+`Payload` had survived a request to rename it. All applied in `477f4dc34`, and every thread of
+both 2026-09-03 rounds is now resolved. What is worth keeping is three findings the rename
+turned up, none of which was the rename itself.
+
+**A stored key can have a writer nothing routes through the enum.** `board.json` is written in
+two places: `PullRequestExport.to_board_document` through `BoardEntryKey`, and
+`maintenance_board.as_json` through `asdict` on `stack.PullRequest` - where the *field name* is
+the key. Renaming only the enum would have left one writer emitting `ci` and `load_board`
+reading `continuous_integration`. Before touching a stored key, find every writer, and do not
+assume the enum is the whole set: `asdict`, `**kwargs` and `model_dump` all serialize a name
+that no enum sees.
+
+**The guard that would have caught it existed on one document and not the other.**
+`board.json` had `test_the_written_board_parses_back_into_the_records_it_was_built_from`;
+`pr_data.json` had nothing pinning its writer and reader to the same keys, because every test
+of it builds its mapping *through* `PullRequestDataKey` - so both sides move together and a
+one-sided rename passes. A round trip that names no key is the only test that catches this;
+each `pr_data` chip field being optional is what makes the failure silent rather than loud.
+Written first and checked to fail on a deliberate one-sided rename before the real one.
+
+**A rename is a reading pass over files you would not otherwise open.** It turned up
+`maintenance_board.as_json` spelling `pull_requests` one line below the enum that owns it, and
+`test_stack.py` spelling `"failure"` where `CheckConclusion` exists. Both are the finding the
+2026-08-30 round asked to be applied everywhere, sitting in files no earlier round had reason
+to read.
