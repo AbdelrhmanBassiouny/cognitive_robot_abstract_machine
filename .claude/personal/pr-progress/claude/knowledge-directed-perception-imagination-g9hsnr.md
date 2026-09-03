@@ -23,11 +23,28 @@ Plan `knowledge-directed-perception`, track `request-language`. Branch
 - Verified: krrood eql 1326 passed vs 1324 on the base; Montessori experiments modules 321
   passed vs 310. Docstrings formatted. Pushed; PR description matches.
 
+## Review round of 2026-09-03
+
+Two threads, both answered exactly as asked, replied to and resolved (32471b172).
+
+- *"`a` not `an`"* on the backend docstring: the rename had left every statement about the
+  type reading `an(DetectedMontessoriShape)`, at 20 further sites across the two backend
+  test modules. All say `a` now, which is krrood's own function for consonant-initial
+  names and delegates to `an`. Two pre-existing `an(ShapeSortingHoleDetection)` in the same
+  file came with them, since the import moved.
+- *"rename this method to what it actually does"*: `ImaginedWorld._solid` is `_mesh_of`,
+  which says what it answers and about what, and reads with its siblings `_frame_of` and
+  `_transform_to`.
+
+321 passed, 1 skipped, 11 xfailed across the Montessori modules - unchanged.
+
 ## Next
 
-- Nothing outstanding on the branch. It is a draft, as the convention asks.
-- The dashboard republish is owed: the live artifact has to be read back first (474KB of
-  generated HTML), which is why it is left to the end of the session.
+- Nothing outstanding on the branch. It is a draft, as the convention asks. CI on the new
+  head was queued when this was written.
+- The dashboard republish is still owed: the live artifact has to be read back first
+  (474KB of generated HTML), which is more than a working session's context affords.
+  `/plan-dashboard knowledge-directed-perception` in a fresh session does it.
 
 ## Known
 
