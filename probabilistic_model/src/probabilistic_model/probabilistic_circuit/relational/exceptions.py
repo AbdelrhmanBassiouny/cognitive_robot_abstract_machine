@@ -106,16 +106,3 @@ class NotAProbabilityDistributionError(DataclassException):
 
     def suggest_correction(self) -> str:
         return f"Ensure {self.name} contains non-negative entries summing to 1."
-
-
-@dataclass
-class EmptyMarkovChainError(DataclassException):
-    """
-    Raised when a ``MarkovChainDistributionTemplate`` is grounded with no parts.
-    """
-
-    def error_message(self) -> str:
-        return "Cannot ground a Markov chain template with zero parts."
-
-    def suggest_correction(self) -> str:
-        return "Pass at least one part to `ground`."

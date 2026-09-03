@@ -19,7 +19,6 @@ import pandas as pd
 from sortedcontainers import SortedSet
 from typing_extensions import TYPE_CHECKING, Any, Optional, Type
 
-from krrood.entity_query_language.query.match import AbstractMatchExpression
 from krrood.ormatic.data_access_objects.dao import (
     DataAccessObject,
     DataAccessObjectSchema,
@@ -42,6 +41,9 @@ from probabilistic_model.probabilistic_circuit.relational.exceptions import (
 from probabilistic_model.probabilistic_circuit.relational.helper import (
     find_lowest_product_nodes_that_model_variables,
     rename_variables_with_part_prefix,
+)
+from probabilistic_model.probabilistic_circuit.relational.template import (
+    RelationalDistributionTemplate,
 )
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
@@ -69,18 +71,13 @@ def _is_concrete_statistic(variable: Variable, value: Any) -> bool:
 
 
 @dataclass
-class ExchangeableDistributionTemplate:
+class ExchangeableDistributionTemplate(RelationalDistributionTemplate):
     """
     A fitted distribution template for one exchangeable (many-to-many) relation.
 
     Wraps a ``RelationalProbabilisticCircuit`` that was trained on the child objects of
     the relation together with the parent's aggregation statistics as latent context
     variables.
-    """
-
-    template_distribution: RelationalProbabilisticCircuit
-    """
-    The fitted ``RelationalProbabilisticCircuit`` representing the child distribution.
     """
 
     latent_variables: list[Variable] = field(default_factory=list)
@@ -117,11 +114,7 @@ class ExchangeableDistributionTemplate:
             if variable not in self.latent_variables
         ]
         part_circuit.marginal_in_place(non_latent_variables)
-        prefix = (
-            str(part.variable)
-            if isinstance(part, AbstractMatchExpression)
-            else str(index)
-        )
+        prefix = self._prefix_for_part(part, index)
         rename_variables_with_part_prefix(part_circuit, prefix, self.latent_variables)
         if len(part_circuit.nodes()) == 0:
             raise ValueError("The grounding of the part failed.")
@@ -144,9 +137,7 @@ class ExchangeableDistributionTemplate:
             part_circuit = self._ground_part_circuit(
                 part, aggregation_statistics, index
             )
-            part_root_index = part_circuit.root.index
-            node_index_map = result.mount(part_circuit.root)
-            root.add_subcircuit(node_index_map[part_root_index])
+            root.add_subcircuit(self._mount_part(result, part_circuit))
         return result
 
 

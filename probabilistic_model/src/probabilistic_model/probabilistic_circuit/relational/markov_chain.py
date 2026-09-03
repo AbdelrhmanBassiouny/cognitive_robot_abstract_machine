@@ -8,19 +8,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-import numpy.typing as npt
 
-from krrood.entity_query_language.query.match import AbstractMatchExpression
+from probabilistic_model.distributions.distributions import SymbolicDistribution
+from probabilistic_model.distributions.multinomial import MultinomialDistribution
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.relational.exceptions import (
-    EmptyMarkovChainError,
     NotAProbabilityDistributionError,
 )
-from probabilistic_model.probabilistic_circuit.relational.helper import (
-    rename_variables_with_part_prefix,
-)
-from probabilistic_model.probabilistic_circuit.relational.rspn import (
-    RelationalProbabilisticCircuit,
+from probabilistic_model.probabilistic_circuit.relational.template import (
+    RelationalDistributionTemplate,
 )
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
@@ -30,7 +26,7 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
 
 
 @dataclass
-class MarkovChainDistributionTemplate:
+class MarkovChainDistributionTemplate(RelationalDistributionTemplate):
     """
     A fitted distribution template for one sequential (Markov chain) relation.
 
@@ -46,45 +42,57 @@ class MarkovChainDistributionTemplate:
     ``P(observation | state = s)``.
     """
 
-    template_distribution: RelationalProbabilisticCircuit
+    starting_distribution: SymbolicDistribution
     """
-    One time step's fitted relational circuit.
-
-    Its class-level circuit's root is a ``SumUnit``; that sum unit's latent-variable
-    interpretation is the chain's hidden state, shared across every grounded part.
-    """
-
-    starting_distribution: npt.NDArray
-    """
-    1D array of length K (K = number of hidden states); the probability of each
-    hidden state for the first grounded part.
+    Distribution over the chain's hidden state for the first grounded part. Its
+    ``variable``'s domain enumerates the hidden states as ``0, 1, ..., K - 1``
+    (``K`` = number of hidden states), the same indices ``root.subcircuits`` uses.
     """
 
-    transition_model: npt.NDArray
+    transition_model: MultinomialDistribution
     """
-    (K, K) row-stochastic array; ``transition_model[i, j]`` is the probability of
-    transitioning to hidden state ``j`` given hidden state ``i``, applied between
-    every consecutive pair of grounded parts.
+    Joint table over ``(state, next_state)`` pairs, row-stochastic given ``state``;
+    applied between every consecutive pair of grounded parts. Both of its variables'
+    domains must match :attr:`starting_distribution`'s.
     """
 
     def __post_init__(self):
-        expected_transition_shape = (len(self.starting_distribution),) * 2
-        if self.transition_model.shape != expected_transition_shape:
-            raise ShapeMismatchError(
-                self.transition_model.shape, expected_transition_shape
-            )
-        if np.any(self.starting_distribution < 0) or not np.isclose(
-            self.starting_distribution.sum(), 1.0
+        state_domain = self.starting_distribution.variable.domain
+        transition_domains = tuple(
+            variable.domain for variable in self.transition_model.variables
+        )
+        expected_domains = (state_domain, state_domain)
+        if transition_domains != expected_domains:
+            raise ShapeMismatchError(transition_domains, expected_domains)
+
+        starting_probabilities = np.array(
+            [
+                self.starting_distribution.probabilities[hash(state)]
+                for state in state_domain.simple_sets
+            ]
+        )
+        if np.any(starting_probabilities < 0) or not np.isclose(
+            starting_probabilities.sum(), 1.0
         ):
             raise NotAProbabilityDistributionError(
-                "starting_distribution", self.starting_distribution
+                "starting_distribution", starting_probabilities
             )
-        if np.any(self.transition_model < 0) or not np.allclose(
-            self.transition_model.sum(axis=1), 1.0
+        if np.any(self.transition_model.probabilities < 0) or not np.allclose(
+            self.transition_model.probabilities.sum(axis=1), 1.0
         ):
             raise NotAProbabilityDistributionError(
-                "transition_model", self.transition_model
+                "transition_model", self.transition_model.probabilities
             )
+
+    @property
+    def _state_count(self) -> int:
+        return len(self.starting_distribution.variable.domain.simple_sets)
+
+    def _starting_probability(self, state: int) -> float:
+        return self.starting_distribution.probabilities[hash(state)]
+
+    def _transition_probability(self, state: int, next_state: int) -> float:
+        return self.transition_model.probabilities[state, next_state]
 
     def ground(self, parts_to_ground: list) -> ProbabilisticCircuit:
         """
@@ -94,10 +102,10 @@ class MarkovChainDistributionTemplate:
         :param parts_to_ground: The query parts, one per position in the sequence, in
             sequence order.
         :return: A circuit over all variables implied by the query, with the per-
-            position hidden states marginalized out.
+            position hidden states marginalized out. Empty if ``parts_to_ground`` is.
         """
         if len(parts_to_ground) == 0:
-            raise EmptyMarkovChainError()
+            return ProbabilisticCircuit()
 
         result = ProbabilisticCircuit()
         roots = [
@@ -105,16 +113,15 @@ class MarkovChainDistributionTemplate:
             for index, part in enumerate(parts_to_ground)
         ]
 
-        state_count = len(roots[0].subcircuits)
-        expected_shape = (state_count,)
-        if self.starting_distribution.shape != expected_shape:
-            raise ShapeMismatchError(self.starting_distribution.shape, expected_shape)
+        if len(roots[0].subcircuits) != self._state_count:
+            raise ShapeMismatchError(
+                (len(roots[0].subcircuits),), (self._state_count,)
+            )
 
-        # Read every position's emission branches once, up front: these are plain
-        # leaves/subtrees ("P(observation at t | state = s)"), never mutated below, so
-        # reading them here fixes what "state s" means at each position once and for
-        # all -- the chain built below only ever adds new nodes, it never re-derives a
-        # position's state ordering from a circuit structure that could have changed.
+        # Read every position's emission branches once, up front, since the chain
+        # built below mutates the circuit -- if it re-read a position's branches
+        # after mutating an earlier one, "state s" could stop meaning the same thing
+        # at every position.
         emission_given_state = [list(root.subcircuits) for root in roots]
 
         self._point_root_at_hidden_markov_chain(result, roots[0], emission_given_state)
@@ -133,16 +140,10 @@ class MarkovChainDistributionTemplate:
         :param part: The query part (a ``Match`` or a concrete domain object).
         :return: The root of the mounted part, owned by ``result``.
         """
-        part_circuit = self.template_distribution.ground(part)
-        prefix = (
-            str(part.variable)
-            if isinstance(part, AbstractMatchExpression)
-            else str(index)
+        part_circuit = self._ground_and_rename_part(
+            self.template_distribution, part, index, []
         )
-        rename_variables_with_part_prefix(part_circuit, prefix, [])
-        part_root_index = part_circuit.root.index
-        node_index_map = result.mount(part_circuit.root)
-        return node_index_map[part_root_index]
+        return self._mount_part(result, part_circuit)
 
     def _point_root_at_hidden_markov_chain(
         self,
@@ -175,26 +176,74 @@ class MarkovChainDistributionTemplate:
         :param emission_given_state: ``emission_given_state[t][s]`` is
             ``P(observation_t | state_t = s)``, read once before any mutation.
         """
-        state_count = len(self.starting_distribution)
         continuation_given_state = emission_given_state[-1]
         for position in reversed(range(len(emission_given_state) - 1)):
-            next_continuation_given_state = continuation_given_state
-            continuation_given_state = []
-            for state in range(state_count):
-                transition = SumUnit(probabilistic_circuit=result)
-                for next_state in range(state_count):
-                    transition.add_subcircuit(
-                        next_continuation_given_state[next_state],
-                        np.log(self.transition_model[state, next_state]),
-                    )
-                joint = ProductUnit(probabilistic_circuit=result)
-                joint.add_subcircuit(emission_given_state[position][state])
-                joint.add_subcircuit(transition)
-                continuation_given_state.append(joint)
+            continuation_given_state = self._continuation_given_state_at(
+                result, position, continuation_given_state, emission_given_state
+            )
 
         for state, own_subcircuit in enumerate(emission_given_state[0]):
             result.remove_edge(first_root, own_subcircuit)
             first_root.add_subcircuit(
                 continuation_given_state[state],
-                np.log(self.starting_distribution[state]),
+                np.log(self._starting_probability(state)),
             )
+
+    def _continuation_given_state_at(
+        self,
+        result: ProbabilisticCircuit,
+        position: int,
+        next_continuation_given_state: list,
+        emission_given_state: list,
+    ) -> list:
+        """
+        Build ``P(observation_position, ..., observation_{T-1} | state_position = s)``
+        for every state ``s``, from the next position's already-built continuations.
+
+        :param result: The circuit every new node is added to.
+        :param position: The position this continuation is built for.
+        :param next_continuation_given_state: Position ``position + 1``'s already-built
+            continuations, indexed by state.
+        :param emission_given_state: ``emission_given_state[t][s]`` is
+            ``P(observation_t | state_t = s)``.
+        :return: The new continuations for ``position``, indexed by state.
+        """
+        return [
+            self._joint_of_emission_and_transition(
+                result, position, state, next_continuation_given_state, emission_given_state
+            )
+            for state in range(self._state_count)
+        ]
+
+    def _joint_of_emission_and_transition(
+        self,
+        result: ProbabilisticCircuit,
+        position: int,
+        state: int,
+        next_continuation_given_state: list,
+        emission_given_state: list,
+    ) -> ProductUnit:
+        """
+        Build ``P(observation_position, ..., observation_{T-1} | state_position = state)``:
+        the current position's own emission, paired with a sum over the next state of
+        its continuation weighted by the transition probability.
+
+        :param result: The circuit every new node is added to.
+        :param position: The position this joint is built for.
+        :param state: The state of ``position`` this joint is conditioned on.
+        :param next_continuation_given_state: Position ``position + 1``'s already-built
+            continuations, indexed by state.
+        :param emission_given_state: ``emission_given_state[t][s]`` is
+            ``P(observation_t | state_t = s)``.
+        :return: The joint's root.
+        """
+        transition = SumUnit(probabilistic_circuit=result)
+        for next_state in range(self._state_count):
+            transition.add_subcircuit(
+                next_continuation_given_state[next_state],
+                np.log(self._transition_probability(state, next_state)),
+            )
+        joint = ProductUnit(probabilistic_circuit=result)
+        joint.add_subcircuit(emission_given_state[position][state])
+        joint.add_subcircuit(transition)
+        return joint

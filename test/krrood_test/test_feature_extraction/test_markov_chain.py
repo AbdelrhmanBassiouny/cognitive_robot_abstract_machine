@@ -5,10 +5,11 @@ from random_events.set import Set
 from random_events.variable import Symbolic
 
 from krrood.entity_query_language.factories import a
+from probabilistic_model.distributions.distributions import SymbolicDistribution
 from probabilistic_model.distributions.helper import make_dirac
+from probabilistic_model.distributions.multinomial import MultinomialDistribution
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.relational.exceptions import (
-    EmptyMarkovChainError,
     NotAProbabilityDistributionError,
 )
 from probabilistic_model.probabilistic_circuit.relational.markov_chain import (
@@ -22,6 +23,7 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     SumUnit,
     leaf,
 )
+from probabilistic_model.utils import MissingDict
 from ..dataset import ormatic_interface  # type: ignore
 from ..dataset.example_classes import (
     KRROODOrientation,
@@ -86,13 +88,39 @@ def type_by_state(dirac_hidden_state_template) -> list:
 
 
 @pytest.fixture
-def starting_distribution() -> np.ndarray:
+def state_domain() -> Set:
+    return Set.from_iterable(range(2))
+
+
+@pytest.fixture
+def starting_probabilities() -> np.ndarray:
     return np.array([0.3, 0.7])
 
 
 @pytest.fixture
-def transition_model() -> np.ndarray:
+def transition_probabilities() -> np.ndarray:
     return np.array([[0.9, 0.1], [0.2, 0.8]])
+
+
+@pytest.fixture
+def starting_distribution(state_domain, starting_probabilities) -> SymbolicDistribution:
+    return SymbolicDistribution(
+        variable=Symbolic(name="state", domain=state_domain),
+        probabilities=MissingDict(
+            float, {hash(state): p for state, p in enumerate(starting_probabilities)}
+        ),
+    )
+
+
+@pytest.fixture
+def transition_model(state_domain, transition_probabilities) -> MultinomialDistribution:
+    return MultinomialDistribution(
+        distribution_variables=(
+            Symbolic(name="state", domain=state_domain),
+            Symbolic(name="next_state", domain=state_domain),
+        ),
+        probabilities=transition_probabilities,
+    )
 
 
 @pytest.fixture
@@ -125,51 +153,79 @@ def _scene_object_parts(count: int) -> list:
 
 
 def test_mismatched_transition_shape_raises(dirac_hidden_state_template):
+    mismatched_domain = Set.from_iterable(range(1))
     with pytest.raises(ShapeMismatchError):
         MarkovChainDistributionTemplate(
             template_distribution=dirac_hidden_state_template,
-            starting_distribution=np.array([0.5, 0.5]),
-            transition_model=np.array([[1.0]]),
+            starting_distribution=SymbolicDistribution(
+                variable=Symbolic(name="state", domain=Set.from_iterable(range(2))),
+                probabilities=MissingDict(float, {0: 0.5, 1: 0.5}),
+            ),
+            transition_model=MultinomialDistribution(
+                distribution_variables=(
+                    Symbolic(name="state", domain=mismatched_domain),
+                    Symbolic(name="next_state", domain=mismatched_domain),
+                ),
+                probabilities=np.array([[1.0]]),
+            ),
         )
 
 
-def test_starting_distribution_not_summing_to_one_raises(dirac_hidden_state_template):
+def test_starting_distribution_not_summing_to_one_raises(
+    dirac_hidden_state_template, state_domain, transition_model
+):
     with pytest.raises(NotAProbabilityDistributionError):
         MarkovChainDistributionTemplate(
             template_distribution=dirac_hidden_state_template,
-            starting_distribution=np.array([0.5, 0.6]),
-            transition_model=np.array([[0.5, 0.5], [0.5, 0.5]]),
+            starting_distribution=SymbolicDistribution(
+                variable=Symbolic(name="state", domain=state_domain),
+                probabilities=MissingDict(float, {0: 0.5, 1: 0.6}),
+            ),
+            transition_model=transition_model,
         )
 
 
-def test_starting_distribution_with_negative_entry_raises(dirac_hidden_state_template):
+def test_starting_distribution_with_negative_entry_raises(
+    dirac_hidden_state_template, state_domain, transition_model
+):
     with pytest.raises(NotAProbabilityDistributionError):
         MarkovChainDistributionTemplate(
             template_distribution=dirac_hidden_state_template,
-            starting_distribution=np.array([1.5, -0.5]),
-            transition_model=np.array([[0.5, 0.5], [0.5, 0.5]]),
+            starting_distribution=SymbolicDistribution(
+                variable=Symbolic(name="state", domain=state_domain),
+                probabilities=MissingDict(float, {0: 1.5, 1: -0.5}),
+            ),
+            transition_model=transition_model,
         )
 
 
-def test_transition_row_not_summing_to_one_raises(dirac_hidden_state_template):
+def test_transition_row_not_summing_to_one_raises(
+    dirac_hidden_state_template, state_domain, starting_distribution
+):
     with pytest.raises(NotAProbabilityDistributionError):
         MarkovChainDistributionTemplate(
             template_distribution=dirac_hidden_state_template,
-            starting_distribution=np.array([0.5, 0.5]),
-            transition_model=np.array([[0.9, 0.2], [0.5, 0.5]]),
+            starting_distribution=starting_distribution,
+            transition_model=MultinomialDistribution(
+                distribution_variables=(
+                    Symbolic(name="state", domain=state_domain),
+                    Symbolic(name="next_state", domain=state_domain),
+                ),
+                probabilities=np.array([[0.9, 0.2], [0.5, 0.5]]),
+            ),
         )
 
 
 # %% ground()
 
 
-def test_ground_with_no_parts_raises(markov_chain_template):
-    with pytest.raises(EmptyMarkovChainError):
-        markov_chain_template.ground([])
+def test_ground_with_no_parts_returns_empty_circuit(markov_chain_template):
+    grounded = markov_chain_template.ground([])
+    assert len(grounded.nodes()) == 0
 
 
 def test_ground_single_part_uses_starting_distribution(
-    markov_chain_template, starting_distribution, type_by_state
+    markov_chain_template, starting_probabilities, type_by_state
 ):
     [part] = _scene_object_parts(1)
     grounded = markov_chain_template.ground([part])
@@ -183,7 +239,7 @@ def test_ground_single_part_uses_starting_distribution(
                 {type_variable_at_position: type_value}
             ).as_composite_set()
         )
-        assert probability == pytest.approx(starting_distribution[state])
+        assert probability == pytest.approx(starting_probabilities[state])
 
 
 def test_ground_three_parts_is_valid(markov_chain_template):
@@ -192,14 +248,14 @@ def test_ground_three_parts_is_valid(markov_chain_template):
 
 
 def test_ground_three_parts_matches_forward_algorithm(
-    markov_chain_template, starting_distribution, transition_model, type_by_state
+    markov_chain_template, starting_probabilities, transition_probabilities, type_by_state
 ):
     """
     With dirac emissions, the observed "type" sequence reveals the hidden state sequence
     exactly, so the joint probability of every state path is.
 
     independently computable as
-    ``starting_distribution[i] * transition_model[i, j] * transition_model[j, k]``
+    ``starting_probabilities[i] * transition_probabilities[i, j] * transition_probabilities[j, k]``
     -- the textbook forward-algorithm formula for a length-3 chain -- and must
     match what the grounded circuit itself reports.
     """
@@ -222,26 +278,26 @@ def test_ground_three_parts_matches_forward_algorithm(
                     }
                 ).as_composite_set()
                 expected = (
-                    starting_distribution[i]
-                    * transition_model[i, j]
-                    * transition_model[j, k]
+                    starting_probabilities[i]
+                    * transition_probabilities[i, j]
+                    * transition_probabilities[j, k]
                 )
                 assert grounded.probability(event) == pytest.approx(expected)
 
 
 def test_ground_position_probability_matches_forward_marginal(
-    markov_chain_template, starting_distribution, transition_model, type_by_state
+    markov_chain_template, starting_probabilities, transition_probabilities, type_by_state
 ):
     """
     Each position's "type" probability, with the other positions left.
 
     unconstrained, must recover that position's forward marginal
-    (``starting_distribution @ transition_model ** t``).
+    (``starting_probabilities @ transition_probabilities ** t``).
     """
     parts = _scene_object_parts(3)
     grounded = markov_chain_template.ground(parts)
 
-    forward_marginal = starting_distribution
+    forward_marginal = starting_probabilities
     for part in parts:
         type_variable_at_position = next(
             v for v in grounded.variables if v.name == f"{part.variable}.type"
@@ -253,4 +309,4 @@ def test_ground_position_probability_matches_forward_marginal(
                 ).as_composite_set()
             )
             assert probability == pytest.approx(forward_marginal[state])
-        forward_marginal = forward_marginal @ transition_model
+        forward_marginal = forward_marginal @ transition_probabilities
