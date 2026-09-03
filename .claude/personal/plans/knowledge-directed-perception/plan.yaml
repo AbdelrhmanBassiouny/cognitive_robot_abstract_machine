@@ -839,16 +839,7 @@ items:
 
     The rename waits here rather than landing on #238 for a second reason the developer weighed: it is 51
     references across 10 files, and #232, #236 and #239 would each inherit it as a conflict. Naming the type
-    once, when it is what it will finally be, costs those three branches nothing.
-
-
-    Built 2026-09-03 as #255, off #238 rather than off #227: the rename is 53 references across 11
-    files on #238''s tree and six of those files exist on no earlier branch, so renaming on #227 would
-    have named the type on half its readers and handed #238 the rest as a conflict.
-    search-clipped-to-a-predicates-region is therefore recorded as a dependency. The round found a
-    second shape of the same fault the item was raised about: a relation stated about the thing sought
-    alone was never refused at all, only evaluated natively where it raised AttributeError on a
-    dataclass. Both are closed by the detection having a body behind it.'
+    once, when it is what it will finally be, costs those three branches nothing.'
 - id: how-to-look-concluded-from-the-request
   title: Work out how to answer a look from the request, instead of being handed a pipeline
   branch: null
@@ -1211,7 +1202,28 @@ items:
     Failure detection then follows from the belief rather than from a surface: the insertion promised
     the cube would end up *in* the hole, and it is found resting *on* the lid, turned thirty degrees from
     where it would have had to be. Reporting which part of the expectation was violated is what a recovery
-    can act on, and it is the paper''s end-to-end story.'
+    can act on, and it is the paper''s end-to-end story.
+
+    Built 2026-09-03 as #257, over the merge of #232, #222 and #246 - three dependencies on three stacks,
+    the first item on the plan whose dependencies span that many. An expectation is a named piece, a
+    BelievedPlace, what it should be resting on and what put the belief there; where a look is aimed and
+    what the piece should rest on are deliberately two fields, which is what makes a cube left lying on
+    the lid a reportable failure rather than a sighting. SceneRequest carries what the asker believes, as
+    this plan''s note of 2026-08-31 predicted it would need to. 482 passed against 453 on the merge of the
+    three, which is the 29 tests added and nothing else moved.
+
+    The item''s own reach exposed a fault worth more than the feature. This is the first belief on the plan
+    that states how far it reaches - every one before it reached exactly SEED_REACH - and varying a radius
+    showed the fit is not monotonic in it: PieceMatcher''s grid was laid out from -radius, so its phase
+    moved with the reach and a peak one reach landed on the next stepped over. That is #238''s lattice
+    finding in the sweep rather than the rectification; offsets_within counts outwards from the centre.
+
+    The four lid expected-to-fail marks do not come off, and the measurement says why. Two of the four are
+    a cube an insertion put at a named hole, so a history does say where to look and the cube is fitted -
+    but not at every reach even with the grid monotone, because it reaches 0.645 against a ghost
+    cylinder''s 0.641 at the same place. Stating a reach that happens to work is the tuning this plan has
+    refused three times, and separating a piece from a ghost that follows the same edges is
+    competing-explanations'' claim. LID_PIECES_STILL_MISSED now records that, and names that item.'
 - id: robokudo-detector
   title: Answer a request with a RoboKudo analysis engine
   branch: perception_robokudo_detector

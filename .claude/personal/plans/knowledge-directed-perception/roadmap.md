@@ -4450,78 +4450,109 @@ parse this repository's `pyproject.toml`, `pip install -U uv` puts a working one
 plan's two -- so `plan.yaml` was edited directly again. Seven rounds have now worked around
 one unfixed script.
 
-### `imagination-world-rejects-what-a-predicate-refuses`: what it took, and the fault that was not a refusal
+### `expectations-from-events`: what it took, and the fault a stated reach exposed
 
-Built 2026-09-03 in `auto` mode as pull request #255, off #238 for the reason the plan
-above records.
+Built 2026-09-03 as pull request #257, over the merge of #232, #222 and #246. 29 new
+tests in `test_montessori_expectations.py` and `test_montessori_piece_matching.py`.
 
-#### The refusal had a quieter half
+**The plan held, and the type it needed was the one it predicted.** An expectation is a
+named piece, a `BelievedPlace`, what it should be resting on and what put the belief
+there; `Expectations` keeps one per piece the robot has acted on; `SceneRequest` carries
+what the asker believes, which is the change this plan's own note of 2026-08-31 said
+this item would need. The three propagation rules are the item's notes verbatim, and the
+one that carries the weight is written as its own test:
+`test_a_belief_only_decays_when_something_acts_on_that_piece`.
 
-The item was raised about a relation the backend *refuses*. Reading
-`_check_what_was_found` rather than the note turned up a second shape of the same fault, and
-it is the worse one: a relation stated about the thing sought **alone** -- *supporting
-something*, *stable* -- was never refused at all. It fell through to the residual filter and
-was evaluated natively, where it reached for `_world` on a dataclass and raised
-`AttributeError`. A refusal at least says what it cannot do. Both halves are closed by the
-same thing, which is the detection having a body behind it.
+#### Where a look is aimed and what it should rest on are two things
 
-#### One change in krrood, and it is about what a description leaves behind
+The single design call this item made, and it is what makes the failure story work.
+`BelievedPlace.surface` is the plane a look searches; `Expectation.resting_on` is what
+the piece should have come to rest against. A cube an insertion put through a hole is
+looked for **on the lid** and expected to rest **on the hole**, and it is exactly that
+gap which makes a cube left lying on the lid a reportable failure rather than a
+sighting. Conflating the two would have made the item's own sentence -- *"the insertion
+promised the cube would end up in the hole, and it is found resting on the lid"* --
+inexpressible.
 
-The refusal is `condition._constrained_variables_ - {expression.variable}` being non-empty.
-The things a statement *describes* are already resolved out of the world before the look, so
-they are not variables the look has to answer -- subtracting them from that difference is
-the whole change. What it needs beside it is that a described variable stops ranging over
-everything it could have meant: `_hold_each_description_to_its_answer` pins each to the one
-answer that resolved it, or the residual check would pass against something the statement
-ruled out.
+#### The five events are a mapping, not a chain of type tests
 
-`PerceptionBackend.discard` is the other half: what the statement rejected, which a backend
-that brought its findings into a world of its own takes back out. It does nothing by default,
-because a backend that brought them nowhere has nothing to let go of.
+`SUPPORT_AFTER_EVENT` says what supports a piece after each kind of event: four name
+what it has come to rest against and the fifth names what it has come off. Every other
+kind says nothing about support, so a piece it names keeps its belief -- which is a rule
+only its own test observes, exactly the shape #246 recorded about `advances_the_clock`,
+so it was written rather than trusted.
 
-#### A statement names the world's entity, and the copy answers for it
+#### The release spread has no default, and that is the honest answer
 
-The one thing this design could not decide from the sources: a statement names a body of the
-world the robot has, while the found things stand in the copy. Measured rather than assumed
--- `InContactWith(<a body of the copy>, <the original's own body>)` answers exactly as it does
-against the copy's counterpart, positive and negative both, because the collision detector
-resolves the second body inside the first one's world. So no substitution is needed at the
-call site, and a statement is written the way it always was.
+How far a released piece may land from the hole depends on the height it was let go from
+and what it fell onto. There is no number here to derive, so `release_spread` is
+`field(kw_only=True)` with no default and whoever declares the effect states it -- the
+same call #238 recorded for `Near.radius` (*"how near is near is the caller's to say"*).
 
-#### `Role[T]` decides where the spawn happens
+#### The fault a stated reach exposed, which is worth more than the feature
 
-`role_taker` is required at construction, so the piece has to exist in a world *before* the
-detection does -- which puts the spawn inside `LoosePieceDetector._piece_at`, at the moment a
-piece is recognised, rather than anywhere later. `ImaginedWorld` therefore replaces
-`reference_frame` in that detector's signature rather than joining it: it carries the frame
-the look reports in, so the parameter count is unchanged and there is one thing that knows
-where a finding comes to stand. `MontessoriPerceptionPipeline.imagine()` is the one place a
-look's world is made.
+**This is the first belief on the plan that states its own reach.** Every belief before
+it reached exactly `SEED_REACH`, so nothing ever varied a radius -- and varying one
+showed the fit is *not monotonic in the reach*. `PieceMatcher._sweep` laid its grid out
+as `arange(-radius, ...)`, whose phase therefore moves with the reach, so a peak one
+reach lands on the next steps over. Measured on `displaced_cube_from_hole`: the cube is
+fitted at a reach of 20 mm and of 40 mm and not at 24 mm or 30 mm.
 
-A finding's pose keeps naming the frame of the world the look was taken in; only the body
-hangs from the copy's own counterpart, found by the name they share. Nothing a caller reads
-off a detection changed.
+That is #238's lattice finding in the sweep instead of the rectification, with the same
+giveaway, and `offsets_within` fixes it: count outwards from the centre, so widening a
+reach only *adds* placements. Writing the reach's other half as a test -- that a grid
+stops inside the reach, since a belief says a thing is no further than that from the
+place it names -- is what caught an overshoot the first version of the fix introduced.
 
-#### Verification, and a container that cannot run the experiments suite
+Worth generalizing alongside #238's: **anything laid out from the edge of its own extent
+is re-phased by every change to that extent**, and the cheap way to find out is to vary
+the extent and check the answer is flat rather than merely plausible.
 
-`test/krrood_test/test_eql/`: **1326 passed**, 3 skipped, against **1324** on the base tip in
-a worktree with its own `*/src` on `PYTHONPATH`. The Montessori modules of
-`test/experiments_test/`: **321 passed**, 1 skipped, 11 xfailed, against **310** on the same
-base -- the eleven added and nothing else moved.
+#### The lid marks do not come off, and the measurement says why
 
-The three behaviours are mutation-checked: reverting the krrood refusal change fails the
-end-to-end described-operand test, and stubbing out `discard` fails the discard test, neither
-touching anything else.
+Two of the four captures `test_every_piece_resting_on_the_lid_is_found` still fails on
+are a cube an insertion put at a named hole, so a history does say where to look, and
+armed with one the cube **is** fitted. It is not fitted at every reach, and the grid fix
+above is not the whole cause: with the grid monotone, `displaced_cube_from_hole` still
+finds the cube at 20 mm and 40 mm and not at 24 mm or 30 mm, because the agreement
+landscape over the lid is flat enough that which peak the coarse pass settles on decides
+it -- the cube reaches 0.645 against a ghost cylinder's 0.641 at the same place, four
+parts in a thousand, which is the same fragility #236 recorded at nine.
 
-**This container has no ROS at all**, which is new on this plan: `test/experiments_test/conftest.py`
-imports `rclpy` and, through `coraplex`, `geometry_msgs`, so the directory cannot be collected
-here, and `scripts/regenerate_all_orm.py` fails in giskardpy's own generator
-(`CouldNotResolveType: DebugExpressionPublisher`) for the same reason -- both before this
-branch changed anything. The Montessori test modules were run against the same sources from
-outside that conftest, identically on this branch and on its base, which is what makes the two
-numbers comparable. A ROS container runs them the ordinary way.
+**So no reach was stated that takes the marks off.** Picking one that happens to work is
+the tuning this plan has refused three times, and separating a piece from a ghost that
+follows the same edges is `competing-explanations`' whole claim. The marks stay, and
+what changed is what they record: `LID_PIECES_STILL_MISSED` now says that a history does
+reach two of the four and what stops them, and names `competing-explanations` rather
+than this item. The other two are pieces nothing acted on, so no history says anything
+about them and a capture carries no world to say it instead.
 
-#### The bootstrap script's fault is unfixed, for the seventh round
+That is a narrower delivery than the item's own note implies, and it is deliberate: the
+mechanism is what this item claims, it is demonstrated end to end on the rendered scene
+by `test_a_piece_a_colour_cannot_separate_is_found_because_an_action_promised_it`, and
+the capture recall was always `competing-explanations`' to finish.
 
-`plan_item_bootstrap.py open` fails through `save-plan.sh` again, so `plan.yaml` and
-`roadmap.md` were written directly and pushed with `save-plan.sh`.
+#### `InsertMontessoriShapeAction` is not edited, because it cannot be
+
+`git ls-tree` finds it on `tracy_icra` and on no branch this item can base on, and
+`ActionDescription` on `main` declares its effect as a `post_condition` returning a
+symbolic expression with no per-action effect to read. So the declared effect is
+`Expectations.released_over`, which whoever performs the action calls, and the wiring
+lands on the demo branch -- the same split the perception node already has.
+
+#### Open, and stated on the pull request rather than decided quietly
+
+Whether the belief store belongs in `experiments` or, generally, in `krrood` or
+`semantic_digital_twin`. Review overturned that placement twice on #222. `BelievedPlace`
+lives in `experiments` because #232 put it there, and moving it now is a rename across
+#232, #236, #238 and #239 -- the cost #238 refused for the `DetectedMontessoriShape`
+rename.
+
+#### Landing hazards
+
+#255 renames `MontessoriShapeDetection` to `DetectedMontessoriShape` across
+`pipeline.py`, `detections.py` and `occupancy.py`; this branch edits `pipeline.py` and
+`piece_matcher.py`, so it inherits that rename the way #232 and #236 do. #223's
+`Footprint` rename and #231's `EdgeFitDetector` rename conflict the usual mechanical
+way. `offsets_within` is a new function in `piece_matcher.py`, which #231 and #239 both
+edit.
