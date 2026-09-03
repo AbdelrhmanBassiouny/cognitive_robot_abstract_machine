@@ -3900,3 +3900,126 @@ generated ORM interface, which is absent here, and it is one of the 178.
 there, and the `uv` first on `PATH` is 0.8.17, which cannot parse this repository's
 `pyproject.toml` — so the working `uv` has to be called by its full path rather than found.
 `black` and `docformatter` are again not in the dependency set and go in by hand.
+
+### `episode-replayed-into-the-world`: the review round of 2026-09-03
+
+Resolved 2026-09-03 in `auto` mode. **Nothing was wrong with the branch.** #246 was green on
+all 23 checks, `mergeable_state: clean`, out of draft nowhere — it is a draft as this
+plan's convention asks — and its base #244 open, out of draft and clean. What kept it open
+was four review threads opened that afternoon, of which the item's own `blockers` recorded
+none. That is the **fifth** time on this plan that the cause of a stall was a review comment
+nobody had turned into state, after `surfaces-from-world`, #222's own round,
+`choose-detection-method` and #238; the only stall that was not one is #222's restack.
+Writing them down was again the first thing this resolve did, before any code.
+
+Unlike #238, this branch does have CI — it is one deep off #244 rather than deep in a fork
+stack — so the green run is worth something here. It still said nothing about why the item
+was open.
+
+#### The generator was one method holding four pieces of state
+
+The ask, in the developer's words: *"this method is so complicated and big, I do not like
+nested methods. Modularize, simplify and clean this, do very small modular methods, use OOP
+and abide to SOLID."* `RosbagPlayer._sample` was fifty lines with two nested functions
+(`next_sample_time`, `frame_at`) closing over `tree`, `joint_positions`, `first_sample_time`
+and `sample_count`, and a three-way branch on the topic inside the message loop.
+
+The nesting was the symptom rather than the fault: **a closure is what you write when the
+state has no object to belong to**. Three now:
+
+- `RecordedMessage` — a message with the topic it arrived on and the instant of the
+  recording's clock it was published at. `RecordedMessage.of` is the one place that knows
+  how the reader hands a message over, and it replaces the `(connection, timestamp, raw)`
+  tuple whose positions carried the meaning.
+- `RecordedState` — the transform tree and the latest joint positions together, which is
+  what the two closures both reached for. `record(message)` keeps a message as the latest
+  word and `frame_at` takes a frame of the state as it stands.
+- `RecordingSampler` — the sampling itself, with the counters as fields. `frames`,
+  `_messages`, `_replayed_connections_of`, `_frames_due_before`, `_frames_due_through`,
+  `_next_sample_time`, `_take_sample` and `_require_a_recorded_reference_frame`; the longest
+  is seven lines.
+
+**The branch in the loop moved onto the type that owns it.** `RosbagTopic.advances_the_clock`
+says whether a message on a topic states a time to sample along, so `/tf_static` needs no
+`continue` and `frames()` reads as the rule rather than as the special case.
+`RosbagTopic.message_type` is the same move for the pairing the writer used to restate beside
+every `add_connection`. Worth generalizing: **the branches worth moving onto an enum are the
+ones that ask what a member *is*, not the ones that ask what to *do* about it** — both of
+these answer a property of the topic, and both had been written out at every use site.
+
+Behaviour is unchanged, and the split of eager and lazy that the item's own section records
+is preserved deliberately: the topic check still happens when the player is built (the
+sampler's `replayed_topics` opens the reader eagerly) and the reference frame still on the
+first frame. Both have the tests they already had.
+
+#### The strings were a type, and the type needed a test rather than a promise
+
+*"make these string keys StrEnum members instead, and all similar ones. and import them and
+reuse them everywhere they are needed."* The six ROS message type names
+`recorded_episode.py` spelled as dictionary keys are `RosbagMessageType` members beside the
+two already there, so the enum is now every message type a recording carries rather than
+only the two published on a topic, and the reader and the writer name them from one place.
+
+**A name in an enum is not automatically a name that resolves**, which is the fault an enum
+of foreign identifiers can still have: a typo surfaces as a `KeyError` at the one call site
+that uses that member, whenever that site next runs.
+`test_every_message_type_named_is_one_the_recordings_definitions_hold` asserts every member
+against the type store the recording is read and written through, so all eight are checked
+by one test rather than incidentally by whichever call site happens to be exercised.
+
+The sweep for "all similar ones" turned up two more bare strings naming a fixed thing — the
+empty `frame_id` a joint state message carries (`UNSTAMPED_FRAME`) and the frame the refusal
+test roots its tree in (`UNROOTED_FRAME`) — and one convention being trusted rather than
+declared: `_write` depends on both published kinds having a `time` and a `to_message()`, so
+they share a `PublishedMessage` base that says so.
+
+#### Docstrings, and the two places left bare on purpose
+
+Two threads asked for the missing docstrings and type hints, one on the player and one on the
+whole pull request. Swept with an AST walk over every file the pull request touches rather
+than by eye, which is what found the remaining two: the JSON player's `_pause` and `_resume`
+stubs, and — in the tests — every test function and helper.
+
+`TransformTree.record` had no hint at all. It takes a message of a type `rosbags` generates at
+import time, so there is no class to name: it is `Any`, with the docstring naming
+`RosbagMessageType.STAMPED_TRANSFORM` for what it actually is. **Worth knowing for anything
+else reading a bag in this workspace:** the deserialized message types are not importable, so
+`Any` plus a docstring is the honest hint, and `rosbags.interfaces.Connection` — which *is*
+importable — goes under `TYPE_CHECKING`.
+
+**Two places are left undocumented deliberately and the thread is left open for the
+developer**, per the standing convention about answering differently: the two new exceptions'
+`error_message` / `suggest_correction` overrides, whose contracts `DataclassException` states
+on its abstract methods and which no `DataclassException` subclass anywhere in this workspace
+documents; and `DataPlayer.__post_init__` / `FilePlayer.__post_init__`, which this branch
+neither adds nor changes and which show in the diff only because black re-wrapped lines
+around them.
+
+#### Verification
+
+`test/segmind_test`: **53 passed, 1 skipped** against **48 passed, 1 skipped** on this
+branch's previous tip, which is the five added here and nothing else moved.
+
+**The five are mutation-checked rather than merely green**, since a refactor's own tests are
+worth what they would catch: sharing the joint positions instead of copying them, making
+every topic advance the clock, and making every topic claim the transform message type each
+fail their own test and nothing unrelated. The middle one is the one worth recording — the
+sampling tests all still pass under it, because this recording's static transform happens to
+be stamped at the first dynamic message time, so `advances_the_clock` is a rule that only its
+own test observes on this data.
+
+#### The environment, which is the easiest this plan has recorded
+
+The `uv` on `PATH` is 0.8.17 and cannot parse this repository's `pyproject.toml`, as five
+consecutive items have recorded; `pip install -U uv` puts 0.12.9 at `/usr/local/bin/uv` and
+`uv sync --extra dev --python 3.12` builds the whole workspace, **including `rosbags`** — the
+item's own section had to install it by hand, and it now comes with the sync since this
+branch declares it. `black` and `docformatter` still go in by hand, with `.venv/bin` on
+`PATH`.
+
+`.claude/hooks/plan_item_bootstrap.py` was not used at all this round: the version in this
+branch's checkout has only `record` and `open`, not the `update` the resolve skill now calls
+for, so `plan.yaml` was edited directly and pushed with `save-plan.sh --manifest`. That is
+the sixth round on this plan to work around that script, and the second distinct reason —
+the indentation fault #231, #236, #238, #239 and this item's own kickoff hit is one; a
+checkout older than the skill that calls it is another.

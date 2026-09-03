@@ -1117,16 +1117,14 @@ items:
   depends_on: []
   status: in_progress
   blockers:
-  - 'Four unresolved review threads opened on #246 on 2026-09-03, which is the whole of what
-    keeps this item open: CI is green on all 23 checks, mergeable_state is clean, and its base
-    #244 is open and out of draft. r3927189874 on rosbag_player.py:207 asks for RosbagPlayer._sample
-    to be modularized - "this method is so complicated and big, I do not like nested methods.
-    Modularize, simplify and clean this, do very small modular methods, use OOP and abide to
-    SOLID". r3927193153 on the same file asks for the missing docstrings and type hints.
-    r3927219116 on test/segmind_test/dataset/recorded_episode.py:37 asks for "docstrings everywhere
-    they are missing in this PR". r3927227326 on line 39 of the same file asks for the ROS message
-    type strings to become StrEnum members, "and all similar ones. and import them and reuse them
-    everywhere they are needed".'
+  - 'One of the four review threads of 2026-09-03 is left open deliberately, and it is the developer''s
+    to close rather than work for this item. r3927219116 asked for docstrings everywhere they are
+    missing in the pull request; every file it touches was swept with an AST walk and two places are
+    left bare on purpose - the two new exceptions'' error_message / suggest_correction overrides,
+    whose contracts DataclassException states on its own abstract methods and which no DataclassException
+    subclass anywhere in this workspace documents, and DataPlayer.__post_init__ / FilePlayer.__post_init__,
+    which this branch neither adds nor changes. Both are stated on the thread with an offer to add them
+    either way. The other three threads are answered exactly as asked and resolved.'
   notes: 'An expectation about where a thing now is comes from what was done to it, and on a recording
     nothing has been done to anything until the recording is replayed. Segmind already has the extension
     point: EpisodePlayer -> DataPlayer -> FilePlayer, with CSVEpisodePlayer and JSONPlayer as its two
@@ -1147,7 +1145,22 @@ items:
     any recording - which is why pieces-looked-for-where-expected does not depend on this item.
 
     Worth recording for whoever runs it: recording /tf and /joint_states alongside the camera in future
-    takes costs nothing and would remove this split entirely.'
+    takes costs nothing and would remove this split entirely.
+
+    Resolved 2026-09-03 in `auto` mode, and nothing was wrong with the branch: green on all 23 checks,
+    mergeable_state clean, base #244 open and out of draft. What kept it open was four review threads
+    nobody had turned into state - the fifth time on this plan that a stall was exactly that. Answered
+    as 3b3e3f53 and f9a961fc. The sampling generator was one fifty-line method with two nested functions
+    closing over its counters; it is RecordedMessage, RecordedState and RecordingSampler now, each with
+    one subject and no method longer than seven lines, and the branch that was in the message loop moved
+    onto RosbagTopic.advances_the_clock. The ROS message type strings the test dataset spelled are
+    RosbagMessageType members, the topic-to-type pairing the writer restated is RosbagTopic.message_type,
+    and one test asserts every member against the type store rather than leaving a typo to surface at
+    whichever call site next runs. Docstrings and type hints everywhere they were missing, swept by an
+    AST walk; TransformTree.record takes a type rosbags generates at import time, so it is Any with the
+    docstring naming what it is. 53 passed, 1 skipped against 48 passed, 1 skipped, and the five added
+    are mutation-checked - notably advances_the_clock, which every sampling test still passes without,
+    since this recording''s static transform happens to be stamped at the first dynamic message time.'
 - id: expectations-from-events
   title: Expect what the action promised, and report the difference as a failure
   branch: perception_expectations_from_events
