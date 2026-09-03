@@ -4307,3 +4307,145 @@ this session will not see structural changes to the plan as they arrive, and rea
 tracking issue's comments directly before any later round. Reading them at kickoff is
 what turned up `icra-experiments`' cross-plan record above, which nothing in this plan's
 own roadmap carried.
+
+## `surfaces-found-by-looking`: the surface described, and the model it is measured against
+
+Kicked off 2026-09-03 in `auto` mode, as pull request #259. Both recorded dependencies
+report `open_ready`: `perception-backend` (#222) and `surface-finish-annotation` (#216).
+The session's branch arrived cut from `integration` rather than from anything this plan is
+stacked on -- the hazard #199 exists to refuse, and the ninth time on this plan after
+#223, #225, #227, #232, #236, #238, #239 and #246 -- and was re-cut onto #231's tip
+before the first commit. Subscribing to the tracking issue was refused by the session's
+permission classifier, so this round has no push channel for concurrent structural
+changes; the manifest delta is the only one it reads.
+
+### It is based on #231, and that is a third dependency rather than a convenience
+
+The item's `depends_on` names #222 and #216, which between them would base this on
+`perception_eql_backend` with #216 merged in. That is wrong twice over, and both reasons
+are about work #231 has already done:
+
+- **The properties this item's description of a surface is written over are #231's
+  fields.** `WorkspaceSurface.finish` and `WorkspaceSurface.color` -- read off the widest
+  horizontal collision shape, which is #216's own recorded design for where a finish is
+  read -- exist on #231 and on no earlier branch. #216 puts `SurfaceFinish` on `Shape`;
+  it is #231 that carries it as far as the surface perception measures.
+- **The mechanism is #231's.** A member of a detector family declaring what it can answer
+  as an entity query language condition (`PieceDetector.capability`), and a rule tree
+  stated once and grown while in use (`DetectorRules`, `add_rule`,
+  `ConclusionSelector.insert_at`), is exactly what this item applies to surfaces. Writing
+  a second copy of it on a branch that cannot see the first is the duplication these notes
+  record five times over.
+
+#231 carries #216 already -- `80100bd4` is in its history through `e382e581`, though not
+through #216's current tip, which has since merged `main` again -- so both recorded
+dependencies arrive with it. `depends_on` now names all three, following what
+`perception-backend`'s own section did when its dependency on #221 turned out to be
+recorded in prose and never in the manifest.
+
+The mechanical scope check reports every path this touches absent from `main` and shared
+with #222, #231, #238 and #239, which every round on this plan has already recorded as
+expected: every file in this plan is introduced by #202, so path overlap alone would fold
+the whole plan into one item. The purpose check is the one that decides it and it comes
+back clean: #231 chooses which detector reads a *piece* off a surface the world hands it,
+#239 concludes the numbers that detector reads with, #238 clips the picture a stated
+relation allows. None of the three measures a surface. What remains once their edits are
+removed is a surface found in the image, which no earlier item states in any form.
+
+### What the item is, in one line
+
+`recorded_setup.searched_workspace()` is a rectangle a person dragged sliders to arrive at,
+and `WorkspaceSurface.of_body` is the body's own collision shape. Neither is a measurement
+of where the table is. This replaces both with a surface described by what the twin states
+about it -- a large horizontal plane, mirror-finished, colourless, of about the modelled
+size -- and a finder compiled from that description.
+
+### What is built
+
+- **`SurfaceFinder`**, the family, each member declaring the surfaces it can find as an
+  entity query language condition over what the world describes, exactly as
+  `PieceDetector.capability` declares the looks a detector answers.
+- **Two members, which is the demonstration.** Reading the surface off the world's model
+  is the base rule and the general answer: it needs nothing of the picture, only that the
+  world models the body at all. Measuring the plane in the depth image is the refinement,
+  and it holds only for a surface the world describes well enough to recognise one --
+  which is what makes the description load-bearing rather than decorative.
+- **`SurfaceRules`**, the live tree over that description, stated once and grown through
+  `add_rule`, following what #231's review round settled about a tree that is built where
+  it is read.
+- **The pipeline and the recorded setup ask the rules** for each surface rather than
+  reading a tuned rectangle, so the stretch of table searched is measured.
+
+### The evidence this starts from, so the failed half is not re-run
+
+The point-cloud trial of `4b74460f8` measured a RANSAC plane holding 34% of 693k points on
+the bare steel and 69% with a mat, table points scattering about 17 mm either side of it,
+and **no piece standing out of that cloud at all**. So a plane fit is a candidate for the
+surface and is known not to be one for what rests on it; the same trial's clustering must
+not be re-run for pieces. Across the six captures everything detected lies within
+x 0.57..0.91 and y -0.02..0.37, against a searched region of x 0.35..1.35, y -0.45..0.75 --
+the great majority of what is rectified every frame is floor.
+
+### Where the description's own facts come from, and what #239 owns
+
+A rule reading *mirror-finished* needs something to state a finish, and #231 recorded that
+**nothing in this workspace states one**. #239 is the sibling off #231 that fixes it, and
+it has already landed that half: the lid states hue 19 and `SurfaceFinish.MATTE`, Tracy's
+table its own near-colourless grey and `SurfaceFinish.MIRROR`.
+
+That is #239's for the *world*, and it stays there. A recording carries no world, which is
+why `recorded_setup` writes down what the recordings were taken over, so this branch states
+the recorded table's finish and colour beside the `TABLE_HEIGHT` already there. The two are
+complementary rather than duplicates -- the same shape as `BOARD_SCALE_AGAINST_THE_MESH`
+sitting in `recorded_setup` on #236 -- and whichever of the two branches meets the other
+first keeps #239's statement for the world. Merging #239 in to get it was refused for the
+reason #231 refused it: #239 carries #159, which adds 9,236 lines over 50 files to a pull
+request whose own change is a few hundred.
+
+### Deliberately not attempted, each recorded rather than dropped
+
+- **Fitting anything but the surface.** The trial above measured that no piece stands out
+  of the cloud, so a plane fit is not a piece detector and this branch does not make one.
+- **The lid's extent.** #221 took the lid's height from the world and its extent from the
+  board detection because the world's board pose has drifted, and #238 recorded the same
+  split for a clip. Measuring the lid's own plane here would reintroduce exactly the
+  constant that split removed.
+- **Removing `tune_workspace`.** This item replaces the tuning, so the tool it replaces
+  becomes used by nothing but its own tests. `AGENTS.md` says to consult the developer
+  before removing something used only in tests, so it is left standing and the removal is
+  asked on the pull request -- the same call `surfaces-from-world` made about the
+  widest-or-highest face and `holes-fitted-like-pieces` made about `CrossSectionClassifier`.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause:
+
+- **The plane measurement on its own**: a synthetic depth image of a plane at a known
+  height, with clutter standing off it, recovers that height and the plane's extent; a
+  frame holding no dominant plane raises rather than answering a rectangle.
+- **The rules on their own**: a surface described as a mirror-finished, colourless plane of
+  about the modelled size is answered by the measurement; one the world describes with
+  nothing falls back to the model; and a rule added while the tree is in use changes what
+  the next surface is answered by -- the behavioural test #231's round settled is what says
+  a tree is a tree.
+- **The captures, which is the measurement that matters**: the measured table region is
+  strictly inside `WIDEST_WORKSPACE`, it holds every detection the pipeline reports on all
+  six, and the six report the same detections measured as tuned. The extents are read from
+  the pipeline's own run rather than retyped from the figures above, so the assertion stays
+  answerable rather than being a second copy of them.
+
+Cost as a ratio to a same-run baseline, never in seconds against the node's 0.5 s period --
+what #232 recorded about this container's speed moving between runs by more than the
+difference being measured.
+
+### The environment, and the bootstrap fault for the seventh time
+
+Run under what six consecutive items have recorded: the `uv` on `PATH` is 0.8.17 and cannot
+parse this repository's `pyproject.toml`, `pip install -U uv` puts a working one at
+`/usr/local/bin/uv`, and `black` and `docformatter` go in by hand with `.venv/bin` on
+`PATH` before `scripts/format_docstrings.py` will run.
+
+`.claude/hooks/plan_item_bootstrap.py open` failed inside `save-plan.sh` exactly as #231,
+#236, #238, #239 and #246 recorded -- the four-space item-field indentation against this
+plan's two -- so `plan.yaml` was edited directly again. Seven rounds have now worked around
+one unfixed script.

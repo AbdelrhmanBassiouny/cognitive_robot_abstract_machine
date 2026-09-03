@@ -915,13 +915,15 @@ items:
     to declare it on the region it builds.'
 - id: surfaces-found-by-looking
   title: Find a surface in the image from what the world says it is like
-  branch: perception_surface_from_description
-  pull_request_number: null
+  branch: claude/plan-item-kickoff-kdp-34snn0
+  pull_request_number: 259
   track: method-selection
   depends_on:
   - perception-backend
   - surface-finish-annotation
-  status: not_started
+  - choose-detection-method
+  status: in_progress
+  session: https://claude.ai/code/session_01DnVSdcxop561xKAGeg61MG
   notes: 'Raised by the developer on 2026-08-30, watching the workspace clip show the floor, the chairs
     and whoever was standing at the table. Every surface in this plan is taken from a model - either a
     constant (recorded_setup.WORKSPACE, still the old 1.0 x 1.2 m guess) or the body''s own collision
