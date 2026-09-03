@@ -142,7 +142,7 @@ items:
 
   - id: tracy-demo-takes-the-integrated-branch
     title: "tracy_icra takes the integrated branch and the real robot runs it"
-    branch: tracy_icra
+    branch: null
     pull_request_number: null
     track: integration
     depends_on: [integrated-simulation-pipeline, simulated-camera-feeds-perception]
