@@ -1036,9 +1036,11 @@ items:
 
 - id: integrated-label
   title: "Label every pull request the integration branch carries, and unlabel the ones it drops"
-  branch: null
+  branch: claude/stack-maintenance-kickoff-9kal0j
+  pull_request_number: 260
+  status: in_progress
+  session: https://claude.ai/code/session_016Fms9hs3XuS3a5wgc5ts3x
   track: integration
   depends_on:
   - integration-branch-ci-verdict
   - red-candidate-localisation
-  status: not_started

@@ -334,3 +334,51 @@ one reconciler called from two sites.
 
 The read side is deliberately out of scope: the dashboard renderer has its own
 `PullRequestLabel` enum, which belongs to `plan-dashboards`. This item owns the write.
+
+## `integrated-label`: the plan settled on 2026-09-03
+
+Kicked off in `auto` mode on #260, based on #211's branch
+(`claude/plan-item-kickoff-workflow-unification-wg4w4x`) rather than `main`: `git ls-tree origin/main`
+over the nine paths the work touches returns only `stack.py`, `stack.toml` and `README.md`, so six of
+the nine exist on #211 alone. Both dependencies came back `open_ready`; #211 publishes them both.
+
+**The recorded design is followed as written, with two names corrected against the code.** The item's
+scope note names a `StackLabel` member and a `SettleCandidateCommand._publish_recorded_pass`. Neither
+exists: the label enum is `stack.DefaultLabel`, whose `configuration_key` derives `Configuration`'s own
+field name, and the second publish path is `PublishRecordedPassCommand.run`
+(`RefreshPipeline._publish_recorded_pass` is the pipeline method that invokes it as a subprocess). Both
+paths funnel through the module-level `integration_candidate_commands.publish`, so there are two call
+sites, as recorded.
+
+**Only the integrated set is persisted, not both sides of the outcome.** The removal half has to cover
+`report.left_out`, tips considered and not carried, and a pull request labelled by an earlier run and
+absent from this report entirely. Reconciling to an exact set - the pull requests carrying the label are
+exactly the ones the published build integrated - covers all three through one rule, where persisting
+both sides would cover only the first two. The `refs/` namespace therefore holds one reference per
+integrated tip, keyed by build branch, in the shape `integration_block_record.py` uses.
+
+**A build branch with no records reconciles nothing**, rather than stripping the label off everything.
+An unrecorded build is one assembled before this landed, or by a path that did not record; treating its
+absence as "carried nothing" would clear a whole fork's labels on the first publish after an upgrade.
+The same distinction `BlockStanding.UNRECORDED` already draws.
+
+**Records are kept while their build branch is, and dropped when it is not.** That is the take-down rule
+`TakeDownUnreferencedBuildsCommand` already applies to the branches themselves, so a filtered `--plan`
+build and a build whose suite failed can both record without accumulating: neither is ever published, and
+both lose their branch. Recording is unconditional at assemble time for the same reason - what must not
+be written early is the *label*, not the record.
+
+**No comment accompanies the label.** A block lift comments because it is telling one branch's owner that
+a decision about their branch changed; membership of a build changes for roughly ten branches four times
+a day, and a comment per branch per build is noise on every pull request in flight. The label alone is
+the signal. The label writes are printed to standard error, the way `BuildCommand._lift_what_the_suite_cleared`
+already prints its own, so the document on standard output stays one document.
+
+**The `integrated` label is not added to the setup check.** GitHub's set-labels endpoint creates a label
+that does not exist, so an unconfigured fork needs nothing; `check-setup.sh`'s label step covers `merged`,
+`bug` and `in-review` because those are read or applied elsewhere.
+
+**Met while bootstrapping, not fixed here**: `plan_item_bootstrap`'s `open` writes item fields at
+`ITEM_FIELD_INDENT = "    "` while this manifest indents them by two, so the save it attempted produced
+a `yaml.parser.ParserError` and the entry was written by hand instead. That is the defect #151 owns, by
+the fold recorded above; this branch would be the third to edit the same emitter.
