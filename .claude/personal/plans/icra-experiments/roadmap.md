@@ -528,3 +528,97 @@ unmodified `main` in that container, which is what settles it as the environment
 than the change; CI runs both inside the ROS image. Worth knowing for every later item of
 this track: anything touching the generated `experiments` interface is CI-verified, not
 session-verified.
+
+### The tracy_icra_segmind merge, as it actually resolved
+
+Merged as `a80e86926` and pushed to `tracy_icra` on 2026-09-03. No pull request: a
+merge between two of the developer's own branches, done on their explicit instruction.
+
+The three conflicts the plan predicted were the three that occurred, against merge base
+`e034fa791` with `tracy_icra` 472 commits past it.
+
+**`experiments/requirements.txt`** stayed deleted, and `flask` moved to
+`experiments/pyproject.toml` as planned. What the plan did not anticipate is that the
+merge is also the moment `experiments/src` first imports `segmind` at all -- four
+modules do, three of them new here -- so `test_imported_workspace_members_are_declared`
+demanded `segmind` be declared alongside `flask`. Confirmed by running that test with
+the declaration removed: it fails, and passes with it.
+
+**`segmind/datastructures/events.py`** took `tracy_icra_segmind`'s content whole -- the
+`Body | Region` `with_object`, `GraspEvent`, `LossOfGraspEvent`, `LiftEvent`,
+`StopLiftEvent`, `InsertionEvent.through_hole` as a field rather than a property, and
+the switch from `tracked_object.collision.combined_mesh` to `tracked_object.combined_mesh`
+so a hole's `Region` root works too -- laid over `tracy_icra`'s rename of `BoundingBox`
+to `VolumetricBoundingBox`. That rename is not optional: `BoundingBox` no longer exists
+in `semantic_digital_twin.world_description.geometry` on `tracy_icra`, so the incoming
+spelling would not have imported. `Region.combined_mesh` does exist there, so the other
+half of the change stands as written.
+
+**`pickup_demo_real.py`** kept both sides: `tracy_icra`'s `--record` rosbag arguments and
+this branch's event dashboard and slip watch, with argument parsing ahead of the dashboard
+so a bad flag exits before a web server starts.
+
+#### The one judgement call, recorded because it is a hardware number
+
+`SHAPE_TABLE_CLEARANCE` and `GRASP_HEIGHT_OFFSET` looked like a value conflict and were
+not. `tracy_icra_segmind` deleted `SHAPE_TABLE_CLEARANCE` outright: it stopped spawning
+shapes hovering above the table (so SegMind's own support and contact detectors see them
+resting on it) and raised the *grasp target* by `GRASP_HEIGHT_OFFSET` instead, which is
+the same physical distance under a different decomposition. Both of the old constant's
+readers are gone, so keeping it would have left a dead name and lost the offset.
+
+`tracy_icra` had meanwhile tuned that distance from 0.032 to 0.04 on hardware, in
+`e8aef78f6` ("Added recording for rosbags"), alongside the same move for `PLACE_HOVER`.
+The merge carries the 0.04 onto `GRASP_HEIGHT_OFFSET`. Taking the incoming 0.032 would
+have silently reverted a hardware tuning; taking the old name would have broken the new
+design. **If 0.04 was tuned against the old spawn-hovering geometry specifically rather
+than against where the arm has to reach, this is the line to revisit** -- it is the only
+number in the merge that came from a run rather than from either branch's text.
+
+#### The silent-conflict sweep, and what it found
+
+Six passes over the merged tree, none of which an import resolver or pyflakes would have
+made:
+
+1. **Module-level name inventory** on both sides against the merge base. `tracy_icra`
+   removed twelve names in the four source packages; every one turned out to have moved
+   modules rather than vanished, and every reader still resolves. `tracy_icra_segmind`
+   removed exactly one, `SHAPE_TABLE_CLEARANCE`, handled above.
+2. **Import resolution** over the whole tree without executing anything, diffed against
+   both parents. The merge introduces no unresolved import.
+3. **Identifier-shaped string literals** in every merged-in file, checked against what the
+   tree defines. All resolve -- including `_KNUCKLE_JOINT_TEMPLATE`'s
+   `"{side}_robotiq_85_left_knuckle_joint"` and `"/{side}_gripper/joint_states"`, which
+   are the names `TracyJoint` and Giskard's Tracy config still use.
+4. **Attribute reads** in every merged-in file. Everything unmatched is stdlib or
+   third-party; nothing from the workspace is dangling. `end_effector.thumb.tip` and
+   `.finger.tip` resolve through the `HasTwoFingers` mixin that `TracyLeftGripper` carries.
+5. **Keyword arguments** against the signatures the merged tree declares, diffed against
+   the same sweep run on `tracy_icra_segmind` itself. The merge introduces none.
+6. **Enum members** named by merged-in files, against 204 enums. All resolve.
+
+The near miss worth naming: `grasp_detector_nodes.py` calls
+`contact(object, finger_tip)` and expects a bool, while `tracy_icra` rewrote
+`reasoning/predicates.py` (+567/-195) and turned `contact` from a plain function into
+`symbolic_callable_to_function(InContactWith)`. That is safe -- the wrapper returns the
+computed value when no argument is a variable, which is what it exists for -- but only
+because the migration was built to preserve the name's call behaviour. The base version's
+`threshold` parameter is now `maximum_distance`; the single call site passes neither.
+
+#### Tests were not run here, and why
+
+`test/segmind_test` and `test/experiments_test` cannot run in a Claude Code web session:
+`segmind.datastructures.events` imports `geometry_msgs.msg` at module scope, and `rclpy`
+has no PyPI distribution at all. CI runs both inside a ROS container
+(`ghcr.io/<repo>:jazzy`, with `/opt/ros/cram-env`), which is where they have to be run.
+The local `uv` is also older than CI's and cannot parse the root `pyproject.toml`'s
+`override-dependencies` map form.
+
+What was verified locally instead: every file the merge touches parses, the six sweeps
+above, and `test_dependency_declarations.py` executed directly against all ten workspace
+members -- twenty checks, all passing, which is the test that governs the
+`requirements.txt` resolution.
+
+`ci.yml` triggers on push to `main` and on pull requests, so this push to `tracy_icra`
+runs nothing. **The suites still need a run** -- on the next pull request that carries
+this branch, or by hand in the container.

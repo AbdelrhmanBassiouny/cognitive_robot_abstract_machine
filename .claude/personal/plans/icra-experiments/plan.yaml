@@ -137,7 +137,7 @@ items:
     pull_request_number: null
     track: integration
     depends_on: []
-    status: not_started
+    status: done
     notes: >-
       Merge tracy_icra_segmind into tracy_icra. Not a fast-forward: tracy_icra has moved 20-odd commits
       past their merge base e034fa791, taking the knowledge-directed-perception work with it, so this is
