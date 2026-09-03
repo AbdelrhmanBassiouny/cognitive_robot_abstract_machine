@@ -352,14 +352,31 @@ items:
 
     Still this item's own: the stack chip read from the pull request's native stack object,
     specified 2026-07-31 and not implemented.
+
+    **The 2026-09-03 review round, found by /plan-item-resolve and not recorded before it.**
+    Nine threads are unresolved: the two from 2026-08-30 left open on purpose, and seven new
+    ones the manifest never mentioned. All seven are naming rules rather than defects - no
+    abbreviations in identifiers (`ci`, and the module `pr_state` itself), a clearer name for
+    `PullRequestDetailPayload`, the `in-review` literal that `PullRequestLabel` already has a
+    member for, and `board.json` wanting a constant. Nothing else flagged the stall because
+    the fold left the pull request healthy: all 23 checks pass on bfc1e9b7 and it is `clean`
+    against its new base.
   blockers:
+    - >-
+      Seven review threads from the 2026-09-03 round are unaddressed, and this is what actually
+      stalls the item: no abbreviations in identifiers at build_dashboard.py 457 and 509 and at
+      pr_state.py 284, 318 and 557 (CONTINUOUS_INTEGRATION, named on the thread), rename
+      bastler/pr_state.py to pull_request_state.py, give PullRequestDetailPayload a clearer name,
+      read the "in-review" literal in test_export_board.py from PullRequestLabel, and give
+      board.json a constant.
     - >-
       Cross-plan dependency, not representable in depends_on: this branch is stacked on
       bastler-package (#185, bastler-package plan) since 2026-09-02 - its base is that branch and
       its modules are folded into the package. #185 is open, out of draft and promoted upstream
-      (cram2-link-sent) but unmerged, and itself carries needs-resolution against main (a
-      file-location conflict on test/bastler_test/test_setup_steps.py). This item lands only after
-      it does; GitHub retargets the base to main by itself when it merges.
+      (cram2-link-sent) but unmerged. Its main conflict is gone as of 2026-09-03: it is mergeable,
+      with one unrelated robotics check red (test_each_lib (giskardpy)). This item lands only after
+      it does; GitHub retargets the base to main by itself when it merges. cross-plan-dependencies
+      (#253) is what turns this entry into a depends_on reference.
     - >-
       Two review threads from the 2026-08-30 round are left open on purpose, each answered on the
       thread and waiting on the user: GitCommandRunner in the tests (answered with
