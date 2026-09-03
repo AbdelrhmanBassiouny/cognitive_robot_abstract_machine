@@ -189,13 +189,18 @@ items:
     session: https://claude.ai/code/session_01Hg8944NTdj8WMSGFqV4mq8
     blockers:
       - >-
-          One review thread left open on purpose: the four translate() sites in
-          test_random_events_translator.py keep _variable_ where the developer asked for it to go,
-          because Query._type_ is None and the random-events translator reads
-          comparator.left._type_, so a match-rooted chain raises there. Answered on the thread with
-          the measurement and the pre-existing-on-main confirmation, and left for the developer to
-          decide whether Query should report its selected variable's type. The conflict against main
-          and the round's other three threads are resolved.
+          Three review threads open, all answered with measurements and none needing a change from
+          this side. (1) The four translate() sites in test_random_events_translator.py keep
+          _variable_, because Query._type_ is None and the random-events translator reads
+          comparator.left._type_; teaching Query to report its selected variable's type is a change
+          to a class main owns, so it is the developer's call. (2) The .resolve() calls in the
+          feature-extraction tests stay, being load-bearing; making ground() resolve its own
+          argument is a probabilistic_model change the developer should choose. (3) 2026-09-03
+          15:55, on test_markov_chain.py:186 - whether part.variable was an EQL name at all.
+          Measured: part is a Match and _variable_ an IndexByValue, the foreign object on that line
+          is the random_events Symbolic on the other side of the ==, and restoring .variable fails
+          three tests. The conflict against main is resolved and the round's other threads are
+          closed.
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which converged on this item's
