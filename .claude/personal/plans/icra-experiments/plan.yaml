@@ -113,10 +113,16 @@ items:
       shape behind Context.update_world_model_attachment, and the results
       recording), the predicate classes (#229), the perception stack tip (#238,
       which carries #221, #222 and #227) and the hole layout fit (#236, which
-      carries #225 and #232). Resolve the known meetings once and record them
-      in roadmap.md: #223's RectifiedFootprint rename, #231's EdgeFitDetector
-      rename, #244 and #229 both editing reasoning/predicates.py and
-      geometry.py. Done when franka_montessori_demo and the Tracy simulated
+      carries #225 and #232), the detector choice by rule (#231, 13 commits,
+      no rule-engine dependency) and only the one knowledge-half commit of
+      #239 (3a493be9, the measured colours and finishes on the twin): the rest
+      of #239 is 177 commits of the RDR stack and stays out. Resolve the known
+      meetings once and record them in roadmap.md: #223's RectifiedFootprint
+      rename, #231's EdgeFitDetector rename, #244 and #229 both editing
+      reasoning/predicates.py and geometry.py. Inherits #169's open debt,
+      which is prerequisite work: its last CI round left three coraplex
+      failures and a hanging Tracy demo job, and SimulationTimePacer.sleep
+      has no bound. Done when franka_montessori_demo and the Tracy simulated
       demo both sort the board headless with the event monitor ticking and
       every test module of the merged packages collected and green in CI.
       Keep #192 out until the developer says it is in; it removes
