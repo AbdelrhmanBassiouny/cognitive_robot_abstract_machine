@@ -1,8 +1,8 @@
 """
-The GitHub payloads the pull-request state tests feed their fakes, built from the same
+The GitHub responses the pull-request state tests feed their fakes, built from the same
 key vocabulary the production code reads them with.
 
-A payload is a dataclass rendered to JSON rather than a dict literal, so a test names a
+A response is a dataclass rendered to JSON rather than a dict literal, so a test names a
 field once and never spells a key the production enum already owns.
 """
 
@@ -22,7 +22,7 @@ from bastler.pull_request_state import (
 
 
 @dataclass(frozen=True)
-class PullRequestPayload:
+class PullRequestResponse:
     """
     One pull request, rendered into whichever shape an endpoint returns it in.
     """
@@ -84,11 +84,12 @@ class PullRequestPayload:
 
     @property
     def head_commit(self) -> str:
-        """:return: The head commit, derived from the number so every payload's differs."""
+        """:return: The head commit, derived from the number so every response's
+        differs."""
         return f"sha-{self.number}"
 
     def to_json(self) -> dict[str, Any]:
-        """:return: The detail payload."""
+        """:return: The detail response."""
         return {
             PullRequestField.NUMBER: self.number,
             PullRequestField.STATE: self.state.value,
@@ -112,7 +113,7 @@ class PullRequestPayload:
 
     def to_list_entry(self) -> dict[str, Any]:
         """:return: The same pull request as the list endpoint returns it - the detail
-        payload without the line counts and the mergeable verdict."""
+        response without the line counts and the mergeable verdict."""
         entry = self.to_json()
         for omitted in (
             PullRequestField.ADDITIONS,
@@ -123,7 +124,7 @@ class PullRequestPayload:
         return entry
 
 
-def check_runs_payload(*conclusions: CheckConclusion) -> dict[str, Any]:
+def check_runs_response(*conclusions: CheckConclusion) -> dict[str, Any]:
     """
     :param conclusions: One finished check per conclusion.
     :return: The check-runs endpoint's response carrying them.
@@ -138,13 +139,13 @@ def check_runs_payload(*conclusions: CheckConclusion) -> dict[str, Any]:
 @dataclass
 class RecordedFakeGitHubApi(GitHubApi):
     """
-    An in-memory transport returning canned payloads keyed by path, recording every
+    An in-memory transport returning canned responses keyed by path, recording every
     request it serves.
     """
 
     responses: dict[str, Any]
     """
-    The payload to return for each path.
+    The response to return for each path.
     """
 
     requested_paths: list[str] = field(default_factory=list)

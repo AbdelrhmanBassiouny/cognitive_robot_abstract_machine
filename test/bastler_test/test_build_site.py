@@ -40,10 +40,10 @@ from bastler.pull_request_state import (
 )
 
 from .constants import DATASET_DIRECTORY, STUBS_DIRECTORY
-from .pull_request_payloads import (
-    PullRequestPayload,
+from .pull_request_responses import (
+    PullRequestResponse,
     RecordedFakeGitHubApi,
-    check_runs_payload,
+    check_runs_response,
 )
 from .scratch_repository import ScratchRepository
 
@@ -73,7 +73,7 @@ TRACKING_ISSUE_URL = "https://github.com/owner/repository/issues/9"
 What the fake transport reports as the tracking issue's page.
 """
 
-PULL_REQUEST = PullRequestPayload(
+PULL_REQUEST = PullRequestResponse(
     number=1,
     head="a-branch",
     draft=True,
@@ -145,7 +145,7 @@ def make_api(plan: Plan) -> RecordedFakeGitHubApi:
                 IssueField.HTML_URL: TRACKING_ISSUE_URL
             },
             endpoints.pull_request(PULL_REQUEST.number): PULL_REQUEST.to_json(),
-            endpoints.check_runs(PULL_REQUEST.head_commit): check_runs_payload(
+            endpoints.check_runs(PULL_REQUEST.head_commit): check_runs_response(
                 CheckConclusion.SUCCESS
             ),
         }

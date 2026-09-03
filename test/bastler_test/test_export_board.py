@@ -15,10 +15,10 @@ from bastler.pull_request_state import (
 )
 from bastler.stack import BOARD_DOCUMENT_NAME, export_board, load_board
 
-from .pull_request_payloads import (
-    PullRequestPayload,
+from .pull_request_responses import (
+    PullRequestResponse,
     RecordedFakeGitHubApi,
-    check_runs_payload,
+    check_runs_response,
 )
 
 REPOSITORY = "some-owner/some-repository"
@@ -31,7 +31,7 @@ ENDPOINTS = RepositoryEndpoints(REPOSITORY)
 Its endpoints.
 """
 
-PULL_REQUEST = PullRequestPayload(
+PULL_REQUEST = PullRequestResponse(
     number=5,
     head="feature-branch",
     labels=(PullRequestLabel.IN_REVIEW,),
@@ -54,7 +54,7 @@ def make_single_pull_request_api() -> RecordedFakeGitHubApi:
         {
             ENDPOINTS.pull_requests: [PULL_REQUEST.to_list_entry()],
             ENDPOINTS.pull_request(PULL_REQUEST.number): PULL_REQUEST.to_json(),
-            ENDPOINTS.check_runs(PULL_REQUEST.head_commit): check_runs_payload(
+            ENDPOINTS.check_runs(PULL_REQUEST.head_commit): check_runs_response(
                 CheckConclusion.SUCCESS
             ),
         }
@@ -77,5 +77,5 @@ def test_export_writes_a_board_that_load_board_round_trips(tmp_path):
     assert exported.base == PULL_REQUEST.base
     assert exported.draft is PULL_REQUEST.draft
     assert exported.labels == list(PULL_REQUEST.labels)
-    assert exported.ci == CheckConclusion.SUCCESS
+    assert exported.continuous_integration == CheckConclusion.SUCCESS
     assert exported.session == PULL_REQUEST.session.url

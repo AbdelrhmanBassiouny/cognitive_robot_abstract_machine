@@ -31,12 +31,12 @@ EXECUTABLE_SEARCH_PATH_VARIABLE = "PATH"
 The environment variable the GitHub CLI executable is looked up through.
 """
 
-# %% the vocabulary of GitHub's payloads
+# %% the vocabulary of GitHub's responses
 
 
 class PullRequestField(StrEnum):
     """
-    The keys of a pull request's REST payload this module reads.
+    The keys of a pull request's REST response this module reads.
     """
 
     NUMBER = "number"
@@ -110,7 +110,7 @@ class PullRequestField(StrEnum):
 
 class IssueField(StrEnum):
     """
-    The keys of an issue's REST payload this module reads.
+    The keys of an issue's REST response this module reads.
     """
 
     HTML_URL = "html_url"
@@ -121,7 +121,7 @@ class IssueField(StrEnum):
 
 class CheckRunField(StrEnum):
     """
-    The keys of a check-runs payload this module reads, in both the REST shape
+    The keys of a check-runs response this module reads, in both the REST shape
     (``conclusion``/``status``) and the GraphQL rollup shape (``state``).
     """
 
@@ -188,7 +188,7 @@ class CheckState(StrEnum):
 
     UNKNOWN = ""
     """
-    The payload carried no state at all, which a run still starting can do.
+    The response carried no state at all, which a run still starting can do.
     """
 
 
@@ -281,7 +281,7 @@ class BoardEntryKey(StrEnum):
     The label names.
     """
 
-    CONTINUOUS_INTEGRATION = "ci"
+    CONTINUOUS_INTEGRATION = "continuous_integration"
     """
     The reduced check conclusion, or ``null``.
     """
@@ -315,7 +315,7 @@ class PullRequestDataKey(StrEnum):
     The label names.
     """
 
-    CONTINUOUS_INTEGRATION = "ci"
+    CONTINUOUS_INTEGRATION = "continuous_integration"
     """
     The reduced check conclusion, or ``null``.
     """
@@ -401,12 +401,12 @@ class CheckRollup:
     """
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> CheckRollup:
+    def from_response(cls, response: dict[str, Any]) -> CheckRollup:
         """
-        :param payload: The check-runs endpoint's response for one commit.
+        :param response: The check-runs endpoint's answer for one commit.
         :return: The rollup it describes.
         """
-        return cls(tuple(payload[CheckRunField.CHECK_RUNS]))
+        return cls(tuple(response[CheckRunField.CHECK_RUNS]))
 
     @property
     def conclusion(self) -> CheckConclusion | None:
@@ -425,7 +425,7 @@ class CheckRollup:
     @staticmethod
     def _state_of(check: dict[str, Any]) -> str:
         """
-        :param check: One check's mapping, in either payload dialect.
+        :param check: One check's mapping, in either response dialect.
         :return: Its state, upper-cased so both dialects compare alike.
         """
         return str(
@@ -592,7 +592,7 @@ class PullRequestLiveState:
         cls, detail: dict[str, Any], rollup: CheckRollup
     ) -> PullRequestLiveState:
         """
-        :param detail: One pull request's detail payload.
+        :param detail: One pull request's detail response.
         :param rollup: The check rollup of its head commit.
         :return: The assembled live state.
         """
@@ -909,7 +909,7 @@ class PullRequestFetcher:
         """
         detail = self.api.get(self.endpoints.pull_request(number))
         head_commit = detail[PullRequestField.HEAD][PullRequestField.COMMIT]
-        rollup = CheckRollup.from_payload(
+        rollup = CheckRollup.from_response(
             self.api.get(self.endpoints.check_runs(head_commit))
         )
         return PullRequestLiveState.from_detail(detail, rollup)

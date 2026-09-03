@@ -480,8 +480,9 @@ class PullRequest:
     labels: list[str] = field(default_factory=list)
     """Labels currently on the PR."""
 
-    ci: str | None = None
-    """Latest CI conclusion on the PR head: ``success`` / ``failure`` / ``pending`` / None."""
+    continuous_integration: str | None = None
+    """Latest check conclusion on the pull request head: ``success`` / ``failure`` /
+    ``pending`` / None."""
 
     session: str | None = None
     """URL of the Claude session working this PR, parsed from the PR body (None if none)."""
@@ -509,8 +510,8 @@ class Branch:
     labels: list[str]
     """Labels carried by the PR."""
 
-    ci: str | None = None
-    """Latest CI conclusion on the PR head."""
+    continuous_integration: str | None = None
+    """Latest check conclusion on the pull request head."""
 
     session: str | None = None
     """URL of the Claude session working this PR, if any."""
@@ -571,7 +572,7 @@ def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
             base=pr[BoardEntryKey.BASE],
             draft=bool(pr[BoardEntryKey.DRAFT]),
             labels=list(pr.get(BoardEntryKey.LABELS, [])),
-            ci=pr.get(BoardEntryKey.CONTINUOUS_INTEGRATION),
+            continuous_integration=pr.get(BoardEntryKey.CONTINUOUS_INTEGRATION),
             session=pr.get(BoardEntryKey.SESSION),
         )
         for pr in data[BoardEntryKey.PULL_REQUESTS]
@@ -623,7 +624,7 @@ def build_stack(
                 else IntegrationStrategy.MERGE
             ),
             labels=pr.labels,
-            ci=pr.ci,
+            continuous_integration=pr.continuous_integration,
             session=pr.session,
         )
         for pr in prs

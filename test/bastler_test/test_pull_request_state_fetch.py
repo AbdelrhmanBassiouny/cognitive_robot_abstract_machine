@@ -1,7 +1,7 @@
 """
 Tests for the fetch half of :mod:`bastler.pull_request_state`: transport resolution (GitHub CLI,
 else a token, else a failure naming both routes), the two transports, and the
-orchestration that turns GitHub API payloads into
+orchestration that turns GitHub API responses into
 :class:`~bastler.pull_request_state.PullRequestLiveState`.
 
 All network-free: the transports run against the shared ``gh`` stub or a monkeypatched
@@ -39,10 +39,10 @@ from bastler.pull_request_state import (
 )
 
 from .executable_stubs import ExecutableStubDirectory
-from .pull_request_payloads import (
-    PullRequestPayload,
+from .pull_request_responses import (
+    PullRequestResponse,
     RecordedFakeGitHubApi,
-    check_runs_payload,
+    check_runs_response,
 )
 from .test_upstream_reviews import StubEnvironmentVariable
 
@@ -144,9 +144,9 @@ def test_the_command_transport_invokes_gh_api_and_parses_the_response(
     response = {PullRequestField.NUMBER: 7}
     monkeypatch.setenv(StubEnvironmentVariable.API_JSON, json.dumps(response))
 
-    payload = CommandGitHubApi().get(ENDPOINTS.pull_request(7))
+    fetched = CommandGitHubApi().get(ENDPOINTS.pull_request(7))
 
-    assert payload == response
+    assert fetched == response
     assert (
         stub_call_log.read_text()
         == f"{CommandGitHubApi.API_SUBCOMMAND} {ENDPOINTS.pull_request(7)}\n"
@@ -183,11 +183,11 @@ def test_the_token_transport_authorizes_and_parses_the_response(monkeypatch):
         bastler.pull_request_state.urllib.request, "urlopen", fake_urlopen
     )
 
-    payload = TokenGitHubApi(token=TOKEN).get(
+    fetched = TokenGitHubApi(token=TOKEN).get(
         ENDPOINTS.pull_request(7), {ListParameter.PER_PAGE: "1"}
     )
 
-    assert payload == response
+    assert fetched == response
     request = captured_requests[0]
     assert (
         request.full_url == f"{GITHUB_API_ROOT}/{ENDPOINTS.pull_request(7)}?per_page=1"
@@ -200,7 +200,7 @@ def test_the_token_transport_authorizes_and_parses_the_response(monkeypatch):
 
 # %% fetch orchestration
 
-FIRST = PullRequestPayload(
+FIRST = PullRequestResponse(
     number=7,
     head="feature-one",
     labels=("bug",),
@@ -213,7 +213,7 @@ FIRST = PullRequestPayload(
 An open, ready pull request whose checks passed.
 """
 
-SECOND = PullRequestPayload(
+SECOND = PullRequestResponse(
     number=8,
     head="feature-two",
     draft=True,
@@ -238,10 +238,10 @@ def make_two_pull_request_api() -> RecordedFakeGitHubApi:
             ENDPOINTS.pull_requests: [FIRST.to_list_entry(), SECOND.to_list_entry()],
             ENDPOINTS.pull_request(FIRST.number): FIRST.to_json(),
             ENDPOINTS.pull_request(SECOND.number): SECOND.to_json(),
-            ENDPOINTS.check_runs(FIRST.head_commit): check_runs_payload(
+            ENDPOINTS.check_runs(FIRST.head_commit): check_runs_response(
                 CheckConclusion.SUCCESS
             ),
-            ENDPOINTS.check_runs(SECOND.head_commit): check_runs_payload(),
+            ENDPOINTS.check_runs(SECOND.head_commit): check_runs_response(),
         }
     )
 
@@ -284,7 +284,7 @@ class PaginatingFakeGitHubApi(GitHubApi):
     A transport whose list endpoint serves one full page and then an empty one.
     """
 
-    payloads: list[PullRequestPayload]
+    pull_requests: list[PullRequestResponse]
     """
     The pull requests the full page lists.
     """
@@ -299,23 +299,27 @@ class PaginatingFakeGitHubApi(GitHubApi):
             self.list_pages_served += 1
             first_page = parameters[ListParameter.PAGE] == "1"
             return (
-                [payload.to_list_entry() for payload in self.payloads]
+                [pull_request.to_list_entry() for pull_request in self.pull_requests]
                 if first_page
                 else []
             )
         responses = {}
-        for payload in self.payloads:
-            responses[ENDPOINTS.pull_request(payload.number)] = payload.to_json()
-            responses[ENDPOINTS.check_runs(payload.head_commit)] = check_runs_payload()
+        for pull_request in self.pull_requests:
+            responses[ENDPOINTS.pull_request(pull_request.number)] = (
+                pull_request.to_json()
+            )
+            responses[ENDPOINTS.check_runs(pull_request.head_commit)] = (
+                check_runs_response()
+            )
         return responses[path]
 
 
 def test_fetch_paginates_until_a_short_page():
-    payloads = [
-        PullRequestPayload(number=number, head=f"branch-{number}")
+    pull_requests = [
+        PullRequestResponse(number=number, head=f"branch-{number}")
         for number in range(PullRequestFetcher.PAGE_SIZE)
     ]
-    api = PaginatingFakeGitHubApi(payloads)
+    api = PaginatingFakeGitHubApi(pull_requests)
 
     states = PullRequestFetcher(REPOSITORY, api).fetch()
 

@@ -27,6 +27,7 @@ from bastler.pull_request_state import (
     CheckConclusion,
     ClaudeSessionLink,
     PullRequestDataKey,
+    PullRequestLiveState,
     PullRequestState,
 )
 
@@ -237,6 +238,43 @@ def test_a_non_http_session_url_in_pull_request_data_is_dropped_at_parse_time():
         }
     )
     assert record.session_url is None
+
+
+# %% the document the fetcher writes
+
+
+def test_a_written_pull_request_data_entry_parses_back_into_the_record_it_came_from():
+    """
+    Pin that the fetcher and the dashboard agree on the keys of ``pr_data.json``.
+
+    The two write and read it through the same enum but live in different modules, and
+    every chip field is optional, so a disagreement would render already-fetched data
+    chipless rather than fail. The expected values are therefore derived from the state
+    that was written rather than from keys named here.
+    """
+    state = PullRequestLiveState(
+        number=PULL_REQUEST_NUMBER,
+        head="a-branch",
+        base="main",
+        state=PullRequestState.OPEN,
+        draft=False,
+        merged_at=None,
+        labels=[PullRequestLabel.BUG],
+        continuous_integration=CheckConclusion.FAILURE,
+        additions=12,
+        deletions=3,
+        mergeable=False,
+        session_url=PARSED_SESSION.url,
+    )
+
+    record = PullRequestRecord.from_mapping(state.to_pull_request_data_entry())
+
+    assert record.continuous_integration is state.continuous_integration
+    assert record.change_size == ChangeSize(state.additions, state.deletions)
+    assert record.mergeable is state.mergeable
+    assert record.session_url == state.session_url
+    assert record.labels == state.labels
+    assert record.draft is state.draft
 
 
 # %% rendered markup

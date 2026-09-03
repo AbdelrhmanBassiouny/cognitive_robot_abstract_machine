@@ -26,10 +26,10 @@ from bastler.pull_request_state import (
 
 def rollup_of(*checks: dict[str, Any]) -> CheckRollup:
     """
-    :param checks: One mapping per check, in either payload dialect.
+    :param checks: One mapping per check, in either response dialect.
     :return: The rollup over them.
     """
-    return CheckRollup.from_payload({CheckRunField.CHECK_RUNS: list(checks)})
+    return CheckRollup.from_response({CheckRunField.CHECK_RUNS: list(checks)})
 
 
 def test_no_checks_reduce_to_no_conclusion():

@@ -753,7 +753,7 @@ class BoardChip:
         """
         display = cls.CHECK_DISPLAYS[conclusion]
         return cls(
-            label=f"ci {display}",
+            label=f"checks {display}",
             tone=cls.CHECK_TONES[conclusion],
             tooltip=f"Latest checks on the head commit: {display}",
         )

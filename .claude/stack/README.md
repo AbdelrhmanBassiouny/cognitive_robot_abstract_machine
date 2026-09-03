@@ -39,9 +39,10 @@ next to the workflow it describes, because it is read rather than run.
   `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top
   (see `stack.py`'s `load_configuration`), including a `fork_repository` to pick between remotes
   when more than one could be the fork.
-- **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
-  `session`) that `stack.py` reads. Written from GitHub as scratch by `python -m bastler.stack
-  export` (below) or whatever else refreshes it - never committed.
+- **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`,
+  `continuous_integration`, `session`) that `stack.py` reads. Written from GitHub as
+  scratch by `python -m bastler.stack export` (below) or whatever else refreshes it -
+  never committed.
 - **`stack.py`** - read-only status tool (never mutates branches). Reads `board.json` + git:
   - `python -m bastler.stack status` - the whole stack, with ahead/behind drift per parent.
   - `python -m bastler.stack check` - would each branch integrate cleanly onto its parent

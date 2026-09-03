@@ -19,7 +19,7 @@ remains the fallback for a session with neither.
 
 ## Optional chip fields
 
-Each pull request entry may additionally carry `ci`
+Each pull request entry may additionally carry `continuous_integration`
 (`"success"`/`"failure"`/`"pending"`/null), `additions`, `deletions`,
 `mergeable`, and `session_url` - `build_dashboard.py` renders them as the
 CI/change-size/conflict chips on the item card and as a session-link
