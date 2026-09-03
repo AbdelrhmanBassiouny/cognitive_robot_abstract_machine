@@ -189,6 +189,10 @@ class Query(
     )
     """
     The variables that are selected by the query.
+
+    Read through :meth:`_as_operand_`, so a value that only stands for an expression - a
+    match, whose query carries its pattern - selects that expression rather than itself,
+    which nothing binds a row to.
     """
 
     _distinct_on: Tuple[Selectable, ...] = field(default_factory=tuple, init=False)
@@ -251,6 +255,9 @@ class Query(
     """
 
     def __post_init__(self):
+        self._selected_variables_ = tuple(
+            self._as_operand_(selected) for selected in self._selected_variables_
+        )
         self._operation_children_ = tuple(self._selected_variables_)
         MultiArityExpressionThatPerformsACartesianProduct.__post_init__(self)
 

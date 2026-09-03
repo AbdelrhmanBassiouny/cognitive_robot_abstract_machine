@@ -1149,7 +1149,7 @@ class CausesEffectRequiresEqualityComparator(UsageError):
     def suggest_correction(self) -> str:
         return (
             "Compare an attribute against a literal value with `==`, e.g. "
-            "`match.causes_effect(match.variable.status == SUCCESS)`, combining "
+            "`match.causes_effect(match.status == SUCCESS)`, combining "
             "several such comparisons with `and_` if needed."
         )
 
@@ -1178,7 +1178,7 @@ class NoCausesEffectConditionForCause(DataclassException):
     def suggest_correction(self) -> str:
         return (
             "Add a causes_effect(...) condition declaring the effect, e.g. "
-            "`match.causes_effect(match.variable.status == SUCCESS)`."
+            "`match.causes_effect(match.status == SUCCESS)`."
         )
 
 

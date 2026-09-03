@@ -1349,7 +1349,12 @@ class UnificationDict(UserDict):
     """
 
     def __getitem__(self, key: Selectable[T]) -> T:
-        key = self._id_expression_map_[key._id_]
+        """
+        :param key: The expression whose bound value to read, or something standing for
+            one - a match, which is read as the query it selects.
+        :return: The value bound to that expression in this row.
+        """
+        key = self._id_expression_map_[SymbolicExpression._as_operand_(key)._id_]
         return super().__getitem__(key)
 
     @cached_property

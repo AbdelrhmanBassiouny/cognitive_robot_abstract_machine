@@ -58,7 +58,7 @@ def test_match(handles_and_containers_world):
         parent=a(Container)(name="Container1"),
         child=a(Handle)(name="Handle1"),
     ).from_(world.connections)
-    fixed_connection_query = the(fixed_connection.expression)
+    fixed_connection_query = the(fixed_connection)
 
     fc = variable(FixedConnection, domain=None)
     fixed_connection_query_manual = the(
@@ -89,8 +89,8 @@ def test_select(handles_and_containers_world):
     ).from_(world.connections)
     container_and_handle = the(
         set_of(
-            container := fixed_connection.expression.parent,
-            handle := fixed_connection.expression.child,
+            container := fixed_connection.parent,
+            handle := fixed_connection.child,
         )
     )
 
@@ -128,8 +128,8 @@ def test_select_where(handles_and_containers_world):
     ).from_(world.connections)
     container_and_handle = a(
         set_of(
-            container := fixed_connection.expression.parent,
-            handle := fixed_connection.expression.child,
+            container := fixed_connection.parent,
+            handle := fixed_connection.child,
         ).where(container.size > 1)
     )
     # Method 2
@@ -171,30 +171,12 @@ def test_domain_carrying_an_is_a_select():
     assert query.tolist()[0].name == "R2D2"
 
 
-def test_expression_gives_symbolic_access(handles_and_containers_world):
-    world = handles_and_containers_world
-    fixed_connection = a(FixedConnection)(
-        parent=a(Container)(name="Container1"), child=a(Handle)(name="Handle1")
-    ).from_(world.connections)
-    # .expression lowers the domain match to its selection query, whose .parent / .child read
-    # the matched object's attributes symbolically and carry the match's conditions.
-    container_and_handle = the(
-        set_of(
-            container := fixed_connection.expression.parent,
-            handle := fixed_connection.expression.child,
-        )
-    )
-    answers = container_and_handle.tolist()[0]
-    assert answers[container].name == "Container1"
-    assert answers[handle].name == "Handle1"
-
-
 # %% direct symbolic attribute access on a match
 
 
-def test_attribute_access_is_the_expression_attribute():
+def test_attribute_access_is_an_attribute_of_the_query_the_match_stands_for():
     match = a(KRROODPosition)(x=1.0, y=2.0, z=3.0)
-    assert match.x is match.expression.x
+    assert match.x is match._symbolic_expression_.x
 
 
 def test_attribute_access_works_for_names_previously_shadowed_by_match_internals(
@@ -218,8 +200,8 @@ def test_attribute_access_works_for_names_previously_shadowed_by_match_internals
 
 
 def test_name_attribute_of_matched_class_is_symbolic():
-    match = a(Handle)()
-    assert match.name is match.expression.name
+    match = a(Handle)
+    assert match.name is match._symbolic_expression_.name
 
 
 def test_calling_match_after_resolution_raises():
@@ -248,7 +230,7 @@ def test_from_restricts_the_search():
 
     subset = [Robot("R2D2"), Robot("C3PO")]
     # from_ selects only over the given domain.
-    selected = a(Robot)().from_(subset).tolist()
+    selected = a(Robot).from_(subset).tolist()
     assert {robot.name for robot in selected} == {"R2D2", "C3PO"}
 
 
@@ -267,7 +249,7 @@ def test_from_after_where_still_restricts_the_search():
 
     subset = [Robot("R2D2", 100), Robot("C3PO", 0)]
     query = a(Robot)()
-    query.where(query._variable_.battery >= 0)
+    query.where(query.battery >= 0)
     query.from_(subset)
     selected = query.tolist()
     assert {robot.name for robot in selected} == {"R2D2", "C3PO"}
@@ -275,8 +257,8 @@ def test_from_after_where_still_restricts_the_search():
 
 def test_from_without_kwargs_selects_all(handles_and_containers_world):
     world = handles_and_containers_world
-    # an(Type)().from_(X) with no kwargs is a valid "any Type in X" select.
-    selected = a(FixedConnection)().from_(world.connections).tolist()
+    # an(Type).from_(X) with no kwargs is a valid "any Type in X" select.
+    selected = a(FixedConnection).from_(world.connections).tolist()
     assert selected
     assert all(isinstance(connection, FixedConnection) for connection in selected)
 
@@ -317,7 +299,7 @@ def test_match_with_list():
     assert r == [domain[0]]
 
 
-# ── an()/the() with a callable factory: target_type inference and default ────
+# %% an()/the() with a callable factory: target_type inference and default
 
 
 def test_an_infers_target_type_from_annotated_callable():
@@ -368,7 +350,7 @@ def test_a_uses_explicit_target_type_for_unannotated_callable():
     assert match._type_ is KRROODPosition
 
 
-# ── Match._has_ellipsis_attributes_ ─────────────────────────────────────────────
+# %% Match._has_ellipsis_attributes_
 
 
 def test_has_ellipsis_attributes_true_for_direct_ellipsis():
@@ -437,13 +419,13 @@ def test_where_through_a_forwarded_attribute_filters():
     once a condition rooted at the query correlates with that query's own bindings.
     """
     positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
-    match = a(KRROODPosition)().from_(positions)
+    match = a(KRROODPosition).from_(positions)
     assert [position.x for position in match.where(match.x >= 5).tolist()] == [5.0]
 
 
 def test_limit_bounds_the_results_and_keeps_the_chain_on_the_match():
     positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
-    match = a(KRROODPosition)().from_(positions)
+    match = a(KRROODPosition).from_(positions)
     assert match.limit(1) is match
     assert len(match.tolist()) == 1
 
@@ -454,7 +436,7 @@ def test_ordered_by_a_forwarded_attribute_orders_the_results():
         KRROODPosition(5.0, 0.0, 0.0),
         KRROODPosition(3.0, 0.0, 0.0),
     ]
-    match = a(KRROODPosition)().from_(positions)
+    match = a(KRROODPosition).from_(positions)
     ordered = match.ordered_by(match.x, descending=True)
     assert [position.x for position in ordered.tolist()] == [5.0, 3.0, 1.0]
 
@@ -467,12 +449,12 @@ def test_every_query_modifier_returns_the_match():
     lowered query itself supports, which is not what this test is about.
     """
     positions = [KRROODPosition(1.0, 0.0, 0.0)]
-    assert (match := a(KRROODPosition)().from_(positions)).where(match.x >= 0) is match
-    assert (match := a(KRROODPosition)().from_(positions)).having(match.x >= 0) is match
-    assert (match := a(KRROODPosition)().from_(positions)).ordered_by(match.x) is match
-    assert (match := a(KRROODPosition)().from_(positions)).grouped_by(match.y) is match
-    assert (match := a(KRROODPosition)().from_(positions)).distinct() is match
-    assert (match := a(KRROODPosition)().from_(positions)).limit(1) is match
+    assert (match := a(KRROODPosition).from_(positions)).where(match.x >= 0) is match
+    assert (match := a(KRROODPosition).from_(positions)).having(match.x >= 0) is match
+    assert (match := a(KRROODPosition).from_(positions)).ordered_by(match.x) is match
+    assert (match := a(KRROODPosition).from_(positions)).grouped_by(match.y) is match
+    assert (match := a(KRROODPosition).from_(positions)).distinct() is match
+    assert (match := a(KRROODPosition).from_(positions)).limit(1) is match
 
 
 def test_a_matched_class_field_is_not_shadowed_by_a_query_method():
@@ -484,7 +466,7 @@ def test_a_matched_class_field_is_not_shadowed_by_a_query_method():
         FieldNamedLikeAQueryMethod("stable", 7),
         FieldNamedLikeAQueryMethod("nightly", 9),
     ]
-    match = a(FieldNamedLikeAQueryMethod)().from_(releases)
+    match = a(FieldNamedLikeAQueryMethod).from_(releases)
     # Reading the same name off the lowered query gives Query.build, which is what
     # forwarding by name would have returned.
     assert isinstance(match.build, Attribute)
@@ -496,6 +478,50 @@ def test_a_matched_class_field_is_not_shadowed_by_a_query_method():
 def test_match_and_query_share_the_query_modifier_interface():
     assert isinstance(a(KRROODPosition), HasQueryModifiers)
     assert isinstance(entity(variable(KRROODPosition, [])), HasQueryModifiers)
+
+
+# %% a match given where an expression is expected
+
+
+def test_the_quantifies_a_match_itself():
+    """
+    Quantifying a match reads the query it stands for, so the match needs no handle of
+    its own to be quantified through.
+    """
+    positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
+    assert the(a(KRROODPosition)(x=5.0).from_(positions)).tolist() == [positions[1]]
+
+
+def test_an_quantifies_a_match_itself():
+    positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
+    assert an(a(KRROODPosition)(x=5.0).from_(positions)).tolist() == [positions[1]]
+
+
+def test_entity_selects_a_match():
+    positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
+    assert entity(a(KRROODPosition)(x=5.0).from_(positions)).tolist() == [positions[1]]
+
+
+def test_set_of_selects_a_match_beside_one_of_its_attributes():
+    """
+    A match selected beside one of its own attributes must bind to the same row, which
+    it only does once the selection reads the query the match stands for.
+    """
+    positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
+    match = a(KRROODPosition)(x=5.0).from_(positions)
+    (row,) = set_of(match, match.y).tolist()
+    assert row[match] == positions[1]
+    assert row[match.y] == 0.0
+
+
+def test_selecting_a_match_carries_its_pattern():
+    """
+    The match's own conditions travel with it, which selecting the bare variable it
+    created would drop.
+    """
+    positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
+    match = a(KRROODPosition)(x=5.0).from_(positions)
+    assert entity(match).tolist() == [positions[1]]
 
 
 def test_match_and_variable_share_the_symbolic_operations_interface():
@@ -510,28 +536,27 @@ def test_names_that_became_match_internals_are_symbolic_attributes():
     as the matched class's attribute instead.
     """
     match = a(KRROODPosition)(x=1.0, y=2.0, z=3.0)
-    assert match.parent is match.expression.parent
-    assert match.children is match.expression.children
-    assert match.type is match.expression.type
-    assert match.conditions is match.expression.conditions
-    assert match.resolved is match.expression.resolved
-    assert match.id is match.expression.id
-    assert match.root is match.expression.root
-    assert match.descendants is match.expression.descendants
-    assert match.domain is match.expression.domain
-    assert match.factory is match.expression.factory
-    assert match.kwargs is match.expression.kwargs
-    assert match.has_ellipsis_attributes is match.expression.has_ellipsis_attributes
-
-
-def test_variable_and_matches_with_variables_stay_available_for_migrating_callers():
-    """
-    The two renamed names with consumers outside this repository keep working until the
-    detours are removed wholesale.
-    """
-    match = a(Handle)(name="Handle1")
-    assert match.variable is match._variable_
-    assert list(match.matches_with_variables) == list(match._matches_with_variables_)
+    assert match.parent is match._symbolic_expression_.parent
+    assert match.children is match._symbolic_expression_.children
+    assert match.type is match._symbolic_expression_.type
+    assert match.conditions is match._symbolic_expression_.conditions
+    assert match.resolved is match._symbolic_expression_.resolved
+    assert match.id is match._symbolic_expression_.id
+    assert match.root is match._symbolic_expression_.root
+    assert match.descendants is match._symbolic_expression_.descendants
+    assert match.domain is match._symbolic_expression_.domain
+    assert match.factory is match._symbolic_expression_.factory
+    assert match.kwargs is match._symbolic_expression_.kwargs
+    assert (
+        match.has_ellipsis_attributes
+        is match._symbolic_expression_.has_ellipsis_attributes
+    )
+    assert match.variable is match._symbolic_expression_.variable
+    assert match.expression is match._symbolic_expression_.expression
+    assert (
+        match.matches_with_variables
+        is match._symbolic_expression_.matches_with_variables
+    )
 
 
 # %% a match reads like an instance in every symbolic operation
@@ -565,14 +590,14 @@ class CallableAdder:
 
 def test_indexing_a_match_indexes_the_matched_instance():
     rows = [SubscriptableRow("first", (7, 8)), SubscriptableRow("second", (9, 10))]
-    match = a(SubscriptableRow)().from_(rows)
-    assert match[0] is match.expression[0]
+    match = a(SubscriptableRow).from_(rows)
+    assert match[0] is match._symbolic_expression_[0]
     assert [row.name for row in match.where(match[0] == 7).tolist()] == ["first"]
 
 
 def test_comparing_a_match_builds_a_condition_rather_than_answering_identity():
     positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
-    match = a(KRROODPosition)().from_(positions)
+    match = a(KRROODPosition).from_(positions)
     assert isinstance(match == positions[1], Comparator)
     assert [position.x for position in match.where(match == positions[1]).tolist()] == [
         5.0
@@ -600,7 +625,7 @@ def test_arithmetic_on_a_match_operates_on_the_lowered_query():
     match = a(KRROODPosition)(x=1.0, y=2.0, z=3.0)
     doubled = match * 2
     assert isinstance(doubled, ArithmeticOperation)
-    assert doubled.left._id_ == match.expression._id_
+    assert doubled.left._id_ == match._symbolic_expression_._id_
 
 
 def test_a_match_cannot_be_iterated():
@@ -608,7 +633,7 @@ def test_a_match_cannot_be_iterated():
     Indexing a match must not hand Python its legacy sequence protocol, which would
     iterate a match endlessly, every index being a valid expression.
     """
-    match = a(SubscriptableRow)()
+    match = a(SubscriptableRow)
     with pytest.raises(TypeError):
         iter(match)
 

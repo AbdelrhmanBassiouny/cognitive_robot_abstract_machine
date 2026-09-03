@@ -72,12 +72,12 @@ def assert_equal_events(actual: Event, expected: Event) -> None:
 def test_underspecification_with_where():
     pose = underspecified_pose()
     query = pose.where(
-        pose._variable_.position.y > 0.0,
-        pose._variable_.position.x == 0.0,
-        pose._variable_.position.y < 10.0,
-        pose._variable_.position.z >= -1.0,
-        pose._variable_.position.z <= 1.0,
-        pose._variable_.orientation.x != 1.0,
+        pose.position.y > 0.0,
+        pose.position.x == 0.0,
+        pose.position.y < 10.0,
+        pose.position.z >= -1.0,
+        pose.position.z <= 1.0,
+        pose.orientation.x != 1.0,
     )
 
     translated = translate_where_conditions(query)

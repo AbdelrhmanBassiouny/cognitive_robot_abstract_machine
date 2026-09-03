@@ -23,7 +23,7 @@ class Pick:
 def _cause_attribute_match(match):
     [attribute_match] = [
         attribute_match
-        for attribute_match in match.matches_with_variables
+        for attribute_match in match._matches_with_variables_
         if attribute_match.name_from_variable_access_path == "Pick.arm"
     ]
     return attribute_match
@@ -56,7 +56,7 @@ def test_two_cause_marked_attributes_resolve_to_distinct_objects():
     match = a(Pick)(arm=cause, grasped=cause)
     [arm_match, grasped_match] = [
         attribute_match
-        for attribute_match in match.matches_with_variables
+        for attribute_match in match._matches_with_variables_
         if attribute_match.name_from_variable_access_path
         in ("Pick.arm", "Pick.grasped")
     ]

@@ -203,7 +203,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
     """
 
     def __post_init__(self):
-        self.statement.expression.build()
+        self.statement._get_expression_().build()
         self._random_event_compiler = WhereExpressionToRandomEventTranslator(
             and_(*self.statement._where_conditions_)
         )

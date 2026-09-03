@@ -410,9 +410,11 @@ class ProbabilisticBackend(GenerativeBackend):
             truncated = parameters.resolve_conditioned_and_truncated_model(model)
 
         if truncated is None:
-            raise NoSolutionFound(expression.expression)
+            raise NoSolutionFound(expression._get_expression_())
 
-        number_of_samples = expression.expression._limit_ or self.number_of_samples
+        number_of_samples = (
+            expression._get_expression_()._limit_ or self.number_of_samples
+        )
 
         # sample and sort by log likelihood
         samples = truncated.sample(number_of_samples)
@@ -448,7 +450,7 @@ class ProbabilisticBackend(GenerativeBackend):
         :return: The resolved cause candidates and effect variable.
         """
         if not parameters.effect_variables_from_causes_effect:
-            raise NoCausesEffectConditionForCause(expression.expression)
+            raise NoCausesEffectConditionForCause(expression._get_expression_())
         if len(parameters.effect_variables_from_causes_effect) > 1:
             raise MultipleEffectVariablesNotSupported(
                 parameters.effect_variables_from_causes_effect
@@ -502,7 +504,7 @@ class ProbabilisticBackend(GenerativeBackend):
             confounder_variables,
         )
         if not scored_interventions:
-            raise NoSolutionFound(expression.expression)
+            raise NoSolutionFound(expression._get_expression_())
         return scored_interventions[0]
 
     @classmethod
@@ -586,7 +588,7 @@ class ProbabilisticBackend(GenerativeBackend):
         """
         parameters = UnderspecifiedParameters(expression)
         if not parameters.search_cause_variables:
-            raise NoCauseVariablesForRanking(expression.expression)
+            raise NoCauseVariablesForRanking(expression._get_expression_())
         model = self.model_registry.get_model(parameters)
         if not isinstance(model, CausalCircuit):
             raise DoRequiresCausalCircuitModel(model)

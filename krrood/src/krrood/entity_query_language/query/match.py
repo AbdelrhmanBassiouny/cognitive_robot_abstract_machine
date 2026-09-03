@@ -122,11 +122,12 @@ class AbstractMatchExpression(Generic[T], ABC):
     The child matches of this match expression.
     """
 
-    @cached_property
+    @property
     @abstractmethod
-    def expression(self) -> Union[CanBehaveLikeAVariable[T], T]:
+    def _symbolic_expression_(self) -> Union[CanBehaveLikeAVariable[T], T]:
         """
-        :return: the entity expression corresponding to the match query.
+        :return: The expression this match expression stands for, on which every symbolic
+            operation written on it is built.
         """
         ...
 
@@ -231,11 +232,10 @@ class Match(
     A match reads like an instance of the matched class: every symbolic operation of
     :class:`~krrood.entity_query_language.core.mapped_variable.HasSymbolicOperations` -
     attribute access, indexing, calling, comparison and arithmetic - is built on
-    :attr:`expression`, so ``drawer.body`` is the symbolic attribute
-    ``drawer.expression.body`` and carries the pattern. Names of the match's own methods
-    (``where``, ``from_``, ``resolve``, ``expression``, ...) are resolved normally and
-    never delegated; a matched-class field shadowed by one of them stays reachable
-    through :attr:`expression`.
+    :attr:`_symbolic_expression_`, so ``drawer.body`` is that query's ``body`` and
+    carries the pattern. Names of the match's own methods (``where``, ``from_``,
+    ``resolve``, ...) are resolved normally and never delegated; a matched-class field
+    shadowed by one of them stays reachable through :attr:`_symbolic_expression_`.
 
     The one operation the match keeps for itself is the *first* call, which states the
     pattern; a matched class that is itself callable is called through a second pair of
@@ -357,29 +357,6 @@ class Match(
         """
         return "__call__" in dir(self._type_)
 
-    @property
-    def variable(self) -> Optional[Variable[T]]:
-        """
-        :return: The variable the match created for the instance it describes.
-
-        .. note::
-            A compatibility name for callers written before the match's own state moved
-            behind :attr:`_variable_`; it is removed once they have migrated.
-        """
-        return self._variable_
-
-    @property
-    def matches_with_variables(self) -> Iterator[AttributeMatch]:
-        """
-        :return: All attribute matches whose assigned value is a variable.
-
-        .. note::
-            A compatibility name for callers written before the match's own state moved
-            behind :attr:`_matches_with_variables_`; it is removed once they have
-            migrated.
-        """
-        return self._matches_with_variables_
-
     def _is_own_name_(self, name: str) -> bool:
         """
         :param name: A name that this match does not define.
@@ -392,21 +369,14 @@ class Match(
     @property
     def _symbolic_expression_(self) -> Entity[T]:
         """
-        :return: The lowered query, which every symbolic operation on this match is built
-            on, so the match reads like an instance of the matched class:
-            ``a(Drawer).body`` is ``a(Drawer).expression.body`` and carries the match's
+        :return: The query this match stands for - its pattern lowered to a selection of
+            the variable it describes - which every symbolic operation on the match is
+            built on, so ``a(Drawer).body`` is that query's ``body`` and carries the
             pattern.
 
         Operations are built *on* that query rather than read *off* it, so nothing in its
         own namespace - its modifiers, ``build``, ``evaluate`` - can stand in for a
         matched class's field of the same name.
-        """
-        return self.expression
-
-    @property
-    def expression(self) -> Union[Entity[T], T]:
-        """
-        Return the entity expression corresponding to the match query.
         """
         from krrood.entity_query_language.factories import entity
 
@@ -423,7 +393,7 @@ class Match(
         return entity_
 
     def _get_expression_(self) -> SymbolicExpression:
-        return self.expression
+        return self._symbolic_expression_
 
     def _resolve(
         self,
@@ -552,7 +522,7 @@ class Match(
 
         :return: An iterator over the matching elements.
         """
-        return self.expression._evaluate_natively_()
+        return self._symbolic_expression_._evaluate_natively_()
 
     @property
     def _has_ellipsis_attributes_(self) -> bool:
@@ -616,7 +586,7 @@ class Match(
         :return: This match.
         """
         self._where_conditions_.extend(conditions)
-        self.expression.where(*conditions)
+        self._symbolic_expression_.where(*conditions)
         return self
 
     def having(self, *conditions: ConditionType) -> Self:
@@ -626,7 +596,7 @@ class Match(
         :param conditions: The conditions a group must satisfy.
         :return: This match.
         """
-        self.expression.having(*conditions)
+        self._symbolic_expression_.having(*conditions)
         return self
 
     def ordered_by(
@@ -643,7 +613,7 @@ class Match(
         :param key: A function to extract the key from the expression's value.
         :return: This match.
         """
-        self.expression.ordered_by(variable, descending=descending, key=key)
+        self._symbolic_expression_.ordered_by(variable, descending=descending, key=key)
         return self
 
     def distinct(self, *on: Union[Selectable, Any]) -> Self:
@@ -654,7 +624,7 @@ class Match(
             default.
         :return: This match.
         """
-        self.expression.distinct(*on)
+        self._symbolic_expression_.distinct(*on)
         return self
 
     def grouped_by(self, *variables_to_group_by: Union[Selectable, Any]) -> Self:
@@ -664,7 +634,7 @@ class Match(
         :param variables_to_group_by: The expressions to group the results by.
         :return: This match.
         """
-        self.expression.grouped_by(*variables_to_group_by)
+        self._symbolic_expression_.grouped_by(*variables_to_group_by)
         return self
 
     def limit(self, n: int) -> Self:
@@ -674,13 +644,13 @@ class Match(
         :param n: The maximum number of results to return.
         :return: This match.
         """
-        self.expression.limit(n)
+        self._symbolic_expression_.limit(n)
         return self
 
     def causes_effect(self, *conditions: ConditionType) -> Match[T]:
         """
         Mark condition(s) as the effect side of a causal query, e.g.
-        ``a(Pick)(arm=cause).causes_effect(pick.variable.action.status == SUCCESS)``.
+        ``a(Pick)(arm=cause).causes_effect(pick.action.status == SUCCESS)``.
 
         Sugar for ``self.where(CausesEffect(and_(*conditions), cause_attributes=...))``:
         semantically identical to an ordinary ``.where()`` under every backend except
@@ -796,9 +766,10 @@ class AttributeMatch(AbstractMatchExpression[T]):
             self._children_ = self.assigned_value._children_
 
     @cached_property
-    def expression(self) -> Union[CanBehaveLikeAVariable[T], T]:
+    def _symbolic_expression_(self) -> Union[CanBehaveLikeAVariable[T], T]:
         """
-        Return the entity expression corresponding to the match query.
+        :return: The symbolic attribute this match stands for, which is the variable it
+            assigns the matched value to.
         """
         if not self._variable_:
             self.resolve()
