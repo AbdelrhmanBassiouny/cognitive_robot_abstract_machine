@@ -1320,3 +1320,106 @@ enough for the whole of `test/krrood_test` when pytest is given
 `--confcutdir=test/krrood_test`, which skips the workspace-root `conftest.py` and its
 `semantic_digital_twin` / `objgraph` imports. The heavier set the previous sections
 installed is only needed when that root conftest is in play.
+## 28. 2026-09-03: the first real review of #192, and it ended the detours
+
+`/plan-item-resolve match-query-ergonomics match-underscore-rename-and-forwarding`, in
+auto mode. Sections 26 and 27 both found the stall was a conflict and both recorded that
+#192 had *no* review threads. That stopped being true fourteen minutes after section 27's
+own report went up: between 22:55 and 23:05 on 2026-09-02 the developer left six, and the
+manifest still said `blockers: []`. They were the whole of the stall. Everything else was
+ruled out first, as section 26's lesson requires - `mergeable_state` clean, all 23 checks
+green on `9482a62c`, the dependency `where-query-rooted-attribute-no-filter` merged and
+`is_ready: true`, still no `in-review` label and so no upstream pull request to read.
+
+**Three of the six had a plausible reason to refuse, so each was measured rather than
+argued.**
+
+*The `_variable_` detour is genuinely redundant, and section 7's note that it is not is
+obsolete.* Section 7 recorded a cosmetic divergence - a forwarded attribute verbalizing as
+"the battery of the Robot" where a `_variable_`-rooted one says "its battery" - which would
+have made the assembler-doctest comment a change of expected output rather than a
+simplification. Measured on this branch, the two spellings produce the *identical* string,
+because #182 re-roots a chain taken from a query onto the variable that query selects, so
+they are one node. The observation was made before #182 and does not survive its parent.
+
+*The empty pattern parentheses really are optional.* `a(Position).from_(positions)` builds
+and filters exactly as `a(Position)().from_(positions)` does, because `from_` and the
+modifiers create the variable lazily. Seventeen sites lost them; three keep them, where the
+parentheses rule of section 18 needs an empty pattern stated before a second call reaches a
+callable instance, and where the test's own subject is the eagerly created subject variable.
+
+*`_is_own_name_` is load-bearing.* With `Match`'s override deleted, `_chain_expression_`,
+`_missing_` and `_operands_` all come back as symbolic `Attribute`s instead of raising -
+section 6's silent miss, in exactly the shape that produced #196, #248 and the `_operands_`
+assertion section 18 caught in a test written the same day it was documented. Answered on
+the thread and left open, since the question asked for a reason rather than a change.
+
+**The developer extended the first comment to all three compatibility properties, and that
+is what ended item 3.** The comment said "remove this and migrate the callers" on
+`matches_with_variables`; asked how far it went, the answer was all three -
+`variable`, `matches_with_variables` and `expression`. Sections 4 and 17 had kept them
+precisely so the in-flight D-core stack keeps working, and that cost is real and was
+recorded before the removal rather than discovered at the merge: #159 (`D-core-single-class`,
+open and out of draft) still reads `match.matches_with_variables` at
+`test/krrood_test/test_eql_rdr/test_underspecified_match.py:60,67` and `match.variable` at
+line 80.
+
+**Removing `expression` forced two changes it had been standing in for, which is why the
+removal is not a rename.**
+
+- *The factories now unwrap a match.* `the(match.expression)` was the only spelling for
+  quantifying or selecting a match: `the(match)` raised `assert_never` at the point of
+  writing, and `entity(match)` / `set_of(match, ...)` constructed and then died with
+  `KeyError(<uuid>)` at evaluation - the measurement section 19 put in item 3's notes. They
+  now read the match through `SymbolicExpression._as_operand_`, the rule section 19 already
+  established for operands, applied at its two remaining boundaries: `Query`'s selected
+  variables, so a selection reads the query the match stands for, and
+  `UnificationDict.__getitem__`, so `row[match]` reads the value back. That is one rule at
+  three boundaries rather than three unwrappings.
+- *`marginalize_for` looked its attributes up by the chain's display name*, which only ever
+  matched a variable-rooted one, so `distribution_of(match, marginalize_for=(match.outcome,))`
+  - the spelling the docs now teach - raised `KeyError('(Coin).a')`. A chain taken from the
+  match's own query is re-rooted onto its selection, the same rule and the same
+  point-of-attachment #182 established for conditions. Found by the migrated test failing,
+  not by reading.
+
+`expression` was also the name the match hierarchy's own *abstract* member carried, so it
+moves to `_symbolic_expression_` on `AbstractMatchExpression` and `AttributeMatch` as well,
+and `Match` holds the lowering there rather than under a third name both
+`_symbolic_expression_` and `_get_expression_` delegated to. That settles half of section
+27's open question by removing the public handle standing under the two protocol members;
+whether the two should themselves be one is still the developer's. Left as a finding rather
+than a change: `AttributeMatch._symbolic_expression_` has no reader anywhere and exists only
+as the hierarchy's abstract member.
+
+**Item 3 is folded, because nothing was left of it.** `factories-unwrap-match-and-migrate`
+was scoped to the factory unwrapping, the ~30 `.expression` sites, the `.variable` sites, the
+docs that teach the detours, and the decision about whether `expression` survives. All of it
+happened here, so applying the personal notes' own fold test - what would the pull request be
+if these edits were removed - leaves nothing. The three public machinery names section 17
+deferred to "whichever pass removes the detours" went with it: `update_fields`,
+`create_or_update_variable` and `has_cause_attributes` are now underscore-sandwiched, since a
+matched class with a field of any of those names was still getting the method, which is this
+item's own subject in the three places it was still open.
+
+Migrated in full: the five user docs (`underspecified.md`, `causality.md`,
+`probabilistic_queries.md`, `inference_explanation.md`, `graph_and_visualization.md`), the
+`causes_effect` suggestion strings section 26 routed to item 3, and the three `marginalize_for`
+sites section 27 routed there. `QueryGraph(query.expression)` becomes
+`QueryGraph(query._get_expression_())`, the protocol member #575 landed for exactly that
+caller.
+
+Two files became duplicates or dead and were removed rather than migrated:
+`test_expression_gives_symbolic_access` became a character-for-character duplicate of the
+test beside it once the detour it was named for was gone, and a bare `pose.expression`
+statement in `test_match_verbalization.py` existed to force the lowering, which `where` does
+itself - it was already a no-op, and the exhaustive grep is what found it rather than the
+suite, which is section 6's hazard behaving exactly as predicted.
+
+Verification: `test/krrood_test` 1919 passed, 5 skipped, excluding `test_rustworkx_utils` and
+`test_symbolic_math` (`flask`/`casadi`); the two `test_object_diagram` failures are this
+container having no Graphviz `dot` binary, `which dot` finding none. The mypy typing fixture
+and `test_rule_doctests` both run in that total. `test_gcs.py` and `test_spatial_types.py`
+were edited but need `semantic_digital_twin`, which this venv does not carry; both edits are
+one-line spelling changes and were syntax-checked.
+

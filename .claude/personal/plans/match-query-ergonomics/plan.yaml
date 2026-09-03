@@ -186,8 +186,15 @@ items:
     depends_on:
       - where-query-rooted-attribute-no-filter
     status: in_progress
-    session: https://claude.ai/code/session_01F65KD9BwwgdgxZgKKmXj61
-    blockers: []
+    session: https://claude.ai/code/session_01Hg8944NTdj8WMSGFqV4mq8
+    blockers:
+      - >
+        One review thread left open on purpose: match.py:383 asks why
+        Match._is_own_name_ is needed, which is a question rather than a change, so
+        it is answered on the thread with the measurement (deleting the override
+        turns every missing underscore name into a symbolic Attribute) and left for
+        the developer to close. The other five threads of the 2026-09-02 round are
+        addressed and resolved.
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
@@ -287,6 +294,33 @@ items:
       interface main landed the day before. test_eql 1310 passed, 3 skipped; full
       test/krrood_test 1916 passed, 5 skipped (excluding the flask/casadi modules), the two
       test_object_diagram failures being this container's missing Graphviz dot binary.
+      Review round 2026-09-03 (roadmap section 28), f70c1aff4 and 6df7b7516: the developer's
+      first real review of #192, six threads left minutes after section 27's report, which is
+      why both 26 and 27 recorded "no review threads". Five are acted on and resolved, one
+      (_is_own_name_) is a question answered and left open. The first - "remove this and
+      migrate the callers" on matches_with_variables - was extended by the developer to all
+      three compatibility properties, so variable, matches_with_variables and expression are
+      gone with every caller migrated, which is what consumed item 3 entirely. Removing the
+      public expression forced two changes it had been standing in for: the factories now
+      unwrap a match (the(match), entity(match), set_of(match, ...) and row[match] all read it
+      through _as_operand_, the section-19 rule now applied at Query's selected variables and
+      UnificationDict.__getitem__ as well as at operands), and marginalize_for re-roots a chain
+      taken from the match's own query onto its selection, since it looked its attributes up by
+      the chain's display name and only a variable-rooted one matched. expression was also the
+      match hierarchy's abstract member, so it becomes _symbolic_expression_ on
+      AbstractMatchExpression and AttributeMatch too, and Match holds the lowering there rather
+      than under a third name both protocol members delegated to - which settles half of
+      section 27's open question by removing the public handle standing under them. Also here:
+      every _variable_-rooted spelling reads the match directly (measured identical
+      verbalization, so section 7's divergence note does not survive #182), the box-drawing
+      dividers become # %%, the optional empty pattern parentheses are dropped at 17 sites, the
+      five user docs stop teaching the detours, and update_fields, create_or_update_variable
+      and has_cause_attributes move behind the underscore convention. Recorded rather than
+      discovered later: #159 (D-core-single-class, open and out of draft) still reads
+      match.matches_with_variables and match.variable, so its cascade breaks - the cost
+      sections 4 and 17 kept the properties to avoid, now accepted on the developer's
+      instruction. AttributeMatch._symbolic_expression_ has no reader anywhere, left as a
+      question. test/krrood_test 1919 passed, 5 skipped.
   - id: aggregate-signature-reads-a-missing-attribute
     title: "Bug: every aggregate of one kind gets the same structural signature"
     branch: claude/plan-item-kickoff-match-query-npzr78
@@ -379,13 +413,31 @@ items:
       level it actually changes - the structural key of a chain and of each mapping in it.
   - id: factories-unwrap-match-and-migrate
     title: "Factories accept a Match directly; migrate consumers and docs off the detours"
-    branch: null
-    pull_request_number: null
+    branch: claude/match-query-interface-refactor-l55jym
+    pull_request_number: 192
     track: match-api
     depends_on:
       - match-underscore-rename-and-forwarding
-    status: not_started
+    status: done
+    session: https://claude.ai/code/session_01Hg8944NTdj8WMSGFqV4mq8
     notes: >
+      Folded into match-underscore-rename-and-forwarding on 2026-09-03 (roadmap section
+      28), because its review round consumed every part of this item and left nothing
+      that stands alone. The developer's review of #192 asked for the compatibility
+      properties to be removed, and removing the public expression is what forces the
+      factory unwrapping this item was scoped to: the(match.expression) was the only
+      spelling for quantifying or selecting a match, so the(match), an(match),
+      entity(match) and set_of(match, ...) had to start working in the same change. The
+      rest went with it - the ~30 .expression sites, the .variable sites including the
+      causes_effect suggestion strings section 26 routed here and the three
+      marginalize_for sites section 27 routed here, the five user docs, and the
+      decision this item was to put to the developer (expression is removed, not kept
+      as an escape hatch). The three public machinery names section 17 deferred to
+      "whichever pass removes the detours" - update_fields, create_or_update_variable
+      and has_cause_attributes - are underscore-sandwiched there too. Applying the
+      personal notes' own fold test, what this pull request would be with those edits
+      removed is nothing, so it is one item rather than two. Original brief follows.
+
       Teach _quantify_or_build_match / entity / set_of to unwrap a Match to
       its lowered query so the(match), an(match) and set_of(match.parent,
       ...) work (today the(match) mis-routes into Match(factory=match) and
