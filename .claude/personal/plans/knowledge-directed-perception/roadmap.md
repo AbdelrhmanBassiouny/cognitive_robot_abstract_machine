@@ -4632,3 +4632,125 @@ rename.
 `Footprint` rename and #231's `EdgeFitDetector` rename conflict the usual mechanical
 way. `offsets_within` is a new function in `piece_matcher.py`, which #231 and #239 both
 edit.
+
+### `surfaces-found-by-looking`: what it took, and the tuning that stopped mattering
+
+Built 2026-09-03 as pull request #259, one commit off #231's tip. 39 new tests; **429
+passed, 1 skipped, 16 xfailed** across `test/experiments_test/` against **390 passed, 1
+skipped, 16 xfailed** on the parent in the same container, which is the 39 added here and
+nothing else moved. Six modules do not collect either side, needing ROS or `rosbag2_py`,
+as #238 recorded. Nothing outside `experiments/` is touched.
+
+#### The claim, measured: the tuning no longer decides what is searched
+
+The searched stretch of table falls from the **0.635 m²** a person had dragged the
+sliders to, to about **0.51 m²** -- and starting from the whole **1.2 m²** the camera
+looks over reaches the *same answer*, on every one of the six captures. That is the item
+in one measurement: what is searched stopped being a number somebody typed and became
+what the camera shows.
+
+| capture | measured stretch | from the tuned workspace | from the untuned one |
+| --- | --- | --- | --- |
+| disoriented_cube_on_hole | x 0.357..0.915, y -0.450..0.483 | 0.521 m² | identical |
+| displaced_cube_from_hole | x 0.352..0.914, y -0.450..0.464 | 0.514 m² | identical |
+| non_inserted_objects | x 0.362..0.908, y -0.450..0.469 | 0.502 m² | identical |
+| objects_on_montessori | x 0.355..0.915, y -0.450..0.473 | 0.517 m² | identical |
+| stuck_cube_in_hole | x 0.369..0.911, y -0.450..0.482 | 0.505 m² | identical |
+| tracy_pickup_demo | x 0.353..0.914, y -0.450..0.472 | 0.517 m² | identical |
+
+The y minimum sits at the modelled bound in all six: the table reaches at least that far,
+and the measurement will not report ground the world has not already allowed.
+
+#### Only the extent is measured, and the first version measured too much
+
+The plan said "a plane fit", and the first build fitted the height as well, answering
+0.8804 to 0.8811 m against the modelled 0.88. That is a *better* reading of where the
+table is and it was still wrong to ship: it moved the rectification plane, so **every**
+detection on **every** capture moved with it -- up to 3.4 mm and 0.19 agreement -- for a
+gain nothing had asked for. Two recorded facts settle it. This roadmap already says the
+demo drifted away from its model in *layout* "though the table's height agreed exactly",
+so the height is the half of the model that is not in question; and the lid's plane is
+`TABLE_HEIGHT + BOARD_SCALE.z`, so measuring the table's height and not the lid's would
+leave the two surfaces describing different tables.
+
+With only the extent measured, **five of the six captures report exactly what the parent
+reported** -- category, surface, position to the micrometre and agreement. Worth
+generalizing: *a measurement that is more accurate than the thing it feeds is still a
+change to that thing*, and the question is which half of the model is actually wrong.
+
+#### The sixth capture, and a fit that was already two-valued
+
+`stuck_cube_in_hole` moves one rectangular prism by 0.15 mm and from 0.826 to 0.806
+agreement. Running #238's own diagnostic -- vary the crop and check the answer is flat --
+says this is not the lattice: with the *modelled* finder throughout and only the region's
+corner moved by whole pixels, the same prism flips between exactly those two readings,
+non-monotonically in the size of the crop. So the two-valued fit is on the parent and this
+branch merely reaches the other value once. It is the fragility #238 recorded and left to
+`competing-explanations`.
+
+The lattice itself is exact and is now asserted rather than hoped for: each measured
+corner is a whole number of the modelled region's pixels from the modelled corner (7, 2,
+12, 5, 19 and 3 across the six), which is #238's rule -- *anything that re-frames a
+rectification has to land on the same lattice* -- pinned by construction.
+
+#### What a finder needs is not only what the world says
+
+#231's rendered-scene fixture annotates its table `SurfaceFinish.MIRROR`, and it draws
+**no depth at all** -- 0 of 2,073,600 pixels. So the first build made a colour-only
+pipeline unable to look at a mirror-finished table, raising where it used to answer.
+
+The fix is not a fallback in the rules; it is that the finder says so itself.
+`SoughtSurface` carries what one *look* offers as well as what the world states, and the
+measurement's capability is now support-for-a-bound **and** depth having been returned.
+That makes the capability genuinely load-bearing -- #231's own point that "a capability is
+not a weaker rule, it is the half that says what a detector is *for*" -- and it fixed the
+sibling's fixture without touching it. Worth keeping: **a description is not a capability;
+what the picture offers is half of one.**
+
+#### What it costs, and where the cost went
+
+`detect` runs at **1.07x** the parent over the six captures, measured as a ratio to a
+same-run baseline interleaved three times, per what #232 recorded about this container's
+speed. The measurement itself is 0.061 s/frame; the narrowed passes pay most of it back.
+
+The first version read all 2.07 M pixels of the depth image and cost 0.100 s/frame, for
+1.24x. A surface cannot have been seen anywhere the world does not allow it to be, so only
+the pixels its own space covers are read -- its stretch of plane, as thick as such a
+surface's points scatter -- through the `outline_in` machinery `WorkspaceBox` already had.
+`clip` is now written in terms of the same window rather than repeating the crop.
+
+`SURFACE_SCATTER` is 17 mm, which is not chosen: it is the scatter the point-cloud trial
+this package's detectors were written after measured on the bare steel.
+
+#### Deliberately not built, each recorded rather than dropped
+
+- **Clustering the surface's points.** The item's description names "the biggest such
+  surface in view", and the bounding box of the banded points inside the modelled bound
+  already shrinks to the table on all six captures, so nothing here needed the clustering
+  and none was written. The measurement above is what says so.
+- **A colour for the recorded table.** `None` means *not stated*, which is #216's own
+  rule, and nothing here measured Tracy's table's grey. #239 states it, and its finish,
+  on the twin's own surfaces; this branch states only the finish, and only for the
+  recordings, which carry no world to state anything in.
+- **Removing `tune_workspace`.** It is now used by nothing but its own tests. `AGENTS.md`
+  says to consult the developer before removing something used only in tests, so it is
+  left standing and the removal is asked on the pull request -- the same call
+  `surfaces-from-world` made about the widest-or-highest face and `holes-fitted-like-pieces`
+  made about `CrossSectionClassifier`.
+
+#### Two API changes, both updating their own tests
+
+`MontessoriPerceptionPipeline.rectify` takes the surface rather than a bare height, and
+`searched_surfaces` takes the table it searches, because both used to read `self.table`
+and the table a look searches is now the one that look found. `SceneWindows` draws the
+table it looked at, so the clipped windows show what was searched rather than what was
+modelled.
+
+#### The environment
+
+The easiest this plan has recorded, after #246's: `pip install -U uv` puts 0.12.9 at
+`/usr/local/bin/uv` and `uv sync --extra dev --python 3.12` builds the whole workspace.
+`black` and `docformatter` go in by hand with `.venv/bin` on `PATH`. The parent baseline
+was taken in a worktree with its own `*/src` on `PYTHONPATH` and `experiments.__file__`
+checked before it was trusted, per what #222 recorded about nearly measuring a branch
+against itself.
