@@ -1,13 +1,13 @@
-Review-only session (2026-09-03): compared the ICRA planning memo (icra_plan.tex,
-deadline 2026-09-15) against every tracked plan, the open pull requests and the
-tracy_icra demo branch. No code, no pull request from this branch.
+Review-and-planning session (2026-09-03), no code and no pull request from this
+branch (re-cut from main during setup).
 
-Outcome delivered in the session chat: what the memo needs that no plan item
-covers (backend capability table / per-predicate routing, physics
-perceive-commit-verify with injected errors, VLM baselines, question set and
-ground truth, insertion ablation harness with typed and predicted failures,
-snapshot re-perception threshold, artifact release), what the memo should
-change (four backends -> three, no Flanagan/in-hand event, board mesh scale
-0.865, frame budget), and a day-by-day priority order. Recommended next step:
-create an `icra-experiments` plan for the experiment harnesses; that is the
-developer's call and was not done here.
+Done: compared the ICRA memo (icra_plan.tex) against every tracked plan, the open
+pull requests and tracy_icra; then created the `icra-experiments` plan (26 items,
+3 waves, 10 tracks, three lanes) on the personal-notes branch, tracking issue
+#252, dashboard https://claude.ai/code/artifact/60b5a312-c634-48e5-bf1f-aad90bd2d983,
+master index republished.
+
+Next (developer's calls, recorded in the roadmap's open questions): which VLM
+provider the baseline harness calls; whether knowledge-directed-perception's
+expectations-from-events folds into this plan's failure typing; mark that plan's
+imagination-world item as covered by physics-verification-backend.
