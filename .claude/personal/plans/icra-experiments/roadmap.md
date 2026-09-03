@@ -345,3 +345,91 @@ where "how to build the world" now lives.
 runner are `@pytest.mark.slow`, and the default CI selection is `-m "not slow"`, so CI
 proves that the migrated benchmark imports, collects and aggregates, not that it still
 measures a motion. The benchmark wants one manual run before it is trusted.
+
+## 2026-09-03: the recording is taken from #256 without the demo, and the demo branch takes its detectors
+
+The developer asked what this plan actually needs from montessori-eql-stack's
+`montessori_monitor_and_recording` (#256), given that `tracy_icra` works, the
+knowledge-directed-perception segmind pull requests work, `tracy_icra_segmind` is waiting to
+be merged into `tracy_icra`, and what is really wanted is episodes recorded through ORMatic
+with the segmind events in them. Measured rather than argued, and the answer is: about 700 of
+#256's 7,124 lines.
+
+### What is needed, and what is not
+
+Needed. The **three lines that make ORMatic able to hold a segmind event at all** - the
+`experiments` ORM interface declaring `segmind`, `generate_orm` importing
+`segmind.orm.ormatic_interface`, and `experiments/pyproject.toml` declaring the dependency -
+and the **recording trio**: `results_database.py`, `results_recording.py` and
+`sorting_results.py`. That third one is the episode schema, and it imports exactly two things,
+`coraplex.plans.plan.Plan` and `segmind.datastructures.events.DetectionEvent`. Nothing in the
+trio touches the simulated world.
+
+Not needed. `world.py`, `semantics.py`, `hole_geometry.py`, `sorting_progress.py` and
+`insertion_diagnosis.py` are the Franka simulated demo's, and `tracy_icra` has its own
+`world.py`/`semantics.py`/`hole_geometry.py` already (they are close relatives - `world.py`
+differs by 46 lines out of 1,180 - but they are two branches' copies, not one file).
+`event_monitoring.py` is not needed either, because `tracy_icra_segmind` carries its own,
+`experiments/tracy_experiments/montessori/event_monitoring.py`, wired to
+`TracyMontessoriWorld` and the Robotiq grasp detectors.
+
+One correction to a premise: #256 has **no cramera import anywhere** - that was the whole
+point of splitting it out of #169. It is the demo and the world that do not belong here, not
+a viewer dependency.
+
+### Off main, which is what makes it small
+
+`experiments/montessori/` **does not exist on `main` or on #244**. It exists only on #256,
+which creates it, and on `tracy_icra`, which has its own. So the extraction cuts off `main`
+and creates that directory holding only the three recording modules - no perception
+subpackage, no simulated world, and nothing it needs newer than `main` (`Plan`,
+`DetectionEvent`, `to_dao` and `create_engine` are all there).
+
+### The defect that was found on the way
+
+#256 had **no `experiments/montessori/__init__.py`**, which #169 carries as an empty file. The
+split checked out an explicit file list and missed it. `pkgutil.walk_packages` skips a
+directory without one - demonstrated, not assumed - so the ORM generator was never offered
+`SortingIterationResult` and `to_dao` would have had no DAO to find: the recording #256 exists
+to carry could not have worked. Added in `589aceefd` on that branch, and the extraction takes
+it too.
+
+That file is also where the **`Footprint` collision** comes back. It is deferred rather than
+avoided: `experiments/montessori/perception/footprint.py` and
+`semantic_digital_twin...graph_of_convex_sets/plotting.py` both declare a `Footprint`, so the
+moment the `__init__.py` sits over `tracy_icra`'s perception package the generator emits two
+`FootprintDAO`s and SQLAlchemy refuses the mapping. `knowledge-directed-perception`'s
+`montessori-classes-in-the-orm` (#223) has already renamed the perception one to
+`RectifiedFootprint`; whichever branch first puts the two together takes that rename rather
+than writing a second one.
+
+### Merging tracy_icra_segmind is a real merge, and small
+
+Not a fast-forward: `tracy_icra` has moved 20-odd commits past their merge base `e034fa791`,
+taking the perception work with it. Three conflicts, all identified: `experiments/
+requirements.txt` (deleted on `tracy_icra` for `main`'s inline-pyproject convention, which
+`test_dependency_declarations.py` tests; `flask` added on `tracy_icra_segmind`, so it moves to
+`pyproject.toml`), `segmind/datastructures/events.py` (both sides), and
+`tracy_experiments/pickup/pickup_demo_real.py` (both sides).
+
+### The collision this plan should actually worry about
+
+Not #256. **`tracy_icra_segmind` and #244 independently rewrote the same five segmind files**
+from `main` - `events.py`, `atomic_event_detectors_nodes.py`, `base.py`,
+`spatial_relation_detector_nodes.py`, `episode_segmenter.py` - and a test-merge conflicts in
+every one, plus `test_segmind_detectors.py`. **`tracy_icra` and #244 both rewrote the MuJoCo
+adapter** as well: `multi_sim.py` is +272/-14 on `tracy_icra` and +650/-36 on #244, and both
+add a `panda.py` (add/add). So "is MuJoCo working well" is not a question about #256; it is
+this meeting, and it belongs to `integrated-simulation-pipeline` and
+`tracy-demo-takes-the-integrated-branch`. It also strengthens the case for splitting #244 by
+package, since its segmind third is exactly the colliding part.
+
+### Not taken from #256, and why
+
+`demonstrations.py`'s spin fix is real (a borrowed ROS context raises
+`ExternalShutdownException` out of a run that succeeded) but `tracy_icra` uses no
+`RobotDemonstrationRosSession`, so it is not this plan's. `Context.simulation_clock`,
+`Context.update_world_model_attachment`, `SimulationTimePacer` and the tick budget are all
+absent from `tracy_icra`; the attachment gate in particular exists so a simulator holding
+objects by contact does not leave the world model believing they are welded, which the MuJoCo
+demos may well want - left as the integration item's call rather than pulled in here.

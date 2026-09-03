@@ -108,13 +108,14 @@ items:
     status: not_started
     blockers:
       - >-
-        Cross-plan: this item merges montessori-eql-stack's montessori_monitor_and_recording (#256) rather than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was split out of #169 so this plan need not take the cramera console with the monitor. What is left of that debt here is one item: SimulationTimePacer.sleep() waits on the simulation clock with no bound, so a stalled simulation blocks a tick forever. No test reaches it - only the demo scripts set context.simulation_clock - but it is a real hang, and what a stalled simulation should do is the developer's call. The three coraplex failures and the hanging Tracy demo this blocker used to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on #169's c8bf6f05.
+        Cross-plan: this item merges montessori-eql-stack's montessori_monitor_and_recording (#256) rather than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was split out of #169 so this plan need not take the cramera console with the monitor. As of 2026-09-03 it takes only the monitor half of #256: the recording half is being cut off main as its own item, run-results-recorded-into-sql, which this item merges instead. What is left of that debt here is one item: SimulationTimePacer.sleep() waits on the simulation clock with no bound, so a stalled simulation blocks a tick forever. No test reaches it - only the demo scripts set context.simulation_clock - but it is a real hang, and what a stalled simulation should do is the developer's call. The three coraplex failures and the hanging Tracy demo this blocker used to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on #169's c8bf6f05.
     notes: >-
       The foot of the plan. Cut off main and merge in, in this order, the library half of
-      the monitor stack (#244), the monitor itself (#256, which carries the segmind event
+      the monitor stack (#244), the monitor half of #256 (the segmind event
       monitor, the attach and detach of a grasped shape behind
-      Context.update_world_model_attachment, and the results recording, and which imports
-      no cramera at all), the predicate classes (#229), the perception stack tip (#238,
+      Context.update_world_model_attachment, and the montessori world and semantics it
+      monitors - #256 imports no cramera at all), the recording half of #256 as its own
+      branch off main (run-results-recorded-into-sql), the predicate classes (#229), the perception stack tip (#238,
       which carries #221, #222 and #227) and the hole layout fit (#236, which carries #225
       and #232), the detector choice by rule (#231, 13 commits, no rule-engine dependency)
       and only the one knowledge-half commit of #239 (3a493be9, the measured colours and
@@ -130,6 +131,26 @@ items:
       and every test module of the merged packages collected and green in CI. Keep #192
       out until the developer says it is in; it removes Match.variable, which #159 and
       therefore #239 still read.
+  - id: segmind-detectors-on-the-demo-branch
+    title: "The demo branch takes its own segmind detectors, grasp events and gripper feedback"
+    branch: tracy_icra
+    pull_request_number: null
+    track: integration
+    depends_on: []
+    status: not_started
+    notes: >-
+      Merge tracy_icra_segmind into tracy_icra. Not a fast-forward: tracy_icra has moved 20-odd commits
+      past their merge base e034fa791, taking the knowledge-directed-perception work with it, so this is
+      a real merge. Three conflicts, all identified 2026-09-03. experiments/requirements.txt was deleted
+      on tracy_icra (main's convention is inline pyproject dependencies, and
+      test_dependency_declarations tests it) and gained flask on tracy_icra_segmind, so the resolution
+      is to keep the file deleted and declare flask in experiments/pyproject.toml.
+      segmind/datastructures/events.py was changed on both sides (+44/-21 arriving through tracy_icra's
+      perception merges, +104/-24 here). And tracy_experiments/pickup/pickup_demo_real.py was changed on
+      both sides. What the branch brings: grasp_detector_nodes.py, the gripper-feedback and event-
+      dashboard modules, its own background threaded event_monitoring.py for TracyMontessoriWorld, and a
+      much larger detector test suite.
+
   - id: simulated-camera-feeds-perception
     title: "A MuJoCo camera feeds the perception pipeline the same frames the real camera does"
     branch: null
@@ -211,12 +232,42 @@ items:
       depth, the in-gripper scenario really holds the piece).
 
   # %% long-term-memory
+  - id: run-results-recorded-into-sql
+    title: "Where a run records its results, and the plan-and-events schema it records"
+    branch: null
+    pull_request_number: null
+    track: long-term-memory
+    depends_on: []
+    status: not_started
+    notes: >-
+      Cut the recording half of montessori-eql-stack's montessori_monitor_and_recording (#256) as a pull
+      request of its own, off main. Three modules and about 700 lines: results_database.py resolves
+      where a run records and reports whether that database can be reached and written to,
+      results_recording.py records best effort so a database problem cannot lose a finished run, and
+      sorting_results.py is the schema itself - a realized coraplex Plan plus the segmind
+      DetectionEvents detected inside it. With them, the three lines that make the recording possible at
+      all: the experiments ORM interface declares segmind, generate_orm imports
+      segmind.orm.ormatic_interface, and experiments/pyproject declares the dependency. Plus
+      experiments/montessori/__init__.py, without which pkgutil skips the directory and the generator is
+      never offered SortingIterationResult. Off main rather than off tracy_icra or #256, and this is
+      what makes it small: experiments/montessori does not exist on main at all, so the branch creates
+      the directory holding only these modules, and nothing it needs is newer than main. The rest of
+      #256 stays where it is - the simulated world, semantics, hole geometry, sorting progress and
+      insertion diagnosis are another demo's, and its event monitor is one tracy_icra_segmind already
+      has its own of. The Footprint collision is deferred, not avoided:
+      experiments/montessori/perception/footprint.py and
+      semantic_digital_twin...graph_of_convex_sets/plotting.py both declare a Footprint, so the moment
+      this branch's __init__.py sits over tracy_icra's perception package the generator emits two
+      FootprintDAO classes and SQLAlchemy refuses the mapping. knowledge-directed-perception's
+      montessori-classes-in-the-orm (#223) already renames the perception one to RectifiedFootprint;
+      whichever branch first puts the two together takes that rename.
+
   - id: episodes-recorded-through-ormatic
     title: "Every trial, event, query, answer and failure recorded through ORMatic into SQL"
     branch: null
     pull_request_number: null
     track: long-term-memory
-    depends_on: [scenario-domain-model]
+    depends_on: [scenario-domain-model, run-results-recorded-into-sql]
     status: not_started
     notes: >-
       One Episode model for simulation and the robot: the scenario and
