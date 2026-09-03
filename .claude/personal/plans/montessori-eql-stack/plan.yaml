@@ -113,6 +113,13 @@ items:
       since `tracy_icra`, the branch the ICRA demo actually runs on, has no cramera and its own
       `montessori_demo.py`.
 
+      2026-09-03: the split had omitted `experiments/src/experiments/montessori/__init__.py`, an empty
+      file #169 carries. Without it `pkgutil.walk_packages` skips the whole directory, so the ORM
+      generator is never offered `SortingIterationResult` and `to_dao` has no DAO to find - the
+      recording this branch exists to carry could not have worked. Added in `589aceefd`. Same cause the
+      knowledge-directed-perception item `montessori-classes-in-the-orm` (#223) records for the
+      perception classes.
+
   - id: montessori_fast_inline_monitor
     title: "A monitor tick cheap enough to stay on the planning thread"
     branch: montessori_fast_inline_monitor
