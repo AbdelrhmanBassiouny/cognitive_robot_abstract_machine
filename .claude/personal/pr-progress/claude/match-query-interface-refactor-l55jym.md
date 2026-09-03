@@ -1,4 +1,5 @@
-# PR #192 - match-underscore-rename-and-forwarding (plan match-query-ergonomics)
+# PR #192 - match-underscore-rename-and-forwarding + factories-unwrap-match-and-migrate
+# (plan match-query-ergonomics)
 
 Draft PR #192, based on `main` - #182 merged on 2026-08-24 and the 2026-08-30
 maintenance pass reparented this PR (roadmap section 23). Roadmap sections 17 and 26 have
@@ -66,32 +67,48 @@ the full record and the reasoning.
        keeps, so section 6's silent-miss hazard had nothing to catch. `test_eql` 1310
        passed, 3 skipped; full `test/krrood_test` 1916 passed, 5 skipped.
 
+10. [x] Review round 2026-09-03 (roadmap section 28), `f70c1aff4` and `6df7b7516`. The
+       developer's first real review of #192 - six threads left minutes after section 27's
+       own report, which is why 26 and 27 both recorded "no review threads". Five acted on
+       and resolved, one (`_is_own_name_`) a question answered and left open. Asked how far
+       the first went, the developer took all three compatibility properties, which is what
+       consumed item 3: removing the public `expression` forces the factory unwrapping,
+       since `the(match.expression)` was the only spelling for quantifying or selecting a
+       match. `_as_operand_` is now applied at all four boundaries that read a value
+       standing for an expression. `marginalize_for` re-roots onto the selection. The five
+       user docs, the `causes_effect` strings and the `marginalize_for` prose are migrated,
+       and `update_fields` / `create_or_update_variable` / `has_cause_attributes` are behind
+       the convention. Suite: 1919 passed, 5 skipped.
+
 ## Outstanding
 
 - The PR is a draft, as always; the developer marks it ready.
-- Everything this PR refuses is now a plan item, not a note (roadmap section 20):
-  `aggregate-signature-reads-a-missing-attribute` (this plan, ready to start) for the
-  assembler bug, `argument-position-correlation` (#137, behind `binding-order-planner`)
-  for a query evaluated uncorrelated in an argument position, and the already-existing
-  `factories-unwrap-match-and-migrate` for selecting a match. None of them blocks #192.
-- CI is running on `9482a62c` (`mergeable_state` went `dirty` -> `unstable` on the push).
-  The run on `ff5414e0a` was all 23 checks green, but that was against `main` before
-  cram2#575, so it says nothing about this merge.
+- **One review thread deliberately open**: `match.py:383`, "why do we need
+  `_is_own_name_`?". Answered with the measurement - deleting the override turns
+  `_chain_expression_`, `_missing_` and `_operands_` into symbolic `Attribute`s instead of
+  raising, which is section 6's silent miss and the shape behind #196 and #248 - and left
+  for the developer, since the ask was for a reason rather than a change.
+- **A cost accepted on the developer's instruction, not discovered later**: #159
+  (`D-core-single-class`, open and out of draft) still reads `match.matches_with_variables`
+  at `test_underspecified_match.py:60,67` and `match.variable` at line 80, so its cascade
+  breaks. Roadmap sections 4 and 17 kept the properties for exactly that; the review
+  reversed it. Recorded on the thread, in the PR description and in the roadmap.
 - Open for the developer, on #192 and on #181: `HasExpression._get_expression_` and
   `HasSymbolicOperations._symbolic_expression_` return the same object on every class that
-  has both, with different declared contracts (`_symbolic_expression_` must be
-  variable-like; `_get_expression_` may be any expression, which is how
-  `ProbabilisticQuery` implements it). Unifying them would change an interface `main`
-  landed the day before, which is above the bar auto mode decides on its own.
-- Three more `.variable` detour sites for item 3, from #575's `marginalize_for` docs
-  (`factories.py:149`, `operators/probabilistic_queries.py:153`,
-  `verbalization/grammar/probabilistic_queries/rules.py:73`); recorded in that item's notes.
-- The `needs-resolution` label is left in place: the stack tooling clears it itself once
-  the branch merges cleanly again, and hand-clearing it would be managing a signal that is
-  not this session's.
-- Still refused by design, reported on the PR: a match given to a predicate (a query
-  argument there is evaluated uncorrelated even with no match involved - wave 1's
-  territory), and selecting a match (`entity(match)`, `the(match)`), which is item 3's.
+  has both, with different declared contracts. Removing the public `expression` settles
+  half of it by taking the third name out from under them; unifying the two would change an
+  interface `main` landed on 2026-09-01, which is above the bar auto mode decides alone.
+- Also for the developer: `AttributeMatch._symbolic_expression_` has no reader anywhere and
+  exists only as the hierarchy's abstract member.
+- Box-drawing dividers survive in `test_determiner_phase.py`, `test_source_links.py` and a
+  few other verbalization test files this branch does not touch; offered as its own pass.
+- CI is running on `6df7b7516`. The run on `9482a62c` was all 23 checks green, but that was
+  before this round.
+- Still refused by design, reported on the PR: a match given to a predicate, which is wave
+  1's territory - a query argument there is evaluated uncorrelated even with no match
+  involved.
+- Item 3 (`factories-unwrap-match-and-migrate`) is folded into this PR and marked `done` in
+  the manifest; nothing of it stands alone once this lands.
 
 ## Environment
 
