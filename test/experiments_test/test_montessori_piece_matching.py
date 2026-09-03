@@ -22,7 +22,10 @@ from experiments.montessori.perception.hypotheses import (
     PieceHypothesis,
 )
 from experiments.montessori.perception.orthophoto import Orthophoto, WorkspaceRegion
-from experiments.montessori.perception.piece_matcher import PieceMatcher
+from experiments.montessori.perception.piece_matcher import (
+    PieceMatcher,
+    offsets_within,
+)
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.perception.pipeline import (
     MontessoriPerceptionPipeline,
@@ -420,3 +423,42 @@ def test_a_piece_only_half_in_view_is_not_reported(
 def test_a_cleanly_seen_piece_reports_how_closely_it_fitted(scene: MontessoriScene):
     for detected in scene.shapes:
         assert detected.outline_agreement > PieceMatcher().minimum_agreement
+
+
+# %% widening a belief's reach only widens the search
+
+
+def test_a_wider_reach_tries_every_placement_a_narrower_one_tried():
+    """
+    Widening how far a belief reaches adds placements to try rather than moving the ones
+    already tried.
+
+    A grid laid out from the edge of its own reach is re-phased by every change to that
+    reach, so a peak one reach lands on the next steps over. That is the fault #238
+    found in a clip that re-framed a rectification off its own lattice, and it has the
+    same giveaway: an answer that is not monotonic in the size. It went unseen here
+    because nothing varied a belief's reach until an expectation came to state its own.
+    """
+    step = 0.003
+
+    narrower = offsets_within(0.02, step)
+    wider = offsets_within(0.024, step)
+
+    assert set(np.round(narrower, 9)) <= set(np.round(wider, 9))
+    assert len(wider) > len(narrower)
+
+
+def test_a_sweep_tries_the_place_it_is_centred_on():
+    """
+    Whatever else it reaches, a belief's own centre is a placement, since that is the
+    one placement the belief actually asserts.
+    """
+    assert 0.0 in offsets_within(0.02, 0.003)
+
+
+def test_a_sweep_reaches_no_further_than_the_belief_states():
+    """
+    A belief is a claim about where a thing is, so a reach is a bound rather than a
+    suggestion.
+    """
+    assert max(abs(offsets_within(0.02, 0.003))) <= 0.02
