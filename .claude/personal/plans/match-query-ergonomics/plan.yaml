@@ -514,3 +514,10 @@ items:
       operators/probabilistic_queries.py:153 and
       verbalization/grammar/probabilistic_queries/rules.py:73 - stale the moment #192 lands,
       since match.outcome becomes the spelling.
+
+  - id: query-reports-its-selection-type
+    title: "A query over one variable reports that variable's type"
+    branch: null
+    track: mapping-semantics
+    depends_on: []
+    status: in_progress

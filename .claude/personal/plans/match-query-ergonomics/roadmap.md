@@ -1564,3 +1564,51 @@ Verification: full `test/krrood_test` 1925 passed, 5 skipped, excluding
 `test_rustworkx_utils` and `test_symbolic_math` (`flask`/`casadi`); the two
 `test_object_diagram` failures are this container having no Graphviz `dot` binary,
 `which dot` finding none.
+
+The developer's answer to the question section 30 left open: teach `Query` to report the
+type of the variable it selects, in its own pull request off `main`, then merge it into
+#192 and drop the `_variable_` it was standing in for. Done as
+`query-reports-its-selection-type`, PR #254 (draft, `bug`), off `main` at `69b2395a2`;
+merged into #192 as `4f1edbd6d`, the six bindings removed in `e1d8076aa`.
+
+**The bug had been carrying a workaround on `main` since before this plan started, which
+is what settles that it was one.** `Selectable._type__` delegates to `self._var_`, and
+`Query.__post_init__` sets `_var_ = self`, so the delegation never fires and every query
+reports no type - even though `_var_`'s own docstring names "queries ... that operate on
+a single selected variable" as the case it exists for. `Attribute` reads its owning class
+off its child, so every chain built on a query carried `_type_ = None`.
+`Attribute.number_like_field` already re-rooted the chain onto the query's selection to
+get a type out of it; the random-events translator had no such workaround and raised
+`TypeError: issubclass() arg 1 must be a class` instead.
+
+**The fix is polymorphic, on the split section 12 already established.** `Entity` reports
+its selected variable's type; `SetOf` does not, since a row binding several variables is
+not a value of any one type.
+
+**And it needed section 6's own guard, in the fix for a bug section 6's hazard caused.**
+The first version read `selected._type_` unconditionally. A selection is not always a
+`Selectable` - `entity(value > 5)` selects a `Comparator`, which declares none - and a
+variable claims no underscore-prefixed name, so the read was captured as a symbolic
+attribute rather than raising. Building that attribute compiles the query that is still
+inside its own `__post_init__`, and `test_explanation.py`'s filterless-query test
+recursed until the stack ended. The read is now guarded by `isinstance(selected,
+Selectable)` and the case has its own test. That is the third time this hazard has been
+met while fixing something it caused (sections 18 and 25 are the others), and the second
+time the fix's own first draft was the thing it caught.
+
+**The type was necessary and not sufficient, which the plan-mode answer had not
+anticipated.** A random-events variable is identified by its *name*, and the two
+spellings still differed - `Body.size` against `(Body).size` - so a model fitted through
+one would not have matched a query written in the other. The symmetric fix was tried and
+is unsound: naming an `Entity` after its selection makes `entity(condition)` ask a
+`Comparator` for a name that walks back through the query, and the suite recurses again.
+A query is genuinely a different node from its selection and its `(...)` name is honest.
+
+So the name is fixed where it is read, which is what section 28's `marginalize_for` fix
+and #182's condition re-rooting both already do. That made three inline copies of one
+rule, so it is now written once as `query.variable_rooted` and both `number_like_field`
+and the translator call it.
+
+Verification: `test/krrood_test` 1903 passed, 5 skipped on #254 alone, 1930 passed on
+#192 with it merged and the six bindings removed; the two `test_object_diagram` failures
+are this container having no Graphviz `dot` binary.
