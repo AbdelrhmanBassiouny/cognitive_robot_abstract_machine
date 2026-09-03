@@ -14,6 +14,8 @@ from experiments.control_loop_experiments.control_loop_profiler import (
     CallTreeProfile,
     ControlLoopProfiler,
 )
+from experiments.scenarios.runner import ScenarioRunner
+from experiments.scenarios.scenario import Goal, Scenario, ScenarioStep, StepName
 from giskardpy.middleware.ros2.giskard import Giskard
 from giskardpy.middleware.ros2.scripts.iai_robots.pr2.configs import (
     PR2StandaloneInterface,
@@ -49,7 +51,7 @@ from krrood.utils import recursive_subclasses
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidExternalCollisions,
 )
-from semantic_digital_twin.robots.pr2 import PR2Joint
+from semantic_digital_twin.robots.pr2 import PR2, PR2Joint
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
@@ -274,8 +276,44 @@ class BenchmarkRobot(GiskardTester):
 # %% scenarios
 
 
+class ControlLoopStep(StepName):
+    """
+    The steps a measured motion is divided into.
+    """
+
+    MOTION = "motion"
+
+
 @dataclass
-class BenchmarkScenario(ABC):
+class PerformMotion(ScenarioStep[BenchmarkRobot]):
+    """
+    Runs the motion whose control loop is measured.
+    """
+
+    motion_statechart: MotionStatechart
+    """
+    The motion that is executed.
+    """
+
+    def perform(self, robot: BenchmarkRobot) -> None:
+        robot.api.execute(self.motion_statechart)
+
+
+@dataclass
+class MotionRanToItsEnd(Goal[BenchmarkRobot]):
+    """
+    Success is the motion having ended.
+
+    Giskard raises whatever aborted a motion it could not finish, so a trial that gets
+    as far as asking this goal ran its motion to the end.
+    """
+
+    def is_reached(self, robot: BenchmarkRobot) -> bool:
+        return True
+
+
+@dataclass
+class BenchmarkScenario(Scenario[BenchmarkRobot, PR2], ABC):
     """
     One motion whose control loop is measured.
     """
@@ -284,6 +322,46 @@ class BenchmarkScenario(ABC):
     """
     Name the scenario is reported under.
     """
+
+    goal: Goal[BenchmarkRobot] = field(default_factory=MotionRanToItsEnd, kw_only=True)
+    """
+    A measured motion succeeds by running to its end.
+    """
+
+    plotter_mode: PlotterMode = PlotterMode.DEBUG
+    """
+    Whether the post goal plotters record the motion while it is measured.
+    """
+
+    target_frequency: float = 20.0
+    """
+    Frequency the controller is discretized for, in hertz.
+    """
+
+    def build_world(self) -> BenchmarkRobot:
+        """
+        Build the robot, put it into the configuration the motion starts from and add
+        whatever the motion needs to its world.
+
+        :return: The robot the motion is measured on.
+        """
+        robot = BenchmarkRobot(
+            plotter_mode=self.plotter_mode, target_frequency=self.target_frequency
+        )
+        robot.teleport_to_configuration(self.seed_joint_state(robot))
+        self.prepare(robot)
+        return robot
+
+    def release_world(self, robot: BenchmarkRobot) -> None:
+        robot.close()
+
+    def steps(self, robot: BenchmarkRobot) -> List[ScenarioStep[BenchmarkRobot]]:
+        return [
+            PerformMotion(
+                name=ControlLoopStep.MOTION,
+                motion_statechart=self.build_motion_statechart(robot),
+            )
+        ]
 
     @abstractmethod
     def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:
@@ -605,19 +683,9 @@ class IsolatedBenchmarkSession(AbstractContextManager):
 
 
 @dataclass
-class ScenarioRunner:
+class ControlLoopMeasurement(ScenarioRunner[BenchmarkRobot, PR2]):
     """
-    Sets a scenario up, measures its motion and takes the robot down again.
-    """
-
-    plotter_mode: PlotterMode = PlotterMode.DEBUG
-    """
-    Whether the post goal plotters record the motion while it is measured.
-    """
-
-    target_frequency: float = 20.0
-    """
-    Frequency the controller is discretized for, in hertz.
+    Runs one motion and measures what its control loop cost per cycle.
     """
 
     python_profiler: cProfile.Profile | None = None
@@ -628,43 +696,55 @@ class ScenarioRunner:
     meshes cannot drown out the control loop.
     """
 
-    def run(self, scenario: BenchmarkScenario) -> CallTreeProfile:
+    profile: CallTreeProfile | None = field(init=False, default=None)
+    """
+    What the motion measured last cost, recorded while its step ran.
+    """
+
+    def measure(self, scenario: BenchmarkScenario) -> CallTreeProfile:
         """
         Measure one motion of the given scenario on a freshly built robot.
 
         :param scenario: The scenario whose motion is measured.
         :return: The call tree recorded while the motion ran.
         """
-        robot = BenchmarkRobot(
-            plotter_mode=self.plotter_mode, target_frequency=self.target_frequency
-        )
-        try:
-            robot.teleport_to_configuration(scenario.seed_joint_state(robot))
-            scenario.prepare(robot)
-            motion_statechart = scenario.build_motion_statechart(robot)
-            profiler = ControlLoopProfiler(
-                scenario_name=scenario.name, control_dt=robot.control_delta_time
-            )
-            with profiler:
-                self._execute(robot, motion_statechart)
-            return profiler.profile
-        finally:
-            robot.close()
+        self.run_trial(scenario)
+        return self.profile
 
-    def _execute(
-        self, robot: BenchmarkRobot, motion_statechart: MotionStatechart
+    def perform_step(
+        self,
+        scenario: Scenario[BenchmarkRobot, PR2],
+        step: ScenarioStep[BenchmarkRobot],
+        robot: BenchmarkRobot,
     ) -> None:
         """
-        Run the motion, with the python profiler active if one was given.
+        Run one step of the motion with the control loop profiler around it.
 
+        :param scenario: The scenario the step belongs to.
+        :param step: The step to perform.
         :param robot: The robot the motion is executed on.
-        :param motion_statechart: The motion that is executed.
+        """
+        profiler = ControlLoopProfiler(
+            scenario_name=scenario.name, control_dt=robot.control_delta_time
+        )
+        with profiler:
+            self._perform_profiled(step, robot)
+        self.profile = profiler.profile
+
+    def _perform_profiled(
+        self, step: ScenarioStep[BenchmarkRobot], robot: BenchmarkRobot
+    ) -> None:
+        """
+        Perform the step, with the python profiler active if one was given.
+
+        :param step: The step to perform.
+        :param robot: The robot the motion is executed on.
         """
         if self.python_profiler is None:
-            robot.api.execute(motion_statechart)
+            step.perform(robot)
             return
         self.python_profiler.enable()
         try:
-            robot.api.execute(motion_statechart)
+            step.perform(robot)
         finally:
             self.python_profiler.disable()
