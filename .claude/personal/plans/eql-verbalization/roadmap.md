@@ -232,3 +232,47 @@ itself is an open question for whoever picks this item up.
 
 Replied on PR #196's thread with this outcome and resolved it, since the developer's ask —
 *"make fixing it an item of its own"* — is now done.
+
+## P4's rebase is waiting on #229, which has not merged (2026-09-03)
+
+The 2026-08-31 decision above — *#229 carries the predicate classes and P4 rebases onto the
+`main` that has them* — recorded the outcome but not the precondition, so the item read as
+actionable when it is not. As of 2026-09-03, **#229 is still open and unmerged**: state
+`open`, out of draft, `mergeable_state: clean`, base sha `fd72af38`, which is `main`'s own
+current tip. `main`'s `reasoning/predicates.py` therefore still carries the twelve
+`@symbolic_function` helpers and the `Symbol`-derived spatial relations. There is no `main`
+with #229's classes to rebase onto yet.
+
+**And P4's own test is what makes waiting compulsory rather than merely tidy.**
+`test_every_symbolic_callable_declares_its_own_verbalization_fragment` asserts that every
+symbolic callable discovered in sdt implements its own `_verbalization_fragment_` — the test
+that exists precisely so a new `@symbolic_function` from `main` cannot merge in unnoticed
+(it is what caught `is_body_gripped` in round 4). Taking `main`'s `predicates.py` today
+would import a dozen callables with no fragment of their own and turn that test red. So
+dropping this branch's copy early is not an option: the drop and #229's landing are one
+step, not two.
+
+**What is separable is the conflict.** `git merge-tree` puts the entire collision in
+`predicates.py` and nothing else — `ormatic.py`, `generate_orm.py`, `queries.py`,
+`robot_predicates.py` and the test files all auto-merge. `main`'s delta to that file since
+the merge base is three real changes and nothing structural: `camera.root_T_forward_view`
+plus an explicit `field_of_view` in `get_visible_bodies` and `occluding_bodies`, and
+`BoundingBox` -> `VolumetricBoundingBox` in `is_place_occupied`. Porting those three into
+this branch's migrated classes clears `needs-resolution`, stops a routine that has
+re-reported the same conflict ten times in a week, and lets CI run again on a branch whose
+last run was 2026-08-24 — while costing only work that #229's landing will supersede anyway.
+
+**The `Reachable` wording is settled, by a resolve rather than a sentence.** #229's thread
+r3896606294 asked for *"Pose Is reachable by Tip"*; the reply offered decision 11's longer
+*"a Pose is reachable for the kinematic chain rooted at <root> and ending at <tip>"* and left
+the thread open for the developer to pick. That thread now reads resolved on #229, where the
+shorter wording stands — so decision 11 is superseded to that extent, read from the resolve
+rather than stated outright.
+
+**A third review thread was open all along and unrecorded.** The item's blockers said two
+decisions; #33 actually has nine unresolved threads, which are three distinct questions once
+the six same-comment repeats of the type-noun thread are collapsed. The third is
+`ClassNameLowercased`: it renders *"the lower case form of the name of a type"* rather than
+the reviewer's literal *"the lower case form of a class name"*, deliberately, to keep the
+operand in the sentence — offered as a choice (r3608403117) and never answered. It blocks
+nothing and needs one word from the developer.
