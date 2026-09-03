@@ -5,7 +5,7 @@ the Montessori scene by looking at it.
 Perception is a backend beside the native and SQLAlchemy ones, so asking and looking are
 the same act::
 
-    statement = an(MontessoriShapeDetection)(pose=...)
+    statement = an(DetectedMontessoriShape)(pose=...)
     statement = statement.where(SupportedBy(statement.variable, board_lid))
     [seen] = statement.evaluate(backend=MontessoriPerceptionBackend(source=node))
     reach_for = seen.pose

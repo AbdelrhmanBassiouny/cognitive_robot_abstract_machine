@@ -32,7 +32,7 @@ from experiments.montessori.perception.captures import CAPTURE_DIRECTORY, SceneC
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriScene,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
 )
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.overlay import (
@@ -243,7 +243,7 @@ class NarrowingStep:
     Height of the plane that patch lies in, above the world frame's origin, in metres.
     """
 
-    found: Tuple[MontessoriShapeDetection, ...]
+    found: Tuple[DetectedMontessoriShape, ...]
     """
     What a look answering the statement so far reports.
     """
@@ -295,7 +295,7 @@ class SearchNarrowing:
     def steps(
         self,
         frame: RgbdFrame,
-        statement: Match[MontessoriShapeDetection],
+        statement: Match[DetectedMontessoriShape],
         board: Optional[MontessoriBoardDetection] = None,
     ) -> List[NarrowingStep]:
         """
@@ -326,7 +326,7 @@ class SearchNarrowing:
 
     def _step(
         self,
-        statement: Match[MontessoriShapeDetection],
+        statement: Match[DetectedMontessoriShape],
         board: Optional[MontessoriBoardDetection],
         backend: MontessoriPerceptionBackend,
     ) -> NarrowingStep:
@@ -353,7 +353,7 @@ class SearchNarrowing:
     def watch(
         self,
         frame: RgbdFrame,
-        statement: Match[MontessoriShapeDetection],
+        statement: Match[DetectedMontessoriShape],
         board: Optional[MontessoriBoardDetection] = None,
     ) -> List[NarrowingStep]:
         """
@@ -481,7 +481,7 @@ class SearchNarrowing:
 
 
 def show_step_by_step(
-    statement_about: Callable[[RecordedLook], Match[MontessoriShapeDetection]],
+    statement_about: Callable[[RecordedLook], Match[DetectedMontessoriShape]],
     capture: WatchedCapture = WatchedCapture(),
 ) -> List[NarrowingStep]:
     """

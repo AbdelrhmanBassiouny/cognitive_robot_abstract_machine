@@ -22,7 +22,7 @@ from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriScene,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
 )
 from experiments.montessori.perception.exceptions import LookHasNoReferenceFrame
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
@@ -216,13 +216,13 @@ def resting_on(name: PrefixedName) -> StatedCondition:
     return lambda sought: SupportedBy(sought, Body(name=name))
 
 
-def stating(*conditions: StatedCondition) -> Match[MontessoriShapeDetection]:
+def stating(*conditions: StatedCondition) -> Match[DetectedMontessoriShape]:
     """
     A statement asking a look for a piece that satisfies every given condition.
 
     :param conditions: What it says about the piece, in the order it says them.
     """
-    statement = an(MontessoriShapeDetection)()
+    statement = an(DetectedMontessoriShape)()
     if not conditions:
         return statement
     return statement.where(*(condition(statement.variable) for condition in conditions))
@@ -368,7 +368,7 @@ def test_a_narrowed_look_reports_what_the_same_look_unnarrowed_reports_there(
     ]
 
 
-def _as_read(piece: MontessoriShapeDetection) -> Tuple[str, float, float, float]:
+def _as_read(piece: DetectedMontessoriShape) -> Tuple[str, float, float, float]:
     """
     What a look made of one piece, to the millimetre it was measured to.
 
@@ -399,7 +399,7 @@ def test_a_placement_a_look_cannot_read_is_refused_rather_than_ignored(
     backend = MontessoriPerceptionBackend(
         source=FixedScene(captured=MontessoriScene(shapes=[seen]))
     )
-    statement = an(MontessoriShapeDetection)()
+    statement = an(DetectedMontessoriShape)()
     statement = statement.where(InsideRegion(statement.variable, region))
 
     with pytest.raises(LookHasNoReferenceFrame):
@@ -631,7 +631,7 @@ def looking_on_the_lid(condition: StatedCondition):
 
     :param condition: The condition to add.
     """
-    statement = an(MontessoriShapeDetection)()
+    statement = an(DetectedMontessoriShape)()
     statement = statement.where(resting_on(lid_surface().name)(statement.variable))
     return statement.where(condition(statement.variable))
 
@@ -740,7 +740,7 @@ def test_a_look_asked_for_a_color_reports_only_the_pieces_that_wear_it(
 ):
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     prism = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
-    statement = an(MontessoriShapeDetection)()
+    statement = an(DetectedMontessoriShape)()
 
     found = statement.where(Colored(statement.variable, prism.color)).evaluate(
         backend=looking_at_the_capture

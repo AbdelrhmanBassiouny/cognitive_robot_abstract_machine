@@ -107,7 +107,7 @@ class MontessoriDetection(ABC):
 
 
 @dataclass(eq=False)
-class MontessoriShapeDetection(MontessoriDetection):
+class DetectedMontessoriShape(MontessoriDetection):
     """
     A loose Montessori piece lying on the table.
     """
@@ -235,7 +235,7 @@ class MontessoriScene:
     Everything one pass of the pipeline recognised.
     """
 
-    shapes: List[MontessoriShapeDetection] = field(default_factory=list)
+    shapes: List[DetectedMontessoriShape] = field(default_factory=list)
     """
     The loose pieces found on the table.
     """

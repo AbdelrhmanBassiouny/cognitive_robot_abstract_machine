@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, ClassVar, List, Optional, Tuple, Type
+from typing_extensions import Any, ClassVar, Iterable, List, Optional, Tuple, Type
 
 from krrood.entity_query_language.backends import LookRequest, PerceptionBackend
 from krrood.entity_query_language.predicate import Relation, Triple
@@ -61,6 +61,11 @@ class Place:
     name: str
     """
     What the world calls it.
+    """
+
+    adjoins: Tuple[str, ...] = ()
+    """
+    What the world calls the places this one runs alongside.
     """
 
 
@@ -142,6 +147,41 @@ class StandingBetween(Relation):
         )
 
 
+@dataclass(eq=False)
+class StandingBeside(Triple):
+    """
+    Asserts that a thing rests somewhere alongside a place.
+
+    A relation the look cannot narrow itself by, so a statement stating it says something
+    the search never acts on and only what came back can answer.
+    """
+
+    thing: Any
+    """
+    What is resting.
+    """
+
+    place: Place
+    """
+    What it is resting alongside.
+    """
+
+    @property
+    def subject(self) -> Any:
+        return self.thing
+
+    @property
+    def object(self) -> Place:
+        return self.place
+
+    def __call__(self) -> bool:
+        return self.thing.place in self.place.adjoins
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return clause(Noun(fields["thing"]), Verb("stand beside"), Noun(fields["place"]))
+
+
 # %% the backend
 
 
@@ -161,6 +201,12 @@ class BackendThatLooksAtTheWorld(PerceptionBackend):
     The place the last look was narrowed to, or ``None`` when the statement named none.
     """
 
+    kept: List[Sighting] = field(init=False, default_factory=list)
+    """
+    What the last look reported and the statement did not reject, standing in for a copy
+    of the world a backend brings what it found into.
+    """
+
     narrowing_relations: ClassVar[Tuple[Type[Triple], ...]] = (StandingOn,)
     """
     A look here can be narrowed to one place, and says so by the relation that means it.
@@ -175,12 +221,14 @@ class BackendThatLooksAtTheWorld(PerceptionBackend):
         """
         self.searched_place = request.related_by(StandingOn)
         if self.searched_place is None:
-            return list(self.sightings)
-        return [
-            sighting
-            for sighting in self.sightings
-            if sighting.place == self.searched_place.name
-        ]
+            self.kept = list(self.sightings)
+        else:
+            self.kept = [
+                sighting
+                for sighting in self.sightings
+                if sighting.place == self.searched_place.name
+            ]
+        return list(self.kept)
 
     def relations_hold(
         self, instance: Sighting, request: LookRequest[Sighting]
@@ -193,3 +241,13 @@ class BackendThatLooksAtTheWorld(PerceptionBackend):
         """
         place = request.related_by(StandingOn)
         return place is None or instance.place == place.name
+
+    def discard(self, instances: Iterable[Sighting]) -> None:
+        """
+        Let go of the sightings the statement rejected, so what this backend still holds
+        is the answer.
+
+        :param instances: The sightings the statement rejected.
+        """
+        for instance in instances:
+            self.kept.remove(instance)

@@ -33,7 +33,7 @@ from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriDetection,
     MontessoriScene,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
     ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.edges import EdgeDistances
@@ -639,7 +639,7 @@ class LoosePieceDetector(BeliefSource):
         search: SurfaceSearch,
         expected: Sequence[PieceHypothesis] = (),
         color: Optional[Color] = None,
-    ) -> List[MontessoriShapeDetection]:
+    ) -> List[DetectedMontessoriShape]:
         """
         Find the pieces resting on one surface, by evaluating what is expected there.
 
@@ -772,7 +772,7 @@ class LoosePieceDetector(BeliefSource):
         frame: RgbdFrame,
         reference_frame: Optional[KinematicStructureEntity],
         search: SurfaceSearch,
-    ) -> Optional[MontessoriShapeDetection]:
+    ) -> Optional[DetectedMontessoriShape]:
         """
         Recognise the piece a hypothesis expects, if the picture bears it out.
 
@@ -797,7 +797,7 @@ class LoosePieceDetector(BeliefSource):
         )
         fitted = _to_rectified_contour(outline, orthophoto)
         height = _measure_height(fitted, orthophoto, frame, self.piece_height)
-        return MontessoriShapeDetection(
+        return DetectedMontessoriShape(
             pose=Pose.from_xyz_rpy(
                 match.center.x,
                 match.center.y,
@@ -1256,7 +1256,7 @@ class MontessoriPerceptionPipeline:
         board = self.board_in(frame)
         expected = self.expected_pieces()
         pieces = []
-        if request.wants(MontessoriShapeDetection):
+        if request.wants(DetectedMontessoriShape):
             for search in self.searched_surfaces(board, request):
                 pieces.extend(
                     self.piece_detector.detect(

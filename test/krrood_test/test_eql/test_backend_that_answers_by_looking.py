@@ -28,6 +28,7 @@ from ..dataset.backend_that_looks_at_the_world import (
     Place,
     Sighting,
     SightingOfSomethingHeldUp,
+    StandingBeside,
     StandingBetween,
     StandingOn,
 )
@@ -37,9 +38,9 @@ TABLE = Place(name="table")
 The place most of the sightings below stand in.
 """
 
-LID = Place(name="lid")
+LID = Place(name="lid", adjoins=(TABLE.name,))
 """
-The place one of them stands in, one level up.
+The place one of them stands in, one level up, alongside the table.
 """
 
 CUBE_ON_THE_TABLE = Sighting(label="cube", place=TABLE.name)
@@ -430,6 +431,55 @@ def test_each_condition_of_a_statement_narrows_what_a_look_answers(
         [CUBE_ON_THE_TABLE, DISK_ON_THE_TABLE],
         [DISK_ON_THE_TABLE],
     ]
+
+
+# %% a relation the look cannot narrow itself by
+
+
+def looking_for_something_standing_beside_the_place_called(name: str):
+    """
+    A statement asking a look for whatever stands alongside a place it describes rather
+    than hands over, by a relation the look itself cannot act on.
+
+    :param name: What the world calls the place.
+    """
+    place = variable(Place, [TABLE, LID])
+    statement = an(Sighting)()
+    return statement.where(place.name == name, StandingBeside(statement.variable, place))
+
+
+def test_a_relation_the_look_cannot_narrow_itself_by_is_checked_over_what_came_back(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    A relation the search never acts on is still part of what the statement says, so it
+    is checked over what the look reported rather than refused for want of a search that
+    covers it.
+    """
+    results = list(
+        looking_for_something_standing_beside_the_place_called(LID.name).evaluate(
+            backend=backend
+        )
+    )
+
+    assert backend.searched_place is None
+    assert results == [CUBE_ON_THE_TABLE, DISK_ON_THE_TABLE]
+
+
+def test_what_a_relation_rejects_is_discarded_rather_than_left_standing(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    What a backend brought into being to answer a statement is exactly what the
+    statement kept, so a sighting the relation rejects is let go of again.
+    """
+    list(
+        looking_for_something_standing_beside_the_place_called(LID.name).evaluate(
+            backend=backend
+        )
+    )
+
+    assert backend.kept == [CUBE_ON_THE_TABLE, DISK_ON_THE_TABLE]
 
 
 # %% what it refuses

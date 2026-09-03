@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from typing_extensions import List
 
-from experiments.montessori.perception.detections import MontessoriShapeDetection
+from experiments.montessori.perception.detections import DetectedMontessoriShape
 from experiments.montessori.perception.footprint import Footprint
 from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
@@ -72,7 +72,7 @@ def volume_at(
 
 def piece_at(
     x: float, y: float, surface_height: float, outline_agreement: float
-) -> MontessoriShapeDetection:
+) -> DetectedMontessoriShape:
     """
     A cube detection standing at a position, fitted as well as the caller says.
 
@@ -83,7 +83,7 @@ def piece_at(
     """
     height = 0.03
     resting_on = PrefixedName("table", "occupancy_test")
-    return MontessoriShapeDetection(
+    return DetectedMontessoriShape(
         pose=Pose.from_xyz_rpy(x, y, surface_height + height / 2),
         footprint=Footprint(
             area=PIECE_WIDTH**2,
@@ -223,7 +223,7 @@ def test_the_kept_detections_keep_the_order_they_were_offered_in():
     first = piece_at(0.60, 0.20, surface_height=0.88, outline_agreement=0.7)
     second = piece_at(0.70, 0.20, surface_height=0.88, outline_agreement=0.9)
 
-    kept: List[MontessoriShapeDetection] = Occupancy().keep_one_detection_per_place(
+    kept: List[DetectedMontessoriShape] = Occupancy().keep_one_detection_per_place(
         [first, second]
     )
 
