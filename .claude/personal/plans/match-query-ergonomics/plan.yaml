@@ -189,140 +189,151 @@ items:
     session: https://claude.ai/code/session_01Hg8944NTdj8WMSGFqV4mq8
     blockers:
       - >-
-          Two things, both live when this run started and neither recorded: a merge conflict against
-          main in probabilistic_model/.../relational/rspn.py (the eighth needs-resolution round,
-          reported 2026-09-03 14:51), and a second review round the developer left at 14:45-14:54
-          the same day - four unresolved threads, three asking for _variable_ to go from
-          test_causes_effect.py:24,29,34 and one asking whether the .resolve() statements in
-          test_match_verbalization.py:198 are needed and to remove them everywhere if not. The
-          blocker written by the 2026-09-03 round named only the one _is_own_name_ thread left open
-          on purpose, which the developer has since resolved.
+          One review thread left open on purpose: the four translate() sites in
+          test_random_events_translator.py keep _variable_ where the developer asked for it to go,
+          because Query._type_ is None and the random-events translator reads
+          comparator.left._type_, so a match-rooted chain raises there. Answered on the thread with
+          the measurement and the pre-existing-on-main confirmation, and left for the developer to
+          decide whether Query should report its selected variable's type. The conflict against main
+          and the round's other three threads are resolved.
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
-      claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
-      converged on this item's design without knowing the plan existed:
-      underscore-sandwich rename across Match/AbstractMatchExpression/
-      AttributeMatch/HasFactoryAndKwargs, guarded __getattr__ forwarding to the
-      lowered query, __dir__ completion, a CalledMatchAfterResolution guard, all
-      krrood-internal consumers migrated, plus the static half the plan had not
-      scoped (an()/a()/the() return Union[T, Match[T]], Match.__call__ returns
-      Union[T, Self], pinned by the mypy fixture).
-      Resolved 2026-08-23 (roadmap section 17): the recorded blocker was a
-      landing-order constraint, not an unsolved problem, so it is discharged by
-      stacking - the work moved onto claude/match-query-interface-refactor-l55jym,
-      which starts from #182's head with 147d098d2 cherry-picked on top, and PR
-      #192 is based on #182's branch. Not stacked on #186, which is independent.
-      The developer also asked for the common parent between Match and Query, and
-      it turned out to close a hole this item's own forwarding opened: getattr on
-      the lowered query put the whole public namespace of Query between a match
-      and its matched class, so a(Release).build returned Query.build.
-      HasSymbolicAttributes (the dunder guard, __dir__, and a
-      _get_symbolic_attribute_ hook) and HasQueryModifiers (where, having,
-      ordered_by, distinct, grouped_by, limit) now state what the two share; a
-      match forwards all six modifiers and returns itself. The section-7 deviation
-      is reconciled as section 4 decided: variable and matches_with_variables are
-      public compatibility properties again, so the D-core stack keeps working,
-      and item 3 removes them. Section 6's guard test and the blocker's own repro
-      are covered. The name policy stayed per class (_is_own_name_) because
-      unifying it surfaced a pre-existing bug in the verbalization assembler and
-      changed an exception type a backends test pins - both reported on #181, not
-      fixed here. Review round 2026-08-23 (roadmap section 18): the developer
-      caught that the forwarding covered attribute access alone, where a
-      CanBehaveLikeAVariable offers twenty-five operations, and that Match.__call__
-      collides with a callable matched class. Both taken: the operations are now
-      written once in CanBehaveLikeAValue, each built on the one expression an
-      implementation reports as _symbolic_expression_ (a variable reports itself, a
-      match its lowered query), so HasSymbolicAttributes is gone and
-      CanBehaveLikeAVariable keeps only the mapped-variable cache. The developer's
-      parentheses rule - first call states the pattern, later calls call the instance -
-      is implemented with a callability check, so a class whose instances are not
-      callable keeps raising CalledMatchMultipleTimes/CalledMatchAfterResolution and no
-      existing behaviour changes. Two gaps closed to make the operations mean
-      anything: a bare query used as a value in its own condition was uncorrelated
-      (where(match == robot) returned every row) and is now replaced by the selected
-      variable, raising the new AmbiguousQuerySubject for a multi-selection query; and
-      Call read the return hint off the called type rather than its __call__, so
-      calling any callable instance raised KeyError('return') - pre-existing, since
-      variable(Adder, ...)(10) failed identically on main.
-      Naming round 2026-08-23 (roadmap section 19): CanBehaveLikeAValue is renamed
-      HasSymbolicOperations, since the pair differed by one word that said nothing
-      about which half holds the mapped-variable cache; the cache stays on
+      claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which converged on this item's
+      design without knowing the plan existed: underscore-sandwich rename across
+      Match/AbstractMatchExpression/ AttributeMatch/HasFactoryAndKwargs, guarded __getattr__
+      forwarding to the lowered query, __dir__ completion, a CalledMatchAfterResolution guard, all
+      krrood-internal consumers migrated, plus the static half the plan had not scoped
+      (an()/a()/the() return Union[T, Match[T]], Match.__call__ returns Union[T, Self], pinned by
+      the mypy fixture). Resolved 2026-08-23 (roadmap section 17): the recorded blocker was a
+      landing-order constraint, not an unsolved problem, so it is discharged by stacking - the work
+      moved onto claude/match-query-interface-refactor-l55jym, which starts from #182's head with
+      147d098d2 cherry-picked on top, and PR #192 is based on #182's branch. Not stacked on #186,
+      which is independent. The developer also asked for the common parent between Match and Query,
+      and it turned out to close a hole this item's own forwarding opened: getattr on the lowered
+      query put the whole public namespace of Query between a match and its matched class, so
+      a(Release).build returned Query.build. HasSymbolicAttributes (the dunder guard, __dir__, and a
+      _get_symbolic_attribute_ hook) and HasQueryModifiers (where, having, ordered_by, distinct,
+      grouped_by, limit) now state what the two share; a match forwards all six modifiers and
+      returns itself. The section-7 deviation is reconciled as section 4 decided: variable and
+      matches_with_variables are public compatibility properties again, so the D-core stack keeps
+      working, and item 3 removes them. Section 6's guard test and the blocker's own repro are
+      covered. The name policy stayed per class (_is_own_name_) because unifying it surfaced a
+      pre-existing bug in the verbalization assembler and changed an exception type a backends test
+      pins - both reported on #181, not fixed here. Review round 2026-08-23 (roadmap section 18):
+      the developer caught that the forwarding covered attribute access alone, where a
+      CanBehaveLikeAVariable offers twenty-five operations, and that Match.__call__ collides with a
+      callable matched class. Both taken: the operations are now written once in
+      CanBehaveLikeAValue, each built on the one expression an implementation reports as
+      _symbolic_expression_ (a variable reports itself, a match its lowered query), so
+      HasSymbolicAttributes is gone and CanBehaveLikeAVariable keeps only the mapped-variable cache.
+      The developer's parentheses rule - first call states the pattern, later calls call the
+      instance - is implemented with a callability check, so a class whose instances are not
+      callable keeps raising CalledMatchMultipleTimes/CalledMatchAfterResolution and no existing
+      behaviour changes. Two gaps closed to make the operations mean anything: a bare query used as
+      a value in its own condition was uncorrelated (where(match == robot) returned every row) and
+      is now replaced by the selected variable, raising the new AmbiguousQuerySubject for a
+      multi-selection query; and Call read the return hint off the called type rather than its
+      __call__, so calling any callable instance raised KeyError('return') - pre-existing, since
+      variable(Adder, ...)(10) failed identically on main. Naming round 2026-08-23 (roadmap section
+      19): CanBehaveLikeAValue is renamed HasSymbolicOperations, since the pair differed by one word
+      that said nothing about which half holds the mapped-variable cache; the cache stays on
       CanBehaveLikeAVariable because it constructs mappings whose child must be a
-      SymbolicExpression, and a second cache would split match.x from
-      match.expression.x. The same round found the instance-likeness was
-      one-directional: variable == match passed every row, because a match reached the
-      comparator as a Literal. SymbolicExpression._as_operand_ now states once that a
-      value standing for an expression contributes it. A match given to a predicate is
-      still refused - a query argument there is evaluated uncorrelated even with no
+      SymbolicExpression, and a second cache would split match.x from match.expression.x. The same
+      round found the instance-likeness was one-directional: variable == match passed every row,
+      because a match reached the comparator as a Literal. SymbolicExpression._as_operand_ now
+      states once that a value standing for an expression contributes it. A match given to a
+      predicate is still refused - a query argument there is evaluated uncorrelated even with no
       match involved, which is wave 1's territory - and selecting a match stays item 3's.
-      test/krrood_test: 2088 passed, 6 skipped (excluding the Graphviz/flask-dependent
-      modules, which fail identically with the diff stashed).
-      Resolved 2026-09-01 (roadmap section 26): the only thing stalling this item was
-      the conflict against main, and its cause was never recorded - the branch's merge
-      base is 15f31d1e4, #182's branch *before* #182 merged main to take #186's Index
-      split, so #192 carried none of that hierarchy while rewriting the same
-      mapped_variable.py. It is the landing-order adjustment sections 13/14/22 predicted,
-      arriving one branch late rather than a new problem. main is merged in and all three
-      conflicts resolved by taking both sides: the operators keep this item's routing
-      through _symbolic_expression_ and take #186's Attribute/Index/Call return types and
-      the IndexByValue/IndexByExpression split; has_cause_attributes and causes() arrive
-      from main's do() operator reading _matches_with_variables_,
-      AttributeMatch.assigned_variable keeps main's fresh-copy branch for a shared
-      Cause/Confounder, and _update_kwargs_from takes main's IndexByValue distinction;
+      test/krrood_test: 2088 passed, 6 skipped (excluding the Graphviz/flask-dependent modules,
+      which fail identically with the diff stashed). Resolved 2026-09-01 (roadmap section 26): the
+      only thing stalling this item was the conflict against main, and its cause was never recorded
+      - the branch's merge base is 15f31d1e4, #182's branch *before* #182 merged main to take #186's
+      Index split, so #192 carried none of that hierarchy while rewriting the same
+      mapped_variable.py. It is the landing-order adjustment sections 13/14/22 predicted, arriving
+      one branch late rather than a new problem. main is merged in and all three conflicts resolved
+      by taking both sides: the operators keep this item's routing through _symbolic_expression_ and
+      take #186's Attribute/Index/Call return types and the IndexByValue/IndexByExpression split;
+      has_cause_attributes and causes() arrive from main's do() operator reading
+      _matches_with_variables_, AttributeMatch.assigned_variable keeps main's fresh-copy branch for
+      a shared Cause/Confounder, and _update_kwargs_from takes main's IndexByValue distinction;
       test_match.py keeps both sides' tests. One pin moved: the mypy fixture asserted
-      a(Robot).battery as CanBehaveLikeAVariable[Robot], which predates #186 naming what
-      each traced operator builds, and now asserts Attribute[Robot] - narrowing the
-      assertion to the type main landed rather than reverting main's precision, which
-      sections 15/16 settle as this plan's own convention. Nothing else was stalling it:
-      #192 has no review threads at all, was never promoted upstream (no in-review label,
-      so no upstream pull request to read), and its dependency is merged; its previous CI
-      was green but on e9aae10be of 2026-08-24, against a base nine days stale. test_eql
-      1287 passed, 3 skipped; full test/krrood_test 2269 passed, 5 skipped, the two
-      test_object_diagram failures being this container having no Graphviz dot binary.
-      Resolved 2026-09-02 (roadmap section 27): conflicted again one day later, and again
-      the whole of it was one class statement - main took cram2#575 (probabilistic
-      queries), whose HasExpression mixin adds a base to the same class Match(...) this
-      item rewrites with HasQueryModifiers/HasSymbolicOperations. That line is the only
-      conflict in the 1,518 lines #575 brought. Both sides kept: the two interfaces say
-      what can be written on a match, HasExpression says what a match resolves to for a
-      caller that only wants the expression to scan or build, and Match owes both answers.
-      Checked before touching it, so the record names the cause this time: no review
-      threads, no in-review label and never promoted upstream, dependency merged and ready,
-      23 checks green on ff5414e0. #575's new code reads a match only through the public
-      expression property, so section 6's silent-miss hazard had nothing to catch. Left as
-      a question on #192 and #181 rather than decided here: HasExpression._get_expression_
-      and HasSymbolicOperations._symbolic_expression_ return the same object on every class
-      that has both, with different declared contracts, and unifying them would change an
-      interface main landed the day before. test_eql 1310 passed, 3 skipped; full
+      a(Robot).battery as CanBehaveLikeAVariable[Robot], which predates #186 naming what each traced
+      operator builds, and now asserts Attribute[Robot] - narrowing the assertion to the type main
+      landed rather than reverting main's precision, which sections 15/16 settle as this plan's own
+      convention. Nothing else was stalling it: #192 has no review threads at all, was never
+      promoted upstream (no in-review label, so no upstream pull request to read), and its
+      dependency is merged; its previous CI was green but on e9aae10be of 2026-08-24, against a base
+      nine days stale. test_eql 1287 passed, 3 skipped; full test/krrood_test 2269 passed, 5
+      skipped, the two test_object_diagram failures being this container having no Graphviz dot
+      binary. Resolved 2026-09-02 (roadmap section 27): conflicted again one day later, and again
+      the whole of it was one class statement - main took cram2#575 (probabilistic queries), whose
+      HasExpression mixin adds a base to the same class Match(...) this item rewrites with
+      HasQueryModifiers/HasSymbolicOperations. That line is the only conflict in the 1,518 lines
+      #575 brought. Both sides kept: the two interfaces say what can be written on a match,
+      HasExpression says what a match resolves to for a caller that only wants the expression to
+      scan or build, and Match owes both answers. Checked before touching it, so the record names
+      the cause this time: no review threads, no in-review label and never promoted upstream,
+      dependency merged and ready, 23 checks green on ff5414e0. #575's new code reads a match only
+      through the public expression property, so section 6's silent-miss hazard had nothing to
+      catch. Left as a question on #192 and #181 rather than decided here:
+      HasExpression._get_expression_ and HasSymbolicOperations._symbolic_expression_ return the same
+      object on every class that has both, with different declared contracts, and unifying them
+      would change an interface main landed the day before. test_eql 1310 passed, 3 skipped; full
       test/krrood_test 1916 passed, 5 skipped (excluding the flask/casadi modules), the two
-      test_object_diagram failures being this container's missing Graphviz dot binary.
-      Review round 2026-09-03 (roadmap section 28), f70c1aff4 and 6df7b7516: the developer's
-      first real review of #192, six threads left minutes after section 27's report, which is
-      why both 26 and 27 recorded "no review threads". Five are acted on and resolved, one
-      (_is_own_name_) is a question answered and left open. The first - "remove this and
-      migrate the callers" on matches_with_variables - was extended by the developer to all
-      three compatibility properties, so variable, matches_with_variables and expression are
-      gone with every caller migrated, which is what consumed item 3 entirely. Removing the
-      public expression forced two changes it had been standing in for: the factories now
-      unwrap a match (the(match), entity(match), set_of(match, ...) and row[match] all read it
-      through _as_operand_, the section-19 rule now applied at Query's selected variables and
-      UnificationDict.__getitem__ as well as at operands), and marginalize_for re-roots a chain
-      taken from the match's own query onto its selection, since it looked its attributes up by
-      the chain's display name and only a variable-rooted one matched. expression was also the
-      match hierarchy's abstract member, so it becomes _symbolic_expression_ on
-      AbstractMatchExpression and AttributeMatch too, and Match holds the lowering there rather
-      than under a third name both protocol members delegated to - which settles half of
-      section 27's open question by removing the public handle standing under them. Also here:
-      every _variable_-rooted spelling reads the match directly (measured identical
-      verbalization, so section 7's divergence note does not survive #182), the box-drawing
-      dividers become # %%, the optional empty pattern parentheses are dropped at 17 sites, the
-      five user docs stop teaching the detours, and update_fields, create_or_update_variable
-      and has_cause_attributes move behind the underscore convention. Recorded rather than
-      discovered later: #159 (D-core-single-class, open and out of draft) still reads
-      match.matches_with_variables and match.variable, so its cascade breaks - the cost
-      sections 4 and 17 kept the properties to avoid, now accepted on the developer's
-      instruction. AttributeMatch._symbolic_expression_ has no reader anywhere, left as a
-      question. test/krrood_test 1919 passed, 5 skipped.
+      test_object_diagram failures being this container's missing Graphviz dot binary. Review round
+      2026-09-03 (roadmap section 28), f70c1aff4 and 6df7b7516: the developer's first real review of
+      #192, six threads left minutes after section 27's report, which is why both 26 and 27 recorded
+      "no review threads". Five are acted on and resolved, one (_is_own_name_) is a question
+      answered and left open. The first - "remove this and migrate the callers" on
+      matches_with_variables - was extended by the developer to all three compatibility properties,
+      so variable, matches_with_variables and expression are gone with every caller migrated, which
+      is what consumed item 3 entirely. Removing the public expression forced two changes it had
+      been standing in for: the factories now unwrap a match (the(match), entity(match),
+      set_of(match, ...) and row[match] all read it through _as_operand_, the section-19 rule now
+      applied at Query's selected variables and UnificationDict.__getitem__ as well as at operands),
+      and marginalize_for re-roots a chain taken from the match's own query onto its selection,
+      since it looked its attributes up by the chain's display name and only a variable-rooted one
+      matched. expression was also the match hierarchy's abstract member, so it becomes
+      _symbolic_expression_ on AbstractMatchExpression and AttributeMatch too, and Match holds the
+      lowering there rather than under a third name both protocol members delegated to - which
+      settles half of section 27's open question by removing the public handle standing under them.
+      Also here: every _variable_-rooted spelling reads the match directly (measured identical
+      verbalization, so section 7's divergence note does not survive #182), the box-drawing dividers
+      become # %%, the optional empty pattern parentheses are dropped at 17 sites, the five user
+      docs stop teaching the detours, and update_fields, create_or_update_variable and
+      has_cause_attributes move behind the underscore convention. Recorded rather than discovered
+      later: #159 (D-core-single-class, open and out of draft) still reads
+      match.matches_with_variables and match.variable, so its cascade breaks - the cost sections 4
+      and 17 kept the properties to avoid, now accepted on the developer's instruction.
+      AttributeMatch._symbolic_expression_ has no reader anywhere, left as a question.
+      test/krrood_test 1919 passed, 5 skipped.
+
+      Resolved 2026-09-03, second round (roadmap section 29): conflicted an eighth time and reviewed
+      a second time, and section 28's own report was again nine hours older than the review it said
+      did not exist. The conflict was one hunk of cram2#590 (Markov-chain template), which extracted
+      the part-prefix logic out of rspn.py into RelationalDistributionTemplate._prefix_for_part over
+      the same lines this branch had renamed; main's extraction is kept and the extracted helper
+      reads _variable_. #590 is also the first arrival since the compatibility properties were
+      removed, so section 6's silent-miss hazard finally caught something: test_markov_chain.py read
+      match.kwargs and interpolated f"{part.variable}.type", and template.py read
+      str(part.variable), all three now on the convention - the sweeps of sections 26 and 27 came
+      back clean only because #575 reached a match through the public expression that still existed
+      then. Of the review round's four threads, three are done: the six CausesEffect construction
+      tests read the match directly (they had been renamed .variable -> ._variable_ rather than
+      migrated, and the binding is renamed arm -> pick, which it never was), and the three
+      match.resolve() calls in the match-verbalization tests are gone because MatchPlanner resolves
+      the match itself and every expected string is unchanged. The feature-extraction resolve()
+      calls are kept and measured to be load-bearing: without them the grounded circuit carries
+      SceneObject.type instead of the per-position SceneRoom.objects[i].type. The fourth is refused
+      with a measurement and left open: the four translate() sites in
+      test_random_events_translator.py cannot drop _variable_ because Query._type_ is None -
+      SymbolicExpression._type__ delegates to self._var_ and a query is its own _var_ - so every
+      chain built on a query has no type and the random-events translator, which reads
+      comparator.left._type_, raises. Pre-existing on main with no match involved
+      (entity(v).position.x._type_ is None there too); it never shows inside a where because #182
+      re-roots the chain onto the variable at attachment. Teaching Query to report its selected
+      variable's type is a change to a class main owns for every query in the language, so it is the
+      developer's to route. test/krrood_test 1925 passed, 5 skipped.
   - id: aggregate-signature-reads-a-missing-attribute
     title: "Bug: every aggregate of one kind gets the same structural signature"
     branch: claude/plan-item-kickoff-match-query-npzr78
