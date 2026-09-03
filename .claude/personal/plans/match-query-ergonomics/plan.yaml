@@ -418,7 +418,7 @@ items:
     track: match-api
     depends_on:
       - match-underscore-rename-and-forwarding
-    status: done
+    status: in_progress
     session: https://claude.ai/code/session_01Hg8944NTdj8WMSGFqV4mq8
     notes: >
       Folded into match-underscore-rename-and-forwarding on 2026-09-03 (roadmap section
