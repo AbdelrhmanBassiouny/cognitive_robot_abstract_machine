@@ -146,12 +146,13 @@ items:
     '
 - id: aggregate-repeat-reduction-ignores-same-kind-siblings
   title: "Bug: reducing a repeated aggregate mention to \"the sum\" is ambiguous when another aggregate of the same kind is also selected"
-  branch: null
-  pull_request_number: null
+  branch: claude/eql-verbalization-aggregate-repeat-gdz9g2
+  pull_request_number: 264
   track: framework-migration
+  session: https://claude.ai/code/session_01Hwf7n1eUMVXD4vLdQwMYvP
   depends_on:
   - p2-operand-naming
-  status: not_started
+  status: in_progress
   notes: >
     Found and measured on match-query-ergonomics's PR #196
     (aggregate-signature-reads-a-missing-attribute) self-review round: a ranked

@@ -276,3 +276,75 @@ the six same-comment repeats of the type-noun thread are collapsed. The third is
 the reviewer's literal *"the lower case form of a class name"*, deliberately, to keep the
 operand in the sentence — offered as a choice (r3608403117) and never answered. It blocks
 nothing and needs one word from the developer.
+
+## aggregate-repeat-reduction: the settled plan (2026-09-03, PR #264)
+
+Kicked off in `auto` mode on `claude/eql-verbalization-aggregate-repeat-gdz9g2`, cut from
+`main` (its only dependency, `p2-operand-naming` / #87, is merged, so nothing else gates it).
+
+**The symptom, re-measured on `main` rather than taken from #196.** Two manifestations,
+both from one cause:
+
+- ranked (`ordered_by(...).limit(1)`): *"For the Invoice with the highest sum of the amount
+  of its net, report the month of the begin of its period, **the sum**, and the sum of the
+  amount of its tax"*
+- ordered (`ordered_by(...)`, no limit): *"For each month, report the sum of the amount of
+  the net of an Invoice and the sum of the amount of its tax ordered by **the sum** from
+  highest to lowest"*
+
+So this reproduces without #196 — that pull request decides *which* of the two sums the
+ranking frame names, not whether the shortened mention is ambiguous. Worth recording,
+because the item's own note describes the symptom in #196's wording and could be read as
+making it a prerequisite.
+
+**Design, and why it is not an open question.** The developer already said on #196's thread
+(r3919032569, quoted in this roadmap's "New item" section) that the trailing bare *"the
+sum"* should be *spelled out in full*. That rules out the alternative the item's note left
+on the table — registering aggregates in `DistinguisherIndex` so they read *"another sum"* /
+*"the other sum"*. It is also the better answer on its own terms: an aggregate is told apart
+by *what it aggregates*, not by a determiner, and *"the other sum of the amount of its tax"*
+is worse than the full description it replaces.
+
+**Where it goes.** `AggregatorRule.build` is what opts an aggregate into repeat-reduction, by
+giving its noun phrase `referent_id=node._id_`; it is the same place to decide it must not.
+The knowledge it needs — which aggregation words name more than one aggregate in the scanned
+expression — is pre-scan referring-expression state, so it goes on `ReferringExpressions`,
+which a rule already reaches through `RuleContext.refer`.
+
+`CoreferenceProcessor` and `DistinguisherIndex` are deliberately untouched. A variable's
+same-noun group *is* fully told apart by determiner (*"a Robot"* / *"another Robot"*), so its
+reduced mentions stay identifying; a general "don't reduce when the noun is shared" guard
+there would regress P2's design for the case P2 was built for.
+
+**Distinctness is counted per aggregate node, not per structural signature.** Two `Sum`
+objects over the same chain count as two. That is conservative, and a no-op in practice: two
+such nodes carry different `_id_`s, so no repeat mention arises between them either way. The
+alternative — structural comparison — is `_expression_signature` in `query/assembler.py`,
+which #196 is currently changing, so reusing it would couple this branch to an unlanded one.
+
+**Steps, tests first.**
+
+1. `test_set_of_ranking.py` — the two end-to-end wordings above, asserted in full.
+2. `test_coreference.py` — a unit test of the new `ReferringExpressions` state (that file's
+   stated subject is exactly the pre-computed / cross-build state).
+3. `microplanning/referring.py` — record which aggregation words name more than one aggregate.
+4. `grammar/aggregation/rules.py` — give the noun phrase a `referent_id` only when its
+   aggregation word names one aggregate.
+
+Verification: `pytest test/krrood_test/test_eql/test_verbalization` (767 passed / 3 skipped
+before the change), which includes `test_rule_doctests.py`, plus
+`scripts/format_docstrings.py` on the modified files.
+
+**Scope overlap, recorded rather than resolved.** `check_scope_overlap.py --base origin/main`
+over the four paths this touches reports one shared path with unlanded #196:
+`test_set_of_ranking.py`, where both append a new test section at the tail. Removing the
+overlapping edits still leaves the whole source fix, so this is real separate work and not a
+fold; whichever lands second resolves a trivial tail-of-file conflict. The two tests added
+here rank by the *first* selected aggregate on purpose, so their expected text is the same
+before and after #196 lands. #248, #192, #254 and #33 share no paths.
+
+**Tooling note, not this item's work.** `plan_item_bootstrap.py open` could not record this
+item: it writes `branch` / `pull_request_number` / `status` / `session` at a four-space indent
+into a two-space manifest, so `save-plan.sh` fails in `yaml.safe_load`. That is the bug PR
+#160 fixed, which was closed unmerged on 2026-08-30, so it is live on `main` again. This
+entry and the manifest fields beside it were written by hand instead.
