@@ -4,36 +4,36 @@ Plan `knowledge-directed-perception`, track `request-language`. Branch
 `claude/knowledge-directed-perception-imagination-g9hsnr`, based on
 `claude/kdp-search-constraints-pfaph7` (#238), draft.
 
-## The plan
-
-1. Rename `MontessoriShapeDetection` to `DetectedMontessoriShape` and make it a
-   `Role[MontessoriShape]` (53 references, 11 files on #238's tree).
-2. A look spawns what it recognised into a copy of the world it was taken in, so every
-   detection has a real `Body` as its role taker and the original world is untouched.
-3. krrood: a relation the look could not narrow itself by is checked over what came back
-   instead of refused - described things are pinned to the domain that answered them so
-   the condition evaluates natively. A variable neither sought nor described still raises.
-4. `PerceptionBackend.discard` - what the statement rejected leaves the imagined world.
-
-Tests first at both levels: krrood through the `BackendThatLooksAtTheWorld` mimic,
-experiments through the pipeline and one capture end to end.
-
 ## Done
 
-- Branch re-cut from #238 (it arrived cut from `integration`), pushed, draft #255 opened.
-- `plan.yaml` and `roadmap.md` written on the notes branch: status `in_progress`,
-  `search-clipped-to-a-predicates-region` added to `depends_on` (the rename is counted on
-  #238's tree and six of its files exist only there).
+- Branch re-cut from #238 (it arrived cut from `integration`), draft #255 opened, manifest
+  and roadmap written on the notes branch (`search-clipped-to-a-predicates-region` added to
+  `depends_on`, since the rename is counted on #238's tree).
+- `MontessoriShapeDetection` renamed `DetectedMontessoriShape` and made a
+  `Role[MontessoriShape]` (53 references, 11 files).
+- `ImaginedWorld`: a copy of the world a look was taken in, where each finding stands as a
+  body built from the known piece's own measured outline. `MontessoriPerceptionPipeline.imagine()`
+  makes one per look; `MontessoriScene` carries it; the piece detector spawns into it.
+- krrood: a relation to something the statement describes is checked over what came back
+  instead of refused, with each description held to the answer that resolved it; and
+  `PerceptionBackend.discard`, which the Montessori backend uses to take rejected findings
+  out of the imagined world.
+- Tests: 2 in krrood (through the existing mimic), 8 for the imagined world, 3 for the
+  backend end to end. All mutation-checked.
+- Verified: krrood eql 1326 passed vs 1324 on the base; Montessori experiments modules 321
+  passed vs 310. Docstrings formatted. Pushed; PR description matches.
 
 ## Next
 
-- Environment: `pip install -U uv`, then `/usr/local/bin/uv sync --extra dev --python 3.12`.
-- Write the failing krrood test for a refused relation, then the experiments tests.
-- Decide the end-to-end relation by what evaluates offline: `InContactWith` needs a
-  collision detector, `Supports` and `SupportedBy` are pure geometry. Record the choice.
+- Nothing outstanding on the branch. It is a draft, as the convention asks.
+- The dashboard republish is owed: the live artifact has to be read back first (474KB of
+  generated HTML), which is why it is left to the end of the session.
 
 ## Known
 
-- `plan_item_bootstrap.py open` fails again (`save-plan.sh` exits 1 through it); the
-  manifest and roadmap were written directly and pushed with `save-plan.sh`, as six
-  previous rounds on this plan did.
+- This container has no ROS: `test/experiments_test/` cannot be collected (rclpy,
+  geometry_msgs) and `scripts/regenerate_all_orm.py` fails in giskardpy's generator - both
+  before this branch changed anything. The Montessori modules were run outside that conftest,
+  identically on this branch and its base.
+- `plan_item_bootstrap.py open` fails through `save-plan.sh` again (seventh round); the
+  manifest and roadmap were written directly.
