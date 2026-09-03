@@ -9,10 +9,7 @@ from dataclasses import dataclass
 
 from typing_extensions import TYPE_CHECKING
 
-from krrood.entity_query_language.query.match import AbstractMatchExpression
-from probabilistic_model.probabilistic_circuit.relational.helper import (
-    rename_variables_with_part_prefix,
-)
+from krrood.entity_query_language.query.match import AbstractMatchExpression, Match
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
     Unit,
@@ -42,11 +39,11 @@ class RelationalDistributionTemplate(ABC):
     """
 
     @staticmethod
-    def _prefix_for_part(part, index: int) -> str:
+    def _prefix_for_part(part: Match, index: int) -> str:
         """
         The namespace prefix a grounded part's variables are renamed under.
 
-        :param part: The query part (a ``Match`` or a concrete domain object).
+        :param part: The query part being grounded.
         :param index: Position of the part in its parent list; used as fallback prefix
             when ``part`` does not carry a symbolic variable.
         :return: ``str(part.variable)`` if ``part`` carries one, else ``str(index)``.
@@ -60,7 +57,7 @@ class RelationalDistributionTemplate(ABC):
     @staticmethod
     def _ground_and_rename_part(
         template_distribution: RelationalProbabilisticCircuit,
-        part,
+        part: Match,
         index: int,
         excluded_variables: list,
     ) -> ProbabilisticCircuit:
@@ -68,7 +65,7 @@ class RelationalDistributionTemplate(ABC):
         Ground one part and rename its variables under its namespace prefix.
 
         :param template_distribution: The fitted circuit grounded once per part.
-        :param part: The query part (a ``Match`` or a concrete domain object).
+        :param part: The query part being grounded.
         :param index: Position of the part in its parent list; used as fallback prefix
             when ``part`` does not carry a symbolic variable.
         :param excluded_variables: Variables left unrenamed, e.g. latent variables
@@ -77,7 +74,7 @@ class RelationalDistributionTemplate(ABC):
         """
         part_circuit = template_distribution.ground(part)
         prefix = RelationalDistributionTemplate._prefix_for_part(part, index)
-        rename_variables_with_part_prefix(part_circuit, prefix, excluded_variables)
+        part_circuit.rename_variables_with_prefix(prefix, excluded_variables)
         return part_circuit
 
     @staticmethod
@@ -96,7 +93,9 @@ class RelationalDistributionTemplate(ABC):
         return node_index_map[part_root_index]
 
     @abstractmethod
-    def ground(self, parts_to_ground: list, *args, **kwargs) -> ProbabilisticCircuit:
+    def ground(
+        self, parts_to_ground: list[Match], *args, **kwargs
+    ) -> ProbabilisticCircuit:
         """
         Ground one copy of the template per part and combine them into a single circuit.
 

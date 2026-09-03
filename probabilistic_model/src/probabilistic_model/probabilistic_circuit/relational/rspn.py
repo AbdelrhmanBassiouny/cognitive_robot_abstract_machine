@@ -40,7 +40,6 @@ from probabilistic_model.probabilistic_circuit.relational.exceptions import (
 )
 from probabilistic_model.probabilistic_circuit.relational.helper import (
     find_lowest_product_nodes_that_model_variables,
-    rename_variables_with_part_prefix,
 )
 from probabilistic_model.probabilistic_circuit.relational.template import (
     RelationalDistributionTemplate,
@@ -87,7 +86,7 @@ class ExchangeableDistributionTemplate(RelationalDistributionTemplate):
     """
 
     def _ground_part_circuit(
-        self, part, aggregation_statistics: dict[Variable, Any], index: int = 0
+        self, part: Match, aggregation_statistics: dict[Variable, Any], index: int = 0
     ) -> ProbabilisticCircuit:
         """
         Ground and prepare the circuit for a single exchangeable part.
@@ -96,7 +95,7 @@ class ExchangeableDistributionTemplate(RelationalDistributionTemplate):
         the latent variables, renames surviving variables with the part's prefix, and
         reindexes the graph for safe mounting.
 
-        :param part: The query part (a ``Match`` or a concrete domain object).
+        :param part: The query part being grounded.
         :param aggregation_statistics: Observed aggregation values to condition on.
         :param index: Position of this part in its parent list; used as fallback prefix
             when ``part`` does not carry a symbolic variable.
@@ -115,13 +114,13 @@ class ExchangeableDistributionTemplate(RelationalDistributionTemplate):
         ]
         part_circuit.marginal_in_place(non_latent_variables)
         prefix = self._prefix_for_part(part, index)
-        rename_variables_with_part_prefix(part_circuit, prefix, self.latent_variables)
+        part_circuit.rename_variables_with_prefix(prefix, self.latent_variables)
         if len(part_circuit.nodes()) == 0:
             raise ValueError("The grounding of the part failed.")
         return part_circuit
 
     def ground(
-        self, parts_to_ground: list, aggregation_statistics: dict[Variable, Any]
+        self, parts_to_ground: list[Match], aggregation_statistics: dict[Variable, Any]
     ) -> ProbabilisticCircuit:
         """
         Build a product circuit by grounding each exchangeable part independently.

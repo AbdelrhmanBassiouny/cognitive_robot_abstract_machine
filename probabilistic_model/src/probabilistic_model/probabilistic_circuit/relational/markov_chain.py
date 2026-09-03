@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from typing_extensions import TYPE_CHECKING
 
 from probabilistic_model.distributions.distributions import SymbolicDistribution
 from probabilistic_model.distributions.multinomial import MultinomialDistribution
@@ -20,6 +21,9 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProductUnit,
     SumUnit,
 )
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.query.match import Match
 
 
 @dataclass
@@ -72,7 +76,7 @@ class MarkovChainDistributionTemplate(RelationalDistributionTemplate):
     def _transition_probability(self, state: int, next_state: int) -> float:
         return self.transition_model.probabilities[state, next_state]
 
-    def ground(self, parts_to_ground: list) -> ProbabilisticCircuit:
+    def ground(self, parts_to_ground: list[Match]) -> ProbabilisticCircuit:
         """
         Ground one copy of the template per part and chain them into a hidden Markov
         model.
@@ -108,14 +112,16 @@ class MarkovChainDistributionTemplate(RelationalDistributionTemplate):
         result.simplify()
         return result
 
-    def _ground_and_mount_part(self, result: ProbabilisticCircuit, index: int, part):
+    def _ground_and_mount_part(
+        self, result: ProbabilisticCircuit, index: int, part: Match
+    ):
         """
         Ground one part of the sequence and mount it into ``result``.
 
         :param result: The circuit the grounded part is mounted into.
         :param index: Position of the part in the sequence; used as fallback prefix when
             ``part`` does not carry a symbolic variable.
-        :param part: The query part (a ``Match`` or a concrete domain object).
+        :param part: The query part being grounded.
         :return: The root of the mounted part, owned by ``result``.
         """
         part_circuit = self._ground_and_rename_part(
