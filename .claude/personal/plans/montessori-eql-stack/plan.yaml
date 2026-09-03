@@ -83,12 +83,42 @@ items:
       waiting on. Not split yet because #169, #246 and #247 are all based on this branch, so
       splitting it now means re-cutting the whole stack a second time.
 
+  - id: montessori_monitor_and_recording
+    title: "The event monitor, the grasp attachment and the results recording, without the viewer"
+    branch: montessori_monitor_and_recording
+    pull_request_number: 256
+    track: montessori-eql
+    depends_on: [sdt_segmind_krrood_from_fast_monitor]
+    status: in_progress
+    session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
+    blockers: []
+    notes: >
+      Split out of #169 on 2026-09-03 at the developer's request, so `icra-experiments` can take
+      what it needs without taking the console: its foot item names the segmind event monitor, the
+      attach/detach of a grasped shape behind `Context.update_world_model_attachment`, and the
+      results recording, and #169 is 164 cramera files out of 272. 35 files against #169's 272, and
+      nothing in it imports `cramera`.
+
+      Three imports pointed the wrong way and are fixed at the root rather than worked around:
+      `MethodPatch` moved out of cramera to `krrood.patterns.method_patch`, since both the viewer
+      and the monitor instrument classes they cannot edit and must not subclass;
+      `sorting_progress` reads `NumericPose` from `semantic_digital_twin.spatial_types.numeric`,
+      where it is defined, rather than from cramera's re-export of it; and the one test that drives
+      a monitor into `MontessoriLiveEventSource` stays with that adapter in #169.
+
+      Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera adapters
+      (`run_control`, `live_event_source`, `live_query_source`). `SortingRunControl` subclasses
+      cramera's `LiveRunControl` ABC and its clock is `cramera.live.run_clock.RunClock`, so the
+      demo entry point cannot come across without inverting that layer - and it does not need to,
+      since `tracy_icra`, the branch the ICRA demo actually runs on, has no cramera and its own
+      `montessori_demo.py`.
+
   - id: montessori_fast_inline_monitor
     title: "A monitor tick cheap enough to stay on the planning thread"
     branch: montessori_fast_inline_monitor
     pull_request_number: 169
     track: montessori-eql
-    depends_on: [sdt_segmind_krrood_from_fast_monitor]
+    depends_on: [montessori_monitor_and_recording]
     status: in_progress
     session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
     blockers: []

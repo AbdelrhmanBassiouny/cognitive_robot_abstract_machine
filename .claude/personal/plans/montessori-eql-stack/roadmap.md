@@ -1777,3 +1777,77 @@ each empty against both parents. The attachment bug itself was reproduced and it
 confirmed by importing `cramera.knowledge.enums` on its own, which needs nothing but
 `typing_extensions`: `of_plan_node_kind('ReAttachNode')` answered `other_plan_node`
 before and `attachment` after. CI on `dd790c80` is the real check for the rest.
+
+## 2026-09-03: the monitor, the grasp and the recording split out as #256
+
+The developer asked whether everything `icra-experiments` needs from #169 could move into
+#244. It could, and it should not have — so it became a pull request of its own between
+them: **#256 `montessori_monitor_and_recording`**, and the stack is now
+`main → #244 → #256 → #169 → #170 → #164 → #165 → #167 → #168`.
+
+### Why not into #244, and why a third PR at all
+
+#244 is already recorded as too big and slated to split into three, one per package;
+folding coraplex and experiments into it makes it four topics and worsens exactly that.
+And #169 is now **164 cramera files out of 272** — it *is* the viewer. So the honest cut
+is between them, and it leaves both branches named for what they contain.
+
+The one thing worth arguing with: `icra-experiments`' foot item merges *branches*, not
+pull requests, so its integration branch ends up with the same tree either way. What the
+split changes is that ICRA no longer has to wait on, or review, the console.
+
+### The seam was three imports, each fixed at its root
+
+The three things ICRA names came out with **nothing importing cramera** — but only after
+three wrong-direction imports were straightened, rather than worked around:
+
+- **`MethodPatch` lived in cramera.** The viewer instruments the executor and the plan
+  nodes; the monitor instruments the control cycle it ticks from. Both replace a method
+  of a class they cannot edit and must not subclass, and the helper says nothing about
+  either. It is `krrood.patterns.method_patch` now, beside the other patterns, and its
+  docstring says what it does rather than who uses it.
+- **`sorting_progress` read `NumericPose` from `cramera.body_geometry`**, which only
+  re-exports it from `semantic_digital_twin.spatial_types.numeric` — #244's own module.
+  It reads it from where it is defined.
+- **One test straddled the seam.** `test_the_viewers_own_record_can_be_the_listener`
+  drives a monitor into `MontessoriLiveEventSource`, so it is a test of the viewer's
+  adapter and stayed with it; every other test in that module moved.
+
+### What could not come, and why it did not have to
+
+`franka_montessori_demo.py` and the three cramera adapters stay in #169.
+`SortingRunControl` **subclasses cramera's `LiveRunControl` ABC**, its clock is
+`cramera.live.run_clock.RunClock` and its activity enum is cramera's — so the demo entry
+point cannot cross without inverting that layer (only `title`/`state`/`apply`, about 40
+lines, actually speak cramera's vocabulary; the rest is demo state pointing the wrong
+way). That inversion was scoped and deliberately not done.
+
+It is not needed: **`tracy_icra`, the branch the ICRA demo actually runs on, has no
+cramera at all and carries its own `montessori_demo.py`.** It is 149 commits off `main`
+at the same `1227a68f` #244 and #169 branched from, and it built its own
+`experiments/montessori/` package — which exists on neither `main` nor #244. So the two
+montessori packages meeting is a real event for the foot item to resolve, and one it
+already anticipates.
+
+### The stack had to be dissolved again
+
+The base change was refused with the same `422 - Cannot change the base branch because
+the pull request is part of a stack`. Stack #247 was recorded
+(`stacks-before-unstack.json` in this session's scratchpad), unstacked, #169 retargeted,
+and the stack re-created as **#258** with #256 in place: `244, 256, 169, 170, 164, 165,
+167, 168`. Every member was read back and confirmed to report it. Second dissolve on this
+plan; the procedure is `stacked-pr-maintenance`'s and it worked verbatim both times.
+
+### Verified
+
+Statically plus what runs standalone — no CRAM workspace here. Byte-compilation,
+`format_docstrings.py`, `test_dependency_declarations.py` 20 passed (which is what pins
+the new `segmind` declaration `experiments` needed once it imported segmind), the ORM
+declaration assertion driven directly, and the cross-module import resolver reporting
+nothing on either branch that #244 did not already have. `grep` confirms no `cramera`
+reference survives in #256 and none to `cramera.monkey_patch` anywhere.
+
+One thing to keep: `scripts/format_docstrings.py` wrapped the
+`:py:attr:` cross-reference to `GiskardExecutable.max_ticks_per_motion_mapping` across a
+line break again — the third time this file has recorded that damage. Reverted on #256 so
+both branches keep the same text.

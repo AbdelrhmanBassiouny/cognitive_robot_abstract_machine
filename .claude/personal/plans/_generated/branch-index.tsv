@@ -47,6 +47,7 @@ claude/plan-item-kickoff-match-query-npzr78	match-query-ergonomics
 claude/match-query-ergonomics-chain-tozhhq	match-query-ergonomics
 claude/match-query-ergonomics-kpemmp	match-query-ergonomics
 sdt_segmind_krrood_from_fast_monitor	montessori-eql-stack
+montessori_monitor_and_recording	montessori-eql-stack
 montessori_fast_inline_monitor	montessori-eql-stack
 cramera_eql_autocomplete	montessori-eql-stack
 montessori_eql_where_is_highlighting	montessori-eql-stack
