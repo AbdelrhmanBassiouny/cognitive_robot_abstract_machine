@@ -38,10 +38,9 @@ from maintenance_git_commands import GitCommandFailed, GitCommandRunner
 from maintenance_github import GitHubCredentialUnavailableError, GitHubRequestFailed
 from maintenance_report import MaintenanceExitCode
 from stack import (
-    AmbiguousForkRemoteError,
     BoardUnavailable,
     ContradictoryLabelWriteError,
-    ForkRemoteNotFoundError,
+    ForkRepositoryNotConfiguredError,
     PromotionLinkTooLongError,
     load_configuration,
 )
@@ -96,7 +95,7 @@ def _dispatch() -> MaintenanceExitCode:
             git=GitCommandRunner(working_directory=Path.cwd()),
         )
         return requested.run(maintenance, arguments)
-    except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
+    except ForkRepositoryNotConfiguredError as error:
         print(f"{error}", file=sys.stderr)
         return MaintenanceExitCode.REMOTES_UNRESOLVED
     except BoardUnavailable as error:
