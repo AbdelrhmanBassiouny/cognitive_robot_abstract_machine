@@ -300,6 +300,33 @@ class BrokenWorldModificationHistoryError(WorldValidationError):
 
 
 @dataclass
+class InsufficientModificationHistoryError(WorldValidationError):
+    """
+    Raised when attempting to roll back more modification blocks than the world's
+    history contains.
+    """
+
+    requested_count: int
+    """
+    The number of modification blocks that were requested to be rolled back.
+    """
+
+    available_count: int
+    """
+    The number of modification blocks actually available in the world's history.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Cannot roll back {self.requested_count} modification block(s): the "
+            f"world's history only contains {self.available_count}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "reduce the requested count to at most the number of available modification blocks."
+
+
+@dataclass
 class WorldContainsOrphanedDegreeOfFreedom(WorldValidationError):
     """
     Raised when the kinematic structure of the world contains orphaned degrees of
@@ -941,6 +968,7 @@ class DuplicateWorldEntityError(UsageError):
             "PrefixedName with the desired prefix, or use the plural get_..._by_name variant "
             "to retrieve all matches."
         )
+
 
 @dataclass
 class DuplicateRobotAssignmentsError(UsageError):
