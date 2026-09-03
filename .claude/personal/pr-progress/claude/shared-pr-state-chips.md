@@ -2,10 +2,13 @@
 
 ## Where it stands
 
-Draft, based on #185 (`claude/plan-item-kickoff-workflow-cuare2`). Head
-`477f4dc34`; 731 tests pass locally in one invocation. Every review thread on
-the pull request is resolved except the two from 2026-08-30 that are waiting on
-the user by design.
+**Out of draft since 2026-09-03 19:45, by the user** - which by the
+personal-notes convention ends this session's work on it: no further commits, no
+re-drafting, no new work. Based on #185 (`claude/plan-item-kickoff-workflow-cuare2`),
+whose newer head the user merged in at 19:35 as `61139c04a`, on top of this session's
+`477f4dc34`. 731 tests pass locally in one invocation on `477f4dc34`; the merge above
+is not covered by that run. Every review thread is resolved except the two from
+2026-08-30 that are waiting on the user by design.
 
 ## Two rounds this session (2026-09-03)
 
@@ -34,10 +37,14 @@ was asked.
 
 ## What is next
 
+Nothing for this session - the draft→ready flip is the stop signal. For whoever
+picks it up next:
+
 1. Two threads from 2026-08-30 still waiting on the user: `GitCommandRunner` in
    tests, and the rebase-options discussion. Nothing else is open.
 2. Still unimplemented and this item's own: the stack chip read from the pull
-   request's native stack object (specified 2026-07-31).
+   request's native stack object (specified 2026-07-31). It was never in scope
+   for either 2026-09-03 round.
 3. Landing waits on #185.
 
 ## Gotchas worth not relearning
