@@ -189,9 +189,11 @@ it. What the deadline still needs from each plan:
   `robokudo-detector`, the rule-tree half of #239, and
   `episode-replayed-into-the-world` (#246) unless a recording has to be
   replayed for the temporal questions.
-- **montessori-eql-stack.** #244 and #169 are merged into the integrated
-  pipeline; #169's open CI debt blocks `integrated-simulation-pipeline` and
-  that plan owns it. The console stack above #169 (#170, #164, #165, #167,
+- **montessori-eql-stack.** #244 and #256 are merged into the integrated
+  pipeline; #169 is not, since 2026-09-03 - #256 carries the monitor, the grasp
+  attachment and the recording, split out of #169 so the paper need not take the
+  cramera console. What is left of #169's debt here is the unbounded
+  `SimulationTimePacer.sleep()`, and that plan owns it. The console stack above #169 (#170, #164, #165, #167,
   #168) is not needed for any number in the paper; #168's presets are reused
   by `question-set-and-ground-truth` as EQL text only. The video may want the
   console; that is a 12 to 13 September decision.
