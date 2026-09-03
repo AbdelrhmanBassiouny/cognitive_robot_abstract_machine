@@ -56,6 +56,12 @@ is still specified-not-implemented; it is the item's remaining feature work afte
   after the last member of a class, so a new file converges only when its member docstrings are
   already three-line. stack.py and build_dashboard.py were already declined on #185's head.
 - Step 5: manifest blockers/notes updated; dashboard republished.
+- 2026-09-03: CI on d6b8035a was red, but stale: the run's merge commit was head + main (it started
+  before the base retarget, and `pull_request` has no `edited` type to re-run on a base change).
+  `test_bastler` tripped on main's `.claude/hooks/setup_steps.py` + its test, which is #185's own
+  needs-resolution conflict; the suite passes on the true merge ref (698). The giskardpy failure is
+  a robotics test this branch never touches, green on #185 and main. Explained in one PR comment;
+  nothing pushed to kick CI. It re-runs against the retargeted base on the next real push.
 
 ## Next
 
