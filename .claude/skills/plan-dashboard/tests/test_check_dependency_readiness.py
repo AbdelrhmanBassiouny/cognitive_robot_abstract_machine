@@ -5,14 +5,18 @@ not-ready to build on, via build_dashboard.py's own live-state rule.
 
 import json
 import sys
+from pathlib import Path
 
 import pytest
 import yaml
 
 from build_dashboard import (
+    DependencyReference,
     Item,
     ItemStatus,
+    LiveState,
     Plan,
+    PlanDirectory,
     PlanValidationError,
     PullRequestRecord,
     PullRequestState,
@@ -258,3 +262,93 @@ def test_main_rejects_an_unknown_item_id(tmp_path, monkeypatch, capsys):
     exit_code = main()
     assert exit_code == 1
     assert "ghost" in capsys.readouterr().err
+
+
+# %% cross-plan references
+
+
+FIXTURE_PLANS_DIRECTORY = Path(__file__).parent / "fixtures" / "plans"
+"""
+The same two-manifest plans directory test_build_dashboard.py resolves cross-plan
+references against.
+"""
+
+
+def foreign_reference(item_identifier: str, plan_id: str = "other-plan") -> str:
+    """
+    The ``depends_on`` text naming one item of another plan.
+
+    :param item_identifier: The foreign item's own id.
+    :param plan_id: The plan holding it.
+    """
+    return DependencyReference(item_identifier=item_identifier, plan_id=plan_id).text
+
+
+def test_foreign_dependency_is_read_against_its_own_plans_repository():
+    # 91 exists only under other-plan's repository, so reading it against
+    # this plan's own would report not_found rather than open_ready.
+    reference = foreign_reference("foreign-ready")
+    plan = make_plan([item("b", ItemStatus.NOT_STARTED, depends_on=[reference])])
+    results = dependency_readiness(
+        plan,
+        "b",
+        {
+            "other/owner-repo": {
+                "91": PullRequestRecord(state=PullRequestState.OPEN, draft=False)
+            }
+        },
+        PlanDirectory.load(FIXTURE_PLANS_DIRECTORY),
+    )
+    assert results == [
+        {
+            "identifier": reference,
+            "title": "A foreign item whose pull request is out of draft",
+            "live_state": LiveState.OPEN_READY.value,
+            "is_ready": True,
+        }
+    ]
+
+
+def test_foreign_dependency_is_not_ready_without_a_plans_directory():
+    # Nothing can resolve it, and an unresolvable dependency is never ready.
+    reference = foreign_reference("foreign-ready")
+    plan = make_plan([item("b", ItemStatus.NOT_STARTED, depends_on=[reference])])
+    assert dependency_readiness(plan, "b", {}) == [
+        {
+            "identifier": reference,
+            "title": None,
+            "live_state": None,
+            "is_ready": False,
+        }
+    ]
+
+
+def test_main_resolves_a_cross_plan_dependency_against_the_plans_directory(
+    tmp_path, monkeypatch, capsys
+):
+    reference = foreign_reference("foreign-done")
+    plan_mapping = _minimal_plan_mapping()
+    plan_mapping["items"][1]["depends_on"] = [reference]
+    plan_path = tmp_path / "plan.yaml"
+    plan_path.write_text(yaml.dump(plan_mapping))
+    pull_request_data_path = tmp_path / "pr_data.json"
+    pull_request_data_path.write_text("{}")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "check_dependency_readiness.py",
+            "--plan",
+            str(plan_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            "--item",
+            "b",
+            "--plans-dir",
+            str(FIXTURE_PLANS_DIRECTORY),
+        ],
+    )
+    assert main() == 0
+    results = json.loads(capsys.readouterr().out)
+    assert [entry["identifier"] for entry in results] == [reference]
+    assert [entry["is_ready"] for entry in results] == [True]

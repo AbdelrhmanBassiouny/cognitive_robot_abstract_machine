@@ -13,7 +13,9 @@ import pytest
 import yaml
 
 from build_dashboard import (
+    DependencyReference,
     ItemStatus,
+    MissingPlanDirectory,
     PlanValidationError,
     PullRequestRecord,
     PullRequestState,
@@ -299,3 +301,104 @@ def test_main_writes_the_corrected_manifest_to_output_leaving_the_plan_file_unto
     assert exit_code == 0
     assert plan_path.read_text() == MANIFEST_TEXT
     assert "    status: done" in output_path.read_text()
+
+
+# %% main - cross-plan references
+
+
+FIXTURE_PLANS_DIRECTORY = Path(__file__).parent / "fixtures" / "plans"
+"""
+The same two-manifest plans directory test_build_dashboard.py resolves cross-plan
+references against.
+"""
+
+
+def _write_plan_depending_on_another_plan(tmp_path: Path) -> tuple[Path, Path]:
+    """
+    Write a manifest whose one item depends on an item of another plan.
+
+    :param tmp_path: pytest's per-test temporary directory.
+    :return: The manifest's path and an empty pull request data file's path.
+    """
+    plan_path = tmp_path / "plan.yaml"
+    plan_path.write_text(
+        yaml.dump(
+            plan(
+                items=[
+                    {
+                        "id": "a",
+                        "title": "Item A",
+                        "branch": "a",
+                        "track": "track-1",
+                        "status": "not_started",
+                        "depends_on": [
+                            DependencyReference(
+                                item_identifier="foreign-done", plan_id="other-plan"
+                            ).text
+                        ],
+                    }
+                ]
+            )
+        )
+    )
+    pull_request_data_path = tmp_path / "pr_data.json"
+    pull_request_data_path.write_text("{}")
+    return plan_path, pull_request_data_path
+
+
+def _run_main(plan_path: Path, pull_request_data_path: Path, monkeypatch, *extra: str):
+    """
+    Run sync_manifest_status.py's ``main`` over the given files.
+
+    :param plan_path: The manifest to sync.
+    :param pull_request_data_path: The live pull request data to sync against.
+    :param monkeypatch: pytest's argv patcher.
+    :param extra: Further command line arguments.
+    :return:``main``'s exit code.
+    """
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "sync_manifest_status.py",
+            "--plan",
+            str(plan_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            *extra,
+        ],
+    )
+    return main()
+
+
+def test_main_accepts_a_cross_plan_reference_given_the_plans_directory(
+    tmp_path, monkeypatch, capsys
+):
+    # This script validates the manifest before correcting it, so without the
+    # directory the whole refresh would stop before rendering.
+    plan_path, pull_request_data_path = _write_plan_depending_on_another_plan(tmp_path)
+    exit_code = _run_main(
+        plan_path,
+        pull_request_data_path,
+        monkeypatch,
+        "--plans-dir",
+        str(FIXTURE_PLANS_DIRECTORY),
+    )
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {"corrected": []}
+
+
+def test_main_rejects_a_cross_plan_reference_without_the_plans_directory(
+    tmp_path, monkeypatch, capsys
+):
+    plan_path, pull_request_data_path = _write_plan_depending_on_another_plan(tmp_path)
+    exit_code = _run_main(plan_path, pull_request_data_path, monkeypatch)
+    assert exit_code == 1
+    with pytest.raises(PlanValidationError) as expected_error:
+        validate_plan(yaml.safe_load(plan_path.read_text()))
+    assert [type(problem) for problem in expected_error.value.problems] == [
+        MissingPlanDirectory
+    ]
+    assert capsys.readouterr().err == (
+        f"plan.yaml failed validation: {expected_error.value}\n"
+    )

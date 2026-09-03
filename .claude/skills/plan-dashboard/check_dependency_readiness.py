@@ -14,16 +14,19 @@ Usage:
     python3 check_dependency_readiness.py \\
         --plan /tmp/plan.yaml \\
         --pr-data /tmp/pr_data.json \\
-        --item <item-id>
+        --item <item-id> \\
+        [--plans-dir /tmp/plans]
 
-pr_data.json shape: identical to build_dashboard.py's module docstring.
+pr_data.json shape: identical to build_dashboard.py's module docstring, and
+--plans-dir is the same directory build_dashboard.py takes, so a dependency
+naming <plan-id>/<item-id> resolves the way the dashboard resolves it.
 
 Prints a one-line JSON list to stdout, one entry per entry in the item's
 ``depends_on``, in that order:
-    [{"identifier": "<dependency id>", "title": "<dependency title>",
+    [{"identifier": "<dependency reference>", "title": "<dependency title>",
       "live_state": "<LiveState value>", "is_ready": <bool>}, ...]
-A dependency identifier that doesn't resolve to a known item is reported
-with ``"title": null, "live_state": null, "is_ready": false`` - a broken
+A dependency that doesn't resolve to a known item is reported with
+``"title": null, "live_state": null, "is_ready": false`` - a broken
 ``depends_on`` reference is never silently treated as ready.
 """
 
@@ -38,9 +41,12 @@ from typing import Any
 import yaml
 
 from build_dashboard import (
+    DependencyReference,
     Plan,
+    PlanDirectory,
     PlanValidationError,
     PullRequestsByRepository,
+    ResolvedDependency,
     classify_live_state,
     load_pull_requests_by_repository,
     validate_plan,
@@ -57,6 +63,7 @@ def dependency_readiness(
     plan: Plan,
     item_identifier: str,
     pull_requests_by_repository: PullRequestsByRepository,
+    plan_directory: PlanDirectory | None = None,
 ) -> list[dict[str, Any]]:
     """
     Classify every dependency of ``item_identifier`` as ready or not.
@@ -65,7 +72,9 @@ def dependency_readiness(
     :param item_identifier: The effective identifier (``id`` or ``branch``) of the item
         whose dependencies should be checked.
     :param pull_requests_by_repository: Live pull request state for every repository
-        referenced by the plan's items.
+        referenced by the plan's items, and by any plan they depend on.
+    :param plan_directory: The other plans a ``<plan-id>/<item-id>`` dependency resolves
+        against, or ``None`` when only this plan's own items are available.
     :raises UnknownItemError: If ``item_identifier`` isn't in the plan.
     :return: One ready-to-serialize dict per entry in the item's ``depends_on``, in that
         order.
@@ -77,7 +86,9 @@ def dependency_readiness(
 
     results: list[dict[str, Any]] = []
     for dependency_identifier in item.depends_on:
-        dependency = items_by_identifier.get(dependency_identifier)
+        dependency = _resolve(
+            dependency_identifier, plan, items_by_identifier, plan_directory
+        )
         if dependency is None:
             results.append(
                 {
@@ -88,20 +99,46 @@ def dependency_readiness(
                 }
             )
             continue
-        dependency.live_state = classify_live_state(
-            dependency.pull_request_number,
-            dependency.repository or plan.default_repository,
+        dependency.item.live_state = classify_live_state(
+            dependency.item.pull_request_number,
+            dependency.repository,
             pull_requests_by_repository,
         )
         results.append(
             {
-                "identifier": dependency.identifier,
-                "title": dependency.title,
-                "live_state": dependency.live_state.value,
-                "is_ready": dependency.is_ready_to_unblock_dependents(),
+                "identifier": dependency.reference.text,
+                "title": dependency.item.title,
+                "live_state": dependency.item.live_state.value,
+                "is_ready": dependency.item.is_ready_to_unblock_dependents(),
             }
         )
     return results
+
+
+def _resolve(
+    dependency_identifier: str,
+    plan: Plan,
+    items_by_identifier: dict[str, Any],
+    plan_directory: PlanDirectory | None,
+) -> ResolvedDependency | None:
+    """
+    Resolve one ``depends_on`` entry to the item it names.
+
+    :param dependency_identifier: The entry, as the manifest wrote it.
+    :param plan: The plan the entry is written in.
+    :param items_by_identifier: That plan's own items, keyed by effective identifier.
+    :param plan_directory: The other plans a cross-plan entry resolves against.
+    :return: The resolved dependency, or ``None`` if nothing resolves it.
+    """
+    reference = DependencyReference.from_text(dependency_identifier)
+    if reference.names_another_plan:
+        if plan_directory is None:
+            return None
+        return plan_directory.resolve(reference)
+    dependency = items_by_identifier.get(reference.item_identifier)
+    if dependency is None:
+        return None
+    return ResolvedDependency(reference=reference, item=dependency, plan=plan)
 
 
 def main() -> int:
@@ -120,11 +157,22 @@ def main() -> int:
         help='Path to a JSON file: {"owner/repo": {"pr_number": {...}}}',
     )
     parser.add_argument("--item", required=True, help="The item id to check")
+    parser.add_argument(
+        "--plans-dir",
+        default=None,
+        help=(
+            "Path to the directory holding every plan (<plan-id>/plan.yaml), "
+            "required only by a manifest whose depends_on names another plan"
+        ),
+    )
     arguments = parser.parse_args()
 
+    plan_directory = (
+        PlanDirectory.load(Path(arguments.plans_dir)) if arguments.plans_dir else None
+    )
     raw_plan = yaml.safe_load(Path(arguments.plan).read_text())
     try:
-        validate_plan(raw_plan)
+        validate_plan(raw_plan, plan_directory)
     except PlanValidationError as error:
         print(str(error), file=sys.stderr)
         return 1
@@ -137,7 +185,7 @@ def main() -> int:
 
     try:
         results = dependency_readiness(
-            plan, arguments.item, pull_requests_by_repository
+            plan, arguments.item, pull_requests_by_repository, plan_directory
         )
     except UnknownItemError as error:
         print(str(error), file=sys.stderr)

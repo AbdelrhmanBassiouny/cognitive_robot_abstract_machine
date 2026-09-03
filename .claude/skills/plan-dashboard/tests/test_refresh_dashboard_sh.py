@@ -240,3 +240,48 @@ def test_prints_the_merged_sync_and_build_summary(scratch_project_root: Path):
     assert result.returncode == 0, result.stderr
     merged = json.loads(result.stdout)
     assert merged == {"corrected": [{"id": "a"}], "drift_count": 0}
+
+
+# %% --plans-dir passthrough
+
+
+def _invocation_of(scratch_project_root: Path, recorded_filename: str) -> list[str]:
+    """
+    The arguments one stub recorded when refresh_dashboard.sh called it.
+
+    :param scratch_project_root: A fixture-built scratch project root.
+    :param recorded_filename: The file that stub writes its own argv to.
+    """
+    return json.loads((scratch_project_root / recorded_filename).read_text())
+
+
+@pytest.mark.parametrize(
+    "recorded_filename",
+    ["sync_manifest_status_invocation.json", "build_dashboard_invocation.json"],
+)
+def test_plans_directory_is_not_forwarded_when_omitted(
+    scratch_project_root: Path, recorded_filename: str
+):
+    (scratch_project_root / "roadmap.md").write_text("")
+    run_refresh_dashboard(scratch_project_root, corrected_ids=[], extra_arguments=[])
+    assert "--plans-dir" not in _invocation_of(scratch_project_root, recorded_filename)
+
+
+@pytest.mark.parametrize(
+    "recorded_filename",
+    ["sync_manifest_status_invocation.json", "build_dashboard_invocation.json"],
+)
+def test_plans_directory_is_forwarded_to_both_scripts_when_given(
+    scratch_project_root: Path, recorded_filename: str
+):
+    # Both validate the manifest, so a plan whose depends_on names another
+    # plan needs the directory in both places or the refresh stops at the
+    # first one.
+    (scratch_project_root / "roadmap.md").write_text("")
+    run_refresh_dashboard(
+        scratch_project_root,
+        corrected_ids=[],
+        extra_arguments=["--plans-dir", "/tmp/plans"],
+    )
+    invocation = _invocation_of(scratch_project_root, recorded_filename)
+    assert invocation[invocation.index("--plans-dir") + 1] == "/tmp/plans"

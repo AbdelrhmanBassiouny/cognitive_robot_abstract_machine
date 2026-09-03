@@ -16,6 +16,7 @@ from build_dashboard import (
     AVAILABLE_MODELS,
     DashboardRenderer,
     DependencyCycle,
+    DependencyReference,
     DuplicateItemId,
     InvalidBlockers,
     InvalidDependsOn,
@@ -24,18 +25,24 @@ from build_dashboard import (
     Item,
     ItemStatus,
     LiveState,
+    MalformedDependencyReference,
     MalformedPullRequestDataError,
     MAXIMUM_DEPENDENCY_STACK_LEVEL,
     MissingMergeTimestampError,
+    MissingPlanDirectory,
     Plan,
+    PLAN_REFERENCE_SEPARATOR,
+    PlanDirectory,
     PlanValidationError,
     PullRequestLabel,
     PullRequestRecord,
     PullRequestsByRepository,
     PullRequestState,
+    SelfPlanReference,
     StackedItem,
     Track,
     UnknownDependency,
+    UnknownDependencyPlan,
     UnknownStatus,
     UnknownTrack,
     UnknownWave,
@@ -633,6 +640,7 @@ def test_item_from_mapping_defaults_every_optional_field_when_omitted():
 def make_renderer(
     items: list[Item],
     pull_requests_by_repository: PullRequestsByRepository | None = None,
+    plan_directory: PlanDirectory | None = None,
 ) -> DashboardRenderer:
     """
     Build one :class:`DashboardRenderer` over a fixed, otherwise-empty test
@@ -641,6 +649,8 @@ def make_renderer(
 
     :param items: The plan's items.
     :param pull_requests_by_repository: Live pull request state, or ``{}`` if omitted.
+    :param plan_directory: The plans a cross-plan reference resolves against, or
+        ``None`` for a plan whose dependencies are all its own.
     """
     plan = Plan(
         id="test-plan",
@@ -656,6 +666,7 @@ def make_renderer(
         roadmap_text="",
         pull_requests_by_repository=pull_requests_by_repository or {},
         tracking_url=None,
+        plan_directory=plan_directory,
     )
 
 
@@ -2132,3 +2143,498 @@ def test_example_plan_demonstrates_the_bug_chip_and_its_filter():
     assert output.count('<span class="next-bug-chip">bug</span>') == 1
     assert 'id="bug-fixes-only-toggle"' in output
     assert '<div class="next-group next-drift next-group-has-bugs">' in output
+
+
+# %% cross-plan references - parsing
+
+
+def test_dependency_reference_reads_a_bare_item_id():
+    reference = DependencyReference.from_text("a")
+    assert reference == DependencyReference(item_identifier="a")
+    assert reference.names_another_plan is False
+
+
+def test_dependency_reference_reads_a_plan_qualified_id():
+    reference = DependencyReference.from_text(
+        f"other-plan{PLAN_REFERENCE_SEPARATOR}foreign-ready"
+    )
+    assert reference == DependencyReference(
+        item_identifier="foreign-ready", plan_id="other-plan"
+    )
+    assert reference.names_another_plan is True
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        DependencyReference(item_identifier="a"),
+        DependencyReference(item_identifier="foreign-ready", plan_id="other-plan"),
+    ],
+)
+def test_dependency_reference_text_round_trips(reference: DependencyReference):
+    assert DependencyReference.from_text(reference.text) == reference
+
+
+def test_dependency_reference_is_malformed_with_a_second_separator():
+    # A third segment would have to mean something - a plan inside a plan - and
+    # it means nothing, so it is refused rather than read as part of an id.
+    reference = DependencyReference.from_text(
+        PLAN_REFERENCE_SEPARATOR.join(["other-plan", "wave", "item"])
+    )
+    assert reference.is_well_formed is False
+
+
+@pytest.mark.parametrize(
+    "text", [f"{PLAN_REFERENCE_SEPARATOR}item", f"other-plan{PLAN_REFERENCE_SEPARATOR}"]
+)
+def test_dependency_reference_is_malformed_with_an_empty_half(text: str):
+    assert DependencyReference.from_text(text).is_well_formed is False
+
+
+# %% cross-plan references - the plans directory
+
+
+FIXTURE_PLANS_DIRECTORY = Path(__file__).parent / "fixtures" / "plans"
+"""
+A plans directory holding two manifests a cross-plan reference can resolve against, plus
+the dashboard-URL cache naming one of them.
+"""
+
+
+def foreign_reference(item_identifier: str, plan_id: str = "other-plan") -> str:
+    """
+    The ``depends_on`` text naming one item of another plan.
+
+    :param item_identifier: The foreign item's own id.
+    :param plan_id: The plan holding it.
+    """
+    return DependencyReference(item_identifier=item_identifier, plan_id=plan_id).text
+
+
+def test_plan_directory_loads_every_manifest_by_id():
+    directory = PlanDirectory.load(FIXTURE_PLANS_DIRECTORY)
+    assert set(directory.plans_by_id) == {"other-plan", "unpublished-plan"}
+    assert directory.plan("other-plan").default_repository == "other/owner-repo"
+
+
+def test_plan_directory_reads_the_dashboard_url_cache():
+    directory = PlanDirectory.load(FIXTURE_PLANS_DIRECTORY)
+    cached = yaml.safe_load(
+        (FIXTURE_PLANS_DIRECTORY / PlanDirectory.DASHBOARD_URL_CACHE_PATH).read_text()
+    )
+    assert directory.dashboard_url("other-plan") == cached["other-plan"]
+
+
+def test_plan_directory_has_no_url_for_a_plan_the_cache_does_not_name():
+    directory = PlanDirectory.load(FIXTURE_PLANS_DIRECTORY)
+    assert directory.dashboard_url("unpublished-plan") is None
+
+
+def test_plan_directory_without_a_url_cache_loads_its_manifests_anyway(tmp_path: Path):
+    # A plan's first-ever publish happens before any cache exists, so a
+    # missing cache is an ordinary state rather than an error.
+    manifest_path = tmp_path / "other-plan" / "plan.yaml"
+    manifest_path.parent.mkdir()
+    manifest_path.write_text(
+        (FIXTURE_PLANS_DIRECTORY / "other-plan" / "plan.yaml").read_text()
+    )
+    directory = PlanDirectory.load(tmp_path)
+    assert set(directory.plans_by_id) == {"other-plan"}
+    assert directory.dashboard_url("other-plan") is None
+
+
+def test_plan_directory_resolves_an_item_by_reference():
+    directory = PlanDirectory.load(FIXTURE_PLANS_DIRECTORY)
+    resolved = directory.resolve(
+        DependencyReference.from_text(foreign_reference("foreign-ready"))
+    )
+    assert resolved.item.identifier == "foreign-ready"
+    assert resolved.plan.id == "other-plan"
+    assert resolved.repository == "other/owner-repo"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"ghost-plan{PLAN_REFERENCE_SEPARATOR}foreign-ready",
+        f"other-plan{PLAN_REFERENCE_SEPARATOR}ghost-item",
+    ],
+)
+def test_plan_directory_does_not_resolve_an_unknown_reference(text: str):
+    directory = PlanDirectory.load(FIXTURE_PLANS_DIRECTORY)
+    assert directory.resolve(DependencyReference.from_text(text)) is None
+
+
+# %% cross-plan references - validation
+
+
+def plan_depending_on(dependency_text: str) -> dict[str, Any]:
+    """
+    A one-item manifest whose single item depends on *dependency_text*.
+
+    :param dependency_text: The one entry of that item's ``depends_on``.
+    """
+    return minimal_plan(
+        items=[
+            {
+                "id": "a",
+                "title": "A",
+                "branch": "a",
+                "track": "track-1",
+                "status": "not_started",
+                "depends_on": [dependency_text],
+            }
+        ]
+    )
+
+
+def test_validate_plan_accepts_a_reference_into_another_plan():
+    validate_plan(
+        plan_depending_on(foreign_reference("foreign-ready")),
+        PlanDirectory.load(FIXTURE_PLANS_DIRECTORY),
+    )
+
+
+def test_validate_plan_rejects_an_unknown_plan():
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(
+            plan_depending_on(foreign_reference("foreign-ready", "ghost-plan")),
+            PlanDirectory.load(FIXTURE_PLANS_DIRECTORY),
+        )
+    assert error.value.problems == [
+        UnknownDependencyPlan("a", foreign_reference("foreign-ready", "ghost-plan"))
+    ]
+
+
+def test_validate_plan_rejects_an_unknown_item_in_a_known_plan():
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(
+            plan_depending_on(foreign_reference("ghost-item")),
+            PlanDirectory.load(FIXTURE_PLANS_DIRECTORY),
+        )
+    assert error.value.problems == [
+        UnknownDependency("a", foreign_reference("ghost-item"))
+    ]
+
+
+def test_validate_plan_rejects_a_reference_to_the_plans_own_id():
+    # One item, one spelling: the bare id already names it, so the qualified
+    # form would be a second way to write the same edge. Two items, so the
+    # rejected spelling is the only thing wrong with the manifest - an item
+    # qualifying its own id would also be a self-dependency.
+    own_reference = foreign_reference("a", "test-plan")
+    plan = minimal_plan(
+        items=[
+            {
+                "id": "a",
+                "title": "A",
+                "branch": "a",
+                "track": "track-1",
+                "status": "not_started",
+            },
+            {
+                "id": "b",
+                "title": "B",
+                "branch": "b",
+                "track": "track-1",
+                "status": "not_started",
+                "depends_on": [own_reference],
+            },
+        ]
+    )
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(plan, PlanDirectory.load(FIXTURE_PLANS_DIRECTORY))
+    assert error.value.problems == [SelfPlanReference("b", own_reference)]
+
+
+def test_validate_plan_rejects_a_malformed_reference():
+    malformed = PLAN_REFERENCE_SEPARATOR.join(["other-plan", "wave", "foreign-ready"])
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(
+            plan_depending_on(malformed),
+            PlanDirectory.load(FIXTURE_PLANS_DIRECTORY),
+        )
+    assert error.value.problems == [MalformedDependencyReference("a", malformed)]
+
+
+def test_validate_plan_rejects_a_cross_plan_reference_with_no_plans_directory():
+    # Passing it unchecked is the silent-ready fault this feature exists to
+    # remove, so an unresolvable reference is refused instead.
+    reference = foreign_reference("foreign-ready")
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(plan_depending_on(reference))
+    assert error.value.problems == [MissingPlanDirectory("a", reference)]
+
+
+def test_validate_plan_rejects_a_cycle_that_runs_through_another_plan():
+    # other-plan's foreign-depending-back depends on test-plan/a, so this
+    # closes a loop that neither manifest can see on its own.
+    reference = foreign_reference("foreign-depending-back")
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(
+            plan_depending_on(reference),
+            PlanDirectory.load(FIXTURE_PLANS_DIRECTORY),
+        )
+    assert error.value.problems == [DependencyCycle(["a", reference, "a"])]
+
+
+# %% cross-plan references - resolution in the renderer
+
+
+FOREIGN_PULL_REQUESTS: PullRequestsByRepository = {
+    "other/owner-repo": {
+        "91": PullRequestRecord(state=PullRequestState.OPEN, draft=False),
+        "92": PullRequestRecord(state=PullRequestState.OPEN, draft=True),
+    }
+}
+"""
+Live state for the fixture plan's own pull requests, keyed by that plan's
+``default_repository`` rather than the rendered plan's.
+"""
+
+
+def make_renderer_over_plan_directory(
+    items: list[Item],
+    pull_requests_by_repository: PullRequestsByRepository | None = None,
+) -> DashboardRenderer:
+    """
+    Build a renderer whose cross-plan references resolve against the fixture plans
+    directory.
+
+    :param items: The rendered plan's items.
+    :param pull_requests_by_repository: Live pull request state, or ``{}`` if omitted.
+    """
+    return make_renderer(
+        items,
+        pull_requests_by_repository,
+        plan_directory=PlanDirectory.load(FIXTURE_PLANS_DIRECTORY),
+    )
+
+
+def test_item_is_ready_to_start_once_a_foreign_dependency_is_out_of_draft():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference("foreign-ready")],
+            )
+        ],
+        FOREIGN_PULL_REQUESTS,
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_start == ["a"]
+
+
+def test_item_is_not_ready_to_start_while_a_foreign_dependency_is_a_draft():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference("foreign-draft")],
+            )
+        ],
+        FOREIGN_PULL_REQUESTS,
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_start == []
+    assert renderer.items_by_identifier["a"].action is None
+
+
+def test_item_is_ready_to_start_once_a_foreign_dependency_has_landed():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference("foreign-done")],
+            )
+        ]
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_start == ["a"]
+
+
+def test_foreign_dependency_live_state_comes_from_its_own_plans_repository():
+    # The number 91 exists only under other-plan's repository; read against
+    # the rendered plan's own, it would classify as not_found.
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference("foreign-ready")],
+            )
+        ],
+        FOREIGN_PULL_REQUESTS,
+    )
+    renderer.render()
+    resolved = renderer.items_by_reference[foreign_reference("foreign-ready")]
+    assert resolved.item.live_state is LiveState.OPEN_READY
+
+
+def test_item_is_not_ready_to_start_when_a_dependency_cannot_be_resolved():
+    # The latent fault this fixes: an unresolvable entry used to be skipped,
+    # so a mistyped dependency counted as ready.
+    renderer = make_renderer_over_plan_directory(
+        [item("a", ItemStatus.NOT_STARTED, depends_on=["ghost"])]
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_start == []
+    assert renderer.items_by_identifier["a"].action is None
+
+
+def test_item_is_ready_to_review_once_a_foreign_dependency_has_a_pull_request():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.IN_PROGRESS,
+                pull_request_number=1,
+                depends_on=[foreign_reference("foreign-draft")],
+            )
+        ],
+        {
+            **FOREIGN_PULL_REQUESTS,
+            "owner/repo": {
+                "1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)
+            },
+        },
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == ["a"]
+
+
+def test_item_is_not_ready_to_review_while_a_foreign_dependency_has_no_pull_request():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.IN_PROGRESS,
+                pull_request_number=1,
+                depends_on=[foreign_reference("foreign-not-started")],
+            )
+        ],
+        {
+            "owner/repo": {
+                "1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)
+            }
+        },
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == []
+
+
+def test_foreign_dependency_does_not_indent_its_dependent():
+    # An indent level is a position in this page's own stack, and a foreign
+    # parent has no card on it to indent under.
+    stacked = DashboardRenderer._build_track_stack(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference("foreign-ready")],
+            )
+        ]
+    )
+    assert [entry.indent_level for entry in stacked] == [0]
+
+
+# %% cross-plan references - the dependency chip
+
+
+def test_chip_for_a_foreign_dependency_reads_the_qualified_reference():
+    reference = foreign_reference("foreign-ready")
+    renderer = make_renderer_over_plan_directory(
+        [item("a", ItemStatus.NOT_STARTED, depends_on=[reference])],
+        FOREIGN_PULL_REQUESTS,
+    )
+    renderer.render()
+    chip = renderer.items_by_identifier["a"].dependency_chips[0]
+    assert chip.identifier == reference
+    assert chip.is_ready is True
+
+
+def test_chip_tooltip_carries_the_foreign_items_title_plan_and_live_state():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference("foreign-draft")],
+            )
+        ],
+        FOREIGN_PULL_REQUESTS,
+    )
+    renderer.render()
+    chip = renderer.items_by_identifier["a"].dependency_chips[0]
+    foreign = renderer.items_by_reference[foreign_reference("foreign-draft")]
+    assert foreign.item.title in chip.tooltip
+    assert foreign.plan.title in chip.tooltip
+    assert LiveState.OPEN_DRAFT.display_label in chip.tooltip
+
+
+def test_chip_links_to_the_foreign_plans_dashboard_when_the_cache_has_one():
+    directory = PlanDirectory.load(FIXTURE_PLANS_DIRECTORY)
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference("foreign-done")],
+            )
+        ]
+    )
+    renderer.render()
+    chip = renderer.items_by_identifier["a"].dependency_chips[0]
+    assert chip.dashboard_url == directory.dashboard_url("other-plan")
+
+
+def test_chip_has_no_dashboard_link_when_the_cache_names_no_url():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference("unpublished-item", "unpublished-plan")],
+            )
+        ]
+    )
+    renderer.render()
+    assert renderer.items_by_identifier["a"].dependency_chips[0].dashboard_url is None
+
+
+def test_chip_for_a_same_plan_dependency_has_no_dashboard_link():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item("a", ItemStatus.DONE),
+            item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+        ]
+    )
+    renderer.render()
+    assert renderer.items_by_identifier["b"].dependency_chips[0].dashboard_url is None
+
+
+def test_render_links_a_foreign_dependency_chip_to_its_plans_dashboard():
+    directory = PlanDirectory.load(FIXTURE_PLANS_DIRECTORY)
+    reference = foreign_reference("foreign-done")
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", ItemStatus.NOT_STARTED, depends_on=[reference])],
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository={},
+        tracking_url=None,
+        plan_directory=directory,
+    )
+    output, _ = renderer.render()
+    assert f'href="{directory.dashboard_url("other-plan")}"' in output
+    assert f">{reference}</a>" in output

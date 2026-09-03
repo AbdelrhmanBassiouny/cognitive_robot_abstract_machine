@@ -70,7 +70,9 @@ items:                         # the actual trackable units of work - flat,
     repository: null            # optional, overrides default_repository
     pull_request_number: <int or null>  # the real GitHub PR number, once one exists
     track: <track-id>
-    depends_on: [<item-id>, ...]  # structural/stacking dependency, by item id
+    depends_on: [<item-id>, ...]  # structural/stacking dependency - a bare id for
+                                   # an item of this plan, <plan-id>/<item-id> for
+                                   # one in another plan (see below)
     status: not_started | in_progress | blocked | deferred | done
     session: <url or omitted>
     notes: "short, freeform"
@@ -101,6 +103,40 @@ usually means the manifest was mistyped, not that GitHub is wrong. But
 it — `sync_manifest_status.py` corrects `status` to `done` for exactly that
 case, in `plan.yaml` itself, every run, before rendering. Every other kind
 of drift is still left as a flag for a human.
+
+### Depending on an item in another plan
+
+A `depends_on` entry is a bare `<item-id>` when it names an item of the same
+plan, and `<plan-id>/<item-id>` when it names one in another plan. Neither
+kebab-case id can contain a `/`, so the two forms never collide, and a plan
+that depends on nothing outside itself never has to know the form exists.
+
+A precondition that lives in another plan used to have nowhere to go but a
+freeform `blockers` sentence, which nothing resolves, re-checks or renders. A
+reference is checked and shown like any other dependency: `/plan-dashboard`
+resolves it against the referenced plan's own manifest, renders it as a chip
+linking to that plan's dashboard, and reads the foreign item's live pull
+request state from its own plan's `default_repository`.
+
+Four rules, each rejected outright rather than passed over:
+
+- The plan must be in the plans directory, and the item must be in that plan.
+  An unknown plan or item is refused with the same shape of error an unknown
+  same-plan id already gets.
+- A reference must not name **this** plan's own id — the bare id already names
+  that item, and one edge should not have two spellings.
+- A reference has exactly two halves. A third segment would have to mean a
+  plan inside a plan, which means nothing.
+- A cross-plan reference needs the plans directory to resolve against, so a
+  manifest carrying one is refused when the tooling was given no directory
+  (`--plans-dir`, see [`SKILL.md`](./SKILL.md)). Accepting it unchecked is how
+  an unresolvable dependency used to count as *ready*.
+
+The cycle check runs over the resulting union graph, so a loop that closes
+through another plan is caught even though neither manifest can see it alone.
+Indentation is unaffected: an item's indent level is its depth in the
+**same-plan** dependency chain, since an item in another plan has no card on
+this page to indent under.
 
 ### Why items are flat, not nested under wave/track
 

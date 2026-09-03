@@ -609,8 +609,13 @@
   }
 </style>
 
+{# A chip naming an item in another plan links to that plan's own dashboard,
+   which is the only place its state is shown in full - the rest of the chip
+   is identical either way. #}
 {% macro dependency_chip(chip) %}
-<span class="chip{{ '' if chip.is_ready else ' chip-unmet' }}" title="{{ chip.tooltip }}{{ '' if chip.is_ready else ' (not ready yet — this item is blocked on it)' }}">{{ chip.identifier }}</span>
+{%- set chip_class = 'chip' if chip.is_ready else 'chip chip-unmet' %}
+{%- set chip_title = chip.tooltip if chip.is_ready else chip.tooltip ~ ' (not ready yet — this item is blocked on it)' %}
+{% if chip.dashboard_url %}<a class="{{ chip_class }}" href="{{ chip.dashboard_url }}" target="_blank" rel="noopener" title="{{ chip_title }}">{{ chip.identifier }}</a>{% else %}<span class="{{ chip_class }}" title="{{ chip_title }}">{{ chip.identifier }}</span>{% endif %}
 {% endmacro %}
 
 {% macro action_button(item) %}

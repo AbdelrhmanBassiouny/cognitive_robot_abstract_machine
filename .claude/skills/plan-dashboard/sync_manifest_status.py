@@ -20,7 +20,12 @@ Usage:
     python3 sync_manifest_status.py \\
         --plan /tmp/plan.yaml \\
         --pr-data /tmp/pr_data.json \\
-        [--output /tmp/plan.yaml]
+        [--output /tmp/plan.yaml] \\
+        [--plans-dir /tmp/plans]
+
+This validates the manifest before correcting anything, so --plans-dir is
+needed by a manifest whose depends_on names another plan - the same directory
+build_dashboard.py takes.
 
 Rewrites --plan in place, or writes to --output if given. Patches only the
 exact ``status: <value>`` line of each corrected item - every other line is
@@ -53,6 +58,7 @@ import yaml
 from build_dashboard import (
     ItemStatus,
     LiveState,
+    PlanDirectory,
     PlanValidationError,
     classify_live_state,
     load_pull_requests_by_repository,
@@ -193,14 +199,25 @@ def main() -> int:
         default=None,
         help="Path to write the corrected plan.yaml to - defaults to --plan (in place)",
     )
+    parser.add_argument(
+        "--plans-dir",
+        default=None,
+        help=(
+            "Path to the directory holding every plan (<plan-id>/plan.yaml), "
+            "required only by a manifest whose depends_on names another plan"
+        ),
+    )
     arguments = parser.parse_args()
 
     plan_path = Path(arguments.plan)
     plan_text = plan_path.read_text()
     plan = yaml.safe_load(plan_text)
+    plan_directory = (
+        PlanDirectory.load(Path(arguments.plans_dir)) if arguments.plans_dir else None
+    )
 
     try:
-        validate_plan(plan)
+        validate_plan(plan, plan_directory)
     except PlanValidationError as error:
         print(f"plan.yaml failed validation: {error}", file=sys.stderr)
         return 1
