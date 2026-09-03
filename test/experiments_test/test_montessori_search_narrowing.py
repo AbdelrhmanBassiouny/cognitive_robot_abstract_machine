@@ -54,7 +54,7 @@ from experiments.montessori.perception.step_by_step import (
 from experiments.montessori.perception.watch_narrowing import (
     look_for_the_cube_on_the_lid,
 )
-from krrood.entity_query_language.factories import an
+from krrood.entity_query_language.factories import a
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
@@ -222,7 +222,7 @@ def stating(*conditions: StatedCondition) -> Match[DetectedMontessoriShape]:
 
     :param conditions: What it says about the piece, in the order it says them.
     """
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     if not conditions:
         return statement
     return statement.where(*(condition(statement.variable) for condition in conditions))
@@ -399,7 +399,7 @@ def test_a_placement_a_look_cannot_read_is_refused_rather_than_ignored(
     backend = MontessoriPerceptionBackend(
         source=FixedScene(captured=MontessoriScene(shapes=[seen]))
     )
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     statement = statement.where(InsideRegion(statement.variable, region))
 
     with pytest.raises(LookHasNoReferenceFrame):
@@ -631,7 +631,7 @@ def looking_on_the_lid(condition: StatedCondition):
 
     :param condition: The condition to add.
     """
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     statement = statement.where(resting_on(lid_surface().name)(statement.variable))
     return statement.where(condition(statement.variable))
 
@@ -740,7 +740,7 @@ def test_a_look_asked_for_a_color_reports_only_the_pieces_that_wear_it(
 ):
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     prism = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
 
     found = statement.where(Colored(statement.variable, prism.color)).evaluate(
         backend=looking_at_the_capture

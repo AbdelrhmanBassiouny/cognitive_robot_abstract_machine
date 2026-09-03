@@ -113,7 +113,7 @@ class ImaginedWorld:
             IMAGINATION_PREFIX,
         )
         self.spawned += 1
-        body = Body.from_shape_collection(name, ShapeCollection([self._solid(piece)]))
+        body = Body.from_shape_collection(name, ShapeCollection([self._mesh_of(piece)]))
         parent = self._frame_of(pose)
         with self.world.modify_world():
             self.world.add_connection(
@@ -138,7 +138,7 @@ class ImaginedWorld:
             self.world.remove_branch_from_world(shape.root)
 
     @staticmethod
-    def _solid(piece: KnownPiece) -> Mesh:
+    def _mesh_of(piece: KnownPiece) -> Mesh:
         """
         :param piece: The piece that was recognised.
         :return: Its measured outline standing as tall as it was measured to stand.

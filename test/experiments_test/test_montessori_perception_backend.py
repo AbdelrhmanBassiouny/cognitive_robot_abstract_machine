@@ -44,7 +44,7 @@ from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-from krrood.entity_query_language.factories import an, entity, variable
+from krrood.entity_query_language.factories import a, entity, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
@@ -67,7 +67,7 @@ def looking_for_something_supported_by(surface: WorkspaceSurface):
 
     :param surface: The measured surface whose world entity is asked about.
     """
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     return statement.where(SupportedBy(statement.variable, Body(name=surface.name)))
 
 
@@ -120,7 +120,7 @@ def test_a_search_narrows_itself_by_the_color_the_thing_sought_wears():
 
 def test_a_stated_color_is_what_the_look_is_asked_to_mark():
     color = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE].color
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     statement = statement.where(Colored(statement.variable, color))
 
     request = MontessoriPerceptionBackend.scene_request(
@@ -138,7 +138,7 @@ def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
     frame the detections are reported in is known, which is the look.
     """
     lid = Body(name=pipeline.lid.name)
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     statement = statement.where(Near(statement.variable, lid, radius=0.05))
 
     request = MontessoriPerceptionBackend.scene_request(
@@ -152,7 +152,7 @@ def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
 
 
 def test_the_kind_of_detection_asked_for_is_what_the_look_is_asked_for():
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
 
     request = MontessoriPerceptionBackend.scene_request(
         MontessoriPerceptionBackend.read_request(statement)
@@ -177,7 +177,7 @@ def test_a_stated_supporting_surface_narrows_the_look_to_it(
 
 
 def test_an_attribute_the_look_cannot_act_on_leaves_it_searching_everywhere():
-    statement = an(DetectedMontessoriShape)(category=MontessoriShapeCategory.CUBE)
+    statement = a(DetectedMontessoriShape)(category=MontessoriShapeCategory.CUBE)
 
     request = MontessoriPerceptionBackend.scene_request(
         MontessoriPerceptionBackend.read_request(statement)
@@ -193,7 +193,7 @@ def test_a_surface_left_unstated_narrows_nothing(
     Asserting no support says the statement does not know which surface and the look
     must report it, which is the opposite of naming one.
     """
-    statement = an(DetectedMontessoriShape)(supporting_surface=...)
+    statement = a(DetectedMontessoriShape)(supporting_surface=...)
 
     request = MontessoriPerceptionBackend.scene_request(
         MontessoriPerceptionBackend.read_request(statement)
@@ -223,7 +223,7 @@ def test_a_surface_the_statement_describes_is_read_as_the_one_it_describes(
     like any other.
     """
     surface = variable(Body, surfaces_of(pipeline))
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     statement = statement.where(
         surface.name == pipeline.lid.name,
         SupportedBy(statement.variable, surface),
@@ -241,7 +241,7 @@ def test_a_described_surface_is_answered_the_same_as_one_handed_over(
     pipeline: MontessoriPerceptionPipeline, looking: MontessoriPerceptionBackend
 ):
     surface = variable(Body, surfaces_of(pipeline))
-    described = an(DetectedMontessoriShape)()
+    described = a(DetectedMontessoriShape)()
     described = described.where(
         surface.name == pipeline.lid.name,
         SupportedBy(described.variable, surface),
@@ -263,7 +263,7 @@ def test_a_description_no_single_thing_answers_is_refused_rather_than_guessed_at
     of them picked.
     """
     surface = variable(Body, surfaces_of(pipeline))
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     statement = statement.where(
         surface.name.prefix == pipeline.lid.name.prefix,
         SupportedBy(statement.variable, surface),
@@ -279,7 +279,7 @@ def test_a_condition_about_something_other_than_what_is_looked_for_is_refused(
     looking: MontessoriPerceptionBackend,
 ):
     hole = variable(ShapeSortingHoleDetection, [])
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     statement = statement.where(hole.category == MontessoriShapeCategory.CUBE)
 
     with pytest.raises(BackendCannotResolveCondition) as raised:
@@ -373,7 +373,7 @@ def test_a_statement_runs_perception_to_answer_itself(scene: MontessoriScene):
             return self.captured
 
     source = CountingSource(captured=scene)
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
 
     assert source.looks == 0
     results = list(
@@ -386,7 +386,7 @@ def test_a_statement_runs_perception_to_answer_itself(scene: MontessoriScene):
 def test_a_statement_selects_a_hole_by_the_shape_it_takes(
     looking: MontessoriPerceptionBackend, scene: MontessoriScene
 ):
-    statement = an(ShapeSortingHoleDetection)(category=MontessoriShapeCategory.CUBE)
+    statement = a(ShapeSortingHoleDetection)(category=MontessoriShapeCategory.CUBE)
 
     holes = list(statement.evaluate(backend=looking))
 
@@ -409,7 +409,7 @@ def test_a_pose_left_unstated_is_what_the_look_answers_with(
     )
 
     [found] = list(
-        an(ShapeSortingHoleDetection)(
+        a(ShapeSortingHoleDetection)(
             category=MontessoriShapeCategory.TRIANGULAR_PRISM, pose=...
         ).evaluate(backend=looking)
     )
@@ -422,7 +422,7 @@ def test_a_pose_left_unstated_is_what_the_look_answers_with(
 def test_a_statement_over_one_kind_does_not_return_the_other(
     looking: MontessoriPerceptionBackend,
 ):
-    pieces = list(an(DetectedMontessoriShape)().evaluate(backend=looking))
+    pieces = list(a(DetectedMontessoriShape)().evaluate(backend=looking))
 
     assert pieces
     assert all(not isinstance(found, ShapeSortingHoleDetection) for found in pieces)
@@ -431,7 +431,7 @@ def test_a_statement_over_one_kind_does_not_return_the_other(
 def test_an_attribute_the_search_could_not_act_on_still_filters_the_answer(
     looking: MontessoriPerceptionBackend, scene: MontessoriScene
 ):
-    statement = an(DetectedMontessoriShape)(category=MontessoriShapeCategory.CUBE)
+    statement = a(DetectedMontessoriShape)(category=MontessoriShapeCategory.CUBE)
 
     pieces = list(statement.evaluate(backend=looking))
 
@@ -552,7 +552,7 @@ def touching_the_table(world: World):
 
     :param world: The world the look is taken in, which holds the table.
     """
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     return statement.where(
         InContactWith(statement.variable.root, world.get_body_by_name("table"))
     )
@@ -607,7 +607,7 @@ def touching_the_table_the_world_calls(name: PrefixedName, world: World):
     :param world: The world the look is taken in, whose bodies answer the description.
     """
     surface = variable(Body, world.bodies)
-    statement = an(DetectedMontessoriShape)()
+    statement = a(DetectedMontessoriShape)()
     return statement.where(
         surface.name == name,
         InContactWith(statement.variable.root, surface),
