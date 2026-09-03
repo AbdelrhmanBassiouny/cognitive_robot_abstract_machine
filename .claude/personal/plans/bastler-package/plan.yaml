@@ -28,21 +28,15 @@ items:
   title: 'Create the bastler package: the .claude Python and its tests move into it'
   branch: claude/plan-item-kickoff-workflow-cuare2
   pull_request_number: 185
-  status: blocked
+  status: in_progress
   session: https://claude.ai/code/session_014kmiZegiD2Q8w2eese2L2L
   track: extraction
   depends_on: []
   blockers:
-  - 'Labelled `needs-resolution` since 2026-08-22, which withholds the branch from promotion. `main`
-    no longer merges into it: `.claude/hooks/tests/test_setup_steps.py` was added on `main` inside a
-    directory this branch renamed, so git reports CONFLICT (file location) and cannot place it. The
-    maintenance routine has re-reported this on every pass - 20 comments between 2026-08-31 and
-    2026-09-03 naming that one file.'
-  - 'Silent half of the same merge: `.claude/hooks/setup_steps.py` (626 lines) also landed on `main`
-    and merges with no conflict at all, because this branch moved `.claude/hooks/*.py` file by file
-    rather than renaming the directory. Left where it lands it breaks this branch''s own
-    `test_no_python_module_remains_under_the_claude_directory` contract. Third occurrence of the
-    hazard the pull request body already names twice.'
+  - 'Cleared 2026-09-03 by merging `main` at `674f1507f`: `main` merges cleanly again and 664 tests
+    pass. The `needs-resolution` label is still on the pull request - stack.toml says the maintenance
+    routine clears it once the branch merges cleanly, so the next pass should drop it. Until it does,
+    the branch is still withheld from promotion.'
   notes: |-
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
     (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s seven
@@ -94,6 +88,9 @@ items:
     on purpose, each answered differently from what it asked: the `RESTACK_STEPS` name that
     `monkeypatch.setattr` takes as a string by its own signature, and a surviving `status_label`
     assertion offered for deletion. Both are the user's to close.
+
+    **Resolved 2026-09-03** at `674f1507f`: `main` merged, `setup_steps.py` folded into the package
+    as `bastler/setup_steps.py` and its suite converted off the `sys.path` hackery, 664 tests passing.
 
     **The "still a draft" this note carried was wrong, and so was the absence of a blocker.** #185 has
     been out of draft since the 2026-08-23 round - which in this workflow is the promotion approval, not

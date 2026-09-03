@@ -111,6 +111,12 @@ breaks the branch's own "no `.py` remains under `.claude/`" contract. Third occu
 still `git ls-tree -r origin/main --name-only .claude/ | grep '\.py$'` against the merged tree, and
 nothing runs it automatically.
 
+Both were resolved the same day at `674f1507f`. The named conflict took the new suite at its renamed
+location; the unnamed one took `setup_steps.py` into the package, where its hand-counted `.parent`
+chain became `package_layout.REPOSITORY_ROOT` and its suite lost all three shapes this package exists
+to end at once - a bare module import, a bare sibling import, and a `sys.path.insert` reaching the
+plan-dashboard directory for `build_dashboard.PullRequestLabel`. 664 tests pass, against 632.
+
 `bastler-first-time-setup` landing is what produced both files: upstream #577, merged into `main` at
 `017be2aa2` on 2026-09-01, while the manifest carried it as `in_progress`. This is the
 whichever-lands-second convention working exactly as the landing hazards section says it does.
