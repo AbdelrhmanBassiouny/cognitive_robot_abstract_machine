@@ -515,3 +515,57 @@ cause is visible in the test source is worth reading before it is deferred.
     out of it when the context's owner ends it and, unlike the executor's own shutdown,
     does not swallow it. `_spin_until_the_context_ends` returns on it.
 
+### Round 27 -- the base branch merged main again
+
+134. #244 merged `main` a second time (`95f8483b`) after this branch last took it at
+    `f38b9e87`, and the pull request went `dirty` while the manifest still said
+    `blockers: []`. CI on the head `c8bf6f05` was **green in all 24 checks**, so the
+    conflict was the whole of the blocker.
+135. Five files, all the same shape as every round before: main moved something this
+    branch's work sits on. `plans/executables.py`, `actions/core/pick_up.py`,
+    `.../placing.py`, `ormatic_experiments/scalability.py`,
+    `test_plan/test_executables.py`.
+136. **`GiskardExecutable` was rewritten upstream.** The motion state chart is a field
+    parsing fills in, terminated by a new `prepare_for_execution`; the pause/interrupt
+    monitors and `is_paused` are gone, and `_add_condition_monitors` is kept but
+    unused while main reworks it. Main's structure taken, this branch's `tick_limit`
+    and pacer kept in the loop.
+137. The loop's `if self.is_paused: continue` guard went with the monitors its comment
+    names. Checked before dropping it: the only reader was the loop itself, and the
+    demo pauses between plans through `wait_while_paused`, not through the executor.
+    **Coraplex plan-level pause now reaches nothing** -- main's state, flagged in the
+    pull request rather than half-revived here.
+138. **The silent conflict, and the first that is not import-shaped.**
+    `PlanNodeGroup.of_plan_node_kind` keys the attachment colour on the *strings*
+    `"AttachNode"` and `"DetachNode"`; main replaced both with `ReAttachNode`, so every
+    attachment step of a live plan fell to `OTHER` and lost its colour. Git touched
+    neither line. Reproduced directly in this container
+    (`of_plan_node_kind('ReAttachNode') -> other_plan_node`), then fixed.
+139. Both existing tests spell a dead name out, which is why neither noticed -- the
+    exact failure AGENTS.md describes. The new test reads the name off
+    `ReAttachNode.__name__`. The old names stay mapped: a bundle recorded before the
+    rename carries them, and that method reads recorded plans too.
+140. **The check that found it, worth keeping**: after resolving, list every call site
+    of whatever the incoming side renamed or centralised, *including the ones spelled
+    as strings*. Neither pyflakes nor the import resolver can see a name in a dict key.
+141. `semantic_digital_twin/adapters/multi_sim.py` still says AttachNode/DetachNode in
+    four docstrings. That file is #244's now, so it was left alone rather than pulled
+    back into this diff. **Worth mentioning to whoever holds #244.**
+
+### What this container could and could not do
+
+- No CRAM workspace: no numpy, no sqlalchemy, no ROS, python3.11 as `python3` (3.12 is
+  installed). No suite ran.
+- What did run: `python3.12 -m py_compile`, `scripts/format_docstrings.py` (needs a
+  hand-built 3.12 venv with black, docformatter, tqdm), both halves of the
+  undefined-name differential, and `cramera.knowledge.enums` imported by itself with
+  only `typing_extensions` installed -- which is what made the attachment bug
+  reproducible rather than merely argued.
+- The import-resolver half is worth rewriting rather than hunting for; it is ~80 lines
+  of `ast` over every `from <workspace module> import <name>`, following `import *`
+  through `__init__.py`. Run it as a *difference* against both parents: 13 findings
+  either way here, all long-standing.
+- `format_docstrings.py` did not damage anything this round. Checked first that main's
+  own copies of the five conflicted files are already black-clean, so it could only
+  touch the resolutions.
+
