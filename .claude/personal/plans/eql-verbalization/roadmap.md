@@ -29,7 +29,7 @@ it. #32 (SymbolicFunction migration) and P1–P3 (#86, #87, #88) are all merged 
    `SymbolicCallable._example_operand_values_` class hook, which the snapshot consults per
    class. An override belongs on the class, not in a test-side dict.
 10. Keep surfaces concise (omit root/tip from `BlockingBodies`); details are query-able.
-11. `Reachable` reads *"a Pose is reachable for the kinematic chain rooted at <root> and
+11. `Reachable` reads *"a Pose is reachable for the kinematic chain rooted at `<root>` and
     ending at <tip>"* — the chain is what reaches, and root/tip stay named here (unlike
     `BlockingBodies` under decision 10) because reachability is only meaningful relative
     to them.
@@ -167,7 +167,7 @@ sentences before anyone read them.
   the class name `VisibleTo`.
 - `Reachable` reads *"a Pose is reachable by a Tip"* on #229, which is what the developer
   asked for on that pull request (r3896606294). **Decision 11 words the same relation *"a
-  Pose is reachable for the kinematic chain rooted at <root> and ending at <tip>"***. Both
+  Pose is reachable for the kinematic chain rooted at `<root>` and ending at `<tip>`"***. Both
   make the pose the subject and differ only in whether both ends of the chain are named;
   the thread is deliberately left open on #229 for the developer to pick which stands, and
   whichever he picks is what this rebase should apply.
@@ -264,7 +264,7 @@ last run was 2026-08-24 — while costing only work that #229's landing will sup
 
 **The `Reachable` wording is settled, by a resolve rather than a sentence.** #229's thread
 r3896606294 asked for *"Pose Is reachable by Tip"*; the reply offered decision 11's longer
-*"a Pose is reachable for the kinematic chain rooted at <root> and ending at <tip>"* and left
+*"a Pose is reachable for the kinematic chain rooted at `<root>` and ending at `<tip>`"* and left
 the thread open for the developer to pick. That thread now reads resolved on #229, where the
 shorter wording stands — so decision 11 is superseded to that extent, read from the resolve
 rather than stated outright.
