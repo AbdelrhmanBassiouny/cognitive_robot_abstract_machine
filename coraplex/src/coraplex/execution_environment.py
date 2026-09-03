@@ -61,9 +61,10 @@ class ExecutionEnvironment:
 
     max_ticks_per_motion_mapping: Optional[int] = None
     """
-    Per-motion tick budget applied to every motion state chart created within this
-    environment. ``None`` leaves :py:attr:`~coraplex.plans.executables.GiskardExecutable
-    .max_ticks_per_motion_mapping` unchanged.
+    Per-motion tick budget applied to every motion state chart created within
+    this environment. ``None`` leaves
+    :py:attr:`~coraplex.plans.executables.GiskardExecutable.max_ticks_per_motion_mapping`
+    unchanged.
 
     Worth setting whenever ``real_time_pacing`` is on: a paced tick sleeps for a full
     control period, so the default budget takes tens of seconds per motion mapping to
