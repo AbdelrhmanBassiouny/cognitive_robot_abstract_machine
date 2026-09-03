@@ -22,6 +22,10 @@ one thing, between two, near a place -- answers the stretch it allows, so the pi
 cut to it before anything is detected. And a colour says which pieces are worth fitting
 at all, so a look asked for one marks that colour alone. What none of them do is decide
 the answer: each is checked again over what came back.
+
+A relation no search covers is answered rather than refused: what a look found stands as
+a body in a copy of the world it was taken in, so the relation is evaluated there, and
+what it rejects leaves that world again.
 """
 
 from __future__ import annotations

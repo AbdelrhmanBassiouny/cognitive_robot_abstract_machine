@@ -113,11 +113,11 @@ class DetectedMontessoriShape(MontessoriDetection, Role[MontessoriShape]):
     """
     A loose Montessori piece lying on the table, as one look found it.
 
-    A role of the piece as a world holds it, rather than a description of one: a relation
-    of the world's vocabulary is written over bodies and what the world says about them,
-    so a sighting with no such thing behind it is a subject no predicate can be evaluated
-    about. The role taker is the piece standing where it was seen in the world the look
-    brought its findings into.
+    A role of the piece as a world holds it, rather than a description of one: a
+    relation of the world's vocabulary is written over bodies and what the world says
+    about them, so a sighting with no such thing behind it is a subject no predicate can
+    be evaluated about. The role taker is the piece standing where it was seen in the
+    world the look brought its findings into.
     """
 
     category: MontessoriShapeCategory = field(kw_only=True)

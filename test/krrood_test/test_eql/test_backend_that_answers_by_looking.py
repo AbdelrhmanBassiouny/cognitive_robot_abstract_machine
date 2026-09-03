@@ -445,7 +445,9 @@ def looking_for_something_standing_beside_the_place_called(name: str):
     """
     place = variable(Place, [TABLE, LID])
     statement = an(Sighting)()
-    return statement.where(place.name == name, StandingBeside(statement.variable, place))
+    return statement.where(
+        place.name == name, StandingBeside(statement.variable, place)
+    )
 
 
 def test_a_relation_the_look_cannot_narrow_itself_by_is_checked_over_what_came_back(

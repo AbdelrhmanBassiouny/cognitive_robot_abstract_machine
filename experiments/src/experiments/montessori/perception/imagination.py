@@ -51,7 +51,9 @@ class ImaginedWorld:
 
     world: World
     """
-    The copy. Nothing here ever reaches the world it was copied from.
+    The copy.
+
+    Nothing here ever reaches the world it was copied from.
     """
 
     reference_frame: Optional[KinematicStructureEntity] = None

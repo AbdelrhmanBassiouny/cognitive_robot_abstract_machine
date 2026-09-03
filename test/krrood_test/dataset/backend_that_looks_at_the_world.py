@@ -179,7 +179,9 @@ class StandingBeside(Triple):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return clause(Noun(fields["thing"]), Verb("stand beside"), Noun(fields["place"]))
+        return clause(
+            Noun(fields["thing"]), Verb("stand beside"), Noun(fields["place"])
+        )
 
 
 # %% the backend
