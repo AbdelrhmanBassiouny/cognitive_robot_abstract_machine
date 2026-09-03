@@ -382,3 +382,19 @@ that does not exist, so an unconfigured fork needs nothing; `check-setup.sh`'s l
 `ITEM_FIELD_INDENT = "    "` while this manifest indents them by two, so the save it attempted produced
 a `yaml.parser.ParserError` and the entry was written by hand instead. That is the defect #151 owns, by
 the fold recorded above; this branch would be the third to edit the same emitter.
+
+**Two departures from the plan above, both recorded on #260 rather than asked about.** The
+reconciler is called from `integration_candidate_commands.publish` itself rather than from the two
+commands: both reach that one function, and the pipeline guard already sits there for the stated
+reason that there is no publication it does not apply to. Same outcome on both paths, one seam, and
+a third publication path inherits it instead of being trusted to remember it. And
+`forget_dropped_builds` asked the fork for every branch even with nothing recorded - a read on every
+publication that can drop nothing - found by the suite rather than by the new tests, guarded, and
+pinned by a test whose fork refuses to be asked.
+
+**Two behaviour changes the review has to weigh.** `integration.py build` now writes to the fork on
+every run, one reference per carried tip, where before it wrote only when a readmitted branch's
+block was lifted. And `publish-recorded-pass` now needs a credential, because reconciling reads the
+fork's open pull requests; it only ever runs inside the pipeline, which provisions one.
+
+1032 tests pass across the four directories CI runs, from 1015 on the base; eight mutations checked.
