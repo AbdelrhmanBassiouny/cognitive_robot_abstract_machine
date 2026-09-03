@@ -517,7 +517,33 @@ items:
 
   - id: query-reports-its-selection-type
     title: "A query over one variable reports that variable's type"
-    branch: null
+    branch: claude/match-query-ergonomics-kpemmp
     track: mapping-semantics
+    pull_request_number: 254
+    session: https://claude.ai/code/session_01N9nBDbodtuMyupqEWihWVC
+    blockers:
+      - >-
+          None. PR #254 is a draft off main, its own tests green, and it is already merged into #192
+          so the dependent removal is verified rather than assumed.
+    notes: >
+      Carved out of match-underscore-rename-and-forwarding's review round on 2026-09-03 (roadmap
+      section 31), at the developer's instruction, after #192's reviewer asked why four translate()
+      sites still needed _variable_. Selectable._type__ delegates to self._var_ and
+      Query.__post_init__ sets _var_ = self, so no query reports a type and every attribute chain
+      built on one carries _type_ = None - Attribute reads its owning class off its child.
+      Pre-existing on main with no match involved, and already carrying a workaround there:
+      Attribute.number_like_field re-roots the chain onto the query's selection to get a type, while
+      the random-events translator had none and raised TypeError: issubclass() arg 1 must be a
+      class. Entity now reports its selected variable's type and SetOf does not, on the polymorphic
+      split section 12 established. The read is guarded by isinstance(selected, Selectable): a
+      Comparator declares no _type_, a variable claims no underscore-prefixed name, so an unguarded
+      read is captured as a symbolic attribute whose construction compiles the query still inside
+      its own __post_init__ - section 6's hazard, caught by test_explanation.py's filterless-query
+      test recursing. The type turned out necessary but not sufficient for the four sites: a
+      random-events variable is identified by its name, and (Body).size differs from Body.size.
+      Naming an Entity after its selection was measured and is unsound (entity(condition) asks a
+      Comparator for a name that walks back through the query), so the name is fixed where it is
+      read, and the rule number_like_field and #182 both already applied inline is written once as
+      query.variable_rooted. test/krrood_test 1903 passed, 5 skipped.
     depends_on: []
     status: in_progress
