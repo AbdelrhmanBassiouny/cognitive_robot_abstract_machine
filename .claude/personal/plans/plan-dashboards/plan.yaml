@@ -361,14 +361,30 @@ items:
     member for, and `board.json` wanting a constant. Nothing else flagged the stall because
     the fold left the pull request healthy: all 23 checks pass on bfc1e9b7 and it is `clean`
     against its new base.
+
+    **Resolved 2026-09-03** (9dc34b3a). All seven are applied: `bastler/pr_state.py` is
+    `bastler/pull_request_state.py` with its three test modules renamed after it, `ci` is
+    `continuous_integration` on `BoardEntryKey`, `PullRequestDataKey`,
+    `PullRequestLiveState` and `PullRequestRecord`, `PullRequestDetailPayload` is
+    `PullRequestPayload`, and the last hand-spelled strings that already had enums read
+    them - `PullRequestLabel.IN_REVIEW`, `PullRequestLabel.BUG`, and `BOARD_DOCUMENT_NAME`
+    for `board.json`, which `BOARD_PATH` is now built from. 730 tests pass.
+
+    One half is deliberately not done and is the open thread: the `"ci"` each renamed enum
+    member carries as its *value*. That string is the on-disk key in `board.json` and
+    `pr_data.json`, and two readers outside this pull request's diff already spell it -
+    `stack.py`'s `ForkPullRequest.ci` and `maintenance_board.py`, both pre-existing on
+    #185's head. Because every chip field is optional by design, a writer/reader mismatch
+    would render already-fetched data chipless rather than error, so it is not a change to
+    make silently.
   blockers:
     - >-
-      Seven review threads from the 2026-09-03 round are unaddressed, and this is what actually
-      stalls the item: no abbreviations in identifiers at build_dashboard.py 457 and 509 and at
-      pr_state.py 284, 318 and 557 (CONTINUOUS_INTEGRATION, named on the thread), rename
-      bastler/pr_state.py to pull_request_state.py, give PullRequestDetailPayload a clearer name,
-      read the "in-review" literal in test_export_board.py from PullRequestLabel, and give
-      board.json a constant.
+      One review thread from the 2026-09-03 round is left open on purpose, answered on the thread
+      and waiting on the user: whether the "ci" *value* behind the renamed
+      CONTINUOUS_INTEGRATION members should change too. It is the on-disk key in board.json and
+      pr_data.json, read by stack.py's pre-existing ForkPullRequest.ci and by
+      maintenance_board.py, so changing it widens this pull request into files it does not
+      otherwise touch. The other six threads of that round are applied and resolved in 9dc34b3a.
     - >-
       Cross-plan dependency, not representable in depends_on: this branch is stacked on
       bastler-package (#185, bastler-package plan) since 2026-09-02 - its base is that branch and

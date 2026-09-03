@@ -219,3 +219,42 @@ paid off is worth keeping: **assert against the file that declares the value, no
 retyped copy** - the fixture plans' repository, titles and pull request numbers are read
 back out of their manifests through a shared `tests/fixture_plans.py`, and only the ids
 are named in code, because an id is how a test points at a fixture at all.
+
+## shared-pr-state-chips: the 2026-09-03 naming round
+
+Recorded before it was resolved, because the manifest again did not say what was wrong. The
+item read `in_progress` with two blockers, both about the bastler fold and both stale: #185's
+`main` conflict had cleared, and #111's own state was healthy - all 23 checks green, `clean`
+against its new base, out of nothing. What had stalled it was a review round from that morning
+that nothing recorded: seven threads, none of them a defect, all naming rules.
+
+**Same shape as the 2026-08-30 stall, one round later.** Both times the recorded blocker named
+a dependency, and both times the real one was an unanswered review round on the branch's own
+diff. The dependency blocker is true and worth keeping; what it is not is a reason the item
+cannot move. Worth stating as a rule: a blocker naming something outside the item never
+explains why the item itself is idle, so when both are present the review round is the one to
+read first.
+
+**What the round asked for.** No abbreviations, in five places plus the module name itself:
+`pr_state.py` became `pull_request_state.py` and `ci` became `continuous_integration` on the
+two key enums, on `PullRequestLiveState` and on `PullRequestRecord`. `PullRequestDetailPayload`
+wanted a clearer name, and dropping "Detail" made it *correct* as well as shorter - the class
+renders `to_list_entry()` as well as `to_json()`, so naming it after one endpoint described
+half of what it does. The rest were strings that already had enums and were being spelled by
+hand anyway: `in-review`, `bug`, and `board.json`.
+
+**The line the rename stops at, and why it is a line.** An enum member's *name* is an
+identifier; its *value* is a wire format. `CONTINUOUS_INTEGRATION = "ci"` therefore satisfies
+the no-abbreviations rule in full while leaving `board.json` and `pr_data.json` readable by
+`stack.py`'s `ForkPullRequest.ci` and `maintenance_board.py`, which this branch does not
+otherwise touch. It is left open rather than decided, because the chip fields are all optional:
+a writer and reader disagreeing about the key would render already-fetched data chipless
+instead of failing, which is the kind of change that must be asked about rather than made.
+
+**The convergence check the formatter hazard needs.** `format_docstrings.py` prints nothing for
+a file it does not have to touch, and its decline message shares a line with the progress bar -
+so `grep -v '^Formatting'` swallows exactly the message you are looking for. Check a file's
+convergence *in the repository*, never on a copy in a scratch directory: black reads its line
+length from the nearest `pyproject.toml`, so a scratch copy reports a conflict the real file
+does not have. A clean `git worktree` at the commit in question is what answers the question
+"was this already declined, or did I just break it?"
