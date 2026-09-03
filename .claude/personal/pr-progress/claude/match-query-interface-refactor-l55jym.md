@@ -29,6 +29,11 @@ draft PR #192, based on `main`.
 - **`.resolve()` in the feature-extraction tests stays** — load-bearing, and
   making `ground()` resolve its own argument is a `probabilistic_model` change
   the developer should choose. Thread left open.
+- **`part.variable` in `test_markov_chain.py:186`** — asked whether it was an
+  EQL name at all. Measured and answered: `part` is a `Match`, `_variable_` an
+  `IndexByValue`; the foreign object on that line is the `random_events`
+  `Symbolic` on the other side of the `==`; restoring `.variable` fails three
+  tests. No change; thread left open.
 - Two older questions still on the PR: unifying `_get_expression_` with
   `_symbolic_expression_`, and whether `AttributeMatch._symbolic_expression_`
   should exist at all.
