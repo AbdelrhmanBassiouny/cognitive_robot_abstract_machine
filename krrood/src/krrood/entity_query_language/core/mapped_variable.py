@@ -559,7 +559,7 @@ class Attribute(SingleValueMapping[T]):
 
     @property
     def _structural_key_(self) -> Tuple[Any, ...]:
-        return (Attribute, self._attribute_name_, self._owner_class_)
+        return (type(self), self._attribute_name_, self._owner_class_)
 
     @property
     def _name_(self):
@@ -655,7 +655,7 @@ class IndexByValue(Index[T], SingleValueMapping[T]):
     def _structural_key_(self) -> Tuple[Any, ...]:
         # The key is a plain value, since ``__getitem__`` sends a symbolic one to
         # :class:`IndexByExpression`, so it stands for itself.
-        return (IndexByValue, self._key_)
+        return (type(self), self._key_)
 
     def _set_child_instance_value_(self, instance: Any, value: Any):
         instance[self._key_] = value
@@ -688,7 +688,7 @@ class IndexByExpression(Index[T]):
 
     @property
     def _structural_key_(self) -> Tuple[Any, ...]:
-        return (IndexByExpression, identify_argument(self._key_))
+        return (type(self), identify_argument(self._key_))
 
 
 @dataclass(eq=False, repr=False)
@@ -723,7 +723,7 @@ class Call(SingleValueMapping[T]):
     @property
     def _structural_key_(self) -> Tuple[Any, ...]:
         return (
-            Call,
+            type(self),
             tuple(identify_argument(argument) for argument in self._args_),
             tuple(
                 (name, identify_argument(argument))
@@ -771,7 +771,7 @@ class FlatVariable(MappedVariable[T]):
     def _structural_key_(self) -> Tuple[Any, ...]:
         # The node itself is the iteration variable, and it takes no argument naming
         # which element it means, so its identity is all there is to compare.
-        return (FlatVariable, self._id_)
+        return (type(self), self._id_)
 
     @cached_property
     def _name_(self) -> str:
