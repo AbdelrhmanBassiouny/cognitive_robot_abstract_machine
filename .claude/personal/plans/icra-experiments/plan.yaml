@@ -108,29 +108,28 @@ items:
     status: not_started
     blockers:
       - >-
-        Cross-plan: montessori-eql-stack's montessori_fast_inline_monitor (#169) is merged in here, and its last CI round left three coraplex failures, a hanging Tracy demo job and an unbounded SimulationTimePacer.sleep. That plan owns the fix; this item cannot be called done while it is red.
+        Cross-plan: this item merges montessori-eql-stack's montessori_monitor_and_recording (#256) rather than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was split out of #169 so this plan need not take the cramera console with the monitor. What is left of that debt here is one item: SimulationTimePacer.sleep() waits on the simulation clock with no bound, so a stalled simulation blocks a tick forever. No test reaches it - only the demo scripts set context.simulation_clock - but it is a real hang, and what a stalled simulation should do is the developer's call. The three coraplex failures and the hanging Tracy demo this blocker used to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on #169's c8bf6f05.
     notes: >-
-      The foot of the plan. Cut off main and merge in, in this order, the
-      library half of the monitor stack (#244), the monitor itself (#169, which
-      carries the segmind event monitor, the attach and detach of a grasped
-      shape behind Context.update_world_model_attachment, and the results
-      recording), the predicate classes (#229), the perception stack tip (#238,
-      which carries #221, #222 and #227) and the hole layout fit (#236, which
-      carries #225 and #232), the detector choice by rule (#231, 13 commits,
-      no rule-engine dependency) and only the one knowledge-half commit of
-      #239 (3a493be9, the measured colours and finishes on the twin): the rest
-      of #239 is 177 commits of the RDR stack and stays out. Resolve the known
-      meetings once and record them in roadmap.md: #223's RectifiedFootprint
-      rename, #231's EdgeFitDetector rename, #244 and #229 both editing
-      reasoning/predicates.py and geometry.py. Inherits #169's open debt,
-      which is prerequisite work: its last CI round left three coraplex
-      failures and a hanging Tracy demo job, and SimulationTimePacer.sleep
-      has no bound. Done when franka_montessori_demo and the Tracy simulated
-      demo both sort the board headless with the event monitor ticking and
-      every test module of the merged packages collected and green in CI.
-      Keep #192 out until the developer says it is in; it removes
-      Match.variable, which #159 and therefore #239 still read.
-
+      The foot of the plan. Cut off main and merge in, in this order, the library half of
+      the monitor stack (#244), the monitor itself (#256, which carries the segmind event
+      monitor, the attach and detach of a grasped shape behind
+      Context.update_world_model_attachment, and the results recording, and which imports
+      no cramera at all), the predicate classes (#229), the perception stack tip (#238,
+      which carries #221, #222 and #227) and the hole layout fit (#236, which carries #225
+      and #232), the detector choice by rule (#231, 13 commits, no rule-engine dependency)
+      and only the one knowledge-half commit of #239 (3a493be9, the measured colours and
+      finishes on the twin): the rest of #239 is 177 commits of the RDR stack and stays
+      out. Resolve the known meetings once and record them in roadmap.md: #223's
+      RectifiedFootprint rename, #231's EdgeFitDetector rename, #244 and #229 both editing
+      reasoning/predicates.py and geometry.py. Inherits one piece of open debt from that
+      stack, which is prerequisite work: SimulationTimePacer.sleep has no bound. The demo
+      entry point stays in #169, since franka_montessori_demo.py is bound to cramera
+      through SortingRunControl, so the headless demo this item is done by is tracy_icra's
+      own montessori_demo.py rather than that one. Done when franka_montessori_demo and
+      the Tracy simulated demo both sort the board headless with the event monitor ticking
+      and every test module of the merged packages collected and green in CI. Keep #192
+      out until the developer says it is in; it removes Match.variable, which #159 and
+      therefore #239 still read.
   - id: simulated-camera-feeds-perception
     title: "A MuJoCo camera feeds the perception pipeline the same frames the real camera does"
     branch: null

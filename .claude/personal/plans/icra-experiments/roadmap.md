@@ -239,3 +239,47 @@ and the paper rather than worked around:
   still needed for the paper once `snapshot-working-memory` and
   `failure-taxonomy-and-typing` exist, or whether the violated-expectation
   report folds into the failure typing here.
+
+## 2026-09-03: the foot item takes #256, not #169
+
+`integrated-simulation-pipeline` merged `montessori_fast_inline_monitor` (#169) for three
+things: the segmind event monitor, the attach/detach of a grasped shape behind
+`Context.update_world_model_attachment`, and the results recording. #169 had meanwhile
+become the cramera console — **164 of its 272 files** — so taking those three meant taking
+the viewer, its CI surface and its review.
+
+They are their own pull request now: **#256 `montessori_monitor_and_recording`**, between
+#244 and #169 in stack #258. 35 files, and nothing in it imports `cramera`. The merge
+order in this item's notes names #256 in #169's place; nothing else about the item
+changed.
+
+Three wrong-direction imports had to be straightened for that to be true, all on the
+`montessori-eql-stack` side: `MethodPatch` moved out of cramera to
+`krrood.patterns.method_patch`; `sorting_progress` reads `NumericPose` from
+`semantic_digital_twin.spatial_types.numeric`, where it is defined, rather than from
+cramera's re-export; and the one test that drives a monitor into
+`MontessoriLiveEventSource` stayed with that adapter. That plan's roadmap carries the
+detail.
+
+### What stays in #169, and why this item does not need it
+
+`franka_montessori_demo.py` and the three cramera adapters. `SortingRunControl` subclasses
+cramera's `LiveRunControl` ABC and its clock is `cramera.live.run_clock.RunClock`, so the
+demo entry point cannot cross without inverting that layer — scoped, and deliberately not
+done.
+
+It is not needed, and checking that is what settled the cut: **`tracy_icra` has no cramera
+and carries its own `montessori_demo.py`.** So this item's "sorts the board headless" is
+met by that demo, not by `franka_montessori_demo`. Worth knowing for the meetings this
+item already plans to resolve: `tracy_icra` built its own `experiments/montessori/`
+package, and so did #169 — the directory exists on neither `main` nor #244, so the two
+packages meet here in full, not in a few files.
+
+### The blocker this item carried is down to one line
+
+It named three coraplex failures, a hanging Tracy demo job and an unbounded
+`SimulationTimePacer.sleep()`. The first two are fixed — the gripper round (`7fa4b1936`)
+cleared them, and all 24 checks passed on #169's `c8bf6f05`. Only the unbounded `sleep()`
+stands, and it is a policy question rather than a bug to guess at: no test reaches it,
+only the demo scripts set `context.simulation_clock`, but a stalled simulation blocks a
+tick forever.
