@@ -922,7 +922,6 @@ class WrappedTable(TableLike):
         if self.parent_table is not None:
             return self.parent_table.qualified_reference
         else:
-            # "Base" is always in scope: imported from krrood.ormatic.base at the top of the file.
             return "Base"
 
     def __hash__(self):
