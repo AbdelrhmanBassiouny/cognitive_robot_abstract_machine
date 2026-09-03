@@ -92,9 +92,15 @@ class JSONPlayer(FilePlayer):
                 i * self.time_between_frames.total_seconds(), objects_data, frame_idx=i
             )
 
-    def _pause(self): ...
+    def _pause(self):
+        """
+        Nothing beyond the paused status is needed to hold a file.
+        """
 
-    def _resume(self): ...
+    def _resume(self):
+        """
+        Nothing beyond the playing status is needed to resume a file.
+        """
 
     def get_objects_poses(self, frame_data: FrameData) -> Dict[Body, Pose]:
         """

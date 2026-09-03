@@ -62,6 +62,7 @@ BOARD_FRAME = "board"
 CUBE_FRAME = "cube"
 LINK_FRAME = "link"
 GHOST_FRAME = "ghost"
+UNROOTED_FRAME = "odom"
 JOINT = "elbow_joint"
 BOARD_IN_MAP = (1.0, 0.0, 0.0)
 SAMPLE_TIMES = [1.0, 2.0, 3.0]
@@ -388,7 +389,9 @@ def test_a_reference_frame_the_recording_never_publishes_is_refused(tmp_path, wo
     """
     episode = RecordedEpisode(
         transforms=[
-            TransformsAt(1.0, [RecordedTransform("odom", CUBE_FRAME, (0.0, 0.0, 0.0))])
+            TransformsAt(
+                1.0, [RecordedTransform(UNROOTED_FRAME, CUBE_FRAME, (0.0, 0.0, 0.0))]
+            )
         ]
     )
     bag = episode.write(tmp_path / "elsewhere")
