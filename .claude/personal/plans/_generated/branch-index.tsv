@@ -18,6 +18,7 @@ claude/eql-verbalization-p1-surface-verification-eqltzc	eql-verbalization
 claude/eql-verbalization-operand-naming-n0gb95	eql-verbalization
 claude/eql-verbalization-p3-albw76	eql-verbalization
 eql-symbolic-function-sdt	eql-verbalization
+claude/icra-experiments-scenario-domain-n7zwpr	icra-experiments
 montessori_perception_on_main	knowledge-directed-perception
 perception_surfaces_from_world	knowledge-directed-perception
 perception_per_supporting_surface	knowledge-directed-perception

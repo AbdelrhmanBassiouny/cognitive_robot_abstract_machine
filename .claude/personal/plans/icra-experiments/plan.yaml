@@ -170,11 +170,12 @@ items:
   # %% scenario-model
   - id: scenario-domain-model
     title: "Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports"
-    branch: null
-    pull_request_number: null
+    branch: claude/icra-experiments-scenario-domain-n7zwpr
+    pull_request_number: 261
     track: scenario-model
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01Y2R5PzHHiVS7EvnAZ1J2yc
     notes: >-
       The meta level the developer asked for: a Scenario names how to build
       its world and which robot and execution kind (simulated or real) it
