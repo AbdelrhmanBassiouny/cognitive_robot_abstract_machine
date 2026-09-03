@@ -4449,3 +4449,79 @@ parse this repository's `pyproject.toml`, `pip install -U uv` puts a working one
 #236, #238, #239 and #246 recorded -- the four-space item-field indentation against this
 plan's two -- so `plan.yaml` was edited directly again. Seven rounds have now worked around
 one unfixed script.
+
+### `imagination-world-rejects-what-a-predicate-refuses`: what it took, and the fault that was not a refusal
+
+Built 2026-09-03 in `auto` mode as pull request #255, off #238 for the reason the plan
+above records.
+
+#### The refusal had a quieter half
+
+The item was raised about a relation the backend *refuses*. Reading
+`_check_what_was_found` rather than the note turned up a second shape of the same fault, and
+it is the worse one: a relation stated about the thing sought **alone** -- *supporting
+something*, *stable* -- was never refused at all. It fell through to the residual filter and
+was evaluated natively, where it reached for `_world` on a dataclass and raised
+`AttributeError`. A refusal at least says what it cannot do. Both halves are closed by the
+same thing, which is the detection having a body behind it.
+
+#### One change in krrood, and it is about what a description leaves behind
+
+The refusal is `condition._constrained_variables_ - {expression.variable}` being non-empty.
+The things a statement *describes* are already resolved out of the world before the look, so
+they are not variables the look has to answer -- subtracting them from that difference is
+the whole change. What it needs beside it is that a described variable stops ranging over
+everything it could have meant: `_hold_each_description_to_its_answer` pins each to the one
+answer that resolved it, or the residual check would pass against something the statement
+ruled out.
+
+`PerceptionBackend.discard` is the other half: what the statement rejected, which a backend
+that brought its findings into a world of its own takes back out. It does nothing by default,
+because a backend that brought them nowhere has nothing to let go of.
+
+#### A statement names the world's entity, and the copy answers for it
+
+The one thing this design could not decide from the sources: a statement names a body of the
+world the robot has, while the found things stand in the copy. Measured rather than assumed
+-- `InContactWith(<a body of the copy>, <the original's own body>)` answers exactly as it does
+against the copy's counterpart, positive and negative both, because the collision detector
+resolves the second body inside the first one's world. So no substitution is needed at the
+call site, and a statement is written the way it always was.
+
+#### `Role[T]` decides where the spawn happens
+
+`role_taker` is required at construction, so the piece has to exist in a world *before* the
+detection does -- which puts the spawn inside `LoosePieceDetector._piece_at`, at the moment a
+piece is recognised, rather than anywhere later. `ImaginedWorld` therefore replaces
+`reference_frame` in that detector's signature rather than joining it: it carries the frame
+the look reports in, so the parameter count is unchanged and there is one thing that knows
+where a finding comes to stand. `MontessoriPerceptionPipeline.imagine()` is the one place a
+look's world is made.
+
+A finding's pose keeps naming the frame of the world the look was taken in; only the body
+hangs from the copy's own counterpart, found by the name they share. Nothing a caller reads
+off a detection changed.
+
+#### Verification, and a container that cannot run the experiments suite
+
+`test/krrood_test/test_eql/`: **1326 passed**, 3 skipped, against **1324** on the base tip in
+a worktree with its own `*/src` on `PYTHONPATH`. The Montessori modules of
+`test/experiments_test/`: **321 passed**, 1 skipped, 11 xfailed, against **310** on the same
+base -- the eleven added and nothing else moved.
+
+The three behaviours are mutation-checked: reverting the krrood refusal change fails the
+end-to-end described-operand test, and stubbing out `discard` fails the discard test, neither
+touching anything else.
+
+**This container has no ROS at all**, which is new on this plan: `test/experiments_test/conftest.py`
+imports `rclpy` and, through `coraplex`, `geometry_msgs`, so the directory cannot be collected
+here, and `scripts/regenerate_all_orm.py` fails in giskardpy's own generator
+(`CouldNotResolveType: DebugExpressionPublisher`) for the same reason -- both before this
+branch changed anything. The Montessori test modules were run against the same sources from
+outside that conftest, identically on this branch and on its base, which is what makes the two
+numbers comparable. A ROS container runs them the ordinary way.
+
+#### The bootstrap script's fault is unfixed, for the seventh round
+
+`plan_item_bootstrap.py open` fails through `save-plan.sh` again, so `plan.yaml` and
+`roadmap.md` were written directly and pushed with `save-plan.sh`.

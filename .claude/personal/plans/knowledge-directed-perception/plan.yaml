@@ -839,7 +839,16 @@ items:
 
     The rename waits here rather than landing on #238 for a second reason the developer weighed: it is 51
     references across 10 files, and #232, #236 and #239 would each inherit it as a conflict. Naming the type
-    once, when it is what it will finally be, costs those three branches nothing.'
+    once, when it is what it will finally be, costs those three branches nothing.
+
+
+    Built 2026-09-03 as #255, off #238 rather than off #227: the rename is 53 references across 11
+    files on #238''s tree and six of those files exist on no earlier branch, so renaming on #227 would
+    have named the type on half its readers and handed #238 the rest as a conflict.
+    search-clipped-to-a-predicates-region is therefore recorded as a dependency. The round found a
+    second shape of the same fault the item was raised about: a relation stated about the thing sought
+    alone was never refused at all, only evaluated natively where it raised AttributeError on a
+    dataclass. Both are closed by the detection having a body behind it.'
 - id: how-to-look-concluded-from-the-request
   title: Work out how to answer a look from the request, instead of being handed a pipeline
   branch: null
