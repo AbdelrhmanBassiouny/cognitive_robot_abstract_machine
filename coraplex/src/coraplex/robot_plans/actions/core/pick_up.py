@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing_extensions import Any, Dict, Optional
 
 from coraplex.locations.pose_validator import AreReachableBy, IsObjectReachableBy
-from coraplex.plans.attachment_nodes import AttachNode
+from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import LookAtAction
@@ -277,7 +277,7 @@ class PickUpAction(
         ]
         if self.context.update_world_model_attachment:
             children.append(
-                AttachNode(
+                ReAttachNode(
                     body=self.object_designator.root,
                     new_parent=ViewManager.get_end_effector_view(
                         self.arm, self.robot

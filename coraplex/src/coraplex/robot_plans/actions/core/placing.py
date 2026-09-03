@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Any, Dict
 
-from coraplex.plans.attachment_nodes import DetachNode
+from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.plan_node import PlanNode
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import (
@@ -83,7 +83,7 @@ class PlaceAction(
         children = []
         if self.context.update_world_model_attachment:
             children.append(
-                DetachNode(body=self.object_designator, new_parent=self.world.root)
+                ReAttachNode(body=self.object_designator, new_parent=self.world.root)
             )
         children.append(
             MoveToolCenterPointMotion(

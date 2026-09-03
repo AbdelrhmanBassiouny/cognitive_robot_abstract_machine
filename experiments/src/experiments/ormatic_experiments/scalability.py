@@ -28,7 +28,10 @@ from experiments.experiment_definitions import (
 )
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
-from krrood.ormatic.helper import get_classes_of_ormatic_interface
+from krrood.ormatic.helper import (
+    get_classes_of_ormatic_interface,
+    OrmaticInterfaceInformation,
+)
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.type_dict import TypeDict
 from krrood.utils import recursive_subclasses
@@ -57,10 +60,10 @@ def build_cram_class_sets() -> Tuple[Set[Type], List[Type], dict]:
     # unrelated to_dao() call whose object graph reaches those domain classes.
     import coraplex.orm.ormatic_interface
 
-    classes, alternative_mappings, type_mappings = get_classes_of_ormatic_interface(
-        coraplex.orm.ormatic_interface
-    )
-    classes = set(classes)
+    interface_info = get_classes_of_ormatic_interface(coraplex.orm.ormatic_interface)
+    classes = set(interface_info.classes)
+    alternative_mappings = interface_info.alternative_mappings
+    type_mappings = interface_info.type_mappings
 
     alternative_mappings += [
         alternative_mapping
@@ -237,8 +240,10 @@ def _ormatic_scalability_experiment(
 
     ormatic = ORMatic(
         class_diagram,
-        type_mappings=TypeDict(type_mappings),
-        alternative_mappings=alternative_mappings,
+        interface_information=OrmaticInterfaceInformation(
+            type_mappings=TypeDict(type_mappings),
+            alternative_mappings=alternative_mappings,
+        ),
     )
     ormatic.make_all_tables()
 
