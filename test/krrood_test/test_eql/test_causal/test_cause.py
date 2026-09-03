@@ -41,12 +41,12 @@ def test_cause_backfills_its_type_from_the_attribute_it_is_assigned_to():
 
 def test_match_marks_a_cause_attribute_as_present():
     match = a(Pick)(arm=cause, grasped=True)
-    assert match.has_cause_attributes is True
+    assert match._has_cause_attributes_ is True
 
 
 def test_match_without_cause_reports_no_cause_attributes():
     match = a(Pick)(arm=0.3, grasped=True)
-    assert match.has_cause_attributes is False
+    assert match._has_cause_attributes_ is False
 
 
 def test_two_cause_marked_attributes_resolve_to_distinct_objects():

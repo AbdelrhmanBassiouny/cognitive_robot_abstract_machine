@@ -346,7 +346,7 @@ class Match(
         self._kwargs_ = kwargs
         self._has_been_called = True
         if self._variable_ is None:
-            self.create_or_update_variable()
+            self._create_or_update_variable_()
         return self
 
     @property
@@ -408,7 +408,7 @@ class Match(
         :param parent: The parent match if this is a nested match.
         """
         parent = parent or self
-        self.update_fields(variable, parent)
+        self._update_fields_(variable, parent)
         for attr_name, attr_assigned_value in self._kwargs_.items():
             if isinstance(attr_assigned_value, (list, tuple)) and any(
                 isinstance(element, AbstractMatchExpression)
@@ -469,7 +469,7 @@ class Match(
                 index_access=index,
             )
 
-    def update_fields(
+    def _update_fields_(
         self,
         variable: Optional[Selectable] = None,
         parent: Optional[AbstractMatchExpression] = None,
@@ -484,11 +484,11 @@ class Match(
         if variable is not None:
             self._variable_ = variable
         elif self._variable_ is None:
-            self.create_or_update_variable()
+            self._create_or_update_variable_()
 
         self._parent_ = parent
 
-    def create_or_update_variable(self):
+    def _create_or_update_variable_(self):
         """
         Create the subject variable from this match's current type and domain.
 
@@ -553,7 +553,7 @@ class Match(
         return isinstance(value, type(Ellipsis))
 
     @property
-    def has_cause_attributes(self) -> bool:
+    def _has_cause_attributes_(self) -> bool:
         """
         :return: Whether any attribute anywhere in this match's pattern (including nested
             matches) is marked with :func:`~krrood.entity_query_language.factories.cause` --
@@ -689,7 +689,7 @@ class Match(
 
         .. note::
             ``__call__`` eagerly creates a subject variable before the domain is known (and with
-            no domain that is a SymbolGraph-wide variable for Symbol types). ``create_or_update_variable``
+            no domain that is a SymbolGraph-wide variable for Symbol types). ``_create_or_update_variable_``
             re-scopes that same variable's domain in place (see its docstring) rather than
             replacing it, so a ``where`` recorded before this call keeps referencing the correct,
             now domain-scoped, variable.
@@ -698,7 +698,7 @@ class Match(
         :return: This match, for chaining.
         """
         self._domain_ = domain
-        self.create_or_update_variable()
+        self._create_or_update_variable_()
         return self
 
     def _update_kwargs_from_literal_values(self):

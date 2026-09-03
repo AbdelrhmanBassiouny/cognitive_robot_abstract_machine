@@ -557,6 +557,14 @@ def test_names_that_became_match_internals_are_symbolic_attributes():
         match.matches_with_variables
         is match._symbolic_expression_.matches_with_variables
     )
+    assert match.update_fields is match._symbolic_expression_.update_fields
+    assert (
+        match.create_or_update_variable
+        is match._symbolic_expression_.create_or_update_variable
+    )
+    assert (
+        match.has_cause_attributes is match._symbolic_expression_.has_cause_attributes
+    )
 
 
 # %% a match reads like an instance in every symbolic operation

@@ -117,7 +117,7 @@ class QueryBackend(ABC):
 
         :param expression: The expression about to be evaluated.
         """
-        if not (isinstance(expression, Match) and expression.has_cause_attributes):
+        if not (isinstance(expression, Match) and expression._has_cause_attributes_):
             return
         if self.raise_on_unresolvable_cause:
             raise BackendCannotEvaluateCause(expression, backend_type=type(self))
