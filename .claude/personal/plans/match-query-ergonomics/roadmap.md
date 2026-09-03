@@ -1480,6 +1480,8 @@ by side no longer write one path. The module under `-n 4` from a clean state goe
 1 failed 5/5 runs to green 5/5. It is not a plan item - one pull request, in a suite this
 plan does not otherwise touch.
 
+## 30. 2026-09-03: main's first arrival after the detours came out
+
 `/plan-item-resolve match-query-ergonomics match-underscore-rename-and-forwarding`, in
 auto mode. Two things were live and the manifest recorded neither: the eighth
 `needs-resolution` conflict, and a second review round left at 14:45-14:54 on the same
