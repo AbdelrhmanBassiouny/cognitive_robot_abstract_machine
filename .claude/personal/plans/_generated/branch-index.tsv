@@ -37,7 +37,7 @@ claude/choose-detection-method-gf64yp	knowledge-directed-perception
 claude/knowledge-directed-perception-detector-zrm57t	knowledge-directed-perception
 perception_interactive_rule_tuning	knowledge-directed-perception
 claude/episode-replayed-world-kickoff-6ye5bb	knowledge-directed-perception
-perception_expectations_from_events	knowledge-directed-perception
+claude/plan-item-kickoff-expectations-2zvpmn	knowledge-directed-perception
 perception_robokudo_detector	knowledge-directed-perception
 tracy_icra	knowledge-directed-perception
 claude/match-query-ergonomics-idk9w2	match-query-ergonomics

@@ -4117,3 +4117,193 @@ The rename touches `occupancy.py`, `pipeline.py` and `detections.py`, which #232
 also change; they meet it when the merge reaches them. That cost was weighed when the fold
 was taken and is why the rename happens once, here, in the name the type will finally
 carry.
+
+## `expectations-from-events`: three parents, three stacks, and the rule that carries the weight
+
+Kicked off 2026-09-03 in `auto` mode, as draft pull request #257 off
+`claude/plan-item-kickoff-kdp-o4l189` (#232). All three dependencies are open and out
+of draft, so `check_dependency_readiness.py` reports `open_ready` for each. The
+session's branch arrived cut from `integration` -- the hazard #199 exists to refuse,
+and the ninth time on this plan after #223, #225, #227, #232, #236, #238, #239 and
+#246 -- and was re-cut onto #232's tip before the first commit.
+
+### It is the one item on the deadline's critical path with no branch, and another plan says so
+
+`icra-experiments` (tracking issue #252) recorded on 2026-09-03 that everything this
+plan has built is consumed by its `integrated-simulation-pipeline`, and that
+`expectations-from-events` is the one thing it still needs and "the one item of this
+plan on the deadline's critical path that has no branch yet". It blocks that plan's
+`failure-taxonomy-and-typing` (its expectation-derived failure type) and
+`experiment-c-in-simulation` (which without it "reports typed failures but not detected
+ones"). Both carry a blocker naming this item.
+
+That plan also records an open question for the developer, repeated here rather than
+answered: whether this item is still needed once `snapshot-working-memory` and
+`failure-taxonomy-and-typing` exist, or whether the violated-expectation report folds
+into the failure typing there. It is not this session's to settle, and the recorded
+answer everywhere else is that the item is needed, so it is built.
+
+### Three dependencies on three stacks, and the base that costs least
+
+This is the second item whose dependencies span the plan's two perception stacks, and
+the first whose third is on a stack of its own:
+
+```
+#202 -> #205 -> #221 -> #222              the backend, and what a look is asked for
+                     \-> #225 -> #232     the believed place, and hypotheses
+#244 -> #246                              the events, read off a recording
+```
+
+The base is **#232**, because the type this item extends is defined there: #232's own
+section records the belief sources it built and names "the object's own history" as the
+fourth, which is this item. **#222 and #246 are merged in rather than waited on**, this
+plan's standing `depends_on` rule and the same move #227 made with #229 and #238 with
+#232.
+
+Measured before the branch was opened rather than assumed:
+
+| merge | cost |
+| --- | --- |
+| #246 into #232 | clean |
+| #222 into #232 | `pipeline.py` and `test_montessori_perception.py`, five hunks |
+| #246 into #238 | `reasoning/predicates.py` and its test -- #244 against #229 |
+
+The five hunks are the merge #238 already paid and recorded ("both resolve as a
+union"), so the resolution is read from there rather than re-derived. The only file
+#222 and #246 both touch is `english.py`, which auto-merges.
+
+**Basing on #238 instead was measured and refused.** It already carries #222, #227,
+#232 and #229, so it would have cost one merge instead of two -- but it would carry
+#227's and #238's 6,853-line diff through this item's review, which is exactly the
+trade #231 refused for #159 and #238 refused again. A merge is mechanical and cheap;
+another item's diff in this one's review is not.
+
+**#246 is not only the replay.** `segmind/datastructures/events.py` on `main` imports
+`geometry_msgs`, so no segmind test collects without ROS 2 -- #246's own round measured
+that. #244, which #246 carries, removes that import, so merging #246 is what makes the
+event half of this item testable in a container at all. That is a second, sharper
+reason for the dependency than the replay, which this item does not run.
+
+### What an expectation is, and what propagates it
+
+The item's widening of 2026-08-31 already settled the type: an expectation is a belief
+about where an object is -- a stretch of a named surface, an interval of turns, and the
+surface it should rest on -- which is #232's `BelievedPlace` exactly. What this item
+adds is the *subject* and the *history*: a `BelievedPlace` about one piece the world
+names, and the rules that move it.
+
+Three rules, and they are the item's own notes rather than a design taken here:
+
+- released over a hole, the piece is believed at that hole, turned any way, within the
+  spread a release allows;
+- still grasped, its pose is the gripper's;
+- acted on by nothing, its pose is exactly where it was last seen.
+
+**The third is the one that carries the weight**, and it is why a history makes
+tractable what a single frame does not: a belief only decays when something acts on the
+object, so an expectation stays good across every frame in which nothing happened.
+Segmind's events are what say that something happened -- `SupportEvent`,
+`LossOfSupportEvent`, `PickUpEvent`, `PlacingEvent` and `InsertionEvent`, all of which
+already exist and are already computed over `is_supported_by`. A gap found in Segmind
+is a finding for this item, not an assumption of the plan.
+
+### The violated part is the report, and it is what a recovery acts on
+
+An expectation states three things -- the surface, the position, the turn -- so a look
+that contradicts it contradicts one or more of them by name. The insertion promised the
+cube would end up *in* the hole; it is found resting *on* the lid, turned thirty degrees
+from where it would have had to be. Reporting *which* part failed is what distinguishes
+this from an absence, and it is the paper's end-to-end story.
+
+**Recovery is not built**, per the budget section's own narrowing of this item: "report
+the violated expectation. Let recovery be the plan re-asking, not a policy of its own."
+
+### How an expectation reaches a look
+
+Through the request. `perception-backend`'s note on #201 states it: "arming an
+expectation reaches the pipeline through the request", and the plan's structural change
+of 2026-08-31 predicted the shape -- "`SceneRequest` will need to carry a believed place
+as well as a type and a surface". So `SceneRequest` gains what is expected, and
+`MontessoriPerceptionPipeline.detect` evaluates it beside what `expected_pieces()`
+already believes from the world.
+
+This is also what #232's measurement asked for. It built the board's holes as a source
+of hypotheses, measured it twice and left it out, recording that "sweeping every hole
+for every piece every frame is a second exhaustive pass, not knowledge-directed search;
+what makes a seeded fit cheap and precise is a belief that names *which* piece at
+*which* place, and the two things that can say that are the world and the object's own
+history". This item is that second thing.
+
+### `InsertMontessoriShapeAction` is not edited, and it cannot be
+
+The action exists only on `tracy_icra` -- `git ls-tree` finds it on no branch this item
+can base on -- and `ActionDescription` on `main` declares its effect as a
+`post_condition` returning a symbolic expression, with no per-action effect this item
+could read. So the declared effect is built as a rule this item owns, which whoever
+performs the action calls, and the wiring lands on the demo branch. That is the same
+split the perception node already has, and `experiments`' own conventions for a module
+that cannot be imported in a container.
+
+### The lid marks, and why the captures can be measured at all
+
+#232 left four expected-to-fail marks on `test_every_piece_resting_on_the_lid_is_found`
+naming this item, and recorded exactly why they could not come off there: "a capture
+carries no world, so nothing on a capture believes anything about the lid yet."
+
+Three of the six captures -- `stuck_cube_in_hole`, `disoriented_cube_on_hole` and
+`displaced_cube_from_hole` -- are a cube an insertion put at a named hole, which the
+2026-08-31 measurement recorded as needing no replay at all: a hole is a place the board
+mesh gives and the board detection locates every frame. So the history for a capture is
+stated the way `recorded_setup` already states its surfaces and its camera: *what was
+done*, not where the piece is. That distinction is load-bearing and is stated in the
+test's own docstring -- stating that an insertion released the cube over a named hole is
+a statement about what the recording is, and the look still has to find the piece.
+
+**Whether all four marks come off is a measurement, not a promise**, and is recorded
+with whatever it turns out to be, following what #232 and #236 both did with their own.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause:
+
+- The expectation and the store on their own: a release over a hole believes the piece
+  at that hole turned any way; a pick-up moves the belief onto the gripper; an event
+  about another object leaves a belief where it was; a support event confirms and a
+  loss-of-support refutes.
+- The report on its own: an expectation met; one violated in the surface, one in the
+  position, one in the turn; and nothing found at all, which is its own outcome rather
+  than a fourth violated part.
+- The pipeline over the rendered scene and then the captures, which is the measurement
+  that matters.
+
+Cost as a ratio to a same-run baseline, never in seconds, per what #232 recorded about
+this container's speed moving between runs by more than the difference being measured.
+
+### Landing hazards
+
+#255 (`imagination-world-rejects-what-a-predicate-refuses`, kicked off the same day on
+the #238 stack) renames `MontessoriShapeDetection` to `DetectedMontessoriShape` and
+makes it a `Role`, touching `occupancy.py`, `pipeline.py` and `detections.py`. This
+branch edits `pipeline.py`, so it inherits that rename the same mechanical way #232 and
+#236 do. #223's `Footprint` -> `RectifiedFootprint` rename conflicts with this branch's
+`pipeline.py` edits as it does with #205, #221, #225, #232, #236, #238 and #239, and
+#231's `LoosePieceDetector` -> `EdgeFitDetector` rename with them.
+
+### The bootstrap script's fault, for the sixth time and in both of its forms
+
+`.claude/hooks/plan_item_bootstrap.py open` failed inside `save-plan.sh` again, with the
+error swallowed by `capture_output=True` -- the four-space `ITEM_FIELD_INDENT` against
+this plan's two-space item fields, exactly as #231, #236, #238 and #239 recorded, and
+this checkout also has only `record` and `open` rather than the `update` the skills now
+call for, which is the second distinct reason #246 recorded. Worked around a sixth time
+by editing `plan.yaml` directly and pushing with `save-plan.sh --manifest`. It is the
+same family as #160 and still wants its own bug-fix pull request.
+
+### The tracking-issue subscription could not be armed
+
+`subscribe_pr_activity` on #201 was refused by this session's permission classifier. The
+gathering procedure says not to let that fail the skill, so it is recorded here instead:
+this session will not see structural changes to the plan as they arrive, and read the
+tracking issue's comments directly before any later round. Reading them at kickoff is
+what turned up `icra-experiments`' cross-plan record above, which nothing in this plan's
+own roadmap carried.

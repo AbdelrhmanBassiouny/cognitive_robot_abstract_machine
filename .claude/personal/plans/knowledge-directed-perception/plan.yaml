@@ -1165,14 +1165,15 @@ items:
     since this recording''s static transform happens to be stamped at the first dynamic message time.'
 - id: expectations-from-events
   title: Expect what the action promised, and report the difference as a failure
-  branch: perception_expectations_from_events
-  pull_request_number: null
+  branch: claude/plan-item-kickoff-expectations-2zvpmn
+  pull_request_number: 257
   track: events
   depends_on:
   - perception-backend
   - pieces-looked-for-where-expected
   - episode-replayed-into-the-world
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_01KssQQoxKJVf6NzcZbNZ9dQ
   notes: 'Segmind already emits SupportEvent, LossOfSupportEvent, PickUpEvent, PlacingEvent and InsertionEvent
     over is_supported_by. Perception keeps a set of expectations from them - after LossOfSupport(piece,
     table) stop searching the table; after Placing(piece, lid) search the lid - and the action model gets
