@@ -54,7 +54,7 @@ next to the workflow it describes, because it is read rather than run.
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`).
   - `python -m bastler.stack export` - (re)write `board.json` from the fork's live open PRs,
-    through the package's shared `bastler.pr_state` layer (`gh` when installed, else a
+    through the package's shared `bastler.pull_request_state` layer (`gh` when installed, else a
     `GH_TOKEN`/`GITHUB_TOKEN`). Exits `6` when neither route to the GitHub API is available.
   - `python -m bastler.stack configuration` - every resolved setting as `key<TAB>value`
     lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which

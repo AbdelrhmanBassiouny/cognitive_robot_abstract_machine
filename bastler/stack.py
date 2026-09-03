@@ -34,7 +34,7 @@ commits, an unencoded compare URL loses its prefill, and a landed parent is deci
 rather than by pull-request state. ``landed`` reports only - GitHub closes a pull request as merged
 by itself once its head is contained in its base, so nothing here has to close one. ``export``
 writes the ``board.json`` the board-reading commands consume, through the package's shared
-:mod:`bastler.pr_state` layer.
+:mod:`bastler.pull_request_state` layer.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ from typing import ClassVar
 from urllib.parse import quote
 
 from bastler.personal_notes import PersonalNotesBranch
-from bastler.pr_state import (
+from bastler.pull_request_state import (
     BoardEntryKey,
     GitHubAccessError,
     GitHubApi,
@@ -66,7 +66,11 @@ from bastler.pr_state import (
 CONFIGURATION_PATH = Path(__file__).with_name("stack.toml")
 """The checked-in configuration every run starts from, before any per-user override."""
 
-BOARD_PATH = Path(__file__).with_name("board.json")
+BOARD_DOCUMENT_NAME = "board.json"
+"""The exported snapshot's file name, wherever it is written - the package's own copy or
+a test's scratch directory."""
+
+BOARD_PATH = Path(__file__).with_name(BOARD_DOCUMENT_NAME)
 """Where the exported snapshot of the fork's open pull requests is read from and written
 to - scratch state, never committed."""
 
@@ -567,7 +571,7 @@ def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
             base=pr[BoardEntryKey.BASE],
             draft=bool(pr[BoardEntryKey.DRAFT]),
             labels=list(pr.get(BoardEntryKey.LABELS, [])),
-            ci=pr.get(BoardEntryKey.CI),
+            ci=pr.get(BoardEntryKey.CONTINUOUS_INTEGRATION),
             session=pr.get(BoardEntryKey.SESSION),
         )
         for pr in data[BoardEntryKey.PULL_REQUESTS]

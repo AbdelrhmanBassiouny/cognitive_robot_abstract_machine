@@ -7,11 +7,16 @@ covered by ``test_stack.py``, not re-tested here.
 
 from __future__ import annotations
 
-from bastler.pr_state import CheckConclusion, ClaudeSessionLink, RepositoryEndpoints
-from bastler.stack import export_board, load_board
+from bastler.build_dashboard import PullRequestLabel
+from bastler.pull_request_state import (
+    CheckConclusion,
+    ClaudeSessionLink,
+    RepositoryEndpoints,
+)
+from bastler.stack import BOARD_DOCUMENT_NAME, export_board, load_board
 
 from .pull_request_payloads import (
-    PullRequestDetailPayload,
+    PullRequestPayload,
     RecordedFakeGitHubApi,
     check_runs_payload,
 )
@@ -26,10 +31,10 @@ ENDPOINTS = RepositoryEndpoints(REPOSITORY)
 Its endpoints.
 """
 
-PULL_REQUEST = PullRequestDetailPayload(
+PULL_REQUEST = PullRequestPayload(
     number=5,
     head="feature-branch",
-    labels=("in-review",),
+    labels=(PullRequestLabel.IN_REVIEW,),
     session=ClaudeSessionLink("05"),
     additions=10,
     deletions=2,
@@ -57,7 +62,7 @@ def make_single_pull_request_api() -> RecordedFakeGitHubApi:
 
 
 def test_export_writes_a_board_that_load_board_round_trips(tmp_path):
-    board_path = tmp_path / "board.json"
+    board_path = tmp_path / BOARD_DOCUMENT_NAME
 
     exported_count = export_board(
         REPOSITORY, make_single_pull_request_api(), board_path

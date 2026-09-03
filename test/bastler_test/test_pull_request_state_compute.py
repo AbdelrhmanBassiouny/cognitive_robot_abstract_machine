@@ -1,5 +1,5 @@
 """
-Tests for the compute half of :mod:`bastler.pr_state`.
+Tests for the compute half of :mod:`bastler.pull_request_state`.
 
 Reducing a check rollup to one conclusion, finding the session link a description
 carries, and classifying a change's size. Pure functions of their inputs - no git, no
@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from bastler.pr_state import (
+from bastler.pull_request_state import (
     ChangeSize,
     CheckConclusion,
     CheckRollup,

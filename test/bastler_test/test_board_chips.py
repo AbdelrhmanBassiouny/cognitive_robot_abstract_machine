@@ -16,12 +16,13 @@ from bastler.build_dashboard import (
     Item,
     ItemStatus,
     Plan,
+    PullRequestLabel,
     PullRequestRecord,
     PullRequestsByRepository,
     Track,
     Wave,
 )
-from bastler.pr_state import (
+from bastler.pull_request_state import (
     ChangeSize,
     CheckConclusion,
     ClaudeSessionLink,
@@ -87,7 +88,7 @@ def make_record(**overrides: Any) -> PullRequestRecord:
     fields: dict[str, Any] = {
         "state": PullRequestState.OPEN,
         "draft": True,
-        "ci": CheckConclusion.SUCCESS,
+        "continuous_integration": CheckConclusion.SUCCESS,
         "additions": 100,
         "deletions": 20,
         "mergeable": True,
@@ -119,16 +120,20 @@ def test_a_healthy_pull_request_gets_all_three_chips():
     assert {chip.tone for chip in item.board_chips} == {ChipTone.POSITIVE}
 
 
-def test_failing_checks_make_a_negative_ci_chip():
-    item, _ = render_with_record(make_record(ci=CheckConclusion.FAILURE))
+def test_failing_checks_make_a_negative_check_chip():
+    item, _ = render_with_record(
+        make_record(continuous_integration=CheckConclusion.FAILURE)
+    )
     assert item.board_chips[0] == BoardChip.for_check_conclusion(
         CheckConclusion.FAILURE
     )
     assert item.board_chips[0].tone is ChipTone.NEGATIVE
 
 
-def test_running_checks_make_a_pending_ci_chip():
-    item, _ = render_with_record(make_record(ci=CheckConclusion.PENDING))
+def test_running_checks_make_a_pending_check_chip():
+    item, _ = render_with_record(
+        make_record(continuous_integration=CheckConclusion.PENDING)
+    )
     assert item.board_chips[0] == BoardChip.for_check_conclusion(
         CheckConclusion.PENDING
     )
@@ -154,7 +159,11 @@ def test_a_conflicting_pull_request_makes_a_negative_conflict_chip():
 def test_unknown_facts_produce_no_chips_at_all():
     item, _ = render_with_record(
         make_record(
-            ci=None, additions=None, deletions=None, mergeable=None, session_url=None
+            continuous_integration=None,
+            additions=None,
+            deletions=None,
+            mergeable=None,
+            session_url=None,
         )
     )
     assert item.board_chips == []
@@ -206,15 +215,15 @@ def test_extended_pull_request_data_parses_the_chip_fields():
             PullRequestDataKey.STATE: PullRequestState.OPEN,
             PullRequestDataKey.DRAFT: False,
             PullRequestDataKey.MERGED_AT: None,
-            PullRequestDataKey.LABELS: ["bug"],
-            PullRequestDataKey.CI: CheckConclusion.FAILURE,
+            PullRequestDataKey.LABELS: [PullRequestLabel.BUG],
+            PullRequestDataKey.CONTINUOUS_INTEGRATION: CheckConclusion.FAILURE,
             PullRequestDataKey.ADDITIONS: 12,
             PullRequestDataKey.DELETIONS: 3,
             PullRequestDataKey.MERGEABLE: False,
             PullRequestDataKey.SESSION_URL: PARSED_SESSION.url,
         }
     )
-    assert record.ci is CheckConclusion.FAILURE
+    assert record.continuous_integration is CheckConclusion.FAILURE
     assert record.change_size == ChangeSize(12, 3)
     assert record.mergeable is False
     assert record.session_url == PARSED_SESSION.url

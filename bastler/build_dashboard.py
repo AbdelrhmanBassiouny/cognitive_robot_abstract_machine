@@ -53,7 +53,7 @@ from bastler.render_common import (
     sanitize_http_url,
 )
 
-from bastler.pr_state import (
+from bastler.pull_request_state import (
     ChangeSize,
     CheckConclusion,
     PullRequestDataKey,
@@ -454,7 +454,7 @@ class PullRequestRecord:
     closer manually adds the :attr:`PullRequestLabel.MERGED` label to record
     what actually happened - see :meth:`was_merged`."""
 
-    ci: CheckConclusion | None = None
+    continuous_integration: CheckConclusion | None = None
     """The reduced check conclusion on the pull request's head commit - ``None`` when
     no check ran, or when the pull request data predates the chip fields."""
 
@@ -506,13 +506,17 @@ class PullRequestRecord:
                 "(null included)"
             )
         merged_at = data.get(PullRequestDataKey.MERGED_AT)
-        ci = data.get(PullRequestDataKey.CI)
+        continuous_integration = data.get(PullRequestDataKey.CONTINUOUS_INTEGRATION)
         return cls(
             state=state,
             draft=data.get(PullRequestDataKey.DRAFT, False),
             merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
             labels=list(data.get(PullRequestDataKey.LABELS) or []),
-            ci=CheckConclusion(ci) if ci else None,
+            continuous_integration=(
+                CheckConclusion(continuous_integration)
+                if continuous_integration
+                else None
+            ),
             additions=data.get(PullRequestDataKey.ADDITIONS),
             deletions=data.get(PullRequestDataKey.DELETIONS),
             mergeable=data.get(PullRequestDataKey.MERGEABLE),
@@ -531,8 +535,8 @@ class PullRequestRecord:
         """:return: The board-semantics chips this record's facts support - one per fact
         it actually carries, so pre-chip data yields none."""
         chips = []
-        if self.ci is not None:
-            chips.append(BoardChip.for_check_conclusion(self.ci))
+        if self.continuous_integration is not None:
+            chips.append(BoardChip.for_check_conclusion(self.continuous_integration))
         if self.change_size is not None:
             chips.append(BoardChip.for_change_size(self.change_size))
         if self.mergeable is not None:

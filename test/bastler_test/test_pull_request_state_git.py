@@ -1,5 +1,5 @@
 """
-Tests for :mod:`bastler.pr_state`'s local-git probes.
+Tests for :mod:`bastler.pull_request_state`'s local-git probes.
 
 The lines changed between two references, and the non-mutating merge-conflict probe. Run
 against a scratch repository built per test - no network, no real remotes.
@@ -11,7 +11,7 @@ from enum import StrEnum
 
 import pytest
 
-from bastler.pr_state import LocalGitProbe
+from bastler.pull_request_state import LocalGitProbe
 
 from .scratch_repository import ScratchRepository
 

@@ -4,7 +4,7 @@ Build the whole plan-dashboard site statically, with no live session.
 
 This is the headless entry point a Pages workflow runs on a schedule: it discovers every
 plan on the personal-notes branch, fetches the referenced pull requests' live state
-through :mod:`bastler.pr_state`, drives ``refresh_dashboard.sh`` once per plan - manifest
+through :mod:`bastler.pull_request_state`, drives ``refresh_dashboard.sh`` once per plan - manifest
 sync, including its push of merged-to-done corrections back to the notes branch, plus
 the dashboard render - and renders the master index over the results.
 
@@ -41,7 +41,7 @@ from bastler.package_layout import REPOSITORY_ROOT
 from bastler.personal_notes import PersonalNotesBranch
 from bastler.plan_item_bootstrap import PlanDocument
 from bastler.plan_model import ItemStatus
-from bastler.pr_state import (
+from bastler.pull_request_state import (
     GitHubApi,
     IssueField,
     PullRequestExport,

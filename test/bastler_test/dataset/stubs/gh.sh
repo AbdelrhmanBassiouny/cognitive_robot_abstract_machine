@@ -21,7 +21,7 @@ set -uo pipefail
 #   STUB_GH_CALL_LOG            - file the invocation is appended to, so a
 #                                 test can assert the exact call made
 #
-# `gh api <path>`, the one call pr_state's command transport makes:
+# `gh api <path>`, the one call pull_request_state's command transport makes:
 #   STUB_GH_API_JSON - the JSON body to print
 #   STUB_GH_CALL_LOG - file the invocation is appended to
 #

@@ -281,7 +281,7 @@ class BoardEntryKey(StrEnum):
     The label names.
     """
 
-    CI = "ci"
+    CONTINUOUS_INTEGRATION = "ci"
     """
     The reduced check conclusion, or ``null``.
     """
@@ -315,7 +315,7 @@ class PullRequestDataKey(StrEnum):
     The label names.
     """
 
-    CI = "ci"
+    CONTINUOUS_INTEGRATION = "ci"
     """
     The reduced check conclusion, or ``null``.
     """
@@ -554,7 +554,7 @@ class PullRequestLiveState:
     The labels currently on the pull request.
     """
 
-    ci: CheckConclusion | None = None
+    continuous_integration: CheckConclusion | None = None
     """
     The reduced check conclusion on the head commit, or ``None`` when no check ran.
     """
@@ -608,7 +608,7 @@ class PullRequestLiveState:
                 label[PullRequestField.LABEL_NAME]
                 for label in detail.get(PullRequestField.LABELS, [])
             ],
-            ci=rollup.conclusion,
+            continuous_integration=rollup.conclusion,
             additions=detail.get(PullRequestField.ADDITIONS),
             deletions=detail.get(PullRequestField.DELETIONS),
             mergeable=detail.get(PullRequestField.MERGEABLE),
@@ -623,7 +623,11 @@ class PullRequestLiveState:
             BoardEntryKey.BASE: self.base,
             BoardEntryKey.DRAFT: self.draft,
             BoardEntryKey.LABELS: list(self.labels),
-            BoardEntryKey.CI: self.ci.value if self.ci else None,
+            BoardEntryKey.CONTINUOUS_INTEGRATION: (
+                self.continuous_integration.value
+                if self.continuous_integration
+                else None
+            ),
             BoardEntryKey.SESSION: self.session_url,
         }
 
@@ -635,7 +639,11 @@ class PullRequestLiveState:
             PullRequestDataKey.DRAFT: self.draft,
             PullRequestDataKey.MERGED_AT: self.merged_at,
             PullRequestDataKey.LABELS: list(self.labels),
-            PullRequestDataKey.CI: self.ci.value if self.ci else None,
+            PullRequestDataKey.CONTINUOUS_INTEGRATION: (
+                self.continuous_integration.value
+                if self.continuous_integration
+                else None
+            ),
             PullRequestDataKey.ADDITIONS: self.additions,
             PullRequestDataKey.DELETIONS: self.deletions,
             PullRequestDataKey.MERGEABLE: self.mergeable,

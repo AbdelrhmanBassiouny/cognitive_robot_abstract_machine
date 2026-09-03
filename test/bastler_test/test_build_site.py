@@ -30,7 +30,7 @@ from bastler.build_site import (
     SitePath,
 )
 from bastler.plan_item_bootstrap import HookScript, PlanDocument
-from bastler.pr_state import (
+from bastler.pull_request_state import (
     CheckConclusion,
     ClaudeSessionLink,
     IssueField,
@@ -41,7 +41,7 @@ from bastler.pr_state import (
 
 from .constants import DATASET_DIRECTORY, STUBS_DIRECTORY
 from .pull_request_payloads import (
-    PullRequestDetailPayload,
+    PullRequestPayload,
     RecordedFakeGitHubApi,
     check_runs_payload,
 )
@@ -73,7 +73,7 @@ TRACKING_ISSUE_URL = "https://github.com/owner/repository/issues/9"
 What the fake transport reports as the tracking issue's page.
 """
 
-PULL_REQUEST = PullRequestDetailPayload(
+PULL_REQUEST = PullRequestPayload(
     number=1,
     head="a-branch",
     draft=True,
@@ -253,7 +253,7 @@ def test_the_refresh_is_handed_pull_request_data_with_the_chip_fields(built_site
     entry = data[plan.default_repository][str(PULL_REQUEST.number)]
     assert entry[PullRequestDataKey.STATE] == PullRequestState.OPEN
     assert entry[PullRequestDataKey.DRAFT] is PULL_REQUEST.draft
-    assert entry[PullRequestDataKey.CI] == CheckConclusion.SUCCESS
+    assert entry[PullRequestDataKey.CONTINUOUS_INTEGRATION] == CheckConclusion.SUCCESS
     assert entry[PullRequestDataKey.ADDITIONS] == PULL_REQUEST.additions
     assert entry[PullRequestDataKey.DELETIONS] == PULL_REQUEST.deletions
     assert entry[PullRequestDataKey.MERGEABLE] is PULL_REQUEST.mergeable

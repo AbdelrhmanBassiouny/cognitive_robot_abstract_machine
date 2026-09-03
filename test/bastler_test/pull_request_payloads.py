@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from bastler.pr_state import (
+from bastler.pull_request_state import (
     CheckConclusion,
     CheckRunField,
     ClaudeSessionLink,
@@ -22,9 +22,9 @@ from bastler.pr_state import (
 
 
 @dataclass(frozen=True)
-class PullRequestDetailPayload:
+class PullRequestPayload:
     """
-    One pull request as the detail endpoint returns it.
+    One pull request, rendered into whichever shape an endpoint returns it in.
     """
 
     number: int

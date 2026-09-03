@@ -9,7 +9,7 @@ docstring for the exact JSON shape expected.
 
 ## The script route, when `gh` or a token is available
 
-The `bastler.pr_state` module fetches and serializes this exact shape itself -
+The `bastler.pull_request_state` module fetches and serializes this exact shape itself -
 including the optional chip fields below - through `gh` when installed, else
 a `GH_TOKEN`/`GITHUB_TOKEN`. `python3 -m bastler.build_site` is the headless
 consumer: it builds every plan's dashboard plus the master index with no
