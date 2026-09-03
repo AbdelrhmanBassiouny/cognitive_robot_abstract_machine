@@ -63,39 +63,72 @@ items:
   branch: eql-symbolic-function-sdt
   pull_request_number: 33
   track: framework-migration
+  session: https://claude.ai/code/session_017Sij3r2He3kzGwr7zBSc5m
   depends_on:
   - p1-surface-verification
   - p2-operand-naming
   - p3-concrete-subclass-expansion
   status: blocked
   blockers:
-  - 'Awaiting two review decisions, both replied to and left open on #33: type-level display noun for
-    ''a Point3'' -> ''a point'' (P2 shipped the opposite precedence to roadmap decision 1), and whether
-    to widen the IK chain so Reachable/BlockingBodies can take Pose.'
-  - sdt ormatic_interface.py needs regenerating where ROS is installed - ignored_base_classes drops 10
-    predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI regenerates before tests,
-    so the suite is unaffected.
-  - 'stacked-pr-maintenance: Fork PR #33 (branch `eql-symbolic-function-sdt`) conflicts against its base
-    `main` as of the 2026-08-31 stacked-pr-maintenance pass, in: `semantic_digital_twin/src/semantic_digital_twin/reasoning/predicates.py`.
-    It carries the `needs-resolution` label and a routine comment on the PR: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5478382195'
-  - 'The `predicates.py` half of this migration was done independently on knowledge-directed-perception''s
-    #229 (`sdt_predicates_answer_whether_they_hold`, off `main`), and the developer settled the duplication
-    on 2026-08-31 in that branch''s favour: **#229 carries the predicate classes and this branch rebases
-    onto the `main` that has them**, dropping its own copy of the `predicates.py` migration and re-applying
-    its 34 reviewed wordings onto #229''s classes. Everything else here is untouched and still this item''s
-    - `queries.py`, `robot_predicates.py`, `phrase()`, `ORMatic.from_package(ignored_base_classes=...)`
-    and the generated verbalization snapshot. Two of this item''s wordings are already carried across
-    on #229: `Reachable` (as the shorter *"a Pose is reachable by a Tip"* the developer asked for there,
-    which conflicts with decision 11 and is his to settle) and the four relations #229 named for their
-    object. Since this branch was 166 commits behind `main` and `dirty` in `predicates.py` already, the
-    rebase it now owes is the one it owed anyway.'
-  notes: '2026-07-30: merged main (605 commits), dropping the duplicated surface-verification framework;
-    rebuilt the snapshot on the generated-results pattern; applied every wording from the review plus
-    the no-abbreviation sweep; replied to all 36 review threads and resolved 34. Two krrood additions
-    were needed: phrase() as the value counterpart of clause(), and ORMatic ignored_base_classes replacing
-    a mid-method SymbolicCallable import. Full detail: pr-progress/eql-symbolic-function-sdt.md.
+    - >-
+      The rebase this item owes cannot start yet: #229 (`sdt_predicates_answer_whether_they_hold`),
+      which the developer decided on 2026-08-31 should carry the predicate classes, is still **open
+      and unmerged** as of 2026-09-03 (state `open`, not draft, `mergeable_state: clean`, base sha
+      `fd72af38` — which is `main`'s current tip). `main`'s `reasoning/predicates.py` therefore
+      still has the twelve `@symbolic_function` helpers and the `Symbol`-derived spatial relations,
+      not #229's `Predicate` classes. This branch cannot drop its own `predicates.py` migration and
+      take `main`'s side until then, because its own coverage test
+      `test_every_symbolic_callable_declares_its_own_verbalization_fragment` asserts every
+      discovered symbolic callable in sdt implements its own `_verbalization_fragment_` — `main`'s
+      un-migrated helpers do not, so taking `main`'s file today turns this branch's own test red.
+      Nothing an agent can do moves this; #229 is ready for review and waiting on the developer to
+      merge it.
+    - >-
+      Three review threads on #33 are still open, not two as previously recorded (9 of 37 threads
+      are unresolved, but six of them are the same decision repeated on consecutive lines of
+      `verbalization_surfaces.py`): (1) type-level display noun — `a Point3` -> `a point`
+      (r3608352891, plus the five same-comment repeats r3608358590, r3608359011, r3608377541,
+      r3608394028, r3608473110); P2 shipped the opposite precedence to roadmap decision 1, so this
+      needs a type-level display noun in krrood (`value_lexicon.type_noun`) and three options were
+      put to the developer; (2) whether to widen the IK chain so `Reachable.pose` /
+      `BlockingBodies.pose` can be typed `Pose` rather than `HomogeneousTransformationMatrix`
+      (r3608385653 and r3608444608); (3) not previously recorded: `ClassNameLowercased` renders
+      *"the lower case form of the name of a type"* rather than the reviewer's literal *"the lower
+      case form of a class name"* (r3608403117), deliberately, to keep the operand in the sentence —
+      offered as a choice and left unresolved. This one blocks nothing; it just needs a yes or no.
+    - >-
+      sdt `ormatic_interface.py` needs regenerating where ROS is installed - `ignored_base_classes`
+      drops 10 predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI
+      regenerates before tests, so the suite is unaffected.
+    - >-
+      stacked-pr-maintenance: Fork PR #33 (branch `eql-symbolic-function-sdt`) conflicts against its
+      base `main`, in one file only:
+      `semantic_digital_twin/src/semantic_digital_twin/reasoning/predicates.py` (verified 2026-09-03
+      with `git merge-tree`; every other file auto-merges). It carries the `needs-resolution` label
+      and the routine has now re-reported the same conflict ten times between 2026-08-28 and
+      2026-09-03, most recently
+      https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5531090145
+      . The conflicting file is exactly the one this item is due to drop, so the conflict clears for
+      free once #229 lands; until then it can only be cleared by keeping this branch's own migrated
+      copy and porting `main`'s three changes to it (`camera.root_T_forward_view` + `field_of_view`
+      in `get_visible_bodies`/`occluding_bodies`, `BoundingBox` -> `VolumetricBoundingBox` in
+      `is_place_occupied`).
+  notes: >
+    2026-07-30: merged main (605 commits), dropping the duplicated surface-verification framework;
+    rebuilt the snapshot on the generated-results pattern; applied every wording from the review
+    plus the no-abbreviation sweep; replied to all 36 review threads and resolved 34. Two krrood
+    additions were needed: phrase() as the value counterpart of clause(), and ORMatic
+    ignored_base_classes replacing a mid-method SymbolicCallable import. Full detail:
+    pr-progress/eql-symbolic-function-sdt.md.
 
-    '
+    2026-09-03 resolve run: the `Reachable` wording question this item was recorded as waiting on is
+    no longer open. #229's thread r3896606294 — the developer's *"Pose Is reachable by Tip"*,
+    replied to with decision 11's longer *"a Pose is reachable for the kinematic chain rooted at
+    <root> and ending at <tip>"* as the alternative and deliberately left open for him to pick — now
+    reads resolved on #229, where the shorter wording is what stands. A resolve is not a sentence,
+    so this is read rather than stated: treat #229's shorter wording as the one to apply in the
+    rebase, and put it back to the developer if he says otherwise. Decision 11 in `roadmap.md` is
+    superseded to that extent.
 - id: p5-first-mention-type-annotation
   title: 'P5: name a referent by value and type on first mention'
   branch: null
