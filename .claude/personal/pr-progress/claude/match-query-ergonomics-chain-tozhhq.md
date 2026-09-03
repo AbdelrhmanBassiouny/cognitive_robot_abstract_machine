@@ -39,4 +39,22 @@ branch `claude/match-query-ergonomics-chain-tozhhq` off `main` at 2318e206.
   identically with the diff reverted to `main` 2318e206, and the module under `-n 4` from
   a clean state fails 5/5 on the branch and 3/3 reverted. Diagnosis and a proposed fixture
   fix commented on #248; failed jobs re-run once. Not bundled in, being a second root
-  cause in the RDR test suite - worth its own item if the developer wants it tracked.
+  cause in the RDR test suite. Fixed on its own branch at the developer's instruction:
+  PR #251, `claude/rdr-world-saved-model-fixture`, draft with the `bug` label.
+
+## Review round 2026-09-03 (six threads)
+- Five asked the same thing - why the five `_structural_key_` implementations name their
+  class literally rather than reading `type(self)`. Taken in 3e48901b6: a subclass that
+  did not restate its key would have reported its base's kind and collided with it, which
+  is this pull request's own bug one level down. No behaviour change today, there being no
+  subclass of any of the five. `test_eql` 1299 passed, 3 skipped (up from 1276: `main` was
+  merged into the branch remotely and its own new tests arrive with it).
+- The sixth asks whether the structural key duplicates `CanBehaveLikeAVariable`'s cache
+  keys, or whether the cache should use it. Answered with the measurement and left open,
+  being a question: the cache key holds the child and the structural key must not; the
+  cache key is computed before the node exists, so it cannot call an instance property;
+  and the two disagree on `FlatVariable` deliberately - two flattenings of one attribute
+  have equal cache keys and different structural keys, which is why `flat_variable`
+  constructs outside the cache. The one thing they could share is `identify_argument` for
+  expression-valued arguments, which would widen what the cache shares at build time -
+  out of scope here, offered as its own item.
