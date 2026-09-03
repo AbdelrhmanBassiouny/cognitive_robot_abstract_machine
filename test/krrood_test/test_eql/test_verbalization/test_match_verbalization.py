@@ -178,7 +178,6 @@ def test_where_conditions_are_their_own_block():
     *"given that"*.
     """
     match = a(Position)(x=1)
-    match.resolve()
     match.where(match.y > 2)
     text = _hierarchical(match)
     assert text == (
@@ -195,7 +194,6 @@ def test_where_only_match_has_no_given_that_block():
     A match with only ``where`` conditions renders just the *"where"* block.
     """
     match = a(Position)
-    match.resolve()
     match.where(match.x > 0)
     text = _hierarchical(match)
     assert text == "Generate a Position\n  where\n    - its x is greater than 0"
@@ -208,7 +206,6 @@ def test_where_folds_a_range_pair_into_one_between_point():
     the flat ``where`` list.
     """
     match = a(Position)
-    match.resolve()
     match.where(match.x > 0.0, match.x < 5.0)
     text = _hierarchical(match)
     assert text == "Generate a Position\n  where\n    - its x is between 0.0 and 5.0"

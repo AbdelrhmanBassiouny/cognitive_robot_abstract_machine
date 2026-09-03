@@ -21,38 +21,38 @@ class Pick:
 
 
 def test_causes_effect_accepts_a_literal_comparator():
-    arm = a(Pick)(arm=..., status="idle")._variable_
-    CausesEffect(arm.status == "SUCCESS")  # does not raise
+    pick = a(Pick)(arm=..., status="idle")
+    CausesEffect(pick.status == "SUCCESS")  # does not raise
 
 
 def test_causes_effect_accepts_a_conjunction_of_literal_comparators():
-    arm = a(Pick)(arm=..., status="idle")._variable_
-    CausesEffect(and_(arm.status == "SUCCESS", arm.arm == 0.3))  # does not raise
+    pick = a(Pick)(arm=..., status="idle")
+    CausesEffect(and_(pick.status == "SUCCESS", pick.arm == 0.3))  # does not raise
 
 
 def test_causes_effect_rejects_a_comparison_between_two_attributes():
-    first_pick = a(Pick)(arm=..., status="idle")._variable_
-    second_pick = a(Pick)(arm=..., status="idle")._variable_
+    first_pick = a(Pick)(arm=..., status="idle")
+    second_pick = a(Pick)(arm=..., status="idle")
     with pytest.raises(CausesEffectRequiresEqualityComparator):
         CausesEffect(first_pick.arm == second_pick.arm)
 
 
 def test_causes_effect_rejects_an_inequality_comparator():
-    arm = a(Pick)(arm=..., status="idle")._variable_
+    pick = a(Pick)(arm=..., status="idle")
     with pytest.raises(CausesEffectRequiresEqualityComparator):
-        CausesEffect(arm.arm > 0.3)
+        CausesEffect(pick.arm > 0.3)
 
 
 def test_causes_effect_rejects_an_ellipsis_valued_comparator():
-    arm = a(Pick)(arm=..., status="idle")._variable_
+    pick = a(Pick)(arm=..., status="idle")
     with pytest.raises(CausesEffectRequiresEqualityComparator):
-        CausesEffect(arm.status == ...)
+        CausesEffect(pick.status == ...)
 
 
 def test_causes_effect_rejects_a_set_valued_comparator():
-    arm = a(Pick)(arm=..., status="idle")._variable_
+    pick = a(Pick)(arm=..., status="idle")
     with pytest.raises(CausesEffectRequiresEqualityComparator):
-        CausesEffect(arm.status == {"SUCCESS", "FAILURE"})
+        CausesEffect(pick.status == {"SUCCESS", "FAILURE"})
 
 
 # %% transparent evaluation
