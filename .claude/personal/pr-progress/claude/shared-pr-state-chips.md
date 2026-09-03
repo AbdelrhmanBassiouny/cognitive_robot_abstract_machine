@@ -2,46 +2,55 @@
 
 ## Where it stands
 
-Draft, based on #185 (`claude/plan-item-kickoff-workflow-cuare2`). `test_bastler`
-green on head `9dc34b3a`; 730 tests pass locally in one invocation.
+Draft, based on #185 (`claude/plan-item-kickoff-workflow-cuare2`). Head
+`477f4dc34`; 731 tests pass locally in one invocation. Every review thread on
+the pull request is resolved except the two from 2026-08-30 that are waiting on
+the user by design.
 
-## What this session did (2026-09-03, /plan-item-resolve, auto mode)
+## Two rounds this session (2026-09-03)
 
-The recorded blockers named the bastler dependency and a `main` conflict on #185.
-Both were stale - #185's conflict had cleared, and #111 itself was green and
-`clean`. The real stall was a review round from that morning that the manifest
-never mentioned: seven threads, all naming rules.
+**Morning round, `9dc34b3a`** - reached through `/plan-item-resolve` in auto
+mode. The recorded blockers named the bastler dependency and a `main` conflict
+on #185; both were stale, and the real stall was an unrecorded review round of
+seven naming-rule threads. Recorded the real blocker and republished the
+dashboard *before* resolving, then applied all seven: `pr_state.py` ->
+`pull_request_state.py` (+ its 3 test modules), `ci` ->
+`continuous_integration` on the two key enums and two records,
+`PullRequestDetailPayload` -> `PullRequestPayload`, and
+`PullRequestLabel.IN_REVIEW`/`.BUG` and `BOARD_DOCUMENT_NAME` in place of
+literals.
 
-Recorded the real blocker in `plan.yaml` and republished the dashboard *before*
-resolving, then applied all seven in `9dc34b3a`:
-
-- `bastler/pr_state.py` -> `bastler/pull_request_state.py` (+ its 3 test modules)
-- `ci` -> `continuous_integration` on `BoardEntryKey`, `PullRequestDataKey`,
-  `PullRequestLiveState`, `PullRequestRecord`
-- `PullRequestDetailPayload` -> `PullRequestPayload`
-- `PullRequestLabel.IN_REVIEW` / `.BUG` in place of literals;
-  `BOARD_DOCUMENT_NAME` for `board.json`, swept across `test_maintenance.py` too
-
-Eight threads replied to and resolved (six from this round, two from the round
-before that this round superseded).
+**Evening round, `477f4dc34`** - the user answered the one thread that round
+left open ("yes rename it everywhere and also in any existing files that will be
+read") and raised three more. Both key enums carry `"continuous_integration"` as
+their *value* now; `stack.PullRequest`/`Branch` and their readers in `stack.py`
+and `maintenance_board.py` follow, because `maintenance_board.as_json`
+serializes with `asdict`, making the field name the stored key. Schemas
+re-spelled in `.claude/stack/README.md` and `pr-data-fetching.md`.
+`PullRequestPayload` -> `PullRequestResponse` in `pull_request_responses.py`
+(the previous round dropped "Detail" and kept "Payload", which was half the
+ask). Chip label reads `checks passing`, flagged on the thread as beyond what
+was asked.
 
 ## What is next
 
-1. **Open thread, waiting on the user**: whether the `"ci"` *value* behind the
-   renamed `CONTINUOUS_INTEGRATION` members should change too. Left alone because
-   it is the on-disk key in `board.json`/`pr_data.json`, read by `stack.py`'s
-   pre-existing `ForkPullRequest.ci` and `maintenance_board.py`. Answering "yes"
-   means renaming those two files' fields in the same pass.
-2. Two threads from 2026-08-30 still waiting on the user: `GitCommandRunner` in
-   tests, and the rebase-options discussion.
-3. Still unimplemented and this item's own: the stack chip read from the pull
+1. Two threads from 2026-08-30 still waiting on the user: `GitCommandRunner` in
+   tests, and the rebase-options discussion. Nothing else is open.
+2. Still unimplemented and this item's own: the stack chip read from the pull
    request's native stack object (specified 2026-07-31).
-4. Landing waits on #185.
+3. Landing waits on #185.
 
-## Gotcha worth not relearning
+## Gotchas worth not relearning
 
 `format_docstrings.py` prints its decline message on the same line as the tqdm
-progress bar, so `grep -v '^Formatting'` hides it. And check convergence *in the
-repository* (a clean `git worktree`), never on a scratch copy - black reads its
-line length from the nearest `pyproject.toml`, so a scratch copy reports a
-conflict the real file does not have.
+progress bar, so `grep -v '^Formatting'` hides it (`tr '\r' '\n'` first). And
+check convergence *in the repository* (a clean `git worktree`), never on a
+scratch copy - black reads its line length from the nearest `pyproject.toml`.
+
+docformatter treats a docstring's first line as its summary, so a body sentence
+that happens to end mid-line gets a false full stop and a blank line inserted
+into it. Write a new docstring as one short summary line, blank line, body.
+
+Before renaming a *stored* key, find every writer - the enum is not the whole
+set. `asdict` on a dataclass serializes the field name, which is why the board
+document had a second writer nothing routed through `BoardEntryKey`.
