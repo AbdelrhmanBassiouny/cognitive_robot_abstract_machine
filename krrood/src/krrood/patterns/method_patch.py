@@ -1,8 +1,8 @@
 """
-Replacing one method of an external class while keeping access to its original body.
+Replacing one method of a class while keeping access to its original body.
 
-Used to instrument CRAM classes (coraplex, giskardpy, semantic_digital_twin) that the
-observing code does not own, without losing their real behaviour.
+Lets code observe a class it does not own -- one it cannot edit and must not subclass,
+because the instances are built elsewhere -- without losing that class's real behaviour.
 """
 
 from __future__ import annotations

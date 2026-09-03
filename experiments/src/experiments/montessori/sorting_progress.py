@@ -18,7 +18,7 @@ from datetime import datetime
 
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import DesignatorNode, PlanNode
-from cramera.body_geometry import NumericPose
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
     DetectionEvent,

@@ -4,7 +4,7 @@ import numpy as np
 from giskardpy.motion_statechart.context import MotionStatechartContext
 
 from cramera.live.run_clock import RunClock
-from cramera.monkey_patch import MethodPatch
+from krrood.patterns.method_patch import MethodPatch
 
 from experiments.montessori.event_monitoring import (
     build_shape_monitor,

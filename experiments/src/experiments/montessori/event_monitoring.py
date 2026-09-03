@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Any, Callable, List, Optional, Protocol
 
-from cramera.monkey_patch import MethodPatch
+from krrood.patterns.method_patch import MethodPatch
 
 from experiments.montessori.semantics import MontessoriShape
 from experiments.montessori.world import MontessoriWorld
@@ -224,11 +224,11 @@ class ControlCycleTicking:
     detectors read the world on the thread that plans the motion.
 
     A tick is a whole :class:`~giskardpy.executor.Executor` cycle, not only the detector
-    reads: the collision computation it drives builds CasADi objects, and under cramera
-    the patched cycle also snapshots every body's forward kinematics. CasADi releases the
-    GIL for the duration of a call and counts its expression-node references without
-    atomics, so a monitor ticking on a thread of its own frees nodes the planning thread
-    is still dereferencing and the process dies inside CasADi.
+    reads: the collision computation it drives builds CasADi objects, as does anything
+    else patched into the same cycle. CasADi releases the GIL for the duration of a call
+    and counts its expression-node references without atomics, so a monitor ticking on a
+    thread of its own frees nodes the planning thread is still dereferencing and the
+    process dies inside CasADi.
 
     ..note:: The detectors themselves no longer build or read any symbolic value; they
        read geometry out as plain numbers. It is the cycle around them that keeps this

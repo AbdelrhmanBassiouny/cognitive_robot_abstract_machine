@@ -19,7 +19,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
-from cramera.body_geometry import NumericPose
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 
 from experiments.montessori.insertion_diagnosis import InsertionFailureReason
 from experiments.montessori.sorting_progress import (

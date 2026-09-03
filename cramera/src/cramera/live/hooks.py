@@ -28,7 +28,7 @@ from semantic_digital_twin.world import World
 
 from cramera.logging_setup import get_logger
 from cramera.live.bridge import BRIDGE, Bridge, LiveHook, TaskStatusName
-from cramera.monkey_patch import MethodPatch
+from krrood.patterns.method_patch import MethodPatch
 
 logger = get_logger(__name__)
 

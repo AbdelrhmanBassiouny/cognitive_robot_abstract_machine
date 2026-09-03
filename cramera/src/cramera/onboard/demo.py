@@ -75,7 +75,7 @@ from cramera.body_geometry import (
 )
 from cramera.live.bridge import ROBOT_BASE_KEY
 from cramera.loose_objects import LooseObjects
-from cramera.monkey_patch import MethodPatch
+from krrood.patterns.method_patch import MethodPatch
 from cramera.robot_parts import RobotPartAnnotation, model_identity
 from cramera.mesh_format import MeshFormat
 from cramera.onboard.bundle_urdf import BundledAssets, BundleReport

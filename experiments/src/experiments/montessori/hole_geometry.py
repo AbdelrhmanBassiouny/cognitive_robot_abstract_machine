@@ -57,6 +57,7 @@ Bounding-box aspect ratio above which a box-shaped hole is classified as rectang
 rather than square.
 """
 
+
 @dataclass(frozen=True)
 class HoleFootprint:
     """
@@ -132,9 +133,7 @@ def cut_board_mesh(
     :param footprints: The holes to cut, as detected by :func:`detect_hole_footprints`.
     :return: The board blank with all holes cut clean through it.
     """
-    board = trimesh.creation.box(
-        extents=(board_scale.x, board_scale.y, board_scale.z)
-    )
+    board = trimesh.creation.box(extents=(board_scale.x, board_scale.y, board_scale.z))
     cut_depth = board_scale.z * 2
     for footprint in footprints:
         cutter = footprint.extrude(cut_depth)

@@ -1,12 +1,12 @@
 """
-Unit tests for :class:`cramera.monkey_patch.MethodPatch`.
+Unit tests for :class:`krrood.patterns.method_patch.MethodPatch`.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from cramera.monkey_patch import MethodPatch
+from krrood.patterns.method_patch import MethodPatch
 
 
 def make_greeter_class() -> type:

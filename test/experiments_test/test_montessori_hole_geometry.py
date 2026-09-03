@@ -66,9 +66,7 @@ def test_circular_hole_footprint_extrudes_to_a_round_not_rectangular_solid():
     solid = circular_footprint.extrude(0.01)
 
     assert solid.is_watertight
-    bounding_box_volume = (
-        circular_footprint.size[0] * circular_footprint.size[1] * 0.01
-    )
+    bounding_box_volume = circular_footprint.size[0] * circular_footprint.size[1] * 0.01
     # a circle inscribed in its bounding square fills only pi/4 of its area; a
     # rectangular cut would fill all of it
     assert solid.volume == pytest.approx(bounding_box_volume * 3.14159 / 4, rel=0.05)
