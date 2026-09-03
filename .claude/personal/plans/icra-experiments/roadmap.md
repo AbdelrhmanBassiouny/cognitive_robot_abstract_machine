@@ -510,3 +510,21 @@ classes, and SQLAlchemy refuses the mapping. Nothing on `main` triggers it today
 #223 already renames the perception one to `RectifiedFootprint`, so this branch writes
 no second rename; #262's description carries the hazard for whichever branch first puts
 the two together.
+
+### What the branch could and could not prove in a session container
+
+Green here: `test_dependency_declarations.py` (20 passed, and failing as expected with the
+`segmind` line removed, so the declaration is load-bearing),
+`test/cognitive_robot_abstract_machine_test/` (61 passed, covering the
+`("coraplex", "segmind")` declaration and its generation order), and the `__init__.py`
+claim itself - `pkgutil.walk_packages` over `experiments` yields the three montessori
+modules with the file present and nothing with it removed.
+
+Not runnable there: `scripts/regenerate_all_orm.py` and the three new test modules, all
+for the same reason - no ROS. The generator dies resolving giskardpy's
+`DebugExpressionPublisher`, `segmind.datastructures.events` imports `geometry_msgs`, and
+the `experiments_test` conftest imports `rclpy`. The regeneration fails identically on
+unmodified `main` in that container, which is what settles it as the environment rather
+than the change; CI runs both inside the ROS image. Worth knowing for every later item of
+this track: anything touching the generated `experiments` interface is CI-verified, not
+session-verified.
