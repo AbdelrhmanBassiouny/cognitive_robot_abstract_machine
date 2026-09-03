@@ -1,0 +1,566 @@
+schema_version: 1
+id: icra-experiments
+title: "ICRA experiments: one simulated pipeline, episodes in SQL, and the three experiments"
+description: >
+  Everything the ICRA paper (deadline 2026-09-15) needs that no other plan owns:
+  one integrated pipeline that every scenario runs on in simulation before the
+  robot, a dataclass domain model for scenarios, goals, conditions, perturbations
+  and metrics, episodes recorded through ORMatic into an SQL database and queried
+  by EQL as long-term memory, the per-predicate backend routing and physics
+  verification mechanisms the paper measures, failure typing and prediction, the
+  verbalised-memory and VLM baselines, and Experiments A, B and C run in
+  simulation and then on the UR10, with the released artifact. Three lanes run
+  in parallel; roadmap.md carries the lane order and the day-by-day budget.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 252
+
+waves:
+  - id: foundation
+    name: "One pipeline every scenario runs on"
+    description: >-
+      The integrated simulation pipeline, the scenario domain model and the
+      episode recording. Everything later stacks on these three, and all three
+      can start today in parallel.
+  - id: mechanism
+    name: "What the paper measures"
+    description: >-
+      The two mechanisms the thesis sentence names (per-predicate backend
+      routing, perceive-commit-verify in physics), the snapshot working memory,
+      failure typing and prediction, and the baselines the experiments compare
+      against.
+  - id: evidence
+    name: "Experiments in simulation, then on the robot, then released"
+    description: >-
+      Each experiment runs end to end in simulation first, with its episodes in
+      the database and its report generated, and only then on the robot. The
+      artifact packages what both produced.
+
+tracks:
+  - id: integration
+    name: "The integrated pipeline"
+    wave: foundation
+    description: >-
+      Lane 1. One branch carrying the perception stack, the monitor stack, the
+      predicates and a simulated camera, on which the simulated demo runs the
+      same pipeline the robot will.
+  - id: scenario-model
+    name: "Scenarios as data"
+    wave: foundation
+    description: >-
+      Lane 2. The dataclass domain model that describes a scenario, its goal,
+      the knowledge conditions it runs under, the perturbations applied to it
+      and the metrics it reports, plus the runner that executes it with logs
+      and a report.
+  - id: long-term-memory
+    name: "Episodes recorded and queried"
+    wave: foundation
+    description: >-
+      Lane 2. Every trial, event, query, answer and failure recorded through
+      ORMatic into SQL, in simulation and on the robot alike, and read back
+      through the SQL backend as long-term memory.
+  - id: backend-routing
+    name: "Routing, verification and working memory"
+    wave: mechanism
+    description: >-
+      Lane 1. Backends declare what they can answer, a statement is routed
+      per predicate by capability and knowledge state, derived facts are
+      verified in a physics copy of the world, and working memory is a
+      snapshot refreshed only when it is worth refreshing.
+  - id: failure
+    name: "Typed and predicted failures"
+    wave: mechanism
+    description: >-
+      Lane 2. The failure taxonomy, typing from evidence, prediction from the
+      query result before execution, and the knowledge ablations and
+      perturbations that produce failures on purpose.
+  - id: baselines
+    name: "Verbalised memory and the VLM baselines"
+    wave: mechanism
+    description: >-
+      Lane 3. The deterministic English rendering of working memory, and the
+      harness that asks a vision-language model the same questions with and
+      without it.
+  - id: experiment-a
+    name: "Experiment A: question answering"
+    wave: evidence
+    description: "Lane 3 in simulation, robot time shared."
+  - id: experiment-b
+    name: "Experiment B: decomposition and verification"
+    wave: evidence
+    description: "Lane 1."
+  - id: experiment-c
+    name: "Experiment C: manipulation under ablations"
+    wave: evidence
+    description: "Lane 2."
+  - id: release
+    name: "Figures and the artifact"
+    wave: evidence
+    description: "Lane 3."
+
+items:
+  # %% integration
+  - id: integrated-simulation-pipeline
+    title: "One branch on which the simulated demo runs perception, monitor, predicates and events together"
+    branch: null
+    pull_request_number: null
+    track: integration
+    depends_on: []
+    status: not_started
+    notes: >-
+      The foot of the plan. Cut off main and merge in, in this order, the
+      library half of the monitor stack (#244), the monitor itself (#169, which
+      carries the segmind event monitor, the attach and detach of a grasped
+      shape behind Context.update_world_model_attachment, and the results
+      recording), the predicate classes (#229), the perception stack tip (#238,
+      which carries #221, #222 and #227) and the hole layout fit (#236, which
+      carries #225 and #232). Resolve the known meetings once and record them
+      in roadmap.md: #223's RectifiedFootprint rename, #231's EdgeFitDetector
+      rename, #244 and #229 both editing reasoning/predicates.py and
+      geometry.py. Done when franka_montessori_demo and the Tracy simulated
+      demo both sort the board headless with the event monitor ticking and
+      every test module of the merged packages collected and green in CI.
+      Keep #192 out until the developer says it is in; it removes
+      Match.variable, which #159 and therefore #239 still read.
+
+  - id: simulated-camera-feeds-perception
+    title: "A MuJoCo camera feeds the perception pipeline the same frames the real camera does"
+    branch: null
+    pull_request_number: null
+    track: integration
+    depends_on: [integrated-simulation-pipeline]
+    status: not_started
+    notes: >-
+      What makes simulation-first testing honest for perception. MujocoCamera
+      renders colour and depth; wrap them as the RgbdFrame the pipeline reads,
+      with intrinsics and camera pose taken from the twin, so
+      MontessoriPerceptionBackend answers a look in simulation exactly as it
+      does off a capture. The six real captures remain the regression set for
+      detection; this item's tests assert that a simulated scene with the
+      board and four pieces reports every piece once with the right category.
+      Stated colours and finishes on the simulated objects come from the
+      values #239 measured off the real ones.
+
+  - id: tracy-demo-takes-the-integrated-branch
+    title: "tracy_icra takes the integrated branch and the real robot runs it"
+    branch: tracy_icra
+    pull_request_number: null
+    track: integration
+    depends_on: [integrated-simulation-pipeline, simulated-camera-feeds-perception]
+    status: not_started
+    notes: >-
+      The bridge to the robot, and the one item on this plan that needs the
+      robot before any experiment does. Merge the integrated branch into
+      tracy_icra, run the demo on the UR10 with the live camera, and keep a
+      capture of the run. This is knowledge-directed-perception's
+      demo-runs-on-grounded-perception in that plan's words; it is tracked
+      here because the branch it runs is this plan's. From then on every
+      later merge into tracy_icra is a merge of the integrated branch, never
+      of individual stacks. Record the transform tree and joint states with
+      the camera in every take from now on; five of the six existing
+      recordings hold no robot state and cannot supply a history.
+
+  # %% scenario-model
+  - id: scenario-domain-model
+    title: "Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports"
+    branch: null
+    pull_request_number: null
+    track: scenario-model
+    depends_on: []
+    status: not_started
+    notes: >-
+      The meta level the developer asked for: a Scenario names how to build
+      its world and which robot and execution kind (simulated or real) it
+      runs on; a Goal names what counts as success; a Condition names one
+      knowledge source switched on or off; a Perturbation names a change
+      applied to the world at a step; a Metric names one number read off a
+      finished Trial; a Report gathers metrics over trials with confidence
+      intervals. A ScenarioRunner executes trials, writes structured logs and
+      renders the report. Generalise what exists rather than adding a third
+      shape: control_loop_experiments.scenarios already has BenchmarkScenario
+      and ScenarioRunner, and experiment_definitions has ExperimentResult,
+      ExperimentsTable and TypstRenderer; the new model subsumes both and the
+      old ones migrate onto it. Concrete scenarios subclass or instantiate
+      these, never re-describe them. Fully unit-tested against a trivial
+      scenario that needs no simulator, so the model's tests run everywhere.
+
+  - id: montessori-scenarios
+    title: "The memo's scenes and scripted scenarios as Scenario instances that run in simulation"
+    branch: null
+    pull_request_number: null
+    track: scenario-model
+    depends_on: [scenario-domain-model, integrated-simulation-pipeline]
+    status: not_started
+    notes: >-
+      Random layouts with all four pieces, partial scenes with two or three,
+      near-ambiguous layouts with the cube and cylinder aligned in camera
+      depth, a lighting change (a MujocoLight edit in simulation), and the
+      four scripted temporal scenarios: static, robot pick-and-place, an
+      external body pushing a piece while the robot is idle, and a piece in
+      the gripper at query time. Each is a Scenario with a seeded layout so a
+      run is reproducible, and each has a test that builds it headless and
+      asserts its own precondition (the ambiguous layout really is aligned in
+      depth, the in-gripper scenario really holds the piece).
+
+  # %% long-term-memory
+  - id: episodes-recorded-through-ormatic
+    title: "Every trial, event, query, answer and failure recorded through ORMatic into SQL"
+    branch: null
+    pull_request_number: null
+    track: long-term-memory
+    depends_on: [scenario-domain-model]
+    status: not_started
+    notes: >-
+      One Episode model for simulation and the robot: the scenario and
+      condition it ran under, its trials, the segmind events seen per tick,
+      every query asked with its per-predicate backend assignment, answer and
+      latency, every insertion attempt with its outcome, and the failure type
+      observed and predicted. Recorded through ORMatic the way
+      ShapeInsertionExperience and SortingIterationResult already are, and
+      replacing both with the one model rather than standing beside them;
+      ResultsDatabase and results_recording keep deciding where and whether
+      a run records. The runner records as it goes, so a run that dies keeps
+      its finished trials, following batch_runner's reasoning. Tests record a
+      trivial episode into SQLite and read it back through the generated
+      interface.
+
+  - id: episodes-queried-by-eql
+    title: "Long-term memory answered by EQL through the SQL backend, and reports read from it"
+    branch: null
+    pull_request_number: null
+    track: long-term-memory
+    depends_on: [episodes-recorded-through-ormatic]
+    status: not_started
+    notes: >-
+      The SQL backend is one of the paper's four: the same query language
+      over recorded episodes returns domain objects, so the temporal bucket
+      can be answered from long-term memory ("which pieces did you pick up
+      in the last run", "how often did the square hole fail") and the
+      Report of every experiment is computed from the database rather than
+      from in-process results. Tests assert that a query over a recorded
+      episode returns the same objects the runner wrote, and that a report
+      regenerated from the database equals the one the runner rendered.
+
+  # %% backend-routing
+  - id: backends-declare-their-capabilities
+    title: "Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin"
+    branch: null
+    pull_request_number: null
+    track: backend-routing
+    depends_on: [integrated-simulation-pipeline]
+    status: not_started
+    notes: >-
+      The capability table the memo publishes, as code rather than a table
+      written by hand: QueryBackend gains capability(), the same shape #231
+      gave detectors, stating the predicate and statement forms the backend
+      answers and the precondition on the knowledge state under which it
+      answers them (the native twin backend for a body already believed in,
+      perception for a pose stated as ..., the SQL backend for anything about
+      a past episode, physics for a derived physical fact). Rendering the
+      declarations of all four backends is what prints the paper's table.
+      Tests pin one declaration per backend against a statement it accepts
+      and one it refuses.
+
+  - id: query-routed-per-predicate
+    title: "A statement is routed per predicate by capability and knowledge state, and the routing is reported"
+    branch: null
+    pull_request_number: null
+    track: backend-routing
+    depends_on: [backends-declare-their-capabilities]
+    status: not_started
+    notes: >-
+      The mechanism the thesis sentence names. A planner splits a statement
+      into its predicates, assigns each to the backend whose capability
+      admits it under the current twin state, orders them twin first, then
+      perception for what the twin cannot answer, then physics for derived
+      facts, and falls back to the next capable backend when one refuses. It
+      returns a QueryPlan beside the answer: per-predicate assignment,
+      detector calls, region searched and latency, which is exactly what
+      Experiment B tabulates. #238 already does this implicitly for one
+      statement (the lid and the hole are answered from the twin before the
+      look); this item makes it general and visible. The mixed statement
+      "the cyan piece left of the triangle on the table", with the triangle
+      believed in versus not, is the test.
+
+  - id: physics-verification-backend
+    title: "Perceive, commit, verify: detections spawned into a physics copy of the world and derived facts re-evaluated there"
+    branch: null
+    pull_request_number: null
+    track: backend-routing
+    depends_on: [backends-declare-their-capabilities]
+    status: not_started
+    notes: >-
+      A backend that spawns what perception reported into a copy of the
+      world, steps MuJoCo, and evaluates the derived predicates there:
+      Stable, contact and penetration, InsideOf, the directional relations
+      and Reachable, all of which #229 already made predicates. It reports
+      agreement or disagreement with the perception backend per fact, never
+      re-checking the committed pose itself. This is the narrow form of
+      knowledge-directed-perception's imagination-world item, built here
+      because the paper measures it; that plan's item is noted as covered by
+      this one. Tests inject a floating piece, a penetrating piece and a
+      wrongly classified piece and assert each disagreement fires.
+
+  - id: snapshot-working-memory
+    title: "Working memory as a snapshot: the twin follows kinematics while acting and re-perceives only when idle and changed"
+    branch: null
+    pull_request_number: null
+    track: backend-routing
+    depends_on: [simulated-camera-feeds-perception]
+    status: not_started
+    notes: >-
+      During manipulation the grasped piece moves with the gripper through the
+      attachment #169 restored, and perception is not consulted. When idle,
+      a look is taken at a low rate and a piece's pose is committed only
+      when it differs from the believed pose by more than a threshold
+      measured as three standard deviations over a static scene. The
+      threshold is measured in simulation first and again on the robot, both
+      numbers recorded. Fits the frame budget the continuous node cannot:
+      #236's layout fit costs 0.56 s per frame against the node's 0.5 s
+      period, which is fine at idle rate.
+
+  # %% failure
+  - id: failure-taxonomy-and-typing
+    title: "Every failed trial typed as semantic, geometric, perceptual or execution from the evidence"
+    branch: null
+    pull_request_number: null
+    track: failure
+    depends_on: [scenario-domain-model]
+    status: not_started
+    notes: >-
+      A FailureType enum with the four members, and the rule that assigns
+      one to a finished trial from the plan's own failure, the segmind
+      events and the violated expectation. Extends
+      insertion_diagnosis.InsertionDiagnosis and InsertionFailureReason,
+      which already diagnose an attempt from events, rather than a second
+      diagnosis; each existing reason maps to one type. Recorded on the
+      Trial and so in the episode. Tests cover one trial per type.
+
+  - id: knowledge-ablations
+    title: "Each knowledge source switched off through a Condition, never through a code branch"
+    branch: null
+    pull_request_number: null
+    track: failure
+    depends_on: [montessori-scenarios]
+    status: not_started
+    notes: >-
+      The memo's conditions as Condition instances: full; no working memory;
+      no hole-shape knowledge (the board's holes unknown to the twin, which
+      also needs the mesh scale 0.865 #236 measured to be in the twin first,
+      so the full condition is honest); no degree-of-freedom limits; no
+      pickup detection; no predicate-narrowed perception. Each condition
+      removes one thing the action reads from the twin or the backends, so
+      the action's code has no ablation flags of its own. A test per
+      condition asserts the knowledge really is absent (the query that would
+      read it fails or returns nothing).
+
+  - id: perturbations
+    title: "Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push"
+    branch: null
+    pull_request_number: null
+    track: failure
+    depends_on: [montessori-scenarios]
+    status: not_started
+    notes: >-
+      Perturbation instances the runner applies at a named step: the target
+      hole moved 10 cm, a fixed offset added to a reported pose, a detection
+      relabelled as another piece, an external body pushing a piece while
+      the robot is idle. In simulation they act on the MuJoCo world or on the
+      perception result; on the robot the same Perturbation renders a
+      one-line instruction to the person at the table, so the protocol is
+      the same object. Experiment B's ~30 injected events and Experiment C's
+      perturbation conditions are drawn from these.
+
+  - id: failure-predicted-from-the-query
+    title: "The failure type predicted from the query result before execution, and scored against what happened"
+    branch: null
+    pull_request_number: null
+    track: failure
+    depends_on: [failure-taxonomy-and-typing, query-routed-per-predicate]
+    status: not_started
+    notes: >-
+      H4. Before an insertion executes, the QueryPlan and its answer predict
+      the type: several candidate holes answer the target description, so
+      semantic; Reachable is false for the grasp or the release pose, so
+      geometric; the physics backend disagrees with perception or nothing
+      was detected, so perceptual; otherwise none predicted. Precision and
+      recall of prediction against the observed type are Metrics on the
+      Report. Tests build one query result per predicted type.
+
+  # %% baselines
+  - id: working-memory-verbalised
+    title: "Working memory rendered as deterministic English: objects, poses, relations, events, gripper contents"
+    branch: null
+    pull_request_number: null
+    track: baselines
+    depends_on: [integrated-simulation-pipeline]
+    status: not_started
+    notes: >-
+      A fixed set of EQL queries over the twin whose answers are rendered
+      through the verbalization framework on main, concatenated in a fixed
+      order with rounded numbers, so the same state always produces the same
+      text. The scene wordings #33 carries (support, the directional
+      relations, visibility, reachability) are the ones to use; where #33 is
+      not yet rebased onto #229, take its reviewed wordings rather than
+      inventing new ones. A snapshot test pins the text for one simulated
+      scene.
+
+  - id: vlm-baseline-harness
+    title: "The same questions asked of a vision-language model, image only and image plus verbalised memory"
+    branch: null
+    pull_request_number: null
+    track: baselines
+    depends_on: [working-memory-verbalised, question-set-and-ground-truth]
+    status: not_started
+    notes: >-
+      A harness that sends each question with the camera image, and again
+      with the verbalised working memory prepended, parses the answer into
+      the question's answer type and scores it against ground truth. The
+      model sits behind an interface so the provider is one class; CI runs
+      against a recorded-answer mock, and the live test is skipped without
+      credentials. Each question is also run five times on the same scene
+      to report answer variance, for the VLM systems and for EQL alike.
+      Which provider and model to use is the developer's call and is not
+      taken here.
+
+  # %% experiment-a
+  - id: question-set-and-ground-truth
+    title: "The twelve questions in four buckets, as EQL and English, with ground truth and structural requirements"
+    branch: null
+    pull_request_number: null
+    track: experiment-a
+    depends_on: [scenario-domain-model]
+    status: not_started
+    notes: >-
+      Freeze first, on the memo's day one. Lookup (links, joints, gripper
+      finger pose), spatial (what, where, colour, surface, left or right),
+      temporal (moved, moved by you, picked up) and embodiment (in hand),
+      each a Question dataclass carrying its EQL, its English, its answer
+      type and the inputs it structurally requires (the memo's table). The
+      temporal questions have two spellings: over working memory (segmind
+      events) and over long-term memory (the SQL backend). Ground truth is
+      the twin in simulation, exact, and the calibrated twin plus a human
+      check on the robot, stated as such. Several of these already exist as
+      presets in the console stack's live_query_source; reuse their EQL.
+
+  - id: experiment-a-in-simulation
+    title: "Experiment A run end to end in simulation: scenes, temporal scenarios, determinism, three systems, report"
+    branch: null
+    pull_request_number: null
+    track: experiment-a
+    depends_on:
+      - question-set-and-ground-truth
+      - montessori-scenarios
+      - query-routed-per-predicate
+      - vlm-baseline-harness
+      - episodes-recorded-through-ormatic
+    status: not_started
+    notes: >-
+      Every scene and scripted scenario through the runner, every question
+      through EQL and both VLM systems, five repetitions for variance,
+      episodes in the database, the accuracy-per-bucket, latency, variance
+      and footprint tables generated. The point is that the robot runs are a
+      rerun of a script that already works, with only the scenes replaced.
+
+  - id: experiment-a-on-the-robot
+    title: "Experiment A on the UR10: random, partial and ambiguous scenes, temporal scenarios, determinism"
+    branch: null
+    pull_request_number: null
+    track: experiment-a
+    depends_on: [experiment-a-in-simulation, tracy-demo-takes-the-integrated-branch]
+    status: not_started
+    notes: >-
+      15 to 20 random scenes, five partial, five near-ambiguous, the four
+      temporal scenarios five times each, every query five times; lighting
+      only if time remains. Robot state recorded with the camera in every
+      take. Ground truth annotated the same day.
+
+  # %% experiment-b
+  - id: experiment-b-in-simulation
+    title: "Experiment B in simulation: mixed-predicate routing with and without the twin's knowledge, and verification under injected errors"
+    branch: null
+    pull_request_number: null
+    track: experiment-b
+    depends_on:
+      - query-routed-per-predicate
+      - physics-verification-backend
+      - perturbations
+      - episodes-recorded-through-ormatic
+    status: not_started
+    notes: >-
+      H1 and H3. The mixed statements with the triangle believed in versus
+      not, reporting per-predicate assignment, region size, detector calls
+      and latency, extending the ratios #238 already measured on the six
+      captures. Then about thirty injected events (offsets, wrong object,
+      pushes) through the perceive-commit-verify loop, reporting precision
+      and recall of disagreement as a detector.
+
+  - id: experiment-b-on-the-robot
+    title: "Experiment B on the UR10"
+    branch: null
+    pull_request_number: null
+    track: experiment-b
+    depends_on: [experiment-b-in-simulation, tracy-demo-takes-the-integrated-branch]
+    status: not_started
+    notes: >-
+      The same script on the live feed. The memo's cut order drops the
+      injection half first and keeps the decomposition half; the simulation
+      numbers stand in for whatever is cut, stated as such.
+
+  # %% experiment-c
+  - id: experiment-c-in-simulation
+    title: "Experiment C in simulation: every condition, twenty to thirty trials, typed and predicted failures"
+    branch: null
+    pull_request_number: null
+    track: experiment-c
+    depends_on:
+      - knowledge-ablations
+      - perturbations
+      - failure-predicted-from-the-query
+      - episodes-queried-by-eql
+    status: not_started
+    notes: >-
+      The insertion trial from a randomised start pose under every
+      condition, board-level completion reported too, every failure typed
+      and every prediction scored, the stacked failure-type bars generated
+      from the database. Runs in batches the way batch_runner already does,
+      so hundreds of trials survive the process's memory growth.
+
+  - id: experiment-c-on-the-robot
+    title: "Experiment C on the UR10: twenty trials per condition"
+    branch: null
+    pull_request_number: null
+    track: experiment-c
+    depends_on: [experiment-c-in-simulation, tracy-demo-takes-the-integrated-branch]
+    status: not_started
+    notes: >-
+      Twenty trials per condition, thirty only if the pipeline is stable;
+      the perturbation conditions are never cut. Two days of robot time.
+
+  # %% release
+  - id: paper-figures-from-episodes
+    title: "Every table and figure in the paper regenerated by one script from the episode database"
+    branch: null
+    pull_request_number: null
+    track: release
+    depends_on: [episodes-queried-by-eql]
+    status: not_started
+    notes: >-
+      The writer's item, started before any experiment has run so the first
+      draft's tables are already the script's output on simulated data and
+      the robot numbers drop in by rerunning it. Confidence intervals on
+      every rate.
+
+  - id: benchmark-artifact
+    title: "The released artifact: scenes, ground truth, questions, prompts, conditions, captures and the episode database"
+    branch: null
+    pull_request_number: null
+    track: release
+    depends_on: [experiment-a-on-the-robot, experiment-b-on-the-robot, experiment-c-on-the-robot]
+    status: not_started
+    notes: >-
+      A repository a reader can run the simulation experiments from and
+      compare against the robot episodes with: the Scenario definitions,
+      the question set, the VLM prompts, the Condition and Perturbation
+      definitions, the six captures plus every new one, and a dump of the
+      episode database. The rosbags stay out (4.7 GB). Packaged on the
+      memo's 12 to 13 September.

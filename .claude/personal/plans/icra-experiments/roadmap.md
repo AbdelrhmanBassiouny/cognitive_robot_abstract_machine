@@ -1,0 +1,206 @@
+# icra-experiments: roadmap
+
+The narrative half of `plan.yaml`: why the plan has the shape it has, what it
+was built on, how the work is distributed, and the day-by-day budget to the
+2026-09-15 deadline. Created 2026-09-03 from the review of the ICRA planning
+memo (`icra_plan.tex`, dated 3 September) against every tracked plan, the open
+pull requests and the `tracy_icra` demo branch.
+
+## What the memo asks for that no plan owned
+
+The memo's thesis is one mechanism: the same EQL query answers a question,
+selects which backend answers each predicate, drives what the robot perceives,
+and verifies the result in the digital twin; removing knowledge produces
+failures the query predicts. Its evidence is three experiments on the UR10:
+
+- **A**, question answering on the real feed in four buckets (lookup, spatial,
+  temporal, embodiment), against a VLM with the image alone and a VLM with the
+  image plus verbalised working memory, with determinism runs.
+- **B**, per-predicate backend decomposition of a mixed query with measured
+  narrowing, and a perceive-commit-verify loop under about thirty injected
+  errors with precision and recall.
+- **C**, insertion under knowledge ablations and a perturbation, every failure
+  typed and predicted before execution.
+
+Of the twenty plans tracked on 2026-09-03, only `knowledge-directed-perception`
+carried the deadline, and it owns perception: the surfaces, the perception
+backend, the detector rule tree, expectations from events. Nothing owned the
+experiments, the scenario definitions, the episode recording, the capability
+routing across backends, the physics verification, the failure taxonomy, the
+VLM baselines or the artifact. This plan owns those.
+
+## What the code already had, and what this plan builds on
+
+Recorded so that no item rebuilds it:
+
+- **Narrowing is measured.** #238 narrows a look by a whole statement and
+  reports per-frame cost of 0.25 to 0.43 of an unnarrowed look on the six real
+  captures. Experiment B's decomposition half extends that measurement rather
+  than starting it.
+- **Decomposition exists implicitly.** In #238 the lid and the hole named in a
+  statement are answered from the twin before any look is taken, and #222
+  splits every condition into pushed down, residual or refused. #231 has each
+  detector declare the looks it can answer as an EQL condition. The
+  `backend-routing` track raises that one level: backends declare
+  capabilities, a planner routes per predicate, and the routing is reported.
+- **The verification predicates exist.** #229 made support, contact,
+  visibility, reachability, stability, occupancy, inside-of and the six
+  directional relations into predicates with a measurement behind each. The
+  demo already settles shapes in MuJoCo. `physics-verification-backend` is
+  those predicates evaluated in a copy of the world.
+- **Episode recording exists in three shapes.** `ShapeInsertionExperience`
+  with `generate_insertion_experience` and `batch_runner`,
+  `SortingIterationResult` with `ResultsDatabase` and `results_recording`, and
+  the console stack's `SegmindEventRecord` and `InsertionAttemptRecord`. All
+  go through ORMatic into SQL already. `episodes-recorded-through-ormatic`
+  replaces the first two with one Episode model and keeps the database
+  plumbing.
+- **A scenario abstraction and a result model exist.**
+  `control_loop_experiments.scenarios` has `BenchmarkScenario` and
+  `ScenarioRunner`; `experiment_definitions` has `ExperimentResult`,
+  `ExperimentsTable` and `TypstRenderer`. `scenario-domain-model` generalises
+  both rather than adding a third.
+- **Failure diagnosis exists.** `insertion_diagnosis.InsertionDiagnosis` and
+  `InsertionFailureReason` already read an attempt's failure from the plan's
+  own failure and the segmind events. `failure-taxonomy-and-typing` maps each
+  reason to one of the memo's four types.
+- **The temporal and embodiment answers have sources.** Segmind emits support,
+  loss of support, pick-up, placing and insertion events, detected by EQL
+  rules (not ripple-down rules, which the developer corrected on 2026-09-03).
+  The twin answers what is in the gripper through `bodies_in_gripper`. The
+  console stack's `live_query_source` already has presets for "what actions
+  did you perform" and one question per event type.
+- **Attach on grasp exists.** #169 restored `AttachNode` and `DetachNode`
+  behind `Context.update_world_model_attachment`, so a grasped shape moves
+  with the gripper in the twin. `snapshot-working-memory` relies on it rather
+  than rebuilding it.
+- **Verbalisation is deterministic by construction.** The result-verification
+  framework is on main; the scene wordings are on #33, which owes a rebase
+  onto #229 and has two wording decisions only the developer can settle.
+
+## Corrections the developer made on 2026-09-03
+
+- **SQL is a backend, and long-term memory is a deliverable.** The first
+  review read SQL as present only in the console stack; the developer's
+  direction is that EQL over an SQL database returning domain objects is the
+  long-term memory feature, that episodes of every scenario, real and
+  simulated, are recorded through ORMatic into it, and that they are to be
+  queried. The `long-term-memory` track exists for that, and the memo's four
+  backends stand.
+- **Simulation first.** Every scenario, demo and perturbation runs through the
+  full integrated pipeline in simulation before the robot, to save robot time
+  and remove surprises. This is why every experiment has an in-simulation item
+  that its robot item depends on, and why `integrated-simulation-pipeline` is
+  the foot of the plan.
+- **Scenarios are data.** A dataclass domain model describes scenarios, goals,
+  conditions, perturbations and metrics at a meta level; each concrete scenario
+  subclasses or instantiates it. Everything tested and running.
+- **#192 is the developer's.** He is fixing or has fixed it; the integration
+  item keeps it out until he says it is in, because it removes
+  `Match.variable`, which #159 and so #239 still read.
+- **Segmind uses EQL rules**, not ripple-down rules.
+
+## Structural decisions taken at creation
+
+Asked and answered by the developer on 2026-09-03:
+
+- The two core mechanisms (per-predicate routing by declared capability, and
+  the physics verification backend) live here, in the `backend-routing`
+  track, not in `knowledge-directed-perception`. That plan's
+  `imagination-world-rejects-what-a-predicate-refuses` item is covered by
+  `physics-verification-backend` in its narrow form and should be marked so
+  there rather than built twice.
+- The integrated simulation pipeline is this plan's foot item. `tracy_icra`
+  stays the real-robot integration point and takes the integrated branch;
+  `knowledge-directed-perception`'s three demo items are satisfied by
+  `tracy-demo-takes-the-integrated-branch` and the robot experiments.
+- Three lanes, one per person, below.
+
+## The three lanes
+
+Each lane is one person's ordered list. Items in different lanes run in
+parallel; an item waits only on what `depends_on` names.
+
+**Lane 1, robot, perception and mechanisms.**
+`integrated-simulation-pipeline` → `simulated-camera-feeds-perception` →
+`backends-declare-their-capabilities` → `query-routed-per-predicate` →
+`physics-verification-backend` → `snapshot-working-memory` →
+`tracy-demo-takes-the-integrated-branch` → `experiment-b-in-simulation` →
+the three robot runs, with lanes 2 and 3 at the table.
+
+**Lane 2, experiment infrastructure and long-term memory.**
+`scenario-domain-model` → `episodes-recorded-through-ormatic` →
+`montessori-scenarios` → `failure-taxonomy-and-typing` →
+`knowledge-ablations` → `perturbations` → `episodes-queried-by-eql` →
+`failure-predicted-from-the-query` → `experiment-c-in-simulation`.
+
+**Lane 3, baselines, question set, figures and writing.**
+`question-set-and-ground-truth` → `working-memory-verbalised` →
+`vlm-baseline-harness` → `paper-figures-from-episodes` →
+`experiment-a-in-simulation` → `benchmark-artifact`, writing the paper's
+sections 1 to 4 in the gaps and the experiments section from the generated
+tables.
+
+## The budget: 2026-09-15
+
+Twelve days from 2026-09-03. The memo's own timeline is kept where it holds
+and moved where the plans showed it could not: the memo's day one asked for a
+decomposition prototype and attach-on-grasp, both of which exist, and did not
+ask for the integrated simulation pipeline, which is what everything else
+waits on.
+
+| when | lane 1 | lane 2 | lane 3 | state reached |
+|---|---|---|---|---|
+| Thu 3, Fri 4 | integrated pipeline; simulated camera | domain model; episodes recorded | question set frozen; memory verbalised | **the simulated demo runs the whole pipeline and records episodes** |
+| Sat 5, Sun 6 | capabilities; routing | scenarios; taxonomy; ablations; perturbations | VLM harness; figures script | **go/no-go Sunday evening: routing and physics verification answer a mixed query in simulation** |
+| Mon 7, Tue 8 | physics verification; snapshot memory; tracy takes the branch (robot Tue) | episodes queried; prediction; Experiment C in simulation | Experiment A in simulation | **every experiment has run once in simulation** |
+| Wed 9, Thu 10 | Experiment B in simulation, then robot A | robot C | robot A ground truth, tables | robot numbers for A and C |
+| Fri 11 | robot B | reruns | experiments section | full first draft |
+| Sat 12, Sun 13 | video | reruns | artifact; internal review | reviewed draft, artifact |
+| Mon 14, Tue 15 | | | tighten, limitations, submit | submitted |
+
+If the go/no-go fails, the memo's fallback holds: submit with A and C and
+drop B's injection half, keeping the decomposition numbers from #238.
+
+**Cut order**, from the memo and unchanged: lighting → the optional
+no-narrowing ablation → a second setup → fewer random scenes → B's injection
+half. Never cut: the temporal scenarios, the perturbation conditions, the
+hybrid VLM baseline, the failure-prediction metric, the determinism runs.
+
+## What this plan takes priority over
+
+Until 2026-09-15, the following in-flight work waits unless it unblocks an
+item here: the console UI items of `montessori-eql-stack` (#176, #177, #180,
+the written-action and detachable-panel items), `eql-performatives`,
+`eql-existential-semantics`, the `rdr-explanation` demo,
+`knowledge-directed-perception`'s `tune-detection-rules-against-the-camera`,
+`how-to-look-concluded-from-the-request`, `surfaces-found-by-looking` and the
+rule-tree half of #239, and `competing-explanations` unless Experiment A's
+false positives force it.
+
+## Memo corrections this plan carries
+
+Things the memo states that the code contradicts, to be fixed in the memo
+and the paper rather than worked around:
+
+- There is no in-hand event and no Flanagan model. In-hand is a twin
+  predicate; the pick-up detector is an EQL-rule detector over contact and
+  support.
+- The board mesh is 0.865 times the real board (#236). Ground truth from the
+  twin and the no-hole-shape-knowledge condition both need the scale in the
+  twin first.
+- Only one of the six recordings carries robot state. Every future take
+  records the transform tree and joint states with the camera.
+- The continuous perception node cannot hold the frame budget once the hole
+  layout fit runs (0.56 s against 0.5 s); the snapshot design is what makes
+  that irrelevant.
+
+## Open questions for the developer
+
+- Which vision-language model and provider the baseline harness calls, and
+  whether the credentials can be in CI (they need not be; the live test is
+  skipped without them).
+- Whether `knowledge-directed-perception`'s `expectations-from-events` is
+  still needed for the paper once `snapshot-working-memory` and
+  `failure-taxonomy-and-typing` exist, or whether the violated-expectation
+  report folds into the failure typing here.

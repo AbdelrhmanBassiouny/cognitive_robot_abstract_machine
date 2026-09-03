@@ -18,6 +18,7 @@ claude/eql-verbalization-p1-surface-verification-eqltzc	eql-verbalization
 claude/eql-verbalization-operand-naming-n0gb95	eql-verbalization
 claude/eql-verbalization-p3-albw76	eql-verbalization
 eql-symbolic-function-sdt	eql-verbalization
+tracy_icra	icra-experiments
 montessori_perception_on_main	knowledge-directed-perception
 perception_surfaces_from_world	knowledge-directed-perception
 perception_per_supporting_surface	knowledge-directed-perception
@@ -38,7 +39,6 @@ perception_interactive_rule_tuning	knowledge-directed-perception
 claude/episode-replayed-world-kickoff-6ye5bb	knowledge-directed-perception
 perception_expectations_from_events	knowledge-directed-perception
 perception_robokudo_detector	knowledge-directed-perception
-tracy_icra	knowledge-directed-perception
 claude/match-query-ergonomics-idk9w2	match-query-ergonomics
 claude/match-query-ergonomics-where-rooted-b876wm	match-query-ergonomics
 claude/match-query-interface-refactor-l55jym	match-query-ergonomics
