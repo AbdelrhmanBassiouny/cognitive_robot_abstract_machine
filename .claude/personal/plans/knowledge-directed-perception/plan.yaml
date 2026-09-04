@@ -1180,12 +1180,35 @@ items:
   branch: claude/plan-item-kickoff-expectations-2zvpmn
   pull_request_number: 257
   track: events
+  blockers:
+    - >-
+      Review round of 2026-09-04 on #257: 19 unresolved threads from the developer, none yet
+      answered. Fourteen are on `expectations.py`, `scene_request.py`, `backend.py` and the test
+      module and ask for world entities in place of `PrefixedName` (six threads), `BelievedPlace` as
+      a `Role` of a `Place` dataclass, the digital twin's own Surface/Pose/Orientation concepts
+      instead of `ExpectedProperty`, an expectation check that works for arbitrary relations with a
+      per-relation-type distance function, event effects modelled explicitly on the event classes or
+      as an effect hierarchy instead of `SUPPORT_AFTER_EVENT`, plainer names for the effect
+      functions, the `PickUpEvent` support question, dropping a quoted forward reference, docstrings
+      and a helper renamed away from EQL's `entity`. Four reach past this item into #222's files
+      (`look` to `look_for`, `SUPPORTING_SURFACE_ATTRIBUTE_NAME` and
+      `SceneRequest.supporting_surface` versus arbitrary relations, the `DetectedMontessoriShape`
+      rename #255 made). One is a design discussion on explicit effect and occurrence rules,
+      situation calculus, state prediction from the digital twin and probabilistic fusion, asking
+      where that work belongs.
+    - >-
+      CI on head 7526f516: `test_each_lib (version)` fails
+      `test_imported_workspace_members_are_declared[experiments]` because `expectations.py` imports
+      `segmind` and `experiments/pyproject.toml` does not declare it (this item's own fault, green
+      on the base #232). `test_each_lib (probabilistic_model)` errors eight `test_jpt` cases with
+      `ValueError: Unsupported datatype: str`; it is red on the base #232's head too and touches
+      nothing this branch changes.
   depends_on:
   - perception-backend
   - pieces-looked-for-where-expected
   - episode-replayed-into-the-world
   status: in_progress
-  session: https://claude.ai/code/session_01KssQQoxKJVf6NzcZbNZ9dQ
+  session: https://claude.ai/code/session_0124wGjWgkgfuDHX1xTJh6St
   notes: 'Segmind already emits SupportEvent, LossOfSupportEvent, PickUpEvent, PlacingEvent and InsertionEvent
     over is_supported_by. Perception keeps a set of expectations from them - after LossOfSupport(piece,
     table) stop searching the table; after Placing(piece, lid) search the lid - and the action model gets
