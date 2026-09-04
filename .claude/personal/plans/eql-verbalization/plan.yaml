@@ -73,46 +73,34 @@ items:
     - >-
       The rebase this item owes cannot start yet: #229 (`sdt_predicates_answer_whether_they_hold`),
       which the developer decided on 2026-08-31 should carry the predicate classes, is still **open
-      and unmerged** as of 2026-09-03 (state `open`, not draft, `mergeable_state: clean`, base sha
-      `fd72af38` — which is `main`'s current tip). `main`'s `reasoning/predicates.py` therefore
-      still has the twelve `@symbolic_function` helpers and the `Symbol`-derived spatial relations,
-      not #229's `Predicate` classes. This branch cannot drop its own `predicates.py` migration and
-      take `main`'s side until then, because its own coverage test
-      `test_every_symbolic_callable_declares_its_own_verbalization_fragment` asserts every
-      discovered symbolic callable in sdt implements its own `_verbalization_fragment_` — `main`'s
+      and unmerged** as of 2026-09-04 (state `open`, not draft, `mergeable_state: clean`). `main`'s
+      `reasoning/predicates.py` therefore still has the twelve `@symbolic_function` helpers and the
+      `Symbol`-derived spatial relations, not #229's `Predicate` classes. This branch cannot drop
+      its own `predicates.py` migration and take `main`'s side until then, because its own coverage
+      test `test_every_symbolic_callable_declares_its_own_verbalization_fragment` asserts every
+      discovered symbolic callable in sdt implements its own `_verbalization_fragment_` - `main`'s
       un-migrated helpers do not, so taking `main`'s file today turns this branch's own test red.
-      Nothing an agent can do moves this; #229 is ready for review and waiting on the developer to
-      merge it.
+      The drop and #229's landing are one step, not two. Nothing an agent can do moves this; #229 is
+      ready for review and waiting on the developer to merge it.
     - >-
       Three review threads on #33 are still open, not two as previously recorded (9 of 37 threads
       are unresolved, but six of them are the same decision repeated on consecutive lines of
-      `verbalization_surfaces.py`): (1) type-level display noun — `a Point3` -> `a point`
-      (r3608352891, plus the five same-comment repeats r3608358590, r3608359011, r3608377541,
-      r3608394028, r3608473110); P2 shipped the opposite precedence to roadmap decision 1, so this
-      needs a type-level display noun in krrood (`value_lexicon.type_noun`) and three options were
-      put to the developer; (2) whether to widen the IK chain so `Reachable.pose` /
-      `BlockingBodies.pose` can be typed `Pose` rather than `HomogeneousTransformationMatrix`
-      (r3608385653 and r3608444608); (3) not previously recorded: `ClassNameLowercased` renders
-      *"the lower case form of the name of a type"* rather than the reviewer's literal *"the lower
-      case form of a class name"* (r3608403117), deliberately, to keep the operand in the sentence —
-      offered as a choice and left unresolved. This one blocks nothing; it just needs a yes or no.
+      `verbalization_surfaces.py`). All three are collected in one comment for the developer:
+      https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5536810182
+      (1) type-level display noun - `a Point3` -> `a point` (r3608352891, plus the five repeats
+      r3608358590, r3608359011, r3608377541, r3608394028, r3608473110); P2 shipped the opposite
+      precedence to roadmap decision 1, so this needs a type-level display noun in krrood
+      (`value_lexicon.type_noun`), and three options were put to the developer; (2) whether to widen
+      the IK chain so `Reachable.pose` / `BlockingBodies.pose` can be typed `Pose` rather than
+      `HomogeneousTransformationMatrix` (r3608385653 and r3608444608); (3) not previously recorded:
+      `ClassNameLowercased` renders *"the lower case form of the name of a type"* rather than the
+      reviewer's literal *"the lower case form of a class name"* (r3608403117), deliberately, to
+      keep the operand in the sentence - offered as a choice and left unresolved. This one blocks
+      nothing; it just needs a yes or no.
     - >-
       sdt `ormatic_interface.py` needs regenerating where ROS is installed - `ignored_base_classes`
       drops 10 predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI
       regenerates before tests, so the suite is unaffected.
-    - >-
-      stacked-pr-maintenance: Fork PR #33 (branch `eql-symbolic-function-sdt`) conflicts against its
-      base `main`, in one file only:
-      `semantic_digital_twin/src/semantic_digital_twin/reasoning/predicates.py` (verified 2026-09-03
-      with `git merge-tree`; every other file auto-merges). It carries the `needs-resolution` label
-      and the routine has now re-reported the same conflict ten times between 2026-08-28 and
-      2026-09-03, most recently
-      https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5531090145
-      . The conflicting file is exactly the one this item is due to drop, so the conflict clears for
-      free once #229 lands; until then it can only be cleared by keeping this branch's own migrated
-      copy and porting `main`'s three changes to it (`camera.root_T_forward_view` + `field_of_view`
-      in `get_visible_bodies`/`occluding_bodies`, `BoundingBox` -> `VolumetricBoundingBox` in
-      `is_place_occupied`).
   notes: >
     2026-07-30: merged main (605 commits), dropping the duplicated surface-verification framework;
     rebuilt the snapshot on the generated-results pattern; applied every wording from the review
@@ -129,6 +117,17 @@ items:
     so this is read rather than stated: treat #229's shorter wording as the one to apply in the
     rebase, and put it back to the developer if he says otherwise. Decision 11 in `roadmap.md` is
     superseded to that extent.
+
+    2026-09-04 resolve run: merged current `main` into the branch (`f97e7a99`) and cleared the
+    `predicates.py` conflict the routine had re-reported ten times since 2026-08-28. Resolved by
+    keeping this branch's migrated classes and re-applying `main`'s three changes to them -
+    `camera.root_T_forward_view` plus an explicit `field_of_view` in
+    `GetVisibleBodies`/`OccludingBodies`, `BoundingBox` -> `VolumetricBoundingBox` on
+    `IsPlaceOccupied.box`, and the unused `SemanticAnnotation` import dropped. `git merge-tree` now
+    reports the branch clean against `main`. Verified on the merged tree: 30 symbolic callables
+    discovered, all declaring their own fragment; both snapshot assertions pass; the regenerated
+    snapshot changes only `IsPlaceOccupied`'s sentence (following the rename) and the generator's
+    own `tuple`/`Tuple` spelling.
 - id: p5-first-mention-type-annotation
   title: 'P5: name a referent by value and type on first mention'
   branch: null
