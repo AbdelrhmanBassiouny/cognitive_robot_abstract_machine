@@ -703,3 +703,77 @@ in a Claude Code session container: the generator dies resolving giskardpy's
 module scope, and `rclpy` has no PyPI distribution. This is the same limit #262 recorded,
 and it applies to every item of this track. CI runs both inside the ROS image, so the merge
 resolutions and the ORM regeneration are CI-verified rather than session-verified.
+
+## 2026-09-04: what the merge actually cost, and the two branches it could not take
+
+Six of the nine steps landed on #265. The three predicted meetings resolved as planned;
+a fourth appeared that the notes had named in the wrong pairing; and two branches turned
+out not to be mergeable as text at all.
+
+### predicates.py is rewritten by three branches, not two
+
+The item's notes predicted #244 against #229. The perception lineage rewrites the same
+file too, +1107/-257, and its version is a superset of #229's by name - the two carry the
+same class design, including the verbalization fragments, though their merge base is
+`main` and neither is an ancestor of the other.
+
+So #238's copy takes the structure and #244's numeric readings are re-applied over it.
+#238 had meanwhile redesigned the view-relation machinery entirely - `axis` as a
+`ClassVar[SpatialVariables]` plus a `positive_side` flag, in place of #244's `ViewAxis`
+enum and `signed_distance_along_axis` - so the fast path is re-expressed rather than
+restored: `unit_axis_of` is the one home for the direction maths, and both `_direction`
+and `SupportedBy` read through it. `Below(...)()` and #244's numeric reading were checked
+to be the same comparison before one replaced the other.
+
+This matters because #244's four tests assert the path builds nothing symbolic, and they
+are in the tree. Dropping the fast path would have failed them, and AGENTS.md forbids
+adjusting a test to fit.
+
+### the montessori package meets in full, and it costs one module
+
+Predicted, but as `tracy_icra` against #169. On this branch it is the perception lineage
+against #256. The perception copies survive, for the reasons the extraction analysis of
+2026-09-03 already gave.
+
+The cost is `sorting_progress.py`. It reads `shape_key`, `object_name`,
+`insertion_target_for` and `has_fallen_through`, all four of which belong to #256's
+semantics copy and have no counterpart in the surviving one, whose vocabulary is
+`hole_for`, `fits_through` and `cross_section_size`. Nothing imports it but its own test,
+and the same analysis had already called it the Franka demo's, so it was removed rather
+than kept alive by porting four members of the losing copy onto the winning one.
+
+### the Footprint rename was taken without its branch
+
+The hazard fired exactly as predicted, and it is blocking rather than cosmetic: without
+the rename the ORM regeneration this item owes cannot run at all. #223's identifier was
+applied directly, character for character, so the two do not fight when #223 lands.
+
+### #231 and #223 both fork before #236 rewrote BoardDetector
+
+This is the finding that stopped the merge, and it is one finding covering both branches.
+Neither is a text merge onto this branch: each has to be re-applied onto a detector that
+has since been rewritten.
+
+#231 is the harder half, and it is a design synthesis rather than a conflict resolution.
+It renames `LoosePieceDetector` to `EdgeFitDetector`, makes it a `PieceDetector` declaring
+a `capability(look)`, adds `ColorBlobDetector` beside it, and restructures the pipeline's
+`look()` around `detector_rules.detectors_for(...)`. The perception tip meanwhile grew the
+same class expectation-driven and colour-narrowed search with `Occupancy` de-duplication.
+A merged pipeline has to do both. That is ~200 conflicted lines over 10 hunks through the
+core perception loop, and nothing on this branch can be executed to check the result.
+
+Left for a deliberate pass rather than resolved under the deadline. The #239 cherry-pick
+waits on it, since `3a493be9` sits on top of #231.
+
+### nothing on this branch has been run, and that is now measured rather than assumed
+
+The workspace does not install in a session container: `random_events` needs a C++ library
+that will not build there, and the ROS imports #262 already recorded stand. Verification
+was static - whole-tree parse, no leftover markers, every workspace import in the merged
+and edited files resolved against what its module defines, and the four missing members
+confirmed absent before `sorting_progress.py` was removed.
+
+One process note worth keeping: `format_docstrings.py` over "modified files" reformats
+everything a merge dragged in, which on an integration branch is most of the tree and
+would conflict with every owning branch. It was restricted to the files this branch
+actually edited.
