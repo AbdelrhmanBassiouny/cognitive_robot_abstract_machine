@@ -462,3 +462,20 @@ def test_a_sweep_reaches_no_further_than_the_belief_states():
     suggestion.
     """
     assert max(abs(offsets_within(0.02, 0.003))) <= 0.02
+
+
+def test_a_sweeps_positions_are_anchored_on_the_place_it_is_centred_on():
+    """
+    The grid a fit walks is laid out from the believed centre, so a wider reach tries
+    every position a narrower one tried and the centre itself among them.
+    """
+    centre = PlanarPoint(x=0.8, y=0.1)
+    step = 0.003
+
+    narrower = PieceMatcher.placements_within(centre, 0.02, step)
+    wider = PieceMatcher.placements_within(centre, 0.024, step)
+
+    assert {tuple(row) for row in np.round(narrower, 9)} <= {
+        tuple(row) for row in np.round(wider, 9)
+    }
+    assert any(np.allclose(row, [centre.x, centre.y]) for row in narrower)

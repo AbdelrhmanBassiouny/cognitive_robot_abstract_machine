@@ -8,6 +8,7 @@ from semantic_digital_twin.exceptions import RelationStatedAboutNothing
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.reasoning.predicates import (
+    Turned,
     contact,
     visible,
     Above,
@@ -1404,3 +1405,38 @@ def test_containment_builds_nothing_symbolic(container_and_content, monkeypatch)
     monkeypatch.setattr(Point3, "__init__", _refuse_to_build)
 
     assert InsideOf(content, container).compute_containment_ratio() == expected
+
+
+# %% which way a thing is turned
+
+
+def test_turned_holds_within_the_spread_it_was_stated_with(three_places):
+    world, near, middle, far = three_places
+    pose = HomogeneousTransformationMatrix.from_xyz_rpy(
+        yaw=0.5, reference_frame=world.root
+    )
+
+    assert Turned(pose, yaw=0.4, spread=0.2)()
+    assert not Turned(pose, yaw=0.0, spread=0.2)()
+
+
+def test_turned_reads_a_turn_the_short_way_round():
+    """
+    A turn just past a half circle is a small turn the other way, not a large one.
+    """
+    assert Turned(yaw=np.pi - 0.05, spread=0.2).allows_turn(-np.pi + 0.05)
+
+
+def test_turned_reads_the_turn_off_a_thing_the_world_places(three_places):
+    world, near, middle, far = three_places
+
+    assert Turned(middle, yaw=0.0, spread=0.01)()
+
+
+def test_turned_stated_about_nothing_refuses_to_say_whether_it_holds():
+    with pytest.raises(RelationStatedAboutNothing):
+        Turned(yaw=0.0, spread=0.1)()
+
+
+def test_turned_is_a_relation_a_statement_can_state():
+    assert issubclass(Turned, Predicate)

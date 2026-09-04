@@ -23,6 +23,8 @@ from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import FixedScene, RecordedFrame
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
+from experiments.montessori.perception.exceptions import SightingHasNoBody
+from krrood.entity_query_language.backends import StatedRelation
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from semantic_digital_twin.reasoning.predicates import (
@@ -34,6 +36,7 @@ from semantic_digital_twin.reasoning.predicates import (
     PlacementRelation,
     RightOf,
     SupportedBy,
+    Turned,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -149,6 +152,71 @@ def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
     assert isinstance(placement, Near)
     assert placement.place is lid
     assert placement.radius == 0.05
+
+
+def test_a_stated_turn_reaches_the_look_as_the_relation_that_says_it():
+    """
+    Which way round to lay a piece is something the look can act on, so it is read off
+    the statement like a placement is.
+    """
+    statement = a(DetectedMontessoriShape)()
+    statement = statement.where(Turned(statement.variable, yaw=0.3, spread=0.1))
+
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
+
+    assert isinstance(request.turn, Turned)
+    assert request.turn.body is None
+    assert (request.turn.yaw, request.turn.spread) == (0.3, 0.1)
+
+
+def test_a_stated_turn_is_checked_over_what_came_back(
+    scene: MontessoriScene, looking: MontessoriPerceptionBackend
+):
+    """
+    A look already taken laid its pieces whichever way it did, so a stated turn is
+    checked over what it reported.
+    """
+
+    def turned_to(yaw: float):
+        statement = a(DetectedMontessoriShape)()
+        return statement.where(Turned(statement.variable, yaw=yaw, spread=0.05))
+
+    as_laid = list(turned_to(0.0).evaluate(backend=looking))
+    a_turn_away = list(turned_to(1.0).evaluate(backend=looking))
+
+    assert len(as_laid) == len(scene.shapes)
+    assert a_turn_away == []
+
+
+def test_a_relation_the_look_cannot_establish_is_asked_of_the_sightings_body(
+    scene: MontessoriScene,
+):
+    """
+    Contact is read off two bodies, so asked of a piece it is asked of the body the look
+    stood in its world for that piece.
+    """
+    seen, another = scene.shapes[:2]
+    stated = StatedRelation.of(InContactWith, another.role_taker.root)
+
+    [contradicted] = MontessoriPerceptionBackend.contradicted_by(seen, [stated])
+
+    assert isinstance(contradicted, InContactWith)
+    assert contradicted.subject is seen.role_taker.root
+
+
+def test_a_relation_the_look_cannot_establish_needs_a_body_to_be_asked_of(
+    scene: MontessoriScene,
+):
+    """
+    The board is a sighting no body stands for, so a relation read off bodies cannot be
+    asked of it, and says so rather than answering.
+    """
+    stated = StatedRelation.of(InContactWith, Body(name=PrefixedName("table")))
+
+    with pytest.raises(SightingHasNoBody):
+        MontessoriPerceptionBackend.contradicted_by(scene.board, [stated])
 
 
 def test_the_kind_of_detection_asked_for_is_what_the_look_is_asked_for():

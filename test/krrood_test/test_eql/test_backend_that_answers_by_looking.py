@@ -517,3 +517,45 @@ def test_a_query_over_a_domain_is_refused_because_a_look_generates_its_own(
 
     with pytest.raises(GenerativeBackendQueryIsNotUnderspecifiedVariable):
         list(an(entity(sighting)).evaluate(backend=backend))
+
+
+# %% a relation stated before anything was found, asked of what was found
+
+
+def test_a_relation_stated_about_nothing_can_be_asked_of_one_thing():
+    """
+    The form a search reads before anything was found is the form a check asks of what
+    was found afterwards, with that thing standing where the thing sought would.
+    """
+    stated = StatedRelation.of(StandingOn, TABLE)
+    sighting = Sighting(label="cube", place=TABLE.name)
+
+    asked = stated.about(sighting)
+
+    assert isinstance(asked, StandingOn)
+    assert asked.subject is sighting
+    assert asked.object is TABLE
+    assert asked()
+
+
+def test_a_relation_stated_without_a_statement_reads_as_one_read_off_a_statement():
+    statement = an(Sighting)()
+    statement = statement.where(StandingOn(statement.variable, TABLE))
+    [read] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
+
+    assert StatedRelation.of(StandingOn, TABLE) == read
+
+
+def test_a_relation_stating_a_thing_covers_only_relations_to_that_thing():
+    on_the_table = StatedRelation.of(StandingOn, TABLE)
+
+    assert on_the_table.covers(StatedRelation.of(StandingOn, TABLE))
+    assert not on_the_table.covers(StatedRelation.of(StandingOn, LID))
+
+
+def test_a_relation_stating_nothing_covers_every_relation_of_its_kind():
+    standing_on_anything = StatedRelation(relation_type=StandingOn)
+
+    assert standing_on_anything.covers(StatedRelation.of(StandingOn, TABLE))
+    assert standing_on_anything.covers(StatedRelation.of(StandingOn, LID))
+    assert not standing_on_anything.covers(StatedRelation.of(StandingBeside, LID))

@@ -339,3 +339,33 @@ class LookHasNoReferenceFrame(DataclassException):
             "Give the source the frame its detections are placed in, which for a "
             "pipeline read out of a world is that world's own root."
         )
+
+
+@dataclass
+class SightingHasNoBody(DataclassException):
+    """
+    Raised when a relation the look could not establish itself is asked of a sighting
+    that no body stands in the world for.
+    """
+
+    relation_name: str
+    """
+    The relation asked, by the name of the class that means it.
+    """
+
+    label: str
+    """
+    What the sighting recognised.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.relation_name} cannot be asked of the sighting of {self.label}: "
+            f"no body stands in a world for it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Ask it of a sighting the look stood a body in its imagined world for, or "
+            "state a relation the look can establish itself."
+        )

@@ -235,10 +235,7 @@ class PieceMatcher:
         :param reach: How far an edge may lie from the outline and still count.
         :return: The best placement.
         """
-        walk = np.arange(-radius, radius + step / 2, step)
-        positions = np.stack(np.meshgrid(walk, walk, indexing="ij"), axis=-1).reshape(
-            -1, 2
-        ) + np.array([center.x, center.y])
+        positions = self.placements_within(center, radius, step)
         return max(
             (
                 self._best_position(piece, edges, positions, angle, reach)
@@ -246,6 +243,26 @@ class PieceMatcher:
             ),
             key=lambda fit: fit.outline_agreement,
         )
+
+    @staticmethod
+    def placements_within(
+        center: PlanarPoint, radius: float, step: float
+    ) -> np.ndarray:
+        """
+        The positions a sweep tries about the place it is centred on.
+
+        Laid out from that centre outwards along both axes, so that widening the reach
+        only adds positions and the answer is monotonic in it.
+
+        :param center: Where on the plane the grid is centred.
+        :param radius: How far, in metres, the grid reaches from its centre.
+        :param step: How far apart, in metres, the grid's positions stand.
+        :return: The world-frame ``(n, 2)`` positions, the centre among them.
+        """
+        walk = offsets_within(radius, step)
+        return np.stack(np.meshgrid(walk, walk, indexing="ij"), axis=-1).reshape(
+            -1, 2
+        ) + np.array([center.x, center.y])
 
     def _best_position(
         self,

@@ -66,3 +66,27 @@ class ReferenceFrameNotRecorded(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Name the frame the recording roots its transform tree in as the reference frame."
+
+
+# %% events
+
+
+@dataclass
+class EventNamesNoObject(DataclassException):
+    """
+    Raised when an event whose effect is stated about the object it names, names none.
+    """
+
+    event: str
+    """
+    The event, as it prints.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.event} is an event whose effect is stated about the object it "
+            f"names, but it names none."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Build the event with the entity its object was seen involved with."

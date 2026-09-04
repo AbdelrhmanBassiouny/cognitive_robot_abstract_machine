@@ -5,12 +5,15 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import cached_property
 
-from typing_extensions import Optional, List
+from typing_extensions import Optional, List, Tuple
 
+from krrood.entity_query_language.backends import StatedRelation
 from segmind.datastructures.object_tracker import (
     ObjectEventTracker,
     ObjectTrackerFactory,
 )
+from segmind.exceptions import EventNamesNoObject
+from semantic_digital_twin.reasoning.predicates import InsideRegion, SupportedBy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.spatial_types.numeric import NumericPose
@@ -18,6 +21,7 @@ from semantic_digital_twin.world_description.geometry import VolumetricBoundingB
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
+    Region,
 )
 
 
@@ -121,19 +125,130 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
         return hash((self.__class__, tuple(self.tracked_objects), self.timestamp))
 
 
+# %% what an event says now holds
+
+
+@dataclass(frozen=True)
+class Effect:
+    """
+    What an event says about the object it is about once it has happened, in the
+    world's own vocabulary: the relations that hold of it from then on, and the ones
+    that stop holding.
+
+    Each is stated about the object without the object standing in it, so what an
+    event says can be applied to whatever was believed of the object before it.
+    Everything an event says nothing about is left exactly as it was.
+    """
+
+    begins: Tuple[StatedRelation, ...] = ()
+    """
+    The relations that hold of the object once the event has happened.
+    """
+
+    ends: Tuple[StatedRelation, ...] = ()
+    """
+    The relations that stop holding of it, each read as covering every believed
+    relation it states: one stating no operand ends every relation of its kind.
+    """
+
+    def applied_to(
+        self, held: Tuple[StatedRelation, ...]
+    ) -> Tuple[StatedRelation, ...]:
+        """
+        What holds of the object after this effect, given what was believed of it
+        before.
+
+        :param held: The relations believed to hold before the event.
+        """
+        kept = [
+            relation
+            for relation in held
+            if not any(ended.covers(relation) for ended in self.ends)
+        ]
+        return (*kept, *(begun for begun in self.begins if begun not in kept))
+
+
+@dataclass(kw_only=True)
+class EventWithEffect(EventWithTrackedObjects, ABC):
+    """
+    An event that says what holds of its :attr:`tracked_object` once it has happened.
+
+    An event is what was seen to happen, at a time, between the things it names; its
+    effect is what is true of the world from then on. For an event named after the
+    relation it detects the two nearly coincide, and for one named after what happened
+    -- a pick-up, an insertion -- they do not, which is why the effect is stated on
+    the event rather than read off its name.
+    """
+
+    @abstractmethod
+    def effect(self) -> Effect:
+        """
+        What this event says holds of the object it is about, and what stops holding.
+        """
+
+    def _entity_it_names(self) -> KinematicStructureEntity:
+        """
+        The entity this event saw its object involved with.
+
+        :raises EventNamesNoObject: If the event names none.
+        """
+        if self.with_object is None:
+            raise EventNamesNoObject(event=str(self))
+        return self.with_object
+
+    def _region_it_names(self) -> Region:
+        """
+        The region this event saw its object involved with.
+
+        :raises EventNamesNoObject: If the event names none, or names something that is
+            not a region.
+        """
+        if not isinstance(self.with_object, Region):
+            raise EventNamesNoObject(event=str(self))
+        return self.with_object
+
+
+SUPPORTED_BY_ANYTHING = StatedRelation(relation_type=SupportedBy)
+"""
+Resting on anything at all, which is what an event that says what the object now rests
+on ends, and what a pick-up ends without saying what it rests on instead.
+"""
+
+INSIDE_ANY_REGION = StatedRelation(relation_type=InsideRegion)
+"""
+Lying in any region at all, which a pick-up ends.
+"""
+
+
 @dataclass(unsafe_hash=True)
-class SupportEvent(EventWithTrackedObjects):
+class SupportEvent(EventWithEffect):
     """
     The SupportEvent class is used to represent an event that involves an object that is supported by another object.
     """
 
+    def effect(self) -> Effect:
+        """
+        The object rests on what this event names, and on nothing else.
+        """
+        return Effect(
+            begins=(StatedRelation.of(SupportedBy, self._entity_it_names()),),
+            ends=(SUPPORTED_BY_ANYTHING,),
+        )
+
 
 @dataclass(unsafe_hash=True)
-class LossOfSupportEvent(EventWithTrackedObjects):
+class LossOfSupportEvent(EventWithEffect):
     """
     The LossOfSupportEvent class is used to represent an event that involves an object that was supported by another
     object and then lost support.
     """
+
+    def effect(self) -> Effect:
+        """
+        The object no longer rests on what this event names; what else it may rest on
+        is left as it was.
+        """
+        return Effect(ends=(StatedRelation.of(SupportedBy, self._entity_it_names()),))
 
 
 @dataclass(unsafe_hash=True)
@@ -264,25 +379,37 @@ class LossOfContactEvent(AbstractContactEvent):
 
 
 @dataclass(unsafe_hash=True)
-class PickUpEvent(EventWithTrackedObjects):
+class PickUpEvent(EventWithEffect):
     """
     Represents an event where an object is picked up by another object.
     """
 
-    ...
+    def effect(self) -> Effect:
+        """
+        Picked up, the object is held rather than supported: it rests on nothing and
+        lies in no region, whatever it rested on or lay in before.
+        """
+        return Effect(ends=(SUPPORTED_BY_ANYTHING, INSIDE_ANY_REGION))
 
 
 @dataclass(unsafe_hash=True)
-class PlacingEvent(EventWithTrackedObjects):
+class PlacingEvent(EventWithEffect):
     """
     Represents an event where an object is placed on another object.
     """
 
-    ...
+    def effect(self) -> Effect:
+        """
+        The object rests on what it was set down on, and on nothing else.
+        """
+        return Effect(
+            begins=(StatedRelation.of(SupportedBy, self._entity_it_names()),),
+            ends=(SUPPORTED_BY_ANYTHING,),
+        )
 
 
 @dataclass(unsafe_hash=True)
-class InsertionEvent(EventWithTrackedObjects):
+class InsertionEvent(EventWithEffect):
     """
     Represents an event where an object is inserted into another object.
     """
@@ -306,6 +433,16 @@ class InsertionEvent(EventWithTrackedObjects):
     ``with_object`` here: a hole's root is a virtual ``Region``, not a ``Body``, and has
     no reliable way to look its owning annotation back up on its own.
     """
+
+    def effect(self) -> Effect:
+        """
+        The object lies in the region it was inserted into, and rests on nothing it
+        rested on before it went in.
+        """
+        return Effect(
+            begins=(StatedRelation.of(InsideRegion, self._region_it_names()),),
+            ends=(SUPPORTED_BY_ANYTHING,),
+        )
 
     def __str__(self) -> str:
         with_object_name = " - " + " - ".join(

@@ -269,6 +269,30 @@ class StatedRelation:
             self._name_of(self.relation_type.object, self.relation_type)
         ]
 
+    @classmethod
+    def of(
+        cls, relation_type: Type[Relation], related_thing: Any = None, **operands: Any
+    ) -> StatedRelation:
+        """
+        State a relation about the thing sought without writing a statement.
+
+        :param relation_type: The relation, by the class that means it.
+        :param related_thing: The one thing a :class:`Triple` relates the subject to, or
+            ``None`` for a relation stated about the subject alone.
+        :param operands: Whatever else the relation takes, by the operand's own name.
+        """
+        stated = dict(operands)
+        if related_thing is not None:
+            stated[cls._name_of(relation_type.object, relation_type)] = related_thing
+        return cls(relation_type=relation_type, stated_operands=stated)
+
+    @property
+    def subject_name(self) -> str:
+        """
+        What the relation calls the thing it is asserted about.
+        """
+        return self._name_of(self.relation_type.subject, self.relation_type)
+
     def constraint(self) -> Relation:
         """
         The relation as stated, with nothing standing where the thing sought would.
@@ -278,6 +302,35 @@ class StatedRelation:
         this way declares the thing it is asserted about optional.
         """
         return self.relation_type(**self.stated_operands)
+
+    def about(self, subject: Any) -> Relation:
+        """
+        The relation as stated, asserted about one thing.
+
+        This is how a relation stated before anything was found is asked of what was
+        found afterwards, and how one stated about nothing in particular is written into
+        a statement about a variable.
+
+        :param subject: What stands where the thing sought would.
+        """
+        return self.relation_type(
+            **{self.subject_name: subject, **self.stated_operands}
+        )
+
+    def covers(self, other: StatedRelation) -> bool:
+        """
+        Whether every relation this one states, the other states too.
+
+        A relation stating fewer of its operands covers more: one stating none of them
+        covers every relation of its kind, whatever that relation relates the subject
+        to.
+
+        :param other: The relation that may be one of those this one states.
+        """
+        return issubclass(other.relation_type, self.relation_type) and all(
+            name in other.stated_operands and other.stated_operands[name] == value
+            for name, value in self.stated_operands.items()
+        )
 
     @classmethod
     def read_from(

@@ -485,8 +485,10 @@ class SupportedBy(Triple):
         if self._supported_stands_below_supporting():
             return False
         supported_origin = NumericTransform.identity(self.supported)
-        boxes_of_supported = self.supported.collision.as_bounding_box_collection_at_origin(
-            supported_origin
+        boxes_of_supported = (
+            self.supported.collision.as_bounding_box_collection_at_origin(
+                supported_origin
+            )
         )
         boxes_of_supporting = (
             self.supporting.collision.as_bounding_box_collection_at_origin(
@@ -1269,6 +1271,90 @@ class Near(Triple, PlacementRelation):
             Noun(fields["radius"]),
             Prepositions.OF,
             Noun(fields["place"]),
+        )
+
+
+# %% which way a thing is turned
+
+Turnable = Union[Pose, HomogeneousTransformationMatrix, KinematicStructureEntity]
+"""
+Anything the world can say the turn of: a pose, or something standing in one.
+"""
+
+
+def yaw_of(turnable: Turnable) -> float:
+    """
+    How far something is turned about the world's vertical, in radians.
+
+    :param turnable: The pose, or the thing standing in the world, to read.
+    """
+    if isinstance(turnable, KinematicStructureEntity):
+        turnable = turnable.global_pose
+    return float(turnable.to_rotation_matrix().to_rpy()[2])
+
+
+@dataclass(eq=False)
+class Turned(Triple):
+    """
+    Whether something is turned about the vertical to a given angle, give or take a
+    spread either side.
+
+    Stated about nothing it is the constraint alone -- the turns it allows -- which is
+    what a search reads before anything has been found.
+    """
+
+    body: Optional[Turnable] = None
+    """
+    The thing that may be turned so, or None where the relation is stated about nothing.
+    """
+
+    yaw: float = field(kw_only=True)
+    """
+    The turn it may be at, about the world's vertical, in radians.
+    """
+
+    spread: float = field(kw_only=True)
+    """
+    How far either side of :attr:`yaw` a turn may fall and still count, in radians.
+    """
+
+    @property
+    def subject(self) -> Optional[Turnable]:
+        return self.body
+
+    @property
+    def object(self) -> float:
+        return self.yaw
+
+    def __call__(self) -> bool:
+        if self.body is None:
+            raise RelationStatedAboutNothing(type(self).__name__, "body")
+        return self.allows_turn(yaw_of(self.body))
+
+    def allows_turn(self, yaw: float) -> bool:
+        """
+        Whether a turn is one this relation allows.
+
+        :param yaw: The turn to check, about the world's vertical, in radians.
+        """
+        apart = (yaw - self.yaw + np.pi) % (2 * np.pi) - np.pi
+        return abs(float(apart)) <= self.spread
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the body is turned to the yaw within the spread"*.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun(fields["body"]),
+            Copula(),
+            Adjective("turned"),
+            Prepositions.TO,
+            Noun(fields["yaw"]),
+            Prepositions.WITHIN,
+            Noun(fields["spread"]),
         )
 
 
