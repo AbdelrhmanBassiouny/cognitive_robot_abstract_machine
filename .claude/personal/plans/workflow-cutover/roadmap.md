@@ -118,3 +118,30 @@ The three things it has to settle are recorded on the item, because each is a wa
 does something Pages does not: the site is public where an Artifact is private, the workflow reaches
 only the pull requests whose base already carries it, and a manifest edit raises no event, so the
 republish becomes a dispatch rather than a skill invocation.
+
+## What the round changed, and the two threads it did not close
+
+Pushed as `d61619ac`. The four recurring asks are answered across the branch's own files, and the
+answer to the largest of them came from reading #111 rather than from inventing names: every
+vocabulary this branch needed - `RefreshArgument`, `RefreshSummaryKey`, `SitePath`,
+`RepositoryEndpoints`, `PullRequestListFilter`, `IssueField`, and `detail`/`body` in place of
+`payload` - already exists in `bastler/build_site.py` and `bastler/pull_request_state.py`. Taking
+those names makes the single-file overlap the item's notes record an adoption rather than a rename.
+
+`publish_site.sh` is now `publish_site.py` on a `GitCommandRunner` that `PersonalNotesBranch` reads
+through too. That answers two threads at once, and it is where `bastler-package`'s Bash-to-Python
+series was going anyway - none of its seven items covers this file only because the file does not
+exist on `main`.
+
+Two asks are answered differently from how they were put, so they stay open for the user rather than
+being resolved:
+
+- **The git command runner** is this package's own, not `.claude/stack/maintenance_git_commands.py`'s.
+  That module imports `stack`, and reaching it at all depends on another skill directory's conftest
+  having inserted its path - which happens to hold under CI's single pytest run and is not a
+  dependency worth taking. #111's `bastler/personal_notes.py` runs git through a private method for
+  the same reason.
+- **The error base** covers the errors this branch introduces. `build_dashboard.py`'s
+  `MissingMergeTimestampError`, `MalformedPullRequestDataError` and `PlanValidationError` predate the
+  branch and sit outside its diff; retrofitting them widens the pull request rather than answering
+  the review.
