@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,10 @@ from integration_reproduction import (
     clear_fixed_breaks,
 )
 from integration_carried_pipeline import CarriedPipeline, pipeline_carried_by
+from integration_integrated_label import (
+    IntegratedTipRecords,
+    reconcile_integrated_label,
+)
 from integration_verdict import (
     Candidate,
     ChecksVerdict,
@@ -52,6 +57,10 @@ def publish(run: IntegrationRun, build_branch: str, head: str) -> CarriedPipelin
     to publish a later one. The check is here rather than at each caller because there
     is no publication it does not apply to.
 
+    Which pull requests the pointer now holds is said on those pull requests, here for
+    the same reason: two commands publish and a third would inherit it, where a label
+    written at each caller is one a later publication path is trusted to remember.
+
     :param run: What this run has resolved.
     :param build_branch: The build being published.
     :param head: The commit to move the pointer to.
@@ -64,7 +73,35 @@ def publish(run: IntegrationRun, build_branch: str, head: str) -> CarriedPipelin
     remote = run.configuration.fork_remote
     run.git.run("push", "--force", remote, f"{head}:refs/heads/{POINTER_BRANCH}")
     run.git.run("push", "--delete", remote, build_branch)
+    _label_what_was_published(run, build_branch)
     return carried
+
+
+def _label_what_was_published(run: IntegrationRun, build_branch: str) -> None:
+    """
+    Make every pull request say whether the pointer now holds it, and drop the records
+    of the builds the fork has stopped carrying.
+
+    Said on standard error, so the document on standard output stays one document - the
+    same channel a build's own label writes are reported on.
+
+    :param run: What this run has resolved.
+    :param build_branch: The build the pointer was moved onto.
+    """
+    remote = run.configuration.fork_remote
+    records = IntegratedTipRecords.read(run.git, remote)
+    written = reconcile_integrated_label(
+        build_branch=build_branch,
+        configuration=run.configuration,
+        fork=run.fork(),
+        records=records,
+    )
+    for write in written:
+        standing = "integrated" if write.carried else "no longer integrated"
+        print(
+            f"{write.pull_request_number}\t{standing}\t{write.label}", file=sys.stderr
+        )
+    records.forget_dropped_builds()
 
 
 def tree_of(run: IntegrationRun, reference: str) -> str:

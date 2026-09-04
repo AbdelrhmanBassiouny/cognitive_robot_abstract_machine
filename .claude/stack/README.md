@@ -25,6 +25,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 | `merge` vs `rebase` | the **`rebase`** label; default `merge` | labelling on GitHub |
 | cram2 create-link built | the **`cram2-link-sent`** marker | nothing - a maintenance pass sets it when it puts a create-link in the PR description, and clears it once you promote (add `in-review`) |
 | conflict/CI-red reported | the **`needs-resolution`** label | nothing - a maintenance pass sets it when it reports a restack conflict to the branch's owning session, and clears it once the branch stops conflicting |
+| carried by `integration` | the **`integrated`** label | nothing - publishing a build sets it on every branch that build holds, and takes it off the ones it does not |
 
 ## Files
 
@@ -196,6 +197,14 @@ conflicts with its base or has broken a sibling is exactly what this branch must
 The labels are the ones a maintenance pass writes, so run `build --restack` and the pass's own
 verdict decides what the build carries; a build reads the stack again afterwards, since the restack
 is what writes those labels.
+
+**Every pull request says whether `integration` currently holds it**, with the **`integrated`**
+label. It is written when the pointer moves onto a build rather than when one is assembled - an
+assembled build may go red and never be adopted - and each build records what it carried under
+`refs/integration/carried/<build branch>/` so the later run that publishes it can read it back.
+The write is a reconciliation: the branches carrying the label are made to be exactly the ones the
+published build holds, which is what takes it off a branch a later build drops or never mentions.
+It blocks nothing and is there to be read.
 
 **A branch blocked for breaking another is held out only while the tree the break was found in
 still exists.** The block records the heads it was measured over, as references under

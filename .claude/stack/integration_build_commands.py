@@ -21,6 +21,7 @@ from integration_block_record import BlockRecords, lift_readmitted
 from integration_plans import PlanFilter
 from integration_exit_codes import IntegrationExitCode
 from integration_failure import FailureLocation, print_failure_location
+from integration_integrated_label import IntegratedTipRecords
 from integration_report import IntegrationReport, exit_code_for, print_build
 from integration_run import IntegrationCommand, IntegrationRun
 from integration_selection import build_branch_name, stack_to_build
@@ -114,7 +115,25 @@ class BuildCommand(IntegrationCommand):
         else:
             print_build(report)
         self._lift_what_the_suite_cleared(run, fork, report)
+        self._record_what_it_carried(run, report)
         return exit_code_for(report)
+
+    @staticmethod
+    def _record_what_it_carried(run: IntegrationRun, report: IntegrationReport) -> None:
+        """
+        Write down which pull requests this build carried, for whichever later run
+        publishes it.
+
+        The report is what says so and it does not outlive this run: a rebuild settles
+        the previous run's candidate before assembling its own, so the build being
+        published is always one an earlier run assembled.
+
+        :param run: What this run has resolved.
+        :param report: What the build did.
+        """
+        IntegratedTipRecords.read(run.git, run.configuration.fork_remote).record(
+            report, run.git.commit_at(report.build_branch)
+        )
 
     @staticmethod
     def _lift_what_the_suite_cleared(
