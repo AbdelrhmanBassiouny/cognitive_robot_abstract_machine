@@ -7,21 +7,32 @@ repository involved.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import date
+
+from git_commands import ReferenceUpdate
 
 import pytest
 
-from stack import BranchStatus, Stack
+from stack import BranchStatus, Configuration, PullRequest, Stack
+from integration_pass_record import PassRecord, RecordedSubject
 from integration_verdict import ChecksVerdict
 
 import integration_selection
-import integration
+from integration_constants import POINTER_BRANCH
 from integration_exit_codes import IntegrationExitCode
 from integration_report import exit_code_for
-from integration_selection import select_for_build, stack_to_build, tips_of
-from integration_tips import TipStatus
+from integration_selection import (
+    select_for_build,
+    stack_to_build,
+    tips_of,
+)
+from integration_tips import PullRequestStackTipOutcome, TipStatus
+from integration_block_record import BlockRecord, BlockStanding
 
 from integration_fixtures import (
+    GitAnsweringForTheFork,
     create_blocked_branch,
     create_red_branch,
     create_branch_object,
@@ -325,6 +336,24 @@ def test_leaving_a_blocked_branch_out_is_not_a_failed_build():
 # %% which stack a build is made from
 
 
+@dataclass(frozen=True)
+class GitWithNothingPublished:
+    """
+    A runner answering that the fork carries no branch and has recorded no pass, so a
+    test about selection is not also a test about either.
+    """
+
+    def run(self, *arguments: str) -> str:
+        """:param arguments: Ignored.
+        :return: Nothing, which is what an empty listing looks like."""
+        return ""
+
+    def remote_branch_heads(self, remote: str) -> dict[str, str]:
+        """:param remote: Ignored.
+        :return: No branch at all."""
+        return {}
+
+
 @dataclass
 class RunReadingStacksInTurn:
     """An :class:`~integration_run.IntegrationRun` stand-in handing out one stack per read.
@@ -336,8 +365,11 @@ class RunReadingStacksInTurn:
     stacks: list[Stack]
     """The stacks to hand out, in the order they are read."""
 
-    git: str = "a-git-runner"
-    """Stands in for the runner, which only the restack is handed."""
+    git: GitWithNothingPublished = field(default_factory=GitWithNothingPublished)
+    """Stands in for the runner the restack and the pass record are driven through."""
+
+    configuration: Configuration = field(default_factory=make_configuration)
+    """The resolved configuration, read for the fork remote."""
 
     reads: int = 0
     """How many times the stack has been read."""
@@ -495,6 +527,95 @@ def test_the_stack_a_build_is_made_from_carries_each_branch_s_own_checks():
     assert built_from.branches[0].ci == str(ChecksVerdict.FAILED)
 
 
+@dataclass
+class GitWithOneBranchPublished:
+    """
+    A runner answering that the fork carries one branch, and saying whether its head is
+    one this fork has already recorded a pass for.
+    """
+
+    branch: str
+    """The branch the fork carries."""
+
+    head: str
+    """What it points at, which is what a record would be keyed on."""
+
+    already_passed: bool = True
+    """Whether the fork carries a record of that head passing."""
+
+    pushes: list[tuple[str, ...]] = field(default_factory=list)
+    """Every push made through it, which writing a record adds one to."""
+
+    def remote_branch_heads(self, remote: str) -> dict[str, str]:
+        """:param remote: Ignored; there is one fork.
+        :return: The one branch and its head."""
+        return {self.branch: self.head}
+
+    def write_remote_references(
+        self, remote: str, updates: Sequence[ReferenceUpdate]
+    ) -> None:
+        """:param remote: The remote written to.
+        :param updates: What each reference is left at, remembered rather than pushed.
+        """
+        self.pushes.append(("push", remote, *(str(update) for update in updates)))
+
+    def run(self, *arguments: str) -> str:
+        """:param arguments: What git was asked to do.
+        :return: What the fork answers."""
+        if arguments[0] == "ls-remote":
+            if not self.already_passed:
+                return ""
+            recorded = PassRecord(RecordedSubject.BRANCH_HEAD, self.head, date.today())
+            return f"{self.head}\t{recorded.reference}"
+        self.pushes.append(arguments)
+        return ""
+
+
+def test_a_branch_head_already_recorded_as_passing_is_not_asked_about_again():
+    """
+    Most of a rebuild's readings are about branches nothing has moved since the last one,
+    and the answer to those is already on the fork - which is where the time a rebuild
+    spends four times a day actually goes.
+    """
+    unmoved = create_branch_object("unmoved", 1)
+    fork = ForkReportingChecks()
+    git = GitWithOneBranchPublished(branch=unmoved.name, head="0f1e2d3c")
+    run = RunReadingStacksInTurn([create_stack_object([unmoved])], git=git)
+
+    built_from = stack_to_build(run, fork, restack_first=False)
+
+    assert fork.read_branches == []
+    assert built_from.branches[0].ci == str(ChecksVerdict.PASSED)
+    assert git.pushes == []
+
+
+def test_a_branch_whose_checks_have_just_passed_is_recorded_so_the_next_rebuild_skips_it():
+    """
+    A record nothing writes is one nothing ever reuses, and the reading that establishes
+    a pass is the only place that knows one happened.
+    """
+    moved = create_branch_object("moved", 1)
+    fork = ForkReportingChecks(
+        runs=[{"name": "test_each_lib", "status": "completed", "conclusion": "success"}]
+    )
+    git = GitWithOneBranchPublished(
+        branch=moved.name, head="0f1e2d3c", already_passed=False
+    )
+    run = RunReadingStacksInTurn([create_stack_object([moved])], git=git)
+
+    stack_to_build(run, fork, restack_first=False)
+
+    written = PassRecord(RecordedSubject.BRANCH_HEAD, git.head, date.today())
+
+    assert fork.read_branches == [moved.name]
+    assert [
+        argument
+        for push in git.pushes
+        for argument in push
+        if argument.endswith(written.reference)
+    ]
+
+
 def test_a_restacked_branch_s_checks_are_read_after_the_restack_moved_it(monkeypatch):
     """
     A restack rewrites a stale tip's head, so checks read before it belong to a commit
@@ -502,18 +623,152 @@ def test_a_restacked_branch_s_checks_are_read_after_the_restack_moved_it(monkeyp
     """
     restacks: list[object] = []
     reads_after_restacks: list[int] = []
-    annotate = integration_selection.branches_annotated_with_their_own_checks
+    annotate = integration_selection.BranchChecks.annotate
     monkeypatch.setattr(
         integration_selection, "restack", lambda *arguments: restacks.append(1)
     )
     monkeypatch.setattr(
-        integration_selection,
-        "branches_annotated_with_their_own_checks",
-        lambda stack, fork: reads_after_restacks.append(len(restacks))
-        or annotate(stack, fork),
+        integration_selection.BranchChecks,
+        "annotate",
+        lambda self, stack: reads_after_restacks.append(len(restacks))
+        or annotate(self, stack),
     )
     run = RunReadingStacksInTurn([create_stack_object([])])
 
     stack_to_build(run, A_FORK, restack_first=True)
 
     assert reads_after_restacks == [1]
+
+
+# %% a block whose tree is gone
+
+
+INTEGRATION_CONFLICT_LABEL = make_configuration().integration_conflict_label
+"""
+The label a break between two cleanly merging branches blocks the breaking one with.
+"""
+
+
+def test_a_branch_whose_block_is_stale_is_carried_again_and_named_as_readmitted():
+    """
+    A block is about a tree; once a head in that tree has moved the tree no longer
+    exists, and holding the branch out is holding it out for a break nothing has
+    measured since. It is carried on trial, and said so, since the label is still there.
+    """
+    readmitted = create_branch_object(
+        "readmitted",
+        1,
+        labels=[INTEGRATION_CONFLICT_LABEL],
+        block_standing=BlockStanding.STALE,
+    )
+
+    selection = select_for_build(create_stack_object([readmitted]))
+
+    assert selection.integrated == (readmitted,)
+    assert selection.readmitted == (readmitted,)
+    assert selection.left_out == ()
+
+
+def test_a_branch_whose_block_still_stands_is_left_out_as_blocked():
+    """
+    Nothing has moved since the break was measured, so the break is still there.
+    """
+    blocked = create_branch_object(
+        "blocked",
+        0,
+        labels=[INTEGRATION_CONFLICT_LABEL],
+        block_standing=BlockStanding.STANDS,
+    )
+
+    selection = select_for_build(create_stack_object([blocked]))
+
+    assert selection.integrated == ()
+    assert selection.readmitted == ()
+    assert selection.left_out == (create_blocked_branch(blocked.name),)
+
+
+def test_a_branch_blocked_with_nothing_recorded_says_no_build_can_lift_it():
+    """
+    A label with no record of the tree it was measured in can only be lifted by a hand
+    or by a reproduction test, and a build report that filed it under ``blocked`` would
+    read as one the next rebuild might lift.
+    """
+    unrecorded = create_branch_object(
+        "unrecorded",
+        1,
+        labels=[INTEGRATION_CONFLICT_LABEL],
+        block_standing=BlockStanding.UNRECORDED,
+    )
+
+    selection = select_for_build(create_stack_object([unrecorded]))
+
+    assert selection.integrated == ()
+    assert [entry.status for entry in selection.left_out] == [
+        TipStatus.BLOCKED_WITHOUT_RECORD
+    ]
+
+
+def test_a_block_nothing_has_read_the_standing_of_is_honoured():
+    """
+    A selection made without the fork having been asked - a pure read of the board -
+    has no grounds to carry a labelled branch, and the safe direction is to leave it out.
+    """
+    blocked = create_branch_object("blocked", 0, labels=[INTEGRATION_CONFLICT_LABEL])
+
+    selection = select_for_build(create_stack_object([blocked]))
+
+    assert selection.left_out == (create_blocked_branch(blocked.name),)
+
+
+def test_a_stale_block_does_not_readmit_a_branch_a_base_conflict_also_withholds():
+    """
+    The other blocking label is about the branch's own base and is lifted by the
+    maintenance pass on its own evidence; a tree going stale says nothing about it.
+    """
+    conflicted = create_branch_object(
+        "conflicted",
+        0,
+        labels=[INTEGRATION_CONFLICT_LABEL, BLOCKING_LABEL],
+        block_standing=BlockStanding.STALE,
+    )
+
+    selection = select_for_build(create_stack_object([conflicted]))
+
+    assert selection.integrated == ()
+    assert selection.left_out == (create_blocked_branch(conflicted.name),)
+
+
+def test_leaving_an_unrecorded_block_out_is_not_a_failed_build():
+    """
+    It is the rule working, the same as any other block.
+    """
+    report = create_report(
+        tests_passed=True,
+        left_out=(
+            PullRequestStackTipOutcome(
+                branch="unrecorded",
+                pull_request_number=1,
+                status=TipStatus.BLOCKED_WITHOUT_RECORD,
+            ),
+        ),
+    )
+
+    assert exit_code_for(report) is IntegrationExitCode.SUCCESS
+
+
+def test_the_stack_a_build_is_made_from_carries_each_block_s_standing():
+    """
+    The rule is worth nothing if nothing fills the field it reads, and the field is
+    filled from what the fork has each branch pointing at now.
+    """
+    blocked = create_branch_object("blocked", 1, labels=[INTEGRATION_CONFLICT_LABEL])
+    git = GitAnsweringForTheFork(
+        heads={blocked.name: "moved-head"},
+        references={BlockRecord(1, 1, "measured-head").reference: "measured-head"},
+    )
+    run = RunReadingStacksInTurn([create_stack_object([blocked])], git=git)
+
+    built_from = stack_to_build(run, A_FORK, restack_first=False)
+
+    assert built_from.branches[0].block_standing == str(BlockStanding.STALE)
+    assert select_for_build(built_from).readmitted == (blocked,)

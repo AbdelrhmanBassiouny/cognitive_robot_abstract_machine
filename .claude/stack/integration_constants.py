@@ -11,6 +11,25 @@ from enum import StrEnum
 
 from git_commands import GitSetting
 
+# %% who a rebuild runs as, and what it keeps between calls
+
+
+ACTOR_VARIABLE = "GITHUB_ACTOR"
+"""
+Who a runner is acting as, which is who a rebuild's own merge commits are authored as.
+"""
+
+ACTOR_EMAIL_SUFFIX = "@users.noreply.github.com"
+"""
+The address GitHub gives an actor that has published none of its own.
+"""
+
+LOCALISATION_STATE_FILE = "integration-localisation.json"
+"""
+What a rebuild calls the document its localisation keeps between calls.
+"""
+
+
 # %% what a build is named and where it lands
 
 
@@ -26,6 +45,15 @@ stores refs as files, so ``refs/heads/integration/<timestamp>`` cannot exist whi
 BUILD_NAME_FORMAT = "%Y%m%d-%H%M%S"
 """
 How a build's moment is spelled in its branch name.
+"""
+
+CANDIDATE_TITLE_PREFIX = "Integration candidate:"
+"""
+Opens the title of the pull request a build is judged as.
+
+Beside the branch names rather than beside the judging, because it is also how a reader
+of the fork's pull requests tells a build being judged from somebody's work - and one
+kind of candidate is opened against the same base as every ordinary branch.
 """
 
 RERERE_SETTINGS = (
@@ -125,6 +153,11 @@ class ReportKey(StrEnum):
     Whether the base branch was moved to the build being judged.
     """
 
+    MISSING_PIPELINE = "missing_pipeline"
+    """
+    The pipeline's own files a build does not carry, which is why it was not published.
+    """
+
     TIPS_TESTED = "tips_tested"
     """
     The tips a search ran the suite over, in order.
@@ -185,6 +218,22 @@ class ReportKey(StrEnum):
     The earlier tip the culprit fails against alone.
     """
 
+    MEASURED_OVER = "measured_over"
+    """
+    The heads a break was found between, which is the tree its block is about.
+    """
+
+    COMMIT = "commit"
+    """
+    What the fork had a branch pointing at when a break was measured over it.
+    """
+
+    READMITTED = "readmitted"
+    """
+    The branches a build carried although a label withholds them, because the tree
+    their block was measured in is gone.
+    """
+
     BLOCKED = "blocked"
     """
     The branch a block-branch run labelled.
@@ -209,3 +258,42 @@ class ReportKey(StrEnum):
     """
     The branches whose block a clearing run lifted.
     """
+
+    RECORDED_BREAKS = "recorded_breaks"
+    """
+    Every branch a reproduction run had a break recorded against, and whether each break
+    still reproduces.
+    """
+
+    TAKEN_DOWN = "taken_down"
+    """
+    The build branches a run deleted because nothing was judging them any more.
+    """
+
+
+BUILD_BRANCH_PATTERN = f"{POINTER_BRANCH}-[0-9]*"
+"""
+Matches every branch a build was assembled onto, and nothing a build did not.
+
+The digit is what tells a build from a probe: both open with the pointer's own name and
+a hyphen, and only a build follows it with the moment it was named at.
+"""
+
+BUILD_BRANCH_FILTER = f"{POINTER_BRANCH}-*"
+"""
+Matches a build's branch where a workflow says which branches an event is about.
+
+Spelled apart from :data:`BUILD_BRANCH_PATTERN` because the two are read by different
+things: git's own listing takes the character class that tells a build from a probe, and
+a workflow's filter does not, so the pattern that narrows one silently matches nothing in
+the other. Nothing is lost by the wider form here - a probe's tree is judged by the probe
+workflow rather than by the one this filter is about.
+"""
+
+PROBE_BRANCH_PREFIX = f"{POINTER_BRANCH}-probe-"
+"""
+Opens the name of every tree a localisation publishes for CI to judge.
+
+Its own prefix rather than a build's, so a probe is never mistaken for one: a build is
+what the pointer moves to, and a probe exists to answer one question and be deleted.
+"""

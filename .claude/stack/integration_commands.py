@@ -12,6 +12,10 @@ from command_line import commands_of
 
 from integration_build_commands import BuildCommand  # noqa: F401
 from integration_candidate_commands import OpenCandidateCommand  # noqa: F401
+from integration_localisation_commands import (  # noqa: F401
+    LocateCandidateFailureCommand,
+)
+from integration_pipeline_commands import RefreshCommand  # noqa: F401
 from integration_resolution_commands import StageConflictCommand  # noqa: F401
 from integration_run import IntegrationCommand
 

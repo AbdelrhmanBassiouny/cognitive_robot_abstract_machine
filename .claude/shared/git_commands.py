@@ -10,6 +10,7 @@ are here: :meth:`GitCommandRunner.attempt` reports, :meth:`GitCommandRunner.run`
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,6 +92,108 @@ class GitSetting:
     def as_arguments(self) -> tuple[str, str]:
         """:return: The pair of arguments git takes this as."""
         return ("-c", f"{self.key}={self.value}")
+
+
+DETACHED_HEAD = "HEAD"
+"""
+The commit a checkout is on, which is what a build publishes from: it assembles on a
+detached head so no local branch is left behind for a tree already answered about.
+"""
+
+BRANCH_REFERENCE_PREFIX = "refs/heads/"
+"""
+Where git files a branch, written once because a push has to say it in full.
+
+A destination given as a bare name is resolved against whatever the remote already has,
+so a branch is named the long way round to say which namespace is meant.
+"""
+
+
+@dataclass(frozen=True)
+class BranchPublication:
+    """
+    What to publish and the branch to publish it as.
+    """
+
+    source: str
+    """
+    The commit or reference to publish.
+    """
+
+    branch: str
+    """
+    The branch it becomes on the remote.
+    """
+
+    @classmethod
+    def under_its_own_name(cls, branch: str) -> BranchPublication:
+        """
+        Publish a branch as itself.
+
+        :param branch: The branch to publish.
+        :return: The publication saying so.
+        """
+        return cls(source=branch, branch=branch)
+
+    def __str__(self) -> str:
+        return f"{self.source}:{BRANCH_REFERENCE_PREFIX}{self.branch}"
+
+
+@dataclass(frozen=True)
+class ReferenceUpdate:
+    """
+    One reference on a remote, and what to leave it pointing at.
+
+    For the references a record is kept as, below ``refs/`` and outside ``refs/heads/``,
+    which are overwritten by design; a branch is published through
+    :class:`BranchPublication`, which decides whether history may be rewritten.
+    """
+
+    reference: str
+    """
+    The fully qualified reference.
+    """
+
+    commit: str | None = None
+    """
+    The commit to leave it at, or ``None`` to delete it.
+    """
+
+    def __str__(self) -> str:
+        return f"{self.commit or ''}:{self.reference}"
+
+
+@dataclass(frozen=True)
+class ProposedPush:
+    """
+    One publication, and whether it is authorised to overwrite what is published.
+
+    Every push a caller makes is built as one of these, so whether history may be
+    rewritten is decided once rather than at each call.
+    """
+
+    remote: str
+    """
+    The remote to publish to.
+    """
+
+    publication: BranchPublication
+    """
+    What to publish and the branch to publish it as.
+    """
+
+    with_lease: bool = False
+    """
+    Whether published history may be overwritten, and then only if the remote is where
+    this checkout last saw it.
+    """
+
+    def as_arguments(self) -> tuple[str, ...]:
+        """
+        :return: What to hand git, forcing only where this push authorises it.
+        """
+        lease = ("--force-with-lease",) if self.with_lease else ()
+        return (*lease, self.remote, str(self.publication))
 
 
 @dataclass(frozen=True)
@@ -199,6 +302,13 @@ class GitCommandRunner:
             for line in self.run("branch", "--list").splitlines()
         )
 
+    def file_names_in(self, reference: str) -> tuple[str, ...]:
+        """
+        :param reference: The commit or branch to read.
+        :return: The names of the files that reference carries, in git's own order.
+        """
+        return tuple(self.run("ls-tree", "--name-only", reference).splitlines())
+
     def worktree_paths(self) -> tuple[str, ...]:
         """
         :return: The working trees attached to this checkout, the main one included.
@@ -232,6 +342,36 @@ class GitCommandRunner:
         """
         return self.run("ls-remote", remote, reference)
 
+    def remote_branch_heads(self, remote: str) -> dict[str, str]:
+        """
+        Read what a remote has each of its branches pointing at, as this checkout last
+        fetched them, in one call rather than one per branch.
+
+        :param remote: The remote to read.
+        :return: The head per branch name.
+        """
+        listed = self.run(
+            "for-each-ref",
+            "--format=%(refname:strip=3) %(objectname)",
+            f"refs/remotes/{remote}/",
+        )
+        return dict(line.split(" ", 1) for line in listed.splitlines() if " " in line)
+
+    def remote_branch_names(self, remote: str, pattern: str) -> tuple[str, ...]:
+        """
+        Ask a remote which of its branches match a shape, without fetching from it.
+
+        :param remote: The remote to ask.
+        :param pattern: A branch-name glob, matched against the branch's own name.
+        :return: The names of the branches it answered with, without their prefix.
+        """
+        answered = self.remote_reference(remote, f"{BRANCH_REFERENCE_PREFIX}{pattern}")
+        return tuple(
+            line.split()[-1].removeprefix(BRANCH_REFERENCE_PREFIX)
+            for line in answered.splitlines()
+            if line.strip()
+        )
+
     def remove_remote(self, remote: str) -> None:
         """
         :param remote: The remote to stop tracking.
@@ -241,6 +381,10 @@ class GitCommandRunner:
     def configure(self, setting: GitSetting) -> None:
         """
         Write a setting into this checkout's own configuration.
+
+        Unlike :attr:`configuration_overrides`, which a run passes to each command it
+        makes, this outlives the process - which is what an identity has to do, since the
+        commits are made by the commands a rebuild goes on to run.
 
         :param setting: The setting to write.
         """
@@ -317,20 +461,40 @@ class GitCommandRunner:
         """
         return self.attempt("commit", "--no-edit")
 
-    def push_refspec(
-        self, remote: str, refspec: str, with_lease: bool = False
-    ) -> GitCommandResult:
+    def push(self, proposed: ProposedPush) -> GitCommandResult:
         """
-        Publish a refspec, forcing only where the caller says it is authorised.
+        Publish a branch, forcing only where the push itself says it is authorised.
 
-        :param remote: The remote to publish to.
-        :param refspec: What to publish, as ``<source>:<destination>``.
-        :param with_lease: Whether published history may be overwritten, and then only
-            if the remote is where this checkout last saw it.
+        :param proposed: What to publish, and whether a rewrite is authorised.
         :return: The finished push, whose failure the caller reports rather than forces.
         """
-        lease = ["--force-with-lease"] if with_lease else []
-        return self.attempt("push", "--quiet", *lease, remote, refspec)
+        return self.attempt("push", "--quiet", *proposed.as_arguments())
+
+    def write_remote_references(
+        self, remote: str, updates: Sequence[ReferenceUpdate]
+    ) -> None:
+        """
+        Leave a remote's references where the updates say, in one push.
+
+        Overwrites whatever each reference held: these are the references a record is
+        kept as, never branches, so there is no history to protect.
+
+        :param remote: The remote to write to.
+        :param updates: What each reference is left pointing at, or that it is deleted.
+        """
+        self.run(
+            "push", "--quiet", "--force", remote, *(str(update) for update in updates)
+        )
+
+    def delete_branch(self, remote: str, branch: str) -> GitCommandResult:
+        """
+        Remove a published branch.
+
+        :param remote: The remote holding it.
+        :param branch: The branch to remove.
+        :return: The finished push, whose failure the caller reports rather than forces.
+        """
+        return self.attempt("push", "--quiet", "--delete", remote, branch)
 
     def contains(self, candidate: str, descendant: str) -> bool:
         """

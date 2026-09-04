@@ -93,12 +93,39 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   each time. It writes to no branch and pushes nothing.
   - `python .claude/stack/integration.py build` - assemble it, then run the suite on the result.
     `--restack` brings stale tips forward first, which pushes to other people's branches and is
-    why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document.
+    why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document;
+    `--plan <id>` carries only the tips belonging to that plan, repeatable or comma-separated, for
+    finding out whether one plan holds together when the full build is red. A branch the plan
+    index names no plan for is reported rather than dropped or carried.
   - `python .claude/stack/integration.py locate-failure` - when the branch builds and the suite fails on
     it, add the tips back one at a time until it turns, and name the pair. A semantic collision
     leaves no conflict to attribute, so there is nothing else to go on.
   - `stage-conflict` / `record-resolution` - reproduce one collision, and record what was chosen
     so later builds replay it instead of skipping the tip again.
+  - `open-candidate` / `find-candidate` / `settle-candidate` / `close-candidate` - a pushed build
+    collects no checks, so a build is judged as a pull request. One rebuild opens the candidate and
+    a later one settles it: the first check against a candidate has been measured appearing between
+    19 minutes and 2 hours 47 minutes after it was opened, which no job outwaits. Every candidate is
+    opened against the base its build was assembled over, which is the one base a build always
+    merges with - opened against the branch a build publishes to, itself an older build of the same
+    branches, the two conflict, GitHub computes no merge reference, and the `pull_request` run that
+    would check that reference out is never created at all. What tells the candidate a later run
+    settles from one carrying named plans is its title. `close-candidate` drops one nothing is ever
+    going to report a check against, so a rebuild replaces it rather than stopping on it.
+  - `publish-recorded-pass` - publish a build whose *tree* this fork has already seen pass, with
+    no candidate at all. Nothing usually moves between rebuilds, so most assembled builds are
+    byte-for-byte one already judged; the passes are kept as git references under
+    `refs/integration/passed/`, expire after a week and are pruned as new ones are written. Only
+    passes are recorded: a red is cleared by re-running the same commit, and a remembered one
+    would make the rule that a branch re-enters a build by going green unreachable.
+  - `take-down-unreferenced-builds` - drop the build branches nothing is judging any more.
+    Publishing takes its own build down, because the pointer then holds the same commit; every
+    other outcome left one behind, so eight had gathered on the fork before anyone counted. What
+    keeps a build is a pull request still open against it - the candidate judging it, or a
+    filtered build somebody asked for and is working from.
+  - `refresh` - the whole cycle as one command, which is what the scheduled Action runs. It takes
+    the same `--plan`; a rebuild asked for particular plans settles nothing and publishes nothing,
+    and its candidate's title names them so nothing ever can.
 - **`.claude/skills/integration-conflict-triage/SKILL.md`** - what a collision between two
   in-flight branches *means*, which the build deliberately does not decide. Invocable as
   `/integration-conflict-triage`.
@@ -170,10 +197,17 @@ The labels are the ones a maintenance pass writes, so run `build --restack` and 
 verdict decides what the build carries; a build reads the stack again afterwards, since the restack
 is what writes those labels.
 
-Everything left out is named in the report - as `blocked` or `unreviewed`, distinct from a tip the
-build tried to integrate and could not - so a build that integrated nine branches out of nineteen
-says which nine and why, rather than saying so only by omission. Leaving either out is the rule
-working, so it is not a failing build and does not change the exit status.
+**A branch blocked for breaking another is held out only while the tree the break was found in
+still exists.** The block records the heads it was measured over, as references under
+`refs/integration/blocked/` on the fork; once one of them has moved, the build carries the branch
+again on trial and reports it as `readmitted`, and its suite passing is what lifts the label. A
+label with no such record is reported as `blocked-without-record`, since no build can lift it.
+
+Everything left out is named in the report - as `blocked`, `blocked-without-record` or
+`unreviewed`, distinct from a tip the build tried to integrate and could not - so a build that
+integrated nine branches out of nineteen says which nine and why, rather than saying so only by
+omission. Leaving any of them out is the rule working, so it is not a failing build and does not
+change the exit status.
 
 Two branches can also merge perfectly and still not work together - one removing what another's
 test imports, one adding a dependency another's fixture does not provide. No per-branch check can

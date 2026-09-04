@@ -15,7 +15,9 @@ import integration_failure
 import integration
 from integration_constants import ReportKey
 from integration_exit_codes import IntegrationExitCode
-from integration_failure import FailureLocationReport
+from integration_block_record import BlockRecord, BlockRecords, MeasuredHead
+from integration_failure import FailureLocationReport, IntegrationTestFailure
+from integration_reproduction import REPRODUCTION_MARKER
 from integration_tips import ResolutionProvenance
 
 from test_maintenance import (
@@ -32,12 +34,15 @@ from test_maintenance import (
 
 from integration_fixtures import (
     A_BUILD_BRANCH,
+    A_FORK_REMOTE,
     A_PULL_REQUEST_NUMBER,
+    GitAnsweringForTheFork,
     INNOCENT_TIP,
     NEEDS_THE_MODULE,
     ONLY_TIP,
     REMOVES_THE_MODULE,
     create_integration_test_failure,
+    publishing,
 )
 
 # %% localising an integration test failure
@@ -72,8 +77,8 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
     )
     checkout.git.stage("a_module.py", BUILD_CHECK_SCRIPT.name)
     checkout.git.commit("the module both tips are about")
-    checkout.git.push_refspec("origin", UPSTREAM_BASE)
-    checkout.git.push_refspec(UPSTREAM_REMOTE, UPSTREAM_BASE)
+    checkout.git.push(publishing("origin", UPSTREAM_BASE))
+    checkout.git.push(publishing(UPSTREAM_REMOTE, UPSTREAM_BASE))
     checkout.git.fetch(UPSTREAM_REMOTE)
 
     checkout.branch_from(INNOCENT_TIP, UPSTREAM_BASE)
@@ -84,12 +89,12 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
     )
     checkout.git.stage("test_needs_the_module.py")
     checkout.git.commit("a test that needs the module")
-    checkout.git.push_refspec("origin", "needs-the-module:needs-the-module")
+    checkout.git.push(publishing("origin", "needs-the-module"))
 
     checkout.git.checkout(REMOVES_THE_MODULE, UPSTREAM_BASE)
     checkout.git.remove("a_module.py")
     checkout.git.commit("the module goes away")
-    checkout.git.push_refspec("origin", f"{REMOVES_THE_MODULE}:{REMOVES_THE_MODULE}")
+    checkout.git.push(publishing("origin", REMOVES_THE_MODULE))
     checkout.git.fetch("origin")
     checkout.git.switch_to(UPSTREAM_BASE)
     return [
@@ -224,6 +229,11 @@ def test_the_search_report_serialises_what_it_localised(fork_checkout: ForkCheck
 # %% telling the branch that breaks another
 
 
+def no_records() -> BlockRecords:
+    """:return: A fork that has recorded no block, whose writes go nowhere."""
+    return BlockRecords(git=GitAnsweringForTheFork(), remote=A_FORK_REMOTE, records=())
+
+
 def test_blocking_a_failure_holds_the_branch_that_causes_it_out_of_promotion():
     """
     A comment alone is missed, so the branch is held out of promotion until somebody
@@ -235,7 +245,7 @@ def test_blocking_a_failure_holds_the_branch_that_causes_it_out_of_promotion():
     )
 
     create_integration_test_failure().block_the_branch_that_causes_it(
-        configuration, fork
+        configuration, fork, no_records()
     )
 
     assert fork.label_writes == [
@@ -257,7 +267,7 @@ def test_blocking_a_failure_names_both_branches_to_the_one_that_broke_it():
     fork = RecordingPullRequests()
 
     create_integration_test_failure().block_the_branch_that_causes_it(
-        make_configuration(), fork
+        make_configuration(), fork, no_records()
     )
 
     posted = fork.comments[0]
@@ -273,7 +283,7 @@ def test_the_block_is_reported_as_a_document_a_caller_can_read():
     configuration = make_configuration()
 
     blocked = create_integration_test_failure().block_the_branch_that_causes_it(
-        configuration, RecordingPullRequests()
+        configuration, RecordingPullRequests(), no_records()
     )
     document = json.loads(blocked.as_json())
 
@@ -293,6 +303,118 @@ def test_a_failure_only_the_combination_causes_names_no_branch_as_its_partner():
 
     create_integration_test_failure(
         breaks_against=None
-    ).block_the_branch_that_causes_it(make_configuration(), fork)
+    ).block_the_branch_that_causes_it(make_configuration(), fork, no_records())
 
     assert NEEDS_THE_MODULE not in fork.comments[0].body
+
+
+# %% the tree the failure was measured in
+
+
+def test_the_search_records_the_heads_of_the_culprit_and_the_tip_it_breaks_against(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A block is only ever about the tree it was found in, and that tree is these heads:
+    a later build reads them to tell whether the break can still be there.
+    """
+    pull_requests = two_tips_that_break_only_together(fork_checkout)
+
+    report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+
+    assert report.integration_test_failure.measured_over == (
+        MeasuredHead(
+            REMOVES_THE_MODULE,
+            3,
+            fork_checkout.published_commit(A_FORK_REMOTE, REMOVES_THE_MODULE),
+        ),
+        MeasuredHead(
+            NEEDS_THE_MODULE,
+            2,
+            fork_checkout.published_commit(A_FORK_REMOTE, NEEDS_THE_MODULE),
+        ),
+    )
+
+
+def test_a_failure_only_the_combination_causes_is_measured_over_everything_in_the_build(
+    fork_checkout: ForkCheckout,
+):
+    """
+    With no single partner to name, the tree the break is about is the whole build that
+    was there when the culprit arrived - so any of those moving is what makes the block
+    stale.
+    """
+    pull_requests = two_tips_that_break_only_together(fork_checkout)
+    stack = a_stack(fork_checkout, pull_requests)
+    by_name = {branch.name: branch for branch in stack.branches}
+
+    failure = IntegrationTestFailure.measured(
+        git=fork_checkout.git,
+        configuration=stack.configuration,
+        culprit=by_name[REMOVES_THE_MODULE],
+        already_included=(INNOCENT_TIP, NEEDS_THE_MODULE),
+        breaks_against=None,
+        by_name=by_name,
+    )
+
+    assert [head.branch for head in failure.measured_over] == [
+        REMOVES_THE_MODULE,
+        INNOCENT_TIP,
+        NEEDS_THE_MODULE,
+    ]
+    assert all(
+        head.commit == fork_checkout.published_commit(A_FORK_REMOTE, head.branch)
+        for head in failure.measured_over
+    )
+
+
+def test_the_search_report_serialises_the_heads_the_failure_was_measured_over(
+    fork_checkout: ForkCheckout,
+):
+    """
+    ``locate-failure --json`` is what a caller reads the failure back out of.
+    """
+    pull_requests = two_tips_that_break_only_together(fork_checkout)
+    report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+
+    read_back = FailureLocationReport.from_json(report.as_json())
+
+    assert read_back.integration_test_failure.measured_over == (
+        report.integration_test_failure.measured_over
+    )
+
+
+def test_blocking_a_failure_records_the_tree_it_was_measured_in():
+    """
+    A block that wrote no record is the permanent one: nothing could ever tell that the
+    tree it was about had gone.
+    """
+    failure = create_integration_test_failure()
+    git = GitAnsweringForTheFork()
+
+    failure.block_the_branch_that_causes_it(
+        make_configuration(),
+        RecordingPullRequests(),
+        BlockRecords(git=git, remote=A_FORK_REMOTE, records=()),
+    )
+
+    pushed = {argument for push in git.pushes for argument in push}
+    assert {
+        f"{head.commit}:{BlockRecord(A_PULL_REQUEST_NUMBER, head.pull_request_number, head.commit).reference}"
+        for head in failure.measured_over
+    } <= pushed
+
+
+def test_the_block_comment_says_what_lifts_the_label():
+    """
+    The comment used to say nothing clears the label, which was true and is the
+    defect. It names the two things that do: a build carrying the branch again once
+    the tree has moved, and a passing reproduction test.
+    """
+    fork = RecordingPullRequests()
+
+    create_integration_test_failure().block_the_branch_that_causes_it(
+        make_configuration(), fork, no_records()
+    )
+
+    assert REPRODUCTION_MARKER in fork.comments[0].body

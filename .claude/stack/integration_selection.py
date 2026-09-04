@@ -7,15 +7,13 @@ so a reviewed branch standing on a draft would bring that draft in under its own
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from dataclasses import dataclass
 from datetime import datetime
 
-from stack import (
-    Branch,
-    Stack,
-    order,
-)
+from stack import Branch, PullRequest, Stack, order
 
+from maintenance_git_commands import MaintenanceGitCommandRunner
 from maintenance_github import (
     CandidatePullRequests,
     GitHubRepository,
@@ -26,9 +24,14 @@ from integration_verdict import (
     read_checks,
 )
 
+from integration_block_record import BlockRecords, BlockStanding
 from integration_constants import BUILD_NAME_FORMAT, POINTER_BRANCH
-from integration_run import IntegrationRun
+from integration_pass_record import PassedChecks, RecordedSubject
+from integration_plans import PlanFilter
 from integration_tips import PullRequestStackTipOutcome, TipStatus
+
+if TYPE_CHECKING:
+    from integration_run import IntegrationRun
 
 
 @dataclass(frozen=True)
@@ -51,8 +54,17 @@ class BuildSelection:
     nineteen and says so only by omission reads as having covered everything.
     """
 
+    readmitted: tuple[Branch, ...] = ()
+    """
+    The integrated branches a label withholds, carried anyway because the tree their
+    block was measured in is gone.
 
-def select_for_build(stack: Stack) -> BuildSelection:
+    Named because the label is still there: what lifts it is the suite passing over a
+    build these reached, and nothing else knows they were carried on trial.
+    """
+
+
+def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSelection:
     """
     Split the stack into the work a build may integrate and the work it may not.
 
@@ -68,13 +80,25 @@ def select_for_build(stack: Stack) -> BuildSelection:
     restack rewrites every stale tip's head, so requiring green would empty the build
     whenever one ran.
 
+    A branch blocked for breaking another is held out only while the tree the break was
+    measured in still exists. Once a head in it has moved the block is stale, and the
+    branch is carried again on trial: the suite over that build is the first
+    measurement of the break since, and a green one lifts the label. A block nothing
+    recorded a tree for is honoured, and reported as one no build can lift.
+
+    A build asked for particular plans holds a branch out the same way again, so one
+    plan's branches can be judged on their own without a build of their own.
+
     :param stack: The derived stack, its branches carrying whatever
-        :func:`branches_annotated_with_their_own_checks` last read.
+        :class:`BranchChecks` last read.
+    :param plans: The plans this build was asked to carry, or ``None`` for all of them.
     :return: The integrated branches and the ones left out.
     """
+    filtering = plans or PlanFilter.unfiltered()
     in_the_stack = {branch.name for branch in stack.branches}
     integrated: list[Branch] = []
     integrated_names: set[str] = set()
+    readmitted: list[Branch] = []
     left_out: list[PullRequestStackTipOutcome] = []
     reasons: dict[str, tuple[TipStatus, str]] = {}
     for branch in order(stack):
@@ -83,24 +107,30 @@ def select_for_build(stack: Stack) -> BuildSelection:
             or branch.parent not in in_the_stack
             or stack.has_landed_upstream(branch.parent)
         )
-        blocked = stack.is_blocked(branch)
+        withheld = withholding_status(stack, branch)
         red = branch.ci == ChecksVerdict.FAILED
+        outside_the_plans = filtering.leaves_out(branch.name)
         carried = (
             branch.status.is_out_of_draft
-            and not blocked
+            and withheld is None
             and not red
+            and outside_the_plans is None
             and stands_on_integrated_work
         )
         if carried:
             integrated.append(branch)
             integrated_names.add(branch.name)
+            if stack.is_blocked(branch):
+                readmitted.append(branch)
             continue
-        if blocked:
-            reason = (TipStatus.BLOCKED, branch.name)
+        if withheld is not None:
+            reason = (withheld, branch.name)
         elif red:
             reason = (TipStatus.CHECKS_FAILED, branch.name)
         elif not branch.status.is_out_of_draft:
             reason = (TipStatus.UNREVIEWED, branch.name)
+        elif outside_the_plans is not None:
+            reason = (outside_the_plans, branch.name)
         else:
             reason = reasons.get(branch.parent, (TipStatus.UNREVIEWED, branch.parent))
         reasons[branch.name] = reason
@@ -113,27 +143,118 @@ def select_for_build(stack: Stack) -> BuildSelection:
                 attributed_to=None if held_out_by == branch.name else held_out_by,
             )
         )
-    return BuildSelection(integrated=tuple(integrated), left_out=tuple(left_out))
+    return BuildSelection(
+        integrated=tuple(integrated),
+        left_out=tuple(left_out),
+        readmitted=tuple(readmitted),
+    )
 
 
-def branches_annotated_with_their_own_checks(
-    stack: Stack, fork: CandidatePullRequests
-) -> Stack:
+def withholding_status(stack: Stack, branch: Branch) -> TipStatus | None:
     """
-    Read what each branch's own checks say, so a build can decline to carry a red one.
+    Say whether a label holds a branch out of a build, and which status says so.
 
-    A branch that is already red alone makes the candidate red for a reason no reader can
-    tell apart from two branches breaking each other - which is the one thing the
-    candidate exists to report. Read against the branch rather than a commit, so it
-    answers for whatever the branch points at after a restack has moved it.
+    The base-conflict label always holds: the maintenance pass lifts it on evidence of
+    its own. The break label holds only while its block stands - a stale block carries
+    the branch on trial, and one nothing recorded a tree for is reported as such. A
+    standing nothing has read is honoured, since a selection that never asked the fork
+    has no grounds to carry a labelled branch.
 
-    :param stack: The derived stack.
-    :param fork: The fork to read the checks from.
-    :return: The same stack, its branches carrying the verdict on their own heads.
+    :param stack: The derived stack, naming the labels.
+    :param branch: The branch to decide for.
+    :return: The status the branch is left out with, or ``None`` when no label holds it.
     """
-    for branch in stack.branches:
-        branch.ci = str(read_checks(fork, branch.name).verdict)
-    return stack
+    if not stack.is_blocked(branch):
+        return None
+    configuration = stack.configuration
+    other_labels = set(configuration.blocking_labels) - {
+        configuration.integration_conflict_label
+    }
+    if other_labels.intersection(branch.labels):
+        return TipStatus.BLOCKED
+    if branch.block_standing == BlockStanding.STALE:
+        return None
+    if branch.block_standing == BlockStanding.UNRECORDED:
+        return TipStatus.BLOCKED_WITHOUT_RECORD
+    return TipStatus.BLOCKED
+
+
+@dataclass
+class BranchChecks:
+    """
+    What each branch's own checks say, asking GitHub only about heads nothing has
+    already seen pass.
+
+    Most of a rebuild's readings are about branches that have not moved since the last
+    one, and the answer to those is already on the fork.
+    """
+
+    fork: CandidatePullRequests
+    """
+    The fork to read the checks from.
+    """
+
+    git: MaintenanceGitCommandRunner
+    """
+    The runner the published heads are read through.
+    """
+
+    remote: str
+    """
+    The fork remote, whose copy of a branch is the one a build merges.
+    """
+
+    recorded: PassedChecks
+    """
+    What this fork has already seen pass, updated as each new pass is written.
+    """
+
+    def annotate(self, stack: Stack) -> Stack:
+        """
+        Read what each branch's own checks say, so a build can decline to carry a red
+        one.
+
+        A branch that is already red alone makes the candidate red for a reason no reader
+        can tell apart from two branches breaking each other - which is the one thing the
+        candidate exists to report.
+
+        :param stack: The derived stack.
+        :return: The same stack, its branches carrying the verdict on their own heads.
+        """
+        published = self._published_heads()
+        for branch in stack.branches:
+            branch.ci = str(self._verdict_for(branch.name, published.get(branch.name)))
+        return stack
+
+    def _verdict_for(self, branch: str, head: str | None) -> ChecksVerdict:
+        """
+        Answer for one branch, from the record where it has one.
+
+        Read against the branch rather than a commit where GitHub is asked, so it
+        answers for whatever the branch points at after a restack has moved it; a
+        recorded pass is about the commit, so a branch that has moved has no record and
+        is read.
+
+        :param branch: The branch to answer for.
+        :param head: What the fork has it pointing at, absent when the fork has no such
+            branch.
+        :return: What its checks amount to.
+        """
+        if head is not None and self.recorded.holds(RecordedSubject.BRANCH_HEAD, head):
+            return ChecksVerdict.PASSED
+        verdict = read_checks(self.fork, branch).verdict
+        if verdict is ChecksVerdict.PASSED and head is not None:
+            self.recorded = self.recorded.record(
+                self.git, self.remote, RecordedSubject.BRANCH_HEAD, head, head
+            )
+        return verdict
+
+    def _published_heads(self) -> dict[str, str]:
+        """
+        :return: What the fork has each of its branches pointing at, read in one call
+            rather than one per branch.
+        """
+        return self.git.remote_branch_heads(self.remote)
 
 
 def stack_to_build(
@@ -147,20 +268,33 @@ def stack_to_build(
     it again is what lets :func:`select_for_build` leave out the branch this very pass
     has just blocked.
 
+    Every command that assembles tips reads the stack this way, so a search for the
+    branch that broke a build assembles the tips the build carried - a readmitted branch
+    included - rather than some other set.
+
     :param run: What this run has resolved.
     :param fork: The fork to read the open pull requests from.
     :param restack_first: Whether to bring stale tips forward before reading.
-    :return: The stack to build from, annotated with each branch's own checks.
+    :return: The stack to build from, annotated with each branch's own checks and the
+        standing of its block.
     """
+    remote = run.configuration.fork_remote
+    checks = BranchChecks(
+        fork=fork,
+        git=run.git,
+        remote=remote,
+        recorded=PassedChecks.read(run.git, remote),
+    )
+    blocks = BlockRecords.read(run.git, remote)
     stack = run.stack(fork)
-    if not restack_first:
-        return branches_annotated_with_their_own_checks(stack, fork)
-    restack(stack, run.git, fork)
-    run.refresh_remotes()
-    return branches_annotated_with_their_own_checks(run.stack(fork), fork)
+    if restack_first:
+        restack(stack, run.git, fork)
+        run.refresh_remotes()
+        stack = run.stack(fork)
+    return blocks.forget_lifted(stack).annotate(checks.annotate(stack))
 
 
-def tips_of(stack: Stack) -> list[Branch]:
+def tips_of(stack: Stack, plans: PlanFilter | None = None) -> list[Branch]:
     """
     The branches to merge, in the order they are merged.
 
@@ -172,9 +306,10 @@ def tips_of(stack: Stack) -> list[Branch]:
     conflict skips: ascending pull request number.
 
     :param stack: The derived stack.
+    :param plans: The plans this build was asked to carry, or ``None`` for all of them.
     :return: The tips, in merge order.
     """
-    integrated = select_for_build(stack).integrated
+    integrated = select_for_build(stack, plans).integrated
     claimed_as_parent = {branch.parent for branch in integrated}
     return sorted(
         (

@@ -19,7 +19,7 @@ from maintenance_constants import (
     MERGEABLE_STATE_WITH_CONFLICTS,
 )
 from maintenance_board import PullRequestField
-from maintenance_git_commands import MaintenanceGitCommandRunner, ProposedPush
+from maintenance_git_commands import MaintenanceGitCommandRunner, RestackPush
 from maintenance_github import ForkPullRequests
 from stack import (
     Branch,
@@ -428,7 +428,7 @@ class PublishBranch(RestackStep):
         :return: What became of the push - this step always concludes the branch."""
         git = restacking.git
         push = git.push(
-            ProposedPush.publishing(
+            RestackPush.publishing(
                 restacking.configuration, restacking.branch.name, restacking.strategy
             )
         )

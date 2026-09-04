@@ -4,6 +4,12 @@ name: Integration refresh
 # base plus every reviewed, unblocked branch in flight, and move the branch onto the
 # result once this repository's own checks have passed over it.
 #
+# What the rebuild is, step by step, is `integration.py refresh` - not this file. Every
+# decision it makes is a decision about an exit status, and a status branched on in a
+# `run:` block is one nothing can run outside a runner and so one nothing checks. Here
+# that procedure is Python with tests over it, and this file is left with what only a
+# runner can do: check a tree out, put an interpreter on the path, install, and call it.
+#
 # Why a candidate pull request rather than judging the pushed branch directly: ci.yml
 # triggers on `push` to main and on `pull_request`, and on nothing else - so a build
 # that is only pushed collects no checks at all. The candidate exists to be judged and
@@ -25,6 +31,41 @@ on:
     # moved, and the branches move on a working day's rhythm rather than an hourly one.
     - cron: "0 5,11,17,23 * * *"
   workflow_dispatch:
+    inputs:
+      plans:
+        # A rebuild carrying one plan answers whether that plan's branches hold together
+        # on their own, which is what you reach for when the full build is red. It
+        # settles nothing and publishes nothing: the branch a developer works from is
+        # only ever moved onto a build carrying everything in flight.
+        description: "Plans to carry, comma separated; empty carries everything"
+        required: false
+        type: string
+        default: ""
+  workflow_run:
+    # The run this pipeline is actually waiting on. A rebuild opens a candidate and
+    # stops, because a candidate's first check arrives long after the run that opened it
+    # is over - so the verdict is always read by a later run, and on the schedule alone
+    # that later run is up to six hours after the matrix has already answered.
+    #
+    # Answering to the matrix finishing closes that gap without changing what a rebuild
+    # does: the next run settles the inherited candidate exactly as a scheduled one
+    # would, minutes after there is something to settle rather than at the next slot.
+    #
+    # Matched on the workflow's name rather than its file, which is what `workflow_run`
+    # takes - and narrowed to the branches a build is assembled onto, since every pull
+    # request in flight runs that same workflow and an unfiltered trigger would be a
+    # rebuild per push to any of them.
+    #
+    # It settles rather than repeats: the run it starts assembles the next build, and
+    # a build whose tree the fork has already recorded as passing publishes with no
+    # candidate at all - so once nothing in flight has moved there is no matrix left to
+    # finish and nothing left to answer to.
+    #
+    # Like every other trigger here, this is read from the copy of this file on the
+    # default branch, so it starts working once a build carrying it has published.
+    workflows: ["CI (matrix over libs)"]
+    types: [completed]
+    branches: ["integration-*"]
   pull_request:
     # Leaving draft is what makes a branch integrable at all, so it is the moment the
     # build is worth redoing rather than one to wait out: until the next scheduled run
@@ -86,92 +127,44 @@ jobs:
           source .claude/hooks/resolve-personal-notes-config.sh
           pip install pytest -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
 
-      - name: Add the upstream the build is based on
-        env:
-          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+      # A pull request's run is pinned to the default branch, and that branch is the one
+      # this pipeline publishes: it only moves when a build goes green, so it lags every
+      # change in flight and can predate the command this job invokes. Asking argparse
+      # whether it knows the command turns that into an answer instead of a usage error
+      # - and a usage error here would attach a red check to whichever branch's
+      # ready-flip asked for the rebuild, which is the branch the rebuild exists to
+      # carry.
+      - name: Ask whether the published pipeline can rebuild
+        id: published_pipeline
+        continue-on-error: true
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          eval "$(python "${STACK_DIRECTORY}/stack.py" configuration \
-            | awk -F'\t' '$1 == "upstream_setup_command" { print $2 }')"
-          git config user.name "${GITHUB_ACTOR}"
-          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          python "${STACK_DIRECTORY}/integration.py" refresh --help > /dev/null
 
-      - name: Bring the fork's base onto the upstream
-        env:
-          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+      - name: Say that the published pipeline is too old to rebuild
+        if: steps.published_pipeline.outcome != 'success'
         run: |
-          source .claude/hooks/resolve-personal-notes-config.sh
-          python "${STACK_DIRECTORY}/maintenance.py" fast-forward
+          echo "The pipeline on this repository's default branch does not know the" \
+            "rebuild this run asked for, so nothing was rebuilt. It will once a build" \
+            "carrying the rebuild has published." >> "${GITHUB_STEP_SUMMARY}"
 
-      # The suite runs here rather than being left to the candidate, even though the
-      # candidate's own checks include it. A build the tooling suite rejects is one
-      # nobody should be handed, and catching it here costs three minutes where letting
-      # it through costs a whole matrix, a candidate opened to be closed red, and the
-      # time between the two. The asymmetry is the whole argument: it is spent on every
-      # good build to be saved on every bad one, and bad ones are what this branch
-      # exists to find.
-      - name: Restack every stale tip and build
-        id: build
+      - name: Rebuild the integration branch
+        if: steps.published_pipeline.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+          # A probe is dispatched on a reference carrying this pipeline rather than on
+          # the tree under test, which carries no workflow of its own - so it is the
+          # same reference this job checked the tooling out at, as a branch name because
+          # that is what a dispatch takes.
+          PIPELINE_REFERENCE: >-
+            ${{ github.event_name == 'pull_request'
+            && github.event.repository.default_branch
+            || github.ref_name }}
+          # Empty on every trigger but a dispatch, and an empty --plan is dropped by the
+          # shell rather than read as a plan of no name.
+          PLANS: ${{ inputs.plans }}
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          set +e
-          python "${STACK_DIRECTORY}/integration.py" build --restack \
-            --json > "${RUNNER_TEMP}/build.json"
-          status=$?
-          set -e
-          # 0: every tip is in the branch. 10: at least one was left out, which is a
-          # collision to triage rather than a build that failed.
-          case $status in 0 | 10) ;; *) cat "${RUNNER_TEMP}/build.json" ;; esac
-          # 11 is two branches that each pass alone, merge cleanly and break together.
-          # Nothing GitHub reports can find that, so it is found here or not at all -
-          # and a break nobody acts on is carried by every later build. block-branch
-          # localises it to the tip that turned the suite and blocks that branch, so the
-          # next run leaves it out and builds cleanly without it.
-          if [ $status -eq 11 ]; then
-            python "${STACK_DIRECTORY}/integration.py" block-branch --json
-          fi
-          # The job still fails on anything but a build: the branch did not move, and
-          # that is what a red run in the Actions list is telling somebody. Blocking the
-          # branch is what keeps it to one red run rather than one every six hours.
-          case $status in 0 | 10) ;; *) exit $status ;; esac
-          echo "branch=$(python -c "import json;print(json.load(open('${RUNNER_TEMP}/build.json'))['build_branch'])")" >> "$GITHUB_OUTPUT"
-
-      - name: Open the candidate that gets it checked
-        id: candidate
-        env:
-          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
-        run: |
-          source .claude/hooks/resolve-personal-notes-config.sh
-          python "${STACK_DIRECTORY}/integration.py" open-candidate \
-            --build "${{ steps.build.outputs.branch }}" --json \
-            > "${RUNNER_TEMP}/candidate.json"
-          python - <<'READ' >> "$GITHUB_OUTPUT"
-          import json, os
-          opened = json.load(open(os.environ["RUNNER_TEMP"] + "/candidate.json"))
-          print(f"number={opened['candidate']}")
-          print(f"head={opened['head']}")
-          READ
-
-      - name: Publish the build once its checks pass
-        env:
-          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
-        run: |
-          source .claude/hooks/resolve-personal-notes-config.sh
-          # Each call is one decision read on its own; the waiting is here rather than
-          # inside it, so a caller that does not want to wait need not.
-          for _ in $(seq 60); do
-            set +e
-            python "${STACK_DIRECTORY}/integration.py" settle-candidate \
-              --candidate "${{ steps.candidate.outputs.number }}" \
-              --build "${{ steps.build.outputs.branch }}" \
-              --head "${{ steps.candidate.outputs.head }}" --json
-            status=$?
-            set -e
-            # 13 is the checks not having finished; anything else is a verdict.
-            if [ $status -ne 13 ]; then exit $status; fi
-            sleep 60
-          done
-          echo "::error::the candidate's checks had not finished after an hour"
-          exit 1
+          python "${STACK_DIRECTORY}/integration.py" refresh \
+            --dispatch-on "${PIPELINE_REFERENCE}" \
+            ${PLANS:+--plan "${PLANS}"}

@@ -6,17 +6,22 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from stack import PullRequest
+from stack import PullRequest, Stack
 
 import integration_constants
+from integration_assembly import build_integration
+from integration_block_record import BlockStanding
+from integration_report import IntegrationReport
 from integration_selection import build_branch_name
-from integration_tips import TipStatus
+from integration_tips import ReadmittedBranch, ResolutionProvenance, TipStatus
 
 from test_maintenance import (
     ForkCheckout,
     UPSTREAM_BASE,
     UPSTREAM_REMOTE,
+    a_stack,
     fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
+    make_configuration,
 )
 
 from integration_fixtures import (
@@ -29,6 +34,8 @@ from integration_fixtures import (
     UNRELATED_TIP,
     build,
     outcome_for,
+    publishing,
+    two_colliding_tips,
 )
 
 # %% the build branch's own name
@@ -121,7 +128,7 @@ def test_a_conflicting_tip_is_skipped_and_the_build_continues(
     fork_checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
     fork_checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     fork_checkout.commit("contested", "what the second tip wrote\n")
-    fork_checkout.git.push_refspec("origin", f"{SECOND_TIP}:{SECOND_TIP}")
+    fork_checkout.git.push(publishing("origin", SECOND_TIP))
     fork_checkout.branch_from(THIRD_TIP, UPSTREAM_BASE)
 
     report = build(
@@ -148,7 +155,7 @@ def test_a_skipped_tip_names_the_tip_it_collided_with(fork_checkout: ForkCheckou
     fork_checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
     fork_checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     fork_checkout.commit("contested", "what the second tip wrote\n")
-    fork_checkout.git.push_refspec("origin", f"{SECOND_TIP}:{SECOND_TIP}")
+    fork_checkout.git.push(publishing("origin", SECOND_TIP))
 
     report = build(
         fork_checkout,
@@ -173,10 +180,10 @@ def test_a_tip_conflicting_with_the_base_itself_names_the_base(
     """
     fork_checkout.git.checkout(STALE_TIP, UPSTREAM_BASE)
     fork_checkout.commit("a-file", "what the stale tip wrote\n")
-    fork_checkout.git.push_refspec("origin", f"{STALE_TIP}:{STALE_TIP}")
+    fork_checkout.git.push(publishing("origin", STALE_TIP))
     fork_checkout.git.switch_to(UPSTREAM_BASE)
     fork_checkout.commit("a-file", "what the upstream moved on to\n")
-    fork_checkout.git.push_refspec(UPSTREAM_REMOTE, UPSTREAM_BASE)
+    fork_checkout.git.push(publishing(UPSTREAM_REMOTE, UPSTREAM_BASE))
     fork_checkout.git.fetch(UPSTREAM_REMOTE)
 
     report = build(
@@ -201,7 +208,7 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     fork_checkout.git.checkout_orphan(UNRELATED_TIP)
     fork_checkout.git.remove("-rf", ".")
     fork_checkout.commit("its-own-file", "a history sharing no commit\n")
-    fork_checkout.git.push_refspec("origin", f"{UNRELATED_TIP}:{UNRELATED_TIP}")
+    fork_checkout.git.push(publishing("origin", UNRELATED_TIP))
     fork_checkout.git.fetch("origin")
 
     report = build(
@@ -272,3 +279,111 @@ def test_a_build_leaves_no_worktree_of_its_own_behind(fork_checkout: ForkCheckou
     assert not any(
         "stack-restack-" in path for path in fork_checkout.git.worktree_paths()
     )
+
+
+# %% carrying a branch whose block has gone stale
+
+
+def build_from(checkout: ForkCheckout, stack: Stack) -> IntegrationReport:
+    """
+    :param checkout: The checkout to build in.
+    :param stack: The derived stack, its branches carrying whatever a test set on them.
+    :return: The build report.
+    """
+    return build_integration(
+        stack=stack,
+        git=checkout.git,
+        build_branch=A_BUILD_BRANCH,
+        provenance=ResolutionProvenance({}),
+        test_command=None,
+    )
+
+
+def a_stack_with_a_stale_block(
+    checkout: ForkCheckout, pull_requests: list[PullRequest], blocked: str
+) -> Stack:
+    """
+    :param checkout: The checkout the stack is derived in.
+    :param pull_requests: The board entries.
+    :param blocked: The branch carrying a label whose block has gone stale.
+    :return: The derived stack, with that read onto the branch.
+    """
+    stack = a_stack(checkout, pull_requests)
+    branch = next(entry for entry in stack.branches if entry.name == blocked)
+    branch.labels.append(make_configuration().integration_conflict_label)
+    branch.block_standing = str(BlockStanding.STALE)
+    return stack
+
+
+def test_a_build_reports_the_readmitted_branch_that_reached_it(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The label is still on the branch, so what lifts it has to know the branch was in
+    the build the suite ran over.
+    """
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
+    only = PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)
+
+    report = build_from(
+        fork_checkout, a_stack_with_a_stale_block(fork_checkout, [only], ONLY_TIP)
+    )
+
+    assert report.readmitted == (ReadmittedBranch(ONLY_TIP, only.number),)
+    assert [entry.branch for entry in report.tips] == [ONLY_TIP]
+    fork_checkout.git.switch_to(A_BUILD_BRANCH)
+    assert fork_checkout.file_added_by(ONLY_TIP).exists()
+
+
+def test_a_readmitted_branch_a_collision_kept_out_is_not_reported_as_readmitted(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A suite that passed over a build the branch never reached says nothing about it.
+    """
+    pull_requests = two_colliding_tips(fork_checkout)
+
+    report = build_from(
+        fork_checkout,
+        a_stack_with_a_stale_block(fork_checkout, pull_requests, SECOND_TIP),
+    )
+
+    assert outcome_for(report, SECOND_TIP).status is TipStatus.SKIPPED
+    assert report.readmitted == ()
+
+
+def test_a_readmitted_branch_carried_under_its_child_is_reported(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A tip contains its stack, so a blocked parent reaches the build under the child
+    that is merged, and the parent is the one whose label a green suite lifts.
+    """
+    fork_checkout.branch_from(FIRST_TIP, UPSTREAM_BASE)
+    fork_checkout.branch_from(SECOND_TIP, FIRST_TIP)
+    pull_requests = [
+        PullRequest(number=1, head=FIRST_TIP, base=UPSTREAM_BASE, draft=False),
+        PullRequest(number=2, head=SECOND_TIP, base=FIRST_TIP, draft=False),
+    ]
+
+    report = build_from(
+        fork_checkout,
+        a_stack_with_a_stale_block(fork_checkout, pull_requests, FIRST_TIP),
+    )
+
+    assert [entry.branch for entry in report.tips] == [SECOND_TIP]
+    assert report.readmitted == (ReadmittedBranch(FIRST_TIP, 1),)
+
+
+def test_the_build_document_carries_what_it_readmitted(fork_checkout: ForkCheckout):
+    """
+    ``build --json`` is what the rebuild reads, and the readmitted branches are what
+    it lifts labels for.
+    """
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
+    only = PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)
+    report = build_from(
+        fork_checkout, a_stack_with_a_stale_block(fork_checkout, [only], ONLY_TIP)
+    )
+
+    assert IntegrationReport.from_json(report.as_json()).readmitted == report.readmitted
