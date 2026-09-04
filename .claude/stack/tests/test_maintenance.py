@@ -41,7 +41,6 @@ from stack import (
 
 import maintenance_commands
 import maintenance_restack_procedure
-from class_property import classproperty
 from maintenance_board import (
     BoardExport,
     MissingPullRequestFieldError,
@@ -62,10 +61,10 @@ from maintenance_fast_forward import (
     FastForwardReport,
     fast_forward,
 )
+from exceptions import GitCommandFailed
 from maintenance_git_commands import (
     BranchAncestry,
-    GitCommandFailed,
-    GitCommandRunner,
+    MaintenanceGitCommandRunner,
     ProposedPush,
 )
 from maintenance_github import ForkPullRequests
@@ -100,6 +99,12 @@ UPSTREAM_BASE = "main"
 The branch every stack in these tests ultimately targets.
 """
 
+UPSTREAM_REMOTE = "cram2"
+"""
+The name :class:`ForkCheckout` registers the upstream under, matching what
+``stack.toml`` names as the default a checkout gets before configuring one.
+"""
+
 A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
 """
 Stands for whatever else a pull request happens to carry - the labels a write must
@@ -115,12 +120,14 @@ def make_configuration() -> Configuration:
         in_review_label="in-review",
         rebase_label="rebase",
         needs_resolution_label="needs-resolution",
+        integration_conflict_label="integration-conflict",
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
-        upstream_remote="cram2",
+        upstream_remote=UPSTREAM_REMOTE,
         upstream_base=UPSTREAM_BASE,
         upstream_setup_command=None,
+        integration_test_command="true",
     )
 
 
@@ -174,12 +181,14 @@ class ForkCheckout:
         checkout.run_git("config", "user.name", "Scratch Fork")
         checkout.run_git("config", "user.email", "scratch-fork@example.com")
         checkout.run_git("remote", "add", "origin", checkout.fork_path.as_uri())
-        checkout.run_git("remote", "add", "cram2", checkout.upstream_path.as_uri())
+        checkout.run_git(
+            "remote", "add", UPSTREAM_REMOTE, checkout.upstream_path.as_uri()
+        )
         checkout.commit("a-file", "the first line\n")
         checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
-        checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
+        checkout.run_git("push", "--quiet", UPSTREAM_REMOTE, UPSTREAM_BASE)
         checkout.run_git("fetch", "--quiet", "origin")
-        checkout.run_git("fetch", "--quiet", "cram2")
+        checkout.run_git("fetch", "--quiet", UPSTREAM_REMOTE)
         return checkout
 
     @staticmethod
@@ -220,6 +229,15 @@ class ForkCheckout:
         self.run_git("commit", "--quiet", "-m", f"write {name}")
         return self.run_git("rev-parse", "HEAD")
 
+    def file_added_by(self, branch: str) -> Path:
+        """
+        :param branch: The branch to ask about.
+        :return: The file :meth:`branch_from` writes to give that branch a commit of
+            its own, so a test checking whether the branch reached a build reads the
+            name rather than spelling it a second time.
+        """
+        return self.project_root / f"{branch}-file"
+
     def branch_from(self, name: str, start_point: str) -> str:
         """
         Create a branch with a commit of its own, and publish it to the fork.
@@ -233,7 +251,7 @@ class ForkCheckout:
         :return: The branch's published commit hash.
         """
         self.run_git("checkout", "--quiet", "-B", name, start_point)
-        commit = self.commit(f"{name}-file", f"the work on {name}\n")
+        commit = self.commit(self.file_added_by(name).name, f"the work on {name}\n")
         self.run_git("push", "--quiet", "origin", f"{name}:{name}")
         self.run_git("fetch", "--quiet", "origin")
         return commit
@@ -271,11 +289,11 @@ class ForkCheckout:
         return self.run_git("ls-remote", "origin", f"refs/heads/{branch}").split()[0]
 
     @property
-    def git(self) -> GitCommandRunner:
+    def git(self) -> MaintenanceGitCommandRunner:
         """
         :return: The runner the executor drives this checkout through.
         """
-        return GitCommandRunner(working_directory=self.project_root)
+        return MaintenanceGitCommandRunner(working_directory=self.project_root)
 
 
 @pytest.fixture
@@ -459,7 +477,7 @@ def test_a_description_naming_no_session_yields_none():
 def test_the_fork_base_is_fast_forwarded_to_the_upstream(fork_checkout: ForkCheckout):
     fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
     advanced = fork_checkout.commit("another-file", "upstream moved\n")
-    fork_checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
+    fork_checkout.run_git("push", "--quiet", UPSTREAM_REMOTE, UPSTREAM_BASE)
     fork_checkout.run_git(
         "push", "--quiet", "--force", "origin", f"HEAD~1:{UPSTREAM_BASE}"
     )
@@ -492,10 +510,10 @@ def test_a_non_fast_forward_is_refused_and_the_fork_base_is_untouched(
     fork_checkout.run_git("checkout", "--quiet", "-B", "a-divergent-line", "HEAD~1")
     fork_checkout.commit("an-upstream-only-file", "only upstream\n")
     fork_checkout.run_git(
-        "push", "--quiet", "--force", "cram2", f"HEAD:{UPSTREAM_BASE}"
+        "push", "--quiet", "--force", UPSTREAM_REMOTE, f"HEAD:{UPSTREAM_BASE}"
     )
     fork_checkout.run_git("fetch", "--quiet", "origin")
-    fork_checkout.run_git("fetch", "--quiet", "cram2")
+    fork_checkout.run_git("fetch", "--quiet", UPSTREAM_REMOTE)
     before = fork_checkout.published_commit("origin", UPSTREAM_BASE)
 
     report = fast_forward(make_configuration(), fork_checkout.git)
@@ -985,6 +1003,11 @@ class RecordingPullRequests(ForkPullRequests):
     *now* rather than what the board snapshot opened the pass with.
     """
 
+    heads: dict[int, str] = dataclasses_field(default_factory=dict)
+    """
+    What branch to report each pull request number as publishing.
+    """
+
     label_writes: list[RecordedLabelWrite] = dataclasses_field(default_factory=list)
     """
     Every label set written, in order.
@@ -1007,7 +1030,13 @@ class RecordingPullRequests(ForkPullRequests):
         :return: Every pull request this stand-in has been given state for, in number
             order - the same records reading one of them by number answers with.
         """
-        known = {*self.states, *self.descriptions, *self.titles, *self.labels}
+        known = {
+            *self.states,
+            *self.descriptions,
+            *self.titles,
+            *self.labels,
+            *self.heads,
+        }
         return [self.pull_request(number) for number in sorted(known)]
 
     def pull_request(self, number: int) -> dict:
@@ -1024,6 +1053,7 @@ class RecordingPullRequests(ForkPullRequests):
                 number, f"Pull request {number}"
             ),
             PullRequestField.LABELS.key: list(self.labels.get(number, [])),
+            PullRequestField.HEAD.key: self.heads.get(number, f"a-branch-{number}"),
         }
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
@@ -1061,7 +1091,7 @@ class PullRequestsWatchingTheCaller(RecordingPullRequests):
     branch - which is otherwise over before a test can look.
     """
 
-    caller: GitCommandRunner = dataclasses_field(kw_only=True)
+    caller: MaintenanceGitCommandRunner = dataclasses_field(kw_only=True)
     """
     The invoking checkout to read.
     """
@@ -1216,6 +1246,61 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
     assert fork.label_writes == [RecordedLabelWrite(41, ())]
 
 
+def test_a_branch_breaking_another_is_withheld_though_it_merges_cleanly(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Two branches can merge with no conflict at all and still not work together, so the
+    branch carrying such a break is never ``dirty``. Withholding on the mergeable state
+    alone would let it straight back into the pass.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    fork = RecordingPullRequests(states={41: "clean"})
+
+    outcomes = restack(
+        a_stack(
+            fork_checkout,
+            the_board(labels=[make_configuration().integration_conflict_label]),
+        ),
+        fork_checkout.git,
+        fork,
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.WITHHELD
+    assert fork.label_writes == []
+
+
+def test_the_pass_never_clears_the_label_it_did_not_apply(fork_checkout: ForkCheckout):
+    """
+    ``needs-resolution`` is cleared by the mergeable state because the pass applied it
+    for a conflict that state describes. A break between two branches is not visible
+    there at all, so clearing it on the same evidence would drop it on the next pass and
+    reopen the re-reporting loop the label exists to close.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    configuration = make_configuration()
+    fork = RecordingPullRequests(states={41: "clean"})
+
+    restack(
+        a_stack(
+            fork_checkout,
+            the_board(
+                labels=[
+                    configuration.needs_resolution_label,
+                    configuration.integration_conflict_label,
+                ]
+            ),
+        ),
+        fork_checkout.git,
+        fork,
+    )
+
+    assert fork.label_writes == []
+
+
 # %% promotion
 
 
@@ -1271,6 +1356,23 @@ def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
     assert promoted == []
     assert fork.description_writes == []
     assert fork.label_writes == []
+
+
+def test_a_branch_breaking_another_is_not_promoted(fork_checkout: ForkCheckout):
+    """
+    Both labels withhold a branch, so both have to reach promotion's exclusion - one
+    reading only ``needs-resolution`` would send a branch upstream that this pass has
+    just established does not work beside a sibling.
+    """
+    a_parent_and_child(fork_checkout)
+    fork = RecordingPullRequests(
+        labels={40: [make_configuration().integration_conflict_label]}
+    )
+
+    promoted = promote(a_stack(fork_checkout, the_board()), fork)
+
+    assert promoted == []
+    assert fork.description_writes == []
 
 
 def test_the_promotion_label_write_keeps_a_label_added_since_the_board_was_taken(
@@ -1408,7 +1510,10 @@ def a_report(
     """
     return MaintenanceReport(
         fast_forward=FastForwardReport(
-            fast_forward_outcome, "cram2/main", "origin/main", "a-commit"
+            fast_forward_outcome,
+            f"{UPSTREAM_REMOTE}/{UPSTREAM_BASE}",
+            f"origin/{UPSTREAM_BASE}",
+            "a-commit",
         ),
         restacked=(
             BranchOutcome(
@@ -1492,7 +1597,7 @@ def test_a_non_zero_status_says_what_it_means_on_the_way_out(
     """
     A caller reading a bare number has to look it up; the executor already knows.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", UPSTREAM_REMOTE)
 
     result = run_maintenance(fork_checkout, RestackCommand())
 
@@ -1621,15 +1726,6 @@ def test_every_command_class_is_one_reachable_command():
     assert len({command.invoked_as for command in COMMANDS}) == len(COMMANDS)
 
 
-def test_a_command_names_itself_without_being_instantiated():
-    """
-    The parser reads both to build the command line before any command is constructed,
-    so they have to answer on the class.
-    """
-    assert BoardCommand.invoked_as == "board"
-    assert isinstance(BoardCommand.description, str)
-
-
 def test_a_command_that_omits_its_name_cannot_be_built():
     """
     A command stays abstract until it says what it is called, and COMMANDS builds every
@@ -1638,8 +1734,8 @@ def test_a_command_that_omits_its_name_cannot_be_built():
 
     @dataclass(frozen=True)
     class CommandWithoutAName(MaintenanceCommand):
-        @classproperty
-        def description(cls) -> str:
+        @property
+        def description(self) -> str:
             return "a command that forgot what it is called"
 
         def run(self, maintenance, arguments):
@@ -1647,17 +1743,6 @@ def test_a_command_that_omits_its_name_cannot_be_built():
 
     with pytest.raises(TypeError, match="invoked_as"):
         CommandWithoutAName()
-
-
-def test_a_command_answers_with_its_own_name_rather_than_the_one_on_its_base():
-    """
-    An abstract class property answers with itself rather than calling its accessor,
-    which is what leaves a subclass supplying nothing abstract instead of silently
-    answering ``None``.
-    """
-    assert isinstance(MaintenanceCommand.invoked_as, classproperty)
-    assert MaintenanceCommand.invoked_as.__isabstractmethod__
-    assert BoardCommand.invoked_as == "board"
 
 
 def test_a_fork_client_that_cannot_make_one_of_the_writes_cannot_be_built():
@@ -1693,8 +1778,15 @@ def test_every_module_of_the_executor_imports_on_its_own():
     """
     The executor is split across modules, and a cycle between two of them shows up only
     when whichever one a caller imports first is the one that has to be complete.
+
+    The shared directory is on the path because the entry point puts it there; what is
+    under test is the modules' dependence on each other, not on it.
     """
     modules = sorted(path.stem for path in STACK_DIRECTORY.glob("*.py"))
+    environment = {
+        **os.environ,
+        "PYTHONPATH": str(STACK_DIRECTORY.parent / "shared"),
+    }
 
     for module in modules:
         result = subprocess.run(
@@ -1702,6 +1794,7 @@ def test_every_module_of_the_executor_imports_on_its_own():
             cwd=STACK_DIRECTORY,
             capture_output=True,
             text=True,
+            env=environment,
         )
         assert result.returncode == 0, f"{module}: {result.stderr}"
 
@@ -1736,7 +1829,7 @@ def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
     """
     Distinguishable from a missing board, since the fix is a token rather than a fetch.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", UPSTREAM_REMOTE)
 
     assert (
         run_maintenance(fork_checkout, BoardCommand()).returncode
@@ -1755,7 +1848,7 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
     ``stack.toml``, whose upstream is this repository's own - against which both of the
     fixture's remotes look like candidate forks, and inference rightly refuses to guess.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", UPSTREAM_REMOTE)
 
     assert (
         run_maintenance(fork_checkout, RestackCommand()).returncode

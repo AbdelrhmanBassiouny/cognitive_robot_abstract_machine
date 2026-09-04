@@ -11,10 +11,10 @@ import argparse
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from class_property import classproperty
+from command_line import Command, commands_of
 from maintenance_board import BoardExport
 from maintenance_fast_forward import fast_forward
-from maintenance_git_commands import GitCommandRunner
+from maintenance_git_commands import MaintenanceGitCommandRunner
 from maintenance_github import GitHubRepository
 from maintenance_promotion import clear_spent_promotion_labels, promote
 from maintenance_report import (
@@ -46,7 +46,7 @@ class MaintenancePass:
     The resolved configuration naming both repositories and every label.
     """
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """
     The runner every git command goes through.
     """
@@ -61,40 +61,13 @@ class MaintenancePass:
 
 
 @dataclass(frozen=True)
-class MaintenanceCommand(ABC):
+class MaintenanceCommand(Command):
     """
     One command this executor answers.
 
-    The name and the description belong to the class rather than to an instance - the
-    parser reads them to build the command line before anything is constructed - so they
-    are abstract :class:`class_property.classproperty` members. A subclass supplying
-    neither stays abstract, and :data:`COMMANDS` builds every subclass, so a command
-    that cannot say what it is called is refused as this module is imported.
+    Adds to the shared :class:`command_line.Command` only what is this executor's own:
+    what a command is handed, and what it answers with.
     """
-
-    @classproperty
-    @abstractmethod
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-
-    @classproperty
-    @abstractmethod
-    def description(cls) -> str:
-        """
-        What it does, as ``--help`` puts it.
-        """
-
-    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """
-        Declare this command's own flags.
-
-        Concrete rather than abstract: most commands take none, and requiring an empty
-        override of every one of them would say nothing.
-
-        :param parser: The subparser to declare them on.
-        """
 
     @abstractmethod
     def run(
@@ -115,15 +88,15 @@ class BoardCommand(MaintenanceCommand):
     Fetches the fork's open pull requests and exports them as the board.
     """
 
-    @classproperty
-    def invoked_as(cls) -> str:
+    @property
+    def invoked_as(self) -> str:
         """
         The name it is invoked by on the command line.
         """
         return "board"
 
-    @classproperty
-    def description(cls) -> str:
+    @property
+    def description(self) -> str:
         """
         What it does, as ``--help`` puts it.
         """
@@ -154,15 +127,15 @@ class FastForwardCommand(MaintenanceCommand):
     Moves the fork's base branch onto the upstream, refusing to force.
     """
 
-    @classproperty
-    def invoked_as(cls) -> str:
+    @property
+    def invoked_as(self) -> str:
         """
         The name it is invoked by on the command line.
         """
         return "fast-forward"
 
-    @classproperty
-    def description(cls) -> str:
+    @property
+    def description(self) -> str:
         """
         What it does, as ``--help`` puts it.
         """
@@ -185,15 +158,15 @@ class RestackCommand(MaintenanceCommand):
     Integrates every moved parent and publishes what merged cleanly.
     """
 
-    @classproperty
-    def invoked_as(cls) -> str:
+    @property
+    def invoked_as(self) -> str:
         """
         The name it is invoked by on the command line.
         """
         return "restack"
 
-    @classproperty
-    def description(cls) -> str:
+    @property
+    def description(self) -> str:
         """
         What it does, as ``--help`` puts it.
         """
@@ -217,15 +190,15 @@ class PromoteCommand(MaintenanceCommand):
     Records the upstream link on every branch ready to be promoted.
     """
 
-    @classproperty
-    def invoked_as(cls) -> str:
+    @property
+    def invoked_as(self) -> str:
         """
         The name it is invoked by on the command line.
         """
         return "promote"
 
-    @classproperty
-    def description(cls) -> str:
+    @property
+    def description(self) -> str:
         """
         What it does, as ``--help`` puts it.
         """
@@ -251,15 +224,15 @@ class RunReportCommand(MaintenanceCommand):
     Performs the whole pass and reports it as one document.
     """
 
-    @classproperty
-    def invoked_as(cls) -> str:
+    @property
+    def invoked_as(self) -> str:
         """
         The name it is invoked by on the command line.
         """
         return "run-report"
 
-    @classproperty
-    def description(cls) -> str:
+    @property
+    def description(self) -> str:
         """
         What it does, as ``--help`` puts it.
         """
@@ -307,9 +280,7 @@ class RunReportCommand(MaintenanceCommand):
         return exit_code_for(report)
 
 
-COMMANDS: tuple[MaintenanceCommand, ...] = tuple(
-    subclass() for subclass in MaintenanceCommand.__subclasses__()
-)
+COMMANDS: tuple[MaintenanceCommand, ...] = commands_of(MaintenanceCommand)
 """
 Every command this executor answers, found from the subclasses themselves so a command
 cannot exist without being reachable, in the order they are defined.
