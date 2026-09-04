@@ -62,7 +62,9 @@ from krrood.entity_query_language.backends import (
     StatedRelation,
 )
 from krrood.entity_query_language.predicate import Relation
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
 from semantic_digital_twin.reasoning.predicates import (
     Colored,
     PlacementRelation,
@@ -348,18 +350,13 @@ class MontessoriPerceptionBackend(PerceptionBackend):
     @classmethod
     def supporting_surface_asked_about(
         cls, request: LookRequest[MontessoriDetection]
-    ) -> Optional[PrefixedName]:
+    ) -> Optional[KinematicStructureEntity]:
         """
-        The surface a statement says the thing it is looking for rests on.
-
-        A detection says what it rests on by the name the world knows that surface by,
-        so what the statement names is read back the same way.
+        The surface a statement says the thing it is looking for rests on, as the world
+        holds it.
 
         :param request: What the statement asks a look for.
-        :return: The name of the surface asked about, or ``None`` when the statement
-            asks about none.
+        :return: The surface asked about, or ``None`` when the statement asks about
+            none.
         """
-        supporter = request.related_by(SupportedBy)
-        if supporter is None:
-            return None
-        return supporter.name
+        return request.related_by(SupportedBy)

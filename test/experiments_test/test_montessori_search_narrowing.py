@@ -358,7 +358,7 @@ def test_a_narrowed_look_reports_what_the_same_look_unnarrowed_reports_there(
     """
     whole = capture_pipeline.detect(capture_frame)
     narrowed = capture_pipeline.detect(
-        capture_frame, SceneRequest(supporting_surface=lid_surface().name)
+        capture_frame, SceneRequest(supporting_surface=Body(name=lid_surface().name))
     )
 
     assert [_as_read(piece) for piece in narrowed.shapes] == [

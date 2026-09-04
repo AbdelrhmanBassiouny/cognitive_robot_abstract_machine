@@ -487,7 +487,7 @@ def test_an_expectation_reaches_a_look_as_the_relations_it_states(
 
     [request] = expectations.scene_requests()
 
-    assert request.supporting_surface == LID.name
+    assert request.supporting_surface is LID
     assert [type(placement) for placement in request.placements] == [
         InsideRegion,
         Near,

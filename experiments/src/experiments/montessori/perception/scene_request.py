@@ -21,6 +21,9 @@ from semantic_digital_twin.world_description.geometry import (
     Color,
     VolumetricBoundingBox,
 )
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
 
 # %% what to look for
 
@@ -44,10 +47,10 @@ class SceneRequest:
     answer and does not run.
     """
 
-    supporting_surface: Optional[PrefixedName] = None
+    supporting_surface: Optional[KinematicStructureEntity] = None
     """
-    The surface to search, by the name the world knows it by, or ``None`` to search
-    every surface of the scene.
+    The surface to search, as the world holds it, or ``None`` to search every surface of
+    the scene.
     """
 
     placements: Tuple[PlacementRelation, ...] = ()
@@ -98,10 +101,12 @@ class SceneRequest:
         """
         Whether a surface is one this look was asked to search.
 
-        :param surface_name: What the world calls the surface.
+        :param surface_name: What the world calls the surface, which is how a measured
+            surface answers for the entity a statement names.
         """
         return (
-            self.supporting_surface is None or self.supporting_surface == surface_name
+            self.supporting_surface is None
+            or self.supporting_surface.name == surface_name
         )
 
     def believed_stretch(self) -> Optional[VolumetricBoundingBox]:

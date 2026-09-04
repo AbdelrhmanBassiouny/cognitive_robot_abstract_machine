@@ -238,10 +238,8 @@ def test_a_stated_supporting_surface_narrows_the_look_to_it(
         MontessoriPerceptionBackend.read_request(statement)
     )
 
-    assert request == SceneRequest(
-        detection_type=DetectedMontessoriShape,
-        supporting_surface=pipeline.lid.name,
-    )
+    assert request.detection_type is DetectedMontessoriShape
+    assert request.supporting_surface.name == pipeline.lid.name
 
 
 def test_an_attribute_the_look_cannot_act_on_leaves_it_searching_everywhere():
@@ -300,7 +298,7 @@ def test_a_surface_the_statement_describes_is_read_as_the_one_it_describes(
     request = MontessoriPerceptionBackend.read_request(statement)
 
     assert (
-        MontessoriPerceptionBackend.supporting_surface_asked_about(request)
+        MontessoriPerceptionBackend.supporting_surface_asked_about(request).name
         == pipeline.lid.name
     )
 
@@ -362,7 +360,7 @@ def test_a_condition_about_something_other_than_what_is_looked_for_is_refused(
 def test_only_the_surface_asked_about_is_searched(
     pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    request = SceneRequest(supporting_surface=pipeline.lid.name)
+    request = SceneRequest(supporting_surface=Body(name=pipeline.lid.name))
 
     searches = pipeline.searched_surfaces(scene.board, request)
 
@@ -407,7 +405,7 @@ def test_a_look_narrowed_to_one_surface_reports_only_what_rests_on_it(
     frame = renderer.render([*placed_pieces, piece_on_the_lid])
 
     asked_about_the_lid = pipeline.detect(
-        frame, SceneRequest(supporting_surface=pipeline.lid.name)
+        frame, SceneRequest(supporting_surface=Body(name=pipeline.lid.name))
     )
 
     assert [found.supporting_surface for found in asked_about_the_lid.shapes] == [
