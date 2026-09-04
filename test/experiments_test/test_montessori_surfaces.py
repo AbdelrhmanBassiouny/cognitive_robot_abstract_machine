@@ -39,7 +39,12 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Color,
+    Scale,
+    SurfaceFinish,
+)
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
@@ -55,6 +60,30 @@ def _world_rooted_at(body: Body) -> World:
     world = World()
     with world.modify_world():
         world.add_kinematic_structure_entity(body)
+    return world
+
+
+def _world_of_root_with(root: Body, children: Tuple[Tuple[Body, Point3], ...]) -> World:
+    """
+    A world holding one root and each child fixed at a position under it.
+
+    :param root: The body every child hangs from.
+    :param children: Each child body and where under the root it stands.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(root)
+        for child, position in children:
+            world.add_connection(
+                FixedConnection(
+                    parent=root,
+                    child=child,
+                    parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        x=position.x, y=position.y, z=position.z
+                    ),
+                )
+            )
+    world.update_forward_kinematics()
     return world
 
 
@@ -241,6 +270,131 @@ def test_the_node_takes_no_scene_constant_from_another_module():
 
     assert montessori_world.__name__ not in imported
     assert tracy_equipment.__name__ not in imported
+
+
+# %% how a surface takes light, and what colour it is
+
+
+def test_a_surface_takes_the_finish_of_the_shape_it_was_measured_from():
+    finish = SurfaceFinish.MIRROR
+    table = Body(
+        name=PrefixedName("steel_table", "test"),
+        collision=ShapeCollection([Box(scale=Scale(1.0, 1.0, 0.02), finish=finish)]),
+    )
+
+    surface = WorkspaceSurface.of_body(table, _world_rooted_at(table).root)
+
+    assert surface.finish is finish
+
+
+def test_a_surface_takes_the_color_of_the_shape_it_was_measured_from():
+    color = Color(0.9, 0.7, 0.4)
+    lid = Body(
+        name=PrefixedName("wooden_lid", "test"),
+        collision=ShapeCollection([Box(scale=Scale(1.0, 1.0, 0.02), color=color)]),
+    )
+
+    surface = WorkspaceSurface.of_body(lid, _world_rooted_at(lid).root)
+
+    assert surface.color == color
+
+
+def test_a_surface_states_no_finish_where_the_shape_states_none():
+    table = Body(
+        name=PrefixedName("unannotated_table", "test"),
+        collision=ShapeCollection([Box(scale=Scale(1.0, 1.0, 0.02))]),
+    )
+
+    surface = WorkspaceSurface.of_body(table, _world_rooted_at(table).root)
+
+    assert surface.finish is None
+
+
+def test_a_surface_reads_the_finish_of_the_face_it_measured_not_of_a_leg():
+    top_finish = SurfaceFinish.MIRROR
+    leg_finish = SurfaceFinish.MATTE
+    top_center_z = 0.7
+    table = Body(
+        name=PrefixedName("two_finish_table", "test"),
+        collision=ShapeCollection(
+            [
+                Box(
+                    scale=Scale(0.8, 0.8, 0.02),
+                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(z=top_center_z),
+                    finish=top_finish,
+                ),
+                Box(
+                    scale=Scale(0.06, 0.06, top_center_z),
+                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        z=top_center_z / 2
+                    ),
+                    finish=leg_finish,
+                ),
+            ]
+        ),
+    )
+
+    surface = WorkspaceSurface.of_body(table, _world_rooted_at(table).root)
+
+    assert surface.finish is top_finish
+
+
+def test_a_declared_surface_of_one_shape_takes_that_shape_s_finish():
+    finish = SurfaceFinish.MATTE
+    root = Body(name=PrefixedName("root", "test"))
+    counter_top = Body(
+        name=PrefixedName("counter", "test"),
+        collision=ShapeCollection([Box(scale=Scale(2.0, 2.0, 0.05))]),
+    )
+    declared = Region(
+        name=PrefixedName("declared_surface", "test"),
+        area=ShapeCollection([Box(scale=Scale(0.4, 0.6, 0.01), finish=finish)]),
+    )
+    world = _world_of_root_with(
+        root, ((counter_top, Point3(0.0, 0.0, 0.0)), (declared, Point3(1.0, 2.0, 0.5)))
+    )
+    counter = Table(
+        name=PrefixedName("counter", "test"),
+        root=counter_top,
+        supporting_surface=declared,
+    )
+
+    surface = WorkspaceSurface.of(counter, world.root)
+
+    assert surface.finish is finish
+
+
+def test_a_declared_surface_of_several_shapes_states_no_finish():
+    root = Body(name=PrefixedName("root", "test"))
+    counter_top = Body(
+        name=PrefixedName("counter", "test"),
+        collision=ShapeCollection([Box(scale=Scale(2.0, 2.0, 0.05))]),
+    )
+    declared = Region(
+        name=PrefixedName("declared_surface", "test"),
+        area=ShapeCollection(
+            [
+                Box(scale=Scale(0.4, 0.6, 0.01), finish=SurfaceFinish.MATTE),
+                Box(
+                    scale=Scale(0.4, 0.6, 0.01),
+                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(x=0.5),
+                    finish=SurfaceFinish.MIRROR,
+                ),
+            ]
+        ),
+    )
+    world = _world_of_root_with(
+        root, ((counter_top, Point3(0.0, 0.0, 0.0)), (declared, Point3(1.0, 2.0, 0.5)))
+    )
+    counter = Table(
+        name=PrefixedName("counter", "test"),
+        root=counter_top,
+        supporting_surface=declared,
+    )
+
+    surface = WorkspaceSurface.of(counter, world.root)
+
+    assert surface.finish is None
 
 
 # %% which surface a detection belongs to

@@ -160,6 +160,32 @@ def hue_distance(one: int, other: int) -> int:
     return min(apart, HUE_RANGE - apart)
 
 
+def color_of_hue(hue: int) -> Color:
+    """
+    The colour a hue names, at full saturation and brightness.
+
+    Where only a hue was measured, this is the pure form of the colour it names, rather
+    than the shade any one photograph of it happened to catch.
+
+    :param hue: The hue, as OpenCV reports it.
+    """
+    red, green, blue = colorsys.hsv_to_rgb(hue / HUE_RANGE, 1.0, 1.0)
+    return Color(red, green, blue)
+
+
+def hue_of(color: Color) -> int:
+    """
+    The hue a colour wears, as OpenCV reports hue.
+
+    The inverse of :attr:`KnownPiece.color`, so a colour the twin states and a colour
+    the camera measured are compared in the one scale the detectors already work in.
+
+    :param color: The colour to read.
+    """
+    hue, _, _ = colorsys.rgb_to_hsv(color.R, color.G, color.B)
+    return int(round(hue * HUE_RANGE)) % HUE_RANGE
+
+
 HUE_TOLERANCE = 4
 """
 How far a measured colour may sit from a piece's own and still be taken for it.
@@ -233,8 +259,7 @@ class KnownPiece:
         saturation and brightness -- the pure form of the colour it wears, rather than
         the shade any one photograph of it happened to catch.
         """
-        red, green, blue = colorsys.hsv_to_rgb(self.hue / HUE_RANGE, 1.0, 1.0)
-        return Color(red, green, blue)
+        return color_of_hue(self.hue)
 
     @property
     def radius(self) -> float:
