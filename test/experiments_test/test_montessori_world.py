@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from trimesh import Trimesh
 
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY, hue_of
 from experiments.montessori.semantics import (
     MontessoriShape,
     MontessoriShapeCategory,
@@ -10,8 +10,11 @@ from experiments.montessori.semantics import (
     ShapeSortingHole,
 )
 from experiments.montessori.world import (
+    BOARD_COLOR,
     BOARD_SCALE,
     FLOOR_Z,
+    MEASURED_BOARD_HUE,
+    TABLE_COLOR,
     SHAPE_FOOTPRINT_CLEARANCE_SCALE,
     TABLE_POSITION,
     TABLE_SCALE,
@@ -27,6 +30,7 @@ from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     FixedConnection,
 )
+from semantic_digital_twin.world_description.geometry import SurfaceFinish
 from semantic_digital_twin.world_description.world_entity import Actuator
 
 from .dataset.synthetic_fixed_arm_robot import SyntheticFixedArmRobot
@@ -114,7 +118,9 @@ def _collision_box_world_bounds(shapes, position) -> list:
 
 
 def _hole_world_bounds(hole: ShapeSortingHole) -> tuple:
-    """A hole's true (x, y) bounding box, in the world frame, with tolerance applied."""
+    """
+    A hole's true (x, y) bounding box, in the world frame, with tolerance applied.
+    """
     position = hole.global_transform.to_position()
     local_bounds = hole.root.area.combined_mesh.bounds
     return (
@@ -442,3 +448,45 @@ def test_a_loose_shape_wears_the_colour_measured_off_the_real_piece():
         if category in coloured
     }
     assert set(coloured) == set(KNOWN_PIECE_BY_CATEGORY)
+
+
+# %% what the twin states about the surfaces perception looks at
+
+
+def test_the_board_wears_the_colour_measured_off_the_real_board():
+    montessori = MontessoriWorld()
+
+    [board] = montessori.world.get_semantic_annotations_by_type(ShapeSortingBoard)
+
+    assert hue_of(board.root.visual[0].color) == MEASURED_BOARD_HUE
+
+
+def test_the_board_states_the_finish_its_wood_was_measured_to_have():
+    montessori = MontessoriWorld()
+
+    [board] = montessori.world.get_semantic_annotations_by_type(ShapeSortingBoard)
+
+    assert board.root.visual[0].finish is SurfaceFinish.MATTE
+
+
+def test_the_table_states_the_finish_its_bare_steel_was_measured_to_have():
+    montessori = MontessoriWorld()
+
+    [table] = montessori.world.get_semantic_annotations_by_type(Table)
+    tabletop = max(
+        table.root.visual.shapes, key=lambda shape: shape.scale.x * shape.scale.y
+    )
+
+    assert tabletop.finish is SurfaceFinish.MIRROR
+
+
+def test_the_table_is_not_drawn_in_the_boards_own_wood():
+    montessori = MontessoriWorld()
+
+    [table] = montessori.world.get_semantic_annotations_by_type(Table)
+    tabletop = max(
+        table.root.visual.shapes, key=lambda shape: shape.scale.x * shape.scale.y
+    )
+
+    assert tabletop.color != BOARD_COLOR
+    assert tabletop.color == TABLE_COLOR

@@ -465,9 +465,9 @@ class SymbolicExpression(AbstractContextManager, HasExpression):
 
             evaluation_context = create_default_evaluation_context()
             context_token = set_evaluation_context(evaluation_context)
-            evaluation_context.active_conditions_root.set_active_root_if_not_set(
-                self._conditions_root_, has_condition=self._has_condition_
-            )
+        evaluation_context.active_conditions_root.set_active_root_if_not_set(
+            self._conditions_root_, has_condition=self._has_condition_
+        )
         try:
             evaluation_context.on_evaluate_enter(expression=self, sources=sources)
             # Normalize sources: always work with an OperationResult

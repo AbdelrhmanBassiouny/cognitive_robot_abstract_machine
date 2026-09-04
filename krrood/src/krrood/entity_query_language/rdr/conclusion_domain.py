@@ -1,0 +1,231 @@
+"""
+Resolve the set of values an RDR conclusion attribute may take, from its declared type.
+"""
+
+from __future__ import annotations
+
+import enum
+import inspect
+from dataclasses import dataclass
+
+from typing_extensions import Any, Dict, Optional, Tuple, get_args
+
+from krrood.class_diagrams.exceptions import CouldNotResolveType
+from krrood.class_diagrams.utils import get_type_hints_of_object, is_union_annotation
+from krrood.entity_query_language.rdr.exceptions import (
+    ConclusionMayNotBeNone,
+    ConclusionNotInDomain,
+    ConclusionRequired,
+    ConclusionWrongType,
+)
+from krrood.entity_query_language.rdr.interface import AnswerValidator
+from krrood.exceptions import DataclassException
+
+#: The runtime type of ``None``, used to detect ``Optional`` / ``... | None`` annotations.
+_NONE_TYPE = type(None)
+
+
+@dataclass(frozen=True)
+class ConclusionDomain:
+    """
+    The values an RDR conclusion attribute may take, resolved from its declared type.
+    """
+
+    expected_types: Tuple[type, ...]
+    """
+    The declared non-``None`` types of the attribute (``isinstance`` targets).
+
+    Empty when the annotation could not be resolved (then any non-``None`` value is
+    accepted).
+    """
+
+    members: Tuple[Any, ...]
+    """
+    The enumerable allowable values (Enum members, or ``True``/``False``); empty when
+    the domain is not enumerable.
+    """
+
+    is_enumerable: bool
+    """
+    Whether the domain is a finite, enumerable set (an Enum or ``bool``).
+    """
+
+    allows_none: bool
+    """
+    Whether the declared type admits ``None`` (an ``Optional`` / ``... | None`` annotation).
+    """
+
+    @property
+    def type_display(self) -> str:
+        """:return: A human label for the expected type(s) (e.g. ``Species`` or ``str or int``)."""
+        if not self.expected_types:
+            return "value"
+        return " or ".join(t.__name__ for t in self.expected_types)
+
+    def contains(self, value: Any) -> bool:
+        """:return: Whether ``value`` is one of the enumerable members.
+
+        Type-aware so that an ``int`` is not accepted for a ``bool`` domain (``1 == True``).
+        """
+        return any(
+            type(value) is type(member) and (value is member or value == member)
+            for member in self.members
+        )
+
+    def display(self) -> str:
+        """:return: The allowable values as a prose list, or the type label when not enumerable."""
+        if self.is_enumerable:
+            return ", ".join(repr(member) for member in self.members)
+        return self.type_display
+
+    def example_for(self, name: str) -> str:
+        """:return: A copy-pasteable example assignment for the answer named ``name``."""
+        if self.is_enumerable and self.members:
+            return f"{name} = {self.members[0]!r}"
+        return f"{name} = <{self.type_display}>"
+
+    def hint(self) -> str:
+        """:return: A short clause naming the allowable values (enumerable) or expected type."""
+        if self.is_enumerable:
+            return f"one of: {self.display()}"
+        return f"a {self.type_display}"
+
+    def validate(self, value: Any, allow_unset: bool) -> Optional[DataclassException]:
+        """
+        Validate a conclusion answer against this domain.
+
+        A convenience entry point for checking a value without building a
+        :class:`ConclusionValidator`; the actual policy lives there.
+
+        :param value: The conclusion answer to validate.
+        :param allow_unset: Whether leaving the conclusion unset is acceptable.
+        :return: The exception describing why ``value`` is unacceptable, or ``None``.
+        """
+        return self.validator(allow_unset).validate(value)
+
+    def validator(self, allow_unset: bool) -> ConclusionValidator:
+        """
+        Build a validator for a conclusion answer, bound to ``allow_unset``.
+
+        :param allow_unset: Whether leaving the conclusion unset is acceptable.
+        :return: A validator suitable for :attr:`~...interface.AnswerRequest.validate`.
+        """
+        return ConclusionValidator(domain=self, allow_unset=allow_unset)
+
+    def namespace_bindings(self) -> Dict[str, Any]:
+        """
+        Names to inject into the expert's shell so the allowable values tab-complete.
+
+        :return:``{EnumType.__name__: EnumType}`` for each Enum among the expected types
+            (so the expert can type ``Species.<tab>``); empty for non-enumerable /
+            builtin domains.
+        """
+        bindings: Dict[str, Any] = {}
+        for expected in self.expected_types:
+            if inspect.isclass(expected) and issubclass(expected, enum.Enum):
+                bindings[expected.__name__] = expected
+        return bindings
+
+
+@dataclass
+class ConclusionValidator(AnswerValidator):
+    """
+    Validates a conclusion answer against a resolved :class:`ConclusionDomain`.
+    """
+
+    domain: ConclusionDomain
+    """
+    The domain the conclusion answer must satisfy.
+    """
+
+    allow_unset: bool
+    """
+    Whether leaving the conclusion unset is acceptable.
+    """
+
+    def validate(self, value: Any) -> Optional[DataclassException]:
+        """
+        Checks layer in order: an *unset* answer (the ``...`` sentinel) is acceptable
+        only when :attr:`allow_unset` (a current conclusion already stands and is not
+        known to be wrong); ``None`` only when the domain admits it; an enumerable
+        domain requires membership; otherwise the value must be an instance of the
+        expected type(s). An unresolved domain (no expected types) accepts any
+        non-``None`` value.
+
+        :param value: The conclusion answer to validate.
+        :return: The exception describing why ``value`` is unacceptable, or ``None``.
+        """
+        domain = self.domain
+        if value is ...:
+            return None if self.allow_unset else ConclusionRequired(domain=domain)
+        if value is None:
+            return None if domain.allows_none else ConclusionMayNotBeNone(domain=domain)
+        if not domain.expected_types:
+            return None
+        if isinstance(value, domain.expected_types):
+            return None
+        if domain.is_enumerable:
+            return ConclusionNotInDomain(domain=domain, value=value)
+        return ConclusionWrongType(domain=domain, value=value)
+
+
+def resolve_conclusion_domain(
+    owner_type: type, attribute_name: str
+) -> ConclusionDomain:
+    """
+    Resolve the conclusion domain for ``owner_type.attribute_name`` from its type hint.
+
+    Unresolvable annotations degrade to a non-enumerable, no-expected-type domain (any
+    non-``None`` value is then accepted), so callers never have to branch on failure.
+
+    :param owner_type: The case type owning the attribute (e.g. ``Animal``).
+    :param attribute_name: The conclusion attribute (e.g. ``"species"``).
+    :return: The resolved :class:`ConclusionDomain`.
+    """
+    annotation = _annotation_of(owner_type, attribute_name)
+    allows_none, expected_types = _split_optional(annotation)
+    members = _enumerate_members(expected_types)
+    return ConclusionDomain(
+        expected_types=expected_types,
+        members=members,
+        is_enumerable=bool(members),
+        allows_none=allows_none,
+    )
+
+
+def _annotation_of(owner_type: type, attribute_name: str) -> Any:
+    """:return: The declared annotation for the attribute, or ``None`` if unresolvable."""
+    try:
+        return get_type_hints_of_object(owner_type).get(attribute_name)
+    except (CouldNotResolveType, TypeError):
+        return None
+
+
+def _split_optional(annotation: Any) -> Tuple[bool, Tuple[type, ...]]:
+    """:return: ``(allows_none, non_none_types)`` for a possibly-``Optional`` annotation."""
+    if annotation is None:
+        return False, ()
+    if is_union_annotation(annotation):
+        args = get_args(annotation)
+        allows_none = _NONE_TYPE in args
+        non_none = tuple(
+            arg for arg in args if arg is not _NONE_TYPE and isinstance(arg, type)
+        )
+        return allows_none, non_none
+    if annotation is _NONE_TYPE:
+        return True, ()
+    if isinstance(annotation, type):
+        return False, (annotation,)
+    return False, ()
+
+
+def _enumerate_members(expected_types: Tuple[type, ...]) -> Tuple[Any, ...]:
+    """:return: The enumerable members for a single Enum/``bool`` type, else ``()``."""
+    if len(expected_types) != 1:
+        return ()
+    expected = expected_types[0]
+    if inspect.isclass(expected) and issubclass(expected, enum.Enum):
+        return tuple(expected)
+    if expected is bool:
+        return (False, True)
+    return ()
