@@ -23,6 +23,16 @@ from typing_extensions import (
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import SubclassJSONSerializer, from_json, to_json
+from krrood.entity_query_language.verbalization.fragments.base import (
+    NounPhrase,
+    RoleFragment,
+    VerbalizationFragment,
+    WordFragment,
+)
+from krrood.entity_query_language.verbalization.fragments.features import Definiteness
+from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
+from krrood.entity_query_language.verbalization.self_naming_value import SelfNamingValue
+from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
 from krrood.symbolic_math.exceptions import (
     WrongDimensionsError,
     UnsupportedOperationError,
@@ -37,6 +47,7 @@ from semantic_digital_twin.exceptions import (
     SpatialTypesError,
     SpatialTypeNotJsonSerializable,
 )
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
@@ -181,7 +192,7 @@ class SpatialType:
 
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
-    sm.SymbolicMathType, SpatialType, SubclassJSONSerializer
+    sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, SelfNamingValue
 ):
     """
     Represents a 4x4 transformation matrix used in kinematics and transformations.
@@ -216,6 +227,31 @@ class HomogeneousTransformationMatrix(
         else:
             self.casadi_sx = sm.to_sx(data)
         super().__post_init__()
+
+    def _verbalization_noun_phrase_(self) -> VerbalizationFragment:
+        """
+        Reads as the frame this pose is of (*"the camera"*), which is what a reader calls
+        the spot it states; a pose of no frame in particular is a spot in the frame it was
+        read in, and one that names neither frame is a spot and nothing more.
+
+        :return: The noun phrase this pose reads as.
+        """
+        spot = WordFragment(text="pose")
+        named_frame = (
+            self.child_frame if self.child_frame is not None else self.reference_frame
+        )
+        if named_frame is None:
+            return NounPhrase(head=spot)
+        frame_noun = NounPhrase(
+            head=RoleFragment(text=named_frame.name.name, role=SemanticRole.VARIABLE),
+            definiteness=Definiteness.DEFINITE,
+        )
+        if self.child_frame is not None:
+            return frame_noun
+        return NounPhrase(
+            head=spot,
+            modifiers=[Prepositions.IN.as_fragment(), frame_noun],
+        )
 
     def _verify_type(self):
         if self.shape != (4, 4):
@@ -508,6 +544,15 @@ class HomogeneousTransformationMatrix(
         result = Pose.from_casadi_sx(casadi_sx=self.casadi_sx)
         result.reference_frame = self.reference_frame
         return result
+
+    def to_position_quaternion_list(self) -> List[float]:
+        """
+        :return: This transform's position and orientation, as
+            ``[x, y, z, qx, qy, qz, qw]``.
+        """
+        return NumericPose.from_transformation_matrix(
+            self.to_np()
+        ).to_position_quaternion_list()
 
     def _copy_with_data(self, data: ca.SX) -> HomogeneousTransformationMatrix:
         result = super()._copy_with_data(data)
@@ -2201,6 +2246,30 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def to_quaternion(self) -> Quaternion:
         return self.to_rotation_matrix().to_quaternion()
+
+    def to_position_quaternion_list(self) -> List[float]:
+        """
+        :return: This pose's position and orientation, as ``[x, y, z, qx, qy, qz, qw]``.
+        """
+        return NumericPose.of_pose(self).to_position_quaternion_list()
+
+    @classmethod
+    def from_numeric_pose(
+        cls,
+        numeric_pose: NumericPose,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Self:
+        """
+        Build a pose from one that was read out into numbers.
+
+        :param numeric_pose: The numbers to build the pose from.
+        :param reference_frame: The frame the pose is expressed in.
+        """
+        return cls.from_xyz_quaternion(
+            *numeric_pose.position,
+            *numeric_pose.quaternion,
+            reference_frame=reference_frame,
+        )
 
     def to_homogeneous_matrix(self) -> HomogeneousTransformationMatrix:
         return HomogeneousTransformationMatrix(

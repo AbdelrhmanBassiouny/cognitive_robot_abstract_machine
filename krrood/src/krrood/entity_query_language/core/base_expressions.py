@@ -880,6 +880,24 @@ class SymbolicExpression(AbstractContextManager, HasExpression):
         for child in self._children_:
             yield from child._leaves_
 
+    @property
+    def _constrained_variables_(self) -> Set[Variable]:
+        """
+        :return: Every variable this expression reaches, however deeply nested, excluding
+            the fixed values it compares them against.
+        """
+        # Imported here because variable.py imports this module at import time, so
+        # naming it at the top would close the cycle.
+        from krrood.entity_query_language.core.variable import Literal, Variable
+
+        return make_set(
+            [
+                leaf
+                for leaf in self._leaves_
+                if isinstance(leaf, Variable) and not isinstance(leaf, Literal)
+            ]
+        )
+
     def _invert_(self):
         """
         Invert the symbolic expression.

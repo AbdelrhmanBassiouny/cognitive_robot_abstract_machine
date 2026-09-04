@@ -1668,6 +1668,35 @@ class MergedRobotAnnotationNotFound(UsageError):
 
 
 @dataclass
+class MeshDownloadFailed(DataclassException):
+    """
+    Raised when a robot mesh cannot be fetched from the repository that hosts it.
+    """
+
+    url: str
+    """
+    The address the mesh was requested from.
+    """
+
+    status_code: int
+    """
+    The HTTP status the host answered with.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Downloading the mesh {self.url} failed with HTTP status "
+            f"{self.status_code}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "run again once the host answers: meshes downloaded so far are kept, so a "
+            "repeated run only fetches what is still missing."
+        )
+
+
+@dataclass
 class ExerciseVerificationFailed(UsageError):
     """
     Raised when a solution written in a self-assessment exercise does not satisfy one of
@@ -1684,3 +1713,30 @@ class ExerciseVerificationFailed(UsageError):
 
     def suggest_correction(self) -> str:
         return "revisit the task description of this exercise and adjust your solution."
+
+
+@dataclass
+class RelationStatedAboutNothing(DataclassException):
+    """
+    Raised when a relation is asked whether it holds while nothing has been stated for
+    one of the things it relates.
+    """
+
+    relation: str
+    """
+    The relation that was asked.
+    """
+
+    missing: str
+    """
+    What it was stated about nothing.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.relation} was stated about no {self.missing}."
+
+    def suggest_correction(self) -> str:
+        return (
+            f"state a {self.missing} for it, or ask what it allows rather than whether "
+            f"it holds."
+        )
