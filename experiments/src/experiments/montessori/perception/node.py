@@ -44,11 +44,10 @@ from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.markers import DetectionMarkerPublisher
 from experiments.montessori.perception.overlay import (
-    CameraView,
     DetectionOverlay,
-    RectifiedView,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.scene_windows import SceneWindows
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
 from experiments.montessori.perception.viewer import CameraFrameViewer
 from experiments.network_limits import check_large_messages_can_arrive
@@ -231,22 +230,12 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         Draw one look at the scene, on the camera's own image and on the top-down view
         the outlines were measured in.
 
-        The camera's own image is cut down to the workspace first, so the window shows
-        the stretch of table being worked on rather than the whole room it stands in.
-
         :param frame: The frame the detections were found in.
         :param scene: The detections to draw.
         """
-        workspace = self.pipeline.workspace
-        self.viewer.show_color(
-            workspace.clip(self.overlay.draw(CameraView(frame), scene), frame)
-        )
-        self.viewer.show_depth(workspace.clip(frame.depth, frame))
-        self.viewer.show_rectified(
-            self.overlay.draw(
-                RectifiedView(frame, self.pipeline.rectify_table(frame)), scene
-            )
-        )
+        SceneWindows(
+            pipeline=self.pipeline, viewer=self.viewer, overlay=self.overlay
+        ).show(frame, scene)
 
     def _ready(self) -> bool:
         """
@@ -371,9 +360,9 @@ def build_node(
     pipeline = MontessoriPerceptionPipeline.of_world(world, robot.root)
     logger.info(
         "Watching %s: table top at z=%.3f, board lid at z=%.3f, poses in %s.",
-        pipeline.region,
-        pipeline.table_height,
-        pipeline.lid_height,
+        pipeline.table.region,
+        pipeline.table.height,
+        pipeline.lid.height,
         reference_frame.name,
     )
     markers = (

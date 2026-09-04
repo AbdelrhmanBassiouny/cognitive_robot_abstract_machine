@@ -10,7 +10,9 @@ import pytest
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.semantics import MontessoriShapeCategory
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
 from .montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
 
@@ -29,14 +31,27 @@ def placed_pieces() -> list[PlacedPiece]:
     ]
 
 
+SCENE_REGION = WorkspaceRegion(
+    minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
+)
+"""
+The stretch of table the rendered scene is set up on.
+"""
+
+
 @pytest.fixture
 def pipeline(renderer: MontessoriSceneRenderer) -> MontessoriPerceptionPipeline:
     return MontessoriPerceptionPipeline(
-        region=WorkspaceRegion(
-            minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
+        table=WorkspaceSurface(
+            name=PrefixedName("table", "montessori_scene"),
+            region=SCENE_REGION,
+            height=renderer.table_height,
         ),
-        table_height=renderer.table_height,
-        board_height=renderer.board_height,
+        lid=WorkspaceSurface(
+            name=PrefixedName("board_lid", "montessori_scene"),
+            region=SCENE_REGION,
+            height=renderer.lid_height,
+        ),
     )
 
 

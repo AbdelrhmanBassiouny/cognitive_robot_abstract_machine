@@ -135,6 +135,36 @@ class RectifiedView(DetectionView):
         )
 
 
+@dataclass(frozen=True)
+class ViewFromAbove(DetectionView):
+    """
+    A rectified view turned the way the plane is seen from above it.
+
+    A rectified image is indexed the way its region is measured -- the world's x-axis
+    across the columns and its y-axis down the rows -- which draws the plane as it would
+    look from *underneath*, a quarter turn away from the camera's own view of it.
+    Turning it leaves the x-axis pointing up the picture and the y-axis to the left,
+    which is how the camera on its pole sees the same table.
+    """
+
+    view: RectifiedView
+    """
+    The rectified view being turned.
+    """
+
+    def to_image(self) -> np.ndarray:
+        image = self.view.to_image()
+        axes = (1, 0) + tuple(range(2, image.ndim))
+        return np.ascontiguousarray(np.transpose(image[::-1, ::-1], axes))
+
+    def to_pixels(self, points: np.ndarray, height: float) -> np.ndarray:
+        rows, columns = self.view.orthophoto.image.shape[:2]
+        rectified = self.view.to_pixels(points, height)
+        return np.column_stack(
+            [rows - 1 - rectified[:, 1], columns - 1 - rectified[:, 0]]
+        )
+
+
 # %% drawing them
 
 

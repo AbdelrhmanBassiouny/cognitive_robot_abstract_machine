@@ -7,12 +7,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import Dict, List
+from typing_extensions import Dict, List, Optional
 
 from experiments.montessori.perception.viewer import (
     CameraFrameViewer,
     ImageDisplay,
     PerceptionWindow,
+    QuitKey,
     colorize_depth,
     scale_to_fit,
 )
@@ -44,11 +45,29 @@ class RecordingDisplay(ImageDisplay):
     def draw(self, window_name: str, image: np.ndarray) -> None:
         self.drawn[window_name] = image
 
-    def wait(self, milliseconds: int) -> None:
+    def wait(self, milliseconds: int) -> Optional[int]:
         self.waits.append(milliseconds)
+        return None
 
     def close(self) -> None:
         self.closed = True
+
+
+@dataclass
+class KeyPressingDisplay(RecordingDisplay):
+    """
+    Stands in for a screen with someone typing at it, answering each wait with the next
+    of a written-down list of key presses.
+    """
+
+    key_presses: List[Optional[int]] = field(default_factory=list)
+    """
+    What each wait answers with, in order; every wait past the end answers with nothing.
+    """
+
+    def wait(self, milliseconds: int) -> Optional[int]:
+        super().wait(milliseconds)
+        return self.key_presses.pop(0) if self.key_presses else None
 
 
 def test_unmeasured_depth_pixels_are_drawn_black():
@@ -147,3 +166,40 @@ def test_closing_the_viewer_takes_its_windows_off_screen():
     CameraFrameViewer(display=display).close()
 
     assert display.closed
+
+
+# %% holding a look on screen
+
+
+def test_a_refresh_reports_the_key_that_was_pressed():
+    display = KeyPressingDisplay(key_presses=[QuitKey.Q])
+
+    assert CameraFrameViewer(display=display).refresh() == QuitKey.Q
+
+
+def test_holding_the_windows_ends_at_the_first_key_press():
+    display = KeyPressingDisplay(key_presses=[None, None, QuitKey.ESCAPE])
+
+    pressed = CameraFrameViewer(display=display).hold()
+
+    assert pressed == QuitKey.ESCAPE
+    assert len(display.waits) == 3
+
+
+def test_holding_the_windows_for_a_while_gives_up_when_nothing_is_pressed():
+    display = KeyPressingDisplay()
+
+    pressed = CameraFrameViewer(display=display).hold(seconds=0.01)
+
+    assert pressed is None
+    assert display.waits
+
+
+def test_holding_the_windows_for_no_time_at_all_still_draws_them():
+    display = KeyPressingDisplay()
+    viewer = CameraFrameViewer(display=display)
+    viewer.show_color(np.zeros((2, 2, 3), dtype=np.uint8))
+
+    viewer.hold(seconds=0.0)
+
+    assert PerceptionWindow.COLOR in display.drawn
