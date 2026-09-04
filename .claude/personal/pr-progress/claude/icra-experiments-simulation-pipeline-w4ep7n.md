@@ -1,23 +1,27 @@
-### icra-experiments / integrated-simulation-pipeline — PR #265
+### icra-experiments / integrated-simulation-pipeline — PR #265 (draft)
 
-**Plan.** Cut off `main`; merge, in order: #244, #256, #262, #229, #238, #236, #231, #223,
-then cherry-pick #239's `3a493be9`. Keep #169 and #192 out. Regenerate the ORM, add a
-headless integration test over the merged world + monitor + predicates, let CI verify.
+**Done.** Branch cut off `main`, six of nine merge steps in: #244, #256, #262, #229,
+#238, #236, plus #223's `RectifiedFootprint` rename applied directly. Draft PR #265 open
+and its description matches. Manifest and roadmap written.
 
-**Decisions taken (all recorded in roadmap.md and the PR description).**
-- #262's copies win the recording-trio add/add against #256.
-- The perception lineage's `world.py`/`semantics.py`/`hole_geometry.py` win against #256's;
-  the monitor needs only `MontessoriShape` and `MontessoriWorld`, which both copies define.
-- #223 added to the merge list: this is the branch that puts the two `Footprint`s together,
-  and #223 already carries the `RectifiedFootprint` rename.
-- Done-criterion moved to this branch's own headless test; the demo proof belongs to
-  `tracy-demo-takes-the-integrated-branch` (user's call, 2026-09-04).
+**Resolutions taken** (all in roadmap.md and the PR body):
+- #262's recording trio beats #256's (dangling refs already repointed).
+- `predicates.py` is rewritten by *three* branches; #238's is a superset of #229's, so it
+  takes the structure and #244's numeric fast paths are re-expressed over #238's
+  redesigned view machinery via a new `unit_axis_of`. #244's four tests hold it in place.
+- The perception lineage's montessori `world`/`semantics`/`hole_geometry` beat #256's.
+  Cost: `sorting_progress.py` removed (reads four members only the losing copy had).
+- `Footprint` → `RectifiedFootprint`, #223's exact identifier, because #262's
+  `__init__.py` + the perception package would give ORMatic two `FootprintDAO`s.
 
-**Done.** Branch re-cut off `main`, bootstrapped, pushed. Draft PR #265 open. Manifest and
-roadmap written. Conflict census run over every merge source.
+**Next, and the one real blocker.** #231 and #223 both fork *before* #236 rewrote
+`BoardDetector`, so neither is a text merge. #231 is a design synthesis: its
+capability-declaring `EdgeFitDetector`/`ColorBlobDetector` and rule-based
+`detectors_for(...)` pipeline vs the perception tip's expectation/colour-narrowed search
+with `Occupancy` — ~200 conflicted lines through the core perception loop. Needs a
+deliberate pass. #239's cherry-pick (`3a493be9`) waits on #231. Then ORM regeneration and
+the branch's own headless integration test.
 
-**Next.** Work the nine merge steps in order, resolving as above; regenerate the ORM; write
-the integration test; push and let CI report.
-
-**Known limit.** `regenerate_all_orm.py`, `experiments_test` and `segmind_test` need the ROS
-image — not runnable in this container. CI is the verifier.
+**Known limit.** Nothing here has been run: the workspace won't install in a session
+container (`random_events` C++ lib won't build; ROS imports). Verification was static —
+parse, markers, import resolution. CI is the verifier.
