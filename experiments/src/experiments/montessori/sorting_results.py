@@ -1,15 +1,11 @@
 """
-Per-shape sorting results recorded by :mod:`experiments.montessori.franka_montessori_demo`,
-for offline analysis of a repeated (``--iterations``) run's success rate.
+What one shape-sorting run recorded: every shape's insertion outcome, attempt by attempt.
 
-Kept in their own module, separate from the executable demo script: a class defined in
-a script that is itself run via ``python -m ...`` is loaded twice, once as
-``__main__`` and once under its real dotted path (e.g. by the generated
-``experiments.orm.ormatic_interface``, which needs that real path to map the class),
-leaving two distinct, unrelated class objects of the same name and breaking ORMatic's
-DAO lookup for whichever one the running script actually instantiates. Mirrors
-:mod:`experiments.montessori.insertion_experience`'s own reasoning for
-``ShapeInsertionExperience``.
+Kept in a module of its own rather than beside the script that produces it: a class
+defined in a script run via ``python -m ...`` is loaded twice, once as ``__main__`` and
+once under its real dotted path -- which is the path the generated
+``experiments.orm.ormatic_interface`` maps -- leaving two unrelated class objects of the
+same name and no DAO for whichever one the script instantiated.
 """
 
 from __future__ import annotations
@@ -23,10 +19,7 @@ from segmind.datastructures.events import DetectionEvent
 
 class InsertionOutcome(StrEnum):
     """
-    How a single shape's insertion attempts within
-    :func:`~experiments.montessori.franka_montessori_demo._insert_all_shapes` ended,
-    for tallying results across one or more
-    :func:`~experiments.montessori.franka_montessori_demo._build_world_and_sort` runs.
+    How one shape's insertion attempts ended.
     """
 
     FELL_THROUGH = "fell_through"
@@ -42,31 +35,25 @@ class ShapeInsertionAttempt:
 
     plan: Plan
     """
-    The entire realized plan tree of this attempt -- every sub-action and motion
-    :func:`~coraplex.plans.factories.execute_single` and
-    :meth:`~coraplex.plans.plan_node.PlanNode.perform` expanded it into, not just its
-    top-level :class:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction`
-    node (see :func:`~experiments.montessori.franka_montessori_demo._insert_shape_or_none`).
+    The whole realized plan tree of this attempt, expanded down to its motions rather
+    than only its top-level insertion node.
     """
 
     events: list[DetectionEvent] = field(default_factory=list)
     """
-    Segmind events whose timestamp fell within this attempt's time window (see
-    :func:`~experiments.montessori.franka_montessori_demo._partition_events_by_attempt`).
+    Segmind events whose timestamp fell within this attempt's time window.
     """
 
 
 @dataclass
 class ShapeInsertionResult:
     """
-    A single shape's insertion outcome from one
-    :func:`~experiments.montessori.franka_montessori_demo._build_world_and_sort` run.
+    One shape's insertion outcome from a single sorting run.
     """
 
     shape_key: str
     """
-    This shape's name (see :meth:`~experiments.montessori.semantics.ShapeSortingBoard.hole_for`),
-    with its trailing ``"_shape"`` suffix removed.
+    This shape's name, with its trailing ``"_shape"`` suffix removed.
     """
 
     outcome: InsertionOutcome
@@ -76,23 +63,20 @@ class ShapeInsertionResult:
 
     attempts: list[ShapeInsertionAttempt] = field(default_factory=list)
     """
-    Every attempt made for this shape, in order; the last entry is the one whose
-    fell-through result (or lack of one) determined :attr:`outcome` (see
-    :func:`~experiments.montessori.franka_montessori_demo._insert_all_shapes`).
+    Every attempt made for this shape, in order; the last one is what settled
+    :attr:`outcome`.
     """
 
 
 @dataclass
 class SortingIterationResult:
     """
-    Every attempted shape's :class:`ShapeInsertionResult` from one full
-    :func:`~experiments.montessori.franka_montessori_demo._build_world_and_sort` run.
+    Every attempted shape's :class:`ShapeInsertionResult` from one sorting run.
     """
 
     iteration: int
     """
-    This run's 1-based index among the iterations
-    :func:`~experiments.montessori.franka_montessori_demo.main` was asked to repeat.
+    This run's 1-based index among the iterations that were repeated.
     """
 
     shape_results: list[ShapeInsertionResult] = field(default_factory=list)

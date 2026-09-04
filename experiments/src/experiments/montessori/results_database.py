@@ -1,7 +1,7 @@
 """
-Where a Montessori run records its results, and whether that is reachable.
+Where a sorting run records its results, and whether that is reachable.
 
-Kept apart from the demo itself so a launcher can check the database before paying for
+Kept apart from the run itself so a launcher can check the database before paying for
 the CRAM stack's import and a whole world build: reaching it costs a fraction of a
 second, and finding out afterwards costs a minute and buries the reason under a hundred-
 line traceback.
@@ -27,6 +27,14 @@ from typing_extensions import List, Optional
 
 # %% which database a run records to
 
+PROVISIONING_SCRIPT = (
+    "semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql"
+)
+"""
+Script that creates the role and the database a run records to, with the grants it
+needs.
+"""
+
 DEFAULT_DATABASE_URI = (
     "postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/"
     "franka_montessori_sorting_results"
@@ -36,14 +44,13 @@ Database URI used when neither ``--database-uri`` nor
 :data:`DATABASE_URI_ENVIRONMENT_VARIABLE` is given.
 
 Reuses the ``semantic_digital_twin`` role already provisioned on this host for the other
-demos/experiments in this workspace (see ``coraplex_panda_demo/demo3.py``'s own
-``DATABASE_URI``); only the database itself, ``franka_montessori_sorting_results``, is
-dedicated to this demo. Uses the ``psycopg`` (v3) driver explicitly since only that, not
-``psycopg2``, is installed in this environment.
+experiments in this workspace; only the database itself,
+``franka_montessori_sorting_results``, is dedicated to the shape-sorting runs. Names the
+``psycopg`` (v3) driver explicitly since only that, not ``psycopg2``, is installed in
+this environment.
 
 Provision the role and this database once, before the first run, with
-``semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql``
-(see that script's own header for its ``psql`` invocation).
+:data:`PROVISIONING_SCRIPT` (see that script's own header for its ``psql`` invocation).
 """
 
 DATABASE_URI_ENVIRONMENT_VARIABLE = "FRANKA_MONTESSORI_SORTING_DATABASE_URI"
@@ -55,8 +62,8 @@ IN_MEMORY_DATABASE_URI = "sqlite://"
 """
 Database a run records to when the configured one cannot be reached.
 
-Lives inside the running process, so a run keeps its results only until it exits; the
-viewer's episodic-memory questions are answered from it in the meantime.
+Lives inside the running process, so a run keeps its results only until it exits, and
+anything querying them in the meantime is answered from it.
 """
 
 WRITE_PROBE_TABLE_NAME = "montessori_write_probe"
@@ -183,8 +190,8 @@ def create_results_engine(database_uri: str) -> Engine:
     An engine on a results database.
 
     An in-memory database lives inside the connection that created it, so one connection
-    is shared across every thread for it: a run records on the planning thread while the
-    viewer reads on another, and they must see the same rows.
+    is shared across every thread for it: a run records on the planning thread while
+    another thread reads, and they must see the same rows.
 
     :param database_uri: The database to open.
     """
@@ -227,7 +234,7 @@ class ResultsDatabase:
 
         Done once per database rather than once per session: reading the whole generated
         ``experiments`` schema and issuing its ``CREATE TABLE`` statements takes the best
-        part of a minute, which a query answered while a demo runs cannot pay.
+        part of a minute, which a query answered while a run sorts cannot pay.
 
         Skips any table ORMatic could not assign a real column type to (surfaced as
         SQLAlchemy's ``NullType``, e.g. ``EpisodePlayerDAO.rdr_viewer`` for the
@@ -235,7 +242,7 @@ class ResultsDatabase:
         depends on a skipped one through a foreign key -- transitively, since joined-
         table inheritance chains more than one table deep. One unrelated, pre-existing
         gap in the huge generated ``experiments`` schema must not stop every other
-        table, including this demo's own, from being created; a table left out purely
+        table, including this module's own, from being created; a table left out purely
         because it depends on a skipped one would otherwise fail with an "undefined
         table" error the moment ``CREATE TABLE`` tried to reference it.
         """
@@ -309,13 +316,12 @@ class UnreachableResultsDatabase(DataclassException):
 
     def suggest_correction(self) -> str:
         return (
-            "Provision it once as described in "
-            "experiments/src/experiments/montessori/README.md, or point the run at "
-            "another database with --database-uri (for a throwaway one, "
-            "--database-uri sqlite:///montessori.db). An authentication failure on an "
-            "existing role usually means that role's password is not the one "
-            "DEFAULT_DATABASE_URI assumes."
-        )
+            "Provision it once with %s, or point the run at another database with "
+            "--database-uri (for a throwaway one, --database-uri "
+            "sqlite:///montessori.db). An authentication failure on an existing role "
+            "usually means that role's password is not the one DEFAULT_DATABASE_URI "
+            "assumes."
+        ) % PROVISIONING_SCRIPT
 
 
 def verify_reachable(database_uri: str) -> None:
@@ -365,11 +371,10 @@ class ReadOnlyResultsDatabase(DataclassException):
             "the role in that URI was provisioned for reading only. If no "
             "--database-uri was given, the URI came from the %s environment variable "
             "-- check whether a shell profile sets it -- or from DEFAULT_DATABASE_URI. "
-            "Grant the role write access as described in "
-            "experiments/src/experiments/montessori/README.md, or point the run at "
-            "another database with --database-uri (for a throwaway one, "
-            "--database-uri sqlite:///montessori.db)."
-        ) % DATABASE_URI_ENVIRONMENT_VARIABLE
+            "Grant the role write access as %s does, or point the run at another "
+            "database with --database-uri (for a throwaway one, --database-uri "
+            "sqlite:///montessori.db)."
+        ) % (DATABASE_URI_ENVIRONMENT_VARIABLE, PROVISIONING_SCRIPT)
 
 
 def verify_writable(database_uri: str) -> None:
@@ -410,10 +415,10 @@ def verify_writable(database_uri: str) -> None:
 
 def main(argument_list: Optional[List[str]] = None) -> int:
     """
-    Check the database a run would record to, for a launcher to call before starting.
+    Check the database a run would record to, before the run itself starts.
 
     Reads only ``--database-uri`` and ignores everything else, so a launcher can forward
-    the run's whole argument list without knowing which parts are the demo's.
+    the run's whole argument list without knowing which parts this check reads.
 
     Reports rather than refuses: an unreachable database is replaced by one in memory
     and a read-only one is recorded nothing to, so the only thing a database problem

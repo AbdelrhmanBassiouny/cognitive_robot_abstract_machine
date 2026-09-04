@@ -1,10 +1,10 @@
 """
-Whether and where a Montessori run keeps the iterations it finishes.
+Whether and where a sorting run keeps the iterations it finishes.
 
 Recording is best effort: a run whose database will not take a write sorts anyway and
-says so, rather than losing a finished sort to a database problem. ``run_montessori_dem
-o.sh``'s pre-flight reports the same thing before a world has been built, where it is
-worth a fraction of a second rather than a minute.
+says so, rather than losing a finished sort to a database problem.
+:func:`~experiments.montessori.results_database.main` reports the same thing before a
+world has been built, where it costs a fraction of a second rather than a minute.
 """
 
 from __future__ import annotations
@@ -98,9 +98,9 @@ def open_recording(results_database: ResultsDatabase) -> RecordsIterations:
     """
     Start keeping finished iterations, or keep none if the database refuses them.
 
-    Records through the database object it is given rather than one of its own, so the
-    viewer reading a run's episodic memory reads the very rows the run is writing --
-    which for an in-memory database is only true of a shared connection.
+    Records through the database object it is given rather than one of its own, so
+    whatever reads a run's results back reads the very rows the run is writing -- which
+    for an in-memory database is only true of a shared connection.
 
     :param results_database: The database to record to.
     :return: A recorder writing to that database, or one keeping nothing when it cannot
