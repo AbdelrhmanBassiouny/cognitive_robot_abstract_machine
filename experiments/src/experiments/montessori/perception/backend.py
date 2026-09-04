@@ -5,27 +5,31 @@ the Montessori scene by looking at it.
 Perception is a backend beside the native and SQLAlchemy ones, so asking and looking are
 the same act::
 
-    statement = an(MontessoriShapeDetection)(supporting_surface=board_lid_name, pose=...)
+    statement = an(MontessoriShapeDetection)(pose=...)
+    statement = statement.where(SupportedBy(statement.variable, board_lid))
     [seen] = statement.evaluate(backend=MontessoriPerceptionBackend(source=node))
     reach_for = seen.pose
 
 Everything about how a statement is read, narrowed and checked belongs to
 :class:`~krrood.entity_query_language.backends.PerceptionBackend` and is the same for
 any sensor. What is here is only what is particular to this scene: that a look is taken
-by the Montessori pipeline, and that the one attribute its search can narrow itself by
-is the surface a detection rests on.
+by the Montessori pipeline, and that the one relation its search can narrow itself by is
+support.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import ClassVar, Iterable
+from typing_extensions import ClassVar, Iterable, Optional, Tuple, Type
 
 from experiments.montessori.perception.detections import MontessoriDetection
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
 from krrood.entity_query_language.backends import LookRequest, PerceptionBackend
+from krrood.entity_query_language.predicate import Triple
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.reasoning.predicates import SupportedBy
 
 # %% the backend
 
@@ -41,10 +45,10 @@ class MontessoriPerceptionBackend(PerceptionBackend):
     Where a look at the scene comes from.
     """
 
-    SUPPORTING_SURFACE_ATTRIBUTE_NAME: ClassVar[str] = "supporting_surface"
+    narrowing_relations: ClassVar[Tuple[Type[Triple], ...]] = (SupportedBy,)
     """
-    The attribute of a detection that names the surface it was found on, and so the one
-    the search can narrow itself by.
+    A look here searches one supporting surface at a time, so support is what it can
+    narrow itself by.
     """
 
     def look(
@@ -58,6 +62,25 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         """
         return self.source.scene(self.scene_request(request)).detections
 
+    def relations_hold(
+        self, instance: MontessoriDetection, request: LookRequest[MontessoriDetection]
+    ) -> bool:
+        """
+        Whether a detection rests on the surface the statement said the thing sought
+        rests on.
+
+        A look already taken cannot be narrowed, so what the search was asked for is
+        checked again here over whatever came back.
+
+        :param instance: One detection the look reported.
+        :param request: What the statement asks a look for.
+        """
+        supporting_surface = self.supporting_surface_asked_about(request)
+        return (
+            supporting_surface is None
+            or instance.supporting_surface == supporting_surface
+        )
+
     @classmethod
     def scene_request(cls, request: LookRequest[MontessoriDetection]) -> SceneRequest:
         """
@@ -68,7 +91,24 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         """
         return SceneRequest(
             detection_type=request.type_,
-            supporting_surface=request.value_stated_for(
-                cls.SUPPORTING_SURFACE_ATTRIBUTE_NAME
-            ),
+            supporting_surface=cls.supporting_surface_asked_about(request),
         )
+
+    @classmethod
+    def supporting_surface_asked_about(
+        cls, request: LookRequest[MontessoriDetection]
+    ) -> Optional[PrefixedName]:
+        """
+        The surface a statement says the thing it is looking for rests on.
+
+        A detection says what it rests on by the name the world knows that surface by,
+        so what the statement names is read back the same way.
+
+        :param request: What the statement asks a look for.
+        :return: The name of the surface asked about, or ``None`` when the statement
+            asks about none.
+        """
+        supporter = request.related_by(SupportedBy)
+        if supporter is None:
+            return None
+        return supporter.name

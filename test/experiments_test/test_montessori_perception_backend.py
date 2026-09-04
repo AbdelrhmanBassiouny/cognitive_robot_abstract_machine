@@ -6,8 +6,6 @@ look refuses to answer at all.
 
 from __future__ import annotations
 
-from dataclasses import fields
-
 import pytest
 
 from experiments.montessori.perception.backend import (
@@ -23,8 +21,11 @@ from experiments.montessori.perception.detections import (
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import FixedScene
+from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
+from semantic_digital_twin.reasoning.predicates import SupportedBy
+from semantic_digital_twin.world_description.world_entity import Body
 from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
@@ -38,6 +39,20 @@ The rendered scene and pipeline fixtures the tests below ask for by name.
 """
 
 
+def looking_for_something_supported_by(surface: WorkspaceSurface):
+    """
+    A statement asking a look for whatever rests on a surface, said as a relation.
+
+    The statement names the world entity, since that is what support is a relation
+    between; the pipeline fixtures hold only the measurement taken of it, so the body
+    standing for it here carries the very name that measurement records.
+
+    :param surface: The measured surface whose world entity is asked about.
+    """
+    statement = an(MontessoriShapeDetection)()
+    return statement.where(SupportedBy(statement.variable, Body(name=surface.name)))
+
+
 @pytest.fixture
 def looking(scene: MontessoriScene) -> MontessoriPerceptionBackend:
     """
@@ -49,14 +64,12 @@ def looking(scene: MontessoriScene) -> MontessoriPerceptionBackend:
 # %% what the statement tells the search
 
 
-def test_the_attribute_the_search_narrows_by_is_one_a_detection_has():
+def test_what_the_search_narrows_by_is_a_relation_rather_than_an_attributes_name():
     """
-    The backend names the attribute it narrows by, and a rename of that field would
-    otherwise leave the name behind without anything failing.
+    Support is a relation the world means something by, so the search is narrowed by the
+    class that means it and there is no attribute name spelled a second time.
     """
-    assert MontessoriPerceptionBackend.SUPPORTING_SURFACE_ATTRIBUTE_NAME in {
-        field.name for field in fields(MontessoriShapeDetection)
-    }
+    assert MontessoriPerceptionBackend.narrowing_relations == (SupportedBy,)
 
 
 def test_the_kind_of_detection_asked_for_is_what_the_look_is_asked_for():
@@ -72,7 +85,7 @@ def test_the_kind_of_detection_asked_for_is_what_the_look_is_asked_for():
 def test_a_stated_supporting_surface_narrows_the_look_to_it(
     pipeline: MontessoriPerceptionPipeline,
 ):
-    statement = an(MontessoriShapeDetection)(supporting_surface=pipeline.lid.name)
+    statement = looking_for_something_supported_by(pipeline.lid)
 
     request = MontessoriPerceptionBackend.scene_request(
         MontessoriPerceptionBackend.read_request(statement)
@@ -98,8 +111,8 @@ def test_a_surface_left_unstated_narrows_nothing(
     pipeline: MontessoriPerceptionPipeline,
 ):
     """
-    ``...`` says the statement does not know which surface and the look must report it,
-    which is the opposite of naming one.
+    Asserting no support says the statement does not know which surface and the look
+    must report it, which is the opposite of naming one.
     """
     statement = an(MontessoriShapeDetection)(supporting_surface=...)
 
@@ -168,6 +181,7 @@ def test_a_look_narrowed_to_one_surface_reports_only_what_rests_on_it(
 ):
     """
     Narrowing is the search itself running differently, not a filter over a full look:
+
     the table's pieces are never detected, rather than detected and discarded.
     """
     frame = renderer.render([*placed_pieces, piece_on_the_lid])
@@ -284,7 +298,7 @@ def test_a_narrowed_search_still_has_its_own_condition_checked_on_the_answer(
     A source that cannot act on the narrowing answers with every surface's pieces, and
     the condition that narrowed the search is still what decides the answer.
     """
-    statement = an(MontessoriShapeDetection)(supporting_surface=pipeline.lid.name)
+    statement = looking_for_something_supported_by(pipeline.lid)
     on_the_lid = [
         found
         for found in scene_with_a_piece_on_the_lid.shapes
