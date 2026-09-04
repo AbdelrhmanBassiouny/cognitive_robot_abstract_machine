@@ -248,6 +248,32 @@ class UsageError(LogicalError):
 
 
 @dataclass
+class InvalidCameraResolutionError(UsageError):
+    """
+    Raised when a camera resolution cannot describe an image.
+    """
+
+    width: int
+    """
+    The invalid image width.
+    """
+
+    height: int
+    """
+    The invalid image height.
+    """
+
+    def error_message(self) -> str:
+        return (
+            "Camera resolution width and height must be positive, "
+            f"got width={self.width} and height={self.height}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "provide positive width and height values."
+
+
+@dataclass
 class WorldValidationError(LogicalError):
     """
     Raised when the world fails validation, e.g., when the kinematic structure is not a
