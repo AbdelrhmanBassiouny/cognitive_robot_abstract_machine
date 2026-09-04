@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 from typing_extensions import Dict, Optional, Tuple
 
+from experiments.montessori.planar_geometry import KnownOutline, points_along, turned
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.world_description.geometry import Color
 
@@ -115,22 +116,6 @@ def rectangle_boundary(width: float, length: float) -> np.ndarray:
     )
 
 
-def points_along(outline: np.ndarray, spacing: float) -> np.ndarray:
-    """
-    Spread points evenly along a closed outline, corners included.
-
-    :param outline: The outline's corners, as ``(n, 2)`` ``(x, y)`` points in metres.
-    :param spacing: How far apart, in metres, to place the points.
-    :return: The points, as ``(m, 2)`` ``(x, y)`` points in metres.
-    """
-    corners = np.vstack([outline, outline[:1]])
-    walked = []
-    for start, end in zip(corners[:-1], corners[1:]):
-        steps = max(1, int(round(float(np.linalg.norm(end - start)) / spacing)))
-        walked.append(start + np.outer(np.arange(steps) / steps, end - start))
-    return np.vstack(walked)
-
-
 def circle_boundary(diameter: float) -> np.ndarray:
     """
     Corners of a many-sided polygon standing in for a circle centered on its own middle.
@@ -189,7 +174,7 @@ from the loose pieces by its outline.
 
 
 @dataclass(frozen=True, eq=False)
-class KnownPiece:
+class KnownPiece(KnownOutline):
     """
     One kind of loose piece this set contains, as measured off the piece itself.
     """
@@ -250,8 +235,16 @@ class KnownPiece:
         :param angle: How far to turn it, in radians about the world frame's z-axis.
         :return: The turned outline, as ``(n, 2)`` ``(x, y)`` points in metres.
         """
-        cosine, sine = math.cos(angle), math.sin(angle)
-        return self.outline @ np.array([[cosine, sine], [-sine, cosine]])
+        return turned(self.outline, angle)
+
+    def outline_points(self, angle: float, spacing: float) -> np.ndarray:
+        """
+        The points its turned outline covers.
+
+        :param angle: How far to turn it, in radians about the world frame's z-axis.
+        :param spacing: How far apart, in metres, the points stand.
+        """
+        return points_along(self.turned_outline(angle), spacing)
 
     def smallest_equivalent_turn(self, angle: float) -> float:
         """

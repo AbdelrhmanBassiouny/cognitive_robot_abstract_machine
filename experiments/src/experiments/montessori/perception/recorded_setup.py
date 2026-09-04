@@ -15,11 +15,18 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from experiments.montessori.hole_geometry import detect_hole_footprints, hole_names
+from experiments.montessori.hole_geometry import (
+    BoardHoleLayout,
+    detect_hole_footprints,
+    hole_names,
+)
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import MontessoriBoardDetection
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
-from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.pipeline import (
+    BoardDetector,
+    MontessoriPerceptionPipeline,
+)
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.world import BOARD_SCALE
@@ -78,6 +85,24 @@ Enough to hold the board and anything standing on it, which is what a statement 
 stretch of this table means to reach over.
 """
 
+BOARD_SCALE_AGAINST_THE_MESH = 0.865
+"""
+How large the shape-sorting board on this table is, against ``resources/board.stl``.
+
+The mesh is not cut to the size of the board these recordings hold: laid over the lid at
+its own size, its holes miss the openings actually seen by about nineteen millimetres,
+and no plane the board could be rectified onto brings them together. Fitted at this size
+they land two to three millimetres from them, which is what
+:meth:`~experiments.montessori.perception.pipeline.BoardDetector.measure_scale` answers
+on each of the six shipped captures -- 0.82, 0.84, 0.86, 0.87, 0.90 and 0.92, whose
+middle this is. Measuring the board itself would settle it more tightly than six looks
+from one angle can.
+
+Stated here rather than on the detector because it is knowledge about a particular
+board, not about how a board is looked for: a scene built from the mesh is the mesh's
+own size, and reads one.
+"""
+
 TUNED_WORKSPACE_FILE = (
     Path(__file__).parent.parent / "resources" / f"{SETUP_NAME}_workspace.json"
 )
@@ -118,6 +143,16 @@ def lid_surface() -> WorkspaceSurface:
         name=PrefixedName("board_lid", SETUP_NAME),
         region=searched_workspace(),
         height=TABLE_HEIGHT + float(BOARD_SCALE.z),
+    )
+
+
+def board_detector() -> BoardDetector:
+    """
+    :return: The detector that looks for the board this setup holds, at the size that
+        board was measured to be.
+    """
+    return BoardDetector(
+        layout=BoardHoleLayout.of_board_mesh(BOARD_SCALE_AGAINST_THE_MESH)
     )
 
 
@@ -305,6 +340,7 @@ def perception_pipeline(world: Optional[World] = None) -> MontessoriPerceptionPi
     return MontessoriPerceptionPipeline(
         table=table_surface(),
         lid=lid_surface(),
+        board_detector=board_detector(),
         reference_frame=None if world is None else world.root,
         world=world,
     )

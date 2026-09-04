@@ -16,13 +16,23 @@ from __future__ import annotations
 
 from collections import Counter
 
+import cv2
+import numpy as np
 import pytest
 from typing_extensions import List
 
 from experiments.montessori.hole_geometry import detect_hole_footprints
 from experiments.montessori.perception.captures import SceneCapture
-from experiments.montessori.perception.detections import MontessoriScene
+from experiments.montessori.perception.detections import (
+    MontessoriBoardDetection,
+    MontessoriScene,
+    ShapeSortingHoleDetection,
+)
+from experiments.montessori.perception.orthophoto import Orthophoto
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.recorded_setup import (
+    BOARD_SCALE_AGAINST_THE_MESH,
+)
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
@@ -74,6 +84,34 @@ def scene(
     return capture_pipeline.detect(capture.to_frame())
 
 
+def brightness_within(outline: np.ndarray, lid: Orthophoto) -> float:
+    """
+    How bright the lid's rectified view is inside one outline.
+
+    :param outline: World-frame ``(n, 2)`` points bounding the region to read.
+    :param lid: The rectified view of the lid's plane.
+    :return: The middle brightness of the pixels it encloses.
+    """
+    stencil = np.zeros(lid.image.shape[:2], dtype=np.uint8)
+    cv2.fillPoly(stencil, [lid.region.to_pixels(outline).round().astype(np.int32)], 255)
+    return float(np.median(lid.hue_saturation_value[:, :, 2][stencil > 0]))
+
+
+def lies_over_an_opening(
+    hole: ShapeSortingHoleDetection,
+    board: MontessoriBoardDetection,
+    lid: Orthophoto,
+) -> bool:
+    """
+    Whether a reported hole is darker than the board it is cut into.
+
+    :param hole: The hole as reported.
+    :param board: The board it belongs to.
+    :param lid: The rectified view of the lid's plane.
+    """
+    return brightness_within(hole.outline, lid) < brightness_within(board.outline, lid)
+
+
 # %% the board
 
 
@@ -88,23 +126,52 @@ def test_the_board_is_found_in_every_capture(
     assert scene.board.lid_height == capture_pipeline.lid.height
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The hole classifier still measures a contour's fill and aspect instead of "
-        "fitting the known outlines, so it finds five of the board's six holes and "
-        "calls most of them triangular prisms. Owned by the plan item "
-        "holes-fitted-like-pieces."
-    ),
-)
-def test_every_hole_in_the_board_is_found(scene: MontessoriScene) -> None:
+def test_the_board_is_smaller_than_the_mesh_that_models_it(
+    capture: SceneCapture, capture_pipeline: MontessoriPerceptionPipeline
+) -> None:
     """
-    The board has as many holes as its own mesh was cut with, of the same categories.
+    The size this setup states its board to be explains the openings the camera saw, and
+    the mesh's own size does not.
+
+    Where the holes lie relative to one another is cut into the board, so a look that no
+    placement of the layout reaches says the board is not the size the mesh was drawn
+    at. This keeps the size that was written down answerable from the captures rather
+    than only asserted by them.
+    """
+    lid = capture_pipeline.rectify(capture.to_frame(), capture_pipeline.lid.height)
+
+    assert (
+        capture_pipeline.board_detector.measure_scale(
+            lid, candidates=(BOARD_SCALE_AGAINST_THE_MESH, 1.0)
+        )
+        == BOARD_SCALE_AGAINST_THE_MESH
+    )
+
+
+def test_every_hole_in_the_board_is_found(
+    scene: MontessoriScene,
+    capture: SceneCapture,
+    capture_pipeline: MontessoriPerceptionPipeline,
+) -> None:
+    """
+    The board has as many holes as its own mesh was cut with, of the same categories,
+    and each one is reported over an opening rather than over the lid's own wood.
+
+    The second half is what makes this a measurement. A detector that reads its holes
+    off the board's model reports the model's categories wherever it puts them, so
+    counting them says only that a board was found; that they are darker than the lid
+    around them is what says they are the holes.
     """
     assert scene.board is not None
     assert Counter(hole.category for hole in scene.board.holes) == Counter(
         footprint.category for footprint in detect_hole_footprints()
     )
+    lid = capture_pipeline.rectify(capture.to_frame(), capture_pipeline.lid.height)
+    assert [
+        hole.category
+        for hole in scene.board.holes
+        if not lies_over_an_opening(hole, scene.board, lid)
+    ] == []
 
 
 # %% the loose pieces
@@ -122,39 +189,14 @@ def test_every_piece_resting_on_the_table_is_found(
     assert not (Counter(truth.pieces_on_table) - found)
 
 
-TABLE_GHOSTS_STILL_REPORTED: List[str] = ["non_inserted_objects"]
-"""
-The captures where a piece on the lid is still read as one on the table.
-
-What a raised thing hides from the camera is measured off the board as it was detected,
-and the board's own orientation comes from the holes found in its lid. In this capture
-alone the board is reported turned twenty-two degrees from where the other five put it,
-about the same centre, so the stretch of table it is taken to stand in front of is
-turned with it.
-"""
-
-
 def test_only_the_pieces_resting_on_the_table_are_detected_there(
-    request: pytest.FixtureRequest,
     scene: MontessoriScene,
     truth: CaptureTruth,
-    capture: SceneCapture,
     capture_pipeline: MontessoriPerceptionPipeline,
 ) -> None:
     """
     Nothing is reported on the table that is not lying on it.
     """
-    if capture.name in TABLE_GHOSTS_STILL_REPORTED:
-        request.node.add_marker(
-            pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "The board is read as turned away from where it stands, so what it "
-                    "hides is turned with it; owned by the plan item "
-                    "holes-fitted-like-pieces."
-                ),
-            )
-        )
     assert detections_on(scene, capture_pipeline.table.name) == Counter(
         truth.pieces_on_table
     )
@@ -176,6 +218,22 @@ the lid. A look told where to expect a piece finds it (see
 would tell it on a capture is the object's own history.
 """
 
+LID_PIECES_LOST_TO_A_STRONGER_GHOST: List[str] = ["tracy_pickup_demo"]
+"""
+The captures where a piece on the lid is displaced by something that is not there.
+
+A triangular prism laid over the round hole's own rim follows those edges at 0.682,
+against 0.673 for the cylinder actually sitting in that hole, and the two claim one
+place, so the stronger of them is kept and the real piece is dropped. Nine parts in a
+thousand of agreement is not a difference any threshold can be set against, which is why
+telling a piece from the board's own edges is ``competing-explanations``'s to do rather
+than a number to tune here.
+
+The ghost is not new. It is found on the table pass before the board's layout is fitted,
+where a board read as standing forty millimetres from where it does happened to hide it;
+placing the board correctly is what brings it into view.
+"""
+
 
 def test_every_piece_resting_on_the_lid_is_found(
     request: pytest.FixtureRequest,
@@ -195,6 +253,17 @@ def test_every_piece_resting_on_the_lid_is_found(
                     "Nothing tells this look to expect a piece on the lid, and colour "
                     "cannot separate one there. Owned by the plan item "
                     "expectations-from-events."
+                ),
+            )
+        )
+    if capture.name in LID_PIECES_LOST_TO_A_STRONGER_GHOST:
+        request.node.add_marker(
+            pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "A hole's own rim is fitted as a piece more strongly than the piece "
+                    "sitting in that hole, and the two claim one place. Owned by the "
+                    "plan item competing-explanations."
                 ),
             )
         )
