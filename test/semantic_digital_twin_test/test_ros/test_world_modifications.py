@@ -9,7 +9,10 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.exceptions import InsufficientModificationHistoryError
+from semantic_digital_twin.exceptions import (
+    InsufficientModificationHistoryError,
+    InvalidRollbackVersionError,
+)
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
     Door,
@@ -739,6 +742,63 @@ def test_world_rollback_modification_blocks_raises_when_insufficient_history():
         world.rollback_modification_blocks(count=2)
 
     assert world.is_kinematic_structure_entity_in_world(b1)
+
+
+def test_world_rollback_to_version_reverts_blocks_after_it():
+    world = World()
+    with world.modify_world():
+        b1 = Body(name=PrefixedName("b1"))
+        world.add_kinematic_structure_entity(b1)
+    version_after_b1 = world.get_world_model_manager().version
+
+    with world.modify_world():
+        b2 = Body(name=PrefixedName("b2"))
+        world.add_kinematic_structure_entity(b2)
+        world.add_connection(FixedConnection(b1, b2))
+    with world.modify_world():
+        b3 = Body(name=PrefixedName("b3"))
+        world.add_kinematic_structure_entity(b3)
+        world.add_connection(FixedConnection(b2, b3))
+
+    rolled_back = world.rollback_to_version(version_after_b1)
+
+    assert world.is_kinematic_structure_entity_in_world(b1)
+    assert not world.is_kinematic_structure_entity_in_world(b2)
+    assert not world.is_kinematic_structure_entity_in_world(b3)
+    assert len(rolled_back) == 2
+
+
+def test_world_rollback_to_version_is_noop_at_current_version():
+    world = World()
+    with world.modify_world():
+        b1 = Body(name=PrefixedName("b1"))
+        world.add_kinematic_structure_entity(b1)
+    current_version = world.get_world_model_manager().version
+
+    rolled_back = world.rollback_to_version(current_version)
+
+    assert rolled_back == []
+    assert world.is_kinematic_structure_entity_in_world(b1)
+
+
+def test_world_rollback_to_version_raises_for_version_ahead_of_current():
+    world = World()
+    with world.modify_world():
+        b1 = Body(name=PrefixedName("b1"))
+        world.add_kinematic_structure_entity(b1)
+    current_version = world.get_world_model_manager().version
+
+    with pytest.raises(InvalidRollbackVersionError):
+        world.rollback_to_version(current_version + 1)
+
+    assert world.is_kinematic_structure_entity_in_world(b1)
+
+
+def test_world_rollback_to_version_raises_for_negative_version():
+    world = World()
+
+    with pytest.raises(InvalidRollbackVersionError):
+        world.rollback_to_version(-1)
 
 
 if __name__ == "__main__":

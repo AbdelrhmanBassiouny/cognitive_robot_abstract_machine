@@ -60,6 +60,7 @@ from semantic_digital_twin.exceptions import (
     BrokenWorldModificationHistoryError,
     MismatchingWorld,
     InsufficientModificationHistoryError,
+    InvalidRollbackVersionError,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
@@ -2638,11 +2639,35 @@ class World(HasSimulatorProperties):
                 requested_count=count,
                 available_count=len(model_modification_blocks),
             )
-        blocks_to_roll_back = list(reversed(model_modification_blocks[-count:]))
+        # count == 0 has to be handled explicitly: model_modification_blocks[-0:] is
+        # model_modification_blocks[0:], i.e. the whole list, not an empty slice.
+        blocks_to_roll_back = (
+            list(reversed(model_modification_blocks[-count:])) if count else []
+        )
         for block in blocks_to_roll_back:
             with self.modify_world():
                 block.revert(self)
         return blocks_to_roll_back
+
+    def rollback_to_version(self, version: int) -> List[WorldModelModificationBlock]:
+        """
+        Roll back the world's modification history to the given version, undoing every
+        modification block completed since.
+
+        :param version: The target :attr:`WorldModelManager.version` to roll back to,
+            e.g. taken from an earlier :attr:`WorldModelManager.revision`.
+        :return: The modification blocks that were rolled back, most recent first.
+        :raises InvalidRollbackVersionError: If ``version`` is not a version the world
+            has already reached.
+        """
+        current_version = self._model_manager.version
+        if not 0 <= version <= current_version:
+            raise InvalidRollbackVersionError(
+                world=self,
+                target_version=version,
+                current_version=current_version,
+            )
+        return self.rollback_modification_blocks(current_version - version)
 
     @cached_property
     def ray_tracer(self) -> RayTracer:

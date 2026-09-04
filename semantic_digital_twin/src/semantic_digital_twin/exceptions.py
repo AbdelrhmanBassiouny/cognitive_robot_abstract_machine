@@ -327,6 +327,32 @@ class InsufficientModificationHistoryError(WorldValidationError):
 
 
 @dataclass
+class InvalidRollbackVersionError(WorldValidationError):
+    """
+    Raised when attempting to roll back to a version the world has not (yet) reached.
+    """
+
+    target_version: int
+    """
+    The version that was requested.
+    """
+
+    current_version: int
+    """
+    The version the world is currently at.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Cannot roll back to version {self.target_version}: the world is "
+            f"currently at version {self.current_version}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "pass a version between 0 and the world's current version."
+
+
+@dataclass
 class WorldContainsOrphanedDegreeOfFreedom(WorldValidationError):
     """
     Raised when the kinematic structure of the world contains orphaned degrees of
