@@ -35,6 +35,7 @@ from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule im
     PhraseRule,
     RuleContext,
 )
+from krrood.entity_query_language.verbalization.self_naming_value import SelfNamingValue
 from krrood.entity_query_language.verbalization.value_lexicon import type_members
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
@@ -158,8 +159,18 @@ class LiteralRule(PhraseRule):
         as a membership set (*"one of …"*) is the consuming predicate's call (see
         :meth:`HasTypes._verbalization_fragment_`), not the literal's, so an equality
         ``x == (Robot, Task)`` is not mis-read as membership.
+
+        A value that says what it is called (:class:`SelfNamingValue`) is said by that name, which
+        is what *"a specific <Type>"* stands in for when there is none. A value that is a wrapper
+        around one field (:attr:`GrammarMetadata.stands_for_its_owner`) is said by that field, the
+        same way a chain reading it says the wrapper alone.
         """
         value = node._value_
+        if isinstance(value, SelfNamingValue):
+            return value._verbalization_noun_phrase_()
+        standing_for = self._field_standing_for_its_owner(value)
+        if standing_for is not None:
+            return RoleFragment.for_literal(getattr(value, standing_for))
         if is_concrete_object_literal(node):
             return self._concrete_object(node, context)
         if isinstance(value, type):
@@ -243,6 +254,33 @@ class LiteralRule(PhraseRule):
         return (
             marked
             or [name for name in _CONVENTIONAL_ID_FIELDS if hasattr(value, name)][:1]
+        )
+
+    @staticmethod
+    def _field_standing_for_its_owner(value: Any) -> Optional[str]:
+        """:return: The name of the field *value*'s class is a wrapper around
+        (:attr:`GrammarMetadata.stands_for_its_owner`), or ``None`` when it declares none.
+
+        >>> from dataclasses import dataclass, field
+        >>> @dataclass
+        ... class Label:
+        ...     text: str = field(metadata=GrammarMetadata(stands_for_its_owner=True).as_dict())
+        >>> LiteralRule._field_standing_for_its_owner(Label("door"))
+        'text'
+        >>> LiteralRule._field_standing_for_its_owner(42) is None
+        True
+        """
+        if not is_dataclass(value):
+            return None
+        return next(
+            (
+                data_field.name
+                for data_field in fields(value)
+                if (grammar := GrammarMetadata.of_field(value, data_field.name))
+                is not None
+                and grammar.stands_for_its_owner
+            ),
+            None,
         )
 
     @staticmethod

@@ -13,6 +13,7 @@ import numpy as np
 import trimesh
 from typing_extensions import List, Tuple
 
+from experiments.montessori.planar_geometry import PlanarPoint, PlanarSize
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.world_description.geometry import Scale
 
@@ -56,40 +57,6 @@ _RECTANGLE_ASPECT_RATIO_THRESHOLD = 1.3
 Bounding-box aspect ratio above which a box-shaped hole is classified as rectangular
 rather than square.
 """
-
-
-@dataclass(frozen=True)
-class PlanarPoint:
-    """
-    A point on the board mesh's local ``x-y`` plane.
-    """
-
-    x: float
-    """
-    Position along the board mesh's local x-axis, in metres.
-    """
-
-    y: float
-    """
-    Position along the board mesh's local y-axis, in metres.
-    """
-
-
-@dataclass(frozen=True)
-class PlanarSize:
-    """
-    How far something reaches along the board mesh's local ``x`` and ``y`` axes.
-    """
-
-    x: float
-    """
-    Reach along the board mesh's local x-axis, in metres.
-    """
-
-    y: float
-    """
-    Reach along the board mesh's local y-axis, in metres.
-    """
 
 
 @dataclass(frozen=True)
@@ -206,9 +173,7 @@ def cut_board_mesh(
     :param footprints: The holes to cut, as detected by :func:`detect_hole_footprints`.
     :return: The board blank with all holes cut clean through it.
     """
-    board = trimesh.creation.box(
-        extents=(board_scale.x, board_scale.y, board_scale.z)
-    )
+    board = trimesh.creation.box(extents=(board_scale.x, board_scale.y, board_scale.z))
     cut_depth = board_scale.z * 2
     for footprint in footprints:
         cutter = footprint.extrude(cut_depth)
@@ -246,6 +211,38 @@ def _find_perforated_body(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
         if body.is_watertight and body.euler_number < 2:
             return body
     raise ValueError("No part of the board mesh has holes cut into it.")
+
+
+HOLE_NAME_BY_CATEGORY = {
+    MontessoriShapeCategory.CUBE: "square_hole",
+    MontessoriShapeCategory.TRIANGULAR_PRISM: "triangle_hole",
+    MontessoriShapeCategory.RECTANGULAR_PRISM: "rectangular_hole",
+    MontessoriShapeCategory.DISK: "disk_hole",
+}
+"""
+What a hole of a given shape is called, for the shapes the board carries at most one
+hole of.
+
+The :attr:`~experiments.montessori.semantics.MontessoriShapeCategory.CYLINDER` category
+occurs twice and is numbered instead (``circular_hole_1``, ``circular_hole_2``).
+"""
+
+
+def hole_names(footprints: List[HoleFootprint]) -> List[str]:
+    """
+    What each of the board's holes is called, in the order they were detected.
+
+    :param footprints: The board's holes, as cut into its mesh.
+    """
+    circular_hole_count = 0
+    names = []
+    for footprint in footprints:
+        if footprint.category is MontessoriShapeCategory.CYLINDER:
+            circular_hole_count += 1
+            names.append(f"circular_hole_{circular_hole_count}")
+        else:
+            names.append(HOLE_NAME_BY_CATEGORY[footprint.category])
+    return names
 
 
 def detect_hole_footprints() -> List[HoleFootprint]:

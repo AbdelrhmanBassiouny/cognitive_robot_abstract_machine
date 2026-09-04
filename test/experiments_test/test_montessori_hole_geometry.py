@@ -2,12 +2,11 @@ import numpy as np
 import pytest
 
 from experiments.montessori.hole_geometry import (
-    PlanarPoint,
-    PlanarSize,
     PolygonMeasurement,
     cut_board_mesh,
     detect_hole_footprints,
 )
+from experiments.montessori.planar_geometry import PlanarPoint, PlanarSize
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.world_description.geometry import Scale
 

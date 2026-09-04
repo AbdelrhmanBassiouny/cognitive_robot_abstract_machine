@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from abc import ABC
+import itertools
+from abc import ABC, abstractmethod
 from copy import deepcopy
-from dataclasses import dataclass
-from typing import Optional, Any
+from dataclasses import dataclass, field
+from typing import Optional, Any, Union
 
 import numpy as np
 import trimesh.boolean
 from trimesh.collision import CollisionManager
-from typing_extensions import List, TYPE_CHECKING, Iterable, Type
+from typing_extensions import ClassVar, List, TYPE_CHECKING, Iterable, Tuple, Type
 
 from krrood.entity_query_language.predicate import (
     Predicate,
@@ -17,13 +18,17 @@ from krrood.entity_query_language.predicate import (
     SymbolicFunction,
     symbolic_callable_to_function,
     symbolic_function,
+    Relation,
     Triple,
 )
 from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
-from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
+from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Conjunctions,
+    Prepositions,
+)
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Adjective,
     clause,
@@ -47,7 +52,11 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
+from semantic_digital_twin.exceptions import RelationStatedAboutNothing
+from semantic_digital_twin.world_description.geometry import (
+    Color,
+    VolumetricBoundingBox,
+)
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     Region,
@@ -155,7 +164,7 @@ class InContactWith(Triple):
             Noun(fields["body1"]),
             Copula(),
             Prepositions.IN,
-            Noun("contact"),
+            Noun.bare("contact"),
             Prepositions.WITH,
             Noun(fields["body2"]),
         )
@@ -217,6 +226,21 @@ class VisibleTo(Triple):
     @property
     def object(self) -> Camera:
         return self.camera
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the thing is visible to the camera"*.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun(fields["obj"]),
+            Copula(),
+            Adjective("visible"),
+            Prepositions.TO,
+            Noun(fields["camera"]),
+        )
 
     def __call__(self) -> bool:
         return self.obj in get_visible_bodies(self.camera)
@@ -342,16 +366,16 @@ class Reachable(Predicate):
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
         """
-        Reads as *"the tip is reachable at the pose"*.
+        Reads as *"the pose is reachable by the tip"*.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["tip"]),
+            Noun(fields["pose"]),
             Copula(),
             Adjective("reachable"),
-            Prepositions.AT,
-            Noun(fields["pose"]),
+            Prepositions.BY,
+            Noun(fields["tip"]),
         )
 
 
@@ -434,6 +458,24 @@ class SupportedBy(Triple):
     def object(self) -> Body:
         return self.supporting
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the supported body is supported by the supporting body"*.
+
+        :attr:`maximum_intersection_height` is a tolerance of the reading rather than
+        part of the claim, so it is left unspoken.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun(fields["supported"]),
+            Copula(),
+            Adjective("supported"),
+            Prepositions.BY,
+            Noun(fields["supporting"]),
+        )
+
     def __call__(self) -> bool:
         if Below(
             self.supported.center_of_mass,
@@ -500,12 +542,16 @@ class Supports(Predicate):
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
         """
-        Reads as *"the body supports something"*.
+        Reads as *"the body is supporting a body"*, naming what is held up, which the
+        class name leaves implicit.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["supporting_body"]), Verb("support"), Noun("something")
+            Noun(fields["supporting_body"]),
+            Copula(),
+            Adjective("supporting"),
+            Noun("body"),
         )
 
 
@@ -517,9 +563,124 @@ The function spelling of
 :class:`Supports`.
 """
 
+# %% where a relation allows a thing to be
+
+Placed = Union[Point3, Pose, HomogeneousTransformationMatrix, KinematicStructureEntity]
+"""
+Anything the world can say the place of: a point, a pose, or something standing in it.
+"""
+
+AXES: Tuple[SpatialVariables, ...] = VolumetricBoundingBox.axes()
+"""
+The world's own axes, in the order a bounding box states its bounds along them.
+"""
+
+STRAIGHT_ALONG_AN_AXIS = 1e-9
+"""
+How far a direction may fall short of lying along one of the world's axes and still be
+read as lying along it.
+
+A direction is a unit vector, so a component within this of one leaves the other two
+within a rounding error of zero.
+"""
+
+
+def position_of(placed: Placed) -> Point3:
+    """
+    Where something stands.
+
+    :param placed: The point, pose, or thing standing in the world to read.
+    """
+    if isinstance(placed, Point3):
+        return placed
+    if isinstance(placed, (Pose, HomogeneousTransformationMatrix)):
+        return placed.to_position()
+    return placed.global_pose.to_position()
+
+
+def space_between(
+    lower: np.ndarray, upper: np.ndarray, reference_frame: KinematicStructureEntity
+) -> VolumetricBoundingBox:
+    """
+    The stretch of the world between two corners, either of which may be infinite.
+
+    :param lower: The lower corner, as ``(x, y, z)`` in metres.
+    :param upper: The upper corner, as ``(x, y, z)`` in metres.
+    :param reference_frame: The frame those corners are measured in.
+    """
+    return VolumetricBoundingBox.from_array_bounds(
+        lower,
+        upper,
+        HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=reference_frame),
+    )
+
 
 @dataclass(eq=False)
-class InsideRegion(Triple):
+class PlacementRelation(Relation, ABC):
+    """
+    A relation that says where the thing it is asserted about may be.
+
+    Answering that stretch of the world is what lets a search act on the relation before
+    anything has been found: a look reads less picture rather than filtering what it
+    read. So a placement relation is read two ways. Stated about something it answers
+    whether that thing is where it says; stated about nothing it is the constraint alone
+    -- which is why every one of them declares the thing it is about optional, and
+    raises rather than guessing when asked whether it holds without one.
+    """
+
+    @property
+    @abstractmethod
+    def allowed_space(self) -> VolumetricBoundingBox:
+        """
+        The stretch of the world this relation leaves the thing it is about, unbounded
+        along every axis it does not constrain.
+
+        Read from the relation's other operands alone, never from that thing, and never
+        smaller than what the relation allows: a search may read more than it strictly
+        has to, and :meth:`allows` is what settles the rest.
+        """
+
+    def allows(self, place: Point3) -> bool:
+        """
+        Whether something standing at a place satisfies this relation.
+
+        :param place: Where the thing stands.
+        """
+        return self.allowed_space.contains(place)
+
+    def allowed_part_of(
+        self, space: VolumetricBoundingBox
+    ) -> Optional[VolumetricBoundingBox]:
+        """
+        The smallest box holding the part of a stretch of the world this relation
+        allows.
+
+        Asked about a stretch that is already bounded rather than about the world, a
+        relation can answer more tightly than :attr:`allowed_space` can: a direction
+        read from where a camera stands runs across the world's own axes, so no axis-
+        aligned box holds everything it allows, while the part of a bounded stretch that
+        lies on that side of a thing is itself bounded.
+
+        :param space: The stretch being narrowed.
+        :return: The part of it this relation allows, or None where it allows none of
+            it.
+        """
+        return space.intersection_with(self.allowed_space)
+
+    def _stated(self, operand: Optional[Any], name: str) -> Any:
+        """
+        :param operand: What the statement holds that operand to be.
+        :param name: What the relation calls it.
+        :raises RelationStatedAboutNothing: If the statement holds it to be nothing.
+        :return: The operand.
+        """
+        if operand is None:
+            raise RelationStatedAboutNothing(type(self).__name__, name)
+        return operand
+
+
+@dataclass(eq=False)
+class InsideRegion(Triple, PlacementRelation):
     """
     Whether a body lies in a region, by what fraction of its collision volume falls
     inside the region's area.
@@ -529,12 +690,13 @@ class InsideRegion(Triple):
     :attr:`minimum_contained_fraction` is where the judgement is stated.
     """
 
-    body: Body
+    body: Optional[Body] = None
     """
-    The body that may be in the region.
+    The body that may be in the region, or None where the relation is stated about
+    nothing and is read as the region alone.
     """
 
-    region: Region
+    region: Optional[Region] = None
     """
     The region it may be in.
     """
@@ -555,13 +717,24 @@ class InsideRegion(Triple):
     def __call__(self) -> bool:
         return self.compute_contained_fraction() >= self.minimum_contained_fraction
 
+    @property
+    def allowed_space(self) -> VolumetricBoundingBox:
+        """
+        The extent of the region itself, which is where a thing has to stand to be in
+        it.
+        """
+        region = self._stated(self.region, "region")
+        return region.area.as_bounding_box_collection_in_frame(
+            region.global_transform.reference_frame
+        ).bounding_box()
+
     def compute_contained_fraction(self) -> float:
         """
         :return: The fraction (0.0..1.0) of the body's volume lying in the region.
         """
         # Retrieve meshes in local frames
-        local_body_mesh = self.body.collision.combined_mesh
-        local_region_mesh = self.region.area.combined_mesh
+        local_body_mesh = self._stated(self.body, "body").collision.combined_mesh
+        local_region_mesh = self._stated(self.region, "region").area.combined_mesh
 
         # Transform copies of the meshes into the world frame
         body_mesh = local_body_mesh.copy().apply_transform(
@@ -623,36 +796,59 @@ class KinematicStructureEntitySpatialRelation(Predicate, ABC):
 
 
 @dataclass(eq=False)
-class PointSpatialRelation(Predicate, ABC):
+class PointSpatialRelation(Triple, PlacementRelation, ABC):
     """
-    Check if the point is spatially related to the other point.
+    A relation between the places of two things.
+
+    Either side may be given as a point outright or as something the world places, since
+    what the relation reads of each is only where it stands.
     """
 
-    point: Point3
+    point: Optional[Placed] = None
     """
-    The point for which the check should be done.
+    The thing the relation is asserted about, or None where it is asserted about nothing
+    and read as the stretch of the world it allows.
     """
 
-    other: Point3
+    other: Optional[Placed] = None
     """
-    The other point.
+    The thing it is placed with respect to.
     """
+
+    @property
+    def subject(self) -> Optional[Placed]:
+        return self.point
+
+    @property
+    def object(self) -> Optional[Placed]:
+        return self.other
 
 
 @dataclass(eq=False)
 class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
     """
-    A spatial relation between two points, read from somewhere in particular.
+    A spatial relation between two places, read from somewhere in particular.
 
     Which way is left, above or in front depends on where it is being seen from, so the
-    relation carries that spot as an operand of its own.
+    relation carries that spot as an operand of its own. Each direction is one axis of
+    that spot and one side of it, which is all that tells the six of them apart.
+    """
+
+    axis: ClassVar[SpatialVariables]
+    """
+    The axis of the point of view this direction runs along.
+    """
+
+    positive_side: ClassVar[bool]
+    """
+    Whether the thing has to lie on the positive side of that axis, or the negative one.
     """
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
         """
-        Reads as *"the point is left of the other point, seen from the point of view"*,
-        with the direction taken from the relation's own name.
+        Reads as *"the point is left of the other point, as seen from the point of
+        view"*, with the direction taken from the relation's own name.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
@@ -662,11 +858,13 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
             Copula(),
             Adjective(direction),
             Noun(fields["other"]),
+            Prepositions.AS,
+            Adjective("seen"),
             Prepositions.FROM,
             Noun(fields["point_of_view"]),
         )
 
-    point_of_view: HomogeneousTransformationMatrix
+    point_of_view: Optional[HomogeneousTransformationMatrix] = None
     """
     The reference spot from where to look at the bodies.
     """
@@ -676,103 +874,421 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
     """
     spatial_relation_result: bool = False
 
-    def _signed_distance_along_direction(self, index: int) -> float:
-        """
-        Calculate the spatial relation between self.point and self.other with respect to
-        a given reference point (self.point_of_semantic_annotation) and a specified axis
-        index. This function computes the signed distance along a specified direction
-        derived from the reference point to compare the positions.
+    def __call__(self) -> bool:
+        self.spatial_relation_result = self.allows(
+            position_of(self._stated(self.point, "point"))
+        )
+        return self.spatial_relation_result
 
-        :param index: The index of the axis in the transformation matrix along which the
-            spatial relation is computed.
-        :return: The signed distance between the first and the second points along the
-            given direction.
+    def allows(self, place: Point3) -> bool:
         """
-        ref_np = self.point_of_view.to_np()
-        front_world = ref_np[:3, index]
-        front_norm = front_world / (np.linalg.norm(front_world) + self.eps)
-        front_norm = Vector3(
-            x=front_norm[0],
-            y=front_norm[1],
-            z=front_norm[2],
-            reference_frame=self.point_of_view.reference_frame,
+        Whether something standing at a place lies this way from the other one.
+
+        Answered exactly, from the signed distance along the direction itself, rather
+        than from :attr:`allowed_space`, which is only as tight as an axis-aligned box
+        can be about a direction that runs across the world's own axes.
+
+        :param place: Where the thing stands.
+        """
+        return self._distance_towards(place) > 0.0
+
+    @property
+    def allowed_space(self) -> VolumetricBoundingBox:
+        """
+        Everything on this side of the other thing.
+
+        Bounded on the one axis the direction runs along, and unbounded everywhere else
+        -- including on every axis, where the direction runs across the world's own,
+        since no box then holds exactly what the relation allows.
+        """
+        direction = self._direction()
+        other = position_of(self._stated(self.other, "other"))
+        place = other.to_np()[:3]
+        lower, upper = np.full(3, -np.inf), np.full(3, np.inf)
+        for index, component in enumerate(direction):
+            if abs(abs(component) - 1.0) > STRAIGHT_ALONG_AN_AXIS:
+                continue
+            if component > 0.0:
+                lower[index] = place[index]
+            else:
+                upper[index] = place[index]
+        return space_between(lower, upper, other.reference_frame)
+
+    def allowed_part_of(
+        self, space: VolumetricBoundingBox
+    ) -> Optional[VolumetricBoundingBox]:
+        """
+        The part of a stretch of the world that lies on this side of the other thing.
+
+        A direction read from anywhere but straight along the world's own axes leaves a
+        half space, which :attr:`allowed_space` can only answer as everything. Cut
+        against a stretch that is already bounded it is bounded too, and its corners are
+        the corners of that stretch on this side of the dividing plane together with
+        wherever that plane crosses its edges.
+
+        :param space: The stretch being narrowed.
+        :return: The part of it on this side, or None where none of it is.
+        """
+        corners = self._corners_of(space)
+        if not np.isfinite(corners).all():
+            return super().allowed_part_of(space)
+        other = position_of(self._stated(self.other, "other")).to_np()[:3]
+        beyond = (corners - other) @ self._direction()
+        allowed = [*corners[beyond > 0.0], *self._crossings(corners, beyond)]
+        if not allowed:
+            return None
+        return space_between(
+            np.min(allowed, axis=0),
+            np.max(allowed, axis=0),
+            space.origin.reference_frame,
         )
 
-        s_body = front_norm.dot(self.point.to_vector3())
-        s_other = front_norm.dot(self.other.to_vector3())
-        return (s_body - s_other).compile()()
+    @staticmethod
+    def _corners_of(space: VolumetricBoundingBox) -> np.ndarray:
+        """
+        :param space: The stretch to read.
+        :return: Its eight corners, as ``(8, 3)`` world coordinates in metres, ordered
+            so that two differing along one axis alone are an edge of it.
+        """
+        intervals = (space.x_interval, space.y_interval, space.z_interval)
+        return np.array(
+            list(
+                itertools.product(
+                    *((interval.lower, interval.upper) for interval in intervals)
+                )
+            )
+        )
+
+    @staticmethod
+    def _crossings(corners: np.ndarray, beyond: np.ndarray) -> List[np.ndarray]:
+        """
+        Where the plane dividing the two sides crosses the edges of a stretch.
+
+        :param corners: The stretch's corners, as :meth:`_corners_of` orders them.
+        :param beyond: How far along the direction each corner lies from the plane.
+        :return: One point per edge the plane crosses.
+        """
+        crossings = []
+        for one, other in itertools.combinations(range(len(corners)), 2):
+            if bin(one ^ other).count("1") != 1 or beyond[one] * beyond[other] >= 0.0:
+                continue
+            reached = beyond[one] / (beyond[one] - beyond[other])
+            crossings.append(corners[one] + reached * (corners[other] - corners[one]))
+        return crossings
+
+    def _direction(self) -> np.ndarray:
+        """
+        :return: The way, in world coordinates, the thing has to lie from the other one,
+            as a unit vector.
+        """
+        point_of_view = self._stated(self.point_of_view, "point_of_view")
+        axis = point_of_view.to_np()[:3, AXES.index(self.axis)]
+        towards = 1.0 if self.positive_side else -1.0
+        return towards * axis / (np.linalg.norm(axis) + self.eps)
+
+    def _distance_towards(self, place: Point3) -> float:
+        """
+        :param place: Where the thing stands.
+        :return: How far along the direction that place lies from the other thing, in
+            metres, negative where it lies against it.
+        """
+        other = position_of(self._stated(self.other, "other")).to_np()[:3]
+        return float(np.dot(self._direction(), place.to_np()[:3] - other))
 
 
 @dataclass(eq=False)
 class LeftOf(ViewDependentSpatialRelation):
     """
-    The "left" direction is taken as the -Y axis of the given point of
-    semantic_annotation.
+    The "left" direction is taken as the +Y axis of the point of view.
     """
 
-    def __call__(self) -> bool:
-        self.spatial_relation_result = self._signed_distance_along_direction(1) > 0.0
-        return self.spatial_relation_result
+    axis: ClassVar[SpatialVariables] = SpatialVariables.y
+    positive_side: ClassVar[bool] = True
 
 
 @dataclass(eq=False)
 class RightOf(ViewDependentSpatialRelation):
     """
-    The "right" direction is taken as the +Y axis of the given point of
-    semantic_annotation.
+    The "right" direction is taken as the -Y axis of the point of view.
     """
 
-    def __call__(self) -> bool:
-        self.spatial_relation_result = self._signed_distance_along_direction(1) < 0.0
-        return self.spatial_relation_result
+    axis: ClassVar[SpatialVariables] = SpatialVariables.y
+    positive_side: ClassVar[bool] = False
 
 
 @dataclass(eq=False)
 class Above(ViewDependentSpatialRelation):
     """
-    The "above" direction is taken as the +Z axis of the given point of
-    semantic_annotation.
+    The "above" direction is taken as the +Z axis of the point of view.
     """
 
-    def __call__(self) -> bool:
-        self.spatial_relation_result = self._signed_distance_along_direction(2) > 0.0
-        return self.spatial_relation_result
+    axis: ClassVar[SpatialVariables] = SpatialVariables.z
+    positive_side: ClassVar[bool] = True
 
 
 @dataclass(eq=False)
 class Below(ViewDependentSpatialRelation):
     """
-    The "below" direction is taken as the -Z axis of the given point of
-    semantic_annotation.
+    The "below" direction is taken as the -Z axis of the point of view.
     """
 
-    def __call__(self) -> bool:
-        self.spatial_relation_result = self._signed_distance_along_direction(2) < 0.0
-        return self.spatial_relation_result
+    axis: ClassVar[SpatialVariables] = SpatialVariables.z
+    positive_side: ClassVar[bool] = False
 
 
 @dataclass(eq=False)
 class Behind(ViewDependentSpatialRelation):
     """
-    The "behind" direction is defined as the -X axis of the given point of semantic
-    annotation.
+    The "behind" direction is taken as the -X axis of the point of view.
     """
 
-    def __call__(self) -> bool:
-        self.spatial_relation_result = self._signed_distance_along_direction(0) < 0.0
-        return self.spatial_relation_result
+    axis: ClassVar[SpatialVariables] = SpatialVariables.x
+    positive_side: ClassVar[bool] = False
 
 
 @dataclass(eq=False)
 class InFrontOf(ViewDependentSpatialRelation):
     """
-    The "in front of" direction is defined as the +X axis of the given point of semantic
-    annotation.
+    The "in front of" direction is taken as the +X axis of the point of view.
     """
 
+    axis: ClassVar[SpatialVariables] = SpatialVariables.x
+    positive_side: ClassVar[bool] = True
+
+
+@dataclass(eq=False)
+class Between(PlacementRelation):
+    """
+    Whether something lies between two others.
+
+    Between is the stretch from one to the other, and how far to either side of the line
+    joining them still counts is a judgement rather than a measurement, so
+    :attr:`maximum_sideways_fraction` is where that judgement is stated.
+    """
+
+    body: Optional[Placed] = None
+    """
+    The thing that may lie between the two, or None where the relation is asserted about
+    nothing and read as the stretch it allows.
+    """
+
+    one: Optional[Placed] = None
+    """
+    One of the two it may lie between.
+    """
+
+    other: Optional[Placed] = None
+    """
+    The other of the two.
+    """
+
+    maximum_sideways_fraction: float = 0.5
+    """
+    How far to either side of the line joining the two a thing may lie and still count
+    as between them, as a fraction of how far apart they are.
+
+    Half by default, so what counts as between two things is as wide across as they are
+    far apart. Stated as a fraction rather than a distance because how wide *between*
+    reads is set by the two things themselves: an arm's length apart it is a corridor, a
+    millimetre apart it is a point.
+    """
+
+    @property
+    def subject(self) -> Optional[Placed]:
+        return self.body
+
     def __call__(self) -> bool:
-        self.result = self._signed_distance_along_direction(0) > 0.0
-        return self.result
+        return self.allows(position_of(self._stated(self.body, "body")))
+
+    def allows(self, place: Point3) -> bool:
+        """
+        Whether something standing at a place lies between the two.
+
+        Answered exactly: the place has to fall between them along the line joining
+        them, and no further from that line than the fraction allows.
+
+        :param place: Where the thing stands.
+        """
+        one, other = self._places()
+        stands_at = place.to_np()[:3]
+        line = other - one
+        length = float(np.linalg.norm(line))
+        if length == 0.0:
+            return False
+        along = float(np.dot(stands_at - one, line)) / length**2
+        if not 0.0 <= along <= 1.0:
+            return False
+        sideways = float(np.linalg.norm(stands_at - (one + along * line)))
+        return sideways <= self.maximum_sideways_fraction * length
+
+    @property
+    def allowed_space(self) -> VolumetricBoundingBox:
+        """
+        The stretch from one to the other, widened to either side by as much as the
+        fraction allows a thing to stand off the line joining them.
+        """
+        one, other = self._places()
+        reach = self.maximum_sideways_fraction * float(np.linalg.norm(other - one))
+        return space_between(
+            np.minimum(one, other) - reach,
+            np.maximum(one, other) + reach,
+            position_of(self.one).reference_frame,
+        )
+
+    def _places(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        :return: Where the two things it may lie between stand, in metres.
+        """
+        return (
+            position_of(self._stated(self.one, "one")).to_np()[:3],
+            position_of(self._stated(self.other, "other")).to_np()[:3],
+        )
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the body is between the one and the other"*.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun(fields["body"]),
+            Copula(),
+            Prepositions.BETWEEN,
+            Noun(fields["one"]),
+            Conjunctions.AND,
+            Noun(fields["other"]),
+        )
+
+
+@dataclass(eq=False)
+class Near(Triple, PlacementRelation):
+    """
+    Whether something stands within a given distance of a place.
+
+    How near is near is the caller's to say rather than the relation's, so
+    :attr:`radius` has to be stated.
+    """
+
+    body: Optional[Placed] = None
+    """
+    The thing that may stand near the place, or None where the relation is asserted
+    about nothing and read as the stretch it allows.
+    """
+
+    place: Optional[Placed] = None
+    """
+    The place it may stand near, which may be given as a point, a pose, or something the
+    world places.
+    """
+
+    radius: float = field(kw_only=True)
+    """
+    How far from that place, in metres, a thing may stand and still be near it.
+    """
+
+    @property
+    def subject(self) -> Optional[Placed]:
+        return self.body
+
+    @property
+    def object(self) -> Optional[Placed]:
+        return self.place
+
+    def __call__(self) -> bool:
+        return self.allows(position_of(self._stated(self.body, "body")))
+
+    def allows(self, place: Point3) -> bool:
+        """
+        Whether something standing at a place is within the radius of this one.
+
+        Answered exactly, as the distance itself rather than as the box around it.
+
+        :param place: Where the thing stands.
+        """
+        return float(np.linalg.norm(place.to_np()[:3] - self._place())) <= self.radius
+
+    @property
+    def allowed_space(self) -> VolumetricBoundingBox:
+        """
+        The box the radius reaches into, which is the smallest one holding everything
+        within that distance of the place.
+        """
+        place = position_of(self._stated(self.place, "place"))
+        stands_at = place.to_np()[:3]
+        return space_between(
+            stands_at - self.radius, stands_at + self.radius, place.reference_frame
+        )
+
+    def _place(self) -> np.ndarray:
+        """
+        :return: Where the place it is measured from stands, in metres.
+        """
+        return position_of(self._stated(self.place, "place")).to_np()[:3]
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the body is within the radius of the place"*.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun(fields["body"]),
+            Copula(),
+            Prepositions.WITHIN,
+            Noun(fields["radius"]),
+            Prepositions.OF,
+            Noun(fields["place"]),
+        )
+
+
+@dataclass(eq=False)
+class Colored(Triple):
+    """
+    Whether a body is drawn in a colour.
+
+    What colour a thing is, is knowledge about the thing rather than about whatever
+    looks at it, so it is asked of the world the same way a spatial relation is.
+    """
+
+    body: Body
+    """
+    The body whose colour is asked about.
+    """
+
+    color: Color
+    """
+    The colour it may be.
+    """
+
+    @property
+    def subject(self) -> Body:
+        return self.body
+
+    @property
+    def object(self) -> Color:
+        return self.color
+
+    def __call__(self) -> bool:
+        return any(
+            shape.color == self.color
+            for shape in (*self.body.visual, *self.body.collision)
+        )
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the body is colored the color"*.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun(fields["body"]),
+            Copula(),
+            Adjective("colored"),
+            Noun(fields["color"]),
+        )
 
 
 @dataclass(eq=False)

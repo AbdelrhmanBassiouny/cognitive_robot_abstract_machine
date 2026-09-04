@@ -20,7 +20,7 @@ from krrood.entity_query_language.exceptions import (
     BackendCannotResolveCondition,
     GenerativeBackendQueryIsNotUnderspecifiedVariable,
 )
-from krrood.entity_query_language.factories import an, entity, variable
+from krrood.entity_query_language.factories import a, an, entity, variable
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
 from ..dataset.backend_that_looks_at_the_world import (
@@ -28,6 +28,7 @@ from ..dataset.backend_that_looks_at_the_world import (
     Place,
     Sighting,
     SightingOfSomethingHeldUp,
+    StandingBetween,
     StandingOn,
 )
 
@@ -123,9 +124,9 @@ def test_a_relation_asserted_about_the_thing_sought_is_read_off_the_condition():
 
     request = BackendThatLooksAtTheWorld.read_request(statement)
 
-    assert request.stated_relations == [
-        StatedRelation(relation_type=StandingOn, related_thing=LID)
-    ]
+    [stated] = request.stated_relations
+    assert stated.relation_type is StandingOn
+    assert stated.related_thing is LID
 
 
 def test_the_thing_a_relation_relates_the_sought_thing_to_is_read_back_by_its_class():
@@ -141,6 +142,36 @@ def test_a_statement_asserting_no_relation_relates_the_thing_sought_to_nothing()
 
     assert request.stated_relations == []
     assert request.related_by(StandingOn) is None
+
+
+def test_a_relation_of_more_than_two_operands_is_read_whole():
+    """
+    A look narrowed by a relation needs everything the statement holds it to relate the
+    thing sought to, not only the one thing a triple names second.
+    """
+    statement = an(Sighting)()
+    statement = statement.where(StandingBetween(statement.variable, TABLE, LID))
+
+    [stated] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
+
+    assert stated.relation_type is StandingBetween
+    assert stated.stated_operands == {"one": TABLE, "other": LID}
+
+
+def test_a_relation_read_off_a_statement_can_be_rebuilt_without_the_thing_sought():
+    """
+    What a relation allows is read from its other operands alone, so a search reads it
+    before anything has been found -- which is the form this builds.
+    """
+    statement = an(Sighting)()
+    statement = statement.where(StandingBetween(statement.variable, TABLE, LID))
+
+    [stated] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
+    constraint = stated.constraint()
+
+    assert isinstance(constraint, StandingBetween)
+    assert constraint.subject is None
+    assert (constraint.one, constraint.other) == (TABLE, LID)
 
 
 def test_a_relation_asserted_about_another_variable_is_not_read_as_the_sought_things():
@@ -244,13 +275,176 @@ def test_an_unstated_attribute_is_what_the_look_fills_in(
     assert results == [CUBE_ON_THE_LID]
 
 
+# %% saying which thing by describing it
+
+
+def looking_for_something_standing_on_the_place_called(name: str):
+    """
+    A statement asking a look for whatever stands on a place it describes rather than
+    hands over.
+
+    :param name: What the world calls the place.
+    """
+    place = variable(Place, [TABLE, LID])
+    statement = an(Sighting)()
+    return statement.where(place.name == name, StandingOn(statement.variable, place))
+
+
+def test_a_thing_the_statement_describes_narrows_the_look_as_one_handed_over_does(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    A statement can say what it wants by relating it to something it describes -- the
+    place the world calls the lid -- rather than by naming that thing outright.
+
+    Nothing
+    is looked for to answer the description: it is answered out of the domain the
+    statement gave it, before the look, so the relation stating it is a relation to
+    something concrete.
+    """
+    results = list(
+        looking_for_something_standing_on_the_place_called(LID.name).evaluate(
+            backend=backend
+        )
+    )
+
+    assert backend.searched_place == LID
+    assert results == [CUBE_ON_THE_LID]
+
+
+def test_a_description_no_single_thing_answers_is_refused_rather_than_guessed_at(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    Which place a look searches has to be settled before it is taken, so a description
+    two places answer is a condition this backend cannot resolve rather than one of them
+    picked.
+    """
+    place = variable(Place, [TABLE, LID])
+    statement = an(Sighting)()
+    statement = statement.where(
+        place.name != "nowhere", StandingOn(statement.variable, place)
+    )
+
+    with pytest.raises(BackendCannotResolveCondition) as raised:
+        list(statement.evaluate(backend=backend))
+
+    assert raised.value.backend_type is BackendThatLooksAtTheWorld
+
+
+def looking_for_something_standing_on_the_place_answering(name: str):
+    """
+    A statement asking a look for whatever stands on a place described by a statement of
+    its own, handed to the relation where that place would stand.
+
+    :param name: What the world calls the place.
+    """
+    place = a(Place)().from_([TABLE, LID])
+    place.where(place.variable.name == name)
+    statement = an(Sighting)()
+    return statement.where(StandingOn(statement.variable, place.expression))
+
+
+def test_a_thing_described_by_a_statement_of_its_own_narrows_the_look_too(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    A description can be written as a statement in its own right and handed to the
+    relation in the place of the thing it describes, which says what stating its
+    conditions beside that relation says.
+    """
+    results = list(
+        looking_for_something_standing_on_the_place_answering(LID.name).evaluate(
+            backend=backend
+        )
+    )
+
+    assert backend.searched_place == LID
+    assert results == [CUBE_ON_THE_LID]
+
+
+def test_a_statement_of_its_own_no_single_thing_answers_is_refused_too(
+    backend: BackendThatLooksAtTheWorld,
+):
+    """
+    Where the description is written makes no difference to what has to be settled
+    before a look is taken, so one two places answer is refused as the same description
+    stated beside the relation is.
+    """
+    place = a(Place)().from_([TABLE, LID])
+    place.where(place.variable.name != "nowhere")
+    statement = an(Sighting)()
+    statement = statement.where(StandingOn(statement.variable, place.expression))
+
+    with pytest.raises(BackendCannotResolveCondition) as raised:
+        list(statement.evaluate(backend=backend))
+
+    assert raised.value.backend_type is BackendThatLooksAtTheWorld
+
+
+# %% reading a statement as it grows
+
+
+def test_a_statement_is_read_from_saying_nothing_to_saying_all_it_says():
+    statement = an(Sighting)()
+    statement = statement.where(
+        StandingOn(statement.variable, LID),
+        statement.variable.label == CUBE_ON_THE_LID.label,
+    )
+
+    said = statement.one_condition_at_a_time()
+
+    assert [len(step._where_conditions_) for step in said] == [0, 1, 2]
+    assert all(step.variable is statement.variable for step in said)
+
+
+def test_a_description_is_carried_by_every_step_rather_than_being_one_of_them():
+    """
+    A description of another thing is what gives a condition about the thing sought its
+    meaning, so it stands in every step rather than counting as a step of its own.
+    """
+    statement = looking_for_something_standing_on_the_place_called(LID.name)
+
+    said = statement.one_condition_at_a_time()
+
+    assert len(said) == 2
+    assert [len(step._where_conditions_) for step in said] == [1, 2]
+
+
+def test_each_condition_of_a_statement_narrows_what_a_look_answers(
+    backend: BackendThatLooksAtTheWorld,
+):
+    statement = an(Sighting)()
+    statement = statement.where(
+        StandingOn(statement.variable, TABLE),
+        statement.variable.label == DISK_ON_THE_TABLE.label,
+    )
+
+    answers = [
+        list(step.evaluate(backend=backend))
+        for step in statement.one_condition_at_a_time()
+    ]
+
+    assert answers == [
+        backend.sightings,
+        [CUBE_ON_THE_TABLE, DISK_ON_THE_TABLE],
+        [DISK_ON_THE_TABLE],
+    ]
+
+
 # %% what it refuses
 
 
-def test_a_condition_about_another_variable_is_refused_rather_than_dropped(
+def test_a_condition_about_a_variable_the_world_cannot_answer_is_refused(
     backend: BackendThatLooksAtTheWorld,
 ):
-    other = variable(Sighting, [CUBE_ON_THE_LID])
+    """
+    A condition about something other than the thing sought is answerable only out of
+    that thing's own domain, since a look cannot go and fetch it.
+
+    One with nothing in it to answer is refused rather than dropped.
+    """
+    other = variable(Sighting, [])
     statement = an(Sighting)()
     statement = statement.where(other.label == CUBE_ON_THE_LID.label)
 

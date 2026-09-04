@@ -11,6 +11,7 @@ import pytest
 from numpy.testing import assert_raises
 from typing_extensions import Tuple, Type
 
+from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -2581,3 +2582,16 @@ def test_column_indices_of_degree_of_freedom_outside_the_state(world_setup):
 
     with pytest.raises(DofNotInWorldStateError):
         world.state.column_indices([DegreeOfFreedom(name=PrefixedName("new_dof"))])
+
+
+# %% the world as a reason to expect something somewhere
+
+
+def test_the_world_can_be_named_as_what_put_a_belief_somewhere(world_setup):
+    """
+    Where the world places a body is a reason to look for it there, so whoever records
+    that reason can keep the world itself rather than a label for it.
+    """
+    world, *_ = world_setup
+
+    assert isinstance(world, BeliefSource)
