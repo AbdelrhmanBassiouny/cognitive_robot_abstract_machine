@@ -2618,15 +2618,15 @@ class World(HasSimulatorProperties):
         self, count: int = 1
     ) -> List[WorldModelModificationBlock]:
         """
-        Undo the most recently completed modification blocks, restoring the world to the
-        state it was in before they were applied.
+        Revert the most recently completed modification blocks, restoring the world to
+        the state it was in before they were applied.
 
-        Undoing a block is itself recorded as a new modification block (see
-        :meth:`WorldModification.undo`), so the history retains a full account of what
+        Reverting a block is itself recorded as a new modification block (see
+        :meth:`WorldModification.revert`), so the history retains a full account of what
         happened, including the rollback.
 
         :param count: How many of the most recently completed modification blocks to
-            undo, starting with the most recent.
+            revert, starting with the most recent.
         :return: The modification blocks that were rolled back, most recent first.
         :raises InsufficientModificationHistoryError: If the history contains fewer than
             ``count`` completed modification blocks.
@@ -2641,7 +2641,7 @@ class World(HasSimulatorProperties):
         blocks_to_roll_back = list(reversed(model_modification_blocks[-count:]))
         for block in blocks_to_roll_back:
             with self.modify_world():
-                block.undo(self)
+                block.revert(self)
         return blocks_to_roll_back
 
     @cached_property

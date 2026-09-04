@@ -333,14 +333,14 @@ def test_design_09_failed_atomic_modification_is_not_recorded():
         )
 
 
-# %% undo and rollback
+# %% revert and rollback
 
 
 def _last_modification_block(world: World) -> WorldModelModificationBlock:
     return world.get_world_model_manager().model_modification_blocks[-1]
 
 
-def test_undo_add_kinematic_structure_entity():
+def test_revert_add_kinematic_structure_entity():
     world = World()
     body = Body(name=PrefixedName("body"))
     with world.modify_world():
@@ -350,12 +350,12 @@ def test_undo_add_kinematic_structure_entity():
     assert isinstance(modification, AddKinematicStructureEntityModification)
 
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
 
     assert not world.is_kinematic_structure_entity_in_world(body)
 
 
-def test_undo_remove_kinematic_structure_entity():
+def test_revert_remove_kinematic_structure_entity():
     world = World()
     body = Body(name=PrefixedName("body"))
     with world.modify_world():
@@ -367,15 +367,15 @@ def test_undo_remove_kinematic_structure_entity():
     assert isinstance(modification, RemoveKinematicStructureEntityModification)
 
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
 
     assert world.is_kinematic_structure_entity_in_world(body)
 
 
-def test_undo_add_connection():
+def test_revert_add_connection():
     # world.is_connection_in_world() is not used here: Connection.add_to_world()
     # never registers connections in the world's entity-hash table, so that check is
-    # always False regardless of undo. Membership in world.connections is the
+    # always False regardless of revert. Membership in world.connections is the
     # meaningful check, matching how the rest of this file verifies connections.
     world = World()
     with world.modify_world():
@@ -393,8 +393,8 @@ def test_undo_add_connection():
     )
 
     with world.modify_world():
-        modification.undo(world)
-        # undoing the connection alone leaves b2 disconnected from the world's single
+        modification.revert(world)
+        # reverting the connection alone leaves b2 disconnected from the world's single
         # root, which a modify_world block may not exit with; remove it too.
         world.remove_kinematic_structure_entity(b2)
 
@@ -402,7 +402,7 @@ def test_undo_add_connection():
     assert not world.is_kinematic_structure_entity_in_world(b2)
 
 
-def test_undo_remove_connection():
+def test_revert_remove_connection():
     world = World()
     with world.modify_world():
         b1 = Body(name=PrefixedName("b1"))
@@ -424,16 +424,16 @@ def test_undo_remove_connection():
     )
 
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
 
     assert connection in world.connections
     assert world.is_kinematic_structure_entity_in_world(b2)
 
 
-def test_undo_add_degree_of_freedom():
+def test_revert_add_degree_of_freedom():
     # A degree of freedom not used by any connection is deleted automatically as an
     # orphan when the modify_world block that adds it closes (World.delete_orphaned_dofs),
-    # so it has to be attached to a connection to observe undo() removing it deliberately.
+    # so it has to be attached to a connection to observe revert() removing it deliberately.
     world = World()
     with world.modify_world():
         b1 = Body(name=PrefixedName("b1"))
@@ -458,12 +458,12 @@ def test_undo_add_degree_of_freedom():
         # compilation fails with a dangling reference to the removed dof.
         world.remove_connection(connection)
         world.remove_kinematic_structure_entity(b2)
-        modification.undo(world)
+        modification.revert(world)
 
     assert not world.is_degree_of_freedom_in_world(dof)
 
 
-def test_undo_remove_degree_of_freedom():
+def test_revert_remove_degree_of_freedom():
     world = World()
     with world.modify_world():
         b1 = Body(name=PrefixedName("b1"))
@@ -490,7 +490,7 @@ def test_undo_remove_degree_of_freedom():
     )
 
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
         # re-attach the dof so the block does not exit with it orphaned again.
         world.add_kinematic_structure_entity(b2)
         world.add_connection(connection)
@@ -498,7 +498,7 @@ def test_undo_remove_degree_of_freedom():
     assert world.is_degree_of_freedom_in_world(dof)
 
 
-def test_undo_add_semantic_annotation():
+def test_revert_add_semantic_annotation():
     world = World()
     with world.modify_world():
         body = Body(name=PrefixedName("body"))
@@ -512,12 +512,12 @@ def test_undo_add_semantic_annotation():
     assert handle.id in {a.id for a in world.semantic_annotations}
 
     with world.modify_world():
-        add_handle.undo(world)
+        add_handle.revert(world)
 
     assert handle.id not in {a.id for a in world.semantic_annotations}
 
 
-def test_undo_remove_semantic_annotation():
+def test_revert_remove_semantic_annotation():
     world = World()
     with world.modify_world():
         body = Body(name=PrefixedName("body"))
@@ -533,12 +533,12 @@ def test_undo_remove_semantic_annotation():
     assert handle.id not in {a.id for a in world.semantic_annotations}
 
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
 
     assert handle.id in {a.id for a in world.semantic_annotations}
 
 
-def test_undo_add_actuator():
+def test_revert_add_actuator():
     world = World()
     actuator = Actuator(name=PrefixedName("actuator"))
     with world.modify_world():
@@ -546,12 +546,12 @@ def test_undo_add_actuator():
 
     modification = _last_modification_block(world)[0]
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
 
     assert actuator not in world.actuators
 
 
-def test_undo_remove_actuator():
+def test_revert_remove_actuator():
     world = World()
     actuator = Actuator(name=PrefixedName("actuator"))
     with world.modify_world():
@@ -563,12 +563,12 @@ def test_undo_remove_actuator():
     assert isinstance(modification, RemoveActuatorModification)
 
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
 
     assert actuator in world.actuators
 
 
-def test_undo_set_dofs_has_hardware_interface_restores_per_dof_previous_value():
+def test_revert_set_dofs_has_hardware_interface_restores_per_dof_previous_value():
     # dof1 and dof2 are each attached to a connection so neither is deleted as an
     # orphan when the modify_world block that adds it closes.
     world = World()
@@ -606,13 +606,13 @@ def test_undo_set_dofs_has_hardware_interface_restores_per_dof_previous_value():
     assert isinstance(modification, SetDofHasHardwareInterface)
 
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
 
     assert dof1.has_hardware_interface is True
     assert dof2.has_hardware_interface is False
 
 
-def test_undo_attribute_update_scalar():
+def test_revert_attribute_update_scalar():
     world = World()
     body = Body(name=PrefixedName("body"))
     with world.modify_world():
@@ -628,12 +628,12 @@ def test_undo_attribute_update_scalar():
     assert isinstance(modification, AttributeUpdateModification)
 
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
 
     assert body.name == original_name
 
 
-def test_undo_attribute_update_list():
+def test_revert_attribute_update_list():
     world = World()
     with world.modify_world():
         oven_body = Body(name=PrefixedName("oven_body"))
@@ -661,12 +661,12 @@ def test_undo_attribute_update_list():
     assert door in oven.doors
 
     with world.modify_world():
-        modification.undo(world)
+        modification.revert(world)
 
     assert door not in oven.doors
 
 
-def test_world_model_modification_block_undo_restores_removed_branch():
+def test_world_model_modification_block_revert_restores_removed_branch():
     world = World()
     with world.modify_world():
         root = Body(name=PrefixedName("root"))
@@ -682,13 +682,13 @@ def test_world_model_modification_block_undo_restores_removed_branch():
 
     block = _last_modification_block(world)
     with world.modify_world():
-        block.undo(world)
+        block.revert(world)
 
     assert world.is_kinematic_structure_entity_in_world(child)
     assert connection in world.connections
 
 
-def test_world_rollback_modification_blocks_undoes_most_recent_block():
+def test_world_rollback_modification_blocks_reverts_most_recent_block():
     # b2 is connected to b1 so the world stays a single connected tree at the end of
     # each modify_world block, as required.
     world = World()
@@ -713,7 +713,7 @@ def test_world_rollback_modification_blocks_undoes_most_recent_block():
     assert add_body_modification.kinematic_structure_entity is b2
 
 
-def test_world_rollback_modification_blocks_undoes_several_blocks_in_order():
+def test_world_rollback_modification_blocks_reverts_several_blocks_in_order():
     world = World()
     with world.modify_world():
         b1 = Body(name=PrefixedName("b1"))

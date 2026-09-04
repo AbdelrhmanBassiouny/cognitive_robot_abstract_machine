@@ -63,12 +63,12 @@ class WorldModification(ABC):
         """
 
     @abstractmethod
-    def undo(self, world: World):
+    def revert(self, world: World):
         """
         Apply the inverse of this change to the given world, restoring it to the state
         it was in before this modification was applied.
 
-        Like :meth:`apply`, undoing a modification is itself recorded in the world's
+        Like :meth:`apply`, reverting a modification is itself recorded in the world's
         modification history, so the history retains a full account of what happened.
 
         :param world: The world to modify.
@@ -150,7 +150,7 @@ class AddKinematicStructureEntityModification(
             )
         world.add_kinematic_structure_entity(self.kinematic_structure_entity)
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         world.remove_kinematic_structure_entity(self.kinematic_structure_entity)
 
     def update_reference_for_world(self, world: World) -> Self:
@@ -172,7 +172,7 @@ class RemoveKinematicStructureEntityModification(WorldModification):
         default=None, repr=False
     )
     """
-    The body that was removed, kept so this modification can be undone.
+    The body that was removed, kept so this modification can be reverted.
     """
 
     @classmethod
@@ -185,7 +185,7 @@ class RemoveKinematicStructureEntityModification(WorldModification):
             world.get_kinematic_structure_entity_by_id(self.kinematic_structure_id)
         )
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         world.add_kinematic_structure_entity(self.kinematic_structure_entity)
 
 
@@ -223,7 +223,7 @@ class AddConnectionModification(WorldModificationWithWorldEntityReference):
             )
         world.add_connection(self.connection.copy_for_world(world))
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         world.remove_connection(self.connection)
 
     def update_reference_for_world(self, world: World) -> Self:
@@ -248,7 +248,7 @@ class RemoveConnectionModification(WorldModification):
 
     connection: Optional[Connection] = field(default=None, repr=False)
     """
-    The connection that was removed, kept so this modification can be undone.
+    The connection that was removed, kept so this modification can be reverted.
     """
 
     @classmethod
@@ -261,7 +261,7 @@ class RemoveConnectionModification(WorldModification):
         child = world.get_kinematic_structure_entity_by_id(self.child_id)
         world.remove_connection(world.get_connection(parent, child))
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         world.add_connection(self.connection)
 
 
@@ -294,7 +294,7 @@ class AddDegreeOfFreedomModification(WorldModificationWithWorldEntityReference):
             )
         world.add_degree_of_freedom(self.degree_of_freedom)
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         world.remove_degree_of_freedom(self.degree_of_freedom)
 
     def update_reference_for_world(self, world: World) -> Self:
@@ -304,22 +304,24 @@ class AddDegreeOfFreedomModification(WorldModificationWithWorldEntityReference):
 @dataclass
 class RemoveDegreeOfFreedomModification(WorldModification):
 
-    dof_id: UUID
+    degree_of_freedom_id: UUID
 
     degree_of_freedom: Optional[DegreeOfFreedom] = field(default=None, repr=False)
     """
-    The degree of freedom that was removed, kept so this modification can be undone.
+    The degree of freedom that was removed, kept so this modification can be reverted.
     """
 
     @classmethod
     def from_kwargs(cls, kwargs: Dict[str, Any]):
         dof = kwargs["dof"]
-        return cls(dof_id=dof.id, degree_of_freedom=dof)
+        return cls(degree_of_freedom_id=dof.id, degree_of_freedom=dof)
 
     def apply(self, world: World):
-        world.remove_degree_of_freedom(world.get_degree_of_freedom_by_id(self.dof_id))
+        world.remove_degree_of_freedom(
+            world.get_degree_of_freedom_by_id(self.degree_of_freedom_id)
+        )
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         world.add_degree_of_freedom(self.degree_of_freedom)
 
 
@@ -330,7 +332,7 @@ class AddSemanticAnnotationModification(WorldModification, SubclassJSONSerialize
     semantic_annotation_id: Optional[UUID] = field(default=None)
     """
     The ID of the semantic annotation that was added, kept so this modification can be
-    undone.
+    reverted.
     """
 
     @classmethod
@@ -355,7 +357,7 @@ class AddSemanticAnnotationModification(WorldModification, SubclassJSONSerialize
             from_json(self.semantic_annotation_json, **kwargs)
         )
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         world.remove_semantic_annotation(
             world.get_semantic_annotation_by_id(self.semantic_annotation_id)
         )
@@ -382,7 +384,7 @@ class RemoveSemanticAnnotationModification(WorldModification, SubclassJSONSerial
 
     semantic_annotation_json: Optional[JSONData] = field(default=None)
     """
-    The semantic annotation that was removed, kept so this modification can be undone.
+    The semantic annotation that was removed, kept so this modification can be reverted.
     """
 
     @classmethod
@@ -398,7 +400,7 @@ class RemoveSemanticAnnotationModification(WorldModification, SubclassJSONSerial
             world.get_semantic_annotation_by_id(self.semantic_annotation_id)
         )
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         tracker = WorldEntityWithIDKwargsTracker.from_world(world)
         kwargs = tracker.create_kwargs()
         world.add_semantic_annotation(
@@ -443,7 +445,7 @@ class AddActuatorModification(WorldModificationWithWorldEntityReference):
 
         world.add_actuator(self.actuator)
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         world.remove_actuator(self.actuator)
 
     def update_reference_for_world(self, world: World) -> Self:
@@ -456,7 +458,7 @@ class RemoveActuatorModification(WorldModification):
 
     actuator: Optional[Actuator] = field(default=None, repr=False)
     """
-    The actuator that was removed, kept so this modification can be undone.
+    The actuator that was removed, kept so this modification can be reverted.
     """
 
     @classmethod
@@ -467,7 +469,7 @@ class RemoveActuatorModification(WorldModification):
     def apply(self, world: World):
         world.remove_actuator(world.get_actuator_by_id(self.actuator_id))
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         world.add_actuator(self.actuator)
 
 
@@ -487,15 +489,15 @@ class WorldModelModificationBlock:
         for modification in self.modifications:
             modification.apply(world)
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         """
-        Undo all modifications in this block, most recently applied first, restoring the
-        world to the state it was in before this block was applied.
+        Revert all modifications in this block, most recently applied first, restoring
+        the world to the state it was in before this block was applied.
 
         :param world: The world to modify.
         """
         for modification in reversed(self.modifications):
-            modification.undo(world)
+            modification.revert(world)
 
     def update_references_for_world_and_apply(self, world: World):
         """
@@ -563,7 +565,7 @@ class SetDofHasHardwareInterface(WorldModification):
     )
     """
     The ``has_hardware_interface`` value of every affected degree of freedom before this
-    modification was applied, kept so this modification can be undone.
+    modification was applied, kept so this modification can be reverted.
     """
 
     def apply(self, world: World):
@@ -572,7 +574,7 @@ class SetDofHasHardwareInterface(WorldModification):
                 self.value
             )
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         dofs_by_previous_value: Dict[bool, List[DegreeOfFreedom]] = {}
         for previous_value in self.previous_values:
             dof = world.get_degree_of_freedom_by_id(previous_value.degree_of_freedom_id)
@@ -657,7 +659,7 @@ class AttributeUpdateModification(WorldModification, SubclassJSONSerializer):
                 setattr(entity, diff.attribute_name, obj)
         world._model_manager.current_model_modification_block.append(self)
 
-    def undo(self, world: World):
+    def revert(self, world: World):
         tracker = WorldEntityWithIDKwargsTracker.from_world(world)
         kwargs = tracker.create_kwargs()
         entity = world.get_world_entity_with_id_by_id(self.entity_id)
