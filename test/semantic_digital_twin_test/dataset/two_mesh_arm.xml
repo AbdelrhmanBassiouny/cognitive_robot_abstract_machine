@@ -1,0 +1,7 @@
+<mujoco model="two_mesh_arm">
+  <compiler meshdir="assets"/>
+  <asset>
+    <mesh file="link0.obj"/>
+    <mesh file="link1.obj"/>
+  </asset>
+</mujoco>
