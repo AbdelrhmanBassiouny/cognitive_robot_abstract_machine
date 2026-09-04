@@ -2,8 +2,15 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing_extensions import Type, Dict
 
-from krrood.parametrization.parameterizer import UnderspecifiedParameters
+from krrood.parametrization.exceptions import RelationalCircuitRegistryRequiresMatch
+from krrood.parametrization.parameterizer import (
+    ModelQueryParameters,
+    UnderspecifiedParameters,
+)
 from krrood.utils import get_class_and_attribute_name
+from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
+    CausalCircuit,
+)
 from probabilistic_model.probabilistic_circuit.relational.rspn import (
     RelationalProbabilisticCircuit,
 )
@@ -15,11 +22,11 @@ from probabilistic_model.probabilistic_model import ProbabilisticModel
 class ModelRegistry(ABC):
     """
     A registry that selects probabilistic models for given underspecified parameters of
-    match-queries.
+    match-queries (or other probabilistic queries).
     """
 
     @abstractmethod
-    def get_model(self, parameters: UnderspecifiedParameters) -> ProbabilisticModel:
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
         """
         :param parameters: The parameters to get a model for.
         :return: A probabilistic model that can be used to generate answers for the given expression.
@@ -32,7 +39,7 @@ class FullyFactorizedRegistry(ModelRegistry):
     A registry that always returns a fully factorized model.
     """
 
-    def get_model(self, parameters: UnderspecifiedParameters) -> ProbabilisticModel:
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
         return fully_factorized(parameters.variables.values())
 
 
@@ -47,8 +54,8 @@ class DictRegistry(ModelRegistry):
     A dictionary that maps classes to probabilistic models.
     """
 
-    def get_model(self, parameters: UnderspecifiedParameters) -> ProbabilisticModel:
-        return self.models[parameters.statement._expression.selected_variable._type_]
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
+        return self.models[parameters.queried_class]
 
 
 @dataclass
@@ -57,6 +64,13 @@ class RelationalCircuitRegistry(ModelRegistry):
     A registry that grounds a RelationalProbabilisticCircuit for the queried statement
     and aligns its variable names to the UnderspecifiedParameters convention before
     returning.
+
+    Only supports :class:`~krrood.parametrization.parameterizer.UnderspecifiedParameters`
+    (i.e. a ``Match``, directly or wrapped by ``distribution_of(...)``): grounding needs
+    the full match statement, which ``average``'s/``probability_of``'s lighter
+    parameter classes don't carry -- resolving one of those raises
+    :class:`~krrood.parametrization.exceptions.RelationalCircuitRegistryRequiresMatch`
+    rather than failing on a missing attribute.
     """
 
     relational_probabilistic_circuit: RelationalProbabilisticCircuit
@@ -64,7 +78,9 @@ class RelationalCircuitRegistry(ModelRegistry):
     The trained relational probabilistic circuit to ground.
     """
 
-    def get_model(self, parameters: UnderspecifiedParameters) -> ProbabilisticModel:
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
+        if not isinstance(parameters, UnderspecifiedParameters):
+            raise RelationalCircuitRegistryRequiresMatch(parameters)
         grounded = self.relational_probabilistic_circuit.ground(parameters.statement)
         class_prefix = self.relational_probabilistic_circuit.class_.__name__
         rename_map = {}
@@ -76,3 +92,23 @@ class RelationalCircuitRegistry(ModelRegistry):
                 rename_map[circuit_var] = parameters.variables[qualified_name]
         grounded.update_variables(rename_map)
         return grounded
+
+
+@dataclass
+class CausalCircuitRegistry(ModelRegistry):
+    """
+    A registry that maps target classes directly to pre-built causal circuits, so a
+    ``cause``/``causes_effect()`` query can be routed through that circuit's
+    ``backdoor_adjustment`` method.
+
+    See
+    :class:`~probabilistic_model.probabilistic_circuit.causal.causal_circuit.CausalCircuit`.
+    """
+
+    circuits: Dict[Type, CausalCircuit]
+    """
+    A dictionary that maps classes to pre-built causal circuits.
+    """
+
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
+        return self.circuits[parameters.queried_class]

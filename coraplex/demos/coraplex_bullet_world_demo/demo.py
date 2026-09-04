@@ -10,15 +10,17 @@ from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction, MoveTorsoAction
 
 from coraplex.testing import setup_world
+from krrood.entity_query_language.factories import an, entity, variable, the
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.reasoning.world_reasoner import WorldReasoner
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Bowl,
-    Spoon,
     Drawer,
     Handle,
+    Milk,
+    Spoon,
 )
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -65,7 +67,7 @@ try:
     )
 
     node = rclpy.create_node("viz_marker")
-    v = VizMarkerPublisher(_world=world, node=node).with_tf_publisher()
+    v = VizMarkerPublisher(_world=world, node=node)
 except ImportError:
     node = None
 
@@ -95,17 +97,17 @@ plan = sequential(
         ParkArmsAction(Arms.BOTH),
         MoveTorsoAction(TorsoState.HIGH),
         TransportAction(
-            world.get_body_by_name("milk.stl"),
+            next(an(entity(variable(Milk, domain=world.semantic_annotations))).evaluate()),
             Pose.from_xyz_rpy(4.9, 3.3, 0.8, yaw=1.57, reference_frame=world.root),
             Arms.LEFT,
         ),
         TransportAction(
-            world.get_body_by_name("bowl.stl"),
+            next(an(entity(variable(Bowl, domain=world.semantic_annotations))).evaluate()),
             Pose.from_xyz_rpy(5, 3.3, 0.75, yaw=1.57, reference_frame=world.root),
             Arms.LEFT,
         ),
         TransportAction(
-            world.get_body_by_name("spoon.stl"),
+            next(an(entity(variable(Spoon, domain=world.semantic_annotations))).evaluate()),
             Pose.from_xyz_rpy(5.1, 3.3, 0.75, yaw=1.57, reference_frame=world.root),
             Arms.LEFT,
             GraspDescription(

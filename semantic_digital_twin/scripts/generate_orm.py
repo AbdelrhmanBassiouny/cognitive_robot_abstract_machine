@@ -51,6 +51,7 @@ ignore_classes = {
 ignore_base_classes = {SymbolicCallable}
 
 
+
 def generate_orm():
     """
     Generate the ORM classes for the coraplex package.

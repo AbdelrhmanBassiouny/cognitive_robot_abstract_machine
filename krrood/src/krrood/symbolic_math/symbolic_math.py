@@ -456,13 +456,21 @@ class SymbolicMathType(ABC):
     Reference to the casadi data structure of type casadi.SX.
     """
 
+    pinned_free_variables: List[FloatVariable] = field(
+        kw_only=True, repr=False, default_factory=list
+    )
+    """
+    Strong references to this expression's free variables, keeping them alive.
+
+    :attr:`FloatVariable._registry` holds its variables weakly, so an expression whose
+    variables are referenced nowhere else can no longer report them. Empty means this
+    expression pins nothing, which is the case for every expression built by
+    :meth:`from_casadi_sx` and therefore for every result of an arithmetic operation.
+    """
+
     def __post_init__(self):
-        # save free variables at the instance to prevent them from getting cleaned up.
-        # constants have none, so skip the casadi graph scan for them.
-        if self.is_constant():
-            self.__FREE_VARIABLES__ = []
-        else:
-            self.__FREE_VARIABLES__ = self.free_variables()
+        # constants have no free variables, so skip the casadi graph scan for them.
+        self.pinned_free_variables = [] if self.is_constant() else self.free_variables()
 
     @classmethod
     def from_casadi_sx(cls, casadi_sx: ca.SX) -> Self:
@@ -873,6 +881,24 @@ class Scalar(SymbolicMathType):
 
     def is_const_false(self):
         return self.is_constant() and self == False
+
+    def is_true(self) -> Scalar:
+        """
+        :return: An expression that is True wherever this one is the trinary True.
+        """
+        return Scalar(ca.eq(self.casadi_sx, True))
+
+    def is_false(self) -> Scalar:
+        """
+        :return: An expression that is True wherever this one is the trinary False.
+        """
+        return Scalar(ca.eq(self.casadi_sx, False))
+
+    def is_unknown(self) -> Scalar:
+        """
+        :return: An expression that is True wherever this one is the trinary Unknown.
+        """
+        return Scalar(ca.eq(self.casadi_sx, 0.5))
 
     def __bool__(self) -> bool:
         """

@@ -76,7 +76,10 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Scale
+from semantic_digital_twin.world_description.geometry import (
+    VolumetricBoundingBox,
+    Scale,
+)
 from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
 )
@@ -306,6 +309,18 @@ class TestFactories(unittest.TestCase):
         assert isinstance(drawer, HasCaseAsRootBody)
         semantic_drawer_annotations = world.get_semantic_annotations_by_type(Drawer)
         self.assertEqual(len(semantic_drawer_annotations), 1)
+
+    def test_hole_direction_carries_the_entity_own_root_as_reference_frame(self):
+        world = World.create_with_root_body("root")
+        with world.modify_world():
+            drawer = Drawer.create_with_new_body_in_world(
+                name="drawer",
+                world=world,
+                scale=Scale(0.2, 0.3, 0.2),
+            )
+
+        assert drawer.hole_direction.reference_frame is drawer.root
+        np.testing.assert_allclose(drawer.hole_direction.to_np()[:3], [0, 0, 1])
 
     def test_has_slider_factory(self):
         world = World.create_with_root_body("root")
@@ -555,7 +570,9 @@ class TestFactories(unittest.TestCase):
             table = Table.create_with_new_body_in_world(name="table", world=world)
         table_scale = Scale(1.0, 1.0, 0.1)
         table.root.collision = BoundingBoxCollection.from_event(
-            table.root, table_scale.to_simple_event().as_composite_set()
+            VolumetricBoundingBox,
+            table.root,
+            table_scale.to_simple_event().as_composite_set(),
         ).as_shapes()
         table.root.visual = table.root.collision
 
@@ -577,7 +594,9 @@ class TestFactories(unittest.TestCase):
             )
         table_scale = Scale(1.0, 1.0, 0.5)
         table.root.collision = BoundingBoxCollection.from_event(
-            table.root, table_scale.to_simple_event().as_composite_set()
+            VolumetricBoundingBox,
+            table.root,
+            table_scale.to_simple_event().as_composite_set(),
         ).as_shapes()
         table.root.visual = table.root.collision
 
@@ -1498,9 +1517,9 @@ def test_mechanical_joint_mount_reuses_existing_direct_active_connection():
 
 def test_door_create_default_mechanical_joint_inserts_hinge_for_bare_revolute_connection():
     """
-    A door hinged straight to its parent (no hinge body in between, as with a URDF
-    door) gets a Hinge inserted by ``create_default_mechanical_joint()``, carrying
-    over the original connection's axis, multiplier, offset and limits.
+    A door hinged straight to its parent (no hinge body in between, as with a URDF door)
+    gets a Hinge inserted by ``create_default_mechanical_joint()``, carrying over the
+    original connection's axis, multiplier, offset and limits.
     """
     world = _world_with_root()
     lower = DerivativeMap[float]()
@@ -1549,9 +1568,9 @@ def test_door_create_default_mechanical_joint_inserts_hinge_for_bare_revolute_co
 
 def test_drawer_create_default_mechanical_joint_inserts_slider_for_bare_prismatic_connection():
     """
-    A drawer slid straight onto its cabinet (no slider body in between, as with a
-    URDF drawer) gets a Slider inserted by ``create_default_mechanical_joint()``,
-    carrying over the original connection's axis, multiplier, offset and limits.
+    A drawer slid straight onto its cabinet (no slider body in between, as with a URDF
+    drawer) gets a Slider inserted by ``create_default_mechanical_joint()``, carrying
+    over the original connection's axis, multiplier, offset and limits.
     """
     world = _world_with_root()
     lower = DerivativeMap[float]()

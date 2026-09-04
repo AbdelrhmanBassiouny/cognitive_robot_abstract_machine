@@ -10,7 +10,6 @@ before committing an intentional wording change.
 from __future__ import annotations
 
 from krrood.entity_query_language.testing.result_verification import VerbalizationResult
-from typing_extensions import Tuple
 from semantic_digital_twin.reasoning.predicates import (
     Above,
     AllClose,
@@ -48,7 +47,7 @@ from semantic_digital_twin.reasoning.robot_predicates import (
     RobotHoldsBody,
 )
 
-results: Tuple[VerbalizationResult, ...] = (
+results: tuple[VerbalizationResult, ...] = (
     VerbalizationResult(Above, "a Point3 is above another Point3"),
     VerbalizationResult(
         AllClose,
@@ -74,7 +73,7 @@ results: Tuple[VerbalizationResult, ...] = (
     ),
     VerbalizationResult(
         IsPlaceOccupied,
-        "a place represented by a BoundingBox at a Pose is occupied by other bodies in a World",
+        "a place represented by a VolumetricBoundingBox at a Pose is occupied by other bodies in a World",
     ),
     VerbalizationResult(IsSupportedBy, "a Body is supported by another Body"),
     VerbalizationResult(IsSupporting, "a Body is supporting a body"),

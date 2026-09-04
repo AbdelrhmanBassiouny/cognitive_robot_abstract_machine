@@ -3,16 +3,29 @@ import os
 import threading
 import time
 from copy import deepcopy
+from dataclasses import dataclass, field
 
 import numpy as np
 import objgraph
 import pytest
+
+from semantic_digital_twin.api import (
+    ConnectionSpecification,
+    ActiveConnection1DOFSpecification,
+)
+from semantic_digital_twin.predetermined_maps.building_floor import BuildingFloor
+from semantic_digital_twin.callbacks.callback import Callback
 from semantic_digital_twin.robots.daisy import DAiSy
+from semantic_digital_twin.semantic_annotations.mixins import (
+    HasRootBody,
+    HasRootKinematicStructureEntity,
+)
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
 
+from .orm_interface_build import ORM_BUILD_OPTION, OrmBuild
 from .pytest_environment import PytestEnvironmentVariable
 
 try:
@@ -35,7 +48,13 @@ from semantic_digital_twin.adapters.package_resolver import PathResolver
 from semantic_digital_twin.collision_checking.collision_matrix import (
     MaxAvoidedCollisionsOverride,
 )
-from typing_extensions import Type
+from typing_extensions import List, Type, TypeVar
+
+CallbackT = TypeVar("CallbackT", bound=Callback)
+"""
+The kind of publisher a test started.
+"""
+
 
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.symbol_graph.symbol_graph import SymbolGraph, Symbol
@@ -77,11 +96,16 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Elevator,
     Slider,
     Door,
+    Hinge,
+    GroundFloor,
+    FirstFloor,
+    Level,
 )
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
     Point3,
+    Pose,
 )
 from semantic_digital_twin.utils import (
     rclpy_installed,
@@ -106,6 +130,7 @@ from semantic_digital_twin.world_description.geometry import (
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
+    Region,
 )
 
 ###############################
@@ -144,6 +169,29 @@ The structure of fixtures in this conftest:
         after the test since there is no good method to reset the model after a test has changed it. 
 
 """
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """
+    Let a run state when it builds the ORM interfaces it reads.
+
+    ..note:: Registering the option is what lets a run state it and read it in ``--help``.
+        The build itself happens while pytest is still importing the conftests, before it
+        has parsed anything, so :meth:`OrmBuild.requested` reads the choice off the
+        arguments as they were given rather than off the parsed configuration.
+    """
+    parser.addoption(
+        ORM_BUILD_OPTION,
+        choices=OrmBuild.choices(),
+        default=None,
+        help=(
+            "when to build the generated ORM interfaces; "
+            f"'{OrmBuild.AUTO}' builds only what the checkout has not built since its "
+            f"sources changed, '{OrmBuild.ALWAYS}' builds every run, whatever the "
+            f"checkout holds, '{OrmBuild.NEVER}' builds nothing, and reads whatever the "
+            "checkout holds"
+        ),
+    )
 
 
 def pytest_configure(config):
@@ -627,25 +675,31 @@ def _elevator_world_setup():
         world.add_body(Body(name=PrefixedName("root")))
 
         wall_thickness = 0.05
-        scale = Scale(1, 1, 1)
+        scale = Scale(2, 2, 2)
         name = PrefixedName("elevator")
-        elevator = Elevator.create_with_new_body_in_world(
-            name=PrefixedName("Elevator"),
-            world=world,
-            scale=Scale(1, 1, 1),
-            wall_thickness=0.05,
-        )
+        elevator = Elevator.get_annotation_specification(
+            "Elevator",
+            Elevator.get_default_root_kinematic_structure_entity_specification(
+                scale=Scale(2, 2, 2), wall_thickness=0.05
+            ),
+        ).spawn(world)
 
-        vertical_drive = Slider.create_with_new_body_in_world(
-            name=PrefixedName(f"{name.name}_drive", name.prefix),
-            world=world,
-            active_axis=Vector3.Z(),
-        )
+        vertical_drive = Slider.get_annotation_specification(
+            f"{name.name}_drive",
+            Slider.get_default_root_kinematic_structure_entity_specification(),
+            parent_connection_specification=Slider.parent_connection_specification(
+                axis=Vector3.Z(),
+                dof_limits=DegreeOfFreedomLimits(
+                    lower=DerivativeMap(velocity=-1.0),
+                    upper=DerivativeMap(velocity=1.0),
+                ),
+            ),
+        ).spawn(world)
         elevator.add(vertical_drive)
 
         door_scale = Scale(wall_thickness, scale.y / 2, scale.z)
         door1 = Door.create_with_new_body_in_world(
-            name=PrefixedName(f"{name.name}_door0", name.prefix),
+            name=f"{name.name}_door0",
             world=world,
             world_root_T_self=HomogeneousTransformationMatrix.from_point_rotation_matrix(
                 Point3(-scale.x / 2, -scale.y / 4, 0),
@@ -654,7 +708,7 @@ def _elevator_world_setup():
             scale=door_scale,
         )
         door2 = Door.create_with_new_body_in_world(
-            name=PrefixedName(f"{name.name}_door1", name.prefix),
+            name=f"{name.name}_door1",
             world=world,
             world_root_T_self=HomogeneousTransformationMatrix.from_point_rotation_matrix(
                 Point3(-scale.x / 2, scale.y / 4, 0),
@@ -680,12 +734,14 @@ def _elevator_world_setup():
             ),
         )
         for i, (current_door, lower, upper) in enumerate(door_slider_configs):
-            door_slider = Slider.create_with_new_body_in_world(
-                name=PrefixedName(f"{name.name}_door{i}_drive", name.prefix),
-                world=world,
-                active_axis=(Vector3.Y() * ((-1) ** (i + 1))),
-                connection_limits=DegreeOfFreedomLimits(lower=lower, upper=upper),
-            )
+            door_slider = Slider.get_annotation_specification(
+                f"{name.name}_door{i}_drive",
+                Slider.get_default_root_kinematic_structure_entity_specification(),
+                parent_connection_specification=Slider.parent_connection_specification(
+                    axis=(Vector3.Y() * ((-1) ** (i + 1))),
+                    dof_limits=DegreeOfFreedomLimits(lower=lower, upper=upper),
+                ),
+            ).spawn(world)
             current_door.add(door_slider)
 
         world.add_semantic_annotation(elevator)
@@ -838,6 +894,63 @@ def kitchen_world():
 
 
 @pytest.fixture(scope="session")
+def building_floor():
+    world = World.create_with_root_body("root")
+    BuildingFloor().spawn(world, "building_floor")
+    return world
+
+
+@pytest.fixture(scope="session")
+def multi_story_building(_elevator_world_setup):
+    elevator_copy = deepcopy(_elevator_world_setup)
+    world = World.create_with_root_body("root")
+    BuildingFloor().spawn(world, "floor_1")
+    BuildingFloor().spawn(
+        world,
+        "floor_2",
+        parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 3),
+    )
+    world.merge_world(
+        elevator_copy,
+        FixedConnection(
+            parent=world.root,
+            child=elevator_copy.root,
+            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                -5, 0, 1, yaw=np.pi
+            ),
+        ),
+    )
+
+    def add_level(level_type: Type[Level], name: str, center_height: float) -> None:
+        """
+        Add a region spanning one storey and annotate it as that level.
+
+        :param level_type: The annotation the region is given.
+        :param name: The region's name.
+        :param center_height: Height of the region's center above the world root.
+        """
+        region = Region(
+            name=PrefixedName(name),
+            area=ShapeCollection(shapes=[Box(scale=Scale(8, 8, 3))]),
+        )
+        world.add_connection(
+            FixedConnection(
+                parent=world.root,
+                child=region,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    0, 0, center_height
+                ),
+            )
+        )
+        world.add_semantic_annotation(level_type(root=region))
+
+    with world.modify_world():
+        add_level(GroundFloor, "Ground Floor", 1.5)
+        add_level(FirstFloor, "First Floor", 4.5)
+    return world
+
+
+@pytest.fixture(scope="session")
 def apartment_meshes():
     """
     Skip tests that need the visual meshes of the ``iai_apartment`` package.
@@ -942,6 +1055,48 @@ def pr2_apartment_state_reset(pr2_apartment_world):
 ###############################
 ######### Utils ###############
 ###############################
+
+
+@dataclass
+class RosPublishers:
+    """
+    Keeps the ros publishers a test started and stops them when the test ends.
+
+    A publisher stays registered on the world it publishes, so one that is left running
+    on a world outliving the test publishes on a node that is already destroyed.
+    """
+
+    started: List[Callback] = field(default_factory=list)
+    """
+    The publishers started so far, in the order they were started.
+    """
+
+    def adopt(self, publisher: CallbackT) -> CallbackT:
+        """
+        :param publisher: The publisher whose lifetime ends with the test.
+        :return: the publisher itself, so it can be adopted where it is created.
+        """
+        self.started.append(publisher)
+        return publisher
+
+    def stop_all(self) -> None:
+        """
+        Stop every adopted publisher, latest first.
+        """
+        for publisher in reversed(self.started):
+            publisher.stop()
+        self.started.clear()
+
+
+@pytest.fixture(scope="function")
+def ros_publishers():
+    """
+    Hands out the owner of every publisher a test starts on a world it shares with other
+    tests.
+    """
+    publishers = RosPublishers()
+    yield publishers
+    publishers.stop_all()
 
 
 @pytest.fixture(scope="function")

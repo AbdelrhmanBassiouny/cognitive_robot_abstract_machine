@@ -886,6 +886,30 @@ class WorldHasMultipleSynchronizersError(UsageError):
 
 
 @dataclass
+class WorldHasMultipleTfPublishersError(UsageError):
+    """
+    Raised when the tf publisher of a world is asked for, but several of them publish
+    its tf tree, leaving it undecided which one names its frames.
+    """
+
+    world: World
+    """
+    The world with more than one tf publisher.
+    """
+
+    publisher_count: int
+    """
+    How many publishers publish the tf tree of the world.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.publisher_count} publishers publish the tf tree of {self.world}."
+
+    def suggest_correction(self) -> str:
+        return "Stop all but one of them."
+
+
+@dataclass
 class ApplyMissedMessagesWhileWorldIsBeingModifiedError(UsageError):
     """
     Raised when apply_missed_messages is called while a modify_world context is active
@@ -917,7 +941,6 @@ class DuplicateWorldEntityError(UsageError):
             "PrefixedName with the desired prefix, or use the plural get_..._by_name variant "
             "to retrieve all matches."
         )
-
 
 @dataclass
 class DuplicateRobotAssignmentsError(UsageError):

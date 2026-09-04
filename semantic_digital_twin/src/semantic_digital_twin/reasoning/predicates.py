@@ -45,12 +45,11 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     Region,
     KinematicStructureEntity,
-    SemanticAnnotation,
 )
 
 if TYPE_CHECKING:
@@ -149,16 +148,11 @@ class GetVisibleBodies(SymbolicFunction):
         ray_tracer = RayTracer(camera._world)
         ray_tracer.update_scene()
 
-        # This ignores the camera orientation and sets it to identity
-        camera_pose = np.eye(4, dtype=float)
-        camera_pose[:3, 3] = camera.root.global_transform.to_np()[:3, 3]
-
         segmentation_mask = ray_tracer.create_segmentation_mask(
-            HomogeneousTransformationMatrix(
-                camera_pose, reference_frame=camera._world.root
-            ),
+            camera.root_T_forward_view,
             resolution=256,
             min_distance=0.2,
+            field_of_view=camera.field_of_view,
         )
         indices = np.unique(segmentation_mask)
         indices = indices[indices > -1]
@@ -237,12 +231,7 @@ class OccludingBodies(SymbolicFunction):
         camera = self.camera
         body = self.body
 
-        # get camera pose
-        camera_pose = np.eye(4, dtype=float)
-        camera_pose[:3, 3] = camera.root.global_transform.to_np()[:3, 3]
-        camera_pose = HomogeneousTransformationMatrix(
-            camera_pose, reference_frame=camera._world.root
-        )
+        camera_pose = camera.root_T_forward_view
 
         # create a world only containing the target body
         world_without_occlusion = deepcopy(body._world)
@@ -265,7 +254,10 @@ class OccludingBodies(SymbolicFunction):
         ray_tracer_without_occlusion.update_scene()
         segmentation_mask_without_occlusion = (
             ray_tracer_without_occlusion.create_segmentation_mask(
-                camera_pose, resolution=256, min_distance=0.1
+                camera_pose,
+                resolution=256,
+                min_distance=0.1,
+                field_of_view=camera.field_of_view,
             )
         )
 
@@ -274,7 +266,10 @@ class OccludingBodies(SymbolicFunction):
         ray_tracer_with_occlusion.update_scene()
         segmentation_mask_with_occlusion = (
             ray_tracer_with_occlusion.create_segmentation_mask(
-                camera_pose, resolution=256, min_distance=0.1
+                camera_pose,
+                resolution=256,
+                min_distance=0.1,
+                field_of_view=camera.field_of_view,
             )
         )
 
@@ -851,7 +846,7 @@ class IsPlaceOccupied(Predicate):
     bodies.
     """
 
-    box: BoundingBox
+    box: VolumetricBoundingBox
     """
     The place as an axis-aligned box in its own local frame.
     """
