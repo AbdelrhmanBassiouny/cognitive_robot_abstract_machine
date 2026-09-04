@@ -360,3 +360,31 @@ item: it writes `branch` / `pull_request_number` / `status` / `session` at a fou
 into a two-space manifest, so `save-plan.sh` fails in `yaml.safe_load`. That is the bug PR
 #160 fixed, which was closed unmerged on 2026-08-30, so it is live on `main` again. This
 entry and the manifest fields beside it were written by hand instead.
+
+## The conflict is cleared; the rebase still waits on #229 (2026-09-04)
+
+Merged current `main` into `eql-symbolic-function-sdt` (`f97e7a99`), resolving the one
+conflicting file — `reasoning/predicates.py` — by keeping this branch's migrated classes and
+re-applying `main`'s three changes to them: `camera.root_T_forward_view` plus an explicit
+`field_of_view` in `GetVisibleBodies` and `OccludingBodies`, `BoundingBox` ->
+`VolumetricBoundingBox` on `IsPlaceOccupied.box`, and the unused `SemanticAnnotation` import
+dropped. `git merge-tree` now reports the branch clean against `main`, which ends the routine
+that had re-reported the same conflict ten times since 2026-08-28.
+
+**Keeping the copy was the point, not a shortcut.** Dropping `predicates.py` for `main`'s
+version — what the 2026-08-31 decision eventually calls for — cannot happen until #229
+lands, because `main`'s twelve `@symbolic_function` helpers declare no verbalization
+fragment of their own and
+`test_every_symbolic_callable_declares_its_own_verbalization_fragment` would go red and stay
+red. The drop and #229's landing are one step.
+
+Verified on the merged tree: 30 symbolic callables discovered in sdt, all declaring their own
+fragment; `assert_results_cover_every_callable` and `assert_declared_results_render_as_stated`
+both pass. The regenerated snapshot changes exactly two things — `IsPlaceOccupied`'s sentence,
+following the rename, and the generator's own `tuple`/`Tuple` spelling, which is the
+pre-existing generator drift already noted in this branch's progress file.
+
+The three open review decisions are now collected in one comment on #33
+(https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5536810182)
+rather than only living on six scattered threads, since two of them had been recorded as
+blockers for a month without a single place to answer them.
