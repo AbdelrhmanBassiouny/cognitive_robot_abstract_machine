@@ -1182,81 +1182,85 @@ items:
   track: events
   blockers:
     - >-
-      Review round of 2026-09-04 on #257: 19 unresolved threads from the developer, none yet
-      answered. Fourteen are on `expectations.py`, `scene_request.py`, `backend.py` and the test
-      module and ask for world entities in place of `PrefixedName` (six threads), `BelievedPlace` as
-      a `Role` of a `Place` dataclass, the digital twin's own Surface/Pose/Orientation concepts
-      instead of `ExpectedProperty`, an expectation check that works for arbitrary relations with a
-      per-relation-type distance function, event effects modelled explicitly on the event classes or
-      as an effect hierarchy instead of `SUPPORT_AFTER_EVENT`, plainer names for the effect
-      functions, the `PickUpEvent` support question, dropping a quoted forward reference, docstrings
-      and a helper renamed away from EQL's `entity`. Four reach past this item into #222's files
-      (`look` to `look_for`, `SUPPORTING_SURFACE_ATTRIBUTE_NAME` and
-      `SceneRequest.supporting_surface` versus arbitrary relations, the `DetectedMontessoriShape`
-      rename #255 made). One is a design discussion on explicit effect and occurrence rules,
-      situation calculus, state prediction from the digital twin and probabilistic fusion, asking
-      where that work belongs.
-    - >-
-      CI on head 7526f516: `test_each_lib (version)` fails
-      `test_imported_workspace_members_are_declared[experiments]` because `expectations.py` imports
-      `segmind` and `experiments/pyproject.toml` does not declare it (this item's own fault, green
-      on the base #232). `test_each_lib (probabilistic_model)` errors eight `test_jpt` cases with
-      `ValueError: Unsupported datatype: str`; it is red on the base #232's head too and touches
-      nothing this branch changes.
+      The review round of 2026-09-04 is answered on #257 (4c1a1bb7): ten threads done as asked and
+      resolved, nine answered and left open for the developer. One decision decides the item's next
+      step and is his: whether to re-base it on #255, so that an expectation is stated in the
+      digital twin's own relation vocabulary (#229's predicates that answer whether they hold,
+      #238's `PlacementRelation` with `allows` and `allowed_space`) over a sighting that has a body
+      (#255's `DetectedMontessoriShape`), which is what the five threads that reach past this base
+      ask for - the attribute-name string, `SceneRequest.supporting_surface`, `ExpectedProperty`
+      against the twin's concepts, the hard-coded check, `BelievedPlace` as a `Role`. Measured: #246
+      into #255 conflicts in `reasoning/predicates.py` and its test (#244 against #229). The `look`
+      to `look_for` rename is proposed on #222, whose abstract method it is. CI: the `version` check
+      is fixed here; `probabilistic_model` was red on the base too and `main` now carries #597's
+      fix, restacked into this branch at 16:09; whether 4c1a1bb7 is green is unread.
   depends_on:
   - perception-backend
   - pieces-looked-for-where-expected
   - episode-replayed-into-the-world
   status: in_progress
   session: https://claude.ai/code/session_0124wGjWgkgfuDHX1xTJh6St
-  notes: 'Segmind already emits SupportEvent, LossOfSupportEvent, PickUpEvent, PlacingEvent and InsertionEvent
-    over is_supported_by. Perception keeps a set of expectations from them - after LossOfSupport(piece,
-    table) stop searching the table; after Placing(piece, lid) search the lid - and the action model gets
-    there first, since an action declares its own effect and so the expectation can be armed before the
-    event confirms it. The same mechanism gives failure detection: perception looked exactly where the
-    action promised, found nothing, and says so.
+  notes: >
+    Segmind already emits SupportEvent, LossOfSupportEvent, PickUpEvent, PlacingEvent and
+    InsertionEvent over is_supported_by. Perception keeps a set of expectations from them - after
+    LossOfSupport(piece, table) stop searching the table; after Placing(piece, lid) search the lid -
+    and the action model gets there first, since an action declares its own effect and so the
+    expectation can be armed before the event confirms it. The same mechanism gives failure
+    detection: perception looked exactly where the action promised, found nothing, and says so.
 
-    Widened on 2026-08-31, at the developer''s ask, from an expectation that names a surface to one that
-    carries a pose. Naming the surface is the part the request language can push down, but it is not what
-    the captures need: three of them - stuck_cube_in_hole, disoriented_cube_on_hole and displaced_cube_from_hole
-    - are a cube that an insertion put at a *named hole*, and the hole is a place, known in the world,
-    on a surface the board detection measures every frame. So an expectation is a belief about where an
-    object is: a region it should lie in, an interval of yaw it should be turned through, and the surface
-    it should rest on. That is precisely the hypothesis pieces-looked-for-where-expected evaluates, which
-    is why the two are now linked.
+    Widened on 2026-08-31, at the developer's ask, from an expectation that names a surface to one
+    that carries a pose. Naming the surface is the part the request language can push down, but it
+    is not what the captures need: three of them - stuck_cube_in_hole, disoriented_cube_on_hole and
+    displaced_cube_from_hole - are a cube that an insertion put at a *named hole*, and the hole is a
+    place, known in the world, on a surface the board detection measures every frame. So an
+    expectation is a belief about where an object is: a region it should lie in, an interval of yaw
+    it should be turned through, and the surface it should rest on. That is precisely the hypothesis
+    pieces-looked-for-where-expected evaluates, which is why the two are now linked.
 
-    What the belief is propagated by is the action''s own declared effect, confirmed or refuted by the
-    events: released over a hole, an object is believed to be at that hole, turned any way, within the
-    spread a release allows; still grasped, its pose is the gripper''s; acted on by nothing, its pose
-    is exactly where it was last seen. The rule that carries the weight is the last one - a belief only
-    decays when something acts on the object - and it is why a history makes this tractable where a single
-    frame does not.
+    What the belief is propagated by is the action's own declared effect, confirmed or refuted by
+    the events: released over a hole, an object is believed to be at that hole, turned any way,
+    within the spread a release allows; still grasped, its pose is the gripper's; acted on by
+    nothing, its pose is exactly where it was last seen. The rule that carries the weight is the
+    last one - a belief only decays when something acts on the object - and it is why a history
+    makes this tractable where a single frame does not.
 
-    Failure detection then follows from the belief rather than from a surface: the insertion promised
-    the cube would end up *in* the hole, and it is found resting *on* the lid, turned thirty degrees from
-    where it would have had to be. Reporting which part of the expectation was violated is what a recovery
-    can act on, and it is the paper''s end-to-end story.
+    Failure detection then follows from the belief rather than from a surface: the insertion
+    promised the cube would end up *in* the hole, and it is found resting *on* the lid, turned
+    thirty degrees from where it would have had to be. Reporting which part of the expectation was
+    violated is what a recovery can act on, and it is the paper's end-to-end story.
 
-    Built 2026-09-03 as #257, over the merge of #232, #222 and #246 - three dependencies on three stacks,
-    the first item on the plan whose dependencies span that many. An expectation is a named piece, a
-    BelievedPlace, what it should be resting on and what put the belief there; where a look is aimed and
-    what the piece should rest on are deliberately two fields, which is what makes a cube left lying on
-    the lid a reportable failure rather than a sighting. SceneRequest carries what the asker believes, as
-    this plan''s note of 2026-08-31 predicted it would need to. 482 passed against 453 on the merge of the
-    three, which is the 29 tests added and nothing else moved.
+    Built 2026-09-03 as #257, over the merge of #232, #222 and #246 - three dependencies on three
+    stacks, the first item on the plan whose dependencies span that many. An expectation is a named
+    piece, a BelievedPlace, what it should be resting on and what put the belief there; where a look
+    is aimed and what the piece should rest on are deliberately two fields, which is what makes a
+    cube left lying on the lid a reportable failure rather than a sighting. SceneRequest carries
+    what the asker believes, as this plan's note of 2026-08-31 predicted it would need to. 482
+    passed against 453 on the merge of the three, which is the 29 tests added and nothing else
+    moved.
 
-    The item''s own reach exposed a fault worth more than the feature. This is the first belief on the plan
-    that states how far it reaches - every one before it reached exactly SEED_REACH - and varying a radius
-    showed the fit is not monotonic in it: PieceMatcher''s grid was laid out from -radius, so its phase
-    moved with the reach and a peak one reach landed on the next stepped over. That is #238''s lattice
-    finding in the sweep rather than the rectification; offsets_within counts outwards from the centre.
+    The item's own reach exposed a fault worth more than the feature. This is the first belief on
+    the plan that states how far it reaches - every one before it reached exactly SEED_REACH - and
+    varying a radius showed the fit is not monotonic in it: PieceMatcher's grid was laid out from
+    -radius, so its phase moved with the reach and a peak one reach landed on the next stepped over.
+    That is #238's lattice finding in the sweep rather than the rectification; offsets_within counts
+    outwards from the centre.
 
-    The four lid expected-to-fail marks do not come off, and the measurement says why. Two of the four are
-    a cube an insertion put at a named hole, so a history does say where to look and the cube is fitted -
-    but not at every reach even with the grid monotone, because it reaches 0.645 against a ghost
-    cylinder''s 0.641 at the same place. Stating a reach that happens to work is the tuning this plan has
-    refused three times, and separating a piece from a ghost that follows the same edges is
-    competing-explanations'' claim. LID_PIECES_STILL_MISSED now records that, and names that item.'
+    The four lid expected-to-fail marks do not come off, and the measurement says why. Two of the
+    four are a cube an insertion put at a named hole, so a history does say where to look and the
+    cube is fitted - but not at every reach even with the grid monotone, because it reaches 0.645
+    against a ghost cylinder's 0.641 at the same place. Stating a reach that happens to work is the
+    tuning this plan has refused three times, and separating a piece from a ghost that follows the
+    same edges is competing-explanations' claim. LID_PIECES_STILL_MISSED now records that, and names
+    that item.
+
+    The review round of 2026-09-04 moved two things and pointed at a third. A pick-up means held,
+    not supported: Segmind builds `PickUpEvent` with no `with_object`, so the old mapping answered
+    nothing for a real pick-up and its test stated an event no detector emits. What an event says
+    about support is now declared on the event classes in Segmind (`SupportEffect`,
+    `EventWithSupportEffect`), and the expectation types hold the world's entities rather than
+    names. The third is where the generalization the reviewer asks for already lives: the relation
+    vocabulary of #229 and #238 on the other stack, which makes re-basing on #255 the honest answer
+    to five of the threads rather than a second hierarchy here.
 - id: robokudo-detector
   title: Answer a request with a RoboKudo analysis engine
   branch: perception_robokudo_detector
