@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 from typing_extensions import List, Optional
 
-from experiments.montessori.perception.footprint import Footprint
+from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.hypotheses import PieceHypothesis
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -37,7 +37,7 @@ class MontessoriDetection(ABC):
     Where it was seen, in the frame the camera's pose was given in.
     """
 
-    footprint: Footprint
+    footprint: RectifiedFootprint
     """
     Its outline as measured from the rectified image.
     """

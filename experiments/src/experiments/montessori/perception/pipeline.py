@@ -42,7 +42,7 @@ from experiments.montessori.perception.exceptions import (
     BoardMissingFromWorld,
     LookHasNoReferenceFrame,
 )
-from experiments.montessori.perception.footprint import Footprint
+from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
     PieceHypothesis,
@@ -308,7 +308,7 @@ class SizeRange:
     Largest area, in square metres, an outline may have and still be considered.
     """
 
-    def admits(self, footprint: Footprint) -> bool:
+    def admits(self, footprint: RectifiedFootprint) -> bool:
         """
         Whether an outline's area falls in this range.
 
@@ -606,7 +606,7 @@ class BoardDetector:
         return [
             contour
             for contour in contours
-            if Footprint.from_contour(contour, orthophoto.region.resolution).area
+            if RectifiedFootprint.from_contour(contour, orthophoto.region.resolution).area
             >= self.minimum_lid_area
         ]
 
@@ -619,7 +619,7 @@ class BoardDetector:
         """
         return max(
             self._surfaces_large_enough_to_be_a_lid(orthophoto),
-            key=lambda contour: Footprint.from_contour(
+            key=lambda contour: RectifiedFootprint.from_contour(
                 contour, orthophoto.region.resolution
             ).area,
         )
@@ -649,7 +649,7 @@ class BoardDetector:
             orthophoto.contour_center(contour)
             for contour in contours
             if self.hole_size.admits(
-                Footprint.from_contour(contour, orthophoto.region.resolution)
+                RectifiedFootprint.from_contour(contour, orthophoto.region.resolution)
             )
         ]
 
@@ -735,7 +735,7 @@ class BoardDetector:
                 yaw=placement.yaw,
                 reference_frame=reference_frame,
             ),
-            footprint=Footprint(
+            footprint=RectifiedFootprint(
                 area=width * length,
                 width=width,
                 length=length,
@@ -775,7 +775,7 @@ class BoardDetector:
                 orthophoto.plane_height,
                 reference_frame=reference_frame,
             ),
-            footprint=Footprint.from_contour(
+            footprint=RectifiedFootprint.from_contour(
                 _to_rectified_contour(hole.outline, orthophoto),
                 orthophoto.region.resolution,
             ),
@@ -914,7 +914,7 @@ class LoosePieceDetector(BeliefSource):
         seen = []
         for hue in hues_of(pieces_colored(color)):
             for contour in self._outlines_wearing(hue, orthophoto, top_orthophoto):
-                footprint = Footprint.from_contour(
+                footprint = RectifiedFootprint.from_contour(
                     contour, orthophoto.region.resolution
                 )
                 if not self.piece_size.admits(footprint):
@@ -996,7 +996,7 @@ class LoosePieceDetector(BeliefSource):
                 yaw=match.yaw,
                 reference_frame=reference_frame,
             ),
-            footprint=Footprint.from_contour(fitted, orthophoto.region.resolution),
+            footprint=RectifiedFootprint.from_contour(fitted, orthophoto.region.resolution),
             outline=outline,
             category=match.piece.category,
             height=height,

@@ -18,7 +18,7 @@ from experiments.montessori.perception.exceptions import (
     RegionsDoNotMeet,
     SurfaceHasNothingToMeasure,
 )
-from experiments.montessori.perception.footprint import Footprint
+from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
@@ -257,7 +257,7 @@ def _board_outlining(corners: List[Tuple[float, float]]) -> MontessoriBoardDetec
     center = outline.mean(axis=0)
     return MontessoriBoardDetection(
         pose=Pose.from_xyz_rpy(float(center[0]), float(center[1]), 0.0),
-        footprint=Footprint.from_contour(outline.reshape(-1, 1, 2), 1.0),
+        footprint=RectifiedFootprint.from_contour(outline.reshape(-1, 1, 2), 1.0),
         outline=outline.astype(float),
     )
 

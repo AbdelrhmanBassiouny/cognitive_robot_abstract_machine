@@ -9,7 +9,7 @@ import pytest
 from typing_extensions import List
 
 from experiments.montessori.perception.detections import MontessoriShapeDetection
-from experiments.montessori.perception.footprint import Footprint
+from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
     PieceHypothesis,
@@ -85,7 +85,7 @@ def piece_at(
     resting_on = PrefixedName("table", "occupancy_test")
     return MontessoriShapeDetection(
         pose=Pose.from_xyz_rpy(x, y, surface_height + height / 2),
-        footprint=Footprint(
+        footprint=RectifiedFootprint(
             area=PIECE_WIDTH**2,
             width=PIECE_WIDTH,
             length=PIECE_WIDTH,
