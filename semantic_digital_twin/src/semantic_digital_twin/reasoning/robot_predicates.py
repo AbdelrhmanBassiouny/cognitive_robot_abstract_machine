@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional, List
 
 import trimesh.sample
@@ -11,7 +12,22 @@ from krrood.entity_query_language.factories import (
     an,
     the,
 )
-from krrood.entity_query_language.predicate import symbolic_function
+from krrood.entity_query_language.predicate import (
+    Predicate,
+    SymbolicFunction,
+    symbolic_callable_to_function,
+)
+from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Conjunctions,
+    Prepositions,
+)
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    Adjective,
+    clause,
+    Copula,
+    Noun,
+    phrase,
+)
 from semantic_digital_twin.collision_checking.collision_detector import (
     ClosestPoints,
 )
@@ -33,193 +49,405 @@ from semantic_digital_twin.world_description.geometry import VolumetricBoundingB
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@symbolic_function
-def robot_in_collision(
-    robot: AbstractRobot,
-    ignore_collision_with: Optional[List[Body]] = None,
-    threshold: float = 0.001,
-) -> List[ClosestPoints]:
+@dataclass(eq=False)
+class RobotCollisions(SymbolicFunction):
     """
-    Check if the robot collides with any object in the world at the given pose.
-
-    :param robot: The robot object
-    :param ignore_collision_with: A list of objects to ignore collision with
-    :param threshold: The threshold for contact detection
-    :return: True if the robot collides with any object, False otherwise
+    The collision contacts between a robot and the world at the robot's current pose.
     """
-    if ignore_collision_with is None:
-        ignore_collision_with = []
 
-    world = robot._world
+    robot: AbstractRobot
+    """
+    The robot checked for collisions.
+    """
 
-    with world.modify_world():
-        world.collision_manager.clear_temporary_rules()
-        world.collision_manager.add_temporary_rule(
-            AvoidExternalCollisions(
-                buffer_zone_distance=threshold,
-                robot=robot,
+    ignore_collision_with: Optional[List[Body]] = None
+    """
+    Bodies to ignore collisions with.
+    """
+
+    threshold: float = 0.001
+    """
+    The buffer-zone distance for contact detection.
+    """
+
+    def __call__(self) -> List[ClosestPoints]:
+        ignore_collision_with = self.ignore_collision_with or []
+
+        world = self.robot._world
+
+        with world.modify_world():
+            world.collision_manager.clear_temporary_rules()
+            world.collision_manager.add_temporary_rule(
+                AvoidExternalCollisions(
+                    buffer_zone_distance=self.threshold,
+                    robot=self.robot,
+                )
+            )
+            world.collision_manager.add_temporary_rule(
+                AllowSelfCollisions(robot=self.robot)
+            )
+            world.collision_manager.add_temporary_rule(
+                AllowCollisionBetweenGroups(
+                    body_group_a=self.robot.bodies,
+                    body_group_b=ignore_collision_with,
+                )
+            )
+        world.collision_manager.update_collision_matrix()
+
+        collisions = world.collision_manager.compute_collisions()
+
+        return collisions.contacts
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "the collision points between <robot> and the bodies of the world" -- the ignored
+        # bodies and the buffer distance are inputs to the check, not part of the value.
+        return phrase(
+            Noun.the("collision points"),
+            Prepositions.BETWEEN,
+            Noun(fields["robot"]),
+            Conjunctions.AND,
+            Noun.the("bodies"),
+            Prepositions.OF,
+            Noun.the("world"),
+        )
+
+
+robot_in_collision = symbolic_callable_to_function(RobotCollisions)
+
+
+@dataclass(eq=False)
+class RobotHoldsBody(Predicate):
+    """
+    Whether a robot is holding a body in one of its grippers.
+    """
+
+    robot: AbstractRobot
+    """
+    The robot.
+    """
+
+    body: Body
+    """
+    The body checked for being held.
+    """
+
+    def __call__(self) -> bool:
+        gripper = variable(EndEffector, self.robot._world.semantic_annotations)
+        grippers = an(
+            entity(gripper).where(
+                gripper._robot == self.robot,
             )
         )
-        world.collision_manager.add_temporary_rule(AllowSelfCollisions(robot=robot))
-        world.collision_manager.add_temporary_rule(
-            AllowCollisionBetweenGroups(
-                body_group_a=robot.bodies, body_group_b=ignore_collision_with
+
+        return any(
+            [
+                is_body_in_gripper(self.body, gripper) > 0.0
+                for gripper in grippers.evaluate()
+            ]
+        )
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "<robot> is holding <body>" -- the name starts with the subject noun, so the
+        # name-based default would read it as a verb ("a robot robots holds body").
+        return clause(
+            Noun(fields["robot"]),
+            Copula(),
+            Adjective("holding"),
+            Noun(fields["body"]),
+        )
+
+
+robot_holds_body = symbolic_callable_to_function(RobotHoldsBody)
+
+
+@dataclass(eq=False)
+class BlockingBodies(SymbolicFunction):
+    """
+    The bodies blocking a robot from reaching a pose.
+
+    These are the bodies the robot is in collision with when its kinematic chain is
+    moved to reach the pose by inverse kinematics.
+    """
+
+    pose: HomogeneousTransformationMatrix
+    """
+    The pose to reach.
+    """
+
+    root: Body
+    """
+    The root of the kinematic chain.
+    """
+
+    tip: Body
+    """
+    The tip (end effector) of the kinematic chain.
+    """
+
+    def __call__(self) -> List[ClosestPoints]:
+        result = self.root._world.compute_inverse_kinematics(
+            root=self.root, tip=self.tip, target=self.pose, max_iterations=1000
+        )
+        with self.root._world.modify_world():
+            for dof, state in result.items():
+                self.root._world.state[dof.id].position = state
+
+        robot_variable = variable(AbstractRobot, self.root._world.semantic_annotations)
+        robot = the(
+            entity(robot_variable).where(
+                contains(robot_variable.bodies, self.tip),
             )
         )
-    world.collision_manager.update_collision_matrix()
+        return robot_in_collision(robot.first(), [])
 
-    collisions = world.collision_manager.compute_collisions()
-
-    return collisions.contacts
-
-
-@symbolic_function
-def robot_holds_body(robot: AbstractRobot, body: Body) -> bool:
-    """
-    Check if a robot is holding an object.
-
-    :param robot: The robot object
-    :param body: The body to check if it is picked
-    :return: True if the robot is holding the object, False otherwise
-    """
-    g = variable(EndEffector, robot._world.semantic_annotations)
-    grippers = an(
-        entity(g).where(
-            g._robot == robot,
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "the bodies blocking the path to reach <pose>" -- the chain's root and tip are
+        # deliberately unspoken; they are query-able when they matter.
+        return phrase(
+            Noun.the("bodies"),
+            Adjective("blocking"),
+            Noun.the("path"),
+            Prepositions.TO,
+            Adjective("reach"),
+            Noun(fields["pose"]),
         )
-    )
-
-    return any(
-        [is_body_in_gripper(body, gripper) > 0.0 for gripper in grippers.evaluate()]
-    )
 
 
-@symbolic_function
-def blocking(
-    pose: HomogeneousTransformationMatrix,
-    root: Body,
-    tip: Body,
-) -> List[ClosestPoints]:
+blocking = symbolic_callable_to_function(BlockingBodies)
+
+
+@dataclass(eq=False)
+class BodiesInGripper(SymbolicFunction):
     """
-    Get the bodies that are blocking the robot from reaching a given position.
-
-    The blocking are all bodies that are in collision with the robot when reaching for
-    the pose.
-
-    :param pose: The pose to reach
-    :param root: The root of the kinematic chain.
-    :param tip: The threshold between the end effector and the position.
-    :return: A list of bodies the robot is in collision with when reaching for the
-        specified object or None if the pose or object is not reachable.
+    The bodies between the two fingers of a gripper, found by ray casting between the
+    fingers.
     """
-    result = root._world.compute_inverse_kinematics(
-        root=root, tip=tip, target=pose, max_iterations=1000
-    )
-    with root._world.modify_world():
-        for dof, state in result.items():
-            root._world.state[dof.id].position = state
 
-    r = variable(AbstractRobot, root._world.semantic_annotations)
-    robot = the(
-        entity(r).where(
-            contains(r.bodies, tip),
+    gripper: HasTwoFingers
+    """
+    The gripper to check between.
+    """
+
+    sample_size: int = 100
+    """
+    The number of rays to sample.
+    """
+
+    def __call__(self) -> List[Body]:
+        gripper = self.gripper
+        # Retrieve meshes in local frames
+        thumb_mesh = gripper.thumb.tip.collision.combined_mesh.copy()
+        finger_mesh = gripper.finger.tip.collision.combined_mesh.copy()
+
+        # Transform copies of the meshes into the world frame
+        # body_mesh.apply_transform(body.global_transform.to_np())
+        thumb_mesh.apply_transform(gripper.thumb.tip.global_transform.to_np())
+        finger_mesh.apply_transform(gripper.finger.tip.global_transform.to_np())
+
+        # get random points from thumb mesh
+        finger_points = trimesh.sample.sample_surface(finger_mesh, self.sample_size)[0]
+        thumb_points = trimesh.sample.sample_surface(thumb_mesh, self.sample_size)[0]
+
+        ray_tracer = gripper._world.ray_tracer
+        ray_tracer.update_scene()
+
+        points, index_ray, bodies = ray_tracer.ray_test(finger_points, thumb_points)
+        return list(
+            set(bodies) - set(gripper.finger.bodies) - set(gripper.thumb.bodies)
         )
-    )
-    return robot_in_collision(robot.first(), [])
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "the bodies between the fingers of <gripper>" -- the ray sample size is an
+        # accuracy knob of the computation, not part of the value.
+        return phrase(
+            Noun.the("bodies"),
+            Prepositions.BETWEEN,
+            Noun.the("fingers"),
+            Prepositions.OF,
+            Noun(fields["gripper"]),
+        )
 
 
-@symbolic_function
-def bodies_in_gripper(gripper: HasTwoFingers, sample_size: int = 100) -> List[Body]:
+bodies_in_gripper = symbolic_callable_to_function(BodiesInGripper)
+
+
+@dataclass(eq=False)
+class BodyInGripperFraction(SymbolicFunction):
     """
-    Gets all bodies which are between the finger of the gripper.
+    The fraction of sampled rays between a gripper's fingers that hit a given body.
 
-    This method uses samples of rays which are cast between the finger.
-
-    :param gripper: The gripper for which the check should be done.
-    :param sample_size: The number of rays to sample.
+    Random rays are sampled between the finger and thumb; the returned value is the
+    marginal probability that a ray hits the body.
     """
-    # Retrieve meshes in local frames
-    thumb_mesh = gripper.thumb.tip.collision.combined_mesh.copy()
-    finger_mesh = gripper.finger.tip.collision.combined_mesh.copy()
 
-    # Transform copies of the meshes into the world frame
-    # body_mesh.apply_transform(body.global_transform.to_np())
-    thumb_mesh.apply_transform(gripper.thumb.tip.global_transform.to_np())
-    finger_mesh.apply_transform(gripper.finger.tip.global_transform.to_np())
-
-    # get random points from thumb mesh
-    finger_points = trimesh.sample.sample_surface(finger_mesh, sample_size)[0]
-    thumb_points = trimesh.sample.sample_surface(thumb_mesh, sample_size)[0]
-
-    rt = gripper._world.ray_tracer
-    rt.update_scene()
-
-    points, index_ray, bodies = rt.ray_test(finger_points, thumb_points)
-    return list(set(bodies) - set(gripper.finger.bodies) - set(gripper.thumb.bodies))
-
-
-@symbolic_function
-def is_body_in_gripper(
-    body: Body, gripper: EndEffector, sample_size: int = 100
-) -> float:
+    body: Body
     """
-    Check if the body in the gripper.
-
-    This method samples random rays between the finger and the thumb and returns the
-    marginal probability that the rays intersect.
-
-    :param body: The body for which the check should be done.
-    :param gripper: The gripper for which the check should be done.
-    :param sample_size: The number of rays to sample.
-    :return: The percentage of rays between the fingers that hit the body.
+    The body checked for being in the gripper.
     """
-    bodies = bodies_in_gripper(gripper, sample_size)
-    return len([b for b in bodies if b == body]) / sample_size
 
-
-@symbolic_function
-def is_body_gripped(
-    body: Body, gripper: EndEffector, threshold: float = 0.9, sample_size: int = 100
-) -> bool:
+    gripper: EndEffector
     """
-    Check if the body is held by the gripper with at least the given confidence.
-
-    :param body: The body for which the check should be done.
-    :param gripper: The gripper for which the check should be done.
-    :param threshold: Minimum fraction of sampled rays that must hit ``body`` (see
-        :func:`is_body_in_gripper`) for it to count as held.
-    :param sample_size: The number of rays to sample.
-    :return: Whether ``body`` is held by ``gripper``.
+    The gripper to check.
     """
-    return is_body_in_gripper(body, gripper, sample_size) > threshold
 
-
-@symbolic_function
-def is_gripper_holding_something(gripper: EndEffector) -> bool:
+    sample_size: int = 100
     """
-    Check if the gripper is holding something.
-
-    :param gripper: The gripper for which the check should be done.
-    :return: True if there is a body mounted beneath the gripper in the kinematic chain.
+    The number of rays to sample.
     """
-    bodies_under_tcp = gripper._world.get_kinematic_structure_entities_of_branch(
-        gripper.tool_frame
-    )
-    # the branch always contains the tool frame itself, so only additional
-    # entities below it count as something being held
-    return len(bodies_under_tcp) > 1
+
+    def __call__(self) -> float:
+        bodies = bodies_in_gripper(self.gripper, self.sample_size)
+        return len([body for body in bodies if body == self.body]) / self.sample_size
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "the part of <body> that is between the fingers of <gripper>".
+        return phrase(
+            Noun.the("part"),
+            Prepositions.OF,
+            Noun(fields["body"]),
+            Noun.bare("that is"),
+            Prepositions.BETWEEN,
+            Noun.the("fingers"),
+            Prepositions.OF,
+            Noun(fields["gripper"]),
+        )
 
 
-@symbolic_function
-def is_pose_free_for_robot(robot: AbstractRobot, pose: Pose) -> bool:
-    return not is_place_occupied(
-        robot.mobile_base.bounding_box,
-        pose,
-        robot._world,
-        robot.bodies_with_collision
-        + [
-            kse
-            for annotation in robot._world.get_semantic_annotations_by_type(Floor)
-            for kse in annotation.kinematic_structure_entities
-        ],
-    )
+is_body_in_gripper = symbolic_callable_to_function(BodyInGripperFraction)
+
+
+@dataclass(eq=False)
+class IsBodyGripped(Predicate):
+    """
+    Whether a gripper holds a body with at least the given confidence.
+    """
+
+    body: Body
+    """
+    The body checked for being held.
+    """
+
+    gripper: EndEffector
+    """
+    The gripper the body is checked against.
+    """
+
+    threshold: float = 0.9
+    """
+    Minimum fraction of sampled rays that must hit the body for it to count as held.
+    """
+
+    sample_size: int = 100
+    """
+    The number of rays to sample.
+    """
+
+    def __call__(self) -> bool:
+        return (
+            is_body_in_gripper(self.body, self.gripper, self.sample_size)
+            > self.threshold
+        )
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "<body> is gripped by <gripper>" -- the confidence threshold and the ray sample
+        # size decide the check, not what is claimed.
+        return clause(
+            Noun(fields["body"]),
+            Copula(),
+            Adjective("gripped"),
+            Prepositions.BY,
+            Noun(fields["gripper"]),
+        )
+
+
+is_body_gripped = symbolic_callable_to_function(IsBodyGripped)
+
+
+@dataclass(eq=False)
+class IsGripperHoldingSomething(Predicate):
+    """
+    Whether a gripper is holding something -- a body mounted beneath it in the kinematic
+    chain.
+    """
+
+    gripper: EndEffector
+    """
+    The gripper to check.
+    """
+
+    def __call__(self) -> bool:
+        bodies_under_tcp = (
+            self.gripper._world.get_kinematic_structure_entities_of_branch(
+                self.gripper.tool_frame
+            )
+        )
+        # the branch always contains the tool frame itself, so only additional
+        # entities below it count as something being held
+        return len(bodies_under_tcp) > 1
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "<gripper> is holding something" -- the name does not read as a clause on its
+        # own, and "something" is a bare noun (no article).
+        return clause(
+            Noun(fields["gripper"]),
+            Copula(),
+            Adjective("holding"),
+            Noun.bare("something"),
+        )
+
+
+is_gripper_holding_something = symbolic_callable_to_function(IsGripperHoldingSomething)
+
+
+@dataclass(eq=False)
+class IsPoseFreeForRobot(Predicate):
+    """
+    Whether a pose is free for a robot -- its mobile base would not collide there
+    (ignoring the robot's own bodies and the floor).
+    """
+
+    robot: AbstractRobot
+    """
+    The robot whose mobile base is checked.
+    """
+
+    pose: Pose
+    """
+    The pose checked for being free.
+    """
+
+    def __call__(self) -> bool:
+        return not is_place_occupied(
+            self.robot.mobile_base.bounding_box,
+            self.pose,
+            self.robot._world,
+            self.robot.bodies_with_collision
+            + [
+                kse
+                for annotation in self.robot._world.get_semantic_annotations_by_type(
+                    Floor
+                )
+                for kse in annotation.kinematic_structure_entities
+            ],
+        )
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "the <pose> is free for <robot>" -- an adjective relation with a preposition.
+        return clause(
+            Noun(fields["pose"]),
+            Copula(),
+            Adjective("free"),
+            Prepositions.FOR,
+            Noun(fields["robot"]),
+        )
+
+
+is_pose_free_for_robot = symbolic_callable_to_function(IsPoseFreeForRobot)
