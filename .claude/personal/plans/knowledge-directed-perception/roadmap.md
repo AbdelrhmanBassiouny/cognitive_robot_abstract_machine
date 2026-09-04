@@ -4869,3 +4869,103 @@ It is the same family as #160 and still wants its own bug-fix pull request.
 the same way #257's round recorded it. The kickoff carried on, as
 `plan-item-gathering.md` says to: subscribing is a convenience for noticing concurrent
 structural changes, not a precondition for anything here.
+
+### `how-to-look-concluded-from-the-request`: what it took, and the rule that cannot be written down
+
+Built 2026-09-04 as pull request #266, one commit off #239's tip. 15 new tests; **412
+passed, 1 skipped, 16 xfailed** across `test/experiments_test/` against **397 passed, 1
+skipped, 16 xfailed** on the parent, taken in a worktree with its own `*/src` on
+`PYTHONPATH` and `experiments.__file__` checked before it was trusted, per what #222
+recorded about nearly measuring a branch against itself. That is the fifteen added here
+and nothing else moved. Six modules do not collect either side, needing ROS or
+`rosbag2_py`, exactly as #238 and #259 recorded. Nothing outside `experiments/` is
+touched.
+
+**The plan held, and the two ways of looking were the two the code already implied.**
+`FindTheBoard` and `FindThePieces`, each stating the requests it answers as an entity
+query language condition; `LookRules` an `EQLSingleClassRDR` over `RequestedLook`
+concluding one of them; `MontessoriPerceptionPipeline` down from six fields to five,
+with `board_detector` and `detector_rules` moved onto the ways that use them and sharing
+the one board search so a look reporting both runs it once.
+
+#### A rule that concludes a collaborator cannot be written down
+
+**The finding worth more than the feature, and it is a constraint on the engine rather
+than on this item.** `EQLSingleClassRDR` persists its model whenever a fit finishes --
+`_saved_when_the_fit_ends` runs on the way out either way, which is the feature that
+keeps the rules an interrupted fit had authored. It writes them as *Python source*, and
+`serialization.py`'s value serializer spells an `Enum` member, a `bool`, a number, a
+string or `None`. Nothing else. So every one of the ten tests that built the rules failed
+with `UnsupportedNodeForSerialization: Cannot serialize node of type 'FindThePieces'`.
+
+The conclusion here is deliberately the way of looking *itself* rather than a name for
+one -- which is #231's own call, made for the same reason ("the rule tree concludes the
+pipeline's own detector *instances* rather than constructing fresh ones"), and what lets
+each way bring its own condition instead of a table mapping names to objects. So
+`NullModelSaver` states plainly that these rules are not persisted: they are authored in
+code from the ways themselves, and building the rules again is what recovers them.
+
+**Worth knowing for `detector-parameters-from-knowledge`**, whose own section plans "an
+`EQLSingleClassRDR` over #231's `TargetOnSurface`, concluding a `DetectionParameters`,
+rendered by `render_tree`". A `DetectionParameters` is a dataclass of numbers, not one of
+the five kinds the serializer spells, so that item meets this wall too and has the same
+two ways out: a null saver, or a conclusion the serializer can write.
+
+#### A capability that claims too much is refused when the rules are built
+
+Found by mutation-checking rather than by reading. Making `FindTheBoard.capability`
+return `pieces_are_asked_for` -- so both ways claim the same requests -- does not produce
+a wrong answer at look time: the fit itself stops converging and every test that builds
+the rules errors. That is the engine refusing to author a tree it cannot make agree with
+the cases it was given, and it makes a capability load-bearing here in the same sense
+#231 recorded it ("a capability is not a weaker rule, it is the half that says what a
+detector is *for*").
+
+It is recorded rather than pinned by a test: what it pins is the engine's convergence
+rule, not this item's claim.
+
+#### What the three mutation checks caught
+
+Each fails its own test and nothing else, following what #246 and #257 recorded about a
+refactor's tests being worth what they would catch:
+
+- rebuilding the tree where it is read fails only
+  `test_a_way_of_looking_added_at_runtime_answers_the_next_request_of_that_kind` -- the
+  same shape #231's own `add_rule` test has, and the property its review round settled is
+  what makes a rule tree a rule tree;
+- a hole not counting as asking for the board fails only
+  `test_a_request_for_the_holes_asks_for_the_board_that_carries_them`;
+- the capability mutation above, which is caught loudly rather than by one test.
+
+#### Two API changes, both updating their own tests
+
+`RectifiedFrame` moved from `pipeline.py` to `look_choice.py`, beside the `SceneToSearch`
+that is now its only reader, and `searched_surfaces` moved from the pipeline onto that
+scene, since it reads the surfaces and the request and nothing else. Three tests reached
+the detector rules through the pipeline and now read them off the way of looking; two
+read the surface search off the scene the pipeline builds for a look. That is the same
+kind of change #238 and #259 each recorded, and no test's assertion changed.
+
+#### The board is still found whatever was asked for
+
+`FindThePieces` finds the board before it searches anything, because how far each surface
+reaches is read from the board as it was *seen* -- the split #221 made and #225, #238 and
+#259 each kept -- and reports it, since this look measured it. That is what `detect`
+already did ("the board is found whatever was asked for"), so the rules restate the
+existing behaviour rather than changing it, which is why five of the six captures and
+every rendered-scene test read exactly as before.
+
+#### The environment, which is the easiest this plan has recorded
+
+The `uv` on `PATH` is 0.8.17 and cannot parse this repository's `pyproject.toml`, as
+seven consecutive items have recorded; `pip install -U uv` puts 0.12.9 at
+`/usr/local/bin/uv` and `uv sync --extra dev --python 3.12` builds the whole workspace
+first time. `black` and `docformatter` go in by hand with `.venv/bin` on `PATH` before
+`scripts/format_docstrings.py` will run.
+
+`.claude/hooks/plan_item_bootstrap.py open` failed inside `save-plan.sh` for the eighth
+round, the four-space `ITEM_FIELD_INDENT` against this plan's two-space item fields,
+exactly as #231, #236, #238, #239, #246, #255 and #257 recorded. The failure is quieter
+than those rounds described: `save-plan.sh` exits 1 on *"No changes to save"*, which is
+what a rewrite that matched nothing produces, so the error the script swallows is not an
+invalid-YAML error at all. Worked around an eighth time by editing `plan.yaml` directly.
