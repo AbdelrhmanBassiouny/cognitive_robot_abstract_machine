@@ -10,13 +10,19 @@ from __future__ import annotations
 import argparse
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 
 from class_property import classproperty
 from maintenance_board import BoardExport
 from maintenance_fast_forward import fast_forward
 from maintenance_git_commands import GitCommandRunner
 from maintenance_github import GitHubRepository
-from maintenance_promotion import clear_spent_promotion_labels, promote
+from maintenance_promotion import (
+    PromotionSummaries,
+    clear_spent_promotion_labels,
+    pending_promotions,
+    promote,
+)
 from maintenance_report import (
     MaintenanceExitCode,
     MaintenanceReport,
@@ -24,6 +30,7 @@ from maintenance_report import (
     exit_code_for,
     print_board_export,
     print_fast_forward,
+    print_pending_promotions,
     print_promotions,
     print_restack,
 )
@@ -58,6 +65,26 @@ class MaintenancePass:
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
         return load_stack()
+
+
+def declare_summaries_argument(parser: argparse.ArgumentParser) -> None:
+    """
+    Declare the flag naming what each upstream pull request is to open with.
+
+    Shared by the two commands that promote, so neither can end up reading the summaries
+    from a flag the other does not answer to.
+
+    :param parser: The subparser to declare it on.
+    """
+    parser.add_argument(
+        "--summaries",
+        type=Path,
+        help=(
+            "the points to prefill each upstream pull request with, keyed by fork pull "
+            "request number; a branch with no entry is promoted with the link back to "
+            "its fork pull request and nothing else"
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -231,6 +258,10 @@ class PromoteCommand(MaintenanceCommand):
         """
         return "record the upstream link on every promotable branch"
 
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--summaries`` on."""
+        declare_summaries_argument(parser)
+
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
     ) -> MaintenanceExitCode:
@@ -239,8 +270,48 @@ class PromoteCommand(MaintenanceCommand):
         :return: The process exit code."""
         stack = maintenance.stack()
         fork = maintenance.fork()
-        print_promotions(
-            promote(stack, fork), clear_spent_promotion_labels(stack, fork)
+        promoted = promote(
+            stack, fork, PromotionSummaries.read_from(arguments.summaries)
+        )
+        print_promotions(promoted, clear_spent_promotion_labels(stack, fork))
+        return MaintenanceExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class PendingPromotionsCommand(MaintenanceCommand):
+    """
+    Reports every upstream link that is built and still waiting to be opened.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "pending-promotions"
+
+    @property
+    def description(self) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "report every upstream link waiting to be opened, as a table"
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> MaintenanceExitCode:
+        """
+        Report the pending links, reading each one back from where it was recorded.
+
+        Answers from the fork alone rather than from a board, so it runs in a session
+        that did not run the pass - a whole pass discards its board when it finishes.
+
+        :param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        print_pending_promotions(
+            pending_promotions(maintenance.configuration, maintenance.fork())
         )
         return MaintenanceExitCode.SUCCESS
 
@@ -266,12 +337,13 @@ class RunReportCommand(MaintenanceCommand):
         return "perform the whole pass and report it"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """:param parser: The subparser to declare ``--json`` on."""
+        """:param parser: The subparser to declare ``--json`` and ``--summaries`` on."""
         parser.add_argument(
             "--json",
             action="store_true",
             help="emit the machine-readable document rather than a summary",
         )
+        declare_summaries_argument(parser)
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
@@ -290,11 +362,15 @@ class RunReportCommand(MaintenanceCommand):
         stack = maintenance.stack()
         fork = maintenance.fork()
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
+        restacked = restack(stack, maintenance.git, fork)
+        promoted = promote(
+            stack, fork, PromotionSummaries.read_from(arguments.summaries)
+        )
         report = build_report(
             stack,
             fast_forward_report,
-            restack(stack, maintenance.git, fork),
-            promote(stack, fork),
+            restacked,
+            promoted,
             clear_spent_promotion_labels(stack, fork),
         )
         BOARD_PATH.unlink(missing_ok=True)
