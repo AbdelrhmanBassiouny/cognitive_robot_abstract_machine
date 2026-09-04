@@ -30,7 +30,7 @@ it. #32 (SymbolicFunction migration) and P1–P3 (#86, #87, #88) are all merged 
    class. An override belongs on the class, not in a test-side dict.
 10. Keep surfaces concise (omit root/tip from `BlockingBodies`); details are query-able.
 11. `Reachable` reads *"a Pose is reachable for the kinematic chain rooted at `<root>` and
-    ending at <tip>"* — the chain is what reaches, and root/tip stay named here (unlike
+    ending at `<tip>`"* — the chain is what reaches, and root/tip stay named here (unlike
     `BlockingBodies` under decision 10) because reachability is only meaningful relative
     to them.
 12. Naming a referent by value *and* type on first mention (*"a gripper of type
