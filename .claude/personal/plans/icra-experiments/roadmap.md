@@ -622,3 +622,84 @@ members -- twenty checks, all passing, which is the test that governs the
 `ci.yml` triggers on push to `main` and on pull requests, so this push to `tracy_icra`
 runs nothing. **The suites still need a run** -- on the next pull request that carries
 this branch, or by hand in the container.
+
+## 2026-09-04: the integrated branch, its merge order and the four meetings it resolves
+
+`integrated-simulation-pipeline` is #265, `claude/icra-experiments-simulation-pipeline-w4ep7n`,
+cut off `main` with no dependencies. The merge order is the item's own, with one branch added
+and one done-criterion changed; both are recorded below rather than left to the diff.
+
+The order, and what each merge actually cost, measured by a dry run over the real branches
+before anything was committed:
+
+| step | branch | conflicts |
+|---|---|---|
+| 1 | #244 `sdt_segmind_krrood_from_fast_monitor` | none |
+| 2 | #256 `montessori_monitor_and_recording` | none |
+| 3 | #262 `claude/montessori-results-recording-jnrgfy` | 3 add/add: the recording trio |
+| 4 | #229 `sdt_predicates_answer_whether_they_hold` | `reasoning/predicates.py` and its test |
+| 5 | #238 `claude/kdp-search-constraints-pfaph7` | `world.py`, `semantics.py`, `hole_geometry.py` and their three tests |
+| 6 | #236 `claude/plan-item-kickoff-ge8541` | `perception/pipeline.py`, `perception/recorded_setup.py` |
+| 7 | #231 `claude/choose-detection-method-gf64yp` | four perception modules, `geometry.py`, one test |
+| 8 | #223 `claude/montessori-classes-orm-s7vxu1` | the `RectifiedFootprint` rename over the perception tips |
+| 9 | #239 `3a493be9` only | cherry-pick, the measured colours and finishes |
+
+### The three meetings the item predicted, and the fourth it did not
+
+Predicted and confirmed: **#262 against #256** on the recording trio, resolved by taking
+#262's copies, which are the same modules with the dangling references repointed;
+**#244 against #229** on `reasoning/predicates.py` (+184 against a 759-line rewrite) and
+`geometry.py`; and **#231's `EdgeFitDetector` rename**, which arrives with step 7.
+
+Not predicted, and the one that would have stopped the branch: **the perception stack and
+#256 each build their own `experiments/src/experiments/montessori/`**. The directory exists
+on neither `main` nor #244 — #202 creates it with 43 files, #256 with 10, and their
+`world.py`, `semantics.py` and `hole_geometry.py` are close relatives rather than one file
+(1,180 against 1,149 lines; 479 against 318; 236 against 293). The item's notes named this
+collision as `tracy_icra` against #169; on this branch it is the perception lineage against
+#256, and it meets in full.
+
+The perception lineage's copies survive. They are the larger, reviewed lineage that is
+landing on `main` through #202, and the extraction analysis of 2026-09-03 had already judged
+#256's copies to be "the Franka simulated demo's". What the monitor needs from them is
+narrow — `event_monitoring.py` imports exactly `MontessoriShape` from `semantics` and
+`MontessoriWorld` from `world`, both of which the perception copy defines — so the merge
+order puts #256 before #238 and takes #238's side, and only what the monitor needs and the
+perception copy lacks is carried forward.
+
+### #223 joins the merge list, because this is the branch that puts the two Footprints together
+
+`roadmap.md` already assigned the `Footprint` rename to "whichever branch first puts the two
+together". That is this branch, and the trigger is exactly the one predicted: #262's
+`experiments/montessori/__init__.py` makes `pkgutil.walk_packages` descend into the
+directory, where the perception stack's `perception/footprint.py` declares a `Footprint`
+that collides with `semantic_digital_twin...graph_of_convex_sets.plotting.Footprint`. Two
+`FootprintDAO` classes and SQLAlchemy refuses the mapping.
+
+#223 already renamed the perception one to `RectifiedFootprint`, so the branch merges #223
+rather than writing a second rename. It goes in after the perception tips, not before, so
+the rename lands over them instead of being conflicted against by each in turn.
+
+### The done-criterion moved, because neither demo entry point lands here
+
+The item's notes ask for `franka_montessori_demo` and the Tracy simulated demo to sort the
+board headless. Checked rather than assumed: `franka_montessori_demo.py` exists only on
+#169, which is deliberately excluded, and `montessori_demo.py` only on `tracy_icra`, which
+this branch does not merge — `tracy-demo-takes-the-integrated-branch` merges in the other
+direction, and later. So as the merge list stands the criterion is not checkable on this
+branch at all.
+
+Settled with the developer on 2026-09-04: **this branch writes its own headless integration
+test** over the merged world, event monitor and predicates, and the demo proof belongs to
+`tracy-demo-takes-the-integrated-branch`. Porting a copy of `montessori_demo.py` here was
+the alternative, and it was rejected because a copy carrying no shared history buys a
+checkable criterion now at the price of an add/add conflict when the two branches meet.
+
+### What this branch cannot verify, and who does
+
+`scripts/regenerate_all_orm.py`, `test/experiments_test` and `test/segmind_test` do not run
+in a Claude Code session container: the generator dies resolving giskardpy's
+`DebugExpressionPublisher`, `segmind.datastructures.events` imports `geometry_msgs` at
+module scope, and `rclpy` has no PyPI distribution. This is the same limit #262 recorded,
+and it applies to every item of this track. CI runs both inside the ROS image, so the merge
+resolutions and the ORM regeneration are CI-verified rather than session-verified.
