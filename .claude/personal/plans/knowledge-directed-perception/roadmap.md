@@ -4969,3 +4969,118 @@ exactly as #231, #236, #238, #239, #246, #255 and #257 recorded. The failure is 
 than those rounds described: `save-plan.sh` exits 1 on *"No changes to save"*, which is
 what a rewrite that matched nothing produces, so the error the script swallows is not an
 invalid-YAML error at all. Worked around an eighth time by editing `plan.yaml` directly.
+
+### `expectations-from-events`: the review round of 2026-09-04, and the stack it points at
+
+Resolved 2026-09-04 in `auto` mode. What kept the item open was nineteen review threads
+opened that afternoon and two red checks, of which the item's own `blockers` recorded
+none -- the sixth time on this plan that the cause of a stall was a review round nobody
+had turned into state, and the first time one of the stalls was also a red check. Both
+were written down before any code, and the dashboard republished.
+
+#### The red checks, and which of them is this branch's
+
+`test_each_lib (version)` fails `test_imported_workspace_members_are_declared[experiments]`:
+`expectations.py` imports `segmind` and `experiments/pyproject.toml` never declared it.
+That is this branch's, green on the base, and reproduced locally before the one-line fix.
+`test_each_lib (probabilistic_model)` errors eight `test_jpt` cases with
+`ValueError: Unsupported datatype: str`; it is red on #232's own head in the same hour and
+touches nothing this branch changes, so it is recorded on the pull request rather than
+worked here.
+
+#### What was done here
+
+Fourteen of the nineteen threads are local to this item's own types and were answered as
+asked, in `4c1a1bb7`:
+
+- **Entities, not names.** `Expectation.piece` is the `MontessoriShape` the world holds,
+  `resting_on` the `KinematicStructureEntity` it should rest against (a hole's own
+  `Region`, the lid's `Body`), `Expectations.searched_surface` the surface's entity, and
+  the store is keyed by the body an event names. `released_over` takes the piece and the
+  `ShapeSortingHole` themselves, so the category is read off the piece rather than
+  passed beside it. The one name left is at the boundary to #221's
+  `MontessoriShapeDetection.supporting_surface` and #232's `BelievedPlace.surface`, both
+  `PrefixedName` fields on parents this branch does not own; the comparison reads
+  `resting_on.name` there and nowhere else.
+- **A pick-up means held, not supported.** The reviewer's question -- *how does pickup
+  say what the object came to be supported by?* -- had a measurable answer: Segmind's
+  `PickUpDetector` builds `PickUpEvent` with no `with_object` at all, so the old mapping
+  answered *nothing* for a real pick-up and the test that said *the gripper* was stating
+  an event no detector ever emits. A pick-up now says the piece rests on nothing.
+- **Event effects are declared on the events.** `SUPPORT_AFTER_EVENT` -- a dictionary
+  from event type to function, which the reviewer rightly called badly modelled -- is
+  gone. `segmind.datastructures.events` gains `SupportEffect` with three members,
+  `RestingOn`, `RestingOnNothing` and `NoLongerRestingOn`, each answering
+  `supporting_afterwards(supporting_before)` for itself, and `EventWithSupportEffect`, the
+  event that states one. The five events inherit it and each declares its own effect;
+  every other event says nothing about support and is left alone by the store. A
+  support-stating event that names no supporter raises `EventSaysNothingAboutSupport`
+  rather than guessing. That is the first change to Segmind on this plan, and it is the
+  finding the plan allowed for ("if a detector is missing, that is a finding for the
+  item").
+- The quoted forward reference went with the alias that needed it; the test module's
+  constants have docstrings; its `entity` helper is `body_named`, out of the way of the
+  entity query language's own `entity`; the two `predicate` parameters of Segmind's
+  detector base are typed; and the backend's docstring says *a* `MontessoriShapeDetection`.
+
+#### What reaches past this item, and where it already exists
+
+Five threads ask for things this branch cannot answer on its base, and every one of them
+is already built on the other stack:
+
+| ask | where it is built |
+| --- | --- |
+| narrow by arbitrary relations, not `SUPPORTING_SURFACE_ATTRIBUTE_NAME` / `SceneRequest.supporting_surface` | #227 reads a statement's predicates by type; #238 narrows by the whole `PlacementRelation` family |
+| an expectation check over arbitrary relations, with a distance per relation type | #229 makes each relation answer whether it holds with the measurement behind it; #238's `PlacementRelation.allows(place)` answers exactly, `allowed_space` narrows |
+| the digital twin's own concepts instead of `ExpectedProperty` | the same: `SupportedBy`, `Near`, `InsideRegion` are that vocabulary |
+| `DetectedMontessoriShape` | #255, at the developer's 2026-09-02 decision, as a `Role` over a body in an imagined world |
+| `BelievedPlace` as a `Role` for a `Place` | dissolves under the above: a believed place becomes the space a relation allows, and a `Role` has identity equality where #232's round recorded that a belief must compare as a value |
+
+So the recommendation put to the developer is **to re-base this item on #255** rather than
+rebuild any of that here: an expectation becomes the relations of the twin's own
+vocabulary stated about the piece -- `SupportedBy(piece, hole)`, `Near(piece, hole,
+release_spread)`, a turn relation the family does not have yet -- each evaluated against
+the sighting's own body in the imagined world, and the violated ones *are* the report.
+The expectation then reaches a look as the same relations stated in the look's own
+statement, which is the reviewer's *"why not any arbitrary relation or eql statement"*
+answered by construction. Measured before proposing: #246 into #255 conflicts in
+`reasoning/predicates.py` and its test -- #244 against #229, the merge #238's own section
+predicted this item would pay -- and this item's own change is three commits. #255 is a
+draft, so stacking on it is the developer's call, as #246's base was.
+
+The `look` to `look_for` rename is #222's abstract method, implemented on six branches of
+the other stack; done here it would break every one of them at integration, so it is
+proposed on #222 where one rename reaches all of them.
+
+#### The design discussion, recorded as a proposal rather than built
+
+The thread on the module docstring asks for explicit effect and occurrence rules, a
+predicted current state read off the digital twin and Segmind, situation calculus kept
+inside what the domain model can express, and asks where that belongs. The answer given:
+the narrow half is this item (an event declares its effect, done above; an action's
+declared effect is `released_over`), and the wide half is two items rather than this
+branch -- a predicted state of the twin, built by applying every declared effect of the
+actions performed and events seen, which `icra-experiments`' `snapshot-working-memory`
+and `failure-taxonomy-and-typing` are the nearest home for; and effects that cannot be
+enumerated concluded by the EQL-native ripple-down rules on the #77 stack, per the
+developer's own suggestion. Probabilistic fusion is not recommended for this: the
+relations here are true or false, a belief is confirmed or refuted, and a filter answers
+a different question -- the accurate pose -- which the paper's claim does not need.
+Nothing structural was added; both are proposals on #201 for the developer.
+
+#### Verification
+
+`test/segmind_test`: **61 passed, 1 skipped** against **53 passed, 1 skipped** before this round, the eight tests added here and nothing else moved. `test/experiments_test`, the same modules and
+exclusions #238 and #259 recorded: **443 passed, 1 skipped, 11 xfailed**, identical to the same run on the tree as it stood before this round. The version test that was red
+in CI passes locally after the dependency is declared. `scripts/format_docstrings.py`
+ran over every touched file; black's reformatting of Segmind's detector base beyond the
+two typed parameters was reverted, since a file this branch only annotates should not
+arrive re-wrapped.
+
+#### The environment
+
+`pip install -U uv` puts 0.12.9 at `/usr/local/bin/uv` and `uv sync --extra dev --python
+3.12` builds the workspace, as seven items have recorded; `black` and `docformatter` go
+in by hand. This checkout's `plan_item_bootstrap.py` has `update`, so the manifest was
+written through it for the first time on this plan, from a worktree of the tooling
+branch -- the item branch's own checkout is older than the skill that calls it.
