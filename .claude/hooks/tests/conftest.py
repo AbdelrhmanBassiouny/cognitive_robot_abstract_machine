@@ -4,8 +4,10 @@ all run against.
 
 The hooks' Python scripts are single-file scripts, not an installed package - so their
 directory is added to ``sys.path`` here rather than requiring an ``__init__.py``/
-packaging setup just for tests. Mirrors
-``.claude/skills/plan-dashboard/tests/conftest.py``.
+packaging setup just for tests. ``.claude/stack`` joins it for the tests that assert
+against the stack tooling's own definitions rather than restating them, which is the
+same reach ``.claude/stack/tests/conftest.py`` already makes in the other direction.
+Mirrors ``.claude/skills/plan-dashboard/tests/conftest.py``.
 """
 
 import sys
@@ -14,6 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "stack"))
 
 from scratch_repository import ScratchRepository  # noqa: E402
 
