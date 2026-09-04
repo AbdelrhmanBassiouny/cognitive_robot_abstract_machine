@@ -1,9 +1,10 @@
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 
+from semantic_digital_twin.exceptions import RelationStatedAboutNothing
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.reasoning.predicates import (
@@ -14,7 +15,11 @@ from semantic_digital_twin.reasoning.predicates import (
     LeftOf,
     RightOf,
     Behind,
+    Between,
+    Colored,
     InFrontOf,
+    Near,
+    PlacementRelation,
     is_body_in_region,
     occluding_bodies,
     is_supported_by,
@@ -26,12 +31,15 @@ from semantic_digital_twin.reasoning.predicates import (
     PlaceIsOccupied,
     Reachable,
     Stable,
+    space_between,
     SupportedBy,
     Supports,
     ViewDependentSpatialRelation,
     VisibleTo,
 )
-from krrood.entity_query_language.predicate import Predicate
+from krrood.entity_query_language.backends import StatedRelation
+from krrood.entity_query_language.factories import an, variable
+from krrood.entity_query_language.predicate import Predicate, Relation, Triple
 from krrood.entity_query_language.testing.result_verification import (
     placeholder_operands,
 )
@@ -49,12 +57,8 @@ from semantic_digital_twin.reasoning.robot_predicates import (
 )
 from semantic_digital_twin.robots.robot_parts import Camera, EndEffector
 from semantic_digital_twin.robots.pr2 import PR2
-from semantic_digital_twin.spatial_types.spatial_types import (
-    Point3,
-    Pose,
-    Quaternion,
-    Vector3,
-)
+from semantic_digital_twin.spatial_types import Point3
+from semantic_digital_twin.spatial_types.spatial_types import Pose, Quaternion, Vector3
 from semantic_digital_twin.testing import *
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -995,6 +999,22 @@ def test_support_relates_the_supported_thing_to_what_holds_it_up():
     assert relation.object is supporting
 
 
+def test_support_asserted_of_a_variable_is_carried_as_a_symbolic_expression():
+    """
+    A statement asserts support about the thing it is looking for, which has no value
+    yet, so constructing the relation over it has to yield an expression a backend can
+    read rather than an instance that would have to be evaluated at once.
+    """
+    supporting = Body(name=PrefixedName("supporting"))
+    sought = variable(Body, [])
+
+    relation = SupportedBy(supported=sought, supporting=supporting)
+
+    stated = StatedRelation.read_from(relation, sought)
+    assert stated.relation_type is SupportedBy
+    assert stated.related_thing is supporting
+
+
 def test_support_holds_exactly_where_the_geometric_reading_says_it_does(
     two_block_world,
 ):
@@ -1040,3 +1060,343 @@ def test_a_relation_named_for_its_object_still_reads_as_a_sentence(relation, sen
     operands.update(relation._example_operand_values_())
 
     assert verbalize_expression(relation(**operands)) == sentence
+
+
+def test_a_direction_says_where_it_was_read_from():
+    """
+    A direction holds from somewhere rather than of the world, so it says so and names
+    the frame it was read from, instead of the matrix that frame's pose is stored as.
+    """
+    camera = Body(name=PrefixedName("camera", "tracy"))
+    operands = placeholder_operands(LeftOf)
+    operands["point_of_view"] = HomogeneousTransformationMatrix(child_frame=camera)
+
+    assert verbalize_expression(LeftOf(**operands)).endswith(
+        f"as seen from the {camera.name.name}"
+    )
+
+
+# %% where a relation allows a thing to be
+
+
+@pytest.fixture(scope="function")
+def three_places() -> Tuple[World, Body, Body, Body]:
+    """
+    A world holding three bodies a metre apart along the x axis, at y = 0.
+    """
+    world = World()
+    root = Body(name=PrefixedName("root"))
+    placed = [Body(name=PrefixedName(f"place_{step}")) for step in range(3)]
+    with world.modify_world():
+        world.add_kinematic_structure_entity(root)
+        for step, body in enumerate(placed):
+            world.add_connection(
+                FixedConnection(
+                    parent=root,
+                    child=body,
+                    parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        x=float(step), reference_frame=root
+                    ),
+                )
+            )
+    world.update_forward_kinematics()
+    return (world, *placed)
+
+
+def looking_along_x(world: World) -> HomogeneousTransformationMatrix:
+    """
+    A point of view facing along the world's own x axis, which is the one an axis-
+    aligned box can hold exactly what a direction from it allows.
+
+    :param world: The world it stands in.
+    """
+    return HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=world.root)
+
+
+def test_a_direction_is_stated_about_things_rather_than_about_their_coordinates(
+    three_places,
+):
+    """
+    A statement relates the things the world holds, so a relation reads where each of
+    them stands rather than being handed a point measured beforehand.
+    """
+    world, near, middle, far = three_places
+    point_of_view = looking_along_x(world)
+
+    assert InFrontOf(far, middle, point_of_view)()
+    assert Behind(near, middle, point_of_view)()
+    assert not InFrontOf(near, middle, point_of_view)()
+
+
+def test_a_direction_leaves_everything_on_its_own_side_of_the_other_thing(three_places):
+    world, near, middle, far = three_places
+
+    allowed = InFrontOf(
+        other=middle, point_of_view=looking_along_x(world)
+    ).allowed_space
+
+    assert allowed.x_interval.lower == pytest.approx(
+        float(middle.global_pose.to_position().x)
+    )
+    assert allowed.x_interval.upper == np.inf
+    assert (allowed.y_interval.lower, allowed.y_interval.upper) == (-np.inf, np.inf)
+    assert allowed.contains(far.global_pose.to_position())
+    assert not allowed.contains(near.global_pose.to_position())
+
+
+def test_a_direction_running_across_the_worlds_axes_narrows_nothing_and_still_answers(
+    three_places,
+):
+    """
+    No axis-aligned box holds exactly what a direction across the world's own axes
+    allows, so the narrowing gives up rather than reporting a stretch that leaves out
+    somewhere the relation allows -- and the relation itself still answers exactly.
+    """
+    world, near, middle, far = three_places
+    turned = HomogeneousTransformationMatrix.from_xyz_rpy(
+        yaw=np.pi / 4, reference_frame=world.root
+    )
+    relation = InFrontOf(far, middle, turned)
+
+    assert relation.allowed_space.x_interval.lower == -np.inf
+    assert relation.allowed_space.x_interval.upper == np.inf
+    assert relation()
+
+
+def stretch_around_the_places(world: World) -> VolumetricBoundingBox:
+    """
+    A bounded stretch of the world holding all three places, which is the kind of thing
+    a search is about to read.
+
+    :param world: The world they stand in.
+    """
+    return space_between(
+        np.array([-1.0, -1.0, -0.5]), np.array([3.0, 1.0, 0.5]), world.root
+    )
+
+
+def test_a_direction_across_the_worlds_axes_narrows_a_stretch_that_is_bounded(
+    three_places,
+):
+    """
+    Asked about the world a tilted direction can answer nothing, since no axis-aligned
+    box holds a half space; asked about a stretch already bounded it answers the part of
+    it on its own side, which is what lets a search read less picture for a direction
+    stated from where a camera stands.
+    """
+    world, near, middle, far = three_places
+    turned = HomogeneousTransformationMatrix.from_xyz_rpy(
+        yaw=np.pi / 4, reference_frame=world.root
+    )
+    relation = InFrontOf(other=middle, point_of_view=turned)
+    stretch = stretch_around_the_places(world)
+
+    narrowed = relation.allowed_part_of(stretch)
+
+    assert narrowed.x_interval.lower > stretch.x_interval.lower
+    assert narrowed.x_interval.upper == pytest.approx(stretch.x_interval.upper)
+    assert narrowed.contains(far.global_pose.to_position())
+
+
+def test_a_stretch_wholly_against_a_direction_is_left_with_nothing_of_it(three_places):
+    world, near, middle, far = three_places
+    relation = Behind(other=middle, point_of_view=looking_along_x(world))
+
+    assert (
+        relation.allowed_part_of(
+            space_between(
+                np.array([1.5, -1.0, -0.5]), np.array([3.0, 1.0, 0.5]), world.root
+            )
+        )
+        is None
+    )
+
+
+def test_a_relation_that_can_say_where_it_allows_narrows_by_meeting_the_stretch(
+    three_places,
+):
+    """
+    A relation whose own stretch is bounded needs no cutting: what it leaves of another
+    is the ground the two share.
+    """
+    world, near, middle, far = three_places
+    relation = Near(place=middle, radius=0.5)
+
+    narrowed = relation.allowed_part_of(stretch_around_the_places(world))
+
+    assert narrowed == relation.allowed_space.intersection_with(
+        stretch_around_the_places(world)
+    )
+
+
+def test_a_relation_stated_about_nothing_says_what_it_allows_but_not_whether_it_holds(
+    three_places,
+):
+    world, near, middle, far = three_places
+    constraint = RightOf(other=middle, point_of_view=looking_along_x(world))
+
+    assert constraint.allowed_space.y_interval.upper == pytest.approx(
+        float(middle.global_pose.to_position().y)
+    )
+    with pytest.raises(RelationStatedAboutNothing):
+        constraint()
+
+
+def test_left_and_right_are_the_two_sides_of_the_point_of_views_own_y_axis(
+    three_places,
+):
+    world, near, middle, far = three_places
+    point_of_view = looking_along_x(world)
+    beside = Point3(1.0, 0.5, 0.0, reference_frame=world.root)
+
+    assert LeftOf(beside, middle, point_of_view)()
+    assert not RightOf(beside, middle, point_of_view)()
+    assert RightOf(middle, beside, point_of_view)()
+
+
+def test_between_holds_along_the_line_joining_two_things(three_places):
+    world, near, middle, far = three_places
+
+    assert Between(middle, near, far)()
+    assert not Between(near, middle, far)()
+
+
+def test_between_refuses_a_place_further_to_the_side_than_the_fraction_allows(
+    three_places,
+):
+    world, near, middle, far = three_places
+    apart = float(
+        np.linalg.norm(
+            far.global_pose.to_position().to_np()[:3]
+            - near.global_pose.to_position().to_np()[:3]
+        )
+    )
+    relation = Between(one=near, other=far)
+    just_inside = Point3(
+        1.0, relation.maximum_sideways_fraction * apart, 0.0, reference_frame=world.root
+    )
+    just_outside = Point3(
+        1.0,
+        relation.maximum_sideways_fraction * apart + 0.01,
+        0.0,
+        reference_frame=world.root,
+    )
+
+    assert relation.allows(just_inside)
+    assert not relation.allows(just_outside)
+
+
+def test_between_leaves_a_stretch_holding_everything_it_allows(three_places):
+    world, near, middle, far = three_places
+    relation = Between(one=near, other=far)
+    reach = relation.maximum_sideways_fraction * 2.0
+
+    allowed = relation.allowed_space
+
+    assert allowed.x_interval.lower == pytest.approx(-reach)
+    assert allowed.x_interval.upper == pytest.approx(2.0 + reach)
+    assert allowed.contains(middle.global_pose.to_position())
+
+
+def test_near_holds_within_the_radius_it_was_stated_with(three_places):
+    world, near, middle, far = three_places
+
+    assert Near(near, middle, radius=1.5)()
+    assert not Near(near, middle, radius=0.5)()
+
+
+def test_near_leaves_the_box_its_radius_reaches_into(three_places):
+    world, near, middle, far = three_places
+    radius = 0.25
+
+    allowed = Near(place=middle, radius=radius).allowed_space
+
+    middle_x = float(middle.global_pose.to_position().x)
+    assert allowed.x_interval.lower == pytest.approx(middle_x - radius)
+    assert allowed.x_interval.upper == pytest.approx(middle_x + radius)
+
+
+def test_near_reads_a_pose_as_the_place_it_is_measured_from(three_places):
+    """
+    A place worth searching around is as often a pose the robot is about to reach for as
+    a thing already standing there, so either can be stated.
+    """
+    world, near, middle, far = three_places
+    pose = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=1.1, reference_frame=world.root
+    )
+
+    assert Near(middle, pose, radius=0.2)()
+
+
+def test_a_body_is_colored_the_color_its_own_shape_is_drawn_in():
+    body = Body(name=PrefixedName("colored_body"))
+    color = Color(0.0, 1.0, 1.0)
+    body.collision = ShapeCollection(
+        [
+            Box(
+                scale=Scale(0.1, 0.1, 0.1),
+                origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    reference_frame=body
+                ),
+                color=color,
+            )
+        ],
+        reference_frame=body,
+    )
+
+    assert Colored(body, color)()
+    assert not Colored(body, Color(1.0, 0.0, 0.0))()
+
+
+@pytest.mark.parametrize(
+    "relation", [LeftOf, RightOf, Above, Below, Behind, InFrontOf, Between, Near]
+)
+def test_every_placement_relation_says_where_the_thing_it_is_about_may_be(relation):
+    """
+    Saying where a thing may be is what lets a search act on a relation before anything
+    has been found, so it is the family every one of them belongs to.
+    """
+    assert issubclass(relation, PlacementRelation)
+
+
+def test_a_relation_of_more_than_two_operands_is_still_asserted_about_one_thing():
+    """
+    Between relates the thing sought to two others at once, so it is not a triple -- but
+    it still names the thing it is about, which is what a look reads it by.
+    """
+    assert issubclass(Between, Relation)
+    assert not issubclass(Between, Triple)
+
+
+def test_a_color_reads_as_something_the_thing_is_rather_than_something_it_does():
+    operands = placeholder_operands(Colored)
+    operands.update(Colored._example_operand_values_())
+
+    assert verbalize_expression(Colored(**operands)) == "a Body is colored a Color"
+
+
+@pytest.mark.parametrize(
+    "assertion, sentence",
+    [
+        (
+            lambda sought, one, other: Between(sought, one, other),
+            "Generate an object where it is between a specific Body and a specific Body",
+        ),
+        (
+            lambda sought, one, other: Near(sought, one, radius=0.05),
+            "Generate an object where it is within 0.05 of a specific Body",
+        ),
+    ],
+)
+def test_a_relation_this_vocabulary_adds_reads_as_a_sentence(assertion, sentence):
+    """
+    A relation over places is stated about the thing a statement is looking for, so what
+    it has to read as a sentence is the statement asserting it.
+    """
+    one = Body(name=PrefixedName("one"))
+    other = Body(name=PrefixedName("other"))
+    statement = an(object)()
+    statement = statement.where(assertion(statement.variable, one, other))
+
+    assert verbalize_expression(statement) == sentence

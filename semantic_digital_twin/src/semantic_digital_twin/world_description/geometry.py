@@ -8,6 +8,7 @@ import shutil
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
+from enum import Enum
 from functools import cached_property
 from pathlib import Path
 
@@ -31,6 +32,12 @@ from typing_extensions import (
 )
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
+from krrood.entity_query_language.verbalization.fragments.base import (
+    RoleFragment,
+    VerbalizationFragment,
+)
+from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
+from krrood.entity_query_language.verbalization.self_naming_value import SelfNamingValue
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
@@ -62,7 +69,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class Color:
+class Color(SelfNamingValue):
     """
     Dataclass for storing rgba_color as an RGBA value.
 
@@ -104,49 +111,66 @@ class Color:
     def to_rgb(self) -> Tuple[float, float, float]:
         return (self.R, self.G, self.B)
 
-    @classmethod
-    def RED(self):
-        return Color(1, 0, 0)
+    def _verbalization_noun_phrase_(self) -> VerbalizationFragment:
+        """
+        :return: The name of the colour this one lies nearest to, which is what a reader
+            calls it.
+        """
+        return RoleFragment(
+            text=ColorName.nearest_to(self).name.lower(), role=SemanticRole.LITERAL
+        )
 
     @classmethod
-    def YELLOW(self):
-        return Color(1, 1, 0)
+    def RED(cls) -> Color:
+        return ColorName.RED.color
 
     @classmethod
-    def GREEN(self):
-        return Color(0, 1, 0)
+    def YELLOW(cls) -> Color:
+        return ColorName.YELLOW.color
 
     @classmethod
-    def CYAN(self):
-        return Color(0, 1, 1)
+    def GREEN(cls) -> Color:
+        return ColorName.GREEN.color
 
     @classmethod
-    def BLUE(self):
-        return Color(0, 0, 1)
+    def CYAN(cls) -> Color:
+        return ColorName.CYAN.color
 
     @classmethod
-    def MAGENTA(self):
-        return Color(1, 0, 1)
+    def BLUE(cls) -> Color:
+        return ColorName.BLUE.color
 
     @classmethod
-    def WHITE(self):
-        return Color(1, 1, 1)
+    def MAGENTA(cls) -> Color:
+        return ColorName.MAGENTA.color
 
     @classmethod
-    def BLACK(self):
-        return Color(0, 0, 0)
+    def WHITE(cls) -> Color:
+        return ColorName.WHITE.color
 
     @classmethod
-    def GRAY(self):
-        return Color(0.498, 0.498, 0.498)
+    def BLACK(cls) -> Color:
+        return ColorName.BLACK.color
 
     @classmethod
-    def BEIGE(self):
-        return Color(1, 0.827, 0.6078)
+    def GRAY(cls) -> Color:
+        return ColorName.GRAY.color
 
     @classmethod
-    def ORANGE(self):
-        return Color(1, 0.647, 0)
+    def BEIGE(cls) -> Color:
+        return ColorName.BEIGE.color
+
+    @classmethod
+    def ORANGE(cls) -> Color:
+        return ColorName.ORANGE.color
+
+    @classmethod
+    def PINK(cls) -> Color:
+        return ColorName.PINK.color
+
+    @classmethod
+    def GREY(cls) -> Color:
+        return ColorName.GREY.color
 
     @classmethod
     def from_list(cls, color: List[float]):
@@ -180,45 +204,58 @@ class Color:
         """
         return cls(*rgba)
 
-    @classmethod
-    def PINK(cls) -> Self:
-        return cls(1, 0, 1, 1)
+
+class ColorName(Enum):
+    """
+    The colours this twin has a word for, each as the colour that word means.
+
+    Every colour reads as the one of these it lies nearest to, which is how a measured
+    colour is said at all: a hue read off a real object never lands exactly on a named
+    one.
+
+    ..note:: Two names meaning one colour are one member: *pink* is the same red, green and
+        blue as *magenta*, so ``ColorName.PINK`` is ``ColorName.MAGENTA`` and that colour is
+        read as *magenta*.
+    """
+
+    RED = Color(1, 0, 0)
+    YELLOW = Color(1, 1, 0)
+    GREEN = Color(0, 1, 0)
+    CYAN = Color(0, 1, 1)
+    BLUE = Color(0, 0, 1)
+    MAGENTA = Color(1, 0, 1)
+    PINK = Color(1, 0, 1)
+    WHITE = Color(1, 1, 1)
+    BLACK = Color(0, 0, 0)
+    GRAY = Color(0.498, 0.498, 0.498)
+    GREY = Color(0.5, 0.5, 0.5)
+    BEIGE = Color(1, 0.827, 0.6078)
+    ORANGE = Color(1, 0.647, 0)
+
+    @property
+    def color(self) -> Color:
+        """
+        :return: A colour of this name, freshly made, so changing it cannot change what the
+            name means.
+        """
+        return Color(*self.value.to_rgba())
+
+    def distance_to(self, color: Color) -> float:
+        """
+        :param color: The colour to measure against.
+        :return: How far it lies from this name's own colour, as the straight-line distance
+            between the two in red-green-blue space. Opacity is not a colour, so it is not
+            measured.
+        """
+        return math.dist(self.value.to_rgb(), color.to_rgb())
 
     @classmethod
-    def BLACK(cls) -> Self:
-        return cls(0, 0, 0, 1)
-
-    @classmethod
-    def WHITE(cls) -> Self:
-        return cls(1, 1, 1, 1)
-
-    @classmethod
-    def RED(cls) -> Self:
-        return cls(1, 0, 0, 1)
-
-    @classmethod
-    def GREEN(cls) -> Self:
-        return cls(0, 1, 0, 1)
-
-    @classmethod
-    def BLUE(cls) -> Self:
-        return cls(0, 0, 1, 1)
-
-    @classmethod
-    def YELLOW(cls) -> Self:
-        return cls(1, 1, 0, 1)
-
-    @classmethod
-    def CYAN(cls) -> Self:
-        return cls(0, 1, 1, 1)
-
-    @classmethod
-    def MAGENTA(cls) -> Self:
-        return cls(1, 0, 1, 1)
-
-    @classmethod
-    def GREY(cls) -> Self:
-        return cls(0.5, 0.5, 0.5, 1)
+    def nearest_to(cls, color: Color) -> ColorName:
+        """
+        :param color: The colour to name.
+        :return: The name it lies nearest to.
+        """
+        return min(cls, key=lambda name: name.distance_to(color))
 
 
 @dataclass

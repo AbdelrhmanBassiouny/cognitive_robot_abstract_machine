@@ -15,14 +15,16 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import trimesh
-from typing_extensions import List, Optional, Tuple, Type
+from typing_extensions import Dict, List, Optional, Tuple, Type
 
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
     HoleFootprint,
     cut_board_mesh,
     detect_hole_footprints,
+    hole_names,
 )
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
@@ -100,7 +102,7 @@ Wide enough to carry an arm's base without reaching the montessori table itself,
 two never share a footprint.
 """
 
-BOARD_SCALE = Scale(0.13, 0.30, 0.08)
+BOARD_SCALE = Scale(0.11, 0.282, 0.08)
 BOARD_POSITION = Point3(-0.4, 0.0, 0.553)
 BOARD_COLOR = Color.BEIGE()
 
@@ -112,8 +114,7 @@ LANDING_REGION_XY_MARGIN = 0.03
 Margin added on every side of a hole's own footprint size when sizing the
 :class:`Region` a shape is checked for containment against once it has fallen through
 that hole (see :meth:`MontessoriWorld._build_shape_sorting_board`); comfortably
-tolerates placement/settling inaccuracy (the Franka Panda demo measures roughly 5.5 mm
-horizontal accuracy).
+tolerates placement/settling inaccuracy.
 """
 
 LANDING_REGION_TOP_CLEARANCE = 0.02
@@ -156,17 +157,18 @@ DEFAULT_ROBOT_STANDOFF_DISTANCE = 0.6
 Default distance the spawned robot stands in front of the Montessori table's near edge.
 """
 
-_SHAPE_COLORS = {
-    MontessoriShapeCategory.CUBE: Color.RED(),
-    MontessoriShapeCategory.CYLINDER: Color.BLUE(),
+_SHAPE_COLORS: Dict[MontessoriShapeCategory, Color] = {
     MontessoriShapeCategory.DISK: Color.YELLOW(),
     MontessoriShapeCategory.SPHERE: Color.MAGENTA(),
-    MontessoriShapeCategory.TRIANGULAR_PRISM: Color.GREEN(),
-    MontessoriShapeCategory.RECTANGULAR_PRISM: Color.ORANGE(),
-}
+} | {category: piece.color for category, piece in KNOWN_PIECE_BY_CATEGORY.items()}
 """
 The color used to render a loose shape and the hole it fits through, keyed by their
 shared :class:`~experiments.montessori.semantics.MontessoriShapeCategory`.
+
+Every category the physical set contains is drawn in the colour measured off the real
+piece (see :class:`~experiments.montessori.pieces.KnownPiece`), so the simulated scene
+and the camera are looking at the same thing. The disk and the sphere, which this set
+has none of, keep a colour of their own.
 """
 
 
@@ -186,29 +188,14 @@ class _HoleSpec:
     """
 
 
-_HOLE_KEY_BY_CATEGORY = {
-    MontessoriShapeCategory.CUBE: "square_hole",
-    MontessoriShapeCategory.TRIANGULAR_PRISM: "triangle_hole",
-    MontessoriShapeCategory.RECTANGULAR_PRISM: "rectangular_hole",
-    MontessoriShapeCategory.DISK: "disk_hole",
-}
-"""
-Name given to a hole of a given category, for the categories that occur at most once on
-the board.
-
-The :attr:`~MontessoriShapeCategory.CYLINDER` category occurs twice and is numbered
-instead (``circular_hole_1``, ``circular_hole_2``).
-"""
-
-
 def _hole_spec_from_footprint(footprint: HoleFootprint, key: str) -> _HoleSpec:
     """
     Place a mesh-detected :class:`HoleFootprint` onto the board, flush with its top
     surface, and pair it with a semantic key.
     """
     position = Point3(
-        BOARD_POSITION.x + footprint.center[0],
-        BOARD_POSITION.y + footprint.center[1],
+        BOARD_POSITION.x + footprint.center.x,
+        BOARD_POSITION.y + footprint.center.y,
         BOARD_POSITION.z + BOARD_SCALE.z / 2 - HOLE_MARKER_THICKNESS / 2,
     )
     return _HoleSpec(key, footprint.category, position, footprint)
@@ -218,16 +205,10 @@ def _build_hole_specs(footprints: List[HoleFootprint]) -> List[_HoleSpec]:
     """
     Build the board's hole specifications from its mesh-detected hole shapes.
     """
-    circular_hole_count = 0
-    hole_specs = []
-    for footprint in footprints:
-        if footprint.category is MontessoriShapeCategory.CYLINDER:
-            circular_hole_count += 1
-            key = f"circular_hole_{circular_hole_count}"
-        else:
-            key = _HOLE_KEY_BY_CATEGORY[footprint.category]
-        hole_specs.append(_hole_spec_from_footprint(footprint, key))
-    return hole_specs
+    return [
+        _hole_spec_from_footprint(footprint, name)
+        for footprint, name in zip(footprints, hole_names(footprints))
+    ]
 
 
 _HOLE_FOOTPRINTS: List[HoleFootprint] = detect_hole_footprints()
@@ -278,12 +259,13 @@ def _footprint_bounds(footprint: HoleFootprint) -> Tuple[float, float, float, fl
     :param footprint: The hole to compute bounds for.
     :return: ``(min_x, max_x, min_y, max_y)``.
     """
-    boundary = np.asarray(footprint.boundary)
+    boundary_x = [point.x for point in footprint.boundary]
+    boundary_y = [point.y for point in footprint.boundary]
     return (
-        float(footprint.center[0] + boundary[:, 0].min()),
-        float(footprint.center[0] + boundary[:, 0].max()),
-        float(footprint.center[1] + boundary[:, 1].min()),
-        float(footprint.center[1] + boundary[:, 1].max()),
+        footprint.center.x + min(boundary_x),
+        footprint.center.x + max(boundary_x),
+        footprint.center.y + min(boundary_y),
+        footprint.center.y + max(boundary_y),
     )
 
 
@@ -658,11 +640,10 @@ def _landing_region(
         bounding box plus :data:`LANDING_REGION_XY_MARGIN` on every side.
     :param height: This region's extent along z; see :func:`_landing_region_height`.
     """
-    size_x, size_y = footprint.size
     box = Box(
         scale=Scale(
-            size_x + 2 * LANDING_REGION_XY_MARGIN,
-            size_y + 2 * LANDING_REGION_XY_MARGIN,
+            footprint.size.x + 2 * LANDING_REGION_XY_MARGIN,
+            footprint.size.y + 2 * LANDING_REGION_XY_MARGIN,
             height,
         )
     )
@@ -704,12 +685,20 @@ def _shape_body(
         cross-section is derived the same way rather than kept at a fixed size, so it
         gets the same :data:`SHAPE_FOOTPRINT_CLEARANCE_SCALE` clearance every other
         footprint-derived shape does instead of whatever clearance the hole's own true
-        size happens to leave against a hardcoded constant.
+        size happens to leave against a hardcoded constant; unlike the others, its own
+        thickness is derived from that same clearance-scaled edge too (not the shared
+        fixed thickness the others use), so it comes out an actual cube rather than a
+        flat square tile.
     """
     color = _SHAPE_COLORS[category]
     match category:
         case MontessoriShapeCategory.CUBE:
-            shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)
+            # A cube's hole footprint is square, so giving it the same thickness its
+            # own footprint edge scales down to (rather than the fixed 0.03 every other
+            # footprint-derived category uses) makes all three of its edges equal --
+            # an actual cube, not a flat square tile.
+            cube_edge = footprint.size.x * SHAPE_FOOTPRINT_CLEARANCE_SCALE
+            shape = _footprint_shape_mesh(footprint, thickness=cube_edge, color=color)
         case MontessoriShapeCategory.CYLINDER:
             shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)
         case MontessoriShapeCategory.DISK:
@@ -813,9 +802,9 @@ class MontessoriWorld:
     Off by default, matching the HSR :mod:`~experiments.montessori.montessori_demo`,
     which places each shape kinematically and only makes it movable for the moment it
     settles under gravity. Turn it on for a robot that grasps and lifts a shape by
-    physical contact (see :mod:`~experiments.montessori.franka_montessori_demo`): a
-    welded shape cannot be moved by the gripper at all, so it can be reached and pressed
-    against but never picked up.
+    physical contact (see :mod:`~experiments.tracy_experiments.montessori.montessori_demo_mujoco`):
+    a welded shape cannot be moved by the gripper at all, so it can be reached and
+    pressed against but never picked up.
     """
 
     world: World = field(init=False, default_factory=World)
@@ -850,23 +839,6 @@ class MontessoriWorld:
             self._build_floor_and_table()
             self.board = self._build_shape_sorting_board()
             self._build_shapes()
-
-    def gripper_bodies(self) -> List[Body]:
-        """
-        The bodies of :attr:`robot` that hold a shape while it is being carried.
-
-        What a shape losing contact with means it slipped out of the robot's hold, as
-        opposed to leaving any other body behind (see
-        :mod:`experiments.montessori.insertion_diagnosis`). Empty without a robot.
-        """
-        if self.robot is None:
-            return []
-        return [
-            body
-            for arm in self.robot.get_arms()
-            if arm.end_effector is not None
-            for body in arm.end_effector.bodies
-        ]
 
     def spawn_robot(
         self,
@@ -1044,10 +1016,7 @@ class MontessoriWorld:
         # leaves the dofs at create_with_dofs' identity default, so MuJoCo starts the
         # body at the world origin regardless of where it was spawned.
         connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=position.x,
-            y=position.y,
-            z=position.z,
-            reference_frame=self.world.root,
+            x=position.x, y=position.y, z=position.z, reference_frame=self.world.root
         )
         self.world.add_semantic_annotation(annotation)
         return annotation

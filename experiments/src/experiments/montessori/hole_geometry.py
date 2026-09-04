@@ -13,6 +13,7 @@ import numpy as np
 import trimesh
 from typing_extensions import List, Tuple
 
+from experiments.montessori.planar_geometry import PlanarPoint, PlanarSize
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.world_description.geometry import Scale
 
@@ -59,6 +60,43 @@ rather than square.
 
 
 @dataclass(frozen=True)
+class PolygonMeasurement:
+    """
+    How much of the plane a simple polygon covers, and where that area balances.
+    """
+
+    area: float
+    """
+    The area the polygon encloses, in square metres, however its vertices are wound.
+    """
+
+    centroid: PlanarPoint
+    """
+    The point the enclosed area is balanced about, which for an asymmetric outline is
+    not the middle of its bounding box.
+    """
+
+    @classmethod
+    def of(cls, points_xy: np.ndarray) -> PolygonMeasurement:
+        """
+        Measure a simple polygon with the shoelace formula.
+
+        :param points_xy: Ordered boundary vertices, shape ``(n, 2)``.
+        """
+        x, y = points_xy[:, 0], points_xy[:, 1]
+        x_next, y_next = np.roll(x, -1), np.roll(y, -1)
+        cross = x * y_next - x_next * y
+        signed_area = cross.sum() / 2.0
+        return cls(
+            area=abs(signed_area),
+            centroid=PlanarPoint(
+                float(((x + x_next) * cross).sum() / (6 * signed_area)),
+                float(((y + y_next) * cross).sum() / (6 * signed_area)),
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class HoleFootprint:
     """
     A single hole's position and 2D footprint, detected from the board mesh.
@@ -69,18 +107,18 @@ class HoleFootprint:
     The geometric shape of the hole.
     """
 
-    center: Tuple[float, float]
+    center: PlanarPoint
     """
     The hole's center, in the board mesh's local ``(x, y)`` frame.
     """
 
-    size: Tuple[float, float]
+    size: PlanarSize
     """
     The hole's axis-aligned bounding box size, along the board mesh's local ``(x, y)``
     axes.
     """
 
-    boundary: Tuple[Tuple[float, float], ...]
+    boundary: Tuple[PlanarPoint, ...]
     """
     The hole's true cross-section outline: an ordered, closed polygon of ``(x, y)``
     points relative to :attr:`center` (as opposed to its bounding box).
@@ -94,7 +132,9 @@ class HoleFootprint:
 
         :param thickness: Extrusion depth along z.
         """
-        return _extrude_polygon(np.asarray(self.boundary), thickness)
+        return _extrude_polygon(
+            np.asarray([(point.x, point.y) for point in self.boundary]), thickness
+        )
 
 
 def _extrude_polygon(boundary: np.ndarray, thickness: float) -> trimesh.Trimesh:
@@ -137,27 +177,9 @@ def cut_board_mesh(
     cut_depth = board_scale.z * 2
     for footprint in footprints:
         cutter = footprint.extrude(cut_depth)
-        cutter.apply_translation([footprint.center[0], footprint.center[1], 0.0])
+        cutter.apply_translation([footprint.center.x, footprint.center.y, 0.0])
         board = board.difference(cutter, engine=None)
     return board
-
-
-def _polygon_area_and_centroid(
-    points_xy: np.ndarray,
-) -> Tuple[float, Tuple[float, float]]:
-    """
-    Compute a simple polygon's area and centroid with the shoelace formula.
-
-    :param points_xy: Ordered boundary vertices, shape ``(n, 2)``.
-    :return: The polygon's unsigned area and its ``(x, y)`` centroid.
-    """
-    x, y = points_xy[:, 0], points_xy[:, 1]
-    x_next, y_next = np.roll(x, -1), np.roll(y, -1)
-    cross = x * y_next - x_next * y
-    signed_area = cross.sum() / 2.0
-    centroid_x = ((x + x_next) * cross).sum() / (6 * signed_area)
-    centroid_y = ((y + y_next) * cross).sum() / (6 * signed_area)
-    return abs(signed_area), (centroid_x, centroid_y)
 
 
 def _classify_hole_shape(
@@ -191,6 +213,38 @@ def _find_perforated_body(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     raise ValueError("No part of the board mesh has holes cut into it.")
 
 
+HOLE_NAME_BY_CATEGORY = {
+    MontessoriShapeCategory.CUBE: "square_hole",
+    MontessoriShapeCategory.TRIANGULAR_PRISM: "triangle_hole",
+    MontessoriShapeCategory.RECTANGULAR_PRISM: "rectangular_hole",
+    MontessoriShapeCategory.DISK: "disk_hole",
+}
+"""
+What a hole of a given shape is called, for the shapes the board carries at most one
+hole of.
+
+The :attr:`~experiments.montessori.semantics.MontessoriShapeCategory.CYLINDER` category
+occurs twice and is numbered instead (``circular_hole_1``, ``circular_hole_2``).
+"""
+
+
+def hole_names(footprints: List[HoleFootprint]) -> List[str]:
+    """
+    What each of the board's holes is called, in the order they were detected.
+
+    :param footprints: The board's holes, as cut into its mesh.
+    """
+    circular_hole_count = 0
+    names = []
+    for footprint in footprints:
+        if footprint.category is MontessoriShapeCategory.CYLINDER:
+            circular_hole_count += 1
+            names.append(f"circular_hole_{circular_hole_count}")
+        else:
+            names.append(HOLE_NAME_BY_CATEGORY[footprint.category])
+    return names
+
+
 def detect_hole_footprints() -> List[HoleFootprint]:
     """
     Detect the shape-sorting board's holes by slicing its mesh horizontally through the
@@ -216,21 +270,24 @@ def detect_hole_footprints() -> List[HoleFootprint]:
             continue
         minimum, maximum = loop.min(axis=0), loop.max(axis=0)
         size_x, size_y = maximum - minimum
-        area, centroid = _polygon_area_and_centroid(loop)
+        measurement = PolygonMeasurement.of(loop)
         aspect_ratio = max(size_x, size_y) / min(size_x, size_y)
-        fill_ratio = area / (size_x * size_y)
+        fill_ratio = measurement.area / (size_x * size_y)
         category = _classify_hole_shape(len(loop), fill_ratio, aspect_ratio)
         boundary = loop[:-1] if np.allclose(loop[0], loop[-1]) else loop
         footprints.append(
             HoleFootprint(
                 category=category,
-                center=(float(centroid[0]), float(centroid[1])),
-                size=(float(size_x), float(size_y)),
+                center=measurement.centroid,
+                size=PlanarSize(float(size_x), float(size_y)),
                 boundary=tuple(
-                    (float(x - centroid[0]), float(y - centroid[1]))
+                    PlanarPoint(
+                        float(x - measurement.centroid.x),
+                        float(y - measurement.centroid.y),
+                    )
                     for x, y in boundary
                 ),
             )
         )
 
-    return sorted(footprints, key=lambda footprint: footprint.center[1])
+    return sorted(footprints, key=lambda footprint: footprint.center.y)

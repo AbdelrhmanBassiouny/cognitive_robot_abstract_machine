@@ -7,14 +7,13 @@ through them.
 from __future__ import annotations
 
 import math
-import re
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 
 from typing_extensions import Dict, Optional, Type
 
-from krrood.exceptions import DataclassException
+from experiments.montessori.exceptions import NoMatchingHoleError
 from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasApertures,
@@ -29,26 +28,6 @@ from semantic_digital_twin.semantic_annotations.part_whole import (
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
-from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.world_entity import Body
-
-DEFAULT_INSERTION_HOVER_HEIGHT = 0.03
-"""
-Height above a hole, in metres, a shape is released at by default, so the gripper clears
-the board's surface on approach.
-"""
-
-SHAPE_NAME_SUFFIX = "_shape"
-"""
-Suffix :meth:`~experiments.montessori.world.MontessoriWorld._build_shapes` appends to a
-hole's key to name the loose shape it builds for that hole.
-"""
-
-SHAPE_INDEX_PATTERN = re.compile(r"_(\d+)$")
-"""
-Trailing index of a hole key (``circular_hole_1``), which is all that tells two holes of
-one category apart.
-"""
 
 
 class MontessoriShapeCategory(StrEnum):
@@ -85,33 +64,6 @@ class MontessoriShape(HasRootBody):
         """
         ...
 
-    @property
-    def shape_key(self) -> str:
-        """
-        The key pairing this shape with the hole it was built for, e.g.
-        ``"circular_hole_1"``.
-
-        This is the shape's own name minus :data:`SHAPE_NAME_SUFFIX`, the convention
-        :meth:`~experiments.montessori.world.MontessoriWorld._build_shapes` names a
-        shape after its hole with, and the key results are recorded under.
-        """
-        return self.name.name.removesuffix(SHAPE_NAME_SUFFIX)
-
-    @property
-    def object_name(self) -> str:
-        """
-        What this piece is, e.g. ``"cube"`` or ``"cylinder_1"``.
-
-        :attr:`shape_key` names the *hole* a shape belongs to, which reads as though the
-        piece were the hole. This names the piece by its own geometry instead, keeping
-        the hole key's trailing index (see :data:`SHAPE_INDEX_PATTERN`) when there is
-        one, since two holes of one category are told apart by nothing else.
-        """
-        index = SHAPE_INDEX_PATTERN.search(self.shape_key)
-        if index is None:
-            return str(self.shape_category)
-        return "%s_%s" % (self.shape_category, index.group(1))
-
     def insertion_pose_relative_to_hole(
         self, hole: ShapeSortingHole, horizontal_offset: Point3, hover_height: float
     ) -> Pose:
@@ -143,9 +95,9 @@ class MontessoriShape(HasRootBody):
     @property
     def cross_section_size(self) -> float:
         """
-        The larger of this shape's own local ``(x, y)`` footprint extents: the practical
-        diameter or width a hole must be at least as large as for this shape to actually
-        pass through it (see :meth:`fits_through`).
+        The larger of this shape's own local ``(x, y)`` footprint extents: the
+        practical diameter or width a hole must be at least as large as for this shape
+        to actually pass through it (see :meth:`fits_through`).
         """
         bounds = self.root.collision.combined_mesh.bounds
         return float(max(bounds[1][0] - bounds[0][0], bounds[1][1] - bounds[0][1]))
@@ -154,8 +106,8 @@ class MontessoriShape(HasRootBody):
         """
         Whether this shape can actually pass through ``hole``.
 
-        Matching :attr:`shape_category` is necessary but not sufficient once more than
-        one hole shares a category (e.g. the board's two circular holes are both
+        Matching :attr:`shape_category` is necessary but not sufficient once more
+        than one hole shares a category (e.g. the board's two circular holes are both
         :attr:`MontessoriShapeCategory.CYLINDER`, but sized differently), so this also
         requires this shape to be no larger than ``hole``.
 
@@ -194,9 +146,9 @@ class DiskShape(MontessoriShape):
     """
     A loose disk-shaped Montessori piece: a flat coin whose matching hole is a narrow
     slot rather than a coin-shaped opening (see
-    :func:`~experiments.montessori.hole_geometry._classify_hole_shape`), so unlike every
-    other shape it must be tipped onto its edge to fit through, not just hover above it
-    flat.
+    :func:`~experiments.montessori.hole_geometry._classify_hole_shape`), so unlike
+    every other shape it must be tipped onto its edge to fit through, not just hover
+    above it flat.
     """
 
     @classproperty
@@ -207,11 +159,11 @@ class DiskShape(MontessoriShape):
         self, hole: ShapeSortingHole, horizontal_offset: Point3, hover_height: float
     ) -> Pose:
         """
-        Overrides :meth:`MontessoriShape.insertion_pose_relative_to_hole`: a disk lying
-        flat presents its full diameter to the hole's narrow slot and cannot pass
-        through it, so this rotates the disk a quarter turn about the hole's local
-        y-axis, presenting its thin edge (matching the slot's narrow width) instead of
-        its flat face.
+        Overrides :meth:`MontessoriShape.insertion_pose_relative_to_hole`: a disk
+        lying flat presents its full diameter to the hole's narrow slot and cannot
+        pass through it, so this rotates the disk a quarter turn about the hole's
+        local y-axis, presenting its thin edge (matching the slot's narrow width)
+        instead of its flat face.
         """
         return Pose.from_xyz_rpy(
             horizontal_offset.x,
@@ -320,33 +272,6 @@ class ShapeSortingHole(Aperture):
         )
 
 
-@dataclass
-class NoMatchingHoleError(DataclassException):
-    """
-    Raised when a :class:`ShapeSortingBoard` has no :class:`ShapeSortingHole` whose
-    category matches a given :class:`MontessoriShape`.
-    """
-
-    montessori_shape: MontessoriShape
-    """
-    The shape that has no matching hole.
-    """
-
-    board: ShapeSortingBoard
-    """
-    The board that has no hole matching :attr:`montessori_shape`.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"{self.board.name} has no hole matching {self.montessori_shape.name}'s "
-            f"category {self.montessori_shape.shape_category}."
-        )
-
-    def suggest_correction(self) -> str:
-        return ""
-
-
 @dataclass(eq=False)
 class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
     """
@@ -382,98 +307,12 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
         fitting_holes = [
             hole
             for hole in self.apertures
-            if isinstance(hole, ShapeSortingHole)
-            and montessori_shape.fits_through(hole)
+            if isinstance(hole, ShapeSortingHole) and montessori_shape.fits_through(hole)
         ]
         if not fitting_holes:
             raise NoMatchingHoleError(montessori_shape, self)
+        shape_key = montessori_shape.name.name.removesuffix("_shape")
         for hole in fitting_holes:
-            if hole.name.name == montessori_shape.shape_key:
+            if hole.name.name == shape_key:
                 return hole
         return min(fitting_holes, key=lambda hole: hole.cross_section_size)
-
-    def insertion_target_for(
-        self,
-        montessori_shape: MontessoriShape,
-        world: World,
-        hover_height: float = DEFAULT_INSERTION_HOVER_HEIGHT,
-        horizontal_offset: Optional[Point3] = None,
-    ) -> Pose:
-        """
-        The pose, in the world root frame, a shape must be released at to drop through
-        its matching hole.
-
-        Where an insertion aims, so it can be reported without waiting for one.
-
-        :param montessori_shape: The shape being inserted.
-        :param world: The world both the shape and this board live in.
-        :param hover_height: Height above the hole's own origin to release the shape at.
-        :param horizontal_offset: Offset from the hole's origin in its local ``(x, y)``
-            plane; the hole's own origin when omitted.
-        :raises NoMatchingHoleError: If this board has no hole the shape fits through.
-        """
-        hole = self.hole_for(montessori_shape)
-        insertion_pose = montessori_shape.insertion_pose_relative_to_hole(
-            hole,
-            (
-                horizontal_offset
-                if horizontal_offset is not None
-                else Point3(0.0, 0.0, 0.0)
-            ),
-            hover_height,
-        )
-        return world.transform(insertion_pose, world.root)
-
-    def has_fallen_through(
-        self, montessori_shape: MontessoriShape, world: World
-    ) -> bool:
-        """
-        Whether ``montessori_shape`` currently rests below this board's top surface and
-        directly beneath its matching hole, i.e. has actually fallen through that hole
-        rather than resting on top of the board or never having been moved there.
-
-        The ground truth an insertion is judged by. Reads only the world's current
-        state, so it answers for whatever the shape is doing at the moment it is asked.
-
-        .. note::
-            A shape needs time to physically settle before this means anything: right
-            after a kinematic placement above the hole it is still true that the shape
-            has not fallen through.
-
-        :param montessori_shape: The shape to judge.
-        :param world: The world both the shape and this board live in.
-        :raises NoMatchingHoleError: If this board has no hole the shape fits through.
-        :return: True when the shape's own center is horizontally within the hole's
-            footprint and its highest point is below the board's top surface.
-        """
-        hole = self.hole_for(montessori_shape)
-        hole_position = hole.root.global_transform.to_position()
-        hole_bounds = hole.root.area.combined_mesh.bounds
-        shape_position = montessori_shape.root.global_transform.to_position()
-        is_below_the_hole = (
-            float(hole_position.x) + hole_bounds[0][0]
-            <= float(shape_position.x)
-            <= float(hole_position.x) + hole_bounds[1][0]
-            and float(hole_position.y) + hole_bounds[0][1]
-            <= float(shape_position.y)
-            <= float(hole_position.y) + hole_bounds[1][1]
-        )
-        return bool(
-            is_below_the_hole
-            and self._top_height(montessori_shape.root, world)
-            < self._top_height(self.root, world)
-        )
-
-    @staticmethod
-    def _top_height(body: Body, world: World) -> float:
-        """
-        The highest point of a body's collision geometry, in the world root frame.
-
-        :param body: The body to measure.
-        :param world: The world the body lives in.
-        """
-        return (
-            body.collision.as_bounding_box_collection_in_frame(world.root)
-            .bounding_box()
-            .max_z
-        )
