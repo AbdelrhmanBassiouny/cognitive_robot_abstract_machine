@@ -212,7 +212,7 @@ def test_the_board_is_still_found_under_a_piece_standing_on_its_lid(
 def test_a_piece_the_depth_image_cannot_resolve_stands_at_its_nominal_height(
     pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    [(detector, _)] = pipeline.detector_rules.detectors_for(
+    [(detector, _)] = pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
         pipeline.table, KNOWN_PIECES
     )
     nominal = detector.piece_height

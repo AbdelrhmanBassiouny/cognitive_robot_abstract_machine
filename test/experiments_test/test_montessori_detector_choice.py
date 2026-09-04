@@ -25,11 +25,11 @@ from experiments.montessori.perception.orthophoto import (
     OrthophotoProjector,
     WorkspaceRegion,
 )
+from experiments.montessori.perception.look_choice import RectifiedFrame
 from experiments.montessori.perception.pipeline import (
     ColorBlobDetector,
     EdgeFitDetector,
     MontessoriPerceptionPipeline,
-    RectifiedFrame,
 )
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import (
@@ -385,8 +385,10 @@ def test_nothing_is_annotated_yet_so_every_look_falls_to_the_edge_fit(
     pipeline: MontessoriPerceptionPipeline,
 ):
     for surface in (pipeline.table, pipeline.lid):
-        [(detector, chosen_for)] = pipeline.detector_rules.detectors_for(
-            surface, KNOWN_PIECES
+        [(detector, chosen_for)] = (
+            pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
+                surface, KNOWN_PIECES
+            )
         )
         assert isinstance(detector, EdgeFitDetector)
         assert chosen_for == KNOWN_PIECES
@@ -395,8 +397,10 @@ def test_nothing_is_annotated_yet_so_every_look_falls_to_the_edge_fit(
 def test_a_mirror_table_is_searched_by_fitting_edges_whatever_the_piece(
     annotated_pipeline: MontessoriPerceptionPipeline,
 ):
-    [(detector, chosen_for)] = annotated_pipeline.detector_rules.detectors_for(
-        annotated_pipeline.table, KNOWN_PIECES
+    [(detector, chosen_for)] = (
+        annotated_pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
+            annotated_pipeline.table, KNOWN_PIECES
+        )
     )
 
     assert isinstance(detector, EdgeFitDetector)
@@ -408,7 +412,7 @@ def test_a_matte_lid_splits_the_pieces_by_whether_colour_separates_them(
 ):
     chosen = {
         type(detector): {piece.hue for piece in pieces}
-        for detector, pieces in annotated_pipeline.detector_rules.detectors_for(
+        for detector, pieces in annotated_pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
             annotated_pipeline.lid, KNOWN_PIECES
         )
     }

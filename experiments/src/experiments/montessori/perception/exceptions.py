@@ -274,3 +274,25 @@ class NoDetectorAnswersTheLook(DataclassException):
             "that already answers this kind of look declares it can, or add one that "
             "does."
         )
+
+
+@dataclass
+class NoWayOfLookingAnswersTheRequest(DataclassException):
+    """
+    Raised when no rule says how a request is to be answered, so nothing would be run
+    for it and reporting nothing found would be a lie about the scene.
+    """
+
+    request: str
+    """
+    What the look was asked for, as the rules read it.
+    """
+
+    def error_message(self) -> str:
+        return f"No rule says how to answer {self.request}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "State the way of looking that answers this kind of request, through "
+            "LookRules.add_rule, or ask for something a stated rule already reaches."
+        )
