@@ -106,10 +106,7 @@ class SubClassSafeGeneric(ABC):
                 f"SubClassSafeGeneric: could not resolve type hints for {cls}; "
                 f"field types will not be updated. Cause: {error}"
             )
-            if cls._substitutions_bind_a_concrete_type(substitutions):
-                logger.warning(message)
-            else:
-                logger.debug(message)
+            logger.debug(message)
             return
         for name, result in resolution_results.items():
             if not result.resolved:
