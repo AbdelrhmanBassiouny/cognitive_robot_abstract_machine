@@ -63,6 +63,19 @@ if TYPE_CHECKING:
     )
 
 
+def identify_argument(argument: Any) -> Any:
+    """
+    :param argument: An argument a mapping was written with.
+    :return: The identifier of a symbolic expression, or the argument itself when it is
+        a plain value, which identifies itself.
+
+    ..note::
+        An expression is identified rather than held because comparing two of them
+        builds a comparison instead of answering whether they are the same.
+    """
+    return argument._id_ if isinstance(argument, SymbolicExpression) else argument
+
+
 @dataclass(eq=False, repr=False)
 class CanBehaveLikeAVariable(Selectable[T], ABC):
     """
@@ -341,6 +354,21 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
         :return: This mapping applied to ``child``.
         """
 
+    @property
+    @abstractmethod
+    def _structural_key_(self) -> Tuple[Any, ...]:
+        """
+        :return: What tells this mapping apart from another step of a chain -- its kind
+            together with the arguments it was written with, so a consumer comparing two
+            chains step by step finds them equal exactly when they describe the same
+            navigation.
+
+        ..note::
+            Each kind states its own key, for the reason :meth:`_rebuild_on_` is stated
+            per kind too: a mapping added later must not be able to inherit a key that
+            says nothing about the argument distinguishing it.
+        """
+
     def _reroot_on_(
         self, root: CanBehaveLikeAVariable, replaced: SymbolicExpression
     ) -> CanBehaveLikeAVariable:
@@ -530,6 +558,10 @@ class Attribute(SingleValueMapping[T]):
         )
 
     @property
+    def _structural_key_(self) -> Tuple[Any, ...]:
+        return (type(self), self._attribute_name_, self._owner_class_)
+
+    @property
     def _name_(self):
         return f"{self._child_._name_}.{self._attribute_name_}"
 
@@ -586,10 +618,9 @@ class Index(MappedVariable[T], ABC):
         Narrow ``_type_`` to the child's element type: indexing a ``List[X]``-like
         attribute reaches a single ``X``, not the container type itself.
 
-        Without this, an indexed attribute's ``_type_`` stayed the child's raw
-        container type (e.g. ``List[PlanNode]``), which later broke any
-        ``issubclass()`` check against it -- subscripted generics aren't valid
-        ``issubclass()`` arguments.
+        Without this, an indexed attribute's ``_type_`` stayed the child's raw container
+        type (e.g. ``List[PlanNode]``), which later broke any ``issubclass()`` check
+        against it -- subscripted generics aren't valid ``issubclass()`` arguments.
         """
         if self._type_ is not None:
             return
@@ -620,6 +651,12 @@ class IndexByValue(Index[T], SingleValueMapping[T]):
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(IndexByValue, _key_=self._key_)
 
+    @property
+    def _structural_key_(self) -> Tuple[Any, ...]:
+        # The key is a plain value, since ``__getitem__`` sends a symbolic one to
+        # :class:`IndexByExpression`, so it stands for itself.
+        return (type(self), self._key_)
+
     def _set_child_instance_value_(self, instance: Any, value: Any):
         instance[self._key_] = value
 
@@ -649,6 +686,10 @@ class IndexByExpression(Index[T]):
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(IndexByExpression, _key_=self._key_)
 
+    @property
+    def _structural_key_(self) -> Tuple[Any, ...]:
+        return (type(self), identify_argument(self._key_))
+
 
 @dataclass(eq=False, repr=False)
 class Call(SingleValueMapping[T]):
@@ -677,6 +718,17 @@ class Call(SingleValueMapping[T]):
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         return child._get_mapped_variable_(
             Call, _args_=self._args_, _kwargs_=self._kwargs_
+        )
+
+    @property
+    def _structural_key_(self) -> Tuple[Any, ...]:
+        return (
+            type(self),
+            tuple(identify_argument(argument) for argument in self._args_),
+            tuple(
+                (name, identify_argument(argument))
+                for name, argument in sorted(self._kwargs_.items())
+            ),
         )
 
     @property
@@ -714,6 +766,12 @@ class FlatVariable(MappedVariable[T]):
         # Not routed through the mapped-variable cache: a flattening is an iteration
         # variable, so each one written ranges over the elements on its own.
         return FlatVariable(child)
+
+    @property
+    def _structural_key_(self) -> Tuple[Any, ...]:
+        # The node itself is the iteration variable, and it takes no argument naming
+        # which element it means, so its identity is all there is to compare.
+        return (type(self), self._id_)
 
     @cached_property
     def _name_(self) -> str:
