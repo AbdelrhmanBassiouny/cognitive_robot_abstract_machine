@@ -16,6 +16,7 @@ from build_dashboard import (
     AVAILABLE_MODELS,
     DashboardRenderer,
     DependencyCycle,
+    DependencyReference,
     DuplicateItemId,
     InvalidBlockers,
     InvalidDependsOn,
@@ -24,26 +25,46 @@ from build_dashboard import (
     Item,
     ItemStatus,
     LiveState,
+    MalformedDependencyReference,
+    ManifestKey,
     MalformedPullRequestDataError,
     MAXIMUM_DEPENDENCY_STACK_LEVEL,
     MissingMergeTimestampError,
+    MissingPlanDirectory,
     Plan,
+    PLAN_REFERENCE_SEPARATOR,
+    PlanDirectory,
+    PlanFile,
     PlanValidationError,
     PullRequestLabel,
     PullRequestRecord,
     PullRequestsByRepository,
     PullRequestState,
+    SelfPlanReference,
     StackedItem,
+    SUPPORTED_SCHEMA_VERSION,
     Track,
     UnknownDependency,
+    UnknownDependencyPlan,
     UnknownStatus,
     UnknownTrack,
     UnknownWave,
+    UnresolvedDependency,
     Wave,
     classify_live_state,
     load_pull_requests_by_repository,
     main,
     validate_plan,
+)
+from fixture_plans import (
+    FIXTURE_PLANS_DIRECTORY,
+    FixturePlanId,
+    ForeignItemId,
+    PLAN_UNDER_TEST_ID,
+    fixture_manifest,
+    fixture_pull_request_number,
+    fixture_repository,
+    foreign_reference,
 )
 
 EXAMPLE_DIRECTORY = Path(__file__).parent.parent / "example"
@@ -60,25 +81,47 @@ def minimal_plan(**overrides: Any) -> dict[str, Any]:
     :param overrides: Top-level keys to replace in the returned mapping.
     """
     plan = {
-        "schema_version": 1,
-        "id": "test-plan",
-        "title": "Test Plan",
-        "description": "A plan.",
-        "default_repository": "owner/repo",
-        "waves": [{"id": "wave-1", "name": "Wave 1"}],
-        "tracks": [{"id": "track-1", "name": "Track 1", "wave": "wave-1"}],
-        "items": [
+        ManifestKey.SCHEMA_VERSION.value: SUPPORTED_SCHEMA_VERSION,
+        ManifestKey.ID.value: PLAN_UNDER_TEST_ID,
+        ManifestKey.TITLE.value: "Test Plan",
+        ManifestKey.DESCRIPTION.value: "A plan.",
+        ManifestKey.DEFAULT_REPOSITORY.value: "owner/repo",
+        ManifestKey.WAVES.value: [
+            {ManifestKey.ID.value: "wave-1", ManifestKey.NAME.value: "Wave 1"}
+        ],
+        ManifestKey.TRACKS.value: [
             {
-                "id": "a",
-                "title": "Item A",
-                "branch": "a",
-                "track": "track-1",
-                "status": "not_started",
+                ManifestKey.ID.value: "track-1",
+                ManifestKey.NAME.value: "Track 1",
+                ManifestKey.WAVE.value: "wave-1",
             }
         ],
+        ManifestKey.ITEMS.value: [manifest_item("a", title="Item A")],
     }
     plan.update(overrides)
     return plan
+
+
+def manifest_item(identifier: str, **overrides: Any) -> dict[str, Any]:
+    """
+    Build one raw, plan.yaml-shaped item ``dict``, keyed by :class:`ManifestKey` so a
+    manifest key is spelled in one place.
+
+    :param identifier: The item's ``id``, also used as its ``branch`` and
+        ``title`` unless overridden.
+    :param overrides: Further keys, named after their :class:`ManifestKey`
+        member - a ``None`` value leaves that key out of the manifest
+        entirely.
+    """
+    entry = {
+        ManifestKey.ID.value: identifier,
+        ManifestKey.TITLE.value: identifier.upper(),
+        ManifestKey.BRANCH.value: identifier,
+        ManifestKey.TRACK.value: "track-1",
+        ManifestKey.STATUS.value: ItemStatus.NOT_STARTED.value,
+    }
+    entry.update({ManifestKey(key).value: value for key, value in overrides.items()})
+    return {key: value for key, value in entry.items() if value is not None}
 
 
 # %% validate_plan
@@ -97,20 +140,8 @@ def test_validate_plan_rejects_wrong_schema_version():
 
 def test_validate_plan_rejects_duplicate_item_ids():
     items = [
-        {
-            "id": "a",
-            "title": "A",
-            "branch": "a",
-            "track": "track-1",
-            "status": "not_started",
-        },
-        {
-            "id": "a",
-            "title": "A again",
-            "branch": "a2",
-            "track": "track-1",
-            "status": "not_started",
-        },
+        manifest_item("a"),
+        manifest_item("a", title="A again", branch="a2"),
     ]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
@@ -121,38 +152,27 @@ def test_validate_plan_rejects_duplicate_item_ids():
 
 
 def test_validate_plan_rejects_unknown_track():
-    items = [
-        {
-            "id": "a",
-            "title": "A",
-            "branch": "a",
-            "track": "no-such-track",
-            "status": "not_started",
-        }
-    ]
+    items = [manifest_item("a", track="no-such-track")]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
     assert any(isinstance(problem, UnknownTrack) for problem in error.value.problems)
 
 
 def test_validate_plan_rejects_unknown_wave():
-    tracks = [{"id": "track-1", "name": "Track 1", "wave": "no-such-wave"}]
+    tracks = [
+        {
+            ManifestKey.ID.value: "track-1",
+            ManifestKey.NAME.value: "Track 1",
+            ManifestKey.WAVE.value: "no-such-wave",
+        }
+    ]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(tracks=tracks))
     assert any(isinstance(problem, UnknownWave) for problem in error.value.problems)
 
 
 def test_validate_plan_rejects_unknown_depends_on():
-    items = [
-        {
-            "id": "a",
-            "title": "A",
-            "branch": "a",
-            "track": "track-1",
-            "status": "not_started",
-            "depends_on": ["ghost"],
-        }
-    ]
+    items = [manifest_item("a", depends_on=["ghost"])]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
     assert any(
@@ -163,16 +183,7 @@ def test_validate_plan_rejects_unknown_depends_on():
 def test_validate_plan_rejects_depends_on_that_is_not_a_list():
     # A plain string is iterable char-by-char - must be rejected outright,
     # not silently misinterpreted as a list of one-character dependencies.
-    items = [
-        {
-            "id": "a",
-            "title": "A",
-            "branch": "a",
-            "track": "track-1",
-            "status": "not_started",
-            "depends_on": "b",
-        }
-    ]
+    items = [manifest_item("a", depends_on="b")]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
     assert any(
@@ -183,31 +194,14 @@ def test_validate_plan_rejects_depends_on_that_is_not_a_list():
 def test_validate_plan_rejects_blockers_that_is_not_a_list():
     # A plain string is iterable char-by-char - must be rejected outright,
     # not silently misinterpreted as one blocker per character.
-    items = [
-        {
-            "id": "a",
-            "title": "A",
-            "branch": "a",
-            "track": "track-1",
-            "status": "not_started",
-            "blockers": "some prose describing the blocker",
-        }
-    ]
+    items = [manifest_item("a", blockers="some prose describing the blocker")]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
     assert any(isinstance(problem, InvalidBlockers) for problem in error.value.problems)
 
 
 def test_validate_plan_rejects_unknown_status():
-    items = [
-        {
-            "id": "a",
-            "title": "A",
-            "branch": "a",
-            "track": "track-1",
-            "status": "in-review",
-        }
-    ]
+    items = [manifest_item("a", status="in-review")]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
     assert any(isinstance(problem, UnknownStatus) for problem in error.value.problems)
@@ -249,22 +243,8 @@ def test_validate_plan_rejects_a_same_track_dependency_cycle():
     # (and anything depending on them) out of the rendered track later, with
     # no indication data was lost.
     items = [
-        {
-            "id": "a",
-            "title": "A",
-            "branch": "a",
-            "track": "track-1",
-            "status": "not_started",
-            "depends_on": ["b"],
-        },
-        {
-            "id": "b",
-            "title": "B",
-            "branch": "b",
-            "track": "track-1",
-            "status": "not_started",
-            "depends_on": ["a"],
-        },
+        manifest_item("a", depends_on=["b"]),
+        manifest_item("b", depends_on=["a"]),
     ]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
@@ -503,7 +483,15 @@ def test_plan_repository_url():
 
 def test_plan_from_mapping_reads_optional_wave_description():
     plan = Plan.from_mapping(
-        minimal_plan(waves=[{"id": "wave-1", "name": "Wave 1", "description": "why"}])
+        minimal_plan(
+            waves=[
+                {
+                    ManifestKey.ID.value: "wave-1",
+                    ManifestKey.NAME.value: "Wave 1",
+                    ManifestKey.DESCRIPTION.value: "why",
+                }
+            ]
+        )
     )
     assert plan.waves[0].description == "why"
 
@@ -516,7 +504,13 @@ def test_plan_from_mapping_defaults_missing_wave_description_to_none():
 def test_plan_from_mapping_ignores_an_unexpected_wave_key_instead_of_crashing():
     plan = Plan.from_mapping(
         minimal_plan(
-            waves=[{"id": "wave-1", "name": "Wave 1", "future_field": "unused"}]
+            waves=[
+                {
+                    ManifestKey.ID.value: "wave-1",
+                    ManifestKey.NAME.value: "Wave 1",
+                    "future_field": "unused",
+                }
+            ]
         )
     )
     assert plan.waves[0].id == "wave-1"
@@ -527,9 +521,9 @@ def test_plan_from_mapping_ignores_an_unexpected_track_key_instead_of_crashing()
         minimal_plan(
             tracks=[
                 {
-                    "id": "track-1",
-                    "name": "Track 1",
-                    "wave": "wave-1",
+                    ManifestKey.ID.value: "track-1",
+                    ManifestKey.NAME.value: "Track 1",
+                    ManifestKey.WAVE.value: "wave-1",
                     "future_field": "unused",
                 }
             ]
@@ -541,16 +535,7 @@ def test_plan_from_mapping_ignores_an_unexpected_track_key_instead_of_crashing()
 def test_item_from_mapping_keeps_an_http_session_url():
     plan = Plan.from_mapping(
         minimal_plan(
-            items=[
-                {
-                    "id": "a",
-                    "title": "Item A",
-                    "branch": "a",
-                    "track": "track-1",
-                    "status": "not_started",
-                    "session": "https://claude.ai/code/session/abc",
-                }
-            ]
+            items=[manifest_item("a", session="https://claude.ai/code/session/abc")]
         )
     )
     assert plan.items[0].session == "https://claude.ai/code/session/abc"
@@ -558,36 +543,23 @@ def test_item_from_mapping_keeps_an_http_session_url():
 
 def test_item_from_mapping_rejects_a_non_http_session_url():
     plan = Plan.from_mapping(
-        minimal_plan(
-            items=[
-                {
-                    "id": "a",
-                    "title": "Item A",
-                    "branch": "a",
-                    "track": "track-1",
-                    "status": "not_started",
-                    "session": "javascript:alert(1)",
-                }
-            ]
-        )
+        minimal_plan(items=[manifest_item("a", session="javascript:alert(1)")])
     )
     assert plan.items[0].session is None
 
 
 def test_item_from_mapping_reads_required_and_optional_fields():
     item_instance = Item.from_mapping(
-        {
-            "id": "a",
-            "title": "Item A",
-            "branch": "a",
-            "track": "track-1",
-            "status": "in_progress",
-            "pull_request_number": 7,
-            "repository": "owner/other-repo",
-            "notes": "  some notes  ",
-            "depends_on": ["b"],
-            "blockers": ["waiting on design review"],
-        }
+        manifest_item(
+            "a",
+            title="Item A",
+            status=ItemStatus.IN_PROGRESS.value,
+            pull_request_number=7,
+            repository="owner/other-repo",
+            notes="  some notes  ",
+            depends_on=["b"],
+            blockers=["waiting on design review"],
+        )
     )
     assert item_instance.id == "a"
     assert item_instance.title == "Item A"
@@ -602,14 +574,7 @@ def test_item_from_mapping_reads_required_and_optional_fields():
 
 
 def test_item_from_mapping_defaults_every_optional_field_when_omitted():
-    item_instance = Item.from_mapping(
-        {
-            "title": "Item A",
-            "branch": "a",
-            "track": "track-1",
-            "status": "not_started",
-        }
-    )
+    item_instance = Item.from_mapping(manifest_item("a", id=None, title="Item A"))
     assert item_instance.id is None
     assert item_instance.pull_request_number is None
     assert item_instance.repository is None
@@ -633,6 +598,7 @@ def test_item_from_mapping_defaults_every_optional_field_when_omitted():
 def make_renderer(
     items: list[Item],
     pull_requests_by_repository: PullRequestsByRepository | None = None,
+    plan_directory: PlanDirectory | None = None,
 ) -> DashboardRenderer:
     """
     Build one :class:`DashboardRenderer` over a fixed, otherwise-empty test
@@ -641,9 +607,11 @@ def make_renderer(
 
     :param items: The plan's items.
     :param pull_requests_by_repository: Live pull request state, or ``{}`` if omitted.
+    :param plan_directory: The plans a cross-plan reference resolves against, or
+        ``None`` for a plan whose dependencies are all its own.
     """
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -656,6 +624,7 @@ def make_renderer(
         roadmap_text="",
         pull_requests_by_repository=pull_requests_by_repository or {},
         tracking_url=None,
+        plan_directory=plan_directory,
     )
 
 
@@ -1470,7 +1439,7 @@ def test_hidden_done_wrap_parent_is_never_a_done_item():
 
 def test_render_wires_an_item_into_its_wave_and_track_sections():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1489,7 +1458,7 @@ def test_render_wires_an_item_into_its_wave_and_track_sections():
 
 def test_render_shows_placeholder_for_a_track_with_no_items():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1516,7 +1485,7 @@ def test_render_shows_pull_request_link_when_item_has_one():
         "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1537,7 +1506,7 @@ def test_render_shows_pull_request_link_when_item_has_one():
 
 def test_render_shows_start_now_button_for_a_not_started_item():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1555,7 +1524,7 @@ def test_render_shows_start_now_button_for_a_not_started_item():
 
 def test_render_shows_resolve_resume_reconsider_buttons_for_underway_items():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1584,7 +1553,7 @@ def test_render_shows_review_button_for_an_item_with_a_draft_pull_request():
         "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1608,7 +1577,7 @@ def test_render_omits_review_button_once_pull_request_is_ready_for_review():
         "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1631,7 +1600,7 @@ def test_render_omits_review_button_for_a_deferred_item_with_a_draft_pull_reques
         "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1654,7 +1623,7 @@ def test_render_shows_ready_to_review_sidebar_section():
         "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1680,7 +1649,7 @@ def test_render_shows_ready_to_review_section_last_in_the_sidebar():
         "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1704,7 +1673,7 @@ def test_render_shows_ready_to_review_section_last_in_the_sidebar():
 
 def test_render_omits_action_button_for_a_done_item():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1721,7 +1690,7 @@ def test_render_omits_action_button_for_a_done_item():
 
 def test_render_hides_done_items_by_default_with_a_sidebar_toggle():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1740,7 +1709,7 @@ def test_render_hides_done_items_by_default_with_a_sidebar_toggle():
 
 def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1761,7 +1730,7 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
 
 def test_render_exposes_both_indent_levels_as_css_variables_on_the_item():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1781,7 +1750,7 @@ def test_render_exposes_both_indent_levels_as_css_variables_on_the_item():
 
 def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1853,7 +1822,7 @@ def test_dependency_chip_is_not_ready_when_unresolved():
 
 def test_render_marks_an_unmet_dependency_chip_with_the_chip_unmet_class():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1873,7 +1842,7 @@ def test_render_marks_an_unmet_dependency_chip_with_the_chip_unmet_class():
 
 def test_render_does_not_mark_a_ready_dependency_chip_as_unmet():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1897,7 +1866,7 @@ def test_render_does_not_mark_a_ready_dependency_chip_as_unmet():
 
 def test_render_gives_each_item_card_a_stable_id_anchor():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1914,7 +1883,7 @@ def test_render_gives_each_item_card_a_stable_id_anchor():
 
 def test_render_links_a_ready_to_start_sidebar_entry_to_its_item_card():
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -1939,7 +1908,7 @@ def test_render_links_a_drift_sidebar_entry_to_its_item_card():
         "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     plan = Plan(
-        id="test-plan",
+        id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
         description="desc",
         default_repository="owner/repo",
@@ -2132,3 +2101,495 @@ def test_example_plan_demonstrates_the_bug_chip_and_its_filter():
     assert output.count('<span class="next-bug-chip">bug</span>') == 1
     assert 'id="bug-fixes-only-toggle"' in output
     assert '<div class="next-group next-drift next-group-has-bugs">' in output
+
+
+# %% cross-plan references - parsing
+
+
+def test_dependency_reference_reads_a_bare_item_id():
+    reference = DependencyReference.from_text("a")
+    assert reference == DependencyReference(item_identifier="a")
+    assert reference.names_another_plan is False
+
+
+def test_dependency_reference_reads_a_plan_qualified_id():
+    reference = DependencyReference.from_text(foreign_reference(ForeignItemId.READY))
+    assert reference == DependencyReference(
+        item_identifier=ForeignItemId.READY, plan_id=FixturePlanId.OTHER
+    )
+    assert reference.names_another_plan is True
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        DependencyReference(item_identifier="a"),
+        DependencyReference(
+            item_identifier=ForeignItemId.READY, plan_id=FixturePlanId.OTHER
+        ),
+    ],
+)
+def test_dependency_reference_text_round_trips(reference: DependencyReference):
+    assert DependencyReference.from_text(reference.text) == reference
+
+
+def test_dependency_reference_is_malformed_with_a_second_separator():
+    # A third segment would have to mean something - a plan inside a plan - and
+    # it means nothing, so it is refused rather than read as part of an id.
+    reference = DependencyReference.from_text(
+        PLAN_REFERENCE_SEPARATOR.join(
+            [FixturePlanId.OTHER, ManifestKey.WAVE, ForeignItemId.READY]
+        )
+    )
+    assert reference.is_well_formed is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"{PLAN_REFERENCE_SEPARATOR}{ForeignItemId.READY}",
+        f"{FixturePlanId.OTHER}{PLAN_REFERENCE_SEPARATOR}",
+    ],
+)
+def test_dependency_reference_is_malformed_with_an_empty_half(text: str):
+    assert DependencyReference.from_text(text).is_well_formed is False
+
+
+# %% cross-plan references - the plans directory
+
+
+def test_plan_directory_reads_one_plans_manifest_by_id():
+    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    plan = directory.plan(FixturePlanId.OTHER)
+    manifest = fixture_manifest(FixturePlanId.OTHER)
+    assert plan.title == manifest[ManifestKey.TITLE]
+    assert plan.default_repository == manifest[ManifestKey.DEFAULT_REPOSITORY]
+
+
+def test_plan_directory_reads_no_manifest_nothing_has_named():
+    # One plan's dashboard pulling in every other plan's contents is what the
+    # per-plan size budget exists to prevent, so a plan nothing references is
+    # never opened.
+    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    directory.plan(FixturePlanId.OTHER)
+    assert set(directory.plans_by_id) == {FixturePlanId.OTHER}
+
+
+def test_plan_directory_reads_the_dashboard_url_cache():
+    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    cached = yaml.safe_load(
+        (FIXTURE_PLANS_DIRECTORY / PlanDirectory.DASHBOARD_URL_CACHE_PATH).read_text()
+    )
+    assert directory.dashboard_url(FixturePlanId.OTHER) == cached[FixturePlanId.OTHER]
+
+
+def test_plan_directory_has_no_url_for_a_plan_the_cache_does_not_name():
+    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    assert directory.dashboard_url(FixturePlanId.UNPUBLISHED) is None
+
+
+def test_plan_directory_without_a_url_cache_reads_its_manifests_anyway(tmp_path: Path):
+    # A plan's first-ever publish happens before any cache exists, so a
+    # missing cache is an ordinary state rather than an error.
+    manifest_path = tmp_path / FixturePlanId.OTHER / PlanFile.MANIFEST
+    manifest_path.parent.mkdir()
+    manifest_path.write_text(
+        (FIXTURE_PLANS_DIRECTORY / FixturePlanId.OTHER / PlanFile.MANIFEST).read_text()
+    )
+    directory = PlanDirectory.at(tmp_path)
+    assert directory.plan(FixturePlanId.OTHER) is not None
+    assert directory.dashboard_url(FixturePlanId.OTHER) is None
+
+
+def test_plan_directory_resolves_an_item_by_reference():
+    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    resolved = directory.resolve(
+        DependencyReference.from_text(foreign_reference(ForeignItemId.READY))
+    )
+    assert resolved.item.identifier == ForeignItemId.READY
+    assert resolved.plan.id == FixturePlanId.OTHER
+    assert resolved.repository == fixture_repository(FixturePlanId.OTHER)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        foreign_reference(ForeignItemId.READY, FixturePlanId.ABSENT),
+        foreign_reference(ForeignItemId.ABSENT),
+    ],
+)
+def test_plan_directory_does_not_resolve_an_unknown_reference(text: str):
+    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    resolved = directory.resolve(DependencyReference.from_text(text))
+    assert resolved == UnresolvedDependency(
+        reference=DependencyReference.from_text(text)
+    )
+
+
+# %% cross-plan references - validation
+
+
+def plan_depending_on(dependency_text: str) -> dict[str, Any]:
+    """
+    A one-item manifest whose single item depends on *dependency_text*.
+
+    :param dependency_text: The one entry of that item's ``depends_on``.
+    """
+    return minimal_plan(
+        items=[
+            manifest_item("a", depends_on=[dependency_text]),
+        ]
+    )
+
+
+def test_validate_plan_accepts_a_reference_into_another_plan():
+    validate_plan(
+        plan_depending_on(foreign_reference(ForeignItemId.READY)),
+        PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+    )
+
+
+def test_validate_plan_rejects_an_unknown_plan():
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(
+            plan_depending_on(
+                foreign_reference(ForeignItemId.READY, FixturePlanId.ABSENT)
+            ),
+            PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+        )
+    assert error.value.problems == [
+        UnknownDependencyPlan(
+            "a", foreign_reference(ForeignItemId.READY, FixturePlanId.ABSENT)
+        )
+    ]
+
+
+def test_validate_plan_rejects_an_unknown_item_in_a_known_plan():
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(
+            plan_depending_on(foreign_reference(ForeignItemId.ABSENT)),
+            PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+        )
+    assert error.value.problems == [
+        UnknownDependency("a", foreign_reference(ForeignItemId.ABSENT))
+    ]
+
+
+def test_validate_plan_rejects_a_reference_to_the_plans_own_id():
+    # One item, one spelling: the bare id already names it, so the qualified
+    # form would be a second way to write the same edge. Two items, so the
+    # rejected spelling is the only thing wrong with the manifest - an item
+    # qualifying its own id would also be a self-dependency.
+    own_reference = foreign_reference("a", PLAN_UNDER_TEST_ID)
+    plan = minimal_plan(
+        items=[
+            manifest_item("a"),
+            manifest_item("b", depends_on=[own_reference]),
+        ]
+    )
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(plan, PlanDirectory.at(FIXTURE_PLANS_DIRECTORY))
+    assert error.value.problems == [SelfPlanReference("b", own_reference)]
+
+
+def test_validate_plan_rejects_a_malformed_reference():
+    malformed = PLAN_REFERENCE_SEPARATOR.join(
+        [FixturePlanId.OTHER, ManifestKey.WAVE, ForeignItemId.READY]
+    )
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(
+            plan_depending_on(malformed),
+            PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+        )
+    assert error.value.problems == [MalformedDependencyReference("a", malformed)]
+
+
+def test_validate_plan_rejects_a_cross_plan_reference_with_no_plans_directory():
+    # Passing it unchecked is the silent-ready fault this feature exists to
+    # remove, so an unresolvable reference is refused instead.
+    reference = foreign_reference(ForeignItemId.READY)
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(plan_depending_on(reference))
+    assert error.value.problems == [MissingPlanDirectory("a", reference)]
+
+
+def test_validate_plan_rejects_a_cycle_that_runs_through_another_plan():
+    # other-plan's foreign-depending-back depends on test-plan/a, so this
+    # closes a loop that neither manifest can see on its own.
+    reference = foreign_reference(ForeignItemId.DEPENDING_BACK)
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(
+            plan_depending_on(reference),
+            PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+        )
+    assert error.value.problems == [DependencyCycle(["a", reference, "a"])]
+
+
+# %% cross-plan references - resolution in the renderer
+
+
+FOREIGN_PULL_REQUESTS: PullRequestsByRepository = {
+    fixture_repository(FixturePlanId.OTHER): {
+        fixture_pull_request_number(
+            FixturePlanId.OTHER, ForeignItemId.READY
+        ): PullRequestRecord(state=PullRequestState.OPEN, draft=False),
+        fixture_pull_request_number(
+            FixturePlanId.OTHER, ForeignItemId.DRAFT
+        ): PullRequestRecord(state=PullRequestState.OPEN, draft=True),
+    }
+}
+"""
+Live state for the fixture plan's own pull requests, keyed by that plan's
+``default_repository`` rather than the rendered plan's.
+"""
+
+
+def make_renderer_over_plan_directory(
+    items: list[Item],
+    pull_requests_by_repository: PullRequestsByRepository | None = None,
+) -> DashboardRenderer:
+    """
+    Build a renderer whose cross-plan references resolve against the fixture plans
+    directory.
+
+    :param items: The rendered plan's items.
+    :param pull_requests_by_repository: Live pull request state, or ``{}`` if omitted.
+    """
+    return make_renderer(
+        items,
+        pull_requests_by_repository,
+        plan_directory=PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+    )
+
+
+def test_item_is_ready_to_start_once_a_foreign_dependency_is_out_of_draft():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference(ForeignItemId.READY)],
+            )
+        ],
+        FOREIGN_PULL_REQUESTS,
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_start == ["a"]
+
+
+def test_item_is_not_ready_to_start_while_a_foreign_dependency_is_a_draft():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference(ForeignItemId.DRAFT)],
+            )
+        ],
+        FOREIGN_PULL_REQUESTS,
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_start == []
+    assert renderer.items_by_identifier["a"].action is None
+
+
+def test_item_is_ready_to_start_once_a_foreign_dependency_has_landed():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference(ForeignItemId.DONE)],
+            )
+        ]
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_start == ["a"]
+
+
+def test_foreign_dependency_live_state_comes_from_its_own_plans_repository():
+    # The number 91 exists only under other-plan's repository; read against
+    # the rendered plan's own, it would classify as not_found.
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference(ForeignItemId.READY)],
+            )
+        ],
+        FOREIGN_PULL_REQUESTS,
+    )
+    renderer.render()
+    resolved = renderer.dependencies.resolve(foreign_reference(ForeignItemId.READY))
+    assert resolved.live_state is LiveState.OPEN_READY
+
+
+def test_item_is_not_ready_to_start_when_a_dependency_cannot_be_resolved():
+    # The latent fault this fixes: an unresolvable entry used to be skipped,
+    # so a mistyped dependency counted as ready.
+    renderer = make_renderer_over_plan_directory(
+        [item("a", ItemStatus.NOT_STARTED, depends_on=["ghost"])]
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_start == []
+    assert renderer.items_by_identifier["a"].action is None
+
+
+def test_item_is_ready_to_review_once_a_foreign_dependency_has_a_pull_request():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.IN_PROGRESS,
+                pull_request_number=1,
+                depends_on=[foreign_reference(ForeignItemId.DRAFT)],
+            )
+        ],
+        {
+            **FOREIGN_PULL_REQUESTS,
+            "owner/repo": {
+                "1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)
+            },
+        },
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == ["a"]
+
+
+def test_item_is_not_ready_to_review_while_a_foreign_dependency_has_no_pull_request():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.IN_PROGRESS,
+                pull_request_number=1,
+                depends_on=[foreign_reference(ForeignItemId.NOT_STARTED)],
+            )
+        ],
+        {
+            "owner/repo": {
+                "1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)
+            }
+        },
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == []
+
+
+def test_foreign_dependency_does_not_indent_its_dependent():
+    # An indent level is a position in this page's own stack, and a foreign
+    # parent has no card on it to indent under.
+    stacked = DashboardRenderer._build_track_stack(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference(ForeignItemId.READY)],
+            )
+        ]
+    )
+    assert [entry.indent_level for entry in stacked] == [0]
+
+
+# %% cross-plan references - the dependency chip
+
+
+def test_chip_for_a_foreign_dependency_reads_the_qualified_reference():
+    reference = foreign_reference(ForeignItemId.READY)
+    renderer = make_renderer_over_plan_directory(
+        [item("a", ItemStatus.NOT_STARTED, depends_on=[reference])],
+        FOREIGN_PULL_REQUESTS,
+    )
+    renderer.render()
+    chip = renderer.items_by_identifier["a"].dependency_chips[0]
+    assert chip.identifier == reference
+    assert chip.is_ready is True
+
+
+def test_chip_tooltip_carries_the_foreign_items_title_plan_and_live_state():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference(ForeignItemId.DRAFT)],
+            )
+        ],
+        FOREIGN_PULL_REQUESTS,
+    )
+    renderer.render()
+    chip = renderer.items_by_identifier["a"].dependency_chips[0]
+    foreign = renderer.dependencies.resolve(foreign_reference(ForeignItemId.DRAFT))
+    assert foreign.title in chip.tooltip
+    assert foreign.plan.title in chip.tooltip
+    assert LiveState.OPEN_DRAFT.display_label in chip.tooltip
+
+
+def test_chip_links_to_the_foreign_plans_dashboard_when_the_cache_has_one():
+    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[foreign_reference(ForeignItemId.DONE)],
+            )
+        ]
+    )
+    renderer.render()
+    chip = renderer.items_by_identifier["a"].dependency_chips[0]
+    assert chip.dashboard_url == directory.dashboard_url(FixturePlanId.OTHER)
+
+
+def test_chip_has_no_dashboard_link_when_the_cache_names_no_url():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item(
+                "a",
+                ItemStatus.NOT_STARTED,
+                depends_on=[
+                    foreign_reference(
+                        ForeignItemId.UNPUBLISHED, FixturePlanId.UNPUBLISHED
+                    )
+                ],
+            )
+        ]
+    )
+    renderer.render()
+    assert renderer.items_by_identifier["a"].dependency_chips[0].dashboard_url is None
+
+
+def test_chip_for_a_same_plan_dependency_has_no_dashboard_link():
+    renderer = make_renderer_over_plan_directory(
+        [
+            item("a", ItemStatus.DONE),
+            item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+        ]
+    )
+    renderer.render()
+    assert renderer.items_by_identifier["b"].dependency_chips[0].dashboard_url is None
+
+
+def test_render_links_a_foreign_dependency_chip_to_its_plans_dashboard():
+    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    reference = foreign_reference(ForeignItemId.DONE)
+    plan = Plan(
+        id=PLAN_UNDER_TEST_ID,
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", ItemStatus.NOT_STARTED, depends_on=[reference])],
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository={},
+        tracking_url=None,
+        plan_directory=directory,
+    )
+    output, _ = renderer.render()
+    assert f'href="{directory.dashboard_url(FixturePlanId.OTHER)}"' in output
+    assert f">{reference}</a>" in output

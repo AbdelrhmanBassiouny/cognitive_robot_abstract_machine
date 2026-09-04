@@ -78,6 +78,30 @@ git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/plan.yaml" > /tmp/plan.yam
 git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/roadmap.md" > /tmp/roadmap.md  # roadmap.md is always the fixed filename, never configurable
 ```
 
+Also extract every plan's manifest, into one directory — a `depends_on` entry
+may name an item in another plan (`<plan-id>/<item-id>`, see `plan-schema.md`),
+and that plan's own manifest is the only thing that can resolve it. This is one
+extraction whether the manifest uses the form or not, so do it every run
+rather than reading the manifest first to find out:
+
+```bash
+mkdir -p /tmp/plans
+git archive FETCH_HEAD "${PLANS_DIR}" \
+  | tar -x --strip-components=3 -C /tmp/plans --wildcards \
+      '*/plan.yaml' '*/dashboard-urls.yaml'
+```
+
+Manifests only, and no roadmaps: the tooling opens a plan's manifest only when
+a `depends_on` entry names that plan, and never reads another plan's roadmap at
+all. Do not read any of these files yourself — the point of a per-plan size
+budget is lost the moment one plan's dashboard run pulls another plan's
+contents into the session.
+
+The second pattern brings the dashboard-URL cache along at
+`/tmp/plans/_generated/dashboard-urls.yaml`, which is where a cross-plan chip's
+link to the other plan's dashboard comes from — and where step 3 reads the URL
+to publish under.
+
 **Master-index mode:** enumerate every plan instead of one:
 
 ```bash
@@ -86,8 +110,9 @@ git ls-tree -r --name-only FETCH_HEAD | grep -E '^\.claude/personal/plans/[^/]+/
 
 Load each one the same way as above, into its own scratch path.
 
-Also read the generated URL cache, if present (used in step 3, absent on a
-plan's first-ever publish — not an error):
+The generated URL cache (used in step 3, absent on a plan's first-ever
+publish — not an error) comes with the extraction above, and can also be read
+on its own:
 
 ```bash
 git show "FETCH_HEAD:${DASHBOARD_URL_CACHE_PATH}" 2>/dev/null
@@ -106,7 +131,9 @@ when the fallback applies.
 
 Follow `pr-data-fetching.md`'s procedure (next to this file) to assemble
 `/tmp/pr_data.json` for every pull request referenced by any item in this
-plan.
+plan, plus any pull request a cross-plan `depends_on` entry names — the
+dashboard shows that foreign item's live state too, against its own plan's
+repository.
 
 Everything from here on is deterministic - **run `refresh_dashboard.sh`**
 rather than reproducing its steps by hand:
@@ -118,6 +145,7 @@ bash "${REFRESH_DASHBOARD_SCRIPT}" \
   --roadmap /tmp/roadmap.md \
   --pr-data /tmp/pr_data.json \
   --output /tmp/dashboard.html \
+  --plans-dir /tmp/plans \
   --tracking-url "<html_url from step 1, if any>"   # omit if the plan has no tracking_issue
 ```
 
@@ -133,7 +161,9 @@ dashboard reflects corrected data instead of reporting the same "merged but
 not marked done" drift forever; if nothing needed correcting, nothing is
 pushed. It then runs `build_dashboard.py`, which validates the manifest
 (schema version, unique ids, track/wave/depends_on references — the exact
-checks `plan-create` must also satisfy), classifies every item's live state
+checks `plan-create` must also satisfy, including a `depends_on` entry naming
+another plan, which is resolved against `--plans-dir` and refused if that
+plan or item isn't there), classifies every item's live state
 (`merged` | `open_draft` | `open_ready` | `closed_unmerged` | `not_found`),
 computes drift, builds the "ready to start"/"blocker may be cleared" lists
 (a blocked item whose dependency becomes ready always lands in "blocker may
