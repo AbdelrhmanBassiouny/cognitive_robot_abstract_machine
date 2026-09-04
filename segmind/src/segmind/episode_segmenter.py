@@ -13,6 +13,7 @@ from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     FixedConnection,
 )
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.world_description.geometry import Mesh
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
@@ -82,14 +83,18 @@ class EpisodeSegmenterExecutor(Executor):
 
     def detect_holes(self):
         """
-        Iterates through objects in the world's context and appends objects with
-        "hole" in their name to the list of holes.
+        Collects every :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture`
+        semantic annotation in the world and records it as a hole.
+
+        Apertures are real openings authored into the scene (e.g. a shape-sorting
+        board's holes); relying on the annotation instead of a name match on bodies
+        keeps this correct regardless of what the opening or the pieces meant to
+        pass through it happen to be named.
         """
         segmind_context = self.context.require_extension(SegmindContext)
-        segmind_context.holes.clear()
-        for o in self.context.world.bodies:
-            if "hole" in o.name.name:
-                segmind_context.holes.append(o)
+        segmind_context.holes = list(
+            self.context.world.get_semantic_annotations_by_type(Aperture)
+        )
 
     def spawn_scene(self, models_dir, file_resolver: Optional[FileUriResolver] = None):
         """

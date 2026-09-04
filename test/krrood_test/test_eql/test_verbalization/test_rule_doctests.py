@@ -55,6 +55,7 @@ factories = [
     eql.min,
     eql.sum,
     eql.count,  # aggregations
+    eql.case_when,  # conditional values
     eql.contains,
     eql.in_,  # membership
     eql.for_all,

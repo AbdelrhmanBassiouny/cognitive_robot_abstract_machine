@@ -36,12 +36,15 @@ from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.mixin import HasSimulatorProperties
+from semantic_digital_twin.datastructures.types import NpMatrix4x4
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point2,
     Point3,
     Vector3,
 )
+from semantic_digital_twin.spatial_types.math import inverse_frame
+from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
 if TYPE_CHECKING:
@@ -375,6 +378,38 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     trimesh visual instead.
     """
 
+    _numeric_origin: Optional[NumericTransform] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    """
+    The numbers last read out of :attr:`origin`.
+    """
+
+    _read_origin: Optional[HomogeneousTransformationMatrix] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    """
+    The origin :attr:`_numeric_origin` was read out of, so that replacing the origin is
+    noticed.
+    """
+
+    @property
+    def numeric_origin(self) -> NumericTransform:
+        """
+        This shape's origin as plain numbers.
+
+        A shape's origin is model data, so the numbers are read out once and reused
+        until the origin is replaced; measuring geometry then touches no CasADi object.
+
+        ..warning:: An origin mutated in place rather than replaced is not noticed.
+        """
+        if self._read_origin is not self.origin:
+            self._numeric_origin = NumericTransform.from_transformation_matrix(
+                self.origin
+            )
+            self._read_origin = self.origin
+        return self._numeric_origin
+
     @property
     @abstractmethod
     def volume(self) -> float:
@@ -384,6 +419,16 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         ..note:: A primitive states the volume of the shape itself rather than of the
             mesh standing in for it, since a mesh only approximates a curved surface
             with a polygonal one and would report less than the shape holds.
+        """
+
+    @property
+    @abstractmethod
+    def surface_area(self) -> float:
+        """
+        :return: The area of this shape's surface.
+
+        ..note:: Stated the same way :attr:`volume` is: from the shape itself rather
+            than from the mesh standing in for it.
         """
 
     @property
@@ -455,7 +500,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         new_props = {
             f.name: deepcopy(getattr(self, f.name))
             for f in shape_props
-            if f.name not in ["origin"]
+            if f.init and f.name != "origin"
         }
         return self.__class__(origin=new_origin, **new_props)
 
@@ -518,13 +563,17 @@ class Mesh(Shape):
         return self.mesh.volume
 
     @property
+    def surface_area(self) -> float:
+        return self.mesh.area
+
+    @property
     def local_frame_bounding_box(self) -> VolumetricBoundingBox:
         """
         Returns the local bounding box of the mesh.
 
         The bounding box is axis-aligned and centered at the origin.
         """
-        return VolumetricBoundingBox.from_mesh(self.mesh, self.origin)
+        return VolumetricBoundingBox.from_mesh(self.mesh, self.numeric_origin)
 
     @staticmethod
     def _load_in_meters(filename: str, process: bool = True) -> trimesh.Trimesh:
@@ -968,6 +1017,10 @@ class Sphere(Shape):
         return 4.0 / 3.0 * math.pi * self.radius**3
 
     @property
+    def surface_area(self) -> float:
+        return 4.0 * math.pi * self.radius**2
+
+    @property
     def mesh(self) -> trimesh.Trimesh:
         """
         Returns a trimesh object representing the sphere.
@@ -988,7 +1041,7 @@ class Sphere(Shape):
             self.radius,
             self.radius,
             self.radius,
-            self.origin,
+            self.numeric_origin,
         )
 
     def to_json(self) -> Dict[str, Any]:
@@ -1026,6 +1079,10 @@ class Cylinder(Shape):
         return math.pi * self.radius**2 * self.height
 
     @property
+    def surface_area(self) -> float:
+        return 2.0 * math.pi * self.radius * (self.radius + self.height)
+
+    @property
     def mesh(self) -> trimesh.Trimesh:
         """
         Returns a trimesh object representing the cylinder.
@@ -1052,7 +1109,7 @@ class Cylinder(Shape):
             half_width,
             half_width,
             half_height,
-            self.origin,
+            self.numeric_origin,
         )
 
     def to_json(self) -> Dict[str, Any]:
@@ -1085,6 +1142,14 @@ class Box(Shape):
         return self.scale.x * self.scale.y * self.scale.z
 
     @property
+    def surface_area(self) -> float:
+        return 2.0 * (
+            self.scale.x * self.scale.y
+            + self.scale.y * self.scale.z
+            + self.scale.z * self.scale.x
+        )
+
+    @property
     def mesh(self) -> trimesh.Trimesh:
         """
         Returns a trimesh object representing the box.
@@ -1112,7 +1177,7 @@ class Box(Shape):
             half_x,
             half_y,
             half_z,
-            self.origin,
+            self.numeric_origin,
         )
 
     def to_json(self) -> Dict[str, Any]:
@@ -1147,6 +1212,58 @@ class Bounds(Generic[T], SubClassSafeGeneric):
     """
     The corner with the largest coordinate on every axis.
     """
+
+    @property
+    def ends(self) -> Tuple[T, T]:
+        """
+        :return: Both corners, lower first, for enumerating over the pair.
+        """
+        return self.lower, self.upper
+
+    @classmethod
+    def from_points(cls, points: npt.NDArray[np.float64]) -> Bounds[np.ndarray]:
+        """
+        The smallest axis-aligned region enclosing a point cloud.
+
+        :param points: The points to enclose, one per row of an ``(n, 3)`` array.
+        """
+        return cls(points.min(axis=0), points.max(axis=0))
+
+    @classmethod
+    def empty(cls) -> Bounds[np.ndarray]:
+        """
+        The region holding no point at all, which nothing overlaps and nothing lies in.
+
+        What geometry that is absent rather than merely elsewhere reads back as.
+        """
+        return cls(np.full(3, np.inf), np.full(3, -np.inf))
+
+    def overlaps(self, other: Bounds[np.ndarray]) -> bool:
+        """
+        Whether two regions share any point, touching included.
+
+        Assumes ``lower``/``upper`` are plain numeric arrays, as :meth:`clip_segment`
+        does.
+
+        :param other: The region to test against, in the same frame.
+        """
+        return bool(
+            np.all(self.lower <= other.upper) and np.all(other.lower <= self.upper)
+        )
+
+    def contains(self, points: npt.NDArray[np.float64]) -> npt.NDArray[np.bool_]:
+        """
+        Which of a point cloud's points lie inside this region.
+
+        A region flattened onto a plane encloses no volume and so contains nothing, not
+        even a point lying on it.
+
+        :param points: The points to test, one per row of an ``(n, 3)`` array.
+        :return: One flag per point, in the same order.
+        """
+        if np.any(self.upper <= self.lower):
+            return np.zeros(len(points), dtype=bool)
+        return np.all((points >= self.lower) & (points <= self.upper), axis=1)
 
     def clip_segment(
         self, start: npt.NDArray[np.float64], direction: npt.NDArray[np.float64]
@@ -1189,6 +1306,13 @@ class Bounds(Generic[T], SubClassSafeGeneric):
         return SimpleInterval.from_data(t_min, t_max, Bound.CLOSED, Bound.CLOSED)
 
 
+SPATIAL_AXIS_COUNT = 3
+"""
+How many axes a transform of this world spans, which a box expressed over fewer of them
+pads its corners up to before it can be transformed.
+"""
+
+
 @dataclass(eq=False)
 class AxisAlignedBox(ABC):
     """
@@ -1218,12 +1342,25 @@ class AxisAlignedBox(ABC):
             Bound.CLOSED,
         )
 
+    def __post_init__(self):
+        if isinstance(self.origin, HomogeneousTransformationMatrix):
+            self.origin = NumericTransform.from_transformation_matrix(self.origin)
+
     @classmethod
     @abstractmethod
     def axes(cls) -> Tuple[SpatialVariables, ...]:
         """
         :return: The spatial axes this box type is expressed over, in a fixed order
             matching :attr:`_ordered_intervals`.
+        """
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def axis_bounds(self) -> Tuple[Bounds[float], ...]:
+        """
+        :return: This box's lower and upper bound along each of :meth:`axes`, in the
+            same order and relative to :attr:`origin`.
         """
         raise NotImplementedError
 
@@ -1315,50 +1452,60 @@ class AxisAlignedBox(ABC):
         """
         return cls(*lower, *upper, origin)
 
-    def transform_to_origin(
-        self, reference_T_new_origin: HomogeneousTransformationMatrix
-    ) -> Self:
+    def corner_coordinates(self) -> npt.NDArray[np.float64]:
+        """
+        :return: The box's corners in its own origin frame, as homogeneous rows.
+        """
+        bounds = self.axis_bounds
+        padding = (0.0,) * (SPATIAL_AXIS_COUNT - len(bounds))
+        return np.array(
+            [
+                [*corner, *padding, 1.0]
+                for corner in itertools.product(*(axis.ends for axis in bounds))
+            ]
+        )
+
+    def transform_to_origin(self, reference_T_new_origin: NumericTransform) -> Self:
         """
         Transform the bounding box to a different reference frame.
 
-        :param reference_T_new_origin: The origin to express the box relative to.
+        The corners are carried across in numpy, so nothing symbolic is built or read
+        and the transform is safe to run off the thread that owns the world.
+
+        :param reference_T_new_origin: The origin to express the box from; a
+            :class:`HomogeneousTransformationMatrix` is read out into numbers first.
         :return: The box, re-expressed relative to ``reference_T_new_origin``.
         """
-        reference_T_new_origin = HomogeneousTransformationMatrix(
-            data=reference_T_new_origin.to_np(),
-            reference_frame=reference_T_new_origin.reference_frame,
-        )
-
-        new_origin_reference_T_self = self.origin.reference_frame._world.transform(
-            self.origin, reference_T_new_origin.reference_frame
-        )
-
-        self_T_new_pose = reference_T_new_origin.inverse() @ new_origin_reference_T_self
-
-        list_self_T_corner = [
-            HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                corner.to_point3() if isinstance(corner, Point2) else corner
-            ).to_np()
-            for corner in self.get_points()
-        ]
-
-        list_reference_T_corner = [
-            self_T_new_pose.to_np() @ self_T_corner
-            for self_T_corner in list_self_T_corner
-        ]
-
-        dimensionality = len(self.axes())
-        list_reference_P_corner = [
-            reference_T_corner[:dimensionality, 3:]
-            for reference_T_corner in list_reference_T_corner
-        ]
-
-        min_corner = np.min(list_reference_P_corner, axis=0).flatten()
-        max_corner = np.max(list_reference_P_corner, axis=0).flatten()
-
+        if isinstance(reference_T_new_origin, HomogeneousTransformationMatrix):
+            reference_T_new_origin = NumericTransform.from_transformation_matrix(
+                reference_T_new_origin
+            )
+        new_origin_T_self = self._transform_from_own_origin(reference_T_new_origin)
+        new_origin_P_corners = self.corner_coordinates() @ new_origin_T_self.T
+        dimensionality = self.dimensionality()
+        min_corner = new_origin_P_corners[:, :dimensionality].min(axis=0)
+        max_corner = new_origin_P_corners[:, :dimensionality].max(axis=0)
         return self.__class__.from_array_bounds(
             min_corner, max_corner, reference_T_new_origin
         )
+
+    def _transform_from_own_origin(
+        self, reference_T_new_origin: NumericTransform
+    ) -> NpMatrix4x4:
+        """
+        The transform taking a coordinate in this box's own origin frame to the given
+        one.
+
+        :param reference_T_new_origin: The origin the box is being transformed to.
+        """
+        world = self.origin.reference_frame._world
+        reference_T_self = (
+            world.compute_forward_kinematics_np(
+                reference_T_new_origin.reference_frame, self.origin.reference_frame
+            )
+            @ self.origin.to_np()
+        )
+        return inverse_frame(reference_T_new_origin.to_np()) @ reference_T_self
 
     def intersection_with(self, other: Self) -> Optional[Self]:
         """
@@ -1411,9 +1558,12 @@ class VolumetricBoundingBox(AxisAlignedBox):
     The maximum z-coordinate of the bounding box, relative to the origin.
     """
 
-    origin: HomogeneousTransformationMatrix
+    origin: NumericTransform
     """
     The origin of the bounding box.
+
+    A :class:`HomogeneousTransformationMatrix` is accepted and read out into numbers, so
+    that a box carries nothing symbolic however it was built.
     """
 
     def __hash__(self):
@@ -1425,6 +1575,14 @@ class VolumetricBoundingBox(AxisAlignedBox):
     @classmethod
     def axes(cls) -> Tuple[SpatialVariables, ...]:
         return (SpatialVariables.x, SpatialVariables.y, SpatialVariables.z)
+
+    @property
+    def axis_bounds(self) -> Tuple[Bounds[float], ...]:
+        return (
+            Bounds(self.min_x, self.max_x),
+            Bounds(self.min_y, self.max_y),
+            Bounds(self.min_z, self.max_z),
+        )
 
     @property
     def _ordered_intervals(self) -> Tuple[SimpleInterval, ...]:
@@ -1457,7 +1615,7 @@ class VolumetricBoundingBox(AxisAlignedBox):
 
         :return: The corners, in the same frame as ``origin``.
         """
-        x, y, z = self.x_interval, self.y_interval, self.z_interval
+        x, y, z = self._ordered_intervals
         lower = Point3(
             x.lower,
             y.lower,
@@ -1682,7 +1840,7 @@ class VolumetricBoundingBox(AxisAlignedBox):
             and np.isclose(self.max_x, other.max_x)
             and np.isclose(self.max_y, other.max_y)
             and np.isclose(self.max_z, other.max_z)
-            and np.allclose(self.origin, other.origin)
+            and np.allclose(self.origin.to_np(), other.origin.to_np())
         )
 
 
@@ -1716,9 +1874,12 @@ class PlanarBoundingBox(AxisAlignedBox):
     The maximum y-coordinate of the bounding box, relative to the origin.
     """
 
-    origin: HomogeneousTransformationMatrix
+    origin: NumericTransform
     """
     The origin of the bounding box.
+
+    A :class:`HomogeneousTransformationMatrix` is accepted and read out into numbers, so
+    that a box carries nothing symbolic however it was built.
     """
 
     def __hash__(self):
@@ -1727,6 +1888,13 @@ class PlanarBoundingBox(AxisAlignedBox):
     @classmethod
     def axes(cls) -> Tuple[SpatialVariables, ...]:
         return (SpatialVariables.x, SpatialVariables.y)
+
+    @property
+    def axis_bounds(self) -> Tuple[Bounds[float], ...]:
+        return (
+            Bounds(self.min_x, self.max_x),
+            Bounds(self.min_y, self.max_y),
+        )
 
     @property
     def _ordered_intervals(self) -> Tuple[SimpleInterval, ...]:
@@ -1861,5 +2029,5 @@ class PlanarBoundingBox(AxisAlignedBox):
             and np.isclose(self.min_y, other.min_y)
             and np.isclose(self.max_x, other.max_x)
             and np.isclose(self.max_y, other.max_y)
-            and np.allclose(self.origin, other.origin)
+            and np.allclose(self.origin.to_np(), other.origin.to_np())
         )
