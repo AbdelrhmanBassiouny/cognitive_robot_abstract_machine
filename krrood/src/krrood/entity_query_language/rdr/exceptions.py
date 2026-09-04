@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import TYPE_CHECKING, Any, List, Tuple, Type
+from typing_extensions import TYPE_CHECKING, Any, Callable, List, Tuple, Type
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
@@ -513,3 +513,31 @@ class ConditionsNotInsertable(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Give a condition that distinguishes this case from the one the anchored rule was written for."
+
+
+# %% the model file on disk
+
+
+@dataclass
+class ModelFileMissing(DataclassException):
+    """
+    Raised when a decorated function's model file is read before anything wrote it.
+    """
+
+    function: Callable
+    """
+    The decorated function whose model was being read.
+    """
+
+    path: str
+    """
+    Where the model file was expected.
+    """
+
+    def error_message(self) -> str:
+        return f"No model file for {self.function.__name__!r} at {self.path!r}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Fit the function's RDR first; saving a fit is what writes the model file."
+        )
