@@ -47,6 +47,7 @@ from semantic_digital_twin.spatial_computations.ik_solver import (
 )
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 from semantic_digital_twin.spatial_types import Vector3, Point3, math
+from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Pose,
@@ -477,24 +478,31 @@ class SupportedBy(Triple):
         )
 
     def __call__(self) -> bool:
-        if Below(
-            self.supported.center_of_mass,
-            self.supporting.center_of_mass,
-            self.supported.global_transform,
-        )():
+        """
+        Answered from numeric geometry alone, since support is asked on every detector
+        tick from a thread that does not own the world.
+        """
+        if self._supported_stands_below_supporting():
             return False
-        supported_bounding_box = (
-            self.supported.collision.as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=self.supported)
-            ).event
+        supported_origin = NumericTransform.identity(self.supported)
+        boxes_of_supported = self.supported.collision.as_bounding_box_collection_at_origin(
+            supported_origin
         )
-        supporting_bounding_box = (
+        boxes_of_supporting = (
             self.supporting.collision.as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=self.supported)
-            ).event
+                supported_origin
+            )
         )
+        # bodies whose enclosing regions miss each other cannot intersect box by box
+        # either, and most candidate pairs a detector tick asks about are such a pair
+        if not boxes_of_supported.enclosing_bounds.overlaps(
+            boxes_of_supporting.enclosing_bounds
+        ):
+            return False
 
-        intersection = (supported_bounding_box & supporting_bounding_box).bounding_box()
+        intersection = (
+            boxes_of_supported.event & boxes_of_supporting.event
+        ).bounding_box()
 
         if intersection.is_empty():
             return False
@@ -502,6 +510,19 @@ class SupportedBy(Triple):
         z_intersection: Interval = intersection[SpatialVariables.z.value]
         size = sum([si.upper - si.lower for si in z_intersection.simple_sets])
         return size < self.maximum_intersection_height
+
+    def _supported_stands_below_supporting(self) -> bool:
+        """
+        Whether the supported body's centre of mass lies below the supporting body's,
+        along the supported body's own vertical.
+        """
+        up = self.supported.numeric_global_transform.to_np()[:3, 2]
+        up = up / (np.linalg.norm(up) + VIEW_DIRECTION_EPS)
+        apart = (
+            self.supported.numeric_center_of_mass.to_np()[:3]
+            - self.supporting.numeric_center_of_mass.to_np()[:3]
+        )
+        return float(up @ apart) < 0.0
 
 
 is_supported_by = symbolic_callable_to_function(SupportedBy)
@@ -582,6 +603,11 @@ read as lying along it.
 
 A direction is a unit vector, so a component within this of one leaves the other two
 within a rounding error of zero.
+"""
+
+VIEW_DIRECTION_EPS = 1e-12
+"""
+Guards a point of view's direction against division by a degenerate axis.
 """
 
 
@@ -732,16 +758,19 @@ class InsideRegion(Triple, PlacementRelation):
         """
         :return: The fraction (0.0..1.0) of the body's volume lying in the region.
         """
-        # Retrieve meshes in local frames
-        local_body_mesh = self._stated(self.body, "body").collision.combined_mesh
-        local_region_mesh = self._stated(self.region, "region").area.combined_mesh
+        body = self._stated(self.body, "body")
+        region = self._stated(self.region, "region")
+        # a body whose enclosing region misses the region's own shares no volume with
+        # it, and the exact boolean below is far too dear to reach for such a pair
+        if not body.numeric_global_bounds.overlaps(region.numeric_global_bounds):
+            return 0.0
 
-        # Transform copies of the meshes into the world frame
-        body_mesh = local_body_mesh.copy().apply_transform(
-            self.body.global_transform.to_np()
+        # Transform copies of the local meshes into the world frame
+        body_mesh = body.collision.combined_mesh.copy().apply_transform(
+            body.numeric_global_transform.to_np()
         )
-        region_mesh = local_region_mesh.copy().apply_transform(
-            self.region.global_transform.to_np()
+        region_mesh = region.area.combined_mesh.copy().apply_transform(
+            region.numeric_global_transform.to_np()
         )
         intersection = trimesh.boolean.intersection([body_mesh, region_mesh])
 
@@ -868,7 +897,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
     """
     The reference spot from where to look at the bodies.
     """
-    eps: float = 1e-12
+    eps: float = VIEW_DIRECTION_EPS
     """
     A small value to avoid division by zero.
     """
@@ -1324,40 +1353,21 @@ class InsideOf(KinematicStructureEntitySpatialRelation):
     def compute_containment_ratio(self) -> float:
         """
         Compute the containment ratio of self.body inside self.other.
+
+        Both bodies' geometry is carried into the world frame as plain coordinates, so
+        neither the meshes themselves nor a box enclosing them is ever built.
         """
-        if self.other.combined_mesh is None:
+        body_mesh = self.body.combined_mesh
+        if body_mesh is None or body_mesh.is_empty:
             return 0.0
 
-        # Get meshes in their local (body) frames
-        mesh_a_local = self.body.combined_mesh
-        mesh_b_local = self.other.combined_mesh
-
-        # Check if either mesh is empty
-        if (
-            mesh_a_local is None
-            or mesh_a_local.is_empty
-            or mesh_b_local is None
-            or mesh_b_local.is_empty
-        ):
-            return 0.0
-
-        # Transform meshes from body frame to world frame
-        mesh_a = mesh_a_local.copy()
-        mesh_a.apply_transform(self.body.global_transform.to_np())
-
-        mesh_b = mesh_b_local.copy()
-        mesh_b.apply_transform(self.other.global_transform.to_np())
-
-        # Use bounding box of mesh_b to check if mesh_a is inside mesh_b
-        mesh_b_bbox = mesh_b.bounding_box
-
-        if not mesh_b_bbox.is_watertight:
-            return 0.0
-
-        inside = mesh_b_bbox.contains(mesh_a.vertices)
+        world_P_body = self.body.numeric_global_transform.transform_points(
+            body_mesh.vertices
+        )
+        inside = self.other.numeric_global_bounds.contains(world_P_body)
         if len(inside) == 0:
             return 0.0
-        return sum(inside) / len(inside)
+        return float(inside.sum()) / len(inside)
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:

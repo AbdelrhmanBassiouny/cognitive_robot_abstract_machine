@@ -920,6 +920,18 @@ def test_verbalize_sum():
     assert "sum" in text and "Integers" in text
 
 
+def test_verbalize_case_when_without_else():
+    x = variable(int, [1, 2])
+    text = verbalize_expression(eql.case_when(x > 1, "yes"))
+    assert text == "'yes' if an Integer is greater than 1"
+
+
+def test_verbalize_case_when_with_else():
+    x = variable(int, [1, 2])
+    text = verbalize_expression(eql.case_when(x > 1, "yes", "no"))
+    assert text == "'yes' if an Integer is greater than 1, otherwise 'no'"
+
+
 def test_verbalize_max_min():
     # MAX/MIN use SINGULAR_OF: child is verbalized via regular chain form, not plural.
     x = variable(int, [1, 2])

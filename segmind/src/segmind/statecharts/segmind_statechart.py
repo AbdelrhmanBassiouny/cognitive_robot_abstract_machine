@@ -9,7 +9,8 @@ from segmind.detectors.atomic_event_detectors_nodes import ContactDetector, Loss
 from segmind.detectors.base import DetectorStateChart, AbstractDetector
 from segmind.detectors.coarse_event_detector_nodes import PlacingDetector, PickUpDetector
 from segmind.detectors.spatial_relation_detector_nodes import SupportDetector, LossOfSupportDetector, \
-    ContainmentDetector, InsertionDetector, LossOfContainmentDetector
+    ContainmentDetector, InsertionDetector, LossOfContainmentDetector, HoleContactDetector, \
+    LossOfHoleContactDetector
 
 
 @dataclass
@@ -40,6 +41,8 @@ class SegmindStatechart(MotionStatechart):
         default_detectors = [
             ContactDetector(),
             LossOfContactDetector(),
+            HoleContactDetector(),
+            LossOfHoleContactDetector(),
             SupportDetector(),
             LossOfSupportDetector(),
             ContainmentDetector(),
