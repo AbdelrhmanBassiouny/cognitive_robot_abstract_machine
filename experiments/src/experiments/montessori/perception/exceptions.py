@@ -251,3 +251,33 @@ class NothingRecordedOnTopic(DataclassException):
             "Record the bag again with every camera topic the perception node reads, "
             "or capture from a bag that already has them."
         )
+
+
+@dataclass
+class NothingIsHiddenFromBelow(DataclassException):
+    """
+    Raised when what a thing hides from a camera is asked for, but the camera does not
+    stand above the thing, so there is no surface below it that it stands in front of.
+    """
+
+    camera_height: float
+    """
+    Height the camera stands at, in metres.
+    """
+
+    top_height: float
+    """
+    Height of the top of the thing whose hidden ground was asked for, in metres.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"A camera at {self.camera_height:.3f}m does not look down on something "
+            f"reaching {self.top_height:.3f}m, so it hides nothing below it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check the camera's pose and the frame it is given in: a camera mounted "
+            "above the scene reads higher than everything standing in it."
+        )
