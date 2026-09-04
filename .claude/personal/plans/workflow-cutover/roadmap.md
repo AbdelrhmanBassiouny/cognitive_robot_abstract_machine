@@ -103,3 +103,18 @@ Left for the user: whether the Artifact publishing path is retired now the dashb
 Pages. That would delete `record_dashboard_url.py`, `_generated/dashboard-urls.yaml` and the
 "republish the dashboard" convention every plan skill follows, so it is a plan-level scope change
 rather than a review fix.
+
+## The Artifact path is now a tracked retirement, not an open question
+
+`artifact-path-retirement` was added on 2026-09-04, at the user's direction, from a review comment
+on #218 asking whether the Artifact tool is still needed now the dashboards publish to Pages.
+
+It belongs to this plan rather than to `plan-dashboards`, whose files it deletes, because it is what
+finishes this plan's own first goal: one published surface. It carries the same gate as
+`tooling-branch-retirement` - one green cycle on the new path before the old one goes - and the same
+shape of question, which is what makes the two siblings rather than one item.
+
+The three things it has to settle are recorded on the item, because each is a way the Artifact still
+does something Pages does not: the site is public where an Artifact is private, the workflow reaches
+only the pull requests whose base already carries it, and a manifest edit raises no event, so the
+republish becomes a dispatch rather than a skill invocation.

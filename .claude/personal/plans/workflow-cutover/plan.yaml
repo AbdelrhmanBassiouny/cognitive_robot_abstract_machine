@@ -115,6 +115,33 @@ items:
     \ from the same ref instead of\nasserting it. Two deletions fall due when `.claude/stack/` reaches\
     \ main: the pointer prompt's\nsecond source line, which needs a manual paste, and step 0's fetch\
     \ fallback. Neither breaks anything\nif forgotten; both are dead weight."
+- id: artifact-path-retirement
+  title: Retire the Artifact publishing path once the Pages site has run one green cycle
+  branch: null
+  status: not_started
+  track: cutover
+  depends_on:
+  - stack-board-single-site
+  notes: |-
+    Raised by the user on #218's review of `SKILL.md` (2026-09-04): now the dashboards publish to
+    Pages, is the Artifact path still needed? Kept out of #218 as a plan-level scope change rather
+    than a review fix, and tracked here because it is what finishes this plan's own "one published
+    surface" goal.
+
+    What retiring it removes: `record_dashboard_url.py` and its tests, the
+    `_generated/dashboard-urls.yaml` cache, `plan-dashboard/SKILL.md` step 3, and the "republish the
+    dashboard" instruction every plan skill and the personal notes carry - each of which would
+    instead dispatch the workflow.
+
+    Three things to settle first, because they are what the Artifact still does and Pages does not.
+    The Pages site is public on the fork while an Artifact is private, so retiring it publishes the
+    plan data's rendering to anyone with the URL - the data itself is already public on
+    `claude/personal-notes`, so this is a discoverability change rather than a disclosure one, but it
+    is the user's call. The workflow only covers plans once it is on a base branch that carries it,
+    which today is #218's own pull request alone. And a manifest edit raises no event GitHub can
+    see, so the republish becomes a `workflow_dispatch` call rather than a skill invocation.
+
+    Gate: one green site-Action cycle, the same bar `tooling-branch-retirement` already uses.
 - id: tooling-branch-retirement
   title: Tag and delete claude/stack-workflow-tooling after one green cycle
   branch: null
