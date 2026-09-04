@@ -4754,3 +4754,118 @@ The easiest this plan has recorded, after #246's: `pip install -U uv` puts 0.12.
 was taken in a worktree with its own `*/src` on `PYTHONPATH` and `experiments.__file__`
 checked before it was trusted, per what #222 recorded about nearly measuring a branch
 against itself.
+
+## `how-to-look-concluded-from-the-request`: the last hand-wired step, and the tree that concludes it
+
+Kicked off 2026-09-04 in `auto` mode, as pull request #266 off
+`claude/knowledge-directed-perception-detector-zrm57t` (#239, open and out of draft, so
+ready to stack on -- `check_dependency_readiness.py` reports `open_ready` for both this
+item's dependencies, #231 and #239). #239 is the base rather than #231 because it is the
+branch that already merges #159 in, which is what this item's own note says it stacks on
+and reaches through. The session's branch arrived cut from `integration` -- the hazard
+#199 exists to refuse, and the tenth time on this plan after #223, #225, #227, #232,
+#236, #238, #239, #246 and #257 -- and was re-cut onto #239's tip before the first
+commit.
+
+The mechanical scope check reports every path this touches absent from `main` and shared
+with #231, #238, #239, #257 and #259, which every round on this plan has already recorded
+as expected: every file in this plan is introduced by #202, so path overlap alone would
+fold the whole plan into one item. The purpose check decides it and comes back clean.
+#231 concludes *which detector* answers a look at one piece on one surface; #239
+concludes the *numbers* that detector reads the picture with; #238 clips the picture a
+stated relation allows. None of them concludes *which detectors run over which surfaces
+for a whole request*, which is what remains once their edits are removed.
+
+### What was measured before anything was designed
+
+`MontessoriPerceptionPipeline.detect` is where the residue actually sits, and it is two
+hand-written steps rather than one:
+
+- **The board detector always runs**, whatever was asked for. The method's own docstring
+  says so -- *"The board is found whatever was asked for"* -- and it is true even of a
+  request that admits only a shape detection.
+- **The pieces are searched exactly one way**: `searched_surfaces` builds `[table, lid]`
+  from a written `if board is None`, filters it by the request, and every surface that
+  survives is handed to #231's rules for every one of `KNOWN_PIECES`.
+
+That is the branch the developer's *"this feels rigid and hard designed and coded"* names.
+Nothing about it is knowledge; it is a procedure written once and read every look.
+
+### What is built
+
+- **`RequestedLook`** -- what a rule reads about one request. Follows `TargetOnSurface`'s
+  own rule exactly: everything a rule reads is stated on the case as a plain property, so
+  a condition is an equality over a field rather than a reach into a `Type` object. It
+  states whether a shape detection can answer the request, whether the board or one of
+  its holes can, and whether the statement named a surface.
+- **`WayOfLooking`** -- one interface, with the members today's `detect` already implies:
+  finding the board and its holes, finding the pieces on each surface the request asks
+  about, and finding everything. The composite is what an unnarrowed request concludes,
+  so a single-class tree can answer a request that wants both without a fourth kind of
+  conclusion.
+- **`LookRules`** -- an `EQLSingleClassRDR` over `RequestedLook`, concluding a
+  `WayOfLooking`, authored by fitting the three known kinds of request through a scripted
+  expert, and readable by `render_tree`. The engine's `query` is `field(init=False)`, so
+  fitting *is* the authoring model rather than a concession -- the same reading #239's
+  section already recorded, and the path
+  `tune-detection-rules-against-the-camera` extends.
+- **`MontessoriPerceptionPipeline` loses its two hand-wired fields.** `board_detector`
+  and `detector_rules` move onto the ways of looking that use them, and the pipeline
+  carries one `look_rules` instead. Six fields become five, and the two the item's own
+  note calls *"genuinely hand-wired"* become rule-concluded.
+
+### Why the ways of looking, and not a list of passes
+
+A single-class RDR concludes one value per case, and the conclusion has to be stateable
+once when the rules are built -- a rule cannot conclude a list of passes over surfaces
+that only exist once a frame has been looked at. So the tree concludes *how* the look is
+taken and the way of looking derives its own passes from the scene, which is the same
+move #231 made when its tree concluded a `PieceDetector` rather than a name.
+
+### The demonstration of extensibility
+
+#231 answered *"extensibility with new situations through interaction with an expert"*
+only for the choice of detector, and its round left open that nothing yet asks an expert
+when no rule fires, since the expert interface was not on its base. It is on this one.
+A test fits a kind of request no rule covers and asserts the next look is answered the way
+the expert said -- and, as #231's own `add_rule` test does, it fails if the tree is
+rebuilt per look rather than grown in place.
+
+### Deliberately not built here, each recorded rather than dropped
+
+- **`headroom`.** The item's note assigns it to #239 -- *"`headroom` is
+  detector-parameters-from-knowledge's to conclude"* -- and #239's own section records
+  `DetectionParameters` as still to build on that branch. Concluding it here would build
+  that item's value object on a branch it cannot see, which is the duplication these notes
+  record five times over.
+- **Skipping the board pass for a request about pieces.** It is the obvious saving and it
+  would be wrong: `searched_surfaces` uses the board detection as the lid's boundary and
+  as what stands on the table, so a look that skips it attributes a piece on the lid to
+  the table. The rules state what the code already does; they do not invent a shortcut
+  nobody measured.
+- **Which pieces are candidates.** Narrowing `KNOWN_PIECES` from the request is
+  #239's widening (*"which pieces are candidates at all"*), and #232 already moved the
+  seeded half of it onto the belief.
+
+### Landing hazards
+
+`board_detector` and `detector_rules` move off `MontessoriPerceptionPipeline`, so any
+branch constructing a pipeline with either keyword conflicts. #232, #236, #238 and #259
+all edit `pipeline.py` on the other stack; whichever meets this branch first pays for it.
+#223's `Footprint` -> `RectifiedFootprint` rename conflicts the same mechanical way it
+does with every branch this plan has opened.
+
+### The bootstrap script's indentation fault is still unfixed, for the eighth time
+
+`.claude/hooks/plan_item_bootstrap.py` writes item fields at four-space indentation while
+this plan's `plan.yaml` indents them by two, so `open` failed inside `save-plan.sh` --
+`save-plan.sh` exits 1 on *"No changes to save"*, which is exactly what a rewrite that
+matched nothing produces. Worked around an eighth time by editing `plan.yaml` directly.
+It is the same family as #160 and still wants its own bug-fix pull request.
+
+### The tracking-issue subscription could not be armed
+
+`subscribe_pr_activity` on issue 201 was refused by this session's permission classifier,
+the same way #257's round recorded it. The kickoff carried on, as
+`plan-item-gathering.md` says to: subscribing is a convenience for noticing concurrent
+structural changes, not a precondition for anything here.

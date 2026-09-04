@@ -851,13 +851,14 @@ items:
     dataclass. Both are closed by the detection having a body behind it.'
 - id: how-to-look-concluded-from-the-request
   title: Work out how to answer a look from the request, instead of being handed a pipeline
-  branch: null
-  pull_request_number: null
+  branch: claude/plan-item-kickoff-perception-idzwsk
+  pull_request_number: 266
   track: request-language
   depends_on:
   - choose-detection-method
   - detector-parameters-from-knowledge
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_0139rDK7uNEvtjEVZ5krjS4h
   notes: 'Raised by the developer on #238 (r3915356623) and added at his direction on 2026-09-02: "why
     does evaluating a query needs a pipeline? why do we need anything specified other than the request
     and the camera and the feed (images input)? this feels rigid and hard designed and coded ... Also
