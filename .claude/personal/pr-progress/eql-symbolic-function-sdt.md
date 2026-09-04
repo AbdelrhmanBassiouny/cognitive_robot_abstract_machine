@@ -158,3 +158,70 @@ real blockers; dashboard republished.
   base-branch-recovered notice arrives, merge `main` again and let CI re-run.
 - When the type-noun decision lands: if it is "type-level display noun", that is a
   new krrood item (`value_lexicon.type_noun`), not more work on this branch.
+
+## Round 6 — `main` merge, conflict cleared (2026-09-04, `/plan-item-resolve`)
+
+Session: https://claude.ai/code/session_017Sij3r2He3kzGwr7zBSc5m
+
+**What was actually wrong.** The item read as "waiting on two review decisions", but the
+live state said otherwise on three counts:
+
+1. **#229 has not merged.** The 2026-08-31 decision (#229 carries `predicates.py`, this
+   branch rebases onto the `main` that has its classes) recorded the outcome and not the
+   precondition. #229 is `open`, out of draft, `mergeable_state: clean`, base sha
+   `fd72af38` — `main`'s own tip. So there is no `main` with those classes to rebase onto.
+   And the drop cannot be done early: `main`'s twelve `@symbolic_function` helpers declare
+   no fragment of their own, so
+   `test_every_symbolic_callable_declares_its_own_verbalization_fragment` would go red.
+2. **Three review threads open, not two.** Nine of 37 are unresolved, but six are the same
+   type-noun comment repeated on consecutive lines. The third — `ClassNameLowercased`
+   rendering *"the lower case form of the name of a type"* vs the reviewer's literal
+   *"…of a class name"* (r3608403117) — had never been recorded as a blocker at all.
+3. **The `Reachable` wording is settled**, by a resolve rather than a sentence. #229's
+   r3896606294 now reads resolved, with the shorter *"a Pose is reachable by a Tip"*
+   standing there. Roadmap decision 11 is superseded to that extent.
+
+**What was done.** Merged current `main` (`f97e7a99`). One file conflicted —
+`reasoning/predicates.py`, the same one the routine had re-reported ten times since
+2026-08-28. The textual merge interleaved badly (functions on `main` vs classes here), so
+the resolution took this branch's side wholesale and re-applied `main`'s delta by hand:
+
+- `GetVisibleBodies`/`OccludingBodies`: `camera.root_T_forward_view` instead of the
+  hand-built identity-orientation pose, plus `field_of_view=camera.field_of_view` on all
+  three `create_segmentation_mask` calls.
+- `IsPlaceOccupied.box`: `BoundingBox` -> `VolumetricBoundingBox`.
+- The unused `SemanticAnnotation` import dropped, as `main` did.
+
+The resulting diff against this branch's pre-merge side is exactly those four changes and
+nothing else — reviewed hunk by hunk before committing.
+
+**Verification.** `git merge-tree` reports the branch clean against `main`.
+`scripts/format_docstrings.py` made no changes. All three reasoning modules import. 30
+symbolic callables discovered in sdt, all declaring their own fragment;
+`assert_results_cover_every_callable` and `assert_declared_results_render_as_stated` both
+pass. The regenerated snapshot differs in exactly two ways: `IsPlaceOccupied`'s sentence
+(following the rename — the intended "wording change lands as a diff" mechanism), and the
+generator's own `tuple`/`Tuple` spelling, the pre-existing drift already noted above.
+
+Local env: this container has no ROS and no pytest, so verification ran the snapshot
+assertions directly rather than through pytest, with `giskardpy_bullet_bindings`,
+`urdf_parser_py` and `pydrake` stubbed and `random_events` built from source
+(`pip install ./random_events --no-deps`, which is what supplies native
+`random_events_lib.reals`). CI has the real stack.
+
+**Also done.** #33's description rewritten to match (three open threads, not two; the
+`VolumetricBoundingBox` wording; the #229 dependency stated up front). One comment posted
+collecting the three open decisions in a single answerable place
+(https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5536810182).
+`needs-resolution` left in place — the routine clears it itself once it sees the branch
+merge cleanly. PR stays draft.
+
+### Next
+
+- Nothing here is actionable until **#229 merges**. When it does: merge `main`, take its
+  `predicates.py`, re-apply this branch's reviewed wordings onto #229's classes (with
+  `Reachable` taking #229's shorter sentence), and make sure each relation named for its
+  object states its own clause — inheriting `Triple` silently is what produced
+  *"a Body supports by another Body"* there.
+- The three review decisions are the developer's; the collecting comment is where they can
+  be answered.
