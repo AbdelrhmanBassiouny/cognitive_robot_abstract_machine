@@ -24,6 +24,14 @@ items:
   session: https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk
   track: cutover
   depends_on: []
+  blockers:
+  - 'A 26-thread review round submitted 2026-09-04 against head `c62813b9`, every thread
+    unresolved. Four asks recur across it: hard-coded strings that should be StrEnum members
+    (13 threads), the word `payload`, missing per-member docstrings, and a common base for the
+    error classes. Three are questions rather than defects - whether `publish_site.sh` should be
+    Python, why the tests do not use a git command runner, and whether the Artifact publishing
+    path is still needed now the site is on Pages. CI is not the blocker: every completed check
+    on that head is green and `mergeable_state` is `unstable` only because the matrix is queued.'
   notes: |-
     Re-scoped 2026-07-31 to the user's one-dashboard decision: no board index is built at all.
     GitHub's native stack map covers derived stack mechanics, so the plan dashboards are the single

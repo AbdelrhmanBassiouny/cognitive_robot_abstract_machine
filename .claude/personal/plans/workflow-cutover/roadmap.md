@@ -71,3 +71,35 @@ is why the deterministic duties can move to an Action at all.
   was not asked for and the no-scheduled-checks rule makes it the user's call.
 - Whether the every-fork-pull-request-belongs-to-a-plan invariant is enforced at site-build time.
   Recorded when the one-dashboard decision was taken, carried by nothing yet.
+
+## The 2026-09-04 review round on #218, and what it found about the other branches
+
+The item read `in_progress` with no blocker while a 26-thread review round sat unanswered on its
+own head commit. Nothing about its recorded state said it was stuck, which is why the blocker was
+written before the resolution started rather than after it.
+
+Four of the asks are one complaint restated - hard-coded strings where a `StrEnum` member belongs -
+and the round is otherwise `payload` as a name, missing per-member docstrings, and a common base for
+the error classes. Three are questions, and two of those turn out to be about branches other than
+this one:
+
+- **The vocabulary this branch should use already exists on #111.** `RefreshArgument`,
+  `RefreshSummaryKey`, `SitePath`, `RepositoryEndpoints`, `PullRequestListFilter` and `IssueField`
+  are all in `bastler/build_site.py` and `bastler/pull_request_state.py`, and #111 names a decoded
+  response `detail` and a request body `body` - which is the answer to "rename payload". Adopting
+  those names here makes the eventual merge an adoption rather than a conflict, so the overlap the
+  item's notes already record stays a single-file one.
+- **`workflow_document.py` (#211) is a second overlap, and a real one.** Naming the workflow's keys
+  for `test_plan_dashboards_workflow.py` builds a small piece of what that 664-line module already
+  models. It is on `.claude/stack/` on an unlanded branch, so this branch cannot import it; the
+  vocabulary here is deliberately sized to these tests and named after its equivalents, and the
+  richer version wins whenever the two meet.
+- **Bash to Python is the settled direction, and `publish_site.sh` was the last new bash.**
+  `bastler-package` carries a seven-item Bash→Python series; none of its items covers this file,
+  because the file does not exist on `main`. Converting it here is the answer to the review's
+  question rather than a new claim on that plan's scope.
+
+Left for the user: whether the Artifact publishing path is retired now the dashboards publish to
+Pages. That would delete `record_dashboard_url.py`, `_generated/dashboard-urls.yaml` and the
+"republish the dashboard" convention every plan skill follows, so it is a plan-level scope change
+rather than a review fix.
