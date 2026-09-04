@@ -13,6 +13,7 @@ here, so the repository-root ``test/conftest.py`` - which imports the robotics s
 job does not install - is never loaded for it.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -22,6 +23,7 @@ import pytest  # noqa: E402
 
 from bastler.stack import BOARD_PATH  # noqa: E402
 
+from .constants import SCRUBBED_ENVIRONMENT_PREFIXES  # noqa: E402
 from .executable_stubs import ExecutableStubDirectory  # noqa: E402
 from .scratch_repository import ScratchRepository  # noqa: E402
 from .upstream_reviews_replay import RecordedResponse, ReplayingClient  # noqa: E402
@@ -80,3 +82,17 @@ def paginated_client() -> ReplayingClient:
             RecordedResponse.PULL_REQUEST_PAGE_TWO.load(),
         ]
     )
+
+
+@pytest.fixture
+def scrubbed_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Remove from this process every variable a scratch run must not inherit (see
+    :data:`SCRUBBED_ENVIRONMENT_PREFIXES`), for code under test that runs in-process
+    rather than through a :class:`~.script_runner.ScriptRunner`.
+
+    :param monkeypatch: pytest's monkeypatch fixture, which restores them afterwards.
+    """
+    for name in list(os.environ):
+        if name.startswith(SCRUBBED_ENVIRONMENT_PREFIXES):
+            monkeypatch.delenv(name)

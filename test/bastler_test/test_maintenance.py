@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 
 from bastler.stack import (
+    BOARD_DOCUMENT_NAME,
     BOARD_PATH,
     Configuration,
     IntegrationStrategy,
@@ -416,7 +417,7 @@ def test_the_written_board_parses_back_into_the_records_it_was_built_from(
             ),
         ]
     )
-    destination = tmp_path / "board.json"
+    destination = tmp_path / BOARD_DOCUMENT_NAME
 
     export.write(destination)
 
@@ -1391,7 +1392,7 @@ def test_a_whole_pass_leaves_no_board_behind(
     removes it, and the next pass starts by exporting a fresh one.
     """
     a_parent_and_child(fork_checkout)
-    board_path = tmp_path / "board.json"
+    board_path = tmp_path / BOARD_DOCUMENT_NAME
     board_path.write_text("{}")
     monkeypatch.setattr(bastler.maintenance_commands, "BOARD_PATH", board_path)
 

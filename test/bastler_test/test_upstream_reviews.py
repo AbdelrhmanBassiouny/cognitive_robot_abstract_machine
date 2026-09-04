@@ -76,6 +76,7 @@ class StubEnvironmentVariable(StrEnum):
     """
 
     GRAPHQL_JSON = "STUB_GH_GRAPHQL_JSON"
+    API_JSON = "STUB_GH_API_JSON"
     EXIT_CODE = "STUB_GH_EXIT_CODE"
     CALL_LOG = "STUB_GH_CALL_LOG"
 
@@ -121,7 +122,9 @@ def recorded_thread(
 
 def test_a_model_that_declares_no_reader_cannot_be_built():
     class ModelMissingItsReader(JSONModel):
-        """Stands in for a model that forgot the reader every model owes."""
+        """
+        Stands in for a model that forgot the reader every model owes.
+        """
 
     with pytest.raises(TypeError):
         ModelMissingItsReader()

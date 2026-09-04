@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 import bastler.stack
+from bastler.pull_request_state import CheckConclusion
 from bastler.stack import (
     AmbiguousForkRemoteError,
     CommitMoveAction,
@@ -215,7 +216,7 @@ def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
     assert names == ["fine"]
 
 
-def test_ci_and_session_carried_onto_branch():
+def test_check_conclusion_and_session_carried_onto_branch():
     stack = build(
         [
             PullRequest(
@@ -223,12 +224,12 @@ def test_ci_and_session_carried_onto_branch():
                 "f",
                 "main",
                 draft=False,
-                ci="failure",
+                continuous_integration=CheckConclusion.FAILURE,
                 session="https://claude.ai/code/session_x",
             )
         ]
     )
-    assert stack.branches[0].ci == "failure"
+    assert stack.branches[0].continuous_integration == CheckConclusion.FAILURE
     assert stack.branches[0].session == "https://claude.ai/code/session_x"
 
 

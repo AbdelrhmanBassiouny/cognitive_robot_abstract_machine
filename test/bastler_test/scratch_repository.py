@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .script_runner import BashScriptRunner
 import bastler.stack
+from bastler.plan_item_bootstrap import HookScript
 
 from .constants import (
     NOTES_BRANCH,
@@ -293,9 +294,7 @@ class ScratchRepository:
         :param content: The configuration to write.
         :return: The path :func:`bastler.stack.load_configuration` should be pointed at.
         """
-        self.install_hook_scripts(
-            Path(bastler.stack.PERSONAL_NOTES_CONFIGURATION_SCRIPT).name
-        )
+        self.install_hook_scripts(HookScript.CONFIGURATION)
         written = self.write(
             f"{PACKAGE_DIRECTORY.name}/{bastler.stack.CONFIGURATION_PATH.name}", content
         )
