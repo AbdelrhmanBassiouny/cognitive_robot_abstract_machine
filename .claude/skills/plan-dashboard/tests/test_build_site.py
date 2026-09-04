@@ -14,59 +14,45 @@ from typing import Any, Mapping
 
 import pytest
 
-from build_dashboard import ItemStatus, PullRequestState
+from build_dashboard import PullRequestState
 from build_site import (
-    DASHBOARD_DIRECTORY,
-    INDEX_PAGE_FILENAME,
     DashboardRefreshError,
+    RefreshArgument,
+    RefreshDashboardCommand,
     SiteBuilder,
+    SitePath,
 )
 from github_api import (
-    ISSUE_URL_FIELD,
     GitHubApi,
+    IssueField,
     PullRequestField,
     PullRequestListParameter,
+    RepositoryEndpoints,
 )
-from personal_notes import PersonalNotesBranch
+from personal_notes import PersonalNotesBranch, PlanDocument
+from site_fixtures import (
+    RECORDED_ARGUMENTS_FILENAME,
+    UNREFERENCED_PULL_REQUEST,
+    RecordedArgumentKey,
+    SitePlanId,
+    SiteStub,
+)
 
 SITE_BASE_URL = "https://owner.github.io/repository"
-REPOSITORY = "owner/repository"
-TRACKING_ISSUE_URL = f"https://github.com/{REPOSITORY}/issues/9"
-STUBS_DIRECTORY = Path(__file__).parent / "fixtures" / "stubs"
-REFRESH_DASHBOARD_STUB = STUBS_DIRECTORY / "refresh_dashboard_stub.sh"
-FAILING_REFRESH_DASHBOARD_STUB = STUBS_DIRECTORY / "refresh_dashboard_failure_stub.sh"
-RECORDED_ARGUMENTS_FILENAME = "arguments.json"
+OUTPUT_DIRECTORY_NAME = "_site"
 
-REFERENCED_PULL_REQUEST = 1
-UNREFERENCED_PULL_REQUEST = 2
-
-PLAN_MANIFEST = f"""\
-schema_version: 1
-id: {{plan_identifier}}
-title: "Plan {{plan_identifier}}"
-description: "What {{plan_identifier}} is for."
-default_repository: {REPOSITORY}
-tracking_issue: 9
-waves:
-  - id: only-wave
-    name: "Only wave"
-tracks:
-  - id: only-track
-    name: "Only track"
-    wave: only-wave
-items:
-  - id: an-item
-    branch: a-branch
-    title: "An item"
-    track: only-track
-    status: {ItemStatus.IN_PROGRESS.value}
-    pull_request_number: {REFERENCED_PULL_REQUEST}
-  - id: an-item-nobody-has-opened-yet
-    branch: another-branch
-    title: "An item nobody has opened yet"
-    track: only-track
-    status: {ItemStatus.NOT_STARTED.value}
+REPOSITORY = SitePlanId.FIRST.plan.default_repository
 """
+The repository both fixture plans reference, read off one of them rather than restated:
+
+the build's own reuse of a single listing depends on their agreeing.
+"""
+
+TRACKING_ISSUE_URL = (
+    f"https://github.com/{REPOSITORY}/issues/{SitePlanId.FIRST.plan.tracking_issue}"
+)
+
+REFERENCED_PULL_REQUEST = SitePlanId.FIRST.referenced_item.pull_request_number
 
 
 class PlanDataFakeApi(GitHubApi):
@@ -75,19 +61,20 @@ class PlanDataFakeApi(GitHubApi):
     against - one they reference and one they do not.
     """
 
-    def __init__(self, pull_request_payload):
-        self.pull_request_payload = pull_request_payload
+    def __init__(self, pull_request_detail):
+        self.pull_request_detail = pull_request_detail
+        self.endpoints = RepositoryEndpoints(REPOSITORY)
 
     def get(self, path: str, parameters: Mapping[str, str] | None = None) -> Any:
-        if path.endswith("/issues/9"):
-            return {ISSUE_URL_FIELD: TRACKING_ISSUE_URL}
+        if path == self.endpoints.issue(SitePlanId.FIRST.plan.tracking_issue):
+            return {IssueField.URL.value: TRACKING_ISSUE_URL}
         if parameters[PullRequestListParameter.PAGE] != "1":
             return []
         return [
-            self.pull_request_payload(
+            self.pull_request_detail(
                 REFERENCED_PULL_REQUEST, state=PullRequestState.OPEN, draft=True
             ),
-            self.pull_request_payload(
+            self.pull_request_detail(
                 UNREFERENCED_PULL_REQUEST, state=PullRequestState.OPEN
             ),
         ]
@@ -96,44 +83,62 @@ class PlanDataFakeApi(GitHubApi):
 @pytest.fixture
 def two_plans(plan_files) -> dict:
     """
-    Two plans referencing the same repository, to seed a scratch notes branch with.
+    Both fixture plans, read off disk to seed a scratch notes branch with.
 
     :param plan_files: The plan-files type.
     :return: The plans, keyed by identifier.
     """
     return {
-        plan_identifier: plan_files(
-            manifest=PLAN_MANIFEST.format(plan_identifier=plan_identifier),
-            roadmap=f"# {plan_identifier} roadmap\n",
+        str(plan_id): plan_files(
+            manifest=plan_id.document(PlanDocument.MANIFEST),
+            roadmap=plan_id.document(PlanDocument.ROADMAP),
         )
-        for plan_identifier in ("first-plan", "second-plan")
+        for plan_id in SitePlanId
     }
 
 
 @pytest.fixture
-def build_site(notes_clone, two_plans, pull_request_payload, tmp_path: Path):
+def build_site(notes_clone, two_plans, pull_request_detail, tmp_path: Path):
     """
     Build a site builder wired to a scratch clone, the fake transport and a stub
     refresh.
 
     :param notes_clone: The scratch notes-branch builder.
     :param two_plans: The plans to seed.
-    :param pull_request_payload: The GitHub payload builder.
+    :param pull_request_detail: The GitHub response builder.
     :param tmp_path: pytest's per-test temporary directory.
     :return: The builder factory, called with the refresh script to drive.
     """
     clone = notes_clone(two_plans)
 
-    def build(refresh_script: Path = REFRESH_DASHBOARD_STUB) -> SiteBuilder:
+    def build(stub: SiteStub = SiteStub.REFRESH_DASHBOARD) -> SiteBuilder:
         return SiteBuilder(
-            output_directory=tmp_path / "_site",
+            output_directory=tmp_path / OUTPUT_DIRECTORY_NAME,
             site_base_url=SITE_BASE_URL,
-            api=PlanDataFakeApi(pull_request_payload),
+            api=PlanDataFakeApi(pull_request_detail),
             notes=PersonalNotesBranch.resolve(clone),
-            refresh_dashboard_script=refresh_script,
+            refresh_dashboard_script=stub.path,
         )
 
     return build
+
+
+def recorded_arguments(builder: SiteBuilder, plan_id: SitePlanId) -> dict[str, Any]:
+    """
+    What the stub refresh was handed for one plan.
+
+    :param builder: The builder that ran it.
+    :param plan_id: The plan whose refresh to read back.
+    :return: The recorded arguments.
+    """
+    return json.loads(
+        (
+            builder.output_directory
+            / SitePath.PLANS_DIRECTORY
+            / plan_id
+            / RECORDED_ARGUMENTS_FILENAME
+        ).read_text()
+    )
 
 
 def test_every_plan_gets_a_page_and_the_index_lists_them_all(build_site):
@@ -145,14 +150,17 @@ def test_every_plan_gets_a_page_and_the_index_lists_them_all(build_site):
 
     summaries = builder.build()
 
-    assert [summary.id for summary in summaries] == ["first-plan", "second-plan"]
-    assert (builder.output_directory / INDEX_PAGE_FILENAME).is_file()
-    for plan_identifier in ("first-plan", "second-plan"):
+    assert [summary.id for summary in summaries] == [
+        SitePlanId.FIRST,
+        SitePlanId.SECOND,
+    ]
+    assert (builder.output_directory / SitePath.INDEX_PAGE).is_file()
+    for plan_id in SitePlanId:
         assert (
             builder.output_directory
-            / DASHBOARD_DIRECTORY
-            / plan_identifier
-            / INDEX_PAGE_FILENAME
+            / SitePath.PLANS_DIRECTORY
+            / plan_id
+            / SitePath.INDEX_PAGE
         ).is_file()
 
 
@@ -165,9 +173,9 @@ def test_the_index_links_each_plan_at_its_published_url(build_site):
 
     builder.build()
 
-    expected_url = f"{SITE_BASE_URL}/{DASHBOARD_DIRECTORY}/first-plan/"
-    assert builder.dashboard_url_of("first-plan") == expected_url
-    assert expected_url in (builder.output_directory / INDEX_PAGE_FILENAME).read_text()
+    expected_url = f"{SITE_BASE_URL}/{SitePath.PLANS_DIRECTORY}/{SitePlanId.FIRST}/"
+    assert builder.dashboard_url_of(SitePlanId.FIRST) == expected_url
+    assert expected_url in (builder.output_directory / SitePath.INDEX_PAGE).read_text()
 
 
 def test_a_plan_summary_reports_the_counts_the_refresh_computed(build_site):
@@ -176,9 +184,10 @@ def test_a_plan_summary_reports_the_counts_the_refresh_computed(build_site):
     taken here.
     """
     summaries = build_site().build()
+    first_plan = SitePlanId.FIRST.plan
 
-    assert summaries[0].title == "Plan first-plan"
-    assert summaries[0].description == "What first-plan is for."
+    assert summaries[0].title == first_plan.title
+    assert summaries[0].description == first_plan.description
     assert summaries[0].done == 1
     assert summaries[0].total == 2
 
@@ -192,18 +201,15 @@ def test_the_refresh_receives_the_plan_data_and_its_tracking_url(build_site):
 
     builder.build()
 
-    recorded = json.loads(
-        (
-            builder.output_directory
-            / DASHBOARD_DIRECTORY
-            / "first-plan"
-            / RECORDED_ARGUMENTS_FILENAME
-        ).read_text()
+    recorded = recorded_arguments(builder, SitePlanId.FIRST)
+    assert recorded[RefreshArgument.PLAN_ID] == SitePlanId.FIRST
+    assert recorded[RefreshArgument.TRACKING_URL] == TRACKING_ISSUE_URL
+    assert recorded[RecordedArgumentKey.ROADMAP] == SitePlanId.FIRST.document(
+        PlanDocument.ROADMAP
     )
-    assert recorded["--plan-id"] == "first-plan"
-    assert recorded["--tracking-url"] == TRACKING_ISSUE_URL
-    assert recorded["roadmap"] == "# first-plan roadmap\n"
-    assert recorded["plan"] == PLAN_MANIFEST.format(plan_identifier="first-plan")
+    assert recorded[RecordedArgumentKey.PLAN] == SitePlanId.FIRST.document(
+        PlanDocument.MANIFEST
+    )
 
 
 def test_the_refresh_receives_only_the_pull_requests_the_plan_references(build_site):
@@ -214,15 +220,8 @@ def test_the_refresh_receives_only_the_pull_requests_the_plan_references(build_s
 
     builder.build()
 
-    recorded = json.loads(
-        (
-            builder.output_directory
-            / DASHBOARD_DIRECTORY
-            / "first-plan"
-            / RECORDED_ARGUMENTS_FILENAME
-        ).read_text()
-    )
-    assert json.loads(recorded["pr-data"]) == {
+    recorded = recorded_arguments(builder, SitePlanId.FIRST)
+    assert json.loads(recorded[RecordedArgumentKey.PULL_REQUEST_DATA]) == {
         REPOSITORY: {
             str(REFERENCED_PULL_REQUEST): {
                 PullRequestField.STATE.value: PullRequestState.OPEN.value,
@@ -247,9 +246,58 @@ def test_a_repository_is_listed_once_however_many_plans_reference_it(build_site)
 def test_a_failing_refresh_names_the_plan_it_failed_for(build_site):
     """A plan whose refresh fails stops the build, saying which plan - the site must
     not publish an index over pages no script agreed to write."""
-    builder = build_site(FAILING_REFRESH_DASHBOARD_STUB)
+    builder = build_site(SiteStub.FAILING_REFRESH_DASHBOARD)
 
     with pytest.raises(DashboardRefreshError) as raised:
         builder.build()
 
-    assert "first-plan" in str(raised.value)
+    assert raised.value.plan_identifier == SitePlanId.FIRST
+
+
+# %% the refresh command
+
+
+def test_the_refresh_command_omits_the_tracking_option_when_there_is_no_issue(
+    tmp_path: Path,
+):
+    """
+    A plan that tracks no issue is refreshed without the option at all, rather than with
+    an empty one the script would then have to interpret.
+    """
+    command = RefreshDashboardCommand(
+        plan_identifier=SitePlanId.FIRST,
+        manifest_file=tmp_path / PlanDocument.MANIFEST,
+        roadmap_file=tmp_path / PlanDocument.ROADMAP,
+        pull_request_data_file=tmp_path / "pr_data.json",
+        dashboard_page=tmp_path / SitePath.INDEX_PAGE,
+    )
+
+    assert RefreshArgument.TRACKING_URL not in command.command_line(tmp_path / "run.sh")
+
+
+def test_the_refresh_command_names_every_option_it_was_given(tmp_path: Path):
+    """
+    Each field the command carries reaches the script under its own option, so a file
+    staged here cannot be handed over under the wrong flag.
+    """
+    dashboard_page = tmp_path / SitePath.INDEX_PAGE
+    command = RefreshDashboardCommand(
+        plan_identifier=SitePlanId.FIRST,
+        manifest_file=tmp_path / PlanDocument.MANIFEST,
+        roadmap_file=tmp_path / PlanDocument.ROADMAP,
+        pull_request_data_file=tmp_path / "pr_data.json",
+        dashboard_page=dashboard_page,
+        tracking_url=TRACKING_ISSUE_URL,
+    )
+
+    command_line = command.command_line(tmp_path / "run.sh")
+
+    for option, expected in (
+        (RefreshArgument.PLAN_ID, str(SitePlanId.FIRST)),
+        (RefreshArgument.PLAN, str(command.manifest_file)),
+        (RefreshArgument.ROADMAP, str(command.roadmap_file)),
+        (RefreshArgument.PULL_REQUEST_DATA, str(command.pull_request_data_file)),
+        (RefreshArgument.OUTPUT, str(dashboard_page)),
+        (RefreshArgument.TRACKING_URL, TRACKING_ISSUE_URL),
+    ):
+        assert command_line[command_line.index(option) + 1] == expected

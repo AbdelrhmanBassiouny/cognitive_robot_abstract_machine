@@ -16,11 +16,10 @@ import pytest
 from personal_notes import (
     NOTES_BRANCH_SETTING,
     NOTES_REMOTE_SETTING,
-    PLAN_MANIFEST_FILENAME,
-    PLAN_ROADMAP_FILENAME,
     PLANS_DIRECTORY,
     PersonalNotesBranch,
     PersonalNotesUnavailableError,
+    PlanDocument,
     PlanFileMissingError,
 )
 
@@ -30,8 +29,33 @@ CONFIGURATION_SCRIPT = (
     / "resolve-personal-notes-config.sh"
 )
 
+SHELL_PLAN_PATH_VARIABLES = (
+    "PLANS_DIR",
+    "PLAN_MANIFEST_FILENAME",
+    "PLAN_ROADMAP_FILENAME",
+)
+"""
+The shell variables carrying the same three paths this module names, in the order
+:func:`test_the_plan_paths_match_the_shell_configuration` prints and asserts them.
+"""
+
+SHELL_SETTING_VARIABLES = (
+    (NOTES_REMOTE_SETTING, "NOTES_REMOTE"),
+    (NOTES_BRANCH_SETTING, "NOTES_BRANCH"),
+)
+"""
+Each setting beside the shell variable resolved through the same precedence.
+"""
+
 MANIFEST_TEXT = "schema_version: 1\nid: a-plan\n"
 ROADMAP_TEXT = "# A plan\n"
+
+FIRST_PLAN_ID = "alpha-plan"
+SECOND_PLAN_ID = "beta-plan"
+GENERATED_SIBLING_DIRECTORY = "_generated"
+GENERATED_SIBLING_FILE = "branch-index.tsv"
+ABSENT_PLAN_ID = "no-such-plan"
+ABSENT_DOCUMENT = "absent.md"
 
 
 @pytest.fixture
@@ -43,7 +67,7 @@ def two_plans(plan_files) -> dict:
     :return: The plans, keyed by identifier.
     """
     files = plan_files(manifest=MANIFEST_TEXT, roadmap=ROADMAP_TEXT)
-    return {"beta-plan": files, "alpha-plan": files}
+    return {SECOND_PLAN_ID: files, FIRST_PLAN_ID: files}
 
 
 @pytest.fixture
@@ -63,11 +87,11 @@ def fetched_notes(notes_clone, two_plans) -> PersonalNotesBranch:
 # %% resolving where the branch is
 
 
-def test_resolve_falls_back_to_the_defaults(tmp_path: Path, run_git):
+def test_resolve_falls_back_to_the_defaults(tmp_path: Path, scratch_git):
     """
     A clone that configures nothing is read at the zero-config remote and branch.
     """
-    run_git(tmp_path, "init", "--quiet")
+    scratch_git(tmp_path).run("init", "--quiet")
 
     notes = PersonalNotesBranch.resolve(tmp_path)
 
@@ -76,40 +100,42 @@ def test_resolve_falls_back_to_the_defaults(tmp_path: Path, run_git):
 
 
 def test_resolve_prefers_the_environment_variable_over_the_default(
-    tmp_path: Path, run_git, monkeypatch
+    tmp_path: Path, scratch_git, monkeypatch
 ):
     """
     An environment variable overrides the default when git config sets nothing.
     """
-    run_git(tmp_path, "init", "--quiet")
+    scratch_git(tmp_path).run("init", "--quiet")
     monkeypatch.setenv(NOTES_BRANCH_SETTING.environment_variable, "notes/elsewhere")
 
     assert PersonalNotesBranch.resolve(tmp_path).branch == "notes/elsewhere"
 
 
 def test_resolve_prefers_git_config_over_the_environment_variable(
-    tmp_path: Path, run_git, monkeypatch
+    tmp_path: Path, scratch_git, monkeypatch
 ):
     """
     Repository git config wins over the environment variable.
     """
-    run_git(tmp_path, "init", "--quiet")
-    run_git(
-        tmp_path, "config", NOTES_BRANCH_SETTING.git_config_key, "notes/from-config"
-    )
+    git = scratch_git(tmp_path)
+    git.run("init", "--quiet")
+    git.run("config", NOTES_BRANCH_SETTING.git_config_key, "notes/from-config")
     monkeypatch.setenv(NOTES_BRANCH_SETTING.environment_variable, "notes/from-variable")
 
     assert PersonalNotesBranch.resolve(tmp_path).branch == "notes/from-config"
 
 
-def test_an_unfetchable_branch_is_an_error(tmp_path: Path, run_git):
+def test_an_unfetchable_branch_is_an_error(tmp_path: Path, scratch_git):
     """
     A clone whose remote serves no notes branch has no plan data to build from.
     """
-    run_git(tmp_path, "init", "--quiet")
+    scratch_git(tmp_path).run("init", "--quiet")
 
-    with pytest.raises(PersonalNotesUnavailableError):
+    with pytest.raises(PersonalNotesUnavailableError) as raised:
         PersonalNotesBranch.resolve(tmp_path).fetch()
+
+    assert raised.value.branch == NOTES_BRANCH_SETTING.default
+    assert raised.value.remote == NOTES_REMOTE_SETTING.default
 
 
 # %% reading the branch
@@ -119,23 +145,23 @@ def test_plan_identifiers_lists_every_plan_sorted(fetched_notes: PersonalNotesBr
     """
     Plan discovery is by manifest, in a stable order rather than the branch's own.
     """
-    assert fetched_notes.plan_identifiers() == ["alpha-plan", "beta-plan"]
+    assert fetched_notes.plan_identifiers() == [FIRST_PLAN_ID, SECOND_PLAN_ID]
 
 
 def test_plan_identifiers_ignores_a_directory_without_a_manifest(
-    notes_clone, two_plans, run_git, tmp_path: Path
+    notes_clone, two_plans, scratch_git, tmp_path: Path
 ):
     """The generated siblings under the plans directory are not plans - only a
     directory holding a manifest is."""
     clone = notes_clone(two_plans)
     seed = tmp_path / "seed"
-    generated = seed / PLANS_DIRECTORY / "_generated"
+    generated = seed / PLANS_DIRECTORY / GENERATED_SIBLING_DIRECTORY
     generated.mkdir(parents=True)
-    (generated / "branch-index.tsv").write_text("")
-    run_git(seed, "add", ".")
-    run_git(seed, "commit", "--quiet", "--message", "add a generated sibling")
-    run_git(
-        seed,
+    (generated / GENERATED_SIBLING_FILE).write_text("")
+    seed_git = scratch_git(seed)
+    seed_git.run("add", ".")
+    seed_git.run("commit", "--quiet", "--message", "add a generated sibling")
+    seed_git.run(
         "push",
         "--quiet",
         str(tmp_path / "remote.git"),
@@ -145,15 +171,20 @@ def test_plan_identifiers_ignores_a_directory_without_a_manifest(
     notes = PersonalNotesBranch.resolve(clone)
     notes.fetch()
 
-    assert notes.plan_identifiers() == ["alpha-plan", "beta-plan"]
+    assert notes.plan_identifiers() == [FIRST_PLAN_ID, SECOND_PLAN_ID]
 
 
-def test_plan_files_are_read_back_verbatim(fetched_notes: PersonalNotesBranch):
+def test_plan_documents_are_read_back_verbatim(fetched_notes: PersonalNotesBranch):
     """
     A plan's manifest and roadmap come back exactly as they were committed.
     """
-    assert fetched_notes.plan_manifest("alpha-plan") == MANIFEST_TEXT
-    assert fetched_notes.plan_roadmap("alpha-plan") == ROADMAP_TEXT
+    assert (
+        fetched_notes.plan_document(FIRST_PLAN_ID, PlanDocument.MANIFEST)
+        == MANIFEST_TEXT
+    )
+    assert (
+        fetched_notes.plan_document(FIRST_PLAN_ID, PlanDocument.ROADMAP) == ROADMAP_TEXT
+    )
 
 
 def test_reading_an_absent_path_reports_nothing_rather_than_failing(
@@ -162,19 +193,32 @@ def test_reading_an_absent_path_reports_nothing_rather_than_failing(
     """
     A path the branch does not carry is an ordinary outcome of a read.
     """
-    assert fetched_notes.read(f"{PLANS_DIRECTORY}/alpha-plan/absent.md") is None
+    assert (
+        fetched_notes.read(f"{PLANS_DIRECTORY}/{FIRST_PLAN_ID}/{ABSENT_DOCUMENT}")
+        is None
+    )
 
 
-def test_a_plan_missing_its_roadmap_is_an_error(fetched_notes: PersonalNotesBranch):
+def test_a_plan_missing_a_document_is_an_error(fetched_notes: PersonalNotesBranch):
     """
-    A plan without the file every plan must have fails loudly, naming the path, rather
-    than rendering a page from a silently empty roadmap.
+    A plan without a file every plan must have fails loudly, naming the path, rather
+    than rendering a page from a silently empty document.
     """
     with pytest.raises(PlanFileMissingError) as raised:
-        fetched_notes.plan_roadmap("no-such-plan")
+        fetched_notes.plan_document(ABSENT_PLAN_ID, PlanDocument.ROADMAP)
 
-    assert f"{PLANS_DIRECTORY}/no-such-plan/{PLAN_ROADMAP_FILENAME}" in str(
-        raised.value
+    assert raised.value.path == PlanDocument.ROADMAP.path_in(ABSENT_PLAN_ID)
+    assert raised.value.branch == NOTES_BRANCH_SETTING.default
+
+
+def test_a_document_names_its_path_under_its_own_plan():
+    """
+    Where a plan's document lives is composed once, from the plans directory and the
+    document's own filename.
+    """
+    assert (
+        PlanDocument.MANIFEST.path_in(FIRST_PLAN_ID)
+        == f"{PLANS_DIRECTORY}/{FIRST_PLAN_ID}/{PlanDocument.MANIFEST}"
     )
 
 
@@ -187,26 +231,26 @@ def test_the_plan_paths_match_the_shell_configuration():
     cannot read each other at runtime, so nothing but this test keeps a rename in one
     from silently passing the other by.
     """
+    printed = " ".join(f'"${{{variable}}}"' for variable in SHELL_PLAN_PATH_VARIABLES)
     reported = subprocess.run(
         [
             "bash",
             "-c",
-            f'source "{CONFIGURATION_SCRIPT}"; '
-            'printf "%s\\n%s\\n%s\\n" '
-            '"${PLANS_DIR}" "${PLAN_MANIFEST_FILENAME}" "${PLAN_ROADMAP_FILENAME}"',
+            f'source "{CONFIGURATION_SCRIPT}"; ' f'printf "%s\\n%s\\n%s\\n" {printed}',
         ],
         check=True,
         capture_output=True,
         text=True,
     ).stdout.splitlines()
 
-    assert reported == [PLANS_DIRECTORY, PLAN_MANIFEST_FILENAME, PLAN_ROADMAP_FILENAME]
+    assert reported == [
+        PLANS_DIRECTORY,
+        PlanDocument.MANIFEST,
+        PlanDocument.ROADMAP,
+    ]
 
 
-@pytest.mark.parametrize(
-    "setting, shell_variable",
-    [(NOTES_REMOTE_SETTING, "NOTES_REMOTE"), (NOTES_BRANCH_SETTING, "NOTES_BRANCH")],
-)
+@pytest.mark.parametrize("setting, shell_variable", SHELL_SETTING_VARIABLES)
 def test_each_setting_matches_the_shell_precedence(setting, shell_variable):
     """
     Each setting's config key, environment variable and default are the same three the

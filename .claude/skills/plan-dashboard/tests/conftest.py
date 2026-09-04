@@ -18,13 +18,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from build_dashboard import PullRequestState
-from github_api import LABEL_NAME_FIELD, PullRequestField
+from git_commands import GitCommandRunner
+from github_api import LabelField, PullRequestField
 from personal_notes import (
     NOTES_BRANCH_SETTING,
     NOTES_REMOTE_SETTING,
-    PLAN_MANIFEST_FILENAME,
-    PLAN_ROADMAP_FILENAME,
     PLANS_DIRECTORY,
+    PlanDocument,
 )
 
 # %% scratch git repositories
@@ -38,6 +38,11 @@ GIT_ENVIRONMENT = {
 }
 """A fixed identity and a minimal path, so a scratch commit never depends on the
 running user's git configuration."""
+
+SCRATCH_REMOTE_DIRECTORY = "remote.git"
+"""
+The bare repository a scratch clone's notes remote points at.
+"""
 
 
 @dataclass(frozen=True)
@@ -55,6 +60,15 @@ class PlanFiles:
     """
     The plan's ``roadmap.md`` source.
     """
+
+    def content_of(self, document: PlanDocument) -> str:
+        """
+        :param document: The document wanted.
+        :return: Its source, so a caller reads by document rather than by field name.
+        """
+        if document is PlanDocument.MANIFEST:
+            return self.manifest
+        return self.roadmap
 
 
 @pytest.fixture(autouse=True)
@@ -82,38 +96,39 @@ def plan_files() -> type[PlanFiles]:
 
 
 @pytest.fixture
-def run_git() -> Callable[..., None]:
+def scratch_git() -> Callable[[Path], GitCommandRunner]:
     """
-    Run one git command in a scratch repository, under a fixed identity.
+    Run git in a scratch repository under a fixed identity.
 
-    :return: The runner, called as ``run_git(directory, *arguments)``.
+    The same runner the scripts themselves use, so a test builds its fixtures through
+    the code under test rather than through a second way of calling git.
+
+    :return: The factory, called with the directory to run in.
     """
 
-    def run(working_directory: Path, *arguments: str) -> None:
-        subprocess.run(
-            ["git", *arguments],
-            cwd=working_directory,
-            check=True,
-            capture_output=True,
-            env=GIT_ENVIRONMENT,
+    def runner_in(working_directory: Path) -> GitCommandRunner:
+        return GitCommandRunner(
+            working_directory=working_directory, environment=GIT_ENVIRONMENT
         )
 
-    return run
+    return runner_in
 
 
 @pytest.fixture
-def notes_clone(tmp_path: Path, run_git) -> Callable[[Mapping[str, PlanFiles]], Path]:
+def notes_clone(
+    tmp_path: Path, scratch_git
+) -> Callable[[Mapping[str, PlanFiles]], Path]:
     """
     Build a scratch clone whose default remote carries a notes branch holding the given
     plans, so a test reads real plan data over real git with no network access.
 
     :param tmp_path: pytest's per-test temporary directory.
-    :param run_git: The scratch git runner.
+    :param scratch_git: The scratch git runner factory.
     :return: The builder, called with the plans to seed and returning the clone's root.
     """
 
     def build(plans: Mapping[str, PlanFiles]) -> Path:
-        remote = tmp_path / "remote.git"
+        remote = tmp_path / SCRATCH_REMOTE_DIRECTORY
         subprocess.run(
             ["git", "init", "--quiet", "--bare", str(remote)],
             check=True,
@@ -122,32 +137,34 @@ def notes_clone(tmp_path: Path, run_git) -> Callable[[Mapping[str, PlanFiles]], 
 
         seed = tmp_path / "seed"
         seed.mkdir()
-        run_git(
-            seed, "init", "--quiet", "--initial-branch", NOTES_BRANCH_SETTING.default
+        seed_git = scratch_git(seed)
+        seed_git.run(
+            "init", "--quiet", "--initial-branch", NOTES_BRANCH_SETTING.default
         )
         for plan_identifier, files in plans.items():
             plan_directory = seed / PLANS_DIRECTORY / plan_identifier
             plan_directory.mkdir(parents=True)
-            (plan_directory / PLAN_MANIFEST_FILENAME).write_text(files.manifest)
-            (plan_directory / PLAN_ROADMAP_FILENAME).write_text(files.roadmap)
-        run_git(seed, "add", ".")
-        run_git(seed, "commit", "--quiet", "--message", "seed the notes branch")
-        run_git(seed, "push", "--quiet", str(remote), NOTES_BRANCH_SETTING.default)
+            for document in PlanDocument:
+                (plan_directory / document).write_text(files.content_of(document))
+        seed_git.run("add", ".")
+        seed_git.run("commit", "--quiet", "--message", "seed the notes branch")
+        seed_git.run("push", "--quiet", str(remote), NOTES_BRANCH_SETTING.default)
 
         clone = tmp_path / "clone"
         clone.mkdir()
-        run_git(clone, "init", "--quiet")
-        run_git(clone, "remote", "add", NOTES_REMOTE_SETTING.default, str(remote))
+        clone_git = scratch_git(clone)
+        clone_git.run("init", "--quiet")
+        clone_git.run("remote", "add", NOTES_REMOTE_SETTING.default, str(remote))
         return clone
 
     return build
 
 
-# %% GitHub payloads
+# %% GitHub responses
 
 
 @pytest.fixture
-def pull_request_payload() -> Callable[..., dict[str, Any]]:
+def pull_request_detail() -> Callable[..., dict[str, Any]]:
     """
     Build one pull request as GitHub's listing endpoint reports it.
 
@@ -169,7 +186,7 @@ def pull_request_payload() -> Callable[..., dict[str, Any]]:
             PullRequestField.DRAFT.value: draft,
             PullRequestField.MERGED_AT.value: merged_at,
             PullRequestField.LABELS.value: [
-                {LABEL_NAME_FIELD: name} for name in labels
+                {LabelField.NAME.value: name} for name in labels
             ],
         }
 

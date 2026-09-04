@@ -40,25 +40,6 @@ GITHUB_TOKEN_VARIABLE = "GITHUB_TOKEN"
 
 Named here so the workflow and this module cannot disagree about it."""
 
-
-class RequestHeader(StrEnum):
-    """The headers a request to GitHub carries."""
-
-    ACCEPT = "Accept"
-    AUTHORIZATION = "Authorization"
-    API_VERSION = "X-GitHub-Api-Version"
-    USER_AGENT = "User-Agent"
-    CONTENT_TYPE = "Content-Type"
-
-
-class HttpMethod(StrEnum):
-    """The HTTP methods this module sends."""
-
-    GET = "GET"
-    POST = "POST"
-    PUT = "PUT"
-
-
 JSON_MEDIA_TYPE = "application/vnd.github+json"
 """
 The media type asking GitHub for its JSON representation.
@@ -68,6 +49,87 @@ USER_AGENT = "plan-dashboard-site-build"
 """
 How this module identifies itself to GitHub, which requires a user agent.
 """
+
+
+class RequestHeader(StrEnum):
+    """The headers a request to GitHub carries."""
+
+    ACCEPT = "Accept"
+    """
+    Names the representation asked for.
+    """
+
+    AUTHORIZATION = "Authorization"
+    """
+    Carries the bearer token, when there is one.
+    """
+
+    API_VERSION = "X-GitHub-Api-Version"
+    """
+    Pins the response shape to the version the fields below were read against.
+    """
+
+    USER_AGENT = "User-Agent"
+    """
+    Identifies the caller, which GitHub requires of every request.
+    """
+
+    CONTENT_TYPE = "Content-Type"
+    """
+    Names the representation of a request body, on the calls that send one.
+    """
+
+
+class HttpMethod(StrEnum):
+    """The HTTP methods this module sends."""
+
+    GET = "GET"
+    """
+    Reads a resource.
+    """
+
+    POST = "POST"
+    """
+    Creates one that does not exist yet.
+    """
+
+    PUT = "PUT"
+    """
+    Replaces one that does.
+    """
+
+
+@dataclass(frozen=True)
+class RepositoryEndpoints:
+    """
+    The REST paths this tooling addresses for one repository.
+
+    Built here rather than spelled at each call, so a path appears once and a caller
+    names what it wants instead of composing it.
+    """
+
+    repository: str
+    """
+    The ``owner/name`` the paths address.
+    """
+
+    @property
+    def pull_requests(self) -> str:
+        """:return: The pull request listing endpoint."""
+        return f"repos/{self.repository}/pulls"
+
+    def issue(self, number: int) -> str:
+        """
+        :param number: An issue number - a pull request stored under the same number
+            resolves here too.
+        :return: That issue's endpoint.
+        """
+        return f"repos/{self.repository}/issues/{number}"
+
+    @property
+    def pages(self) -> str:
+        """:return: The repository's GitHub Pages configuration endpoint."""
+        return f"repos/{self.repository}/pages"
 
 
 @dataclass
@@ -91,7 +153,7 @@ class GitHubApi:
 
         :param path: The path below the API root, without a leading slash.
         :param parameters: The query parameters to send, if any.
-        :return: The decoded JSON body.
+        :return: The decoded JSON response.
         """
         return self._request(HttpMethod.GET, path, parameters=parameters)
 
@@ -100,7 +162,7 @@ class GitHubApi:
         Fetch one API path whose absence is an ordinary outcome rather than an error.
 
         :param path: The path below the API root, without a leading slash.
-        :return: The decoded JSON body, or ``None`` if GitHub has no such resource.
+        :return: The decoded JSON response, or ``None`` if GitHub has no such resource.
         """
         try:
             return self.get(path)
@@ -109,32 +171,32 @@ class GitHubApi:
                 raise
             return None
 
-    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
+    def send(self, method: HttpMethod, path: str, body: Mapping[str, Any]) -> Any:
         """
         Send one writing request.
 
         :param method: The HTTP method to send it with.
         :param path: The path below the API root, without a leading slash.
-        :param payload: The JSON body to send.
-        :return: The decoded JSON body, or ``None`` when GitHub answers with none.
+        :param body: The JSON body to send.
+        :return: The decoded JSON response, or ``None`` when GitHub answers with none.
         """
-        return self._request(method, path, payload=payload)
+        return self._request(method, path, body=body)
 
     def _request(
         self,
         method: HttpMethod,
         path: str,
         parameters: Mapping[str, str] | None = None,
-        payload: Mapping[str, Any] | None = None,
+        body: Mapping[str, Any] | None = None,
     ) -> Any:
         """
-        Send one request and decode its body.
+        Send one request and decode its response.
 
         :param method: The HTTP method to send it with.
         :param path: The path below the API root, without a leading slash.
         :param parameters: The query parameters to send, if any.
-        :param payload: The JSON body to send, if any.
-        :return: The decoded JSON body, or ``None`` when the response carries none.
+        :param body: The JSON body to send, if any.
+        :return: The decoded JSON response, or ``None`` when it carries none.
         """
         url = f"{self.base_url}/{path}"
         if parameters:
@@ -146,11 +208,11 @@ class GitHubApi:
         }
         if self.token:
             headers[RequestHeader.AUTHORIZATION.value] = f"Bearer {self.token}"
-        body = None
-        if payload is not None:
-            body = json.dumps(dict(payload)).encode()
+        encoded_body = None
+        if body is not None:
+            encoded_body = json.dumps(dict(body)).encode()
             headers[RequestHeader.CONTENT_TYPE.value] = JSON_MEDIA_TYPE
-        request = Request(url, data=body, headers=headers, method=method.value)
+        request = Request(url, data=encoded_body, headers=headers, method=method.value)
         with urlopen(request) as response:
             content = response.read()
         return json.loads(content) if content else None
@@ -166,36 +228,77 @@ class PullRequestField(StrEnum):
     ``pr_data.json`` records them under exactly these keys."""
 
     NUMBER = "number"
+    """
+    The pull request's number in its repository.
+    """
+
     STATE = "state"
+    """
+    Open or closed, which does not distinguish merged from closed unmerged.
+    """
+
     DRAFT = "draft"
+    """
+    Whether it is still a draft.
+    """
+
     MERGED_AT = "merged_at"
+    """
+    When it merged, and the only field that says it did.
+    """
+
     LABELS = "labels"
+    """
+    The labels it carries, as objects rather than names.
+    """
 
 
-LABEL_NAME_FIELD = "name"
-"""
-The field a label object carries its name in.
-"""
+class LabelField(StrEnum):
+    """The fields of one label object in a pull request's response."""
 
-ISSUE_URL_FIELD = "html_url"
-"""
-The field an issue carries its browser URL in.
-"""
+    NAME = "name"
+    """
+    The label's name, which is what this tooling matches on.
+    """
+
+
+class IssueField(StrEnum):
+    """The issue fields this module reads."""
+
+    URL = "html_url"
+    """
+    The issue's browser URL, which a dashboard's tracking link points at.
+    """
 
 
 class PullRequestListParameter(StrEnum):
     """The query parameters the pull request listing endpoint is called with."""
 
     STATE = "state"
+    """
+    Which pull requests to return.
+    """
+
     PER_PAGE = "per_page"
+    """
+    How many to return per page.
+    """
+
     PAGE = "page"
+    """
+    Which page to return.
+    """
 
 
-ALL_STATES = "all"
-"""The ``state`` value asking for open and closed pull requests alike.
+class PullRequestListFilter(StrEnum):
+    """Which pull requests the listing endpoint returns."""
 
-The dashboards classify merged, closed-unmerged and open items apart, so all three
-must come back."""
+    ALL = "all"
+    """Open and closed alike.
+
+    The dashboards classify merged, closed-unmerged and open items apart, so all three
+    must come back."""
+
 
 PULL_REQUESTS_PER_PAGE = 100
 """How many pull requests one listing page asks for - GitHub's maximum.
@@ -232,21 +335,21 @@ class PullRequest:
     """
 
     @classmethod
-    def from_json(cls, payload: Mapping[str, Any]) -> PullRequest:
+    def from_json(cls, detail: Mapping[str, Any]) -> PullRequest:
         """
         Build a pull request from one entry of GitHub's listing response.
 
-        :param payload: One pull request object from the API.
+        :param detail: One pull request object from the API.
         :return: Its live state.
         """
         return cls(
-            number=payload[PullRequestField.NUMBER],
-            state=PullRequestState(payload[PullRequestField.STATE]),
-            draft=bool(payload.get(PullRequestField.DRAFT, False)),
-            merged_at=payload.get(PullRequestField.MERGED_AT),
+            number=detail[PullRequestField.NUMBER],
+            state=PullRequestState(detail[PullRequestField.STATE]),
+            draft=bool(detail.get(PullRequestField.DRAFT, False)),
+            merged_at=detail.get(PullRequestField.MERGED_AT),
             labels=tuple(
-                label[LABEL_NAME_FIELD]
-                for label in payload.get(PullRequestField.LABELS) or ()
+                label[LabelField.NAME]
+                for label in detail.get(PullRequestField.LABELS) or ()
             ),
         )
 
@@ -278,19 +381,20 @@ def fetch_pull_requests(repository: str, api: GitHubApi) -> dict[str, PullReques
     :param api: The transport to read through.
     :return: Its pull requests, keyed by number as a string.
     """
+    endpoints = RepositoryEndpoints(repository)
     pull_requests: dict[str, PullRequest] = {}
     page_number = 1
     while True:
         page = api.get(
-            f"repos/{repository}/pulls",
+            endpoints.pull_requests,
             {
-                PullRequestListParameter.STATE.value: ALL_STATES,
+                PullRequestListParameter.STATE.value: PullRequestListFilter.ALL.value,
                 PullRequestListParameter.PER_PAGE.value: str(PULL_REQUESTS_PER_PAGE),
                 PullRequestListParameter.PAGE.value: str(page_number),
             },
         )
-        for payload in page:
-            pull_request = PullRequest.from_json(payload)
+        for entry in page:
+            pull_request = PullRequest.from_json(entry)
             pull_requests[str(pull_request.number)] = pull_request
         if len(page) < PULL_REQUESTS_PER_PAGE:
             return pull_requests
@@ -310,4 +414,4 @@ def fetch_issue_url(repository: str, issue_number: int, api: GitHubApi) -> str:
     :param api: The transport to read through.
     :return: The issue's browser URL.
     """
-    return api.get(f"repos/{repository}/issues/{issue_number}")[ISSUE_URL_FIELD]
+    return api.get(RepositoryEndpoints(repository).issue(issue_number))[IssueField.URL]

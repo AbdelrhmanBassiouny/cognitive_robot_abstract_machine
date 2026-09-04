@@ -134,7 +134,7 @@ jobs:
       - name: Publish the site
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          bash "${PUBLISH_SITE_SCRIPT}" \
+          python3 "${PUBLISH_SITE_SCRIPT}" \
             --source "${RUNNER_TEMP}/site" \
             --branch "${SITE_BRANCH}" \
             --remote origin \

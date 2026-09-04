@@ -23,20 +23,21 @@ paths drive the same underlying scripts over the same data.
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import yaml
 
+from build_dashboard import ItemStatus
 from build_index import PlanSummary, render_index_page
+from errors import PlanDashboardError
 from github_api import (
     GITHUB_TOKEN_VARIABLE,
     GitHubApi,
@@ -44,24 +45,38 @@ from github_api import (
     fetch_issue_url,
     fetch_pull_requests,
 )
-from personal_notes import PersonalNotesBranch
+from personal_notes import PersonalNotesBranch, PlanDocument
+from script_arguments import ScriptArgumentParser
 
 # %% site layout
 
-INDEX_PAGE_FILENAME = "index.html"
-"""
-The filename a static host serves for a directory URL.
-"""
 
-DASHBOARD_DIRECTORY = "plans"
-"""
-The subdirectory of the site holding one directory per plan's dashboard.
-"""
+class SitePath(StrEnum):
+    """
+    The fixed names inside the published site.
+    """
+
+    INDEX_PAGE = "index.html"
+    """
+    A directory's page - the master index at the root, a dashboard under its plan.
+    """
+
+    PLANS_DIRECTORY = "plans"
+    """
+    Where the per-plan dashboards live, one directory per plan identifier.
+    """
+
 
 REFRESH_DASHBOARD_SCRIPT = Path(__file__).with_name("refresh_dashboard.sh")
 """
 The per-plan refresh the build drives: manifest sync, its correction push, then render.
 """
+
+PULL_REQUEST_DATA_FILENAME = "pr_data.json"
+"""
+The scratch file each plan's fetched pull request state is handed over in.
+"""
+
 
 # %% the manifest fields the build reads
 
@@ -75,10 +90,30 @@ class PlanField(StrEnum):
     """
 
     TITLE = "title"
+    """
+    The plan's own name, which the index entry shows.
+    """
+
     DESCRIPTION = "description"
+    """
+    What the plan is for, shown under the title.
+    """
+
     DEFAULT_REPOSITORY = "default_repository"
+    """
+    The repository an item's pull request number is resolved against unless the item
+    names its own.
+    """
+
     TRACKING_ISSUE = "tracking_issue"
+    """
+    The issue structural changes to the plan are proposed on.
+    """
+
     ITEMS = "items"
+    """
+    The plan's items, which carry the pull request numbers to fetch.
+    """
 
 
 class PlanItemField(StrEnum):
@@ -87,23 +122,214 @@ class PlanItemField(StrEnum):
     """
 
     REPOSITORY = "repository"
+    """
+    The repository this item's pull request lives in, overriding the plan's default.
+    """
+
     PULL_REQUEST_NUMBER = "pull_request_number"
+    """
+    The pull request whose live state the item is classified by.
+    """
 
 
-DONE_COUNT_KEY = "done"
-"""
-The status ``refresh_dashboard.sh``'s summary counts finished items under.
-"""
-
-COUNTS_KEY = "counts"
-"""
-The key of that summary's per-status counts.
-"""
+# %% driving one plan's refresh
 
 
-class DashboardRefreshError(RuntimeError):
+class RefreshArgument(StrEnum):
+    """
+    The command-line options ``refresh_dashboard.sh`` takes.
+    """
+
+    PLAN_ID = "--plan-id"
+    """
+    The plan's identifier.
+    """
+
+    PLAN = "--plan"
+    """
+    The manifest file.
+    """
+
+    ROADMAP = "--roadmap"
+    """
+    The roadmap file.
+    """
+
+    PULL_REQUEST_DATA = "--pr-data"
+    """
+    The live pull request state to cross-check against.
+    """
+
+    OUTPUT = "--output"
+    """
+    Where to write the rendered dashboard.
+    """
+
+    TRACKING_URL = "--tracking-url"
+    """
+    The tracking issue's page, when the plan has one.
+    """
+
+
+class RefreshSummaryKey(StrEnum):
+    """
+    The keys of the one-line JSON summary ``refresh_dashboard.sh`` prints.
+    """
+
+    COUNTS = "counts"
+    """
+    How many of the plan's items carry each status.
+    """
+
+
+@dataclass(frozen=True)
+class RefreshDashboardCommand:
+    """
+    One invocation of ``refresh_dashboard.sh``, as its own options rather than a list.
+
+    Each option is a field, so a caller assembles the run by naming what it is handing
+    over and the order and spelling of the command line are settled in one place.
+    """
+
+    plan_identifier: str
+    """
+    The plan being refreshed.
+    """
+
+    manifest_file: Path
+    """
+    The manifest read off the notes branch.
+    """
+
+    roadmap_file: Path
+    """
+    The roadmap read off the notes branch.
+    """
+
+    pull_request_data_file: Path
+    """
+    The live pull request state to cross-check against.
+    """
+
+    dashboard_page: Path
+    """
+    Where the rendered dashboard is written.
+    """
+
+    tracking_url: str | None = None
+    """
+    The plan's tracking issue URL, absent when the plan tracks no issue.
+    """
+
+    INTERPRETER: ClassVar[str] = "bash"
+    """
+    What runs the script, which is a shell script rather than a module.
+    """
+
+    def command_line(self, script: Path) -> list[str]:
+        """
+        :param script: The refresh script to run.
+        :return: The command line running it with these options.
+        """
+        arguments = [
+            self.INTERPRETER,
+            str(script),
+            RefreshArgument.PLAN_ID,
+            self.plan_identifier,
+            RefreshArgument.PLAN,
+            str(self.manifest_file),
+            RefreshArgument.ROADMAP,
+            str(self.roadmap_file),
+            RefreshArgument.PULL_REQUEST_DATA,
+            str(self.pull_request_data_file),
+            RefreshArgument.OUTPUT,
+            str(self.dashboard_page),
+        ]
+        if self.tracking_url:
+            arguments.extend([RefreshArgument.TRACKING_URL, self.tracking_url])
+        return arguments
+
+
+@dataclass
+class DashboardRefreshError(PlanDashboardError):
     """Raised when ``refresh_dashboard.sh`` fails for one plan - a manifest that no
     longer validates, or a notes-branch write that could not be pushed."""
+
+    plan_identifier: str
+    """
+    The plan whose refresh failed.
+    """
+
+    detail: str
+    """
+    What the refresh said about it.
+    """
+
+    def error_message(self) -> str:
+        """:return: Which plan failed to refresh, and why."""
+        return f"Refreshing '{self.plan_identifier}' failed: {self.detail}"
+
+
+# %% what the build reports
+
+
+@dataclass(frozen=True)
+class PlanBuildResult:
+    """
+    What the build reports about one plan.
+    """
+
+    id: str
+    """
+    The plan's identifier.
+    """
+
+    done: int
+    """
+    How many of its items are done.
+    """
+
+    total: int
+    """
+    How many items it has.
+    """
+
+    @classmethod
+    def from_summary(cls, summary: PlanSummary) -> PlanBuildResult:
+        """
+        :param summary: The plan's index entry.
+        :return: The result reporting it.
+        """
+        return cls(id=summary.id, done=summary.done, total=summary.total)
+
+
+@dataclass(frozen=True)
+class SiteBuildReport:
+    """
+    The one-line JSON report the build prints on success.
+    """
+
+    plans: list[PlanBuildResult]
+    """
+    One result per plan built, in index order.
+    """
+
+    PLANS_KEY: ClassVar[str] = "plans"
+    """
+    The report's one top-level key.
+    """
+
+    @classmethod
+    def from_summaries(cls, summaries: list[PlanSummary]) -> SiteBuildReport:
+        """
+        :param summaries: The index entries the build produced.
+        :return: The report over them.
+        """
+        return cls([PlanBuildResult.from_summary(summary) for summary in summaries])
+
+    def to_json(self) -> str:
+        """:return: The report as JSON."""
+        return json.dumps({self.PLANS_KEY: [asdict(plan) for plan in self.plans]})
 
 
 # %% the build
@@ -159,7 +385,7 @@ class SiteBuilder:
             self._build_plan(plan_identifier)
             for plan_identifier in self.notes.plan_identifiers()
         ]
-        index_page = self.output_directory / INDEX_PAGE_FILENAME
+        index_page = self.output_directory / SitePath.INDEX_PAGE
         index_page.parent.mkdir(parents=True, exist_ok=True)
         index_page.write_text(render_index_page(summaries))
         return summaries
@@ -171,43 +397,45 @@ class SiteBuilder:
         :param plan_identifier: The plan to build.
         :return: The plan's entry for the master index.
         """
-        manifest_text = self.notes.plan_manifest(plan_identifier)
-        roadmap_text = self.notes.plan_roadmap(plan_identifier)
+        manifest_text = self.notes.plan_document(plan_identifier, PlanDocument.MANIFEST)
+        roadmap_text = self.notes.plan_document(plan_identifier, PlanDocument.ROADMAP)
         plan = yaml.safe_load(manifest_text)
 
         dashboard_page = (
             self.output_directory
-            / DASHBOARD_DIRECTORY
+            / SitePath.PLANS_DIRECTORY
             / plan_identifier
-            / INDEX_PAGE_FILENAME
+            / SitePath.INDEX_PAGE
         )
         dashboard_page.parent.mkdir(parents=True, exist_ok=True)
 
         with tempfile.TemporaryDirectory() as scratch:
             scratch_directory = Path(scratch)
-            manifest_file = scratch_directory / "plan.yaml"
+            manifest_file = scratch_directory / PlanDocument.MANIFEST
             manifest_file.write_text(manifest_text)
-            roadmap_file = scratch_directory / "roadmap.md"
+            roadmap_file = scratch_directory / PlanDocument.ROADMAP
             roadmap_file.write_text(roadmap_text)
-            pull_request_data_file = scratch_directory / "pr_data.json"
+            pull_request_data_file = scratch_directory / PULL_REQUEST_DATA_FILENAME
             pull_request_data_file.write_text(
                 json.dumps(self._pull_request_data_of(plan))
             )
             summary = self._refresh(
-                plan_identifier=plan_identifier,
-                manifest_file=manifest_file,
-                roadmap_file=roadmap_file,
-                pull_request_data_file=pull_request_data_file,
-                dashboard_page=dashboard_page,
-                tracking_url=self._tracking_url_of(plan),
+                RefreshDashboardCommand(
+                    plan_identifier=plan_identifier,
+                    manifest_file=manifest_file,
+                    roadmap_file=roadmap_file,
+                    pull_request_data_file=pull_request_data_file,
+                    dashboard_page=dashboard_page,
+                    tracking_url=self._tracking_url_of(plan),
+                )
             )
 
-        counts = summary[COUNTS_KEY]
+        counts = summary[RefreshSummaryKey.COUNTS]
         return PlanSummary(
             id=plan_identifier,
             title=plan[PlanField.TITLE],
             description=(plan.get(PlanField.DESCRIPTION) or "").strip(),
-            done=counts.get(DONE_COUNT_KEY, 0),
+            done=counts.get(ItemStatus.DONE, 0),
             total=sum(counts.values()),
             dashboard_url=self.dashboard_url_of(plan_identifier),
         )
@@ -219,52 +447,26 @@ class SiteBuilder:
         :param plan_identifier: The plan to address.
         :return: Its absolute URL on the site.
         """
-        return (
-            f"{self.site_base_url.rstrip('/')}/{DASHBOARD_DIRECTORY}/{plan_identifier}/"
-        )
+        base = self.site_base_url.rstrip("/")
+        return f"{base}/{SitePath.PLANS_DIRECTORY}/{plan_identifier}/"
 
-    def _refresh(
-        self,
-        plan_identifier: str,
-        manifest_file: Path,
-        roadmap_file: Path,
-        pull_request_data_file: Path,
-        dashboard_page: Path,
-        tracking_url: str | None,
-    ) -> dict[str, Any]:
+    def _refresh(self, command: RefreshDashboardCommand) -> dict[str, Any]:
         """
         Drive one plan's refresh script.
 
-        :param plan_identifier: The plan being refreshed.
-        :param manifest_file: The manifest read off the notes branch.
-        :param roadmap_file: The roadmap read off the notes branch.
-        :param pull_request_data_file: The live pull request state to cross-check
-            against.
-        :param dashboard_page: Where the rendered dashboard is written.
-        :param tracking_url: The plan's tracking issue URL, if it has one.
+        :param command: The refresh to run.
         :raises DashboardRefreshError: If the refresh fails.
         :return: The refresh's own JSON summary.
         """
-        arguments = [
-            "bash",
-            str(self.refresh_dashboard_script),
-            "--plan-id",
-            plan_identifier,
-            "--plan",
-            str(manifest_file),
-            "--roadmap",
-            str(roadmap_file),
-            "--pr-data",
-            str(pull_request_data_file),
-            "--output",
-            str(dashboard_page),
-        ]
-        if tracking_url:
-            arguments.extend(["--tracking-url", tracking_url])
-        refreshed = subprocess.run(arguments, capture_output=True, text=True)
+        refreshed = subprocess.run(
+            command.command_line(self.refresh_dashboard_script),
+            capture_output=True,
+            text=True,
+        )
         if refreshed.returncode != 0:
             raise DashboardRefreshError(
-                f"Refreshing '{plan_identifier}' failed: {refreshed.stderr.strip()}"
+                plan_identifier=command.plan_identifier,
+                detail=refreshed.stderr.strip(),
             )
         return json.loads(refreshed.stdout)
 
@@ -331,26 +533,41 @@ class SiteBuilder:
         )
 
 
+# %% the command line
+
+
+class SiteBuildOption(StrEnum):
+    """
+    The command-line options this script takes.
+    """
+
+    OUTPUT_DIRECTORY = "--output-directory"
+    """
+    Where to write the site.
+    """
+
+    SITE_BASE_URL = "--site-base-url"
+    """
+    The URL it will be published under.
+    """
+
+
 def main() -> int:
     """
     Parse arguments and build the site.
 
     See the module docstring for the CLI contract.
     """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    parser = ScriptArgumentParser(__doc__)
+    parser.add(
+        SiteBuildOption.OUTPUT_DIRECTORY,
+        "Directory to write the site into (created if missing)",
     )
-    parser.add_argument(
-        "--output-directory",
-        required=True,
-        help="Directory to write the site into (created if missing)",
+    parser.add(
+        SiteBuildOption.SITE_BASE_URL,
+        "The URL the site will be published under, e.g. the Pages URL",
     )
-    parser.add_argument(
-        "--site-base-url",
-        required=True,
-        help="The URL the site will be published under, e.g. the Pages URL",
-    )
-    arguments = parser.parse_args()
+    arguments = parser.parse()
 
     repository_root = Path(__file__).resolve().parent.parent.parent.parent
     builder = SiteBuilder(
@@ -359,17 +576,7 @@ def main() -> int:
         api=GitHubApi(token=os.environ.get(GITHUB_TOKEN_VARIABLE)),
         notes=PersonalNotesBranch.resolve(repository_root),
     )
-    summaries = builder.build()
-    print(
-        json.dumps(
-            {
-                "plans": [
-                    {"id": summary.id, "done": summary.done, "total": summary.total}
-                    for summary in summaries
-                ]
-            }
-        )
-    )
+    print(SiteBuildReport.from_summaries(builder.build()).to_json())
     return 0
 
 

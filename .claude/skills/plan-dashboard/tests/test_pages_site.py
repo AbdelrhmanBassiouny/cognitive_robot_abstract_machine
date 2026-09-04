@@ -12,19 +12,20 @@ from typing import Any, Callable, Mapping
 
 import pytest
 
-from github_api import GitHubApi, HttpMethod
+from github_api import GitHubApi, HttpMethod, RepositoryEndpoints
+from publish_site import DEFAULT_SITE_BRANCH
 from pages_site import (
-    LEGACY_BUILD_TYPE,
     SITE_ROOT_PATH,
+    PagesBuildType,
     PagesField,
     PagesSite,
     PagesUnavailableError,
 )
 
 REPOSITORY = "owner/repository"
-SITE_BRANCH = "plan-dashboards-site"
+SITE_BRANCH = DEFAULT_SITE_BRANCH
 SITE_URL = "https://owner.github.io/repository/"
-PAGES_PATH = f"repos/{REPOSITORY}/pages"
+PAGES_PATH = RepositoryEndpoints(REPOSITORY).pages
 
 
 def pages_configuration(branch: str, url: str | None = SITE_URL) -> dict[str, Any]:
@@ -70,10 +71,10 @@ class RecordingApi(GitHubApi):
         self.requests.append((HttpMethod.GET, path, None))
         return self.configuration
 
-    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
-        self.requests.append((method, path, payload))
+    def send(self, method: HttpMethod, path: str, body: Mapping[str, Any]) -> Any:
+        self.requests.append((method, path, body))
         self.configuration = pages_configuration(
-            payload[PagesField.SOURCE.value][PagesField.BRANCH.value]
+            body[PagesField.SOURCE.value][PagesField.BRANCH.value]
         )
         return self.configuration
 
@@ -102,10 +103,10 @@ def test_a_repository_without_pages_has_it_enabled_on_the_site_branch(site):
     pages = site(None)
 
     assert pages.serve_from(SITE_BRANCH) == SITE_URL
-    method, path, payload = pages.api.requests[-1]
+    method, path, body = pages.api.requests[-1]
     assert (method, path) == (HttpMethod.POST, PAGES_PATH)
-    assert payload == {
-        PagesField.BUILD_TYPE.value: LEGACY_BUILD_TYPE,
+    assert body == {
+        PagesField.BUILD_TYPE.value: PagesBuildType.LEGACY,
         PagesField.SOURCE.value: {
             PagesField.BRANCH.value: SITE_BRANCH,
             PagesField.PATH.value: SITE_ROOT_PATH,

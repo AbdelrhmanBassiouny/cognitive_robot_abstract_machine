@@ -13,9 +13,12 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+
+from errors import PlanDashboardError
+from git_commands import GitCommandRunner
 
 # %% where the branch lives
 
@@ -24,15 +27,32 @@ PLANS_DIRECTORY = ".claude/personal/plans"
 The directory on the notes branch holding one subdirectory per plan.
 """
 
-PLAN_MANIFEST_FILENAME = "plan.yaml"
-"""
-The filename of a plan's manifest inside its own directory.
-"""
 
-PLAN_ROADMAP_FILENAME = "roadmap.md"
-"""
-The filename of a plan's roadmap inside its own directory.
-"""
+class PlanDocument(StrEnum):
+    """
+    The files every plan on the notes branch is made of.
+
+    Named here rather than at each read, so the site build, the tests and
+    ``resolve-personal-notes-config.sh``'s own equivalents all spell one filename once.
+    """
+
+    MANIFEST = "plan.yaml"
+    """
+    The plan's items, tracks, waves and statuses.
+    """
+
+    ROADMAP = "roadmap.md"
+    """
+    The narrative the manifest's items refer back to.
+    """
+
+    def path_in(self, plan_identifier: str) -> str:
+        """
+        :param plan_identifier: The plan whose copy of this document is wanted.
+        :return: Its repository-relative path on the notes branch.
+        """
+        return f"{PLANS_DIRECTORY}/{plan_identifier}/{self}"
+
 
 FETCHED_REFERENCE = "FETCH_HEAD"
 """
@@ -43,8 +63,57 @@ tracking ref, and ``FETCH_HEAD`` names what was fetched either way.
 """
 
 _PLAN_MANIFEST_PATH_PATTERN = re.compile(
-    rf"^{re.escape(PLANS_DIRECTORY)}/([^/]+)/{re.escape(PLAN_MANIFEST_FILENAME)}$"
+    rf"^{re.escape(PLANS_DIRECTORY)}/([^/]+)/{re.escape(PlanDocument.MANIFEST)}$"
 )
+
+
+class NotesConfigurationKey(StrEnum):
+    """
+    The repository-local git config keys that locate the notes branch.
+    """
+
+    REMOTE = "claude.personalNotesRemote"
+    """
+    Which remote serves the branch.
+    """
+
+    BRANCH = "claude.personalNotesBranch"
+    """
+    Which branch on it holds the plan data.
+    """
+
+
+class NotesEnvironmentVariable(StrEnum):
+    """
+    The environment variables consulted when the git config keys are unset - the only
+    channel that survives a clone made fresh for every session.
+    """
+
+    REMOTE = "CLAUDE_PERSONAL_NOTES_REMOTE"
+    """
+    Overrides :attr:`NotesConfigurationKey.REMOTE`'s absence.
+    """
+
+    BRANCH = "CLAUDE_PERSONAL_NOTES_BRANCH"
+    """
+    Overrides :attr:`NotesConfigurationKey.BRANCH`'s absence.
+    """
+
+
+class NotesDefault(StrEnum):
+    """
+    What a clone that configures neither override is read at.
+    """
+
+    REMOTE = "origin"
+    """
+    The remote a plain clone already has.
+    """
+
+    BRANCH = "claude/personal-notes"
+    """
+    Where this tooling puts a fork's own plan data.
+    """
 
 
 @dataclass(frozen=True)
@@ -57,47 +126,47 @@ class NotesSetting:
     configured for one is read the same way from bash and from here.
     """
 
-    git_config_key: str
+    git_config_key: NotesConfigurationKey
     """
     The repository-local git config key that overrides everything else.
     """
 
-    environment_variable: str
+    environment_variable: NotesEnvironmentVariable
     """
     The environment variable consulted when the git config key is unset.
     """
 
-    default: str
+    default: NotesDefault
     """
     The value used when neither override is present.
     """
 
-    def resolve(self, repository_root: Path) -> str:
+    def resolve(self, git: GitCommandRunner) -> str:
         """
         Resolve this setting for a given clone.
 
-        :param repository_root: The clone whose git config is consulted.
+        :param git: The runner whose checkout's git config is consulted.
         :return: The configured value, or :attr:`default`.
         """
-        configured = _optional_git_output(
-            repository_root, "config", "--get", self.git_config_key
+        configured = git.output_or_none("config", "--get", self.git_config_key)
+        return (
+            configured or os.environ.get(self.environment_variable) or str(self.default)
         )
-        return configured or os.environ.get(self.environment_variable) or self.default
 
 
 NOTES_REMOTE_SETTING = NotesSetting(
-    git_config_key="claude.personalNotesRemote",
-    environment_variable="CLAUDE_PERSONAL_NOTES_REMOTE",
-    default="origin",
+    git_config_key=NotesConfigurationKey.REMOTE,
+    environment_variable=NotesEnvironmentVariable.REMOTE,
+    default=NotesDefault.REMOTE,
 )
 """
 Which remote serves the personal-notes branch.
 """
 
 NOTES_BRANCH_SETTING = NotesSetting(
-    git_config_key="claude.personalNotesBranch",
-    environment_variable="CLAUDE_PERSONAL_NOTES_BRANCH",
-    default="claude/personal-notes",
+    git_config_key=NotesConfigurationKey.BRANCH,
+    environment_variable=NotesEnvironmentVariable.BRANCH,
+    default=NotesDefault.BRANCH,
 )
 """
 Which branch on that remote holds the plan data.
@@ -107,16 +176,53 @@ Which branch on that remote holds the plan data.
 # %% reading the branch
 
 
-class PersonalNotesUnavailableError(RuntimeError):
-    """Raised when the personal-notes branch cannot be fetched - there is no plan data
-    to read, and every caller here needs some."""
+@dataclass
+class PersonalNotesUnavailableError(PlanDashboardError):
+    """
+    Raised when the personal-notes branch cannot be fetched - there is no plan data to
+    read, and every caller here needs some.
+    """
+
+    remote: str
+    """
+    The remote the fetch was attempted against.
+    """
+
+    branch: str
+    """
+    The branch that was asked for.
+    """
+
+    detail: str
+    """
+    What git said about the refusal.
+    """
+
+    def error_message(self) -> str:
+        """:return: Which branch could not be fetched from where, and why."""
+        return f"Could not fetch '{self.branch}' from '{self.remote}': {self.detail}"
 
 
-class PlanFileMissingError(FileNotFoundError):
+@dataclass
+class PlanFileMissingError(PlanDashboardError):
     """
     Raised when a plan directory on the notes branch lacks a file the plan is required
     to have.
     """
+
+    branch: str
+    """
+    The branch that was read.
+    """
+
+    path: str
+    """
+    The document's repository-relative path, which the branch does not carry.
+    """
+
+    def error_message(self) -> str:
+        """:return: Which document is missing from which branch."""
+        return f"'{self.path}' is not on '{self.branch}' - the plan is incomplete."
 
 
 @dataclass
@@ -128,9 +234,10 @@ class PersonalNotesBranch:
     that fetch left behind.
     """
 
-    repository_root: Path
+    git: GitCommandRunner
     """
-    The clone whose remotes and git config locate the branch.
+    The runner every read goes through, in the clone whose configuration located the
+    branch.
     """
 
     remote: str
@@ -151,10 +258,11 @@ class PersonalNotesBranch:
         :param repository_root: The clone to resolve for.
         :return: The branch, not yet fetched.
         """
+        git = GitCommandRunner(repository_root)
         return cls(
-            repository_root=repository_root,
-            remote=NOTES_REMOTE_SETTING.resolve(repository_root),
-            branch=NOTES_BRANCH_SETTING.resolve(repository_root),
+            git=git,
+            remote=NOTES_REMOTE_SETTING.resolve(git),
+            branch=NOTES_BRANCH_SETTING.resolve(git),
         )
 
     def fetch(self) -> None:
@@ -163,16 +271,10 @@ class PersonalNotesBranch:
 
         :raises PersonalNotesUnavailableError: If the branch cannot be fetched.
         """
-        fetched = subprocess.run(
-            ["git", "fetch", "--quiet", self.remote, self.branch],
-            cwd=self.repository_root,
-            capture_output=True,
-            text=True,
-        )
-        if fetched.returncode != 0:
+        fetched = self.git.attempt("fetch", "--quiet", self.remote, self.branch)
+        if not fetched.succeeded:
             raise PersonalNotesUnavailableError(
-                f"Could not fetch '{self.branch}' from '{self.remote}': "
-                f"{fetched.stderr.strip()}"
+                remote=self.remote, branch=self.branch, detail=fetched.error_output
             )
 
     def plan_identifiers(self) -> list[str]:
@@ -181,15 +283,12 @@ class PersonalNotesBranch:
 
         :return: The plan identifiers, sorted.
         """
-        listing = _git_output(
-            self.repository_root, "ls-tree", "-r", "--name-only", FETCHED_REFERENCE
-        )
-        identifiers = [
+        listing = self.git.run("ls-tree", "-r", "--name-only", FETCHED_REFERENCE)
+        return sorted(
             match.group(1)
             for match in map(_PLAN_MANIFEST_PATH_PATTERN.match, listing.splitlines())
             if match
-        ]
-        return sorted(identifiers)
+        )
 
     def read(self, path: str) -> str | None:
         """
@@ -198,85 +297,21 @@ class PersonalNotesBranch:
         :param path: The file's repository-relative path.
         :return: The file's content, or ``None`` if the branch has no such file.
         """
-        return _optional_git_output(
-            self.repository_root, "show", f"{FETCHED_REFERENCE}:{path}", strip=False
+        return self.git.output_or_none(
+            "show", f"{FETCHED_REFERENCE}:{path}", strip=False
         )
 
-    def plan_manifest(self, plan_identifier: str) -> str:
+    def plan_document(self, plan_identifier: str, document: PlanDocument) -> str:
         """
-        Read one plan's manifest.
-
-        :param plan_identifier: The plan to read.
-        :raises PlanFileMissingError: If the plan has no manifest.
-        :return: The manifest's YAML source.
-        """
-        return self._read_plan_file(plan_identifier, PLAN_MANIFEST_FILENAME)
-
-    def plan_roadmap(self, plan_identifier: str) -> str:
-        """
-        Read one plan's roadmap.
-
-        :param plan_identifier: The plan to read.
-        :raises PlanFileMissingError: If the plan has no roadmap.
-        :return: The roadmap's markdown source.
-        """
-        return self._read_plan_file(plan_identifier, PLAN_ROADMAP_FILENAME)
-
-    def _read_plan_file(self, plan_identifier: str, file_name: str) -> str:
-        """
-        Read one file from a plan's own directory.
+        Read one of a plan's own documents.
 
         :param plan_identifier: The plan whose directory to read from.
-        :param file_name: The file inside it.
-        :raises PlanFileMissingError: If the file is not on the branch.
-        :return: The file's content.
+        :param document: The document inside it.
+        :raises PlanFileMissingError: If the branch does not carry it.
+        :return: The document's content.
         """
-        path = f"{PLANS_DIRECTORY}/{plan_identifier}/{file_name}"
+        path = document.path_in(plan_identifier)
         content = self.read(path)
         if content is None:
-            raise PlanFileMissingError(
-                f"'{path}' is not on '{self.branch}' - the plan is incomplete."
-            )
+            raise PlanFileMissingError(branch=self.branch, path=path)
         return content
-
-
-# %% running git
-
-
-def _git_output(repository_root: Path, *arguments: str) -> str:
-    """
-    Run one git command in a clone and return its standard output, stripped.
-
-    :param repository_root: The clone to run in.
-    :param arguments: The git subcommand and its arguments.
-    :raises subprocess.CalledProcessError: If the command fails.
-    :return: The command's standard output.
-    """
-    return subprocess.run(
-        ["git", *arguments],
-        cwd=repository_root,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-
-
-def _optional_git_output(
-    repository_root: Path, *arguments: str, strip: bool = True
-) -> str | None:
-    """
-    Run one git command whose failure is an ordinary outcome - an unset config key, a
-    path the reference does not carry - rather than an error.
-
-    :param repository_root: The clone to run in.
-    :param arguments: The git subcommand and its arguments.
-    :param strip: Whether to strip surrounding whitespace, which file content must not
-        be - an empty file therefore stays distinguishable from a missing one.
-    :return: The command's standard output, or ``None`` if it failed.
-    """
-    completed = subprocess.run(
-        ["git", *arguments], cwd=repository_root, capture_output=True, text=True
-    )
-    if completed.returncode != 0:
-        return None
-    return completed.stdout.strip() if strip else completed.stdout

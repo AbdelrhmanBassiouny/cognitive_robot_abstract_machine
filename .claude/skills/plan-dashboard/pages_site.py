@@ -23,14 +23,20 @@ tooling makes to a repository's own settings.
 
 from __future__ import annotations
 
-import argparse
 import os
 import sys
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from github_api import GITHUB_TOKEN_VARIABLE, GitHubApi, HttpMethod
+from errors import PlanDashboardError
+from script_arguments import ScriptArgumentParser
+from github_api import (
+    GITHUB_TOKEN_VARIABLE,
+    GitHubApi,
+    HttpMethod,
+    RepositoryEndpoints,
+)
 
 # %% the Pages configuration
 
@@ -41,10 +47,46 @@ class PagesField(StrEnum):
     """
 
     SOURCE = "source"
+    """
+    Where the site is built from, as a branch and a directory within it.
+    """
+
     BRANCH = "branch"
+    """
+    The branch inside :attr:`SOURCE`.
+    """
+
     PATH = "path"
+    """
+    The directory within that branch.
+    """
+
     URL = "html_url"
+    """
+    Where GitHub reports the site is served from.
+    """
+
     BUILD_TYPE = "build_type"
+    """
+    Which of GitHub's two build routes serves it.
+    """
+
+
+class PagesBuildType(StrEnum):
+    """
+    GitHub's two routes for building a Pages site.
+    """
+
+    LEGACY = "legacy"
+    """
+    Built from a branch's contents, which is the route this module configures.
+    """
+
+    WORKFLOW = "workflow"
+    """
+    Deployed by an Action, which the ``github-pages`` environment gates to the default
+    branch - the rejection this module exists to route around.
+    """
 
 
 SITE_ROOT_PATH = "/"
@@ -52,17 +94,28 @@ SITE_ROOT_PATH = "/"
 The directory within the branch that the site is served from.
 """
 
-LEGACY_BUILD_TYPE = "legacy"
-"""
-GitHub's name for building the site from a branch's contents.
 
-The alternative, ``workflow``, is the Actions deployment this module exists to avoid.
-"""
-
-
-class PagesUnavailableError(RuntimeError):
+@dataclass
+class PagesUnavailableError(PlanDashboardError):
     """Raised when a repository's Pages site can be neither read nor configured - the
     site would be built and pushed with nothing serving it."""
+
+    repository: str
+    """
+    The repository whose site was being configured.
+    """
+
+    branch: str
+    """
+    The branch it was pointed at.
+    """
+
+    def error_message(self) -> str:
+        """:return: Which repository reports no site, and where it was pointed."""
+        return (
+            f"GitHub reports no Pages URL for '{self.repository}' after pointing it at "
+            f"'{self.branch}'."
+        )
 
 
 @dataclass
@@ -92,32 +145,23 @@ class PagesSite:
         :raises PagesUnavailableError: If GitHub reports no URL for the site afterwards.
         :return: The site's URL.
         """
-        configuration = self.api.find(self._path)
+        path = RepositoryEndpoints(self.repository).pages
+        configuration = self.api.find(path)
         if configuration is None:
             configuration = self.api.send(
-                HttpMethod.POST, self._path, self._source_payload(branch)
+                HttpMethod.POST, path, self._source_body(branch)
             )
         elif not self._serves_from(configuration, branch):
-            self.api.send(HttpMethod.PUT, self._path, self._source_payload(branch))
-            configuration = self.api.get(self._path)
+            self.api.send(HttpMethod.PUT, path, self._source_body(branch))
+            configuration = self.api.get(path)
 
         url = (configuration or {}).get(PagesField.URL)
         if not url:
-            raise PagesUnavailableError(
-                f"GitHub reports no Pages URL for '{self.repository}' after pointing it "
-                f"at '{branch}'."
-            )
+            raise PagesUnavailableError(repository=self.repository, branch=branch)
         return url
 
-    @property
-    def _path(self) -> str:
-        """
-        The API path of this repository's Pages configuration.
-        """
-        return f"repos/{self.repository}/pages"
-
     @staticmethod
-    def _source_payload(branch: str) -> dict[str, Any]:
+    def _source_body(branch: str) -> dict[str, Any]:
         """
         The body asking GitHub to build the site from a branch.
 
@@ -125,7 +169,7 @@ class PagesSite:
         :return: The request body.
         """
         return {
-            PagesField.BUILD_TYPE.value: LEGACY_BUILD_TYPE,
+            PagesField.BUILD_TYPE.value: PagesBuildType.LEGACY.value,
             PagesField.SOURCE.value: {
                 PagesField.BRANCH.value: branch,
                 PagesField.PATH.value: SITE_ROOT_PATH,
@@ -148,22 +192,32 @@ class PagesSite:
         )
 
 
+class PagesSiteOption(StrEnum):
+    """
+    The command-line options this script takes.
+    """
+
+    REPOSITORY = "--repository"
+    """
+    The repository whose Pages site is configured.
+    """
+
+    BRANCH = "--branch"
+    """
+    The branch it is pointed at.
+    """
+
+
 def main() -> int:
     """
     Point the site at the given branch and print its URL.
 
     See the module docstring for the CLI contract.
     """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument(
-        "--repository", required=True, help="The repository, owner/name"
-    )
-    parser.add_argument(
-        "--branch", required=True, help="The branch the built site is pushed to"
-    )
-    arguments = parser.parse_args()
+    parser = ScriptArgumentParser(__doc__)
+    parser.add(PagesSiteOption.REPOSITORY, "The repository, owner/name")
+    parser.add(PagesSiteOption.BRANCH, "The branch the built site is pushed to")
+    arguments = parser.parse()
 
     site = PagesSite(
         repository=arguments.repository,
