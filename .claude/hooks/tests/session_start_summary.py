@@ -94,6 +94,61 @@ class SummaryMessage(StrEnum):
     The heading above the indented rows naming each check that needs setup.
     """
 
+    DEFAULT_BRANCH_NOT_SYNCED = "default_branch_line_not_synced"
+    """
+    The script that fast-forwards the default branch is not in this checkout.
+    """
+
+    DEFAULT_BRANCH_NOT_CONFIGURED = "default_branch_line_not_configured"
+    """
+    Nothing in the checkout names the upstream repository the fork tracks.
+    """
+
+    DEFAULT_BRANCH_UPSTREAM_UNRESOLVED = "default_branch_line_upstream_unresolved"
+    """
+    The checkout's remotes do not resolve to a fork and an upstream.
+    """
+
+    DEFAULT_BRANCH_UPSTREAM_UNREACHABLE = "default_branch_line_upstream_unreachable"
+    """
+    The upstream is named but could not be fetched.
+    """
+
+    DEFAULT_BRANCH_CURRENT = "default_branch_line_current"
+    """
+    The default branch already carries the upstream's tip.
+    """
+
+    DEFAULT_BRANCH_FAST_FORWARDED = "default_branch_line_fast_forwarded"
+    """
+    The default branch was behind and has been brought up to the upstream's tip.
+    """
+
+    DEFAULT_BRANCH_DIVERGED = "default_branch_line_diverged"
+    """
+    The default branch carries commits the upstream does not.
+    """
+
+    DEFAULT_BRANCH_LOCAL_UPDATE_REFUSED = "default_branch_line_local_update_refused"
+    """
+    The default branch is checked out with changes git will not overwrite.
+    """
+
+    FORK_PUSHED = "default_branch_row_fork_pushed"
+    """
+    The fork's copy of the default branch was behind and has been pushed.
+    """
+
+    FORK_PUSH_FAILED = "default_branch_row_fork_push_failed"
+    """
+    The fork's copy of the default branch could not be pushed.
+    """
+
+    CURRENT_BRANCH_BEHIND = "default_branch_row_current_branch_behind"
+    """
+    The checked-out branch is behind the default branch the hook has just moved.
+    """
+
 
 def summary_value(output: str, label: str) -> str:
     """
