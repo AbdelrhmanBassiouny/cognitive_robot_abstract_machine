@@ -132,7 +132,10 @@ the three robot runs, with lanes 2 and 3 at the table.
 `scenario-domain-model` → `episodes-recorded-through-ormatic` →
 `montessori-scenarios` → `failure-taxonomy-and-typing` →
 `knowledge-ablations` → `perturbations` → `episodes-queried-by-eql` →
-`failure-predicted-from-the-query` → `experiment-c-in-simulation`.
+`failure-predicted-from-the-query` → `experiment-c-in-simulation`, then
+`episode-artifacts-recorded` → `cross-episode-question-set-and-ground-truth` →
+`experiment-d-in-simulation` (added 2026-09-04; the budget table below does not
+yet account for them).
 
 **Lane 3, baselines, question set, figures and writing.**
 `question-set-and-ground-truth` → `working-memory-verbalised` →
@@ -777,3 +780,84 @@ One process note worth keeping: `format_docstrings.py` over "modified files" ref
 everything a merge dragged in, which on an integration branch is most of the tree and
 would conflict with every owning branch. It was restricted to the files this branch
 actually edited.
+
+### 2026-09-04: a fourth experiment, because long-term memory was built but never scored
+
+The developer noticed that the plan tracks no long-term-memory *experiment* and asked
+where those items were. They were half there. `episodes-recorded-through-ormatic` and
+`episodes-queried-by-eql` build the machinery, `segmind-detectors-on-the-demo-branch` is
+`done` (and so hidden by the dashboard's default "hide done items" toggle, which is why it
+looked absent), and the segmind events are in the episode model's own notes. What was
+missing was anything that *measures* it: Experiments A, B and C all ask about the current
+scene, `experiment-a-in-simulation` depends on `episodes-recorded-through-ormatic` but not
+on `episodes-queried-by-eql`, so the long-term-memory spelling of the temporal bucket that
+`question-set-and-ground-truth` explicitly calls for had no consumer. The plan's own
+description calls long-term memory a deliverable, and it was producing no number.
+
+#### What Experiment D asks
+
+The same four buckets, asked of the history rather than the scene: has this happened to
+the robot before and in which episode; what the goal and the conditions were at that time;
+what differed between the earlier episodes and the current one that bears on the question;
+and how a failure was resolved the last time it happened. That last one is why
+`episodes-recorded-through-ormatic` grew a line: it recorded the failure type observed and
+predicted, but not what was *done* after the failure, and nothing else in the record
+carries the resolution.
+
+#### The three decisions taken, and why
+
+**Its own experiment, not a fourth bucket of A.** A and D put different systems under
+test — one VLM looking at an image of the current scene, one VLM reading a corpus of past
+episodes — with different ground truth and a different fairness argument. Folding them
+makes A's per-bucket accuracy table mix two incomparable systems.
+
+**Simulation only.** The questions are about recorded episodes, so they do not care
+whether an episode came from the robot or the simulator; the robot episodes A and C record
+join the same corpus. This buys a whole experiment for no robot time. The condition is
+that simulated episodes must record video and simulation data, which is
+`episode-artifacts-recorded`.
+
+**The VLM gets the whole corpus, capped so it fits — not a retrieval step.** Retrieval was
+considered first and rejected: it scales to any corpus, but a wrong answer is then
+ambiguous between "retrieval never surfaced the episode" and "the model had it and
+reasoned wrong", which is exactly the distinction the experiment exists to make. Capping
+the number of episodes a question may reach over, derived from what the model's context
+holds once the video frames are sampled, means the model is provably given everything the
+SQL backend can see over the same episodes — so a loss is a reasoning failure. The cap
+becomes the baseline's stated limitation in the paper.
+
+That decision also simplifies the availability metric the developer asked for. With one
+shared corpus rather than a per-system retrieval, *whether the information needed to answer
+is present at all* is a property of the corpus, measured once, not a per-system score. A
+question nothing could have answered is then scored apart from one both systems had the
+evidence for.
+
+#### Why `episode-artifacts-recorded` is separate rather than folded
+
+The scope check (`check_scope_overlap.py --base origin/main`) found no in-flight branch
+sharing this work's paths: #265, #262, #256 and `tracy_icra` share none, and #261 shares
+only `experiment_definitions.py`. `experiments/src/experiments/scenarios` and
+`experiments/src/experiments/montessori` are absent from `main` because #261 and #262
+create them — unlanded parents this sits on, not owners of it.
+
+The one real fold candidate was `episodes-recorded-through-ormatic`, which is
+`not_started` with no branch. It stayed separate because the artifacts need
+`simulated-camera-feeds-perception` (lane 1) for the camera frames, and folding would put
+lane 2's foot item — which four other items wait on — behind lane 1's second item.
+
+Duplicate-intent scan: `montessori_event_replay` (#165) records `DemoRecording` /
+`RecordedFrame`, but those are world-state snapshots in a rolling in-memory buffer for the
+console's replay viewer, inside `cramera`, which this plan excludes. Not a per-episode
+video on disk, so not a duplicate.
+
+#### Left to the developer
+
+The budget table above allocates twelve days across three experiments. A fourth is not in
+it, and re-budgeting an 11-day deadline is the developer's call, not something to invent
+here. One suggestion to accept or reject: if time runs short, cut D's VLM arm first and
+keep the EQL-over-SQL numbers, which need no external model or credentials — the same
+shape the memo's cut order already takes with B's injection half.
+
+The open question about which vision-language model and provider the baseline calls now
+covers D as well, and gains a second part: how many episodes fit one context once video
+frames are sampled, which is what sets D's cap.

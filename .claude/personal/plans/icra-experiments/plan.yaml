@@ -1,6 +1,6 @@
 schema_version: 1
 id: icra-experiments
-title: "ICRA experiments: one simulated pipeline, episodes in SQL, and the three experiments"
+title: "ICRA experiments: one simulated pipeline, episodes in SQL, and the four experiments"
 description: >
   Everything the ICRA paper (deadline 2026-09-15) needs that no other plan owns:
   one integrated pipeline that every scenario runs on in simulation before the
@@ -8,8 +8,9 @@ description: >
   and metrics, episodes recorded through ORMatic into an SQL database and queried
   by EQL as long-term memory, the per-predicate backend routing and physics
   verification mechanisms the paper measures, failure typing and prediction, the
-  verbalised-memory and VLM baselines, and Experiments A, B and C run in
-  simulation and then on the UR10, with the released artifact. Three lanes run
+  verbalised-memory and VLM baselines, Experiments A, B and C run in
+  simulation and then on the UR10, Experiment D questioning the episode history
+  in simulation, and the released artifact. Three lanes run
   in parallel; roadmap.md carries the lane order and the day-by-day budget.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 252
@@ -92,6 +93,13 @@ tracks:
     name: "Experiment C: manipulation under ablations"
     wave: evidence
     description: "Lane 2."
+  - id: experiment-d
+    name: "Experiment D: long-term memory across episodes"
+    wave: evidence
+    description: >-
+      Lane 2. The questions Experiment A asks about the current scene, asked
+      instead of the episode history, against a vision-language model given the
+      whole recorded corpus. Simulation only.
   - id: release
     name: "Figures and the artifact"
     wave: evidence
@@ -276,8 +284,11 @@ items:
       One Episode model for simulation and the robot: the scenario and
       condition it ran under, its trials, the segmind events seen per tick,
       every query asked with its per-predicate backend assignment, answer and
-      latency, every insertion attempt with its outcome, and the failure type
-      observed and predicted. Recorded through ORMatic the way
+      latency, every insertion attempt with its outcome, the failure type
+      observed and predicted, and what was done after a failure - retried,
+      changed or abandoned. That last is what answers "how did you resolve this
+      the last time it happened"; nothing else in the record carries it, and it
+      was added on 2026-09-04 when Experiment D was planned. Recorded through ORMatic the way
       ShapeInsertionExperience and SortingIterationResult already are, and
       replacing both with the one model rather than standing beside them;
       ResultsDatabase and results_recording keep deciding where and whether
@@ -302,6 +313,30 @@ items:
       from in-process results. Tests assert that a query over a recorded
       episode returns the same objects the runner wrote, and that a report
       regenerated from the database equals the one the runner rendered.
+
+  - id: episode-artifacts-recorded
+    title: "An episode keeps its video, its simulation data and its question-and-answer transcript beside the database"
+    branch: null
+    pull_request_number: null
+    track: long-term-memory
+    depends_on: [episodes-recorded-through-ormatic, simulated-camera-feeds-perception]
+    status: not_started
+    notes: >-
+      The rows say what happened; these are what a reader - or a
+      vision-language model - can look at, and without them Experiment D has
+      no baseline to compare against. The video is the frames MujocoCamera
+      already renders for MontessoriPerceptionBackend, written per episode
+      rather than discarded; the simulation data is the run's own files, the
+      world it built and the plan it realized; the transcript is every question
+      with its answer, which the episode rows already carry per query, rendered
+      as one readable document. Artifacts sit beside the database addressed by
+      the episode's identifier, so a row references one rather than holding it -
+      the separation ResultsDatabase already draws between where a run records
+      and what it records. Its own item rather than folded into
+      episodes-recorded-through-ormatic because it needs the simulated camera,
+      and folding it would put lane 2's foot item behind lane 1's second. Tests
+      record a two-trial episode and read its video, its files and its
+      transcript back from the episode.
 
   # %% backend-routing
   - id: backends-declare-their-capabilities
@@ -486,7 +521,29 @@ items:
       credentials. Each question is also run five times on the same scene
       to report answer variance, for the VLM systems and for EQL alike.
       Which provider and model to use is the developer's call and is not
-      taken here.
+      taken here. What it sends is an assembled context rather than an image
+      and a prepended string, so the episode corpus of Experiment D is a third
+      system on the same harness rather than a second one.
+
+  - id: episode-corpus-given-whole-to-the-vlm
+    title: "The vision-language model is given the whole episode corpus: every episode's video, files and transcript in one context"
+    branch: null
+    pull_request_number: null
+    track: baselines
+    depends_on: [episode-artifacts-recorded, vlm-baseline-harness]
+    status: not_started
+    notes: >-
+      What makes Experiment D's comparison fair, and the reason a loss there
+      reads as reasoning rather than lookup: every episode a question may reach
+      over goes into one context - sampled video frames, the run's files, the
+      question-and-answer transcript - so the model is given everything the SQL
+      backend can see over the same episodes. That is only possible with a cap,
+      and the cap is derived rather than chosen: how many episodes fit once the
+      frames are sampled to the model's context budget. It is the baseline's
+      stated limit in the paper, and it bounds how far back a question can
+      reach. Assembled from what episode-artifacts-recorded wrote. A retrieval
+      step over an unbounded corpus was considered and rejected on 2026-09-04;
+      roadmap.md carries why.
 
   # %% experiment-a
   - id: question-set-and-ground-truth
@@ -604,6 +661,53 @@ items:
     notes: >-
       Twenty trials per condition, thirty only if the pipeline is stable;
       the perturbation conditions are never cut. Two days of robot time.
+
+  # %% experiment-d
+  - id: cross-episode-question-set-and-ground-truth
+    title: "The questions asked of the episode history, with ground truth read from what the runner recorded"
+    branch: null
+    pull_request_number: null
+    track: experiment-d
+    depends_on: [episodes-queried-by-eql, question-set-and-ground-truth]
+    status: not_started
+    notes: >-
+      Four kinds, each a Question in the shape question-set-and-ground-truth
+      already defines - EQL, English, answer type, and the facts it
+      structurally requires - but spelled over the SQL backend and reaching
+      across episodes rather than into the current scene: has this happened to
+      the robot before and in which episode; what the goal and the conditions
+      were at that time; what differed between the earlier episodes and the
+      current one that bears on the question; and how a failure was resolved
+      the last time it happened. This is the second spelling
+      question-set-and-ground-truth already names for the temporal bucket,
+      carried to every bucket. Ground truth is read from the recorded trial log
+      directly and never through the query under test - the runner's record is
+      what actually happened, and a query checked against itself proves nothing.
+
+  - id: experiment-d-in-simulation
+    title: "Experiment D in simulation: the episode history questioned through EQL and through the vision-language baseline"
+    branch: null
+    pull_request_number: null
+    track: experiment-d
+    depends_on:
+      - cross-episode-question-set-and-ground-truth
+      - episode-corpus-given-whole-to-the-vlm
+      - montessori-scenarios
+    status: not_started
+    notes: >-
+      First a corpus worth asking about: the scenarios run under varied
+      conditions and perturbations so the history holds repeats, failures
+      resolved differently, and goals that changed between runs. Then every
+      question through both systems, repeated for variance the way Experiment A
+      does, reporting accuracy against the recorded ground truth, latency,
+      determinism across repetitions, and information availability - whether the
+      corpus holds the facts a question declares it requires. Availability is
+      measured on the corpus once rather than per system, because both systems
+      see the same episodes, so a question nothing could have answered is scored
+      apart from one both had the evidence for. Simulation only, decided
+      2026-09-04: the questions are about recorded episodes, so the robot
+      episodes Experiments A and C record join the same corpus without a robot
+      session of their own.
 
   # %% release
   - id: paper-figures-from-episodes
