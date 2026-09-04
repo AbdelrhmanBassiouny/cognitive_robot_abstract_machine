@@ -606,7 +606,9 @@ class BoardDetector:
         return [
             contour
             for contour in contours
-            if RectifiedFootprint.from_contour(contour, orthophoto.region.resolution).area
+            if RectifiedFootprint.from_contour(
+                contour, orthophoto.region.resolution
+            ).area
             >= self.minimum_lid_area
         ]
 
@@ -996,7 +998,9 @@ class LoosePieceDetector(BeliefSource):
                 yaw=match.yaw,
                 reference_frame=reference_frame,
             ),
-            footprint=RectifiedFootprint.from_contour(fitted, orthophoto.region.resolution),
+            footprint=RectifiedFootprint.from_contour(
+                fitted, orthophoto.region.resolution
+            ),
             outline=outline,
             category=match.piece.category,
             height=height,

@@ -922,6 +922,7 @@ def test_containment_builds_nothing_symbolic(container_and_content, monkeypatch)
 
     assert InsideOf(content, container)() == expected
 
+
 # %% a spatial relation is something a query can state
 
 

@@ -48,7 +48,9 @@ def test_footprint_fill_ratio_separates_the_shape_families():
     )
 
     measured = {
-        name: RectifiedFootprint.from_contour(_contour_of(boundary, 0.0005), 0.0005).fill_ratio
+        name: RectifiedFootprint.from_contour(
+            _contour_of(boundary, 0.0005), 0.0005
+        ).fill_ratio
         for name, boundary in (
             ("square", square),
             ("triangle", triangle),
