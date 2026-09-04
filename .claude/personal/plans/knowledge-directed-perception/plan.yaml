@@ -1180,22 +1180,9 @@ items:
   branch: claude/plan-item-kickoff-expectations-2zvpmn
   pull_request_number: 257
   track: events
-  blockers:
-    - >-
-      The review round of 2026-09-04 is answered on #257 (4c1a1bb7): ten threads done as asked and
-      resolved, nine answered and left open for the developer. One decision decides the item's next
-      step and is his: whether to re-base it on #255, so that an expectation is stated in the
-      digital twin's own relation vocabulary (#229's predicates that answer whether they hold,
-      #238's `PlacementRelation` with `allows` and `allowed_space`) over a sighting that has a body
-      (#255's `DetectedMontessoriShape`), which is what the five threads that reach past this base
-      ask for - the attribute-name string, `SceneRequest.supporting_surface`, `ExpectedProperty`
-      against the twin's concepts, the hard-coded check, `BelievedPlace` as a `Role`. Measured: #246
-      into #255 conflicts in `reasoning/predicates.py` and its test (#244 against #229). The `look`
-      to `look_for` rename is proposed on #222, whose abstract method it is. CI: the `version` check
-      is fixed here; `probabilistic_model` was red on the base too and `main` now carries #597's
-      fix, restacked into this branch at 16:09; whether 4c1a1bb7 is green is unread.
+  blockers: []
   depends_on:
-  - perception-backend
+  - imagination-world-rejects-what-a-predicate-refuses
   - pieces-looked-for-where-expected
   - episode-replayed-into-the-world
   status: in_progress
@@ -1261,6 +1248,51 @@ items:
     names. The third is where the generalization the reviewer asks for already lives: the relation
     vocabulary of #229 and #238 on the other stack, which makes re-basing on #255 the honest answer
     to five of the threads rather than a second hierarchy here.
+
+    Re-based 2026-09-04 at the developer's decision on #257, onto #255 with #246 merged in, so the
+    branch now carries #222, #227, #229, #238 and #255 beneath it and depends_on names #255's item in
+    place of perception-backend. The one conflict, reasoning/predicates.py against #244's numeric
+    rewrite, is resolved by carrying #244's fast paths into #229's classes. An expectation is now the
+    relations of the twin's own vocabulary stated about the piece with nothing standing in its place
+    (SupportedBy the lid, InsideRegion the hole, Near the hole within the release spread), and nothing
+    enumerates which: the same relations are what a look is asked for, a placement that confines the
+    piece seeds a fit on the asker's say-so, and what the look finds is asked the same relations - each
+    read off the sighting by one SightingReading per kind the look establishes itself, and off the
+    body #255 stands in the imagined world otherwise - so the violated relations, written over that
+    body, are the report. Each Segmind event declares its Effect as the relations that begin and end
+    holding; the SupportEffect classes are gone, since RestingOn was a second name for SupportedBy. The
+    twin gains Turned. The anchored sweep grid of the previous round had never been called by the
+    sweep and is wired now. Verified against #255 in the same container: krrood 1142 passed against
+    1135 with the same 178 errors, experiments 516 passed against 478, segmind 64 passed, the twin's
+    failing set unchanged but for two errors in #246's own armar7 tests that error on #246's tree too.
+    The predicted-state item the review asked for is predicted-state-from-declared-effects.
+- id: predicted-state-from-declared-effects
+  title: Predict the twin's current state from what the actions and the events declared, and ask perception from it
+  branch: null
+  pull_request_number: null
+  track: events
+  depends_on:
+  - expectations-from-events
+  status: not_started
+  notes: >
+    Added 2026-09-04 at the developer's ask on #257 (r3934932647 and r3937639689). expectations-from-events
+    keeps what holds of one piece the robot acted on, from the action's declared effect and each event's
+    declared Effect, both stated as the twin's own relations. This is the general form of that: a predicted
+    current state of the digital twin, built by applying every declared effect of the actions performed and
+    the events seen to the world the robot has - explicit effect and occurrence rules, each event and each
+    action saying queryably what now holds and what no longer does, kept inside what the domain model can
+    express so the frame problem of situation calculus does not arise - from which perception is asked
+    richer questions: the gripper no longer holding the piece, the piece resting where it was left,
+    supported by the surface it was left on. Where an effect cannot be enumerated in advance it is concluded
+    by the EQL-native ripple-down rules on the #77 stack, so knowledge is added as rules rather than as code.
+    An action's pre- and post-conditions in coraplex are the same statements for actions, and where the two
+    meet is worked out here. The prediction is what the simulation and the twin's own state should already
+    agree with when the plan was executed there; the case it exists for is another agent acting, or the
+    world disagreeing, which is what a look is then asked about. It meets icra-experiments'
+    snapshot-working-memory and failure-taxonomy-and-typing, which are the state and the failure side of the
+    same thing; which of the three owns which half is the developer's to settle when it starts. Probabilistic
+    fusion (a Kalman or particle filter) is not part of it: the relations are true or false and a belief is
+    confirmed or refuted, and the accurate pose is a different question the paper's claim does not need.
 - id: robokudo-detector
   title: Answer a request with a RoboKudo analysis engine
   branch: perception_robokudo_detector

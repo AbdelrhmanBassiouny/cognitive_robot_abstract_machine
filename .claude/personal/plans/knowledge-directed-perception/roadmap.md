@@ -5084,3 +5084,148 @@ arrive re-wrapped.
 in by hand. This checkout's `plan_item_bootstrap.py` has `update`, so the manifest was
 written through it for the first time on this plan, from a worktree of the tooling
 branch -- the item branch's own checkout is older than the skill that calls it.
+
+### `expectations-from-events`: the re-base of 2026-09-04, and an expectation in the twin's own words
+
+Resolved 2026-09-04 in `auto` mode, the same evening as the review round. The developer
+answered the round in five threads and one review comment: *"Ok do the restack and the
+rebase, also all other threads where you said needs this rebase do them"*, *"why do we
+have to enumerate the expected relation types? Can't we generalize the approach to
+whatever relation the backend is capable of using?"*, *"Ok add a plan item for it"*, and
+*"I feel like the effects we added are duplicate with the events."* All four are done or
+answered, and the branch is a different branch.
+
+#### Re-cut onto #255, with #246 merged in
+
+The branch now sits on `imagination-world-rejects-what-a-predicate-refuses` (#255), which
+carries #222, #227, #229 and #238 beneath it, with `episode-replayed-into-the-world`
+(#246) merged in -- the same standing `depends_on` rule every item on this plan has
+followed. `depends_on` names #255's item in place of `perception-backend`, since #255
+contains it.
+
+**The one conflict was the one the kickoff predicted**, `reasoning/predicates.py` and its
+test: #244's numeric rewrite of the relations (`is_supported_by` over numeric transforms
+with a bounds shortcut, `is_body_in_region` with the same, a `ViewAxis` enum and a static
+`signed_distance_along_axis`) meeting #229's and #238's predicate classes. Resolved by
+keeping the classes and carrying #244's fast paths into them: `SupportedBy` answers from
+`numeric_global_transform` and `numeric_center_of_mass` and rules out bodies whose
+enclosing bounds miss; `InsideRegion.compute_contained_fraction` rules out a body whose
+bounds miss the region's before any mesh boolean; `InsideOf.compute_containment_ratio`
+carries the body's vertices into the world frame as plain coordinates. `ViewAxis` and the
+static helper are not kept -- #238's class variables `axis` and `positive_side` are the
+same information -- and `VIEW_DIRECTION_EPS` is. #244's three tests that the relations
+build nothing symbolic come across, reading the ratio off `compute_containment_ratio`
+since `InsideOf` answers whether it holds on this side. **Worth keeping for every later
+merge of #246 into the #238 stack, which #236 and #239 will both pay:** take this
+resolution rather than re-deriving it.
+
+#### An expectation is relations, and nothing enumerates which
+
+`Expectation.holds` is a tuple of krrood `StatedRelation`s -- each relation of the twin's
+vocabulary stated with nothing standing in the piece's place, exactly the form a
+statement states about the thing it is looking for and a search reads before anything is
+found. A release over a hole arms `SupportedBy(lid)`, `InsideRegion(hole)` and
+`Near(hole, radius=release_spread)`. `ExpectedProperty`, the if-chain, and
+`SceneRequest.expected` are gone.
+
+Three things make that general rather than a rename:
+
+- **The look is asked for the same relations.** `Expectation.look_request()` is a
+  `LookRequest` over them, read by the same `MontessoriPerceptionBackend.scene_request`
+  any statement is read by. What used to be a tuple of hypotheses beside the statement is
+  `SceneRequest.believed_stretch()` -- the stretch the stated placements together confine
+  the thing to, `None` where a direction alone leaves it unbounded -- and the pipeline's
+  `believed_from` seeds a fit at its centre, half its extent as the reach, the stated
+  turns, the pieces wearing the stated colour. **Only on someone's say-so:**
+  `SceneRequest.believed_by` is who vouches for the placements as a belief, and a bare
+  statement through the backend leaves it `None`, so #238's narrowing tests report exactly
+  what they did. A statement narrows what is read; a belief seeds a fit.
+- **What was found is asked the same relations.** `contradicted_by(instance, stated)`
+  answers each the way the look can: the kinds the look establishes for itself are read
+  off the sighting by one `SightingReading` class per kind (`RestsOnTheSurfaceNamed`,
+  `StandsWhereAllowed`, `WearsTheColor`, `IsTurnedSo`; `narrowing_relations` is now read
+  off them), and every other kind is asked of the body #255 stands in the imagined world
+  for the sighting. The violated relations, written over that body, *are* the report --
+  `InsideRegion(<the prism's body>, <the hole>)` for the item's own story, readable and
+  evaluable like any relation of the world. `relations_hold` is `not contradicted_by`
+  over the narrowing relations, so the backend's check and the expectation's are one
+  mechanism, and `InsideRegion` is read as a placement (does the sighting's position fall
+  in the region's box) rather than by mesh boolean, which is what lets the check run on a
+  rendered scene at all.
+- **The vocabulary grows where it was short.** `Turned(body, yaw=, spread=)` in
+  `semantic_digital_twin.reasoning.predicates`, read the short way round off a pose or a
+  thing the world places; the backend narrows by it and checks the fit's own turn against
+  it. Adding a kind the look can act on is one `SightingReading`; a kind it cannot act on
+  needs nothing added.
+
+**krrood gains three methods on `StatedRelation`** that both halves read: `of(...)` states
+one without a statement (the object's operand name read off the relation's own `object`
+property, so no field name is spelled), `about(subject)` asks it of one thing, and
+`covers(other)` is the pattern match an ended relation is applied by.
+
+#### Each event declares what holds after it
+
+The developer's sense of duplication was right: `RestingOn` was a second name for
+`SupportedBy`. What is *not* duplicated is the distinction, and it is kept. An event is an
+observation -- Segmind saw something happen, at a time, between the things it names; its
+effect is what is true of the world from then on. For `SupportEvent` the two nearly
+coincide; for a pick-up (seen as a translation after a loss of support, meaning *nothing
+supports it and it lies in no region*) and an insertion (seen as contact with a hole's
+region, meaning *it lies in that region and rests on nothing it rested on before*) they do
+not, which is why the effect is written on the event rather than read off its name.
+
+`Effect` is two tuples of `StatedRelation`s, `begins` and `ends`, and `applied_to(held)` is
+the frame rule: drop what an ended relation covers (one stating no operand covers every
+relation of its kind), add what begins, leave everything else exactly as it was.
+`SupportEvent` and `PlacingEvent` begin `SupportedBy(what they name)` and end support by
+anything; `InsertionEvent` begins `InsideRegion(the region it names)` and ends support by
+anything; `LossOfSupportEvent` ends only `SupportedBy(what it names)`; `PickUpEvent` ends
+support by anything and containment in any region. An effect-stating event that names
+nothing raises `EventNamesNoObject`. `Expectations.record` reads `event.effect()` and
+learns no event kind.
+
+#### The fix that was never wired
+
+The previous round's `offsets_within` -- the anchored sweep grid the pull request
+described as the fault worth more than the feature -- was **defined and never called**:
+`PieceMatcher._sweep` still laid its grid out from `-radius`. The re-base's re-read of
+the diff is what found it. It is `PieceMatcher.placements_within` now, used by the sweep
+and tested at that level rather than only as a free function. The capture benchmark reads
+the same 19 passed, 11 xfailed with it wired. Worth generalizing: a test of a helper is
+not a test that the helper is used, and the previous round's mutation checks would not
+have caught this because nothing called the thing being mutated.
+
+#### Two smaller things
+
+`SceneRequest.supporting_surface` is now the `KinematicStructureEntity` the statement
+names rather than its name (`0fab8101`), answering the thread the re-base alone did not;
+the one name left is where a measured `WorkspaceSurface` answers for the entity. And the
+`look` to `look_for` rename is the one resolved thread the re-base does not cover -- #259
+and #266 implement `look` on the #231 stack, outside this branch -- so it is proposed on
+#222 where one commit reaches every branch stacked on it.
+
+#### The new item
+
+`predicted-state-from-declared-effects`, in the `events` track, depending on this item:
+the general form of `Expectations` -- a predicted current state of the twin built by
+applying every declared effect of the actions performed and events seen, effects that
+cannot be enumerated concluded by the EQL-native ripple-down rules on the #77 stack, and
+the meeting with coraplex's action conditions and with `icra-experiments`'
+`snapshot-working-memory` and `failure-taxonomy-and-typing` worked out there. Fusion is
+deliberately not part of it, and the item's notes say why.
+
+#### Verification
+
+Same container, branch against #255 in a worktree with its own `*/src` on `PYTHONPATH`:
+`test/krrood_test/test_eql` 1142 passed against 1135 with the same 178 errors;
+`test/experiments_test` (six ROS modules excluded) 516 passed, 1 skipped, 11 xfailed
+against 478; `test/segmind_test` 64 passed, 1 skipped; `test/semantic_digital_twin_test`
+27 failed and 1106 passed against 27 failed and 1026, with 118 errors against 116 -- the
+two new ones are #246's own `test_world_armar7.py`, erroring identically on #246's tree
+for want of a resource path. Segmind's tests need the root `conftest.py` for their
+apartment fixture, which `--noconftest` hides as 14 errors; the experiments modules run
+with `--noconftest` as every round has recorded.
+
+CI on the new head is not read; the branch was pushed with `--force-with-lease`, since
+its history is rewritten, and the pull request's base was moved to #255 by the API
+without the 422 the stack tooling has met before.
