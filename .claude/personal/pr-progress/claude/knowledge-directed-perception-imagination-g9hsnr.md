@@ -60,6 +60,37 @@ up through all seven branches into this one, three times over. Merged in cleanly
 conflicts) and re-verified before pushing - 478 passed, 1 skipped, 11 xfailed across
 `test/experiments_test/` with the six ROS-dependent modules excluded.
 
+## Review round of 2026-09-05, second pass
+
+He came back on the fixed-connection thread and overturned the answer, rightly: *"a
+fixed connection is an information we do not have ... if we saw this in a later image
+moved to another place that means it must not be a fixed connection"*. The first answer
+argued from what the imagined world does today; his is about what the connection
+*claims*, and a look measures where a piece is, never that it cannot move.
+
+Changed at 90ff3861c. A finding hangs from a `Connection6DoF` and its measured placement
+is written through `connection.origin`, whose setter un-composes the transform into the
+seven dof values - so a later look that finds the piece elsewhere re-places it rather
+than needing a different connection. `FixedConnection` refuses that with
+`NotImplementedError`, which is the mutation check on the new test
+`test_a_finding_can_be_placed_somewhere_else_by_a_later_look`.
+
+Two things the first reply guessed at and this round measured. Spawning alone is
+1.7-1.9x, but per look it is inside the noise - three alternating rounds on one capture,
+same process, welded 0.243/0.233/0.240 s against free 0.236/0.226/0.216 s, same 3 pieces
+each time. And the dof-accumulation worry was wrong: `remove_branch_from_world` takes the
+seven degrees of freedom with it (20 findings give 140 dofs; removing them all leaves 0).
+
+479 passed, 1 skipped, 11 xfailed across `test/experiments_test/` against 478.
+
+**The reply could not be posted.** A pending review of his own (5120880820, on e339b2ef2)
+sits unsubmitted on #255, and GitHub allows one pending review per user - the API acts as
+that account, so every inline reply is refused with *"user_id can only have one pending
+review per pull request"*. Exactly what #222's round of 2026-08-31 recorded. The reply is
+written and waiting in the session scratchpad
+(`reply_r3940306683.md`); submitting or discarding that draft unblocks it. The thread
+stays unresolved until it can carry the reply, since resolving without one is forbidden.
+
 ## CI, traced 2026-09-05
 
 Red since 32471b172, and not this branch's. The only failing job is
