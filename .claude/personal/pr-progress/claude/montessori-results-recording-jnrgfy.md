@@ -35,9 +35,12 @@ regenerate the ORM interfaces, and run the three new test modules plus
   The README citations are user-facing failure text, so they are repointed at
   `semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql`,
   which exists on `main`.
-- **`franka_montessori_sorting_results` is not renamed.** It is a value, three tests
-  assert it appears in failure messages, and renaming it would point this branch at a
-  different database from the demo branch recording to the same one.
+- **The database is named for the board, not the robot.** The first cut left
+  `franka_montessori_sorting_results` alone; the developer overrode that in review on
+  2026-09-05, so `199c478ac` renames it to `montessori_sorting_results` and
+  `FRANKA_MONTESSORI_SORTING_DATABASE_URI` to `MONTESSORI_SORTING_DATABASE_URI`.
+  Neutral rather than Tracy-specific, since both demos record here - flagged on both
+  threads and left open rather than resolved, because that is not the literal ask.
 - **No second `Footprint` rename.** #223 already renames the perception `Footprint` to
   `RectifiedFootprint`; the hazard is recorded in #262's description instead.
 
@@ -53,6 +56,20 @@ regenerate the ORM interfaces, and run the three new test modules plus
   differ, and only in their docstrings and the two `suggest_correction()`
   strings.
 - PR description updated to match, including the verification section below.
+
+## Review round 1 (2026-09-05)
+
+Two threads, both on naming, both from the developer: r3941124169 on
+`DEFAULT_DATABASE_URI` and r3941124727 on `DATABASE_URI_ENVIRONMENT_VARIABLE`.
+
+- Renamed in `199c478ac`, pushed. Both threads answered with the reasoning for
+  the neutral name and **left open** - the ask was "change it for the tracy
+  demo" and a robot-neutral name is not literally that, so it is the
+  developer's to close.
+- PR description rewritten: the paragraph claiming the name was left alone is
+  replaced by a section explaining the rename and the #256 consequence.
+- The branch had also been fast-forwarded past `main` by a merge someone else
+  pushed (`0c58f50e4`); the rename sits on top of it.
 
 ## Verified
 
@@ -77,9 +94,10 @@ both inside the ROS image.
 
 ## Next
 
-Nothing outstanding in this session. Waiting on CI in the ROS image to run the
-three test modules and the ORM regeneration. Per the notes, this session does
-not watch the PR.
+Two review threads are open by choice, waiting on the developer to accept the
+neutral name or ask for the Tracy one. Otherwise waiting on CI in the ROS image
+to run the three test modules and the ORM regeneration. Per the notes, this
+session does not watch the PR.
 
 ## Outstanding
 
