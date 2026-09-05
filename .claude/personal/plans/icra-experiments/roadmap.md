@@ -477,10 +477,31 @@ outside a docstring:
   which does exist on `main` and is what `DEFAULT_DATABASE_URI`'s own docstring already
   names as the provisioning step.
 
-The `franka_montessori_sorting_results` database name in `DEFAULT_DATABASE_URI` is
-*not* renamed. It is a value rather than a reference, three tests assert it appears in
-the failure messages, and renaming it would silently point this branch at a different
-database from the demo branch that records to the same one.
+The `franka_montessori_sorting_results` database name in `DEFAULT_DATABASE_URI` was
+initially left alone, on the reasoning that it is a value rather than a reference and
+that renaming it would silently point this branch at a different database from the demo
+branch recording to the same one. **The developer overrode that in review on 2026-09-05**
+(r3941124169, r3941124727), asking why a name tied to one demo survives on a branch the
+Tracy demo will use too.
+
+Renamed in `199c478ac` to `montessori_sorting_results`, with
+`FRANKA_MONTESSORI_SORTING_DATABASE_URI` becoming `MONTESSORI_SORTING_DATABASE_URI`.
+Neutral rather than Tracy-specific, which is a deviation from the literal ask and is
+flagged as such on both threads rather than resolved: naming the other robot reproduces
+the same problem one demo later, since #256's Franka demo and the Tracy demo both record
+here and the plan has every scenario, simulated and real, eventually recording through
+this.
+
+The consequence the original reasoning named is real and now stands as a note on #256
+rather than as a reason not to rename: until that branch takes the same rename, the two
+record to different databases on the same host.
+
+The four `franka_montessori_sorting_results` literals in the two test modules moved with
+it. They are throwaway URIs rather than copies of `DEFAULT_DATABASE_URI` - the tests
+assert that whichever database name they passed comes back in the failure message - so
+they did not force the rename, but leaving them would have kept the word the review
+objected to. That divergence is the first place these test modules stop being
+byte-identical to #256's.
 
 ### The __init__.py, and why a test rather than a comment proves it
 
