@@ -686,14 +686,15 @@ items:
     '
 - id: a-look-is-described-by-a-match
   title: Describe a look by an underspecified match over the twin's own entities, not by a case class
-  branch: null
-  pull_request_number: null
+  branch: claude/knowledge-directed-perception-vz2hhq
+  pull_request_number: 275
   track: method-selection
   depends_on:
   - choose-detection-method
   - surfaces-found-by-looking
   - how-to-look-concluded-from-the-request
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_01SK2tbXUzLSPebeVcKif92s
   notes: 'Added 2026-09-05 at the developer''s direction on #259 (r3940339984 and r3940357436): "why
     not replace this with an EQL match statement of semdt semantic annotation or kinematic structure
     entities?", and "eql based rdrs (pr 77 for example) can take an underspecified match statement
