@@ -162,11 +162,12 @@ items:
 
   - id: refuse-oversized-save
     title: "Refuse a save that leaves a plan over budget"
-    branch: null
-    pull_request_number: null
+    branch: claude/plan-size-limits-oversized-u24xk7
+    pull_request_number: 273
     track: gate-and-skills
     depends_on: [split-workflow-unification, split-rdr-refactor, split-knowledge-directed-perception, split-icra-experiments, size-budget-and-report]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01XWy1uT1i7FozWdNhLEtcKk
     notes: >
       save-plan.sh gains the gate, with a typed error naming which half of the
       budget was blown and by how much. The natural seam is alongside the
