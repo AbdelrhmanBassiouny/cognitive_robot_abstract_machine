@@ -5760,3 +5760,87 @@ and changes nothing #222 introduced -- removing its edits leaves #222 exactly as
 Fixing it on #222 would also have left `main` and every other branch carrying the same
 latent fault. #222, #231, #238, #239, #259 and #266 all go green on this check once they
 take `main` in after #268 lands; none of those merges is done here.
+
+### `how-to-look-concluded-from-the-request`: the review round of 2026-09-05, and the case class that was never needed
+
+Four review threads, opened the afternoon the branch was built, and they are one ask with four
+faces: no hard-coded attribute name, no hand-written case class, capabilities as entity query
+language conditions in the twin's own vocabulary, and the detector concept modelled at a meta
+level rather than against this one scene -- *"why name it WayOfLooking and not just
+PerceptionDetector, also I think we have detectors in the perception backend ... with
+capabilities as well."*
+
+#### The mechanism the ask needs was already on this branch
+
+`a-look-is-described-by-a-match` was added the same day on #259 and records that an EQL-based
+ripple-down tree taking an underspecified `Match` needs the #77 stack, which is why it was not
+folded into any of the three branches carrying a case class. **Half of that premise is wrong.**
+`EQLSingleClassRDR.from_underspecified(an(Animal)(species=...))` is on #159, which #239 merges
+in, so it is on this branch's own base -- the same shape of correction as the 2026-08-31
+"unmerged is not unusable" one, and found the same way: by reading the engine rather than the
+note about it.
+
+What it lacked was somewhere to say where the rules are kept, so it takes a `model_saver` now.
+That is this round's own finding from the other direction: a rule concluding a detector cannot
+be written to a model file at all, so the shipped entry point could not have been used here.
+
+#### The case class was never needed for the engine's sake
+
+`RequestedLook` and `WAY_OF_LOOKING_ATTRIBUTE_NAME` are both gone. The rules are built from the
+statement *a request whose detector is to be worked out* --
+`from_underspecified(a(SceneRequest)(detector=...))` -- so what is described and what is left
+open are read off that statement rather than named again in a constant, and every condition is
+stated over the request itself.
+
+The two things a rule reads are properties of `SceneRequest` computed from the `detection_type`
+it already carries, not fields copied into a second class. #259 measured on the same day that
+EQL traverses nested attributes and property reads, and this is the second item to spend a case
+class on a constraint that does not exist: two of `SoughtSurface`'s three fields were a copy and
+a constant, and two of `RequestedLook`'s two were derived bools. **A case class in front of an
+EQL rule tree wants justifying, not assuming.**
+
+#### One detector concept, and the duplication it removed
+
+`PerceptionDetector` is in krrood beside `PerceptionBackend` -- the placement the developer
+demanded for #222's general half, for the reason he gave then: *"I would like this to work also
+outside the montessori demo generally."* It carries `capability`, the variable a detector states
+it over, and `answers`; the kind of look a detector answers is the type parameter it binds
+(`PerceptionDetector[SceneRequest]`, `PerceptionDetector[TargetOnSurface]`), read back through
+`SubClassSafeGeneric`, which is AGENTS.md's own rule for a family that each declares the type it
+handles.
+
+`PieceDetector` (#231) had its own copy of all of it -- which is exactly what the review spotted
+-- and now inherits it, losing 40 lines. `WayOfLooking` is `SceneDetector`, and `take` is
+`detect`, so one operation has one name across both families. `state_the_detectors_own_condition`
+moved with them: authoring a rule by reading the condition off the detector being fitted is
+general to any family, not to this scene.
+
+krrood gained a mimic family of its own (`MeasureTheDepth`, `ReadTheColors` over a
+`PlaceToLookAt`) and six tests, so the concept is exercised without the demo, per krrood's
+self-containment rule. The mimic is also where conditioning on *what the sensor provides* is
+demonstrated: `MeasureTheDepth` answers a look only where depth is returned.
+
+#### One thing that had to be restated, and would have been silent
+
+A detector is now a dataclass, and a value-comparing dataclass has no `__hash__` -- so every
+detector became unhashable and `add()` refused to conclude one, which is the failure #231 already
+recorded from the other side. `PerceptionDetector` states identity comparison itself
+(`__hash__ = object.__hash__`) rather than leaving each member to remember `eq=False`: two
+detectors configured alike are not the same detector, and a rule holds the detector itself.
+
+#### What was not done, and is put back to the developer
+
+- **Wiring a detector per *part* of a description.** One detector answers a description today,
+  and `FindThePieces` finds the board itself because the board is what says how far each surface
+  reaches. Composing several detectors for one description is a real change and the thread is
+  left open for it.
+- **Conditions in the twin's own vocabulary for this family.** `PieceDetector`'s already read
+  semdt (`SurfaceFinish`, the surface's colour); a scene detector's read the request, and what a
+  request seeks is a `MontessoriDetection`, which is not a twin entity on this stack -- it becomes
+  one on #255, where it is a `Role` for `MontessoriShape`.
+- **The Montessori family conditioning on the sensor.** Its look is the request, and the rules are
+  stated when the pipeline is built, before any frame exists, so the case would have to carry what
+  the *source* offers rather than one frame. #259's `RgbdFrame.carries_depth` is the sibling
+  precedent.
+- `SUPPORTING_SURFACE_ATTRIBUTE_NAME` in `backend.py` is the same smell in the same package and is
+  #227's to remove, on the other stack.

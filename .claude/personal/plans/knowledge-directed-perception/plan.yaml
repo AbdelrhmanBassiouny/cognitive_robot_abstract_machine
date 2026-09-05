@@ -901,7 +901,39 @@ items:
     depends_on names the two items that supply what the pipeline carries and are hand-wired today.
     surfaces-found-by-looking is deliberately not a dependency: surfaces are already read from the world
     by of_world, so a live look needs nothing from it - what that item removes is the last model-read
-    surface for a *recording*, which this item can be demonstrated without.'
+    surface for a *recording*, which this item can be demonstrated without.
+
+    Review round of 2026-09-05, four threads, resolved the same day as one redesign. The
+    hand-written case class is gone and so is the attribute name spelled as a string: the rules
+    are built from the statement *a request whose detector is to be worked out*
+    (from_underspecified(a(SceneRequest)(detector=...))), so what is described and what is left
+    open are read off it, and every condition is stated over the request itself - the two a rule
+    reads are properties of SceneRequest computed from the detection_type it already carries.
+    EQLSingleClassRDR.from_underspecified is on #159 and so on this branch''s own base, against
+    a-look-is-described-by-a-match''s premise that it needs #77; what it lacked was somewhere to
+    say where the rules are kept, so it takes a model_saver now, since a rule concluding a
+    detector cannot be written to a model file at all.
+
+    The detector concept is general and in krrood beside PerceptionBackend, which is where the
+    developer placed #222''s general half for the same reason: PerceptionDetector carries
+    capability, the variable a detector states it over and answers, and the kind of look a
+    detector answers is the type parameter it binds, read back through SubClassSafeGeneric.
+    PieceDetector (#231) had its own copy of all of it - the duplication the review spotted - and
+    now inherits it, losing 40 lines; WayOfLooking is SceneDetector and take is detect, so one
+    operation has one name across both families. krrood gained a mimic family of its own and six
+    tests, so the concept is exercised without the demo, and the mimic is where conditioning on
+    what the sensor provides is demonstrated. A detector states identity comparison itself, since
+    a value-comparing dataclass has no hash and a rule holds the detector rather than a name for
+    one.
+
+    Three things are put back to the developer rather than built, each with a reply on its
+    thread: wiring a detector per part of one description (one detector answers a description
+    today, and FindThePieces finds the board itself because the board says how far each surface
+    reaches); conditions in the twin''s own vocabulary for this family, which waits on #255 making
+    a detection a Role over a world entity; and this family conditioning on the sensor, whose
+    look is the request and whose rules are stated before any frame exists, so the case would
+    have to carry what the source offers rather than one frame.
+    '
 - id: surface-finish-annotation
   title: Say in the digital twin how a surface takes light
   branch: sdt_surface_finish_annotation
@@ -1218,6 +1250,16 @@ items:
     sought.frame.carries_depth both bind and evaluate. So a case class was never needed for the
     engine's sake even without the RDR stack, which is why the duplicated half of SoughtSurface
     could be removed on #259 and only the Match itself waits for this item.
+
+    Corrected 2026-09-05 by #266's own review round: EQLSingleClassRDR.from_underspecified is on
+    #159, not on #77, so the Match-reading half of this item does not need the tip of the RDR
+    stack and #266 used it - the same shape of correction as the 2026-08-31 "unmerged is not
+    unusable" one. What remains for this item is the other half, which is what actually needs the
+    stack: a Match over the twin's own entities rather than over a plain description. RequestedLook
+    no longer exists to be removed; TargetOnSurface and SoughtSurface still do. Measured while
+    answering the same round: a case class was never needed for the engine's sake, since EQL
+    traverses nested attributes and property reads, so what is left here is the vocabulary the
+    conditions are stated in rather than the shape the engine demands.
 - id: camera-pose-fitted-to-the-model
   title: Correct where the camera stands by fitting what is seen to what the twin models
   branch: null
