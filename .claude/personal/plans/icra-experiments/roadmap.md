@@ -956,3 +956,106 @@ session container - `semantic_digital_twin.world` wants `giskardpy_bullet_bindin
 `PYTHONPATH`, plus `giskardpy/src` on it, and `World()` constructs and the 46 tests run.
 So a scenario-model test is session-verifiable, not only CI-verifiable. What still is not
 is anything touching the generated ORM interface or `segmind`.
+
+## 2026-09-05: the episode model, where it lives and what it records
+
+`episodes-recorded-through-ormatic` is #271,
+`claude/icra-experiments-ormatic-episodes-ib9lr3`, based on #262 and merging #261. Lane
+2's foot item, and four items wait on it.
+
+**Based on #262, merging #261.** The item depends on both, and neither is in the other's
+history, so one is the base and the other a merge. #262 is the base because this branch
+replaces its `sorting_results.py` and keeps its `ResultsDatabase`; #261 is merged because
+the episode records the trials its runner produces, and #261's own `generate_orm.py`
+comment hands that decision here in as many words: "what of a trial becomes a mapped
+record is decided where episodes are recorded, not here". A dry-run merge of the two was
+clean - `experiments/scripts/generate_orm.py` is their only shared file and auto-merged
+with the `segmind` interface import and the scenario-model ignores both intact. The cost
+is that #271's diff against its base carries #261's changes too.
+
+**Both dependencies are open and non-draft**, so `check_dependency_readiness.py` reports
+both ready.
+
+### The model is its own package, not a montessori module
+
+`experiments/src/experiments/episodes/`, holding `episode.py` and `recording.py`, beside
+`experiments/scenarios/` rather than inside `experiments/montessori/`. An episode is
+recorded by every scenario, simulated and real, so a demo package is the wrong home - the
+same argument the developer made in review on 2026-09-05 (r3941124169) when a database
+named for one demo survived onto a branch the Tracy demo will also use.
+
+`results_recording.py` moves there and becomes `episodes/recording.py`, since what it now
+records is an episode's trials. `results_database.py` does **not** move: it answers where a
+run records rather than what, this branch does not otherwise touch it, and moving 454 lines
+plus a 345-line test would collide with #256 and #265, which both carry the same file. That
+rename belongs to whichever branch reconciles the montessori package - #265 is already
+doing that work.
+
+### What one trial is committed at a time, and how the episode row stays one row
+
+The item asks the runner to record as it goes, so a run that dies keeps its finished
+trials. The committed unit is therefore one `RecordedTrial`, and `Episode` holds the run's
+identity rather than a list of its trials: `RecordedTrial` names its `Episode`, one
+direction only, which is what makes each trial committable on its own.
+
+The recorder keeps one `ToDataAccessObjectState` for the whole episode and converts every
+trial through it. `to_dao` memoises by `id(source)`, so the second trial's conversion finds
+the same `EpisodeDAO` the first one made instead of inserting a second episode row. Doing
+it the other way round - re-converting the whole `Episode` after appending a trial - does
+not work: `to_dao` returns a memoised DAO without re-reading its collections, so the new
+trial would never reach the database.
+
+### Vocabularies this item defines, and the ones it deliberately does not
+
+`FailureType` is an empty `StrEnum` base, the same shape #261 gave `StepName`, for
+`failure-taxonomy-and-typing` to fill in with the memo's four types. Naming those four here
+would be inventing another item's taxonomy. ORMatic stores an enum as its
+`module.Class.MEMBER` path in a `String(512)` column (`PolymorphicEnumType`), not as a SQL
+enum type, so an empty base carries no schema consequence and a subclass added later
+round-trips through a field typed `FailureType` with no migration.
+
+`FailureResolution` does get its three members - retried, changed, abandoned - because the
+item's own notes name them, and Experiment D's "how did you resolve this the last time"
+question is answered from nothing else.
+
+A backend is recorded by name rather than by enum member. `backends-declare-their-
+capabilities` will make backends a class family, not a fixed enumeration, and a name read
+off the object at record time is the precedent #261 already set with `metric_name` and
+`scenario_name`. `condition_names` and `perturbation_names` on `Episode` are read the same
+way: the live `Condition` and `Perturbation` objects are abstract and bound to a `World`,
+which is exactly why #261 kept them out of the ORM.
+
+### What is replaced, and what could not be
+
+`sorting_results.py` goes, with its test. `ShapeInsertionExperience`, which the item's notes
+also name, exists on none of this branch's ancestors - it lives on the montessori demo
+branches only - so there is nothing here to replace, and whichever branch carries it takes
+the same deletion.
+
+`test_montessori_results_database.py` names `ShapeInsertionResultDAO` in three places as a
+witness that the generated schema's tables exist. Deleting the class it names would fail
+those assertions, so they are repointed at the episode model's own DAO, which is the same
+witness. That is a rewrite forced by the replacement the item asks for, not a test adjusted
+to fit a change.
+
+`montessori/__init__.py` stops being load-bearing for ORM generation, since
+`results_database.py` maps nothing; `episodes/__init__.py` takes over that role, proved the
+same way #262 proved it - a round trip through a DAO from the generated interface fails if
+the file is missing. The `Footprint` hazard #262 recorded is unaffected: that
+`__init__.py` stays, so `pkgutil` still descends into `montessori/`.
+
+### Every field is defined, not every field is written yet
+
+The model carries what the paper needs end to end, because four items depend on its shape.
+What writes into it arrives with the items that own each part: the runner fills a trial's
+outcome and duration here, while ticks, queries and insertion attempts are written by the
+event monitor, `query-routed-per-predicate` and `failure-taxonomy-and-typing`. The tests
+round-trip a fully populated episode, so the shape is proved before its writers exist.
+
+### Verified in CI, not in this session
+
+Same limit #262 and #265 already recorded for this track: `scripts/regenerate_all_orm.py`,
+`test/experiments_test` and `test/segmind_test` do not run in a session container - the
+generator dies resolving giskardpy's `DebugExpressionPublisher`, `segmind.datastructures.
+events` imports `geometry_msgs`, and `rclpy` has no PyPI distribution. `sqlalchemy` is not
+installed there either. Everything touching the generated interface is CI-verified.
