@@ -13,21 +13,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from typing_extensions import List, Tuple
+from typing_extensions import List, Tuple, Type
 
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
 from experiments.montessori.perception.detections import DetectedMontessoriShape
 from experiments.montessori.perception.scene_request import SceneRequest
-from krrood.entity_query_language.backends import StatedRelation
 from krrood.entity_query_language.predicate import Relation
-from krrood.patterns.belief_source import BeliefSource
 from segmind.expectations import Expectation, Expectations
-from semantic_digital_twin.world_description.world_entity import Body
 
 # %% what is expected of one piece
 
 
-@dataclass
+@dataclass(eq=False)
 class MontessoriExpectation(Expectation):
     """
     What is expected of one Montessori piece, as a look at the scene can act on it.
@@ -65,19 +62,12 @@ class MontessoriExpectations(Expectations):
     What is expected of every Montessori piece the robot has acted on.
     """
 
-    def expect(
-        self, subject: Body, holds: Tuple[StatedRelation, ...], source: BeliefSource
-    ) -> MontessoriExpectation:
+    @classmethod
+    def expectation_type(cls) -> Type[MontessoriExpectation]:
         """
-        Believe something of a piece, as a look at this scene can act on it.
-
-        :param subject: The piece, as the world holds it.
-        :param holds: The relations expected of it.
-        :param source: What put the belief there.
+        What is expected of a piece is expected as a look at this scene can act on it.
         """
-        expectation = MontessoriExpectation(subject=subject, holds=holds, source=source)
-        self.expected[subject] = expectation
-        return expectation
+        return MontessoriExpectation
 
     def scene_requests(self) -> List[SceneRequest]:
         """

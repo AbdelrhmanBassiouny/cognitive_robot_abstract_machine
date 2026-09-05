@@ -19,12 +19,13 @@ a failure and an absence.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
 from typing_extensions import Any, Dict, List, Optional, Tuple, Type, TypeVar
 
 from krrood.entity_query_language.backends import LookRequest, StatedRelation
 from krrood.entity_query_language.predicate import Relation
+from krrood.entity_query_language.query.match import Match
 from krrood.patterns.belief_source import BeliefSource
 from segmind.datastructures.events import DetectionEvent, Effect, EventWithEffect
 from semantic_digital_twin.reasoning.predicates import Colored, InsideRegion, Near
@@ -46,37 +47,65 @@ The kind of thing a look reports.
 # %% what is expected of one thing
 
 
-@dataclass
-class Expectation:
+@dataclass(eq=False)
+class Expectation(Match[Body]):
     """
-    The relations one thing is expected to stand in, and what put that belief there.
+    A statement about one thing of the world, saying what is expected to hold of it, and
+    what put that belief there.
 
-    Nothing here names a kind of relation: whatever the world's vocabulary can state
-    about a thing can be expected of it, and a look checks each the way it can.
-    """
-
-    subject: Body
-    """
-    The thing this is expected of, as the world holds it.
-    """
-
-    holds: Tuple[StatedRelation, ...]
-    """
-    What is believed to hold of the subject, each relation stated with nothing standing
-    in the subject's place.
+    It is an ordinary entity query language statement: a match over the subject's own
+    kind, ranging over that one thing, with the relations expected of it as its
+    conditions. So whatever the world's vocabulary can state about a thing can be
+    expected of it -- nothing here names a kind of relation -- and the same statement
+    can be evaluated against the world as it stands or handed to a look to be answered
+    by going and seeing.
     """
 
-    source: BeliefSource
+    source: BeliefSource = field(kw_only=True)
     """
     What put this belief there: the action that declared the effect, or whoever asked
     for the look.
     """
 
-    @property
-    def color(self) -> Optional[Color]:
+    @classmethod
+    def about(
+        cls,
+        subject: Body,
+        holds: Tuple[StatedRelation, ...],
+        source: BeliefSource,
+    ) -> Expectation:
         """
-        The colour the subject is drawn in, or ``None`` where its geometry is drawn in
-        none or in more than one.
+        Expect relations of one thing.
+
+        :param subject: The thing, as the world holds it.
+        :param holds: What is expected of it, each relation stated with nothing standing
+            in the subject's place.
+        :param source: What put the belief there.
+        """
+        statement = cls(type(subject), source=source)().from_([subject])
+        if not holds:
+            return statement
+        return statement.where(*(stated.about(statement.variable) for stated in holds))
+
+    @property
+    def subject(self) -> Body:
+        """
+        The thing this is expected of, as the world holds it.
+        """
+        return self.domain[0]
+
+    @property
+    def holds(self) -> Tuple[StatedRelation, ...]:
+        """
+        What is believed to hold of the subject, each relation stated with nothing
+        standing in the subject's place.
+        """
+        return tuple(StatedRelation.stated_in(self))
+
+    @property
+    def colors(self) -> Tuple[Color, ...]:
+        """
+        The colours the subject's geometry is drawn in, in the order it states them.
 
         A colour is what tells a look which things are worth fitting where the subject
         is expected, so a look is asked for it alongside the relations.
@@ -85,7 +114,17 @@ class Expectation:
         for shape in (*self.subject.visual, *self.subject.collision):
             if shape.color not in colors:
                 colors.append(shape.color)
-        return colors[0] if len(colors) == 1 else None
+        return tuple(colors)
+
+    def holds_now(self) -> bool:
+        """
+        Whether the subject, as the world stands, is in every relation expected of it.
+
+        This is the same statement answered by reading the world rather than by looking
+        at it, which is what a thing the robot already models can be checked against
+        without a camera.
+        """
+        return bool(list(self._evaluate_natively_()))
 
     def after(self, effect: Effect) -> Expectation:
         """
@@ -93,18 +132,24 @@ class Expectation:
 
         :param effect: What the event says holds of the subject from then on.
         """
-        return replace(self, holds=effect.applied_to(self.holds, self.subject))
+        return type(self).about(
+            self.subject, effect.applied_to(self.holds, self.subject), self.source
+        )
 
     def look_request(self, type_: Type[Sought]) -> LookRequest[Sought]:
         """
         This expectation as what a look is asked for: the relations expected of the
         subject, together with the colour it is drawn in where it is drawn in one.
 
+        A subject drawn in several colours is not narrowed by colour at all: a look
+        narrowed to one of them would pass over the thing wearing the others, so which
+        of them to search for is not a choice this can take.
+
         :param type_: The kind of thing the look reports.
         """
         stated = list(self.holds)
-        if self.color is not None:
-            stated.append(StatedRelation.of(Colored, self.color))
+        if len(self.colors) == 1:
+            stated.append(StatedRelation.of(Colored, self.colors[0]))
         return LookRequest(type_=type_, stated_relations=stated)
 
     def check(self, seen: Any) -> ExpectationReport:
@@ -134,6 +179,19 @@ class Expectation:
         return tuple(
             stated.about(seen) for stated in self.holds if not stated.about(seen)()
         )
+
+    def _restated(self, conditions: List[Any]) -> Expectation:
+        """
+        This expectation over the same subject, saying only what it is given.
+
+        :param conditions: What the restated expectation says.
+        """
+        restated = type(self)(
+            self.factory, type_=self.type_, variable=self.variable, source=self.source
+        )
+        if self._has_been_called:
+            restated = restated(**self.kwargs)
+        return restated.where(*conditions) if conditions else restated
 
 
 @dataclass(frozen=True)
@@ -210,6 +268,16 @@ class Expectations(BeliefSource):
     One expectation per thing something has acted on, by the body an event names it by.
     """
 
+    @classmethod
+    def expectation_type(cls) -> Type[Expectation]:
+        """
+        The kind of expectation this store holds, by the class that means it.
+
+        A store for a particular scene answers its own kind, which is what lets one
+        built here be asked for a look at that scene.
+        """
+        return Expectation
+
     def expect(
         self, subject: Body, holds: Tuple[StatedRelation, ...], source: BeliefSource
     ) -> Expectation:
@@ -221,7 +289,7 @@ class Expectations(BeliefSource):
         :param source: What put the belief there.
         :return: The expectation now held.
         """
-        expectation = Expectation(subject=subject, holds=holds, source=source)
+        expectation = self.expectation_type().about(subject, holds, source)
         self.expected[subject] = expectation
         return expectation
 

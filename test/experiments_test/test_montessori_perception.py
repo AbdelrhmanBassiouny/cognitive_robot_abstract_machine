@@ -31,6 +31,7 @@ from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCat
 from experiments.montessori.world import MontessoriWorld
 from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from .dataset import montessori_scene_fixtures
@@ -315,12 +316,12 @@ def test_a_look_expects_the_piece_the_world_says_it_placed(
     montessori = MontessoriWorld()
     pipeline = MontessoriPerceptionPipeline(
         table=WorkspaceSurface(
-            name=PrefixedName("table", "world_expectations"),
+            entity=Body(name=PrefixedName("table", "world_expectations")),
             region=SCENE_REGION,
             height=renderer.table_height,
         ),
         lid=WorkspaceSurface(
-            name=PrefixedName("board_lid", "world_expectations"),
+            entity=Body(name=PrefixedName("board_lid", "world_expectations")),
             region=SCENE_REGION,
             height=renderer.lid_height,
         ),

@@ -190,14 +190,31 @@ class SpatialType:
         return result
 
 
-class HasPose(ABC):
+class HasPosition(ABC):
+    """
+    Something the world can say the place of: a point, or anything standing somewhere in
+    the world.
+
+    A relation that reads where a thing is is written over this rather than over each
+    kind of thing it accepts, so a point, a pose and an entity of the world are all read
+    the one way.
+    """
+
+    @abstractmethod
+    def to_position(self) -> Point3:
+        """
+        Where this stands.
+        """
+
+
+class HasPose(HasPosition, ABC):
     """
     Something that stands in a pose: a pose itself, or a thing of the world standing in
     one.
 
-    A relation that reads where a thing is or which way it faces is written over this
-    rather than over each kind of thing it accepts, so a pose, a transformation and an
-    entity of the world are all read the one way.
+    A relation that reads which way a thing faces is written over this rather than over
+    each kind of thing it accepts, so a pose, a transformation and an entity of the
+    world are all read the one way.
     """
 
     @abstractmethod
@@ -205,6 +222,12 @@ class HasPose(ABC):
         """
         The pose this stands in.
         """
+
+    def to_position(self) -> Point3:
+        """
+        Where this stands, which is where the pose it stands in puts it.
+        """
+        return self.to_pose().to_position()
 
 
 @dataclass(eq=False, init=False, repr=False)
@@ -1019,7 +1042,7 @@ class Point(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, ABC):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Point3(Point):
+class Point3(HasPosition, Point):
     """
     Represents a 3D point with reference frame handling.
 
@@ -1048,6 +1071,12 @@ class Point3(Point):
         self.casadi_sx = sm.to_sx([x, y, z, 1])
         self.reference_frame = reference_frame
         super().__post_init__()
+
+    def to_position(self) -> Point3:
+        """
+        Where this stands, which for a point is itself.
+        """
+        return self
 
     def _verify_type(self):
         if self.shape == (3, 1):

@@ -43,6 +43,7 @@ from experiments.montessori.pieces import (
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.world_description.geometry import Color
 
 from .dataset import montessori_scene_fixtures
@@ -397,7 +398,7 @@ def test_a_piece_only_half_in_view_is_not_reported(
 ):
     cut_through_a_piece = MontessoriPerceptionPipeline(
         table=WorkspaceSurface(
-            name=PrefixedName("table", "montessori_scene"),
+            entity=Body(name=PrefixedName("table", "montessori_scene")),
             region=WorkspaceRegion(
                 minimum_x=0.35,
                 maximum_x=1.35,
@@ -407,7 +408,7 @@ def test_a_piece_only_half_in_view_is_not_reported(
             height=renderer.table_height,
         ),
         lid=WorkspaceSurface(
-            name=PrefixedName("board_lid", "montessori_scene"),
+            entity=Body(name=PrefixedName("board_lid", "montessori_scene")),
             region=SCENE_REGION,
             height=renderer.lid_height,
         ),

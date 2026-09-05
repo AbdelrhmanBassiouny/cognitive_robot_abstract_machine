@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import pytest
 
 from krrood.entity_query_language.backends import StatedRelation
+from krrood.entity_query_language.query.match import Match
 from krrood.patterns.belief_source import BeliefSource
 from segmind.datastructures.events import (
     PickUpEvent,
@@ -25,6 +26,8 @@ from semantic_digital_twin.reasoning.predicates import (
     SupportedBy,
 )
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
+from semantic_digital_twin.world_description.geometry import Box, Color, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
 from ..dataset.plate_with_a_hole import (
@@ -112,7 +115,7 @@ def test_a_thing_that_went_into_a_hole_is_not_expected_to_rest_on_what_the_hole_
 
     expected = release_the_cube(expectations, scene, declared)
 
-    assert SupportedBy not in [stated.relation_type for stated in expected.holds]
+    assert SupportedBy not in [stated.type for stated in expected.holds]
     assert not SupportedBy(scene.cube, scene.plate)()
 
 
@@ -127,6 +130,52 @@ def test_an_expectation_is_read_back_by_the_annotation_about_the_thing(
     expected = release_the_cube(expectations, scene, declared)
 
     assert expectations.of_annotation(SomethingAbout(root=scene.cube)) is expected
+
+
+# %% an expectation is a statement about the thing it is expected of
+
+
+def test_an_expectation_is_a_statement_over_the_subjects_own_kind(
+    expectations: Expectations, declared: SomethingThatDeclaredAnEffect
+):
+    """
+    An expectation is an ordinary statement: a match over the kind of thing the subject
+    is, ranging over that one thing, with what is expected of it as its conditions.
+    """
+    scene = cube_in_the_hole()
+
+    expected = release_the_cube(expectations, scene, declared)
+
+    assert isinstance(expected, Match)
+    assert expected.type is type(scene.cube)
+    assert expected.domain == [scene.cube]
+    assert len(expected._where_conditions_) == len(expected.holds)
+
+
+def test_an_expectation_is_answered_by_the_world_where_it_holds_of_it(
+    expectations: Expectations, declared: SomethingThatDeclaredAnEffect
+):
+    """
+    The same statement a look is asked can be asked of the world the robot already has,
+    which is what says whether what was expected is true of the thing as it now stands.
+    """
+    expected = release_the_cube(expectations, cube_in_the_hole(), declared)
+
+    assert expected.holds_now()
+
+
+def test_an_expectation_the_world_contradicts_does_not_hold_of_it(
+    expectations: Expectations, declared: SomethingThatDeclaredAnEffect
+):
+    """
+    A cube lying on the plate over the hole is not in it, and the statement says so
+    without a look being taken at all.
+    """
+    scene = cube_on_the_plate_over_the_hole()
+
+    expected = release_the_cube(expectations, scene, declared)
+
+    assert not expected.holds_now()
 
 
 # %% what the events do to a belief
@@ -159,9 +208,7 @@ def test_a_pick_up_that_lifts_the_thing_out_of_the_hole_ends_its_being_in_it(
 
     expectations.record(PickUpEvent(tracked_object=scene.cube))
 
-    assert [stated.relation_type for stated in expectations.of(scene.cube).holds] == [
-        Near
-    ]
+    assert [stated.type for stated in expectations.of(scene.cube).holds] == [Near]
 
 
 def test_a_belief_only_decays_when_something_acts_on_that_thing(
@@ -216,13 +263,38 @@ def test_a_look_is_asked_for_the_expected_relations_and_the_colour_the_thing_is_
     ]
 
 
+def test_a_thing_drawn_in_several_colours_is_not_looked_for_by_colour(
+    expectations: Expectations, declared: SomethingThatDeclaredAnEffect
+):
+    """
+    Which of its colours to search for is not a choice this can take: a look narrowed to
+    one of them would pass over the thing wearing the other, so it says all of them and
+    narrows by none.
+    """
+    other = Color(R=0.9, G=0.6, B=0.0)
+    two_toned = Body.from_shape_collection(
+        named("two_toned"),
+        ShapeCollection(
+            [
+                Box(scale=Scale(0.05, 0.05, 0.05), color=CUBE_COLOR),
+                Box(scale=Scale(0.05, 0.05, 0.05), color=other),
+            ]
+        ),
+    )
+
+    expected = expectations.expect(two_toned, (), declared)
+
+    assert expected.colors == (CUBE_COLOR, other)
+    assert expected.look_request(Body).stated_relations == []
+
+
 def test_a_thing_drawn_in_no_colour_is_looked_for_by_its_relations_alone(
     expectations: Expectations, declared: SomethingThatDeclaredAnEffect
 ):
     bare = Body(name=named("bare"))
     expected = expectations.expect(bare, (), declared)
 
-    assert expected.color is None
+    assert expected.colors == ()
     assert expected.look_request(Body).stated_relations == []
 
 

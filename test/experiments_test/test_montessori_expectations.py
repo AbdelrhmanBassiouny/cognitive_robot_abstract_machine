@@ -267,7 +267,7 @@ def kinds_of(expectation: MontessoriExpectation) -> List[Type[Relation]]:
 
     :param expectation: What is expected of a piece.
     """
-    return [stated.relation_type for stated in expectation.holds]
+    return [stated.type for stated in expectation.holds]
 
 
 def piece_seen_at(
@@ -330,14 +330,14 @@ def expectation_of_the_cube(
     :param further: Anything else expected of it.
     :param source: What put the belief there.
     """
-    return MontessoriExpectation(
-        subject=CUBE.root,
-        holds=(
+    return MontessoriExpectation.about(
+        CUBE.root,
+        (
             StatedRelation.of(InsideRegion, SQUARE_HOLE.root),
             StatedRelation.of(Near, SQUARE_HOLE.root, radius=RELEASE_SPREAD),
             *further,
         ),
-        source=SomethingThatAskedForALook() if source is None else source,
+        SomethingThatAskedForALook() if source is None else source,
     )
 
 

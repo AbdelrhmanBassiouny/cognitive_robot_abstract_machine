@@ -14,8 +14,8 @@ import numpy as np
 from typing_extensions import Optional, Tuple, Type
 
 from experiments.montessori.perception.detections import MontessoriDetection
+from experiments.montessori.perception.surfaces import WorkspaceSurface
 from krrood.patterns.belief_source import BeliefSource
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.reasoning.predicates import PlacementRelation, Turned
 from semantic_digital_twin.world_description.geometry import (
     Color,
@@ -97,16 +97,15 @@ class SceneRequest:
         """
         return issubclass(detection_type, self.detection_type)
 
-    def searches(self, surface_name: PrefixedName) -> bool:
+    def searches(self, surface: WorkspaceSurface) -> bool:
         """
         Whether a surface is one this look was asked to search.
 
-        :param surface_name: What the world calls the surface, which is how a measured
-            surface answers for the entity a statement names.
+        :param surface: The surface measured, which carries the thing of the world it
+            was measured of -- the same thing a statement names.
         """
         return (
-            self.supporting_surface is None
-            or self.supporting_surface.name == surface_name
+            self.supporting_surface is None or self.supporting_surface is surface.entity
         )
 
     def believed_stretch(self) -> Optional[VolumetricBoundingBox]:

@@ -21,6 +21,7 @@ from krrood.entity_query_language.exceptions import (
     GenerativeBackendQueryIsNotUnderspecifiedVariable,
 )
 from krrood.entity_query_language.factories import a, an, entity, variable
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
 from ..dataset.backend_that_looks_at_the_world import (
@@ -126,7 +127,7 @@ def test_a_relation_asserted_about_the_thing_sought_is_read_off_the_condition():
     request = BackendThatLooksAtTheWorld.read_request(statement)
 
     [stated] = request.stated_relations
-    assert stated.relation_type is StandingOn
+    assert stated.type is StandingOn
     assert stated.related_thing is LID
 
 
@@ -155,8 +156,8 @@ def test_a_relation_of_more_than_two_operands_is_read_whole():
 
     [stated] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
 
-    assert stated.relation_type is StandingBetween
-    assert stated.stated_operands == {"one": TABLE, "other": LID}
+    assert stated.type is StandingBetween
+    assert stated.kwargs == {"one": TABLE, "other": LID}
 
 
 def test_a_relation_read_off_a_statement_can_be_rebuilt_without_the_thing_sought():
@@ -546,6 +547,33 @@ def test_a_relation_stated_without_a_statement_reads_as_one_read_off_a_statement
     assert StatedRelation.of(StandingOn, TABLE) == read
 
 
+def test_a_stated_relation_is_a_statement_over_the_relations_own_class():
+    """
+    A relation stated about the thing sought is an ordinary match: the relation's own
+    class, holding whichever of its operands the statement already knows, and saying
+    nothing about the thing being looked for.
+    """
+    on_the_table = StatedRelation.of(StandingOn, TABLE)
+
+    assert isinstance(on_the_table, Match)
+    assert on_the_table.type is StandingOn
+    assert on_the_table.kwargs == {"place": TABLE}
+    assert on_the_table.subject_name == "thing"
+
+
+def test_stating_more_of_a_relation_leaves_the_one_it_grew_from_alone():
+    """
+    A relation is stated once and asked about many things, so growing one answers a new
+    statement rather than changing the one in hand.
+    """
+    on_anything = StatedRelation.of(StandingOn)
+
+    on_the_table = on_anything.stating(place=TABLE)
+
+    assert on_the_table.kwargs == {"place": TABLE}
+    assert on_anything.kwargs == {}
+
+
 def test_a_relation_stating_a_thing_covers_only_relations_to_that_thing():
     on_the_table = StatedRelation.of(StandingOn, TABLE)
 
@@ -554,7 +582,7 @@ def test_a_relation_stating_a_thing_covers_only_relations_to_that_thing():
 
 
 def test_a_relation_stating_nothing_covers_every_relation_of_its_kind():
-    standing_on_anything = StatedRelation(relation_type=StandingOn)
+    standing_on_anything = StatedRelation.of(StandingOn)
 
     assert standing_on_anything.covers(StatedRelation.of(StandingOn, TABLE))
     assert standing_on_anything.covers(StatedRelation.of(StandingOn, LID))

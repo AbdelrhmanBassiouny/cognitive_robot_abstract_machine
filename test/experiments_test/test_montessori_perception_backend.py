@@ -65,13 +65,12 @@ def looking_for_something_supported_by(surface: WorkspaceSurface):
     A statement asking a look for whatever rests on a surface, said as a relation.
 
     The statement names the world entity, since that is what support is a relation
-    between; the pipeline fixtures hold only the measurement taken of it, so the body
-    standing for it here carries the very name that measurement records.
+    between, and a measured surface carries the very entity it was measured of.
 
     :param surface: The measured surface whose world entity is asked about.
     """
     statement = a(DetectedMontessoriShape)()
-    return statement.where(SupportedBy(statement.variable, Body(name=surface.name)))
+    return statement.where(SupportedBy(statement.variable, surface.entity))
 
 
 @pytest.fixture
@@ -140,7 +139,7 @@ def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
     The relation itself rather than a patch in metres: what it allows is read where the
     frame the detections are reported in is known, which is the look.
     """
-    lid = Body(name=pipeline.lid.name)
+    lid = pipeline.lid.entity
     statement = a(DetectedMontessoriShape)()
     statement = statement.where(Near(statement.variable, lid, radius=0.05))
 
@@ -274,7 +273,7 @@ def surfaces_of(pipeline: MontessoriPerceptionPipeline):
 
     :param pipeline: The pipeline whose surfaces they stand for.
     """
-    return [Body(name=pipeline.table.name), Body(name=pipeline.lid.name)]
+    return [pipeline.table.entity, pipeline.lid.entity]
 
 
 def test_a_surface_the_statement_describes_is_read_as_the_one_it_describes(
@@ -360,11 +359,26 @@ def test_a_condition_about_something_other_than_what_is_looked_for_is_refused(
 def test_only_the_surface_asked_about_is_searched(
     pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    request = SceneRequest(supporting_surface=Body(name=pipeline.lid.name))
+    request = SceneRequest(supporting_surface=pipeline.lid.entity)
 
     searches = pipeline.searched_surfaces(scene.board, request)
 
     assert [search.surface for search in searches] == [pipeline.lid]
+
+
+def test_a_surface_that_only_shares_a_name_is_not_the_one_asked_about(
+    pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
+):
+    """
+    A statement names a thing of the world, and the world tells its things apart by
+    which one they are rather than by what they are called, so a look asked about a body
+    that merely carries the lid's name is asked about no surface this pipeline measured.
+    """
+    request = SceneRequest(supporting_surface=Body(name=pipeline.lid.name))
+
+    searches = pipeline.searched_surfaces(scene.board, request)
+
+    assert searches == []
 
 
 def test_every_surface_is_searched_when_the_request_names_none(
@@ -405,7 +419,7 @@ def test_a_look_narrowed_to_one_surface_reports_only_what_rests_on_it(
     frame = renderer.render([*placed_pieces, piece_on_the_lid])
 
     asked_about_the_lid = pipeline.detect(
-        frame, SceneRequest(supporting_surface=Body(name=pipeline.lid.name))
+        frame, SceneRequest(supporting_surface=pipeline.lid.entity)
     )
 
     assert [found.supporting_surface for found in asked_about_the_lid.shapes] == [

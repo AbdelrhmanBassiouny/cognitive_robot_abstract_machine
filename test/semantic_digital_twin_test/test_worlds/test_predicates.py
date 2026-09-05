@@ -877,7 +877,7 @@ def test_support_asserted_of_a_variable_is_carried_as_a_symbolic_expression():
     relation = SupportedBy(supported=sought, supporting=supporting)
 
     stated = StatedRelation.read_from(relation, sought)
-    assert stated.relation_type is SupportedBy
+    assert stated.type is SupportedBy
     assert stated.related_thing is supporting
 
 

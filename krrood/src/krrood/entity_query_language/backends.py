@@ -229,45 +229,19 @@ class GenerativeBackend(QueryBackend, ABC):
     def _evaluate(self, expression: Match[T]) -> Iterable[T]: ...
 
 
-@dataclass(frozen=True)
-class StatedRelation:
+@dataclass(eq=False)
+class StatedRelation(Match[Relation]):
     """
     A relation a statement asserts between the thing it is looking for and something the
     world already holds.
 
-    This is what a look can be narrowed by without a name being spelled twice: the
-    relation is a class, so it is its own source of truth, and the thing on the other
-    side of it is an object the world already knows. Reading it needs neither the name
-    of an attribute nor the name of a field.
+    A statement of the relation rather than the relation itself: a match over the
+    relation's own class, stating whichever of its operands the statement already holds
+    and leaving the thing sought unstated. That is what a look can be narrowed by
+    without a name being spelled twice -- the relation is a class, so it is its own
+    source of truth, and the thing on the other side of it is an object the world
+    already knows.
     """
-
-    relation_type: Type[Relation]
-    """
-    The relation asserted, by the class that means it.
-    """
-
-    stated_operands: Dict[str, Any] = field(default_factory=dict)
-    """
-    What the statement already holds each of the relation's other operands to be, keyed
-    by the operand's own name.
-
-    Never the thing being looked for, which is why a search can act on them before
-    anything has been found -- and everything but that thing, so a relation of more than
-    two operands is read whole rather than down to the one it happens to name second.
-    """
-
-    @property
-    def related_thing(self) -> Any:
-        """
-        The one thing the thing being looked for is asserted to stand in this relation
-        to.
-
-        :raises KeyError: If the relation is not a :class:`Triple`, and so relates the
-            thing sought to other than exactly one thing.
-        """
-        return self.stated_operands[
-            self._name_of(self.relation_type.object, self.relation_type)
-        ]
 
     @classmethod
     def of(
@@ -284,14 +258,33 @@ class StatedRelation:
         stated = dict(operands)
         if related_thing is not None:
             stated[cls._name_of(relation_type.object, relation_type)] = related_thing
-        return cls(relation_type=relation_type, stated_operands=stated)
+        return cls(relation_type)(**stated)
+
+    @property
+    def related_thing(self) -> Any:
+        """
+        The one thing the thing being looked for is asserted to stand in this relation
+        to.
+
+        :raises KeyError: If the relation is not a :class:`Triple`, and so relates the
+            thing sought to other than exactly one thing.
+        """
+        return self.kwargs[self._name_of(self.type.object, self.type)]
 
     @property
     def subject_name(self) -> str:
         """
         What the relation calls the thing it is asserted about.
         """
-        return self._name_of(self.relation_type.subject, self.relation_type)
+        return self._name_of(self.type.subject, self.type)
+
+    def stating(self, **operands: Any) -> StatedRelation:
+        """
+        The same relation with more of its operands stated.
+
+        :param operands: What to state, by the operand's own name.
+        """
+        return type(self)(self.factory)(**{**self.kwargs, **operands})
 
     def constraint(self) -> Relation:
         """
@@ -301,7 +294,7 @@ class StatedRelation:
         form a search reads before anything has been found. A relation meant to be read
         this way declares the thing it is asserted about optional.
         """
-        return self.relation_type(**self.stated_operands)
+        return self.construct_instance()
 
     def about(self, subject: Any) -> Relation:
         """
@@ -313,9 +306,7 @@ class StatedRelation:
 
         :param subject: What stands where the thing sought would.
         """
-        return self.relation_type(
-            **{self.subject_name: subject, **self.stated_operands}
-        )
+        return self.stating(**{self.subject_name: subject}).construct_instance()
 
     def covers(self, other: StatedRelation) -> bool:
         """
@@ -327,10 +318,47 @@ class StatedRelation:
 
         :param other: The relation that may be one of those this one states.
         """
-        return issubclass(other.relation_type, self.relation_type) and all(
-            name in other.stated_operands and other.stated_operands[name] == value
-            for name, value in self.stated_operands.items()
+        return issubclass(other.type, self.type) and all(
+            name in other.kwargs and other.kwargs[name] == value
+            for name, value in self.kwargs.items()
         )
+
+    def __eq__(self, other: Any) -> bool:
+        """
+        Two of these are the same when they say the same thing: the same relation,
+        holding the same operands.
+
+        A statement is an object of its own everywhere else in the entity query
+        language, but one stated about the thing sought is written down, passed around
+        and compared as a value -- what a belief holds, what an event ends -- so it is
+        read by what it states.
+
+        :param other: What to compare against.
+        """
+        if not isinstance(other, StatedRelation):
+            return NotImplemented
+        return self.covers(other) and other.covers(self)
+
+    def __hash__(self) -> int:
+        return hash(self.type)
+
+    @classmethod
+    def stated_in(
+        cls, statement: Match, described_things: Optional[Dict[Any, Any]] = None
+    ) -> List[StatedRelation]:
+        """
+        Every relation a statement asserts about the thing it is looking for, in the
+        order it states them.
+
+        :param statement: The statement to read.
+        :param described_things: What the statement describes rather than hands over,
+            each already resolved to the thing that answers its description.
+        """
+        read = (
+            cls.read_from(condition, statement.variable, described_things)
+            for condition in statement._where_conditions_
+        )
+        return [relation for relation in read if relation is not None]
 
     @classmethod
     def read_from(
@@ -362,7 +390,7 @@ class StatedRelation:
         }
         if any(isinstance(value, SymbolicExpression) for value in operands.values()):
             return None
-        return cls(relation_type=relation_type, stated_operands=operands)
+        return cls(relation_type)(**operands)
 
     @classmethod
     def relation_stated_by(
@@ -493,7 +521,7 @@ class LookRequest(Generic[T]):
         return [
             stated
             for stated in self.stated_relations
-            if issubclass(stated.relation_type, relation_type)
+            if issubclass(stated.type, relation_type)
         ]
 
     def admits(self, instance: Any) -> bool:
@@ -633,10 +661,6 @@ class PerceptionBackend(GenerativeBackend, ABC):
             nothing: the statement is saying the look must supply it.
         """
         described_things = cls.things_described_by(expression)
-        stated_relations = [
-            StatedRelation.read_from(condition, expression.variable, described_things)
-            for condition in expression._where_conditions_
-        ]
         return LookRequest(
             type_=expression.variable._type_,
             stated_attributes=[
@@ -646,9 +670,7 @@ class PerceptionBackend(GenerativeBackend, ABC):
                 for attribute_match in expression.matches_with_variables
                 if not isinstance(attribute_match.assigned_value, EllipsisType)
             ],
-            stated_relations=[
-                relation for relation in stated_relations if relation is not None
-            ],
+            stated_relations=StatedRelation.stated_in(expression, described_things),
             described_things=described_things,
         )
 
@@ -788,9 +810,7 @@ class PerceptionBackend(GenerativeBackend, ABC):
         :param described_things: What the statement describes rather than hands over.
         """
         stated = StatedRelation.read_from(condition, selection, described_things)
-        return stated is not None and issubclass(
-            stated.relation_type, self.narrowing_relations
-        )
+        return stated is not None and issubclass(stated.type, self.narrowing_relations)
 
 
 @dataclass

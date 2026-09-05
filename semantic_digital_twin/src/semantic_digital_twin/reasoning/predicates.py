@@ -4,7 +4,7 @@ import itertools
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Optional, Any, Union
+from typing import Optional, Any
 
 import numpy as np
 import trimesh.boolean
@@ -50,6 +50,7 @@ from semantic_digital_twin.spatial_types import Vector3, Point3, math
 from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.spatial_types.spatial_types import (
     HasPose,
+    HasPosition,
     HomogeneousTransformationMatrix,
     Pose,
     Pose2D,
@@ -590,11 +591,6 @@ The function spelling of
 
 # %% where a relation allows a thing to be
 
-Placed = Union[Point3, HasPose]
-"""
-Anything the world can say the place of: a point, or something standing in a pose.
-"""
-
 AXES: Tuple[SpatialVariables, ...] = VolumetricBoundingBox.axes()
 """
 The world's own axes, in the order a bounding box states its bounds along them.
@@ -613,17 +609,6 @@ VIEW_DIRECTION_EPS = 1e-12
 """
 Guards a point of view's direction against division by a degenerate axis.
 """
-
-
-def position_of(placed: Placed) -> Point3:
-    """
-    Where something stands.
-
-    :param placed: The point, pose, or thing standing in the world to read.
-    """
-    if isinstance(placed, Point3):
-        return placed
-    return placed.to_pose().to_position()
 
 
 def space_between(
@@ -835,23 +820,23 @@ class PointSpatialRelation(Triple, PlacementRelation, ABC):
     what the relation reads of each is only where it stands.
     """
 
-    point: Optional[Placed] = None
+    point: Optional[HasPosition] = None
     """
     The thing the relation is asserted about, or None where it is asserted about nothing
     and read as the stretch of the world it allows.
     """
 
-    other: Optional[Placed] = None
+    other: Optional[HasPosition] = None
     """
     The thing it is placed with respect to.
     """
 
     @property
-    def subject(self) -> Optional[Placed]:
+    def subject(self) -> Optional[HasPosition]:
         return self.point
 
     @property
-    def object(self) -> Optional[Placed]:
+    def object(self) -> Optional[HasPosition]:
         return self.other
 
 
@@ -907,7 +892,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
 
     def __call__(self) -> bool:
         self.spatial_relation_result = self.allows(
-            position_of(self._stated(self.point, "point"))
+            self._stated(self.point, "point").to_position()
         )
         return self.spatial_relation_result
 
@@ -933,7 +918,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         since no box then holds exactly what the relation allows.
         """
         direction = self._direction()
-        other = position_of(self._stated(self.other, "other"))
+        other = self._stated(self.other, "other").to_position()
         place = other.to_np()[:3]
         lower, upper = np.full(3, -np.inf), np.full(3, np.inf)
         for index, component in enumerate(direction):
@@ -963,7 +948,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         corners = self._corners_of(space)
         if not np.isfinite(corners).all():
             return super().allowed_part_of(space)
-        other = position_of(self._stated(self.other, "other")).to_np()[:3]
+        other = self._stated(self.other, "other").to_position().to_np()[:3]
         beyond = (corners - other) @ self._direction()
         allowed = [*corners[beyond > 0.0], *self._crossings(corners, beyond)]
         if not allowed:
@@ -1023,7 +1008,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         :return: How far along the direction that place lies from the other thing, in
             metres, negative where it lies against it.
         """
-        other = position_of(self._stated(self.other, "other")).to_np()[:3]
+        other = self._stated(self.other, "other").to_position().to_np()[:3]
         return float(np.dot(self._direction(), place.to_np()[:3] - other))
 
 
@@ -1097,18 +1082,18 @@ class Between(PlacementRelation):
     :attr:`maximum_sideways_fraction` is where that judgement is stated.
     """
 
-    body: Optional[Placed] = None
+    body: Optional[HasPosition] = None
     """
     The thing that may lie between the two, or None where the relation is asserted about
     nothing and read as the stretch it allows.
     """
 
-    one: Optional[Placed] = None
+    one: Optional[HasPosition] = None
     """
     One of the two it may lie between.
     """
 
-    other: Optional[Placed] = None
+    other: Optional[HasPosition] = None
     """
     The other of the two.
     """
@@ -1125,11 +1110,11 @@ class Between(PlacementRelation):
     """
 
     @property
-    def subject(self) -> Optional[Placed]:
+    def subject(self) -> Optional[HasPosition]:
         return self.body
 
     def __call__(self) -> bool:
-        return self.allows(position_of(self._stated(self.body, "body")))
+        return self.allows(self._stated(self.body, "body").to_position())
 
     def allows(self, place: Point3) -> bool:
         """
@@ -1163,7 +1148,7 @@ class Between(PlacementRelation):
         return space_between(
             np.minimum(one, other) - reach,
             np.maximum(one, other) + reach,
-            position_of(self.one).reference_frame,
+            self.one.to_position().reference_frame,
         )
 
     def _places(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -1171,8 +1156,8 @@ class Between(PlacementRelation):
         :return: Where the two things it may lie between stand, in metres.
         """
         return (
-            position_of(self._stated(self.one, "one")).to_np()[:3],
-            position_of(self._stated(self.other, "other")).to_np()[:3],
+            self._stated(self.one, "one").to_position().to_np()[:3],
+            self._stated(self.other, "other").to_position().to_np()[:3],
         )
 
     @classmethod
@@ -1201,13 +1186,13 @@ class Near(Triple, PlacementRelation):
     :attr:`radius` has to be stated.
     """
 
-    body: Optional[Placed] = None
+    body: Optional[HasPosition] = None
     """
     The thing that may stand near the place, or None where the relation is asserted
     about nothing and read as the stretch it allows.
     """
 
-    place: Optional[Placed] = None
+    place: Optional[HasPosition] = None
     """
     The place it may stand near, which may be given as a point, a pose, or something the
     world places.
@@ -1219,15 +1204,15 @@ class Near(Triple, PlacementRelation):
     """
 
     @property
-    def subject(self) -> Optional[Placed]:
+    def subject(self) -> Optional[HasPosition]:
         return self.body
 
     @property
-    def object(self) -> Optional[Placed]:
+    def object(self) -> Optional[HasPosition]:
         return self.place
 
     def __call__(self) -> bool:
-        return self.allows(position_of(self._stated(self.body, "body")))
+        return self.allows(self._stated(self.body, "body").to_position())
 
     def allows(self, place: Point3) -> bool:
         """
@@ -1245,7 +1230,7 @@ class Near(Triple, PlacementRelation):
         The box the radius reaches into, which is the smallest one holding everything
         within that distance of the place.
         """
-        place = position_of(self._stated(self.place, "place"))
+        place = self._stated(self.place, "place").to_position()
         stands_at = place.to_np()[:3]
         return space_between(
             stands_at - self.radius, stands_at + self.radius, place.reference_frame
@@ -1255,7 +1240,7 @@ class Near(Triple, PlacementRelation):
         """
         :return: Where the place it is measured from stands, in metres.
         """
-        return position_of(self._stated(self.place, "place")).to_np()[:3]
+        return self._stated(self.place, "place").to_position().to_np()[:3]
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:

@@ -235,14 +235,14 @@ class EventWithEffect(EventWithTrackedObjects, ABC):
         return self.with_object
 
 
-SUPPORTED_BY_ANYTHING = StatedRelation(relation_type=SupportedBy)
+SUPPORTED_BY_ANYTHING = StatedRelation.of(SupportedBy)
 """
 Resting on anything at all: every support believed before the event, whatever it
 named, which an event that says what the object now rests on ends, and a pick-up ends
 without saying what it rests on instead.
 """
 
-INSIDE_ANY_REGION = StatedRelation(relation_type=InsideRegion)
+INSIDE_ANY_REGION = StatedRelation.of(InsideRegion)
 """
 Lying in any region at all: every containment believed before the event, which a
 pick-up is a reason to check.

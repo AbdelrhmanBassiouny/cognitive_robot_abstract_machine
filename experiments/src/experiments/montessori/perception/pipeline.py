@@ -1136,7 +1136,7 @@ class MontessoriPerceptionPipeline:
                 SurfaceSearch(surface=self.lid, boundary=board),
             ]
         asked_about = [
-            search for search in searches if request.searches(search.surface.name)
+            search for search in searches if request.searches(search.surface)
         ]
         narrowed = [self._narrowed(search, request) for search in asked_about]
         return [search for search in narrowed if search is not None]
