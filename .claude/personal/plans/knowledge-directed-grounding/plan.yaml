@@ -1,0 +1,505 @@
+schema_version: 1
+id: knowledge-directed-grounding
+title: 'Knowledge-directed perception: scene grounding'
+description: 'The scene grounding wave of knowledge-directed-perception (split out on 2026-09-05
+  to get every successor under the plan-size budget): the three faults visible on the running demo
+  - a clip that shows the floor, pieces on the board''s lid that are never found, and duplicate detections
+  on the board''s borders - are one fault, the scene being described by constants instead of read
+  from the world the node already fetches. This plan removes the constants, lands the Montessori
+  perception package on `main`, and carries the demo item that says the wave is finished when the
+  three faults are gone on the real robot. See this plan''s roadmap.md for the programme-wide why,
+  the three waves, the deadline budget and the sequencing decisions shared with `knowledge-directed-requests`
+  and `knowledge-directed-expectation`.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 201
+waves:
+- id: grounding
+  name: Perception reads the scene from the world
+  description: 'The three faults visible in the running demo - a clip that shows the floor, pieces
+    on the board lid that are never found, and duplicate detections on the board''s borders - are
+    one fault: the scene is described by constants instead of read from the world the node already
+    fetches. Removing the constants is what this wave does, and each fault is the test that its item
+    worked.'
+tracks:
+- id: package-landing
+  name: The perception package reaches main
+  wave: grounding
+  description: Everything in this plan edits files that exist on no branch but tracy_icra. Landing
+    them first is what makes every later item a normal reviewable pull request.
+- id: surfaces
+  name: Surfaces, not constants
+  wave: grounding
+  description: 'Sequential: each item edits the same pipeline the previous one left behind, so they
+    stack rather than run in parallel.'
+- id: demo-grounding
+  name: The demo runs on perception that reads the world
+  wave: grounding
+  description: 'The deadline deliverable, tracked in the same wave as the work it integrates rather
+    than left to the end. Runs in parallel with the surfaces track: an item merges into tracy_icra
+    when it works, not when its pull request lands.'
+items:
+- id: montessori-perception-on-main
+  title: Land the Montessori perception package on main
+  branch: montessori_perception_on_main
+  pull_request_number: 202
+  track: package-landing
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01Pk12hDbP8k2C16ZQWvcroA
+  notes: 'Cuts a branch off `main` carrying the Montessori perception package alone - sorinar329''s
+
+    original node commit 75258debd plus the seven that follow it - so the rest of the plan
+
+    stacks on reviewable ground instead of a branch whose upstream points at a colleague''s
+
+    fork (`tracy_icra` itself is left alone). `depends_on: []`, and nothing in this plan waits
+
+    for it to merge, per the plan''s standing rule that `depends_on` means stacked on, never
+
+    waiting for a merge.
+
+
+    Built 2026-08-28 as PR #202 (12 commits, 34 files, +9,664/-0). Two symbols dragged onto
+
+    `main` for the package to import-close - `BOARD_SCALE` (`montessori/world.py`) and
+
+    `table_top_z` (`tracy_experiments/equipment.py`) - are exactly what `surfaces-from-world`
+
+    replaces with values read from the world; `table_top_z` is fully removed by that item,
+
+    `BOARD_SCALE` partly (kept for `board_footprint`''s tolerance, removed later by
+
+    `detect-per-supporting-surface`). Opened out of draft deliberately: the dashboard only
+
+    lets a dependent stack on a still-open pull request when it is out of draft, and a draft
+
+    here would have shown `surfaces-from-world` and `perception-backend` as blocked.
+
+
+    `test/experiments_test/test_montessori_perception.py` (1,262 lines) was split here at the
+
+    developer''s own placement ("it should be done on 202"), since the file exists on no branch
+
+    but this one: six subject modules (`00721be7`), shared fixtures moved to
+
+    `dataset/montessori_scene_fixtures.py`. Two review rounds on 2026-08-29 resolved all
+
+    thirteen threads: an exception module, named hole-footprint parts (`PolygonMeasurement`),
+
+    an empty `__init__.py`, the node''s poll-interval field, then `hole_geometry.py:185`''s
+
+    remaining tuple and simulated-piece colouring taken from the real pieces'' measured hues
+
+    (cyan cube/cylinder, amber prisms). 147 passed, 1 skipped, up from 140.
+
+
+    Nine of the thirteen threads were one ask from the developer - move the detector''s
+
+    numbers onto the twin as knowledge, and build an interactive tuner - and became the new
+
+    items `detector-parameters-from-knowledge` and `tune-detection-rules-against-the-camera`.
+
+
+    Gained the capture set 2026-08-30 (`7f053db0b`): six real-camera looks (the camera''s own
+
+    compressed colour payload, a millimetre depth PNG, an intrinsics/pose JSON), 3.0 MB,
+
+    committed at the base of the stack so every branch cut from it inherits them; the 4.7 GB
+
+    source rosbags are gitignored. The colour file is the raw subscribed payload rather than a
+
+    re-encoding, so a capture and the live stream see the same pixels.
+
+    '
+- id: surfaces-from-world
+  title: Take the workspace from the table the robot knows about, not from a constant
+  branch: perception_surfaces_from_world
+  pull_request_number: 205
+  track: surfaces
+  depends_on:
+  - montessori-perception-on-main
+  status: in_progress
+  session: https://claude.ai/code/session_01ScJk8zKUuToafxg38Bcag5
+  blockers:
+  - 'Unanswered question to the developer, raised on #205 at review time and still open: WorkspaceSurface.of_body
+    picks the body''s widest horizontal face, following table_top_z''s existing rule, where the highest
+    face is arguably the truer reading of "the surface things rest on". The two disagree only for
+    a body whose widest shape is not its top. Not settleable from a container, since the rule was
+    chosen against the real URDF.'
+  notes: 'Fixes the first fault: the clip shows the floor because TRACY_WORKSPACE (node.py:102) is
+    a hand-written 1.0 x 1.2 m rectangle. table_top_z() already pulls the tabletop''s collision shape
+    out of the fetched world for its height and discards scale.x, scale.y and the origin, which are
+    exactly the bounds being guessed. Derives the region and every plane height from the world, and
+    from HasSupportingSurface.supporting_surface where one exists.
+
+    The review round of 2026-08-29 is answered in full. The test-file split it asked for was the
+    developer''s call to place on #202, and it landed there as 00721be7, merged into this branch
+    by d6673b48; the widest-face question this branch raised is the one thing still open.
+
+    '
+- id: detect-per-supporting-surface
+  title: Look at every supporting surface, not only the table
+  branch: perception_per_supporting_surface
+  pull_request_number: 221
+  track: surfaces
+  depends_on:
+  - surfaces-from-world
+  status: in_progress
+  session: https://claude.ai/code/session_01T8CPPnj2uqZB7bACWBFJhb
+  notes: 'Fixes the second fault: a piece resting on the board''s lid is invisible twice over. The
+    pipeline rectifies loose pieces onto exactly one plane (table_height), so a piece eighty millimetres
+    higher is parallax-shifted out of both silhouettes; and pipeline.py:626 drops any contour the
+    board encloses, coding the board as an obstacle when it is physically a supporting surface like
+    the table. One detection pass per surface, each at its own plane height, with detections attributed
+    to the surface supporting them. Built 2026-08-30 as #221, 2744c23d. The pass-per-surface restructure
+    landed as planned, but a piece on the lid was invisible four times over rather than the two this
+    note recorded, and the restructure alone fixes two. The lid''s wood reads within two hues of
+    the amber prisms, so marking every piece colour at once merged a piece standing on it into the
+    lid; and the edge fit ran Canny over brightness, where a cyan piece is one grey level from the
+    lid against 34 from the bare table. Each colour is now segmented on its own and each colour channel
+    read for edges of its own; both stay inside the one detector, so choose-detection-method still
+    owns choosing between detectors - but its "the lid selects the colour blob" rule now needs a
+    different justification, since the edge fit fits a cube on the lid at 0.93 agreement. 153 tests
+    pass across the montessori modules where 144 did. This item does not populate supporting_surface,
+    against surface-finish-annotation''s prediction, so the finish question that raised does not
+    arise yet. detect costs 0.35 s per frame against 0.23 s, inside the node''s 0.5 s period.
+
+    Measured against the real camera on 2026-08-30 (8da0e84e9), on the six captures #202 now carries.
+    Every loose piece lying on the bare table is found with the right category in all six - the thing
+    this branch was built for. Three faults show, each with a strict expected-to-fail test naming
+    the item that owns it, so the day that item lands the mark reports itself stale: a piece standing
+    on the lid is reported a second time on the table (one-detection-per-thing), pieces on the lid
+    are lost where they wear its colour or touch one another (detector-parameters-from-knowledge),
+    and five of the board''s six holes are found with most called triangular prisms (holes-fitted-like-pieces,
+    new).
+
+    The branch also gained watch_bag, which is the node with a recording in place of the camera and
+    the robot, and SceneWindows, so a replay and a live run draw the same three windows rather than
+    two copies of the drawing. The test that plays the pick-up demo through it is skipped wherever
+    the recordings are not on disk, which is every run but a developer''s own.'
+- id: one-detection-per-thing
+  title: One physical thing, one detection, and none inside a body already known
+  branch: claude/plan-item-kickoff-kdp-z4pv7l
+  pull_request_number: 225
+  track: surfaces
+  depends_on:
+  - detect-per-supporting-surface
+  status: in_progress
+  session: https://claude.ai/code/session_01RRu7SutvRcNWHYNVUDCUFr
+  notes: 'Fixes the third fault: the duplicate boxes on the board''s borders are the lid''s own edges,
+    which a rectangular or triangular prism template fits at about 0.7 - above the 0.62 threshold.
+    board.encloses only rejects a contour whose centre falls inside the board, and a contour riding
+    the border has its centre outside; nothing anywhere forbids two detections occupying one place.
+    Rejects a detection intersecting a known body''s volume, and resolves overlapping detections
+    against each other. semantic_digital_twin.reasoning.predicates.is_place_occupied already exists
+    for the first half.
+
+    It now has a failing test rather than a description: measured on 2026-08-30, every one of the
+    six captures reports a piece that is standing on the board''s lid a second time on the table,
+    about 50 mm from the first, because the table pass rectifies it onto the table''s plane and claims
+    it there. That is a second shape of the same fault as the border boxes, and the wider one - it
+    fires whenever anything rests on the lid, not only at its edges. test_only_the_pieces_resting_on_the_table_are_detected_there
+    in test_montessori_detection_on_captures.py is the test; it is marked strict expected-to-fail
+    against this item.
+
+    Built 2026-08-31 as cf155f4a1. The note above describes the duplicate as a detection standing
+    inside the board''s own volume, and it is not: measured on the six captures, every duplicate
+    lies 14 to 63 mm *outside* the board''s detected outline and shares no ground with it, so the
+    planned occupancy rule over the board''s volume rejects none of them. What they are is the table
+    seen past the board - a piece on the lid stands between the camera and the table behind it, so
+    the table''s rectification places it there, outside the board along the ray from the camera.
+    The rule is therefore line of sight rather than volume: the board''s outline projected away from
+    the camera onto the table''s plane, cast from the top of a piece standing on the lid, is the
+    stretch of table nothing may be reported resting on. Real table pieces stand 115 to 186 mm clear
+    of it. The height half of the rule stands unchanged, and is what keeps a piece resting on the
+    lid apart from a reading taken off the table below it.
+
+    No threshold was needed: two solid things cannot stand in one another, so any shared ground at
+    meeting heights is one thing read twice, and the captures show duplicates sharing their whole
+    outline while no two separate detections share any. is_place_occupied was measured and not used
+    - 0.035 s per call against a fifteen-body world, so six detections cost 0.21 s of a 0.5 s period
+    detect already spends 0.35 s of; reading every body''s bounding box costs the same. A general
+    per-frame walk of the world''s bodies does not fit the frame budget, which is a finding for detector-parameters-from-knowledge
+    rather than something dropped. detect costs 0.279 s per frame against the parent''s 0.289 s.
+
+    The strict expected-to-fail mark came off five captures of six. non_inserted_objects keeps it,
+    now naming holes-fitted-like-pieces: the board is reported at -29.7 degrees there against -7.6
+    degrees in the other five about the same centre, because its orientation comes from minAreaRect
+    over the hole centres and only five of six holes are found, so the ground it is taken to hide
+    is turned with it.'
+- id: holes-fitted-like-pieces
+  title: Find the board's holes by fitting its whole known layout, not one contour at a time
+  branch: claude/plan-item-kickoff-ge8541
+  pull_request_number: 236
+  track: surfaces
+  depends_on:
+  - pieces-looked-for-where-expected
+  status: in_progress
+  session: https://claude.ai/code/session_01TSK8GxG8qC6udSB7sjwzXf
+  notes: 'The board''s holes are found by fitting the mesh''s own rigid six-hole layout over the
+    lid
+
+    in one shot - three degrees of freedom for all six holes together, seeded from the board
+
+    detection''s own pose - rather than classifying each contour on its own. A free per-contour
+
+    fit was tried first and is what put the fault there: a triangular prism template laid
+
+    anywhere near the board''s middle reaches 0.85-0.89 agreement in every capture, higher than
+
+    any genuine piece on the lid, and converges on the same spot each time. A layout fit cannot
+
+    invent a hole, cannot double one up, and cannot land on the drawer fronts below the lid, and
+
+    it settles the board''s own pose better than the board detector does (six outlines
+
+    constraining it instead of one).
+
+
+    Built 2026-09-01 as `172c10209`. The capture benchmark turned up a root cause the item did
+
+    not know about: the board mesh is not cut to the size of the real board. `BoardDetector.
+
+    measure_scale` answers the scale at which the layout lands on the openings actually seen -
+
+    0.82 to 0.92 across the six captures, middle 0.865, persisted as `recorded_setup.
+
+    BOARD_SCALE_AGAINST_THE_MESH`, a fact about this particular board rather than a fit
+
+    parameter. With it the board is found within a degree and a half of straight in all six
+
+    captures (against the parent''s -5.6 to -29.7 degrees), all six holes land over openings
+
+    rather than five over the drawer fronts, and detect costs 0.560 s/frame against 0.370 s
+
+    (within the node''s 0.5 s period with #231''s `RectifiedFrame` and a carried-forward believed
+
+    place as the two ways to recover it). 423 passed, 1 skipped, 5 xfailed against 400/1/11.
+
+
+    One new mark: in `tracy_pickup_demo` a prism laid over the round hole''s rim beats the
+
+    cylinder actually sitting in that hole by nine parts in a thousand, which is
+
+    `competing-explanations`'' to settle. `CrossSectionClassifier` and `FootprintClassifier` are
+
+    now used by nothing but their own tests and are left standing, asked on the pull request.
+
+
+    Depends on `pieces-looked-for-where-expected` rather than running beside it: fitting a
+
+    known model at a believed pose is exactly the evaluator that item builds, and two branches
+
+    independently writing it is duplication already paid for twice on this plan.
+
+    '
+- id: pieces-looked-for-where-expected
+  title: Look for a piece where it is expected, not only where a colour blob appears
+  branch: claude/plan-item-kickoff-kdp-o4l189
+  pull_request_number: 232
+  track: surfaces
+  depends_on:
+  - one-detection-per-thing
+  status: in_progress
+  session: https://claude.ai/code/session_0158YvLwWkcdv4Hqz9i4926W
+  notes: 'The structural change the rest of the plan''s perception work needs. Today a piece is only
+
+    found where colour segmentation isolated a blob, so one wearing the lid''s own hue, or
+
+    touching another piece, is never fitted however plainly its edges show. Detection becomes
+
+    the evaluation of hypotheses instead: a hypothesis is a belief about where a piece might be
+
+    - a region of a named surface and an interval of yaw, with the source of the belief carried
+
+    alongside it - and its evaluator is the same seeded sweep `PieceMatcher` already performs,
+
+    narrowed by the belief instead of run open over the whole surface. Colour becomes one source
+
+    of hypotheses and one piece of evidence, never a gate that can suppress one. Seeding by hand
+
+    at the board''s own detected holes reached 0.62-0.89 agreement where the bottom-up pass found
+
+    nothing at all, at a fifth of the cost of a full pass.
+
+
+    Built 2026-08-31 as `d8b654433`; every one of the six captures reports exactly what the
+
+    parent reported at exactly its cost, so the restructure is behaviour-preserving on real
+
+    data (397/1/11 against 376/1/11). The board''s holes as a third source of hypotheses were
+
+    built, measured and left out at the developer''s decision: arming them turns 3 false lid
+
+    reports into 20 for 3 of the item''s 4 lid marks, and narrowing them only recovers 2 of the
+
+    4 at a lower but still real cost, because the openings they read are the same measurements
+
+    `holes-fitted-like-pieces` says are wrong. The four lid marks stay, now naming
+
+    `expectations-from-events`, which can say which piece is expected at which hole and so
+
+    makes a seeded fit cheap and precise.
+
+
+    The *believed place* type (a region of a named surface plus a yaw interval) is defined
+
+    once, here, and reused by `perception-predicates-guide-the-search` (added the same day and
+
+    not visible to this item when written) rather than each building its own - both items reach
+
+    the same shape from opposite ends: this item says what the searcher does with the belief,
+
+    that item says where the constraint comes from. Whichever lands second takes the type from
+
+    whichever lands first; this item lands first, being in `surfaces` and depending only on
+
+    `one-detection-per-thing`.
+
+
+    Review round of 2026-08-31, resolved as `571042923`: the believed place''s centre is now a
+
+    `PlanarPoint` (moved with `PlanarSize` into `montessori/planar_geometry.py`), since
+
+    `spatial_types.Point2` is identity-equal and cannot be a value-object field; and
+
+    `BeliefSource` became an abstract mixin in `krrood/patterns/belief_source.py` rather than a
+
+    `StrEnum`, which `World` (semantic_digital_twin) and `LoosePieceDetector` (here) both
+
+    inherit, so a belief keeps its source object rather than a label for it. krrood''s
+
+    ripple-down-rules `Expert` was deliberately not reused. 400 passed, 1 skipped, 11 xfailed.
+
+    '
+- id: competing-explanations
+  title: Decide a detection by comparing explanations, not against a fixed threshold
+  branch: claude/plan-item-kickoff-kdp-r8nttk
+  pull_request_number: 270
+  track: surfaces
+  depends_on:
+  - pieces-looked-for-where-expected
+  - holes-fitted-like-pieces
+  status: in_progress
+  session: https://claude.ai/code/session_01BxhH7rCvhti967uCAmAaKr
+  notes: 'PieceMatcher.minimum_agreement is one number, 0.62, standing for how much of an outline
+    must lie along a seen edge before a piece is reported, and its recorded justification is that
+    a correct piece reaches 0.63 to 0.86 while the best wrong piece of the same colour reaches 0.62.
+    Measured on 2026-08-31, that boundary does not hold anywhere near the board: a triangular prism
+    template reaches 0.85 to 0.89 on the board''s own middle in every capture, above every genuine
+    piece detection on the lid in the same captures, which run 0.64 to 0.71 for the most part. No
+    single threshold separates them, because agreement measures how well an outline follows *some*
+    edge and says nothing about what put that edge there.
+
+    A two-plane test was tried first and does not work: scoring the same outline in the lid''s own
+    rectification as well as in the plane a piece''s top stands on separates neither, since both
+    differences fall between +0.30 and +0.62 for holes and pieces alike. Recorded so it is not tried
+    again.
+
+    What does separate them is asking what else could have produced the edges. The board''s geometry
+    is known exactly and, once holes-fitted-like-pieces has settled its layout over the picture,
+    every edge the board itself produces can be predicted. A piece is then reported where it explains
+    edges the board alone does not, and two hypotheses claiming one set of edges are settled against
+    each other rather than both passing a threshold. The decision is a comparison of explanations,
+    so it states how much better one explanation must be than the next, which is a statement about
+    how costly a wrong report is - a thing the robot can be told - rather than a tuned constant.
+
+    This is also what makes the plan''s central claim measurable: with one candidate and a strong
+    belief, less picture evidence is needed to accept a detection than with six candidates and none,
+    and that is knowledge improving perception in a quantity that can be plotted. one-detection-per-thing''s
+    occupancy rule is the same idea applied to place, and the two should share their resolution rather
+    than filtering one after the other.
+
+    Built 2026-09-05 as pull request #270, ee52352e0, off #236. The two-sided reading is what carries
+    it: an account is scored on how much of its own outline the picture holds an edge along *and*
+    how much of the edge seen there it covers, so a template laid across part of a rim loses to the
+    thing that made the rim however well its own points sit. On tracy_pickup_demo the ghost prism''s
+    nine-parts-in-a-thousand lead over the cylinder sitting in the round hole becomes the cylinder
+    leading by 0.115 (0.582 against 0.467), and that mark comes off.
+
+    The board is one of the accounts, as the item asked: its lid border and its six holes, cast from
+    where the camera stands into the plane the fits are read in, are edges the picture holds whether
+    or not anything rests on it. And a report is a lead over the alternatives rather than a level
+    - over the board, over the next candidate the belief allowed, and over nothing being there, which
+    explains nothing and so is the floor without one being set separately. A belief naming one piece
+    has no runner-up to lead where an unguided look over six has, which is the plan''s central claim
+    as a rule rather than as a description. Occupancy reads the same comparison, so the threshold
+    and the place rule stopped being two filters run in sequence on two different quantities.
+
+    required_lead states a cost rather than a level: a wrong report and a missed piece cost about
+    the same here, and 0.075 is what follows from saying so, measured over the six captures. Missed
+    falls from the parent''s 7 to 5 and reported-but-not-there from 4 to 2, and a different cost
+    statement gives a different number off the same table, which a test keeps answerable. Two things
+    are flagged on the pull request rather than smoothed over: the cube on tracy_pickup_demo clears
+    its runner-up by 0.076 against the stated 0.075, four parts in a thousand, and the operating
+    range is narrow - below 0.075 the lead buys nothing and above it recall falls. detect costs 1.08x
+    the parent, measured as a ratio to a same-run baseline. 442 passed, 1 skipped, 4 xfailed across
+    test/experiments_test/ against 423/1/5 on the parent in the same container, with the collected
+    sets diffed by name rather than compared by count.'
+- id: montessori-classes-in-the-orm
+  title: Map the Montessori package's own classes, which the ORM has never seen
+  branch: claude/montessori-classes-orm-s7vxu1
+  pull_request_number: 223
+  track: package-landing
+  depends_on:
+  - montessori-perception-on-main
+  status: in_progress
+  session: https://claude.ai/code/session_01PWzamoTtp8TNZyqhWornUs
+  notes: 'experiments/src/experiments/montessori/ has no __init__.py, and never has on any branch,
+    so pkgutil does not report it as a subpackage of experiments and the ORM generator''s package
+    walk skips the whole thing. Nothing under experiments.montessori is in experiments/orm/ormatic_interface.py
+    - not MontessoriShape, not CubeShape, not ShapeSortingBoard. That is the whole cause of the five
+    NoDAOFoundError failures in test_montessori_insert_shape_action.py that this branch has carried
+    as "the documented empty-ORM state": regenerating the interfaces cannot fix them, because the
+    classes are not being offered to the generator in the first place.
+
+    Adding the file was tried on 2026-08-30 and is not a one-liner. Two things follow it, and there
+    may be more behind them: NoSceneAvailable.missing_inputs was typed Sequence[str], which the generator
+    cannot resolve (already changed to List[str], the shape every other field in that module uses);
+    and experiments.montessori.perception.footprint.Footprint collides by name with semantic_digital_twin...graph_of_convex_sets.plotting.Footprint,
+    so the generator emits two FootprintDAO classes and SQLAlchemy refuses the mapping. That collision
+    needs one of the two renamed, which is an API change across the perception package, so it is
+    its own piece of work rather than a fix folded into a capture commit.
+
+    Built 2026-08-30 as #223. Two of the three claims above did not reproduce, and the note is left
+    standing with this correction beneath it rather than rewritten, so a reader can see what was
+    assumed. NoSceneAvailable.missing_inputs is still Sequence[str] on this branch and the generator
+    resolves it, normalizing it to List[str] and mapping it as JSON; nothing was behind the two known
+    faults. The collision is exactly as recorded, reproduced before anything was changed, and perception.footprint.Footprint
+    became RectifiedFootprint. #205 and #221 edit the same files and will both conflict on that rename.'
+- id: demo-catches-up-with-main
+  title: Bring the demo branch up to date with main while it is still cheap
+  branch: tracy_icra
+  pull_request_number: null
+  track: demo-grounding
+  depends_on: []
+  status: done
+  session: https://claude.ai/code/session_01FMKabzWhaJpTERyAaSc7Kh
+  notes: 'Done 2026-08-28, pushed to `origin/tracy_icra` as `fb0d0e41` (the merge) plus `ece5eb74`
+
+    (three branch-only call sites `main` had broken without conflicting). `main` was 277
+
+    commits ahead by the time it ran (234 when the plan was written), merge base `1646dd355`.
+
+    The one conflict, `semantic_digital_twin/adapters/multi_sim.py`, was a colleague''s MuJoCo
+
+    work resolved as a union taking `main`''s structure; `main`''s tracked `ormatic_interface.py`
+
+    files were dropped, per `AGENTS.md`. No pull request: this merges into `tracy_icra`
+
+    directly, which is never proposed for review.
+
+    '
+- id: demo-runs-on-grounded-perception
+  title: The demo sees only the table, finds pieces on the lid, and reports each once
+  branch: tracy_icra
+  pull_request_number: null
+  track: demo-grounding
+  depends_on:
+  - one-detection-per-thing
+  - demo-catches-up-with-main
+  status: not_started
+  notes: 'Wave one is finished when the three faults are gone on the real robot, not when their pull
+    requests are approved: the clipped windows show the table and nothing beyond it, a cube resting
+    on the board''s lid is detected there, and no detection rides the board''s borders. Verified
+    against the live camera, with a captured frame kept for the tests.'
