@@ -355,6 +355,44 @@ average), and the pre-scan itself. `test_eql/test_verbalization` 768 -> 774 pass
 and no existing expectation changed; `test_eql` 1291 passed (`test_typing` needs `mypy`, absent
 from this environment).
 
+## aggregate-repeat-reduction: review round 1 (2026-09-05)
+
+Three threads on #264, of which one changes what the plan holds.
+
+**`Money` is now a `Role[float]`** (r3941169916 / r3941170391, applied in `ce290914c`). The
+test domain wrapped a single float in an `amount` field; the role expresses the same thing
+without the hop, and it is krrood's own pattern rather than an invention of the test.
+
+It moved every expectation in the module, which is worth recording because the item's
+"What shipped" paragraph above quotes the old text: a directly aggregated attribute renders
+as a plural generic, *"the sum of incomes of Statements"*, where the two-navigation chain
+rendered a possessive, *"the sum of the amount of its income"*. Pre-existing behaviour — a
+plain `income: float` field reproduces it on `main` — so it is about chain length, not about
+`Role`. The change under test is unaffected: reverting the production change on the new
+domain still fails the two ambiguity tests.
+
+**The grouping frame is a candidate item, and its premise is false as stated** (r3941192834,
+left open). The proposal was *"For each statement"* in place of *"For each month"*, reasoning
+that grouping by a month reached through a statement is the same as grouping by the
+statement. Evaluated over three statements, two of them in March, the query returns two rows
+with March's income sum `30.0` — the two March statements are summed together, so a row is
+not a statement. The cardinality runs the other way: one period per statement makes the month
+a function *of* the statement, while naming the frame after the statement needs the month to
+determine the statement, which no constraint in the model asserts.
+
+Three generalizations were put to the developer: keep the key as the frame (correct for every
+model, what ships); name the key with the path it is reached by, *"For each month of a
+Statement's period"* (also always correct, and reverses `_group_label`'s stated decision to
+name the group rather than a member's navigation); or name the entity only where the model
+can declare that a key identifies its owner, read by a rule rather than guessed from
+cardinality. Recommended the first, with the third once declarable.
+
+It is a different rule in a different file — `_for_each_header` / `_group_label` in
+`verbalization/grammar/query/assembler.py` — from this item's `AggregatorRule.build`, so it
+is not being folded into #264. If the developer wants it, it is a new item in this track,
+alongside the separate question of whether a directly aggregated attribute should read
+*"the sum of its income"* rather than *"the sum of incomes of Statements"*.
+
 **Tooling note, not this item's work.** `plan_item_bootstrap.py open` could not record this
 item: it writes `branch` / `pull_request_number` / `status` / `session` at a four-space indent
 into a two-space manifest, so `save-plan.sh` fails in `yaml.safe_load`. That is the bug PR
