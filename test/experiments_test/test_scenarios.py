@@ -13,6 +13,10 @@ from dataclasses import dataclass, field
 import pytest
 from typing_extensions import ClassVar, Sequence
 
+from coraplex.datastructures.enums import ExecutionType
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.world import World
+
 from experiments.experiment_definitions import (
     ConfidenceInterval,
     MeanAndStandardDeviation,
@@ -22,7 +26,6 @@ from experiments.scenarios.report import GoalReached, Report, TrialDuration
 from experiments.scenarios.runner import ScenarioRunner
 from experiments.scenarios.scenario import (
     Condition,
-    ExecutionKind,
     Goal,
     Perturbation,
     Scenario,
@@ -50,15 +53,14 @@ class SortingStep(StepName):
     PUT_DOWN = "put down"
 
 
-@dataclass
-class TwoFingerGripper:
+class TwoFingerGripper(AbstractRobot):
     """
     The robot the scenario below runs on, which the model only ever names as a type.
     """
 
 
 @dataclass
-class RecordedWorld:
+class RecordedWorld(World):
     """
     A world that only remembers what was done to it.
     """
@@ -188,7 +190,7 @@ class SortOnePieceAndFail(SortOnePiece):
 
 
 @dataclass
-class StepMeasuringRunner(ScenarioRunner[RecordedWorld, TwoFingerGripper]):
+class StepMeasuringRunner(ScenarioRunner[SortOnePiece, RecordedWorld]):
     """
     A runner that records every step it performs, the way a measuring runner wraps the
     steps it measures.
@@ -201,7 +203,7 @@ class StepMeasuringRunner(ScenarioRunner[RecordedWorld, TwoFingerGripper]):
 
     def perform_step(
         self,
-        scenario: Scenario[RecordedWorld, TwoFingerGripper],
+        scenario: SortOnePiece,
         step: ScenarioStep[RecordedWorld],
         world: RecordedWorld,
     ) -> None:
@@ -224,7 +226,7 @@ def test_a_scenario_names_the_robot_it_runs_on():
 
 
 def test_a_scenario_runs_in_simulation_unless_it_says_otherwise():
-    assert SortOnePiece().execution_kind is ExecutionKind.SIMULATED
+    assert SortOnePiece().execution_type is ExecutionType.SIMULATED
 
 
 # %% running one trial
@@ -269,13 +271,13 @@ class TestTrialExecution:
         perturbation = PiecePushedAway(step=SortingStep.PUT_DOWN)
 
         trial = ScenarioRunner().run_trial(
-            SortOnePiece(execution_kind=ExecutionKind.REAL),
+            SortOnePiece(execution_type=ExecutionType.REAL),
             conditions=[condition],
             perturbations=[perturbation],
         )
 
         assert trial.scenario_name == SortOnePiece.name
-        assert trial.execution_kind is ExecutionKind.REAL
+        assert trial.execution_type is ExecutionType.REAL
         assert trial.conditions == (condition,)
         assert trial.perturbations == (perturbation,)
 
@@ -363,7 +365,7 @@ def sorted_trial(outcome: TrialOutcome, duration: float) -> Trial:
     """
     return Trial(
         scenario_name=SortOnePiece.name,
-        execution_kind=ExecutionKind.SIMULATED,
+        execution_type=ExecutionType.SIMULATED,
         conditions=(),
         perturbations=(),
         outcome=outcome,

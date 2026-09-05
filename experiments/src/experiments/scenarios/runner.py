@@ -4,10 +4,9 @@ Running the trials a report is measured over.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 
-from typing_extensions import Generic, List, Sequence
+from typing_extensions import Generic, List, Sequence, TypeVar
 
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
@@ -16,7 +15,6 @@ from experiments.scenarios.report import Metric, Report
 from experiments.scenarios.scenario import (
     Condition,
     Perturbation,
-    RobotType,
     Scenario,
     ScenarioStep,
     WorldType,
@@ -32,14 +30,19 @@ from experiments.scenarios.trial import (
     TrialStarted,
 )
 
+ScenarioType = TypeVar("ScenarioType", bound=Scenario)
+"""
+The scenario a runner runs.
+"""
+
 
 @dataclass
-class ScenarioRunner(Generic[WorldType, RobotType], SubClassSafeGeneric):
+class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
     """
     Runs the trials of a scenario, records what each one did, and reports over them.
 
-    A runner that measures the trials of one kind of scenario binds that scenario's
-    world and robot, so what it may be handed is part of its type.
+    A runner that measures the trials of one kind of scenario binds that scenario and
+    the world it is run in, so what it may be handed is part of its type.
     """
 
     repetitions: int = 1
@@ -59,7 +62,7 @@ class ScenarioRunner(Generic[WorldType, RobotType], SubClassSafeGeneric):
 
     def run(
         self,
-        scenario: Scenario[WorldType, RobotType],
+        scenario: ScenarioType,
         conditions: Sequence[Condition[WorldType]] = (),
         perturbations: Sequence[Perturbation[WorldType]] = (),
     ) -> Report:
@@ -84,7 +87,7 @@ class ScenarioRunner(Generic[WorldType, RobotType], SubClassSafeGeneric):
 
     def run_trial(
         self,
-        scenario: Scenario[WorldType, RobotType],
+        scenario: ScenarioType,
         conditions: Sequence[Condition[WorldType]] = (),
         perturbations: Sequence[Perturbation[WorldType]] = (),
     ) -> Trial:
@@ -99,21 +102,18 @@ class ScenarioRunner(Generic[WorldType, RobotType], SubClassSafeGeneric):
         """
         world = scenario.build_world()
         log = TrialLog()
-        started_at = time.perf_counter()
         log.record(
             TrialStarted(
-                moment=0.0,
+                moment=log.elapsed_seconds,
                 scenario_name=scenario.name,
-                execution_kind=scenario.execution_kind,
+                execution_type=scenario.execution_type,
             )
         )
         try:
             for condition in conditions:
                 condition.apply(world)
                 log.record(
-                    ConditionApplied(
-                        moment=time.perf_counter() - started_at, condition=condition
-                    )
+                    ConditionApplied(moment=log.elapsed_seconds, condition=condition)
                 )
             for step in scenario.steps(world):
                 for perturbation in perturbations:
@@ -122,28 +122,23 @@ class ScenarioRunner(Generic[WorldType, RobotType], SubClassSafeGeneric):
                     perturbation.apply(world)
                     log.record(
                         PerturbationApplied(
-                            moment=time.perf_counter() - started_at,
-                            perturbation=perturbation,
+                            moment=log.elapsed_seconds, perturbation=perturbation
                         )
                     )
                 self.perform_step(scenario, step, world)
-                log.record(
-                    StepPerformed(
-                        moment=time.perf_counter() - started_at, step=step.name
-                    )
-                )
+                log.record(StepPerformed(moment=log.elapsed_seconds, step=step.name))
             outcome = (
                 TrialOutcome.SUCCEEDED
                 if scenario.goal.is_reached(world)
                 else TrialOutcome.FAILED
             )
-            duration = time.perf_counter() - started_at
+            duration = log.elapsed_seconds
             log.record(TrialFinished(moment=duration, outcome=outcome))
         finally:
             scenario.release_world(world)
         return Trial(
             scenario_name=scenario.name,
-            execution_kind=scenario.execution_kind,
+            execution_type=scenario.execution_type,
             conditions=tuple(conditions),
             perturbations=tuple(perturbations),
             outcome=outcome,
@@ -153,7 +148,7 @@ class ScenarioRunner(Generic[WorldType, RobotType], SubClassSafeGeneric):
 
     def perform_step(
         self,
-        scenario: Scenario[WorldType, RobotType],
+        scenario: ScenarioType,
         step: ScenarioStep[WorldType],
         world: WorldType,
     ) -> None:

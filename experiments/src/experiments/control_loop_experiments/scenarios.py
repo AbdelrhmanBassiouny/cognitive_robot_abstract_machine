@@ -285,7 +285,7 @@ class ControlLoopStep(StepName):
 
 
 @dataclass
-class PerformMotion(ScenarioStep[BenchmarkRobot]):
+class PerformMotion(ScenarioStep[World]):
     """
     Runs the motion whose control loop is measured.
     """
@@ -295,12 +295,17 @@ class PerformMotion(ScenarioStep[BenchmarkRobot]):
     The motion that is executed.
     """
 
-    def perform(self, robot: BenchmarkRobot) -> None:
-        robot.api.execute(self.motion_statechart)
+    benchmark_robot: BenchmarkRobot
+    """
+    The robot the motion is commanded on.
+    """
+
+    def perform(self, world: World) -> None:
+        self.benchmark_robot.api.execute(self.motion_statechart)
 
 
 @dataclass
-class MotionRanToItsEnd(Goal[BenchmarkRobot]):
+class MotionRanToItsEnd(Goal[World]):
     """
     Success is the motion having ended.
 
@@ -308,12 +313,12 @@ class MotionRanToItsEnd(Goal[BenchmarkRobot]):
     as far as asking this goal ran its motion to the end.
     """
 
-    def is_reached(self, robot: BenchmarkRobot) -> bool:
+    def is_reached(self, world: World) -> bool:
         return True
 
 
 @dataclass
-class BenchmarkScenario(Scenario[BenchmarkRobot, PR2], ABC):
+class BenchmarkScenario(Scenario[World, PR2], ABC):
     """
     One motion whose control loop is measured.
     """
@@ -323,7 +328,7 @@ class BenchmarkScenario(Scenario[BenchmarkRobot, PR2], ABC):
     Name the scenario is reported under.
     """
 
-    goal: Goal[BenchmarkRobot] = field(default_factory=MotionRanToItsEnd, kw_only=True)
+    goal: Goal[World] = field(default_factory=MotionRanToItsEnd, kw_only=True)
     """
     A measured motion succeeds by running to its end.
     """
@@ -338,28 +343,37 @@ class BenchmarkScenario(Scenario[BenchmarkRobot, PR2], ABC):
     Frequency the controller is discretized for, in hertz.
     """
 
-    def build_world(self) -> BenchmarkRobot:
+    benchmark_robot: BenchmarkRobot | None = field(init=False, default=None)
+    """
+    The robot this scenario built its world around, for as long as a trial runs in it.
+    """
+
+    def build_world(self) -> World:
         """
         Build the robot, put it into the configuration the motion starts from and add
         whatever the motion needs to its world.
 
-        :return: The robot the motion is measured on.
+        :return: The world the measured motion runs in.
         """
-        robot = BenchmarkRobot(
+        self.benchmark_robot = BenchmarkRobot(
             plotter_mode=self.plotter_mode, target_frequency=self.target_frequency
         )
-        robot.teleport_to_configuration(self.seed_joint_state(robot))
-        self.prepare(robot)
-        return robot
+        self.benchmark_robot.teleport_to_configuration(
+            self.seed_joint_state(self.benchmark_robot)
+        )
+        self.prepare(self.benchmark_robot)
+        return self.benchmark_robot.world
 
-    def release_world(self, robot: BenchmarkRobot) -> None:
-        robot.close()
+    def release_world(self, world: World) -> None:
+        self.benchmark_robot.close()
+        self.benchmark_robot = None
 
-    def steps(self, robot: BenchmarkRobot) -> List[ScenarioStep[BenchmarkRobot]]:
+    def steps(self, world: World) -> List[ScenarioStep[World]]:
         return [
             PerformMotion(
                 name=ControlLoopStep.MOTION,
-                motion_statechart=self.build_motion_statechart(robot),
+                motion_statechart=self.build_motion_statechart(self.benchmark_robot),
+                benchmark_robot=self.benchmark_robot,
             )
         ]
 
@@ -683,7 +697,7 @@ class IsolatedBenchmarkSession(AbstractContextManager):
 
 
 @dataclass
-class ControlLoopMeasurement(ScenarioRunner[BenchmarkRobot, PR2]):
+class ControlLoopMeasurement(ScenarioRunner[BenchmarkScenario, World]):
     """
     Runs one motion and measures what its control loop cost per cycle.
     """
@@ -713,38 +727,37 @@ class ControlLoopMeasurement(ScenarioRunner[BenchmarkRobot, PR2]):
 
     def perform_step(
         self,
-        scenario: Scenario[BenchmarkRobot, PR2],
-        step: ScenarioStep[BenchmarkRobot],
-        robot: BenchmarkRobot,
+        scenario: BenchmarkScenario,
+        step: ScenarioStep[World],
+        world: World,
     ) -> None:
         """
         Run one step of the motion with the control loop profiler around it.
 
         :param scenario: The scenario the step belongs to.
         :param step: The step to perform.
-        :param robot: The robot the motion is executed on.
+        :param world: The world the motion is executed in.
         """
         profiler = ControlLoopProfiler(
-            scenario_name=scenario.name, control_dt=robot.control_delta_time
+            scenario_name=scenario.name,
+            control_dt=scenario.benchmark_robot.control_delta_time,
         )
         with profiler:
-            self._perform_profiled(step, robot)
+            self._perform_profiled(step, world)
         self.profile = profiler.profile
 
-    def _perform_profiled(
-        self, step: ScenarioStep[BenchmarkRobot], robot: BenchmarkRobot
-    ) -> None:
+    def _perform_profiled(self, step: ScenarioStep[World], world: World) -> None:
         """
         Perform the step, with the python profiler active if one was given.
 
         :param step: The step to perform.
-        :param robot: The robot the motion is executed on.
+        :param world: The world the motion is executed in.
         """
         if self.python_profiler is None:
-            step.perform(robot)
+            step.perform(world)
             return
         self.python_profiler.enable()
         try:
-            step.perform(robot)
+            step.perform(world)
         finally:
             self.python_profiler.disable()

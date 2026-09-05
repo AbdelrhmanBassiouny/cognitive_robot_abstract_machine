@@ -11,30 +11,24 @@ from enum import StrEnum
 
 from typing_extensions import ClassVar, Generic, Sequence, Type, TypeVar
 
+from coraplex.datastructures.enums import ExecutionType
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.world import World
 
-WorldType = TypeVar("WorldType")
+WorldType = TypeVar("WorldType", bound=World)
 """
 The world a scenario builds, and that its steps, goal, conditions and perturbations act
 on.
 """
 
-RobotType = TypeVar("RobotType")
+RobotType = TypeVar("RobotType", bound=AbstractRobot)
 """
 The robot a scenario runs on.
 """
 
 # %% where and how a scenario runs
-
-
-class ExecutionKind(StrEnum):
-    """
-    Whether a scenario runs in a simulator or on the robot.
-    """
-
-    SIMULATED = "simulated"
-    REAL = "real"
 
 
 class StepName(StrEnum):
@@ -143,7 +137,7 @@ class Scenario(Generic[WorldType, RobotType], SubClassSafeGeneric, ABC):
     What a trial of this scenario has to reach to have succeeded.
     """
 
-    execution_kind: ExecutionKind = field(default=ExecutionKind.SIMULATED, kw_only=True)
+    execution_type: ExecutionType = field(default=ExecutionType.SIMULATED, kw_only=True)
     """
     Whether this instance runs in a simulator or on the robot.
     """

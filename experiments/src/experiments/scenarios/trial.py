@@ -6,18 +6,16 @@ everything that happened while it ran.
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from typing_extensions import Tuple
+from typing_extensions import List, Tuple
 
-from experiments.scenarios.scenario import (
-    Condition,
-    ExecutionKind,
-    Perturbation,
-    StepName,
-)
+from coraplex.datastructures.enums import ExecutionType
+
+from experiments.scenarios.scenario import Condition, Perturbation, StepName
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +55,7 @@ class TrialStarted(TrialLogEntry):
     The scenario the trial runs.
     """
 
-    execution_kind: ExecutionKind
+    execution_type: ExecutionType
     """
     Whether the trial runs in a simulator or on the robot.
     """
@@ -117,10 +115,22 @@ class TrialLog:
     Everything that happened while a trial ran, in the order it happened.
     """
 
-    entries: list[TrialLogEntry] = field(default_factory=list)
+    entries: List[TrialLogEntry] = field(default_factory=list)
     """
     The entries recorded so far.
     """
+
+    started_at: float = field(default_factory=time.monotonic)
+    """
+    Reading of the monotonic clock the trial began at.
+    """
+
+    @property
+    def elapsed_seconds(self) -> float:
+        """
+        Seconds between the start of the trial and now.
+        """
+        return time.monotonic() - self.started_at
 
     def record(self, entry: TrialLogEntry) -> None:
         """
@@ -146,7 +156,7 @@ class Trial:
     The scenario that was run.
     """
 
-    execution_kind: ExecutionKind
+    execution_type: ExecutionType
     """
     Whether it ran in a simulator or on the robot.
     """
