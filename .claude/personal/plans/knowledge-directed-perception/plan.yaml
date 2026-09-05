@@ -1386,6 +1386,10 @@ items:
     as a PlacementRelation.'
   - 'r3940991795, HasPosition versus his HasLocation, was resolved by the developer without
     a rename being asked for; recorded here only because the name is still his to change.'
+  - 'Two threads opened on #257 on the evening of 2026-09-05, both about what f7112120 left
+    in krrood. r3941751684 asks why Match.stating is needed when a where statement is
+    extendable; r3941771838 asks for a helper for reading the object off a relation stated
+    as a match, and for an honest account of whether subclassing Match was worth it.'
   depends_on:
   - imagination-world-rejects-what-a-predicate-refuses
   - pieces-looked-for-where-expected
