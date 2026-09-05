@@ -141,3 +141,53 @@ The plan's tracking issue (#201) could not be subscribed to - the session's perm
 classifier refused the call - so this branch will not see structural changes announced
 there. Also inherited, not this item's: `test_each_lib` is red across the whole stack
 from #222 onward, waiting on `main`-branch #251 (see `perception-backend`'s blockers).
+
+### The two design calls the item actually turned on, and how they were answered
+
+Both were put to the developer on 2026-09-05 and both took the recommended option; the
+second only surfaced once the first was being built.
+
+**A rule's condition is not a capability.** `LookRules` authors its tree with
+`state_the_detectors_own_condition`, which answers the engine with the detector's own
+capability, and that works there because each of its detectors declares a condition no
+other satisfies. Neither family here is like that: both piece detectors answer a look at
+a piece colour separates from a matte surface, and both finders answer any surface the
+world bounds in a picture with depth. What tells them apart is `surface.finish` --
+`MATTE` for the colour blob, `MIRROR` for the measurement -- and that is the *rules'*
+knowledge about when a detector is worth its cost (89 ms against 126 ms), not part of
+what either says it can answer. #231's own module docstring is explicit that neither part
+subsumes the other, so moving the finish onto a capability was rejected. Each rules class
+supplies its own expert instead, answering with the capability and'ed with the situation
+the rules choose that detector in. `ConditionResolver` cannot stand in for this: it
+reuses conditions already in the tree rather than inventing one.
+
+**The situation is read off the case, not hardcoded.** The first build wrote
+`finish == MIRROR` into `SurfaceRules` directly, and
+`test_a_rule_added_while_the_rules_are_in_use_changes_the_next_answer` caught it at once:
+a rule added for a glossy surface got the mirror condition and never fired. The rules'
+knowledge is that *the finish* decides; *which* finish is a property of the look the rule
+is being stated from, which `CaseContext.case_instance` supplies. That is what makes
+`add_rule` work for a finish nobody foresaw, and it is why the general answer (the edge
+fit, the model) is the one that carries no situation at all rather than one guarded by a
+name.
+
+**Fitting cases need a picture.** `MeasuredSurfaceFinder` asks whether the camera
+returned any depth, so a case the rules are fitted from needs an `RgbdFrame`, which
+`SceneRequest` never did. `SurfaceRules` builds one-pixel pictures for it: only whether
+there is any depth at all separates the kinds of look these rules tell apart, so a single
+pixel says everything a rule reads of a picture and nothing is claimed about a scene that
+was never photographed.
+
+Behaviour is unchanged by any of it, which is the point: a mirror-finished surface is
+still searched by fitting edges, a matte one by colour where colour separates the piece,
+and a surface whose finish nothing states is still taken from the model.
+
+### Left standing, and why
+
+`TargetOnSurface.target_outline_is_known` reads `target.outline is not None` over a
+`KnownPiece` whose `outline` is typed non-optional, so it holds for every piece the set
+contains -- the same shape of defect the item's notes record for `SoughtSurface`.
+Removing the flattening does not fix it; it only moves the reading from a copied field to
+a property. Whether a `KnownPiece` may have no outline is a question about that type
+rather than about these rules, so the guard the edge fit's capability was written around
+is kept and the question is left for the developer.
