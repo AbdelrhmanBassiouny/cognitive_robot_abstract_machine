@@ -486,14 +486,19 @@ items:
   blockers:
     - >-
       `test_each_lib (krrood)` is red on #222, and every branch stacked on it inherits it - #227,
-      #231, #238, #239, #259 and everything past them. Root-caused on 2026-09-05 and fixed in
-      #268, off `main`: the failure is not this item's diff at all. It is an order-dependent test
-      on `main` - `test_draw_evaluated_tree_for_drawer_cabinet_rdr` loads a model directory that
-      only `test_save_and_load_drawer_cabinet_rdr`, earlier in the same file, writes, and which
+      #231, #238, #239, #259 and everything past them. The failure is not this item's diff at
+      all, and it was already fixed before this item looked at it: **#251**, open off `main`
+      since 2026-09-03, is the fix. It is an order-dependent test on `main` -
+      `test_draw_evaluated_tree_for_drawer_cabinet_rdr` loads a model directory that only
+      `test_save_and_load_drawer_cabinet_rdr`, earlier in the same file, writes, and which
       `git ls-files` reports as untracked generated output. Sequentially the two line up by luck;
       CI runs `pytest -n auto`, where they can land on different xdist workers. #222 flipped it
       because it is the first branch in the stack to add krrood tests, which changes the count
-      xdist distributes by. #222's check clears once it takes #268 in - that merge is not done.
+      xdist distributes by. #222's check clears once it takes #251 in - that merge is not done.
+      A second pull request off `main` re-derived the same fix on 2026-09-05 and was closed as a
+      duplicate; the two changes it carried that #251 does not - `GeneralRDR.load` chaining its
+      cause, and a generated model's import root reaching the search path - are **#269**, and
+      neither is needed for this check.
     - >-
       The `needs-resolution` label the maintenance routine set on the 2026-09-02 conflict is still
       on the branch, so it stays withheld from promotion until the routine's own next pass clears

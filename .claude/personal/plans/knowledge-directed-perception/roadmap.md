@@ -5686,7 +5686,8 @@ against 518/1/11, the one added. The twin's failing set is unchanged by name.
 The bisect above placed `test_each_lib (krrood)` on #222 and stopped there, because the
 failing test is byte-identical to `main` and `main` is green. Both facts are true and the
 conclusion drawn from them was still wrong. The fault is on `main`; #222 only made it
-visible. It is fixed in **#268**, off `main`, with the `bug` label.
+visible. It was **already fixed before this round started**: #251, open off `main` since
+2026-09-03, carries it. See the correction at the end of this section.
 
 ### The test loads something no fixture provides
 
@@ -5721,7 +5722,7 @@ everything stacked past it. Nothing about #222's own 260 lines of krrood source 
 involved. The bisect's evidence was sound; what it could not see is that "first branch to
 touch krrood" and "the branch whose diff causes it" are not the same claim.
 
-### What #268 changes
+### What the fix changes
 
 A `saved_drawer_cabinet_rdr` fixture writes the model and says where it went, so each test
 that reads it back provisions it itself. All six tests in the module now pass run
@@ -5755,11 +5756,11 @@ diagnosis.
 
 ### For the stack
 
-#268 is based on `main`, not on #222, because it touches only files that exist on `main`
+The fix is based on `main`, not on #222, because it touches only files that exist on `main`
 and changes nothing #222 introduced -- removing its edits leaves #222 exactly as it is.
 Fixing it on #222 would also have left `main` and every other branch carrying the same
 latent fault. #222, #231, #238, #239, #259 and #266 all go green on this check once they
-take `main` in after #268 lands; none of those merges is done here.
+take `main` in after #251 lands; none of those merges is done here.
 
 ### `how-to-look-concluded-from-the-request`: the review round of 2026-09-05, and the case class that was never needed
 
@@ -5932,3 +5933,37 @@ answers no stretch of world at all. Left open with both stated.
 Worth generalizing: **"make X work for Y" is worth measuring before it is built** -- here
 the type already worked and the *reading* was the gap, which is the opposite of what the
 thread assumed and would have been invisible from the signatures.
+
+### Correction, 2026-09-05: this was already fixed, and the duplicate check is what missed it
+
+The section above was written as though this round root-caused the krrood check. It did not:
+**#251, `Give each test that reads a saved classifier one of its own`, had been open off `main`
+since 2026-09-03** with the same diagnosis and the same fix. The pull request this round opened
+(#268) was closed as its duplicate.
+
+The convergence was near-total, which is itself worth recording: two sessions that could not see
+each other produced the same `saved_drawer_cabinet_rdr` fixture, the same
+`SavedRDRModel(directory, name)` with a `load()` method, and the same removal of the hardcoded
+`"world_rdr"`. **#251's version is the better one** - it writes to a directory named after the
+requesting test, so two tests running side by side no longer write one path either, and it
+verified under `pytest -n 4` across five runs, which the later session's sandbox blocked.
+
+#251 also names the red job it was chasing as **#248**, not #222. So the bisect recorded above -
+true in every one of its three facts - answered a question that had already been answered, and
+"first branch in this stack to touch krrood" turned out not to be the same claim as "the branch
+whose diff causes it" in a second way: nothing in #222 causes it, and nothing needed to.
+
+**What actually failed is the duplicate check.** The gathering read the plan's items, this
+roadmap, and #222's own state, and never looked at the repository's open `bug` pull requests -
+where #251 had been sitting, naming this exact failure, for two days. That is the *purpose*
+check that `scope-decision.md` asks for and the path check cannot supply, and it is the fourth
+time this repository has paid for skipping it, after #110/#106, #117/#106 and #229/#33. The
+cheap version of it is one search of the open bug-fix pull requests for the failing test's own
+name, before any branch is cut.
+
+**What survived the fold.** Two changes #251 does not carry, both in the load path rather than
+in the tests, are **#269**: `GeneralRDR.load` chaining the error that prevented the load, which
+is why CI reported no reason at all; and `make_path_importable`, so a generated model is
+loadable from wherever it was saved rather than only from inside a package whose root already
+happened to be on the search path. Neither is needed to clear this check - they are their own
+root cause, split out for that reason rather than folded into #251.
