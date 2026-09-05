@@ -153,12 +153,15 @@ items:
     pull_request_number: null
     track: plan-splits
     depends_on: [size-budget-and-report]
-    status: not_started
+    status: done
     notes: >
       Discovered over budget alongside knowledge-directed-perception, 2026-09-05: 33
       items, 772 manifest + 1,061 roadmap = 1,833 lines - over the item limit (15) while
       still under the line limit (2,000), so it is a pure item-count outlier rather than
-      a narrative one. Same treatment as the sibling splits.
+      a narrative one. Same treatment as the sibling splits. Done 2026-09-05: split by
+      wave into icra-foundation (10 items), icra-mechanism (12) and icra-evidence (11),
+      all within budget; see roadmap.md's "Done" section for the seams, the cost and
+      what was verified.
 
   - id: refuse-oversized-save
     title: "Refuse a save that leaves a plan over budget"

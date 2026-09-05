@@ -463,3 +463,98 @@ that call would otherwise fail with the new scripts missing from its scratch lay
 Landing this PR (merging it, not just opening it) still has to wait on
 `split-knowledge-directed-perception` and `split-icra-experiments` alongside the two done
 splits - both entries in `depends_on` above the found-oversized note explains.
+
+## Done 2026-09-05: `split-icra-experiments` - three plans, 1,833 lines to 1,126
+
+Session: https://claude.ai/code/session_01XWy1uT1i7FozWdNhLEtcKk
+
+Pushed to the notes branch as `68da2fd2c`, `55f80a611` and `0ad970a0f` (one commit per
+successor); the old plan directory and its `_generated/dashboard-urls.yaml` key removed in
+`c6dc76240`.
+
+| new plan | items | manifest | roadmap | total |
+|---|---|---|---|---|
+| `icra-foundation` | 10 | 150 | 324 | 474 |
+| `icra-mechanism` | 12 | 186 | 135 | 321 |
+| `icra-evidence` | 11 | 205 | 126 | 331 |
+
+### The seam: by wave, and it held on both halves without cutting inside one
+
+Unlike `split-rdr-refactor`'s wave 0 (92% of that roadmap, forcing a cut on subject
+instead), `icra-experiments`' three waves - `foundation`, `mechanism`, `evidence` - were
+already close to even in items (10/12/11) and the roadmap's per-round narrative turned out
+to concentrate almost entirely (about 790 of 1,061 lines) on `foundation`'s four items with
+open pull requests (#261, #262, #265, #271); `mechanism` and `evidence` carried almost none,
+since every item there is `not_started`. Measured rather than assumed, exactly as the
+sibling splits insist: a by-lane alternative (the plan's three person-assignment lanes, cut
+across all three waves) was checked too and rejected - it crosses roughly as many
+dependency edges as by-wave (19 against 29) while producing a lane holding exactly 15 items
+with no headroom, and it breaks the wave framing the budget table's own milestones
+("go/no-go Sunday evening", "every experiment has run once in simulation") are already
+organized around. By-wave keeps that framing and is the plan's own existing seam.
+
+### The cost is real, and larger than either sibling split's: 29 edges, not 3 or 7
+
+`icra-experiments` is a single pipeline by design - foundation feeds mechanism feeds
+evidence, item by item - so a wave-based cut crosses far more of its own `depends_on`
+graph than the sibling splits' subject-based tracks did: 29 edges out of 33 items' worth of
+graph, against the sibling splits' 3 and 7. None of the 29 crossing edges name an
+already-`done` target (only one item plan-wide is `done`, and nothing depends on it), so
+none could be dropped the way the sibling splits dropped their satisfied edges - all 29
+became `blockers` naming the other plan and item, verbatim by script rather than retyped
+(`icra-mechanism` carries 9, `icra-evidence` 20). Every not-yet-started item in
+`icra-mechanism` and `icra-evidence` that depends on upstream work now reads its dependency
+as free text rather than a dashboard chip with automatic readiness. This is the strongest
+case yet for the `<plan-id>:<item-id>` cross-plan reference already flagged as a
+`plan-dashboards` candidate by both prior splits - three programmes in a row have now paid
+this same cost.
+
+### Verified rather than trusted
+
+All 33 items are present exactly once and none is invented, checked by a script-driven set
+comparison against the source manifest (not eyeballed); every successor passes
+`build_dashboard.validate_plan`; every item's `branch`, `pull_request_number`, `status`,
+`session`, `repository`, `title` and `notes` are byte-identical to the source, checked by
+direct field comparison via a load/transform/dump script rather than hand-retyped (a script
+also built every `depends_on`/`blockers` edit, so the 29 blocker strings are generated, not
+typed 29 times by hand). The branch index went from 148 branches to 148, with **none
+unmapped** - the only remappings are the five `icra-*` branches now pointing at
+`icra-foundation` instead of the deleted `icra-experiments`, plus a handful the sibling
+`split-knowledge-directed-perception` push remapped in the same window (this session's
+push and that one interleaved on the notes branch - see below - and neither broke the
+other's mapping).
+
+### The compression rule, on a plan too small to need it for budget
+
+Unlike both prior splits, none of `icra-experiments`' three successors needed compression
+to clear the line budget - even keeping every line of the source roadmap in `icra-foundation`
+alone would have landed at about 1,300 lines, well under 2,000. The rule was applied anyway,
+on its own terms rather than skipped: `icra-foundation`'s roadmap (324 lines, down from the
+source's 1,061) keeps every standing hazard, every decision with a lasting consequence (the
+`Footprint` rename precedent, the unbounded `SimulationTimePacer.sleep()`, the database
+rename cost, the #231/#223 rebase left for a deliberate pass) and compresses the blow-by-blow
+merge-conflict narrative - which hunk, which commit, which of six silent-conflict sweeps - to
+its outcome, since the pull requests themselves carry that record. `icra-mechanism` and
+`icra-evidence`'s roadmaps needed no compression at all: their items are all `not_started`,
+so the source carried almost no per-round narrative to compress, only design decisions
+(Experiment D's three-part rationale, the expectation-mechanism test) that were kept in
+full under whichever successor owns the items they explain.
+
+### Concurrency, as the mechanics note anticipated
+
+`split-knowledge-directed-perception` ran on the notes branch at the same time as this item,
+exactly the scenario `refuse-oversized-save`'s kickoff flagged when it added both items
+together. Every push here re-fetched immediately before writing: two of this session's own
+pushes landed cleanly back to back, and the final cleanup push (`c6dc76240`, deleting
+`icra-experiments`) was itself followed by the sibling's `Update plan manifest for
+knowledge-directed-grounding` fast-forwarding on top with no conflict - confirming the
+fast-forward-only push is what the mechanics notes said it would be: a clean rejection on a
+race, never silent data loss, and safe to just re-fetch and retry.
+
+### What this leaves for `refuse-oversized-save`
+
+Both plans `refuse-oversized-save`'s `depends_on` was waiting on are now split;
+`split-knowledge-directed-perception` still shows `not_started` in this plan's own manifest
+as of this write - its session had not yet flipped that item's status when this one was
+written, so `refuse-oversized-save`'s own session should re-check `plan-size-limits` live
+rather than trust this note once both are believed done.
