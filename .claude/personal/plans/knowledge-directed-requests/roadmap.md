@@ -82,3 +82,62 @@ plan.
   in the twin's own vocabulary for this detector family (waits on
   `imagination-world-rejects-what-a-predicate-refuses`); and this family conditioning on
   the sensor itself, since a request's rules are stated before any frame exists.
+
+## `a-look-is-described-by-a-match`: one mechanism for all three families, and why it is not folded
+
+Kicked off 2026-09-05. The item's own `notes` had already been corrected twice, and the
+plan settled after that correction reads: what is left here is *the vocabulary the
+conditions are stated in*, not the shape the engine demands. `EQLSingleClassRDR`
+takes one case object of one class and infers one attribute on it
+(`UnderspecifiedMatch.case_type` is `match.type`, `target_attribute_name` an attribute of
+it), so `a(Body)(detector=...)` is not a thing the engine can be handed - a twin entity
+carries no detector slot. The achievable and already-validated reading is #266's: a
+family states its own `Look` subclass, that subclass *holds* the world's entities instead
+of copying values out of them, and conditions traverse into them. That is not a
+flattening, because nothing is copied that could drift.
+
+So the work is to apply #266's shape to the two families that still predate it:
+
+- `TargetOnSurface` (#231) copies three values out of `WorkspaceSurface` and `KnownPiece`
+  at construction. It becomes a `Look` holding the surface and the target, with the
+  readings restated as properties over them, plus the open `detector` slot.
+- `SoughtSurface` (#259) already holds the world's own things - that half was fixed on
+  #259's own review round - but `SurfaceRules` still builds its tree by hand with
+  `entity().where()` and `Alternative.insert_at`. It moves onto
+  `EQLSingleClassRDR.from_underspecified` and `SurfaceFinder` onto
+  `PerceptionDetector[SoughtSurface]`, which also deletes the `capability`/`stated_surface`
+  /`answerable_surfaces`/`answers` quartet each family was re-declaring.
+
+### The scope check, and why it still gets its own branch
+
+`check_scope_overlap.py --base origin/main` reports **every** path this item touches as
+absent from `main`: `detector_choice.py` and its test are introduced by #231,
+`surface_finding.py` and its test by #259, `look_choice.py` by #266. Read mechanically
+that is the fold signal, and the item's originally recorded reason for staying separate
+(that it needed #77, the tip of the RDR stack) no longer holds - `from_underspecified` is
+#159's, and #239 already merged it into this stack.
+
+It stays its own branch for a different reason than the one recorded: the work modifies
+files introduced by *three* different unlanded branches, so there is no single parent to
+fold into, and folding one mechanism into three in-flight pull requests would be worse
+than the one coherent story. It is where those branches converge.
+
+### Base, and the sibling merged in
+
+Base is `claude/plan-item-kickoff-perception-idzwsk` (#266): the only tip carrying all of
+`Look`, `PerceptionDetector` and `from_underspecified`. `claude/plan-item-kickoff-kdp-
+34snn0` (#259) is merged in rather than based on, because it carries none of them - it
+sits on #231, before the RDR stack entered at #239. The merge conflicts on three files
+(`exceptions.py`, `pipeline.py`, `test_montessori_perception_backend.py`) and all three
+are additive: both siblings appended to the same region, so both sides are kept.
+
+The cost, recorded rather than hidden: this pull request's diff against its base carries
+#259's own 1,235 lines. That is the diamond the two `method-selection` tips make, not
+scope creep.
+
+### Not resolved here
+
+The plan's tracking issue (#201) could not be subscribed to - the session's permission
+classifier refused the call - so this branch will not see structural changes announced
+there. Also inherited, not this item's: `test_each_lib` is red across the whole stack
+from #222 onward, waiting on `main`-branch #251 (see `perception-backend`'s blockers).
