@@ -37,23 +37,22 @@ needs.
 
 DEFAULT_DATABASE_URI = (
     "postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/"
-    "franka_montessori_sorting_results"
+    "montessori_sorting_results"
 )
 """
 Database URI used when neither ``--database-uri`` nor
 :data:`DATABASE_URI_ENVIRONMENT_VARIABLE` is given.
 
 Reuses the ``semantic_digital_twin`` role already provisioned on this host for the other
-experiments in this workspace; only the database itself,
-``franka_montessori_sorting_results``, is dedicated to the shape-sorting runs. Names the
-``psycopg`` (v3) driver explicitly since only that, not ``psycopg2``, is installed in
-this environment.
+experiments in this workspace; only the database itself, ``montessori_sorting_results``,
+is dedicated to the shape-sorting runs. Names the ``psycopg`` (v3) driver explicitly
+since only that, not ``psycopg2``, is installed in this environment.
 
 Provision the role and this database once, before the first run, with
 :data:`PROVISIONING_SCRIPT` (see that script's own header for its ``psql`` invocation).
 """
 
-DATABASE_URI_ENVIRONMENT_VARIABLE = "FRANKA_MONTESSORI_SORTING_DATABASE_URI"
+DATABASE_URI_ENVIRONMENT_VARIABLE = "MONTESSORI_SORTING_DATABASE_URI"
 """
 Environment variable overriding :data:`DEFAULT_DATABASE_URI` for every run.
 """

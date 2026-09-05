@@ -20,7 +20,9 @@ from experiments.montessori.results_recording import (
 )
 from experiments.montessori.sorting_results import SortingIterationResult
 
-UNREACHABLE_URI = "postgresql+psycopg://recorder:hunter2@127.0.0.1:1/franka_montessori_sorting_results"
+UNREACHABLE_URI = (
+    "postgresql+psycopg://recorder:hunter2@127.0.0.1:1/montessori_sorting_results"
+)
 """
 A Postgres URI on a port nothing listens on, carrying a password a log must not repeat.
 """
@@ -95,7 +97,7 @@ def test_a_run_that_cannot_record_says_so_without_the_password(caplog):
     with caplog.at_level(logging.WARNING):
         open_recording(ResultsDatabase(uri=UNREACHABLE_URI))
 
-    assert "franka_montessori_sorting_results" in caplog.text
+    assert "montessori_sorting_results" in caplog.text
     assert "hunter2" not in caplog.text
 
 

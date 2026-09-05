@@ -26,7 +26,7 @@ from experiments.montessori.results_database import (
 )
 
 UNREACHABLE_URI = (
-    "postgresql+psycopg://nobody:wrong@127.0.0.1:1/franka_montessori_sorting_results"
+    "postgresql+psycopg://nobody:wrong@127.0.0.1:1/montessori_sorting_results"
 )
 """
 A Postgres URI on a port nothing listens on, so reaching it fails without waiting.
@@ -95,7 +95,7 @@ class TestReachingTheDatabase:
             verify_reachable(UNREACHABLE_URI)
 
         message = str(raised.value)
-        assert "franka_montessori_sorting_results" in message
+        assert "montessori_sorting_results" in message
         assert "wrong" not in message
 
     def test_the_failure_says_what_to_do_about_it(self):
@@ -137,11 +137,11 @@ class TestWritingToTheDatabase:
         with pytest.raises(ReadOnlyResultsDatabase) as raised:
             verify_writable(
                 "postgresql+psycopg://reader:secret@127.0.0.1:1/"
-                "franka_montessori_sorting_results"
+                "montessori_sorting_results"
             )
 
         message = str(raised.value)
-        assert "franka_montessori_sorting_results" in message
+        assert "montessori_sorting_results" in message
         assert "secret" not in message
 
     def test_the_failure_points_at_the_environment_variable(self, read_only_database):
