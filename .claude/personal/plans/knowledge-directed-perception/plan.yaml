@@ -1334,7 +1334,17 @@ items:
   branch: claude/plan-item-kickoff-expectations-2zvpmn
   pull_request_number: 257
   track: events
-  blockers: []
+  blockers:
+  - 'Review round of 2026-09-05 (evening), six threads open on #257 and none of them
+    recorded as state until now. Two are the developer accepting recommendations this
+    session had left open: r3940415301 asks for ``StatedRelation`` to become an entity
+    query language ``Match``, and r3940406029 for the measured surface to carry the entity
+    it was measured from so ``SceneRequest.searches`` compares entities rather than names.
+    Four are new: whether an event''s declared effect and its re-checks duplicate what
+    Segmind''s statechart already expresses; ``Expectations.of`` answering the first
+    expectation of a subject rather than every one of them; an expectation stated as a
+    ``Match`` about the subject rather than as a tuple of relations; and a shared location
+    base of ``HasPose`` and ``Point3`` in place of the ``Placed`` union.'
   depends_on:
   - imagination-world-rejects-what-a-predicate-refuses
   - pieces-looked-for-where-expected
