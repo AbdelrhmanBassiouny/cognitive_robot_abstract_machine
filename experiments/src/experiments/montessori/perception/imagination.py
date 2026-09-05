@@ -26,7 +26,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.geometry import Mesh
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
@@ -103,10 +103,10 @@ class ImaginedWorld:
         """
         Stand a piece in this world where it was seen.
 
-        A finding is welded where the look measured it, with no degree of freedom of its
-        own: a look reports one placement, and nothing in this world moves what it found.
-        A piece is instead given a free (:class:`Connection6DoF`) joint in the world the
-        robot acts in, where gravity or a gripper can move it.
+        A finding is free to be placed anywhere. A look measures where a piece is, never
+        that it cannot move, so the placement is state rather than structure: a later
+        look that finds the piece somewhere else writes the new placement into the
+        connection this one built.
 
         :param piece: The piece that was recognised, whose own measured outline and
             height the body standing for it is built from.
@@ -121,15 +121,13 @@ class ImaginedWorld:
         body = Body.from_shape_collection(name, ShapeCollection([self._mesh_of(piece)]))
         parent = self._frame_of(pose)
         with self.world.modify_world():
-            self.world.add_connection(
-                FixedConnection(
-                    parent=parent,
-                    child=body,
-                    parent_T_connection_expression=self._transform_to(pose, parent),
-                )
+            connection = Connection6DoF.create_with_dofs(
+                world=self.world, parent=parent, child=body
             )
+            self.world.add_connection(connection)
             shape = MONTESSORI_SHAPE_CLASSES[piece.category](name=name, root=body)
             self.world.add_semantic_annotation(shape)
+        connection.origin = self._transform_to(pose, parent)
         return shape
 
     def remove(self, shape: MontessoriShape) -> None:
