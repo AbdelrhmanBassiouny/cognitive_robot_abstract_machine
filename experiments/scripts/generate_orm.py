@@ -8,6 +8,7 @@ import experiments.scenarios.report
 import experiments.scenarios.runner
 import experiments.scenarios.scenario
 import experiments.scenarios.trial
+import experiments.episodes.recording
 import coraplex.orm.ormatic_interface
 import segmind.orm.ormatic_interface
 
@@ -34,6 +35,10 @@ for scenario_model_module in (
     experiments.scenarios.runner,
 ):
     ignored_classes |= set(classes_of_module(scenario_model_module))
+
+# a recorder is machinery rather than a record: it holds an open session and the
+# conversion state of a run, neither of which is anything to store
+ignored_classes |= set(classes_of_module(experiments.episodes.recording))
 
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(

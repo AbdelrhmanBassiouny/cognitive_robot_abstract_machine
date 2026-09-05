@@ -211,6 +211,22 @@ class StepMeasuringRunner(ScenarioRunner[SortOnePiece, RecordedWorld]):
         super().perform_step(scenario, step, world)
 
 
+@dataclass
+class TrialKeepingRunner(ScenarioRunner[SortOnePiece, RecordedWorld]):
+    """
+    A runner that keeps every trial it finishes, the way a recording runner keeps them
+    somewhere that outlives the run.
+    """
+
+    kept_trials: list[Trial] = field(default_factory=list)
+    """
+    The trials this runner has finished, in order.
+    """
+
+    def trial_finished(self, scenario: SortOnePiece, trial: Trial) -> None:
+        self.kept_trials.append(trial)
+
+
 def performed_steps(log: TrialLog) -> list[StepName]:
     """
     The steps the log says ran, in order.
@@ -353,6 +369,24 @@ class TestRepeatedTrials:
 
         assert len(report.trials) == 3
         assert report.scenario_name == SortOnePiece.name
+
+    def test_a_finished_trial_is_offered_before_the_run_is_over(self):
+        """
+        A runner that keeps its trials somewhere is offered each one as it ends, so a run
+        that dies keeps what it had finished rather than nothing.
+        """
+        runner = TrialKeepingRunner(repetitions=3)
+
+        report = runner.run(SortOnePiece())
+
+        assert runner.kept_trials == report.trials
+
+    def test_a_trial_run_on_its_own_is_offered_too(self):
+        runner = TrialKeepingRunner()
+
+        trial = runner.run_trial(SortOnePiece())
+
+        assert runner.kept_trials == [trial]
 
 
 # %% what the trials measured

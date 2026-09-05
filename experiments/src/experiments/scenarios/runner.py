@@ -136,7 +136,7 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
             log.record(TrialFinished(moment=duration, outcome=outcome))
         finally:
             scenario.release_world(world)
-        return Trial(
+        trial = Trial(
             scenario_name=scenario.name,
             execution_type=scenario.execution_type,
             conditions=tuple(conditions),
@@ -145,6 +145,20 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
             duration=duration,
             log=log,
         )
+        self.trial_finished(scenario, trial)
+        return trial
+
+    def trial_finished(self, scenario: ScenarioType, trial: Trial) -> None:
+        """
+        Take note of a trial that has just finished.
+
+        A runner that keeps its trials somewhere overrides this; this one keeps them only
+        in the report it returns. Called as each trial ends rather than once the run is
+        over, so a run that dies keeps what it had finished.
+
+        :param scenario: The scenario the trial ran.
+        :param trial: The trial that has finished.
+        """
 
     def perform_step(
         self,
