@@ -23,6 +23,7 @@ from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
     PieceHypothesis,
 )
+from experiments.montessori.perception.explanations import Explanation
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import FixedScene, PerceivedObjects
@@ -315,7 +316,7 @@ def test_a_reading_taken_off_the_table_the_board_hides_is_not_reported(
         category=MontessoriShapeCategory.CUBE,
         supporting_surface=pipeline.table.name,
         height=0.03,
-        outline_agreement=0.7,
+        explanation=Explanation(outline_followed=0.7, edges_accounted_for=0.7),
     )
 
     assert occupancy.keep_one_detection_per_place([against_the_board]) == []

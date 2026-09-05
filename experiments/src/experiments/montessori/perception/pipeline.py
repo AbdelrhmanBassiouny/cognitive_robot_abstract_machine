@@ -37,6 +37,11 @@ from experiments.montessori.perception.detections import (
     ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.edges import EdgeDistances
+from experiments.montessori.perception.explanations import (
+    BoardOutlines,
+    CompetingExplanations,
+    PlaceInThePicture,
+)
 from experiments.montessori.perception.exceptions import BoardMissingFromWorld
 from experiments.montessori.hole_geometry import BoardHoleLayout, PlacedHole
 from experiments.montessori.perception.footprint import Footprint
@@ -799,6 +804,8 @@ class LoosePieceDetector(BeliefSource):
         reference_frame: Optional[KinematicStructureEntity],
         search: SurfaceSearch,
         expected: Sequence[PieceHypothesis] = (),
+        board_outlines: BoardOutlines = BoardOutlines(),
+        explanations: CompetingExplanations = CompetingExplanations(),
     ) -> List[MontessoriShapeDetection]:
         """
         Find the pieces resting on one surface, by evaluating what is expected there.
@@ -810,6 +817,11 @@ class LoosePieceDetector(BeliefSource):
         piece is found at a place it was expected whether or not any colour separated it
         from what it rests on.
 
+        What is reported is then settled by comparing the accounts of each place against
+        each other rather than by a level a fit clears: against the board's own known
+        geometry, against the next piece that fitted there, and against nothing being
+        there at all.
+
         :param orthophoto: The rectified view of the surface's own plane.
         :param top_orthophoto: The rectified view of the plane a piece's top stands on.
         :param frame: The camera data, for measuring how tall each piece stands.
@@ -817,9 +829,14 @@ class LoosePieceDetector(BeliefSource):
         :param search: The surface being searched, which settles what rests on it.
         :param expected: What is believed to be on this surface already, from anything
             other than this picture.
+        :param board_outlines: Where the board's own edges fall in the plane the fits are
+            read in, which is what a piece found there has to explain better than.
+        :param explanations: How much better one account of a place must be than the next
+            before it is reported.
         :return: One detection per recognised piece.
         """
         edges = EdgeDistances.of(top_orthophoto)
+        seen = edges.positions
         pieces = []
         for hypothesis in [
             *self._colors_seen_in(orthophoto, top_orthophoto, search),
@@ -828,7 +845,15 @@ class LoosePieceDetector(BeliefSource):
             if not self._is_this_surfaces(hypothesis, search):
                 continue
             piece = self._piece_at(
-                hypothesis, orthophoto, edges, frame, reference_frame, search
+                hypothesis,
+                orthophoto,
+                edges,
+                seen,
+                board_outlines,
+                explanations,
+                frame,
+                reference_frame,
+                search,
             )
             if piece is not None:
                 pieces.append(piece)
@@ -924,32 +949,57 @@ class LoosePieceDetector(BeliefSource):
         hypothesis: PieceHypothesis,
         orthophoto: Orthophoto,
         edges: EdgeDistances,
+        seen: np.ndarray,
+        board_outlines: BoardOutlines,
+        explanations: CompetingExplanations,
         frame: RgbdFrame,
         reference_frame: Optional[KinematicStructureEntity],
         search: SurfaceSearch,
     ) -> Optional[MontessoriShapeDetection]:
         """
-        Recognise the piece a hypothesis expects, if the picture bears it out.
+        Recognise the piece a hypothesis expects, if the picture bears it out better
+        than anything else could have.
 
         The outline the fit settled on is what the piece is measured by, rather than the
         colour blob a hypothesis may have come from: it is the piece's own footprint,
         and it is the only outline a hypothesis expected from anything but a colour has.
 
+        Three accounts of the same place are what the best fit has to lead: the board's
+        own geometry, the next candidate the belief allowed, and nothing being there. A
+        belief naming one piece therefore has less to lead than an unguided look over the
+        whole set, which is knowledge making the same evidence go further.
+
         :param hypothesis: What is expected, and where it is believed to be.
         :param orthophoto: The rectified view of the surface's own plane.
         :param edges: How far each point of the top view lies from an edge the camera
             saw, which is what a piece's own outline is fitted to.
+        :param seen: Where the edges of that view stand, as ``(n, 2)`` world-frame points.
+        :param board_outlines: Where the board's own edges fall in that view.
+        :param explanations: How much better one account must be than the next.
         :param frame: The camera data, for measuring how tall the piece stands.
         :param reference_frame: Frame the resulting pose is expressed in.
         :param search: The surface being searched.
-        :return: The piece, or None where nothing expected follows the edges there.
+        :return: The piece, or None where nothing expected explains the edges there
+            better than the alternatives.
         """
-        match = self.matcher.match(edges, hypothesis)
-        if match is None:
+        fitted_pieces = self.matcher.fits(edges, hypothesis)
+        if not fitted_pieces:
             return None
-        outline = match.piece.turned_outline(match.yaw) + np.array(
-            [match.center.x, match.center.y]
+        match, *runners_up = fitted_pieces
+        outline = match.outline
+        place = PlaceInThePicture.around(
+            outline,
+            edges,
+            seen,
+            self.matcher.fitter.reach,
+            self.matcher.fitter.outline_spacing,
         )
+        account = place.explained_by(outline)
+        rivals = [board_outlines.account_of(place)]
+        if runners_up:
+            rivals.append(place.explained_by(runners_up[0].outline))
+        if not explanations.is_reported(account, *rivals):
+            return None
         fitted = _to_rectified_contour(outline, orthophoto)
         height = _measure_height(fitted, orthophoto, frame, self.piece_height)
         return MontessoriShapeDetection(
@@ -964,7 +1014,7 @@ class LoosePieceDetector(BeliefSource):
             outline=outline,
             category=match.piece.category,
             height=height,
-            outline_agreement=match.outline_agreement,
+            explanation=account,
             supporting_surface=search.surface.name,
             hypothesis=hypothesis,
         )
@@ -1119,6 +1169,14 @@ class MontessoriPerceptionPipeline:
     piece_detector: LoosePieceDetector = field(default_factory=LoosePieceDetector)
     """
     Finds the loose pieces resting on each of the scene's surfaces.
+    """
+
+    explanations: CompetingExplanations = field(default_factory=CompetingExplanations)
+    """
+    How much better one account of a place must be than the next before it is reported.
+
+    A statement about what a wrong report costs whoever asked for the look, so it
+    belongs to the look rather than to the detector that takes it.
     """
 
     headroom: float = 0.15
@@ -1277,22 +1335,40 @@ class MontessoriPerceptionPipeline:
         expected = self.expected_pieces()
         pieces = []
         for search in self.searched_surfaces(board):
+            plane_of_the_tops = search.surface.height + self.piece_detector.piece_height
             pieces.extend(
                 self.piece_detector.detect(
                     self.rectify(frame, search.surface.height),
-                    self.rectify(
-                        frame,
-                        search.surface.height + self.piece_detector.piece_height,
-                    ),
+                    self.rectify(frame, plane_of_the_tops),
                     frame,
                     self.reference_frame,
                     search,
                     expected,
+                    self._board_outlines_in(board, plane_of_the_tops, frame),
+                    self.explanations,
                 )
             )
-        occupancy = Occupancy()
+        occupancy = Occupancy(explanations=self.explanations)
         if board is not None:
             occupancy.claim(self.table_hidden_by(board, frame))
         return MontessoriScene(
             shapes=occupancy.keep_one_detection_per_place(pieces), board=board
         )
+
+    @staticmethod
+    def _board_outlines_in(
+        board: Optional[MontessoriBoardDetection],
+        plane_height: float,
+        frame: RgbdFrame,
+    ) -> BoardOutlines:
+        """
+        Where the board's own edges fall in one rectified plane, or none where no board
+        was in view.
+
+        :param board: The board as this look found it.
+        :param plane_height: Height of the plane they are wanted in, in metres.
+        :param frame: The camera data, for where the camera stands.
+        """
+        if board is None:
+            return BoardOutlines()
+        return board.outlines_in(plane_height, frame.camera_position)
