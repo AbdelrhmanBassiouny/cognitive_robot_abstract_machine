@@ -30,7 +30,10 @@ from experiments.montessori.perception.surface_finding import (
 )
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.world_description.geometry import SurfaceFinish
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.geometry import Box, Scale, SurfaceFinish
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 
 # %% a depth image of a plane, built where what it holds is known
 
@@ -167,6 +170,13 @@ PLANE_HEIGHT = 0.88
 How high that plane stands, which is Tracy's own table height.
 """
 
+NO_GROUND = WorkspaceRegion(
+    minimum_x=0.75, maximum_x=0.75, minimum_y=-0.05, maximum_y=0.40
+)
+"""
+A stretch bounded to no ground at all, which is a surface neither finder can answer.
+"""
+
 
 def test_a_plane_is_measured_where_the_depth_image_puts_it() -> None:
     """
@@ -174,8 +184,10 @@ def test_a_plane_is_measured_where_the_depth_image_puts_it() -> None:
     world models around it.
     """
     measured = MeasuredSurfaceFinder().find(
-        modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
-        frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
+        SoughtSurface(
+            modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
+            frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
+        )
     )
     assert reaches(measured) == pytest.approx(
         (
@@ -194,8 +206,10 @@ def test_a_plane_standing_a_little_off_its_modelled_height_is_still_measured() -
     is found without its height having to agree to the millimetre.
     """
     measured = MeasuredSurfaceFinder().find(
-        modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
-        frame_showing(PLANE_BOUNDS, PLANE_HEIGHT + SURFACE_SCATTER / 2),
+        SoughtSurface(
+            modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
+            frame_showing(PLANE_BOUNDS, PLANE_HEIGHT + SURFACE_SCATTER / 2),
+        )
     )
     assert reaches(measured) == pytest.approx(
         (
@@ -218,7 +232,9 @@ def test_everything_but_the_extent_is_left_as_the_world_states_it() -> None:
     """
     modelled = modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT, SurfaceFinish.MIRROR)
     measured = MeasuredSurfaceFinder().find(
-        modelled, frame_showing(PLANE_BOUNDS, PLANE_HEIGHT + SURFACE_SCATTER / 2)
+        SoughtSurface(
+            modelled, frame_showing(PLANE_BOUNDS, PLANE_HEIGHT + SURFACE_SCATTER / 2)
+        )
     )
     assert (measured.name, measured.height, measured.finish) == (
         modelled.name,
@@ -233,8 +249,10 @@ def test_a_plane_wider_than_the_world_models_is_reported_no_wider() -> None:
     only ever searches a stretch the world had already allowed.
     """
     measured = MeasuredSurfaceFinder().find(
-        modelled_surface(PLANE_BOUNDS, PLANE_HEIGHT),
-        frame_showing(MODELLED_BOUNDS, PLANE_HEIGHT),
+        SoughtSurface(
+            modelled_surface(PLANE_BOUNDS, PLANE_HEIGHT),
+            frame_showing(MODELLED_BOUNDS, PLANE_HEIGHT),
+        )
     )
     assert reaches(measured) == pytest.approx(
         (
@@ -254,8 +272,10 @@ def test_a_picture_holding_no_plane_where_the_world_says_is_refused() -> None:
     """
     with pytest.raises(SurfaceNotSeenWhereTheWorldPutsIt):
         MeasuredSurfaceFinder().find(
-            modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
-            frame_showing(PLANE_BOUNDS, PLANE_HEIGHT + 10 * SURFACE_SCATTER),
+            SoughtSurface(
+                modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
+                frame_showing(PLANE_BOUNDS, PLANE_HEIGHT + 10 * SURFACE_SCATTER),
+            )
         )
 
 
@@ -269,12 +289,38 @@ def test_a_mirror_finished_surface_is_measured_in_the_picture() -> None:
     """
     rules = SurfaceRules()
     finder = rules.finder_for(
-        SoughtSurface.of(
+        SoughtSurface(
             modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT, SurfaceFinish.MIRROR),
             frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
         )
     )
     assert finder is rules.measured
+
+
+def test_the_rules_read_the_finish_the_worlds_own_shape_states() -> None:
+    """
+    A rule is stated over the surface the world describes rather than over a copy of its
+    properties, so a finish carried by the twin's own collision shape is what decides
+    the look, with nothing in between to fall out of step with it.
+    """
+    table = Body(
+        name=PrefixedName("brushed_steel_table", "test"),
+        collision=ShapeCollection(
+            [Box(scale=Scale(1.0, 1.2, 0.02), finish=SurfaceFinish.MIRROR)]
+        ),
+    )
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(table)
+    rules = SurfaceRules()
+
+    sought = SoughtSurface(
+        WorkspaceSurface.of_body(table, world.root),
+        frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
+    )
+
+    assert sought.surface.finish is SurfaceFinish.MIRROR
+    assert rules.finder_for(sought) is rules.measured
 
 
 def test_a_surface_the_world_states_no_finish_for_is_taken_from_the_model() -> None:
@@ -284,7 +330,7 @@ def test_a_surface_the_world_states_no_finish_for_is_taken_from_the_model() -> N
     """
     rules = SurfaceRules()
     finder = rules.finder_for(
-        SoughtSurface.of(
+        SoughtSurface(
             modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
             frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
         )
@@ -292,16 +338,19 @@ def test_a_surface_the_world_states_no_finish_for_is_taken_from_the_model() -> N
     assert finder is rules.modelled
 
 
-def test_a_surface_the_world_does_not_bound_is_refused() -> None:
+def test_a_surface_the_world_bounds_to_nothing_is_refused() -> None:
     """
-    A surface nothing bounds gives both finders nothing: the model has no extent to
-    state and the measurement has none to narrow, so the look is refused rather than
-    answered from a guess.
+    A surface bounded to no ground at all gives both finders nothing: the model has no
+    extent to state and the measurement has none to narrow, so the look is refused
+    rather than answered from a guess.
     """
     rules = SurfaceRules()
     with pytest.raises(NoSurfaceFinderAnswersTheLook):
         rules.finder_for(
-            SoughtSurface(finish=SurfaceFinish.MIRROR, extent_is_modelled=False)
+            SoughtSurface(
+                modelled_surface(NO_GROUND, PLANE_HEIGHT, SurfaceFinish.MIRROR),
+                frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
+            )
         )
 
 
@@ -311,12 +360,14 @@ def test_a_rule_added_while_the_rules_are_in_use_changes_the_next_answer() -> No
     rule rather than written into the code that reads them.
     """
     rules = SurfaceRules()
-    glossy = SoughtSurface.of(
+    glossy = SoughtSurface(
         modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT, SurfaceFinish.GLOSSY),
         frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
     )
     assert rules.finder_for(glossy) is rules.modelled
-    rules.add_rule(rules.stated_surface.finish == SurfaceFinish.GLOSSY, rules.measured)
+    rules.add_rule(
+        rules.stated_surface.surface.finish == SurfaceFinish.GLOSSY, rules.measured
+    )
     assert rules.finder_for(glossy) is rules.measured
 
 
@@ -360,8 +411,11 @@ def test_each_finder_declares_the_surfaces_it_can_answer() -> None:
     not, and on a look that offers both of them everything the choice between them is
     the rules' rather than a capability's.
     """
-    unbounded = SoughtSurface(finish=SurfaceFinish.MIRROR, extent_is_modelled=False)
-    bounded = SoughtSurface.of(
+    unbounded = SoughtSurface(
+        modelled_surface(NO_GROUND, PLANE_HEIGHT, SurfaceFinish.MIRROR),
+        frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
+    )
+    bounded = SoughtSurface(
         modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT, SurfaceFinish.MIRROR),
         frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
     )
@@ -380,8 +434,10 @@ def test_a_measured_stretch_lands_on_the_grid_the_modelled_one_samples() -> None
     picture rather than less of the same one.
     """
     measured = MeasuredSurfaceFinder().find(
-        modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
-        frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
+        SoughtSurface(
+            modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
+            frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
+        )
     )
     steps = [
         (measured.region.minimum_x - MODELLED_BOUNDS.minimum_x)
@@ -417,6 +473,6 @@ def test_a_measurement_is_declared_only_where_there_is_depth_to_take_it_in() -> 
     colour_only = replace(seen, depth=np.zeros((480, 640), dtype=float))
     finder = MeasuredSurfaceFinder()
     assert [
-        finder.answers(SoughtSurface.of(mirror, seen)),
-        finder.answers(SoughtSurface.of(mirror, colour_only)),
+        finder.answers(SoughtSurface(mirror, seen)),
+        finder.answers(SoughtSurface(mirror, colour_only)),
     ] == [True, False]

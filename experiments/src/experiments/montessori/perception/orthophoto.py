@@ -93,6 +93,13 @@ class WorkspaceRegion(SubclassJSONSerializer):
         return int(round((self.maximum_y - self.minimum_y) / self.resolution))
 
     @property
+    def area(self) -> float:
+        """
+        How much ground the stretch covers, in square metres.
+        """
+        return (self.maximum_x - self.minimum_x) * (self.maximum_y - self.minimum_y)
+
+    @property
     def region_T_pixel(self) -> np.ndarray:
         """
         The 3x3 mapping from a rectified pixel to the plane coordinates ``(x, y, 1)`` it

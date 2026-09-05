@@ -23,7 +23,6 @@ from typing_extensions import List
 from experiments.montessori.hole_geometry import detect_hole_footprints
 from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.detections import MontessoriScene
-from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import WIDEST_WORKSPACE
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -49,15 +48,6 @@ def detections_on(
     return Counter(
         shape.category for shape in scene.shapes if shape.supporting_surface == surface
     )
-
-
-def area_of(region: WorkspaceRegion) -> float:
-    """
-    How much of a plane a stretch of it covers, in square metres.
-
-    :param region: The stretch to measure.
-    """
-    return (region.maximum_x - region.minimum_x) * (region.maximum_y - region.minimum_y)
 
 
 @pytest.fixture(params=sorted(CAPTURE_TRUTHS), ids=sorted(CAPTURE_TRUTHS))
@@ -204,7 +194,7 @@ def test_the_table_is_measured_smaller_than_the_stretch_the_world_allows(
     """
     modelled = capture_pipeline.table.region
     measured = capture_pipeline.table_in(capture.to_frame()).region
-    assert area_of(measured) < area_of(modelled)
+    assert measured.area < modelled.area
 
 
 def test_the_measured_table_stays_inside_the_stretch_the_world_allows(

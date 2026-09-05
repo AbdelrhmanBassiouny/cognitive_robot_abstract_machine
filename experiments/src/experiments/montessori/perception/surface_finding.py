@@ -37,7 +37,7 @@ from krrood.entity_query_language.factories import (
     variable,
 )
 from krrood.entity_query_language.rules.conclusion_selector import Alternative
-from typing_extensions import TYPE_CHECKING, Optional
+from typing_extensions import TYPE_CHECKING
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.exceptions import (
@@ -67,52 +67,30 @@ millimetres either side of the plane fitted through them.
 # %% what the rules read
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class SoughtSurface:
     """
-    One surface being looked for, and what the world says about it.
+    One surface being looked for, and the look it is being looked for in.
 
-    Everything a rule reads is stated here rather than reached for through the world, so
-    a rule is a condition over plain properties and the reading of the world happens
-    once in :meth:`of`.
+    A rule reads these two as they are rather than a copy of the properties it happens
+    to want, so what a condition asks about a surface is what the world states about it
+    -- the finish its own shape carries, the ground its own region covers -- and there
+    is no second description to fall out of step with either.
+
+    ..note:: Compared by identity: a look holds images, which do not compare as values,
+        and two looks at one scene are not the same look.
     """
 
-    finish: Optional[SurfaceFinish]
+    surface: WorkspaceSurface
     """
-    How the surface takes the light that falls on it, or ``None`` where the world states
-    no finish for it.
-    """
-
-    extent_is_modelled: bool
-    """
-    Whether the world says how far the surface reaches.
-
-    That bound is what the model states outright and what a measurement narrows, so a
-    surface without one is one neither finder can answer.
+    The surface as the world models it: how far it says the surface reaches, how high
+    its plane stands, and how it takes the light that falls on it.
     """
 
-    depth_was_returned: bool = True
+    frame: RgbdFrame
     """
-    Whether the camera returned any depth for the look this surface is sought in.
-
-    What the world says is not the whole of what a finder needs: a camera that reports
-    only colour can be described a mirror-finished plane all day and still have nothing
-    to measure one in.
+    The camera data the surface is being looked for in.
     """
-
-    @classmethod
-    def of(cls, surface: WorkspaceSurface, frame: RgbdFrame) -> SoughtSurface:
-        """
-        What the world says about a surface, and what one look offers to find it with.
-
-        :param surface: The surface as the world models it.
-        :param frame: The camera data it is being looked for in.
-        """
-        return cls(
-            finish=surface.finish,
-            extent_is_modelled=True,
-            depth_was_returned=bool((frame.depth > 0.0).any()),
-        )
 
 
 # %% what a finder says it can answer
@@ -170,13 +148,11 @@ class SurfaceFinder(ABC):
         return bool(self.answerable_surfaces.tolist())
 
     @abstractmethod
-    def find(self, modelled: WorkspaceSurface, frame: RgbdFrame) -> WorkspaceSurface:
+    def find(self, sought: SoughtSurface) -> WorkspaceSurface:
         """
         Say how far the surface reaches and how high its plane stands.
 
-        :param modelled: The surface as the world models it, which is what a measurement
-            narrows and what a reading of the model answers outright.
-        :param frame: The camera data the surface is looked for in.
+        :param sought: The surface the world models, and the look it is sought in.
         :return: The surface a run searches.
         """
 
@@ -195,20 +171,21 @@ class ModelledSurfaceFinder(SurfaceFinder):
 
     def capability(self, sought: SoughtSurface) -> ConditionType:
         """
-        Any surface the world bounds, which is the extent this finder states.
+        Any surface the world bounds to some ground, which is the extent this finder
+        states.
 
         :param sought: The description to state the condition over.
         """
-        return sought.extent_is_modelled == True  # noqa: E712 - a stated condition
+        return sought.surface.region.area > 0.0
 
-    def find(self, modelled: WorkspaceSurface, frame: RgbdFrame) -> WorkspaceSurface:
+    def find(self, sought: SoughtSurface) -> WorkspaceSurface:
         """
         The surface exactly as the world models it.
 
-        :param modelled: The surface as the world models it.
-        :param frame: The camera data, which this finder does not read.
+        :param sought: The surface the world models, and the look it is sought in, which
+            this finder does not read.
         """
-        return modelled
+        return sought.surface
 
 
 @dataclass(eq=False)
@@ -231,17 +208,22 @@ class MeasuredSurfaceFinder(SurfaceFinder):
 
     def capability(self, sought: SoughtSurface) -> ConditionType:
         """
-        Any surface the world bounds, looked for in a picture that carries depth: the
-        bound is what a measurement narrows, and the depth is what it reads.
+        Any surface the world bounds to some ground, looked for in a picture that
+        carries depth: the bound is what a measurement narrows, and the depth is what it
+        reads.
+
+        What the world says is not the whole of what a finder needs -- a camera
+        reporting only colour can be described a mirror-finished plane all day and still
+        have nothing to measure one in -- so the picture is asked as well as the world.
 
         :param sought: The description to state the condition over.
         """
         return and_(
-            sought.extent_is_modelled == True,  # noqa: E712 - a stated condition
-            sought.depth_was_returned == True,  # noqa: E712 - a stated condition
+            sought.surface.region.area > 0.0,
+            sought.frame.carries_depth == True,  # noqa: E712 - a stated condition
         )
 
-    def find(self, modelled: WorkspaceSurface, frame: RgbdFrame) -> WorkspaceSurface:
+    def find(self, sought: SoughtSurface) -> WorkspaceSurface:
         """
         The stretch of the modelled surface the camera saw.
 
@@ -252,14 +234,14 @@ class MeasuredSurfaceFinder(SurfaceFinder):
         plane is derived from the table's, so measuring one and not the other would
         leave the two surfaces describing different tables.
 
-        :param modelled: The surface as the world models it.
-        :param frame: The camera data the surface is measured in.
+        :param sought: The surface the world models, and the look it is measured in.
         :raises WorkspaceOutOfView: If the stretch the world allows falls outside the
             picture entirely.
         :raises SurfaceNotSeenWhereTheWorldPutsIt: If nothing stands at the modelled
             plane inside that stretch.
         """
-        at_the_plane = self._points_standing_at(modelled, frame)
+        modelled = sought.surface
+        at_the_plane = self._points_standing_at(modelled, sought.frame)
         if not len(at_the_plane):
             raise SurfaceNotSeenWhereTheWorldPutsIt(str(modelled.name), modelled.height)
         surface_points = self._within(
@@ -445,7 +427,7 @@ class SurfaceRules:
             add(self.chosen_finder, self.modelled)
             self.latest_rule = refinement(
                 and_(
-                    self.stated_surface.finish == SurfaceFinish.MIRROR,
+                    self.stated_surface.surface.finish == SurfaceFinish.MIRROR,
                     self.measured.capability(self.stated_surface),
                 )
             )
@@ -478,7 +460,8 @@ class SurfaceRules:
         :raises NoSurfaceFinderAnswersTheLook: If no finder answers what the world says
             about it.
         """
-        return self.finder_for(SoughtSurface.of(modelled, frame)).find(modelled, frame)
+        sought = SoughtSurface(modelled, frame)
+        return self.finder_for(sought).find(sought)
 
     def finder_for(self, sought: SoughtSurface) -> SurfaceFinder:
         """
