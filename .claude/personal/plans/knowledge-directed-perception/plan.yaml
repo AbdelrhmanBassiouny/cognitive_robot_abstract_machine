@@ -1373,15 +1373,19 @@ items:
   pull_request_number: 257
   track: events
   blockers:
-  - 'Two of the six threads of 2026-09-05 (evening) are left open on #257 deliberately, and
-    both are the developer''s to close. r3940953108 asked whether an event''s declared effect
-    duplicates Segmind''s statechart: verified, and the direction is right - the containment
-    detectors do re-check every step and emit their own events - but nothing passes a hole''s
-    region as a containment candidate, and they read InsideOf at 0.9 between bodies where the
-    belief is InsideRegion at 0.5 against a region, so folding is a decision about which
-    relation a containment belief is stated in. r3940991795 asked for a shared base of HasPose
-    and Point3 in place of the Placed union and named it HasLocation; it is HasPosition, the
-    word the twin already uses for this, which is a rename away if he prefers his.'
+  - 'One thread is open on #257 and it is the developer''s to settle. r3940953108 asked
+    whether an event''s declared effect duplicates Segmind''s statechart, and on 2026-09-05
+    he proposed making InsideOf answer for regions as the fix. Measured on the plate scene:
+    it already does - Region is a KinematicStructureEntity and every attribute the reading
+    touches is on that base - answering 1.000 sunk in the hole, 0.500 standing on the plate
+    over it and 0.000 lifted clear, at 23x less cost than InsideRegion. But it counts
+    vertices inside a bounding box rather than volume inside a shape, so its own default of
+    0.5 reads the over-the-hole case as in the hole, while the detectors'' 0.9 reads it
+    correctly. So the fold works at 0.9, and what is his to decide is whether the threshold
+    may carry that correctness and whether InsideOf gains the allowed_space InsideRegion has
+    as a PlacementRelation.'
+  - 'r3940991795, HasPosition versus his HasLocation, was resolved by the developer without
+    a rename being asked for; recorded here only because the name is still his to change.'
   depends_on:
   - imagination-world-rejects-what-a-predicate-refuses
   - pieces-looked-for-where-expected
@@ -1505,6 +1509,34 @@ items:
     which one they are. HasPosition replaces the Placed union and position_of. colors answers
     every colour and look_request takes the decision. Two threads stay open: the statechart
     fold and the HasPosition naming. krrood 1335 passed and 3 skipped against 1333; segmind 88
+
+    Review round of 2026-09-05 (night), two threads, one answered in code and one in
+    measurement. The developer rejected the morning's shape - "I don't think inheriting
+    from match is the right approach here, what I meant is to use match instead of stated
+    relation altogether" - so StatedRelation is gone entirely (f7112120). A relation
+    asserted about the thing sought is an ordinary Match over the relation's own class,
+    and everything the class carried moved to whatever already owned it: Relation
+    subject_name and Triple object_name in krrood's predicate module, which also removes a
+    duplication in Triple's own verbalization; Match.stating, Match.covers and
+    Match.states_the_same, which are true of any partial description rather than of
+    relations; construct_instance, which a match already had; and
+    relation_asserted_about, relations_stated_in, relation_stated_by and
+    relation_type_stated_by beside the backend that reads statements. Value comparison is
+    explicit at the two places that need it rather than an overridden equality, and
+    Expectation.expects is what a belief is asked in place of comparing statements.
+    krrood 1336 passed and 3 skipped against 1335, the one added; segmind 88 and 1 skipped
+    and experiments 520, 1 skipped, 11 xfailed, both unchanged against the previous head
+    measured in the same container.
+
+    The other thread is his proposal that InsideOf answer for regions. It already does, and
+    the measurement is on the pull request: 1.000 sunk in the hole, 0.500 standing over it,
+    0.000 lifted clear, 23x cheaper than InsideRegion - but it counts vertices in a
+    bounding box rather than volume in a shape, so its own 0.5 default reads the
+    over-the-hole case as in the hole while the detectors' 0.9 reads it right. Left open
+    for him with two things to weigh: whether a threshold may carry that correctness, and
+    that InsideRegion is a PlacementRelation whose allowed_space a search reads while
+    InsideOf answers no stretch of world.
+
     against 84; experiments 519 against 518; the twin''s 27 failures identical by name.
 - id: predicted-state-from-declared-effects
   title: Predict the twin's current state from what the actions and the events declared, and ask perception from it

@@ -5844,3 +5844,91 @@ detectors configured alike are not the same detector, and a rule holds the detec
   precedent.
 - `SUPPORTING_SURFACE_ATTRIBUTE_NAME` in `backend.py` is the same smell in the same package and is
   #227's to remove, on the other stack.
+
+### `expectations-from-events`: the round of 2026-09-05 (night), and a relation with no class of its own
+
+Two threads, and the first of them reverses the morning's answer. The developer read
+`StatedRelation` subclassing `Match` and said no: *"I don't think inheriting from match is
+the right approach here, what I meant is to use match instead of stated relation
+altogether, use match on the semdt classes and relations and define the description as a
+match statement like that. If there are missing classes or properties that are not in the
+semdt and you think should be there then add them, or if they should be in the perception
+backend add them there. A match statement is the cannonical way to define partial
+information about domain concepts and entities."*
+
+He is right, and the class was hiding how little was left of it. Done as `f7112120`.
+
+#### Everything it carried already had an owner
+
+A relation asserted about the thing a statement looks for is now written the way anything
+partial is written -- `an(SupportedBy)(supporting=lid)` -- and the class is gone rather
+than reparented.
+
+| what it was | where it is |
+| --- | --- |
+| `subject_name`, `related_thing` | `Relation.subject_name()`, `Triple.object_name()` |
+| `stating`, `covers` | `Match.stating(**kwargs)`, `Match.covers(other)` |
+| value equality | `Match.states_the_same(other)`, mutual coverage |
+| `constraint()` | `Match.construct_instance()`, which it already had |
+| `about(subject)` | `relation_asserted_about(stated, subject)` |
+| `read_from`, `stated_in`, `relation_stated_by` | the three reading functions beside the backend |
+
+**Two of those are worth having on their own, independently of this branch.**
+`Triple._verbalization_fragment_` was reading the subject's and the object's field names
+its own way, through the same code-parsing helper `StatedRelation` used privately; both now
+read one classmethod. And `Match.covers` gives the language a name for what a partial
+description *means* -- a match stating fewer attributes admits more, one stating none
+admits every match over its kind -- which a belief and an event's effect were each doing
+by hand.
+
+**The one thing that had to be deliberate is equality.** A `Match` is `eq=False` because a
+match is a node of a query graph, told apart by which one it is. A relation stated about
+the thing sought is written down, passed around and compared as a value. Rather than
+override equality anywhere, the comparison is explicit at the two places that need it:
+`Effect.applied_to`'s "what this begins that is not already believed", and
+`Expectation.expects(relation)`, which is what a belief is asked instead of comparing
+statements -- a better question than the `in` it replaces, since `Expectation.holds` reads
+its relations off its own conditions afresh each call and so never returns the same objects
+twice.
+
+`says(relations, *expected)` in `test/segmind_test/dataset/` is the sequence form of the
+same question, shared by the two Segmind test modules that assert what an effect or a look
+request states.
+
+#### `InsideOf` already answers for regions, and what it measures is the question
+
+The second thread is the statechart-duplication one, and the developer's proposal on it:
+*"InsideOf should be able to work for regions as well. If we make that, we fix our
+problem."*
+
+There is nothing to make. `Region` is a `KinematicStructureEntity`, and `combined_mesh`,
+`numeric_global_bounds` and `numeric_global_transform` -- the three things
+`compute_containment_ratio` reads -- are all on that base. Measured on the
+plate-with-a-hole scene:
+
+| the cube is | `InsideOf` ratio | `InsideRegion` fraction |
+| --- | --- | --- |
+| sunk in the hole | 1.000 | 1.000 |
+| on the plate, directly over the hole | **0.500** | 0.000 |
+| lifted clear | 0.000 | 0.000 |
+
+and at **115 µs against 2604 µs**, 23x cheaper, which matters for a relation the statechart
+re-checks every step.
+
+**What separates them is the middle row.** `InsideOf` counts the fraction of the body's
+mesh *vertices* inside the other's *bounding box*; `InsideRegion` intersects volume with
+the region's actual shape. A cube standing on the plate directly over the hole has its four
+bottom vertices on the hole box's top face, so it reads 0.500 -- and `InsideOf`'s own
+default `minimum_containment_ratio` is 0.5, so *at the default it answers "in the hole" for
+a piece lying on top of it*, which is the one distinction this expectation exists to make.
+At the containment detectors' 0.9 it reads all three rows correctly.
+
+So the fold works, and it costs one decision that is the developer's: whether a threshold
+may carry that correctness, given the reading is a vertex count against a box whose error
+depends on the region's shape; and that `InsideRegion` is a `PlacementRelation` whose
+`allowed_space` a search reads to narrow a look before anything is found, while `InsideOf`
+answers no stretch of world at all. Left open with both stated.
+
+Worth generalizing: **"make X work for Y" is worth measuring before it is built** -- here
+the type already worked and the *reading* was the gap, which is the opposite of what the
+thread assumed and would have been invisible from the signatures.
