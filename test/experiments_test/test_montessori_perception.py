@@ -16,7 +16,7 @@ from typing_extensions import List
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriScene,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
 )
 from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
@@ -156,7 +156,7 @@ def test_pipeline_reports_no_board_when_none_is_in_view(
 
 def _pieces_near(
     scene: MontessoriScene, placed: PlacedPiece
-) -> list[MontessoriShapeDetection]:
+) -> list[DetectedMontessoriShape]:
     """
     The detections standing within one piece's own outline of where it was placed.
 
@@ -280,11 +280,16 @@ def test_a_reading_taken_off_the_table_the_board_hides_is_not_reported(
     scene = pipeline.detect(frame)
     occupancy = Occupancy()
     occupancy.claim(pipeline.table_hidden_by(scene.board, frame))
-    against_the_board = MontessoriShapeDetection(
-        pose=Pose.from_xyz_rpy(
-            *scene.board.pose.to_position().to_np()[:2],
-            pipeline.table.height + 0.015,
+    against_the_board_pose = Pose.from_xyz_rpy(
+        *scene.board.pose.to_position().to_np()[:2],
+        pipeline.table.height + 0.015,
+    )
+    against_the_board = DetectedMontessoriShape(
+        role_taker=scene.imagined.spawn(
+            KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE],
+            against_the_board_pose,
         ),
+        pose=against_the_board_pose,
         footprint=scene.shapes[0].footprint,
         hypothesis=scene.shapes[0].hypothesis,
         outline=scene.board.outline,
@@ -370,7 +375,7 @@ def lid_search(
 
 def pieces_on_the_lid(
     pipeline: MontessoriPerceptionPipeline, frame, expected
-) -> List[MontessoriShapeDetection]:
+) -> List[DetectedMontessoriShape]:
     """
     What one pass over the board's lid finds, given what it was told to expect.
 
@@ -385,7 +390,7 @@ def pieces_on_the_lid(
             frame, pipeline.lid.height + pipeline.piece_detector.piece_height
         ),
         frame,
-        pipeline.reference_frame,
+        pipeline.imagine(),
         search,
         expected,
     )

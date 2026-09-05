@@ -5,7 +5,7 @@ the Montessori scene by looking at it.
 Perception is a backend beside the native and SQLAlchemy ones, so asking and looking are
 the same act::
 
-    statement = an(MontessoriShapeDetection)(pose=...)
+    statement = a(DetectedMontessoriShape)(pose=...)
     statement = statement.where(SupportedBy(statement.variable, board_lid))
     [seen] = statement.evaluate(backend=MontessoriPerceptionBackend(source=node))
     reach_for = seen.pose
@@ -22,15 +22,23 @@ one thing, between two, near a place -- answers the stretch it allows, so the pi
 cut to it before anything is detected. And a colour says which pieces are worth fitting
 at all, so a look asked for one marks that colour alone. What none of them do is decide
 the answer: each is checked again over what came back.
+
+A relation no search covers is answered rather than refused: what a look found stands as
+a body in a copy of the world it was taken in, so the relation is evaluated there, and
+what it rejects leaves that world again.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from typing_extensions import ClassVar, Iterable, Optional, Tuple, Type
+from typing_extensions import ClassVar, Iterable, List, Optional, Tuple, Type
 
-from experiments.montessori.perception.detections import MontessoriDetection
+from experiments.montessori.perception.detections import (
+    DetectedMontessoriShape,
+    MontessoriDetection,
+    MontessoriScene,
+)
 from experiments.montessori.perception.exceptions import LookHasNoReferenceFrame
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
@@ -57,6 +65,11 @@ class MontessoriPerceptionBackend(PerceptionBackend):
     Where a look at the scene comes from.
     """
 
+    seen: Optional[MontessoriScene] = field(init=False, default=None)
+    """
+    What the last look found, which is what says where the things found stand.
+    """
+
     narrowing_relations: ClassVar[Tuple[Type[Relation], ...]] = (
         SupportedBy,
         PlacementRelation,
@@ -76,7 +89,21 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         :param request: What the statement asks a look for.
         :return: Everything the look found.
         """
-        return self.source.scene(self.scene_request(request)).detections
+        self.seen = self.source.scene(self.scene_request(request))
+        return self.seen.detections
+
+    def discard(self, instances: List[MontessoriDetection]) -> None:
+        """
+        Take what the statement rejected out of the world the look stood it in, so what
+        that world holds is the answer and nothing else.
+
+        :param instances: Everything the look reported that the statement rejected.
+        """
+        if self.seen is None or self.seen.imagined is None:
+            return
+        for instance in instances:
+            if isinstance(instance, DetectedMontessoriShape):
+                self.seen.imagined.remove(instance.role_taker)
 
     def relations_hold(
         self, instance: MontessoriDetection, request: LookRequest[MontessoriDetection]

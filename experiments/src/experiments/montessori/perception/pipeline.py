@@ -33,7 +33,7 @@ from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriDetection,
     MontessoriScene,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
     ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.edges import EdgeDistances
@@ -50,6 +50,7 @@ from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
     PieceHypothesis,
 )
+from experiments.montessori.perception.imagination import ImaginedWorld
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.perception.orthophoto import (
     Orthophoto,
@@ -635,11 +636,11 @@ class LoosePieceDetector(BeliefSource):
         orthophoto: Orthophoto,
         top_orthophoto: Orthophoto,
         frame: RgbdFrame,
-        reference_frame: Optional[KinematicStructureEntity],
+        imagined: ImaginedWorld,
         search: SurfaceSearch,
         expected: Sequence[PieceHypothesis] = (),
         color: Optional[Color] = None,
-    ) -> List[MontessoriShapeDetection]:
+    ) -> List[DetectedMontessoriShape]:
         """
         Find the pieces resting on one surface, by evaluating what is expected there.
 
@@ -653,7 +654,8 @@ class LoosePieceDetector(BeliefSource):
         :param orthophoto: The rectified view of the surface's own plane.
         :param top_orthophoto: The rectified view of the plane a piece's top stands on.
         :param frame: The camera data, for measuring how tall each piece stands.
-        :param reference_frame: Frame the resulting poses are expressed in.
+        :param imagined: Where what is found comes to stand, and the frame the resulting
+            poses are expressed in.
         :param search: The surface being searched, which settles what rests on it.
         :param expected: What is believed to be on this surface already, from anything
             other than this picture.
@@ -671,7 +673,7 @@ class LoosePieceDetector(BeliefSource):
             if not self._is_on_this_surface(hypothesis, search):
                 continue
             piece = self._piece_at(
-                hypothesis, orthophoto, edges, frame, reference_frame, search
+                hypothesis, orthophoto, edges, frame, imagined, search
             )
             if piece is not None:
                 pieces.append(piece)
@@ -770,9 +772,9 @@ class LoosePieceDetector(BeliefSource):
         orthophoto: Orthophoto,
         edges: EdgeDistances,
         frame: RgbdFrame,
-        reference_frame: Optional[KinematicStructureEntity],
+        imagined: ImaginedWorld,
         search: SurfaceSearch,
-    ) -> Optional[MontessoriShapeDetection]:
+    ) -> Optional[DetectedMontessoriShape]:
         """
         Recognise the piece a hypothesis expects, if the picture bears it out.
 
@@ -785,7 +787,8 @@ class LoosePieceDetector(BeliefSource):
         :param edges: How far each point of the top view lies from an edge the camera
             saw, which is what a piece's own outline is fitted to.
         :param frame: The camera data, for measuring how tall the piece stands.
-        :param reference_frame: Frame the resulting pose is expressed in.
+        :param imagined: Where the piece comes to stand once it is recognised, and the
+            frame its pose is expressed in.
         :param search: The surface being searched.
         :return: The piece, or None where nothing expected follows the edges there.
         """
@@ -797,14 +800,16 @@ class LoosePieceDetector(BeliefSource):
         )
         fitted = _to_rectified_contour(outline, orthophoto)
         height = _measure_height(fitted, orthophoto, frame, self.piece_height)
-        return MontessoriShapeDetection(
-            pose=Pose.from_xyz_rpy(
-                match.center.x,
-                match.center.y,
-                orthophoto.plane_height + height / 2,
-                yaw=match.yaw,
-                reference_frame=reference_frame,
-            ),
+        pose = Pose.from_xyz_rpy(
+            match.center.x,
+            match.center.y,
+            orthophoto.plane_height + height / 2,
+            yaw=match.yaw,
+            reference_frame=imagined.reference_frame,
+        )
+        return DetectedMontessoriShape(
+            role_taker=imagined.spawn(match.piece, pose),
+            pose=pose,
             footprint=Footprint.from_contour(fitted, orthophoto.region.resolution),
             outline=outline,
             category=match.piece.category,
@@ -1255,8 +1260,9 @@ class MontessoriPerceptionPipeline:
         """
         board = self.board_in(frame)
         expected = self.expected_pieces()
+        imagined = self.imagine()
         pieces = []
-        if request.wants(MontessoriShapeDetection):
+        if request.wants(DetectedMontessoriShape):
             for search in self.searched_surfaces(board, request):
                 pieces.extend(
                     self.piece_detector.detect(
@@ -1267,7 +1273,7 @@ class MontessoriPerceptionPipeline:
                             search.region,
                         ),
                         frame,
-                        self.reference_frame,
+                        imagined,
                         search,
                         expected,
                         request.color,
@@ -1276,6 +1282,17 @@ class MontessoriPerceptionPipeline:
         occupancy = Occupancy()
         if board is not None:
             occupancy.claim(self.table_hidden_by(board, frame))
-        return MontessoriScene(
-            shapes=occupancy.keep_one_detection_per_place(pieces), board=board
-        )
+        kept = occupancy.keep_one_detection_per_place(pieces)
+        for rejected in pieces:
+            if rejected not in kept:
+                imagined.remove(rejected.role_taker)
+        return MontessoriScene(shapes=kept, board=board, imagined=imagined)
+
+    def imagine(self) -> ImaginedWorld:
+        """
+        Take the world a look is about to stand its findings in.
+
+        :return: A copy of the world this pipeline reads, reporting in the frame this
+            pipeline places its detections in.
+        """
+        return ImaginedWorld.copied_from(self.world, self.reference_frame)
