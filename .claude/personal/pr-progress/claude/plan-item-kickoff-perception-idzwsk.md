@@ -40,11 +40,30 @@ a half answered differently, and the standing rule is to leave those for the dev
 - **A detector must state identity comparison itself** once it is a dataclass, or `add()`
   refuses to conclude one.
 
+## Round three: the second review of 2026-09-05 (0063f9824)
+
+Two threads about the concept in krrood, both answered exactly and **resolved** — the first
+resolves on this pull request.
+
+- **`LookT` is bound to `Look`**, the question put to perception. Not an empty marker:
+  `LookRequest` is one too, so `Look` / `LookRequest` stop reading as two names for one thing.
+- **`asked_about` replaces `answers`**, returning the detector's own standing query. Renamed
+  rather than retyped, because a `Query` is always truthy and `if detector.answers(look)`
+  would have been silently true forever.
+
+1311/3 krrood eql, 414/1/16 experiments unchanged.
+
 ## Open, for the developer
 
-- Wiring a detector per *part* of one description (thread r3941256826).
-- Conditions in the twin's own vocabulary for this family — waits on #255 making a detection
-  a `Role` over a world entity (r3941290762).
+- **The two-stack merge**, which is what three of the open asks actually need. Not only #255's
+  `Role`: #227 gives the backend a statement's relations in place of an attribute name, #238
+  makes a relation answer the stretch of world it allows. Merging #255 supplies all three —
+  measured at 68 commits, 62 files, +8,613/−752, seven conflicted files. A re-base is not
+  available as it was for #257, since #231 and #239 must stay beneath this branch.
+  Recommended, not taken (r3941601972).
+- Wiring a detector per *part* of one description (r3941623073) — answered in
+  `icra-experiments`' `query-routed-per-predicate`, one level up (among backends, not among
+  detectors). Proposed as an item of that track, not added. Waits on the same merge.
 - This family conditioning on the sensor: its look would have to carry what the *source*
   offers, since the rules are stated before any frame exists (r3941305756).
 - The remote branch was merged forward by a maintenance pass mid-round; that merge is in.
@@ -54,7 +73,9 @@ a half answered differently, and the standing rule is to leave those for the dev
 - `headroom` — #239's to conclude.
 - Skipping the board pass for a piece request — would misattribute a lid piece to the table.
 - Narrowing the candidate pieces from the request — #239's widening.
-- `SUPPORTING_SURFACE_ATTRIBUTE_NAME` in `backend.py` — the same smell, #227's to remove.
+- `SUPPORTING_SURFACE_ATTRIBUTE_NAME` in `backend.py` — **already removed on #227**
+  (`narrowing_relations = (SupportedBy,)`); it survives only on this sibling stack and goes
+  when the two meet. Recorded there at his ask (issuecomment-5554306138).
 
 ## Note
 
