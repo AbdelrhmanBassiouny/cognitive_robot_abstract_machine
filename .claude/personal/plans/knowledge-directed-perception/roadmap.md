@@ -5320,3 +5320,113 @@ which is #238's ground and #259's file.
 #### Verification
 
 Same container, branch head 4ad0fe46: krrood test_eql 1333 passed and 3 skipped; segmind 84 passed and 1 skipped against 64 (the twenty added); experiments with the six ROS modules excluded 518 passed, 1 skipped, 11 xfailed against 516; the twin 27 failed, 1106 passed, 118 errors with a failing set identical by name to the previous head. CI on 4ad0fe46 is not read.
+
+### `surfaces-found-by-looking`: the review round of 2026-09-05, and the case class that was a copy
+
+Five threads on #259, all opened that morning, none of which the item's own `blockers`
+recorded — the seventh round on this plan whose stall was a review comment nobody had
+turned into state. The branch was otherwise fine: out of draft nowhere (it is a draft, as
+the convention asks), its base #231 open and out of draft, and one red check of 23 that
+turns out not to be its own.
+
+#### The one that was answered in code
+
+*"why not replace this with an EQL match statement of semdt semantic annotation or
+kinematic structure entities?"*, on `SoughtSurface`.
+
+He is right, and reading the class rather than the thread made it worse than it looked.
+Its three fields were **a copy, a constant and a frame property**: `finish` duplicated
+`WorkspaceSurface.finish`; `extent_is_modelled` was set `True` unconditionally by `of`, so
+the base rule's condition could never be false and the rule tree's one guard was a
+tautology; and `depth_was_returned` was `(frame.depth > 0).any()` computed at case
+construction. So the thing the rules decided on was a second description of what the world
+already states, with nothing keeping the two in step — which `AGENTS.md`'s own rule against
+a value spelled in two places condemns independently of any redesign.
+
+`SoughtSurface` now holds the two things a look actually has — the `WorkspaceSurface` the
+world models and the `RgbdFrame` it is sought in — and every condition reads into them:
+`sought.surface.finish == SurfaceFinish.MIRROR`, `sought.surface.region.area > 0.0`,
+`sought.frame.carries_depth == True`.
+
+**The case class was never needed for the engine's sake**, and that is worth recording
+because three items on this plan assumed otherwise. EQL conditions traverse nested
+attributes *and* `@property` reads — measured with a probe before anything was changed, not
+inferred — so `TargetOnSurface` (#231) and `RequestedLook` (#266) were flattened for a
+constraint that does not exist. Whatever replaces them, that is one fewer reason to.
+
+Three things fell out of the change, each removing something rather than adding one:
+
+- The always-true flag became a condition that can be false. A surface the world bounds to
+  no ground is one the model has no extent to state and the measurement none to narrow, so
+  the look is refused — `test_a_surface_the_world_bounds_to_nothing_is_refused` now builds
+  a real region instead of passing a flag.
+- `carries_depth` moved onto `RgbdFrame`, whose question it is, and `area` onto
+  `WorkspaceRegion`, which the capture tests had been computing in a helper of their own.
+- `SurfaceFinder.find` takes that pair rather than the two arguments beside it, so a caller
+  cannot hand a finder a surface and a picture that do not go together.
+
+`test_the_rules_read_the_finish_the_worlds_own_shape_states` pins the path end to end: a
+`Body` whose collision shape is `Box(finish=MIRROR)`, read with `WorkspaceSurface.of_body`,
+and the rule firing off that shape's own statement. 430 passed, 1 skipped, 16 xfailed
+across `test/experiments_test/` against 429/1/16 before — the one added and nothing else
+moved.
+
+#### The four that are answered differently, and stay open
+
+- **The finish belongs on the twin's own body** (`recorded_setup.py:81`). It does, and #239
+  states it there for the world — on the *collision* geometry, since `of_body` reads the
+  appearance off the widest horizontal collision shape. `recorded_setup` writes it down for
+  the same reason `TABLE_HEIGHT` sits four lines above it: a capture is three files and no
+  `World`. What was **not** done is give that module a world of bodies, because #238 already
+  built one — `recorded_world()`, `_body_of(surface)`, `region_over`, `camera_in` — and a
+  third copy is the duplication this plan has recorded five times. The fold is one line:
+  `_body_of` passes `surface.finish` into its `Box`. #257's own round of 2026-09-04 reached
+  the same boundary from the other side, recording the measured surface carrying its entity
+  as *"#238's ground and #259's file"*.
+- **EQL-based RDRs take an underspecified match** (#77). Agreed, and it is the rest of the
+  first thread. It needs the `@rdr` stack — #77 on #80 on #76 on #159 — which this branch is
+  not on, for the cost #231 refused twice (#159 is 9,236 lines over 50 files; #77 is
+  22,745). Proposed as **`a-look-is-described-by-a-match`**: the description a rule tree is
+  stated over is an underspecified `Match` over the twin's own entities rather than a case
+  class mirroring their fields. It is worth an item rather than three corrections because
+  the same flattening is in `SoughtSurface`, `TargetOnSurface` and `RequestedLook`, and one
+  mechanism removes all three. Not added — structural, and the developer's.
+- **Calibrate the camera against the 3D model**, and **combine the two finders to do it**.
+  Good direction, and the shape is ready: `SurfaceFinder` is the interface and the rules
+  choose among whatever declares it can answer, so this arrives as a third finder and one
+  `add_rule` rather than a change to either. Three measurements bear on it, two of them
+  against the obvious version. Fitting this table's *height* as well as its extent answered
+  **0.8804–0.8811 m against the modelled 0.88** on all six captures, so there is about a
+  millimetre of transform error here to recover — which is also why this branch ships
+  measuring the extent alone. Where the model and the world genuinely disagree is not the
+  transform: #236 measured the board mesh at **0.865** of the real board with a 2.1–2.6 mm
+  residual, a wrong *model* that a solve with only a transform to move would absorb into a
+  wrong *pose*. And the table plane holds ~34% of 693k points on bare steel while the
+  board's outline is measured every frame, so the fit is genuinely over-constrained — what
+  it needs is to be told which side is trusted, per capture, since the recorded layout has
+  drifted in x and y while the height agreed exactly. Two smaller notes: the camera's pose
+  is a value on one `RgbdFrame`, so a correction has nowhere to live between frames (the
+  gap #232 filled for pieces with `BelievedPlace` and a `BeliefSource`); and the two
+  finders are today **layered, not independent** — the measurement only ever cuts the
+  model's bound down — so "combine" means letting a measurement *move* the model, which is
+  a different contract and why it is not a tweak.
+
+#### The red check, and why it is not this branch's
+
+`test_each_lib (semantic_digital_twin)` was the one failure of 23, and its whole content is
+`MemoryError: Something is leaking worlds` out of `test/conftest.py`'s `count_worlds` —
+1494 passed, no failing assertion. That fixture is autouse at **module** scope: it
+`gc.collect()`s on teardown and counts live `World` objects, so it is attributed to
+whichever test ran last in the module rather than to anything that test did, and the one it
+named creates no world at all.
+
+Three things say it is not this diff: the branch's diff against its base is entirely inside
+`experiments/`; the base #231 is green on that same job with byte-identical
+`semantic_digital_twin` sources; and #231 is red on a *different* job, `krrood`, which is
+green here. Two adjacent branches failing on two jobs neither of them touches is the
+signature of an order- and GC-dependent guard. Nothing to port, so the standing-down comment
+went on the pull request and the push of `946017c70` is the one re-run the rule allows.
+
+Worth generalizing alongside what #238 recorded about having no CI at all: **a check red on
+a job whose sources the diff does not contain is answerable from the diff rather than from a
+re-run**, and comparing which job each sibling failed on is cheaper evidence than either.

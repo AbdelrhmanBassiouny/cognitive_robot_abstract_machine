@@ -953,7 +953,39 @@ items:
     worth taking from the captures: everything detected across all six lies within x 0.57..0.91 and y
     -0.02..0.37, against a region of x 0.35..1.35, y -0.45..0.75. Deliberately after the deadline''s critical
     path - the demo can run on a tuned workspace, and this replaces the tuning rather than unblocking
-    anything.'
+    anything.
+
+    Review round of 2026-09-05, five threads, answered the same day. SoughtSurface was a flattening
+    of what the world already states - finish a copy of WorkspaceSurface.finish, extent_is_modelled
+    a constant that of set True unconditionally so the base rule could never be false, and
+    depth_was_returned a frame property computed when the case was built. It now holds the surface
+    the world models and the frame it is sought in, and every condition reads into them
+    (sought.surface.finish, sought.surface.region.area > 0.0, sought.frame.carries_depth). EQL
+    traverses nested attributes and properties, measured before the change, so the case class was
+    never needed for the engine''s sake. The always-true flag became a condition that can be false,
+    carries_depth moved onto RgbdFrame and area onto WorkspaceRegion where the capture tests had
+    their own helper, and SurfaceFinder.find takes that pair rather than the two arguments beside
+    it. 430 passed against 429.
+
+    Four threads are left open with replies rather than resolved, each answered differently from
+    what it asked. The finish belongs on the twin''s body: #239 states it for the world and #238''s
+    recorded_world already carries bodies derived from these very surfaces, so building a third
+    copy here is the duplication this plan has paid for before, and the fold is _body_of passing
+    surface.finish into its Box. Stating the description as a Match over semdt entities read by an
+    EQL-RDR needs the #77 stack this branch is not on, and is proposed as the item
+    a-look-is-described-by-a-match, since TargetOnSurface (#231) and RequestedLook (#266) are the
+    same flattening and one mechanism removes all three. Calibrating the camera against the twin,
+    and combining the two finders to do it, is proposed as an item of its own and arrives as a
+    third SurfaceFinder rather than a change to either, with two measured caveats: fitting this
+    table''s height answers 0.8804-0.8811 m against the modelled 0.88, so there is about a
+    millimetre of transform error to recover here, and #236''s 0.865 board is a wrong model rather
+    than a wrong pose, which a solve with only a transform to move would absorb.
+
+    The one red check, test_each_lib (semantic_digital_twin), is conftest.py''s module-scoped world
+    count erroring with 1494 passed and no failing assertion. This branch''s diff is entirely inside
+    experiments/, the base #231 is green on that same job with byte-identical sdt sources, and #231
+    is red on krrood which is green here - two branches failing on two jobs neither touches. Not
+    this diff, recorded in a comment on the pull request rather than worked around.'
 - id: choose-detection-method
   title: Choose the detector by rule from the target and the surface
   branch: claude/choose-detection-method-gf64yp
