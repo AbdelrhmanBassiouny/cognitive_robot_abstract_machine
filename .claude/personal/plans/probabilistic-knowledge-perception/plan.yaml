@@ -1,0 +1,74 @@
+schema_version: 1
+id: probabilistic-knowledge-perception
+title: 'Probabilistic knowledge-guided perception'
+description: >-
+  A follow-up to the knowledge-directed-perception programme, deliberately outside the ICRA
+  deadline. That programme shows that a robot which knows what it is looking at perceives
+  better; this plan asks by how much, on a scale where the answer means something. Today a
+  belief can only delete a rival candidate, so knowledge is permission to consider a piece
+  rather than evidence for it - a believed piece that fits slightly worse than a ghost still
+  loses. Stated as posterior odds, the belief becomes an additive term with a known exchange
+  rate against picture evidence, and the report threshold becomes a genuine cost ratio rather
+  than a number measured off six captures. The plan starts with the measurement that says
+  whether any of this is worth building.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 276
+waves:
+- id: evidence
+  name: A belief on the same scale as the picture
+  description: >-
+    One question, asked in the order that can answer it: measure first, on the captures the
+    grounding wave already ships, and only build the mechanism the measurement supports.
+tracks:
+- id: decision
+  name: What decides a detection
+  description: >-
+    The rule that turns accounts of a place into a report, and the quantity it compares.
+  wave: evidence
+items:
+- id: belief-counts-as-evidence
+  title: Let a belief count as evidence for a candidate, not only as permission to consider it
+  branch: null
+  pull_request_number: null
+  track: decision
+  depends_on: []
+  status: not_started
+  notes: >-
+    Two halves, in order, with a decision between them.
+
+
+    The prototype comes first and is a measurement, not a feature: on the six captures
+    `montessori-perception-on-main` ships, label every place-and-account pair the pipeline
+    already forms, and ask whether `Explanation.strength` can be mapped monotonically onto a
+    log-likelihood ratio that separates real pieces from ghosts better than a level on the raw
+    score does. Held out, since six captures fitted and evaluated on themselves would only be
+    `required_lead` re-tuned with more steps. If the separation is not there, the answer is
+    that a calibrated likelihood needs more data than this scene has, and that is the item's
+    result - recorded in roadmap.md, no mechanism built.
+
+
+    If it holds, the second half replaces the compared quantity while keeping #270's structure
+    intact: a report stays a lead over the board's own account, over the next candidate the
+    belief allowed, and over nothing being there. What changes is that the lead is measured in
+    log posterior odds, so a prior from the twin adds to it and `required_lead` becomes
+    log(cost of a wrong report / cost of a missed piece) - a number that does not move when the
+    lens, the lighting or the detector changes.
+
+
+    Scope boundary, stated so a later session does not quietly widen it: the prior is *stated*
+    here (from the action's declared effect and the gripper's release uncertainty), not learned.
+    Only the likelihood map is fitted. Learning the prior from the twin through
+    `probabilistic_model` and `krrood.parametrization`, the generative/description-length
+    likelihood, and joint assignment over a whole scene are all named in roadmap.md as where
+    this goes next, and none of them is this item.
+
+
+    Deliverable either way is the figure the programme has been promising and cannot currently
+    draw: detection rate against the strength of the belief, at a fixed stated cost. Today the
+    only available x-axis is candidate-set size, one against six - two points, no curve.
+
+
+    No branch yet, on purpose. The prototype is a study; what it needs from a branch depends on
+    what it finds. Whoever starts it will most likely cut off #270
+    (`claude/plan-item-kickoff-kdp-r8nttk`), which has both `explanations.py` and the captures,
+    and inherits that stack's known-red CI from #222.
