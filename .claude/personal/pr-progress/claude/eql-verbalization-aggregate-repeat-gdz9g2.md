@@ -21,13 +21,42 @@ two sums describes each in full at every mention.
   `grammar/aggregation/rules.py`. `CoreferenceProcessor`/`DistinguisherIndex` untouched.
 - `test_eql/test_verbalization` 768 → 774 passed / 3 skipped, no existing expectation changed;
   `test_eql` 1291 passed / 3 skipped. `scripts/format_docstrings.py` applied.
-- Commit `62853d466` pushed; draft PR #264 open, labelled `bug`, description matching the work.
+- Commits `62853d466` (the fix) and `ce290914c` (review round 1) pushed, with `main` merged in
+  at `4a5541d2c`; draft PR #264 open, labelled `bug`, description matching the work.
 - Manifest, roadmap and dashboard all current.
+
+## Review round 1 (2026-09-05) — three threads, two done, one open
+
+- **r3941169916 / r3941170391 (done, resolved).** *"Money should be a Role for float so we
+  would not need to access an extra attribute called `amount`."* Applied in `ce290914c`:
+  `Money` is `@dataclass(eq=False) class Money(Role[float])` with no fields of its own, so
+  the chains read `statement.income` / `statement.expenses`.
+  Consequence flagged on the thread: the rendering follows the shorter chain, so every
+  expectation in the module moved from *"the sum of the amount of its income"* to *"the sum
+  of incomes of Statements"* — a plural generic instead of a possessive. That is pre-existing
+  behaviour (a plain `income: float` field reproduces it on `main`), about one navigation
+  instead of two rather than about `Role`. Re-checked by reverting the production change on
+  the new domain: the two ambiguity tests still fail without it, so the tests stay
+  load-bearing.
+- **r3941192834 (open, deliberately).** *"For each statement …"* instead of *"For each
+  month"*, on the premise that grouping by a month reached through a statement is the same as
+  grouping by the statement. **Verified false**, with data: evaluated over three statements,
+  two of them in March, the query returns two rows and March's income sum is `30.0` — the two
+  March statements are summed together, so a row is not a statement. The cardinality argument
+  runs the wrong way: one period per statement makes the month a function *of* the statement,
+  while naming the frame after the statement needs the month to determine the statement.
+  Replied with that evidence and three general options (keep the key; name the key with its
+  path, *"For each month of a Statement's period"*; name the entity only once the model can
+  declare a key identifying), recommending the first plus the third when declarable. Left
+  unresolved — it asks to discuss, and it is answered differently from what it asked.
 
 ## Next
 
-- Developer review. Nothing is outstanding on this branch: CI has not been read from this
-  session, and no check-in is armed (personal notes forbid scheduled checks).
+- Developer answer on r3941192834, and on the two questions asked back there: which test his
+  sentence meant (it matches the ranked one, not the ordered one it sits on), and whether the
+  possessive-vs-plural-generic wording for a directly aggregated attribute is a third item.
+- CI for `4a5541d2c` was still running when this was written; nothing had failed. No check-in
+  is armed (personal notes forbid scheduled checks).
 
 ## Decisions worth knowing at review time
 
@@ -45,6 +74,10 @@ two sums describes each in full at every mention.
   an `Invoice` mimic there with exactly the fields this needs — the two branches would have
   defined the same fixture. `check_scope_overlap.py` now reports no shared path with any open
   pull request.
+- **The grouping frame is a different rule.** `_for_each_header` / `_group_label` in
+  `query/assembler.py` decide *"For each month"*; this PR's mechanism is `AggregatorRule.build`
+  plus `ReferringExpressions`. Keeping the frame question out of this branch is why r3941192834
+  is answered rather than implemented.
 
 ## Watch out
 
