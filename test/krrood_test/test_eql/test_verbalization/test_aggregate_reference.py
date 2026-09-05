@@ -88,8 +88,8 @@ def test_a_ranked_sum_is_described_in_full_when_another_sum_is_selected():
         .limit(1)
     )
     assert verbalize_expression(query) == (
-        "For the Statement with the highest sum of incomes of Statements, "
-        "report the month of its period, the sum of incomes of Statements, "
+        "For the month with the highest sum of incomes of Statements, "
+        "report the month, the sum of incomes of Statements, "
         "and the sum of expenses of Statements"
     )
 
@@ -132,8 +132,8 @@ def test_a_lone_sum_is_shortened_on_its_repeat_mention():
         .limit(1)
     )
     assert verbalize_expression(query) == (
-        "For the Statement with the highest sum of incomes of Statements, "
-        "report the month of its period and the sum"
+        "For the month with the highest sum of incomes of Statements, "
+        "report the month and the sum"
     )
 
 
@@ -152,8 +152,8 @@ def test_a_sum_is_shortened_alongside_an_aggregate_of_another_kind():
         .limit(1)
     )
     assert verbalize_expression(query) == (
-        "For the Statement with the highest sum of incomes of Statements, "
-        "report the month of its period, the sum, "
+        "For the month with the highest sum of incomes of Statements, "
+        "report the month, the sum, "
         "and the average of expenses of Statements"
     )
 
