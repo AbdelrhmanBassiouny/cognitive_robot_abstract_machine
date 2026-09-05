@@ -1266,6 +1266,26 @@ items:
     1135 with the same 178 errors, experiments 516 passed against 478, segmind 64 passed, the twin's
     failing set unchanged but for two errors in #246's own armar7 tests that error on #246's tree too.
     The predicted-state item the review asked for is predicted-state-from-declared-effects.
+
+    Review round of 2026-09-05, nineteen threads, resolved the same day. The expectation and the
+    store are general concepts in Segmind now (segmind.expectations: Expectation, Expectations), with
+    MontessoriExpectation and MontessoriExpectations in experiments carrying only how a look at the
+    scene is asked for one and how a sighting is checked. An insertion's declared effect is InsideRegion
+    the hole and Near it within the release spread, and no longer SupportedBy the lid: measured with the
+    twin's own SupportedBy, a piece sunk in its hole is not supported by the plate the hole is cut
+    through, so expecting it contradicted the insertion's own success; the look still reaches the lid
+    alone, because the hole's region reaches from the lid's plane down into the board and the table
+    pass has nothing of it to read. An Effect gained checks, so a pick-up ends support and re-checks
+    every containment believed against where the object now is, rather than ending it on the event's
+    say-so; SupportEvent and PlacingEvent share ComesToRestEvent. The sighting readings are two, bound
+    as generics through SubClassSafeGeneric, and colour and turn are asked of the body the look stood
+    in its imagined world. The twin gains HasPose over Pose, HomogeneousTransformationMatrix and
+    KinematicStructureEntity, and yaw_of reads through Pose2D. Two threads are left open as
+    discussions, both with a recommendation: StatedRelation as an entity query language Match, and
+    the measured surface carrying the entity it was measured from. One gap is recorded rather than
+    closed: a look cannot tell a piece sunk in its hole from one standing over it, so the success case
+    of the check is demonstrated against a stated sighting only, which is what icra-experiments' new
+    item expectation-checked-under-perturbation-in-simulation exercises. Same container, branch head 4ad0fe46: krrood test_eql 1333 passed and 3 skipped; segmind 84 passed and 1 skipped against 64 (the twenty added); experiments with the six ROS modules excluded 518 passed, 1 skipped, 11 xfailed against 516; the twin 27 failed, 1106 passed, 118 errors with a failing set identical by name to the previous head. CI on 4ad0fe46 is not read.
 - id: predicted-state-from-declared-effects
   title: Predict the twin's current state from what the actions and the events declared, and ask perception from it
   branch: null

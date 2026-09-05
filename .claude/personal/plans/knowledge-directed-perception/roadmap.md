@@ -5229,3 +5229,94 @@ with `--noconftest` as every round has recorded.
 CI on the new head is not read; the branch was pushed with `--force-with-lease`, since
 its history is rewritten, and the pull request's base was moved to #255 by the API
 without the 422 the stack tooling has met before.
+
+### `expectations-from-events`: the review round of 2026-09-05, and the support an insertion cannot promise
+
+Resolved 2026-09-05 in `auto` mode, the morning after the re-base. Nineteen threads, and
+the branch had also fallen one commit behind #255, which was merged in first. What kept
+the item open was again a review round nobody had turned into state, the seventh time on
+this plan.
+
+#### The expectation is Segmind's, and the Montessori half is two thin subclasses
+
+Three threads asked for the store not to be tied to the Montessori demo at all. It is
+`segmind.expectations` now: `Expectation` (a body, the relations expected of it, what put
+the belief there), `ExpectationReport`, and `Expectations` with `expect`, `released_over`,
+`record`, `of`, `of_annotation` and `look_requests`. Segmind is the one package that can
+hold it: it already reads krrood's `StatedRelation` and the twin's relations, and the
+twin cannot import Segmind. `MontessoriExpectation` adds only how a look at this scene is
+asked for one (`scene_request`) and how a sighting is checked (`contradicted_by` through
+the backend's readings); `MontessoriExpectations` builds those and answers
+`scene_requests`. The colour a look is asked for is read off the subject body's own
+geometry rather than off the piece set, which is the reviewer's *"depend on the attribute
+colour of semdt bodies"* answered by construction: a body drawn in one colour states it,
+a bare body states none.
+
+#### An insertion cannot promise support by the lid, and the twin's own geometry says so
+
+The item's own story had the released piece expected `SupportedBy(lid)`, `InsideRegion(hole)`
+and `Near(hole)` together. The general test, evaluating those relations against a real
+body in a real world rather than against a sighting read by name, refused the first: a
+cube sunk in its hole has its centre of mass below the plate's, and `SupportedBy` reads
+that as standing below rather than resting on. That is not a fault in `SupportedBy`; a
+piece that went in rests on whatever lies under the hole, and expecting the lid
+contradicted the insertion's own success. The sighting-based check had hidden it, because
+a look that searched the lid's plane reports "supported by the lid" for anything it found
+there, sunk or not.
+
+So a release expects `InsideRegion` and `Near` only, and the lid is reached by the look
+another way: a hole's region reaches from the lid's plane down into the board, so a look
+told the piece lies in it has nothing of the table to read, and `searched_surfaces` drops
+the table pass on its own. `test_a_stated_hole_leaves_only_the_surface_it_is_cut_through_to_search`
+pins that, and the reviewer's *"the general concept for the lid is the body that contains
+the hole"* is answered on the thread rather than built: the lookup through `HasApertures`
+was written and measured before the relation it fed was dropped.
+
+**One gap is recorded rather than closed.** A look reports a piece's height from the depth
+image, with a fallback that stands every unresolved piece on the plane it was found in, so
+a piece sunk in its hole and one standing over it are the same sighting to it. The success
+case of the check is therefore demonstrated against a stated sighting only, and the
+reviewer's ask for a test over an actual plan execution in simulation is exactly where it
+gets checked against a look: `expectation-checked-under-perturbation-in-simulation`, new on
+`icra-experiments`.
+
+#### A pick-up is evidence, not a verdict, about where a thing lies
+
+The reviewer's correction on `PickUpEvent`: it need not end every containment, only occasion
+a check. `Effect` gained `checks`, the relations an event is a reason to look at again, and
+`applied_to` now takes the object as it stands so a checked belief is asked of it and kept
+only where it still holds. A cube lifted clear of its hole loses `InsideRegion`; one the
+gripper closed on without lifting keeps it, and both are tested against a world of a plate
+with a hole in Segmind's own test dataset. Support is still ended outright, since held is
+not supported. `SupportEvent` and `PlacingEvent` share `ComesToRestEvent` rather than one
+subclassing the other, because Segmind's placing detector starts on
+`isinstance(event, SupportEvent)` and would otherwise start on its own output.
+
+#### What was duplication and what was not
+
+The reviewer saw the sighting readings as duplicating the twin's own definitions, and half
+of that was right. Colour and turn are now asked of the body the look stood in its imagined
+world, since #255's spawn draws that body in the piece's colour and stands it at the fit's
+turn; `WearsTheColor` and `IsTurnedSo` are gone rather than renamed. The two readings that
+stay are the ones a look establishes differently from a body: which surface it searched,
+which a recording's world cannot answer, and where it reported the thing standing, which
+is a position rather than a volume. They bind the relation they answer as a generic
+parameter through `SubClassSafeGeneric`, as the reviewer asked, and `holds_for` is the
+method's name on both. `yaw_of` reads through `Pose2D.from_pose`, and the union of pose,
+transform and entity it accepted is a mixin, `HasPose`, that all three inherit, with
+`position_of`'s union of #238 folded onto it.
+
+Two threads are discussions and are left open with a recommendation each. `StatedRelation`
+as an entity query language `Match`: yes, it is a match over the relation class with the
+subject left to be supplied, its `covers` is the match's own attribute test and its
+`about` the generative construction, and the place to make it one is where #227 defines it,
+so that `read_from` and `LookRequest` follow. The measured surface carrying the entity it
+was measured from: the request carries the entity already, and the one place the two meet
+compares names because world entities compare by id, so a bare body standing for the lid in
+a recording would never equal the world's; doing it means `recorded_setup` measuring its
+surfaces off `recorded_world`'s bodies and every statement about a recording naming them,
+which is #238's ground and #259's file.
+
+#### Verification
+
+Same container, branch head 4ad0fe46: krrood test_eql 1333 passed and 3 skipped; segmind 84 passed and 1 skipped against 64 (the twenty added); experiments with the six ROS modules excluded 518 passed, 1 skipped, 11 xfailed against 516; the twin 27 failed, 1106 passed, 118 errors with a failing set identical by name to the previous head. CI on 4ad0fe46 is not read.
