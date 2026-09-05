@@ -13,7 +13,10 @@ from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import CubeShape, MontessoriShape
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -25,6 +28,11 @@ The piece every test below stands somewhere.
 SEEN_AT = (0.58, 0.15, 0.75)
 """
 Where it is seen, in metres, which is a place on the table of the rendered scene.
+"""
+
+SEEN_AGAIN_AT = (0.62, 0.21, 0.75)
+"""
+Where a later look finds the same piece, a few centimetres from where it was.
 """
 
 
@@ -92,6 +100,25 @@ def test_a_finding_is_something_the_world_holds_as_a_semantic_annotation():
     shape = imagined.spawn(CUBE, seen_at(*SEEN_AT))
 
     assert imagined.world.get_semantic_annotations_by_type(MontessoriShape) == [shape]
+
+
+def test_a_finding_can_be_placed_somewhere_else_by_a_later_look():
+    """
+    A look measures where a piece is, never that it cannot move, so a later look that
+    finds it elsewhere re-places it rather than needing a different world.
+    """
+    imagined = ImaginedWorld.copied_from(None)
+    shape = imagined.spawn(CUBE, seen_at(*SEEN_AT))
+    connection = shape.root.parent_connection
+
+    connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        *SEEN_AGAIN_AT, reference_frame=connection.parent
+    )
+
+    assert shape.root.global_pose.to_position().to_np()[:3] == pytest.approx(
+        SEEN_AGAIN_AT, abs=1e-9
+    )
+    assert shape.root.parent_connection is connection
 
 
 # %% the world the look was taken in
