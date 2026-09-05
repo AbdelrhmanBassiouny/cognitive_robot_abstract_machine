@@ -60,10 +60,40 @@ up through all seven branches into this one, three times over. Merged in cleanly
 conflicts) and re-verified before pushing - 478 passed, 1 skipped, 11 xfailed across
 `test/experiments_test/` with the six ROS-dependent modules excluded.
 
+## CI, traced 2026-09-05
+
+Red since 32471b172, and not this branch's. The only failing job is
+`test_each_lib (semantic_digital_twin)`, and its only entry is the `count_worlds`
+module teardown in `test/conftest.py`, which raises when more than 30 `World`
+objects survive `gc.collect()`. No test fails: 1545 passed, 1 error.
+
+What says it is not ours:
+
+- It names a different test each run - `test_the_world_can_be_named_as_what_put_a_belief_somewhere`,
+  `test_reset_state_context_restores_state_on_exception`,
+  `test_column_indices_of_degree_of_freedom_outside_the_state` - because a module-scoped
+  teardown reports against whichever test ran last on that xdist worker. It is a
+  threshold on a count, not an assertion about a behaviour.
+- It is on the ancestor #227, which carries none of this branch's changes. #222, one
+  below it, fails a *krrood* job instead and its sdt job passes; `main`'s red runs are
+  the unrelated probabilistic_model jpt failure and its sdt job passes. So the leak
+  enters the stack at #227, where #229's predicate classes arrive.
+- This branch changes krrood's `backends.py` and experiments only, neither of which the
+  sdt job runs, so its own commits cannot move that count. 32471b172 is docstrings and
+  test articles.
+
+`SupportedBy` retaining its bodies' world past `SymbolGraph.clear_instance()` was the
+obvious mechanism and was measured here: no leak over five rounds. The sdt module cannot
+be run in this container to narrow it further - it needs `iai_pr2_description` and the
+other robot description packages.
+
+Not fixed here deliberately: it is #227's, and fixing it on this branch would put
+another item's work in this one's review.
+
 ## Next
 
 - Nothing outstanding on the branch. It is a draft, as the convention asks. Head is
-  e339b2ef2; `mergeable_state: unstable` with checks running, none red when last read.
+  e339b2ef2; the one red job is the inherited world-leak count above.
 - The dashboard republish is still owed: the live artifact has to be read back first
   (474KB of generated HTML), which is more than a working session's context affords.
   `/plan-dashboard knowledge-directed-perception` in a fresh session does it.
