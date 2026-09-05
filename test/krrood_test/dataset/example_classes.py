@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import uuid
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
@@ -793,6 +794,37 @@ class GenericClassAssociation:
     associated_value_not_parametrized_list: List[GenericClass] = field(
         default_factory=list
     )
+
+
+# %% a generic whose alias carries no attributes of its own
+
+
+@dataclass
+class GenericContextManager(AbstractContextManager, Generic[T]):
+    """
+    A generic class that is also a context manager.
+
+    Being a context manager is what makes subscripting it answer a
+    :class:`types.GenericAlias` rather than a ``typing`` one, and an alias of that kind
+    holds no attributes of its own -- so nothing may be written onto it.
+    """
+
+    value: T
+    """
+    Whatever the class was specialized for.
+    """
+
+
+@dataclass
+class GenericContextManagerAssociation:
+    """
+    Holds a specialization of a generic whose alias carries no attributes.
+    """
+
+    associated_context_manager: GenericContextManager[float]
+    """
+    The specialization a class diagram has to build a dataclass for.
+    """
 
 
 # %% Test TypeVar field resolution in DAO generation
