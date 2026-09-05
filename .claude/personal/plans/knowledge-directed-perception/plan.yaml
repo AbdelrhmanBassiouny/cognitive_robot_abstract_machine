@@ -442,7 +442,34 @@ items:
     less picture evidence is needed to accept a detection than with six candidates and none, and that
     is knowledge improving perception in a quantity that can be plotted. one-detection-per-thing''s occupancy
     rule is the same idea applied to place, and the two should share their resolution rather than filtering
-    one after the other.'
+    one after the other.
+
+    Built 2026-09-05 as pull request #270, ee52352e0, off #236. The two-sided reading is what carries
+    it: an account is scored on how much of its own outline the picture holds an edge along *and* how
+    much of the edge seen there it covers, so a template laid across part of a rim loses to the thing
+    that made the rim however well its own points sit. On tracy_pickup_demo the ghost prism''s
+    nine-parts-in-a-thousand lead over the cylinder sitting in the round hole becomes the cylinder
+    leading by 0.115 (0.582 against 0.467), and that mark comes off.
+
+    The board is one of the accounts, as the item asked: its lid border and its six holes, cast from
+    where the camera stands into the plane the fits are read in, are edges the picture holds whether or
+    not anything rests on it. And a report is a lead over the alternatives rather than a level - over
+    the board, over the next candidate the belief allowed, and over nothing being there, which explains
+    nothing and so is the floor without one being set separately. A belief naming one piece has no
+    runner-up to lead where an unguided look over six has, which is the plan''s central claim as a rule
+    rather than as a description. Occupancy reads the same comparison, so the threshold and the place
+    rule stopped being two filters run in sequence on two different quantities.
+
+    required_lead states a cost rather than a level: a wrong report and a missed piece cost about the
+    same here, and 0.075 is what follows from saying so, measured over the six captures. Missed falls
+    from the parent''s 7 to 5 and reported-but-not-there from 4 to 2, and a different cost statement
+    gives a different number off the same table, which a test keeps answerable. Two things are flagged
+    on the pull request rather than smoothed over: the cube on tracy_pickup_demo clears its runner-up by
+    0.076 against the stated 0.075, four parts in a thousand, and the operating range is narrow - below
+    0.075 the lead buys nothing and above it recall falls. detect costs 1.08x the parent, measured as a
+    ratio to a same-run baseline. 442 passed, 1 skipped, 4 xfailed across test/experiments_test/ against
+    423/1/5 on the parent in the same container, with the collected sets diffed by name rather than
+    compared by count.'
 - id: montessori-classes-in-the-orm
   title: Map the Montessori package's own classes, which the ORM has never seen
   branch: claude/montessori-classes-orm-s7vxu1

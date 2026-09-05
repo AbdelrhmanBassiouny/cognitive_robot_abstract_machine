@@ -6290,3 +6290,133 @@ a module.
 `test/segmind_test` 88 passed and 1 skipped, unchanged; `test/experiments_test` with the six ROS
 modules excluded 521 passed, 1 skipped, 11 xfailed against 520. The twin was not re-run: this
 head changes no file in it.
+
+### `competing-explanations`: what it took, and the quantity that carries the distinction
+
+Built 2026-09-05 as pull request #270, `ee52352e0`, off #236. 18 new tests; **442 passed,
+1 skipped, 4 xfailed** across `test/experiments_test/` against **423 passed, 1 skipped, 5
+xfailed** on the parent in the same container. The two collected sets were diffed by name
+rather than compared by count, which is what says nothing else moved: one test renamed
+(`test_edges_no_known_piece_follows_are_refused` is now
+`..._are_fitted_poorly_rather_than_refused`, since refusing left the matcher), none
+removed, eighteen added. Six modules do not collect either side, needing ROS or
+`rosbag2_py`, as #238, #259 and #266 recorded. Nothing outside `experiments/` is touched.
+
+#### The plan held, and the two-sided reading is what carries it
+
+The kickoff's three parts were all built and all earn their place, but not equally. What
+separates the ghost from the piece is the **second side of the score**, and it does so on
+its own:
+
+| account, on `tracy_pickup_demo`'s round hole | outline followed | edges accounted for | strength |
+| --- | --- | --- | --- |
+| the ghost triangular prism | 0.674 | 0.357 | 0.467 |
+| the cylinder sitting in that hole | 0.673 | 0.512 | 0.582 |
+
+The two are within a thousandth of each other on the side `minimum_agreement` measured,
+which is #236's nine parts in a thousand restated; they are 0.155 apart on the side it
+never asked. A triangle laid across a round rim follows the stretch of rim it sits on as
+closely as the circle does, and leaves the rest of it unaccounted for. That is the whole
+of it, and it is why no level on the first side could ever have worked.
+
+**The harmonic mean** is what holds an account to its weaker side, so following the edges
+perfectly buys nothing while most of what is there is left over.
+
+#### The board's account was measured and is not what settles this capture
+
+The item's own note leads with the board — "a piece is reported where it explains edges
+the board alone does not" — and that framing needs one correction, recorded because it
+would otherwise be re-derived. Measured at each fit's own place on `tracy_pickup_demo`,
+the board alone explains 0.192 where the ghost stands and 0.272 where the cylinder does,
+against their own 0.467 and 0.582. Every real piece already leads it comfortably, so the
+board's account **rejects nothing on these captures**.
+
+It is kept because what it rejects is the other half of the fault the item names: a
+template on the board's *middle* at 0.85 to 0.89, and a detection riding the lid's own
+border. Those are places where the board's outlines are the whole of what is there. The
+honest statement is that the board's account guards the case the item was raised about
+and the two-sided score settles the case the benchmark actually holds — and *the gain
+over the board alone*, tried first as the decisive quantity, separates the two by 0.051
+where the strength itself separates them by 0.115, so it is the weaker reading of the two
+and is not what is used.
+
+#### A lead over the alternatives, and where the candidate count enters
+
+A report is what leads every other account of its place: the board's, the next candidate
+the belief allowed, and nothing being there. The last of those explains nothing by
+construction, so it is the floor — there is no separate level to set.
+
+The candidate count enters through the rivals rather than through a formula. A hypothesis
+naming one piece has no runner-up to lead; one allowing six has five, of which only the
+best need be beaten. That is the plan's central claim as a rule rather than as a
+description, and it is what
+`test_a_candidate_chosen_from_several_has_more_to_lead_than_one_a_belief_names` pins.
+
+`Occupancy.keep_one_detection_per_place` reads the same comparison, and gives a place away
+only where the account holding it leads the one claiming it, so the item's own ask -- that
+the occupancy rule and the report rule share their resolution rather than filtering one
+after the other -- is delivered rather than restated.
+
+#### What the stated lead buys, and the two things that are narrow about it
+
+`required_lead` states a **cost**: a wrong report and a piece not reported cost about the
+same here -- a ghost is acted on once, a missed piece is looked for again next frame --
+and 0.075 is what follows from saying so. Measured over all six captures:
+
+| stated lead | pieces missed | pieces reported that are not there |
+| --- | --- | --- |
+| 0.00 | 5 | 3 |
+| 0.05 | 5 | 3 |
+| **0.075** | **5** | **2** |
+| 0.10 | 7 | 2 |
+| 0.15 | 10 | 1 |
+| 0.20 | 12 | 0 |
+
+Against the parent's 7 missed and 4 invented, both sides improve. The table is what the
+statement is evaluated against rather than what the number is chosen from, which is the
+same shape #236 used for `BOARD_SCALE_AGAINST_THE_MESH`; and the trade is a test rather
+than a table that stops being true.
+
+**Two things about it are narrow, and both are on the pull request rather than smoothed
+over.** The cube on `tracy_pickup_demo`'s lid leads its runner-up -- the cylinder, the
+other cyan piece -- by 0.076 against the stated 0.075, so one report clears by four parts
+in a thousand. And the operating range is genuinely narrow: below 0.075 the lead buys
+nothing at all, above it recall starts falling. The item's claim is that the *quantity*
+changed, not that the margins became comfortable, and this is where that distinction is
+visible.
+
+#### What it costs
+
+`detect` runs at **1.08x the parent** -- 0.429 s/frame against 0.398 -- measured as a
+ratio to a same-run baseline interleaved twice in a worktree with its own `*/src` on
+`PYTHONPATH`, per what #232 recorded about this container's speed and what #222 recorded
+about nearly measuring a branch against itself. The comparison is two distance readings
+per fit over a few hundred edge points, which is cheap beside the sweep that produced the
+fit.
+
+#### Three API changes, each updating its own tests
+
+`PieceMatcher.match` is `fits` and refuses nothing: how well an outline follows some edge
+was never the matcher's to decide on, and every candidate's answer is what the comparison
+is made between. `MontessoriShapeDetection.outline_agreement` is a property reading
+`explanation.outline_followed`, so the fit's own figure has one source of truth rather
+than two. And `EdgeDistances.positions` reads the edges back out of the distances it
+already holds, which is where that question belonged.
+
+#### Deliberately not attempted, each recorded rather than dropped
+
+- **Recovering the frame cost.** #231's `RectifiedFrame` would share the board's account
+  across the passes that read it, and is not on this stack.
+- **Arming the board's holes as a source of hypotheses.** #232 measured that twice and it
+  was left out at the developer's decision; this item changes what a false report costs,
+  so the trade is worth re-measuring -- by the item that owns the belief.
+- **Tuning any reach or step.** The point of the item is that the quantity changed.
+
+#### The environment, and the bootstrap fault for the ninth time
+
+`pip install -U uv` puts 0.12.x at `/usr/local/bin/uv` and `uv sync --extra dev --python
+3.12` builds the whole workspace first time, as eight consecutive items have recorded;
+`black` and `docformatter` go in by hand before `scripts/format_docstrings.py` will run.
+`.claude/hooks/plan_item_bootstrap.py` still writes item fields at four-space indentation
+against this plan's two, so `plan.yaml` was edited directly again -- the ninth round to
+work around one unfixed script, and still wanting its own bug-fix pull request.
