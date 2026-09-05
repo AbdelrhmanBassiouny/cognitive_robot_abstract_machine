@@ -17,10 +17,12 @@ from dataclasses import dataclass
 import pytest
 
 from experiments.experiment_definitions import (
+    ConfidenceInterval,
     ExperimentResult,
     ExperimentsTable,
     IncompatibleUnitConversionError,
     MeanAndStandardDeviation,
+    NoMeasurementsError,
     PercentageBound,
     RowIsNotAnExperimentResult,
     RowsOfDifferingTypes,
@@ -132,6 +134,40 @@ def test_converting_an_untagged_value_is_rejected():
 
     with pytest.raises(IncompatibleUnitConversionError):
         value.to(Unit.MILLISECONDS)
+
+
+# %% ConfidenceInterval
+
+
+def test_the_interval_brackets_the_mean_by_its_standard_error():
+    # five measurements of mean 3 and standard deviation 1.5811, so a standard error of
+    # 0.7071, which the 95% quantile of 1.96 widens to 1.3859 on either side.
+    interval = ConfidenceInterval.for_mean([1.0, 2.0, 3.0, 4.0, 5.0])
+
+    assert interval.lower == pytest.approx(1.6141, abs=1e-4)
+    assert interval.upper == pytest.approx(4.3859, abs=1e-4)
+
+
+def test_a_higher_confidence_level_widens_the_interval():
+    measurements = [1.0, 2.0, 3.0, 4.0, 5.0]
+
+    almost_certain = ConfidenceInterval.for_mean(measurements, confidence_level=0.99)
+    usual = ConfidenceInterval.for_mean(measurements)
+
+    assert almost_certain.lower < usual.lower
+    assert almost_certain.upper > usual.upper
+
+
+def test_one_measurement_has_no_spread_to_report():
+    interval = ConfidenceInterval.for_mean([4.0])
+
+    assert interval.lower == 4.0
+    assert interval.upper == 4.0
+
+
+def test_an_interval_over_nothing_is_rejected():
+    with pytest.raises(NoMeasurementsError):
+        ConfidenceInterval.for_mean([])
 
 
 # %% PercentageBound
