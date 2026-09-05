@@ -5554,3 +5554,129 @@ nowhere to live between frames — the gap #232 filled for pieces with `Believed
 measurement only ever cuts the model's bound down. Combining properly means letting a
 measurement *move* the model, which is a different contract and is why this is a new finder
 rather than a tweak to `MeasuredSurfaceFinder`.
+
+### `expectations-from-events`: the review round of 2026-09-05 (evening), and a relation that is a statement
+
+Resolved 2026-09-05 in `auto` mode, hours after the morning's round. Six threads, four of
+them new and two of them the developer accepting recommendations that round had left open
+-- *"ok do the recommended action"* on the surface's entity, and *"yes do it the
+recommended and cleanest way"* on `StatedRelation`. None of the six was on the item's
+`blockers` until this round wrote them there, which is the eighth time on this plan that
+the cause of a stall was a review comment nobody had turned into state.
+
+#### A relation stated about the thing sought is a statement, not a record of one
+
+`StatedRelation` was a frozen dataclass holding a relation class and a dictionary of the
+operands a statement already knew. It is a `Match` over that relation's own class now --
+`a(SupportedBy)(supporting=lid)` with the subject unstated -- and every one of its four
+operations turned out to be something a match already is:
+
+| what it was | what it is |
+| --- | --- |
+| `relation_type` | `Match.type`, the class the match is over |
+| `stated_operands` | `Match.kwargs`, the pattern it states |
+| `constraint()` | `HasFactoryAndKwargs.construct_instance()` |
+| `about(subject)` | the same, with the subject stated -- `stating(...)` grows one |
+| `covers(other)` | the match's own attribute test: stating fewer operands accepts more |
+
+So the class shrank to what is particular about a relation -- which operand is the
+subject, which is the object, and how to read one off a statement's condition -- and the
+rest is inherited.
+
+**One thing had to be added back deliberately: equality.** A `Match` is `eq=False`, since
+matches elsewhere are nodes of a query graph and are told apart by which one they are. A
+relation stated about the thing sought is not used that way: it is written down, passed
+around and compared as a value -- what a belief holds, what an event ends -- so
+`StatedRelation` defines `__eq__` as *saying the same thing* (mutual coverage) and hashes
+on its relation class. Without it every assertion comparing stated relations, and
+`Effect.applied_to`'s own "what this begins that is not already believed", would silently
+have become identity comparisons that never hold.
+
+**And one method moved to where it belongs.** `StatedRelation.stated_in(statement)` reads
+every relation a statement asserts about the thing it is looking for; `read_request` uses
+it rather than walking `_where_conditions_` itself, and Segmind reads an expectation's own
+conditions through it rather than reaching into a private attribute of a match.
+
+#### An expectation is a statement about the thing it is expected of
+
+The developer's own sketch, and it is what the class is now: `Expectation` subclasses
+`Match`, over the subject's own kind, ranging over that one thing, with the relations
+expected of it as its conditions. `Expectation.about(subject, holds, source)` builds one,
+`holds` reads them back, and `source` is the one field a statement does not already carry.
+
+**What it buys is not tidiness.** The same statement a look is asked can be asked of the
+world the robot already has: `holds_now()` evaluates it natively, and on the plate-with-a-
+hole scene it answers `True` for a cube sunk in its hole and `False` for one lying on the
+plate over it -- a check that needed no camera and that the previous shape could not
+express at all. That is the half of `predicted-state-from-declared-effects` this item can
+already demonstrate.
+
+Two smaller consequences. An expectation that states nothing is the statement alone, since
+`where()` with no conditions is refused. And a store says which kind of expectation it
+holds (`Expectations.expectation_type`), so `MontessoriExpectations` names its own kind
+instead of restating how one is built and filed -- a `Generic` parameter through
+`SubClassSafeGeneric` was tried first and is the wrong tool here, because the general
+store is itself a usable member of the family and an unbound parameter resolves to the
+type variable rather than to `Expectation`.
+
+#### A measured surface carries the entity it was measured of
+
+`WorkspaceSurface.name` was a `PrefixedName`, so `SceneRequest.searches` could only
+compare names against the entity a statement names. The surface carries that entity now
+and `name` reads off it, which is one source of truth rather than two.
+
+**The work is not in the field, it is in identity.** World entities compare by which one
+they are, so a `Body` built with the lid's name is not the lid: `recorded_setup`'s
+surfaces had to be measured of `recorded_world()`'s own bodies rather than of constants,
+which inverted that module -- `recorded_world` builds the slabs and `table_surface(world)`
+/ `lid_surface(world)` are measured of them -- and every statement about a recording had
+to name the pipeline's own entity rather than a body carrying its name. Nine hand-built
+surfaces in the tests take a body each, and
+`test_a_surface_that_only_shares_a_name_is_not_the_one_asked_about` pins the difference
+that was invisible before.
+
+A surface measured with no world at all keeps a body of its own, since a run that only
+reads the pictures still has to say what a detection rests on.
+
+#### The place a relation reads is a kind of thing, not a union
+
+`Placed = Union[Point3, HasPose]` is `HasPosition`, an abstract base both inherit: a point
+answers itself and anything standing in a pose answers where that pose puts it. So
+`position_of(placed)` is gone and every reader asks the thing itself. Checked first that
+the twin had no such base already -- `to_position` was implemented five times over and
+declared nowhere.
+
+#### The one thread answered with a measurement rather than a change
+
+*"I feel like we are duplicating what segmind is already doing ... the checks or rechecks
+or the relationship between events and what to check after is kind of what segmind
+statechart already can do or does. Verify this and discuss with me if I am wrong."*
+
+Verified, and he is right about the idea and not about this instance yet.
+`ContainmentDetector` and `LossOfContainmentDetector` are in the default statechart and do
+re-check containment every step, emitting `ContainmentEvent` and `LossOfContainmentEvent`
+-- which is the same mechanism as `Effect.checks`, and a better one, since it reads the
+world continuously rather than at the moment an event arrives. Two things stop it
+answering the belief this check exists for:
+
+- `BaseContainmentDetector.get_containment_pairs` searches
+  `context.world.bodies_with_collision` plus `additional_candidates`, and **nothing in the
+  workspace passes a hole's `Region` as one** -- the `additional_candidates` that are
+  passed belong to `HoleContactDetector`, a different field of a different detector. So no
+  containment event is ever emitted about a hole's region today.
+- The detector reads `InsideOf` at a ratio of 0.9 between bodies; the belief is
+  `InsideRegion` at 0.5 against a region. Two relations, two thresholds.
+
+So the fold is real and worth doing -- pass the hole regions as containment candidates,
+let `ContainmentEvent` and `LossOfContainmentEvent` declare their own effects, and
+`Effect.checks` and `PickUpEvent`'s use of it can go -- but it changes which relation a
+containment belief is stated in, which is the developer's call. Recorded on the thread and
+left open.
+
+#### Verification
+
+Same container: krrood `test_eql` 1335 passed and 3 skipped against 1333/3 on the previous
+head, which is the two tests added; segmind 88 passed and 1 skipped against 84/1, the four
+added; experiments with the six ROS modules excluded 519 passed, 1 skipped, 11 xfailed
+against 518/1/11, the one added. The twin's failing set is unchanged by name.
+

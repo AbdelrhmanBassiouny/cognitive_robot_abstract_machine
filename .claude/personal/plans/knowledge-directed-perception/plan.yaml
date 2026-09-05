@@ -1335,16 +1335,15 @@ items:
   pull_request_number: 257
   track: events
   blockers:
-  - 'Review round of 2026-09-05 (evening), six threads open on #257 and none of them
-    recorded as state until now. Two are the developer accepting recommendations this
-    session had left open: r3940415301 asks for ``StatedRelation`` to become an entity
-    query language ``Match``, and r3940406029 for the measured surface to carry the entity
-    it was measured from so ``SceneRequest.searches`` compares entities rather than names.
-    Four are new: whether an event''s declared effect and its re-checks duplicate what
-    Segmind''s statechart already expresses; ``Expectations.of`` answering the first
-    expectation of a subject rather than every one of them; an expectation stated as a
-    ``Match`` about the subject rather than as a tuple of relations; and a shared location
-    base of ``HasPose`` and ``Point3`` in place of the ``Placed`` union.'
+  - 'Two of the six threads of 2026-09-05 (evening) are left open on #257 deliberately, and
+    both are the developer''s to close. r3940953108 asked whether an event''s declared effect
+    duplicates Segmind''s statechart: verified, and the direction is right - the containment
+    detectors do re-check every step and emit their own events - but nothing passes a hole''s
+    region as a containment candidate, and they read InsideOf at 0.9 between bodies where the
+    belief is InsideRegion at 0.5 against a region, so folding is a decision about which
+    relation a containment belief is stated in. r3940991795 asked for a shared base of HasPose
+    and Point3 in place of the Placed union and named it HasLocation; it is HasPosition, the
+    word the twin already uses for this, which is a rename away if he prefers his.'
   depends_on:
   - imagination-world-rejects-what-a-predicate-refuses
   - pieces-looked-for-where-expected
@@ -1450,6 +1449,25 @@ items:
     closed: a look cannot tell a piece sunk in its hole from one standing over it, so the success case
     of the check is demonstrated against a stated sighting only, which is what icra-experiments' new
     item expectation-checked-under-perturbation-in-simulation exercises. Same container, branch head 4ad0fe46: krrood test_eql 1333 passed and 3 skipped; segmind 84 passed and 1 skipped against 64 (the twenty added); experiments with the six ROS modules excluded 518 passed, 1 skipped, 11 xfailed against 516; the twin 27 failed, 1106 passed, 118 errors with a failing set identical by name to the previous head. CI on 4ad0fe46 is not read.
+
+    Review round of 2026-09-05 (evening), six threads, resolved the same day as e5d12093. Two
+    were the developer accepting recommendations the morning''s round had left open, and both
+    are done. StatedRelation is an entity query language Match over the relation''s own class
+    with the subject unstated - type, kwargs, construct_instance and the match''s attribute
+    test are what its four operations were, so what is left is which operand is the subject,
+    which the object, and reading one off a statement''s condition; it defines equality as
+    mutual coverage, since a Match is eq=False and a stated relation is compared as a value.
+    StatedRelation.stated_in reads every relation a statement asserts, and read_request uses
+    it. An Expectation is that statement about one thing: a Match over the subject''s kind
+    ranging over it alone, so holds_now() answers what is expected against the world the robot
+    already has - True for a cube sunk in its hole, False for one lying over it - which the
+    tuple shape could not express. A measured WorkspaceSurface carries the entity it was
+    measured of and searches compares it, which inverted recorded_setup: recorded_world builds
+    the slabs and the surfaces are measured of its bodies, since world entities compare by
+    which one they are. HasPosition replaces the Placed union and position_of. colors answers
+    every colour and look_request takes the decision. Two threads stay open: the statechart
+    fold and the HasPosition naming. krrood 1335 passed and 3 skipped against 1333; segmind 88
+    against 84; experiments 519 against 518; the twin''s 27 failures identical by name.
 - id: predicted-state-from-declared-effects
   title: Predict the twin's current state from what the actions and the events declared, and ask perception from it
   branch: null
