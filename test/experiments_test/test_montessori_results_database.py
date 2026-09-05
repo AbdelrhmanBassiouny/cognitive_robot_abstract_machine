@@ -69,7 +69,7 @@ class TestOpeningSessions:
         with database.open_session() as session:
             tables = inspect(session.bind).get_table_names()
 
-        assert "ShapeInsertionResultDAO" in tables
+        assert "RecordedTrialDAO" in tables
 
     def test_the_default_database_is_the_configured_one(self, monkeypatch):
         monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, "sqlite://")
@@ -246,7 +246,7 @@ class TestTheInMemoryDatabase:
         database = ResultsDatabase(uri=IN_MEMORY_DATABASE_URI)
 
         with database.open_session() as session:
-            assert "ShapeInsertionResultDAO" in inspect(session.bind).get_table_names()
+            assert "RecordedTrialDAO" in inspect(session.bind).get_table_names()
 
     def test_another_thread_opens_the_same_database(self):
         """
@@ -266,7 +266,7 @@ class TestTheInMemoryDatabase:
         reader.start()
         reader.join()
 
-        assert "ShapeInsertionResultDAO" in tables_seen_elsewhere
+        assert "RecordedTrialDAO" in tables_seen_elsewhere
 
 
 # %% the pre-flight a launcher runs
