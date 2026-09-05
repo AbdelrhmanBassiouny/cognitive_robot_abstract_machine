@@ -67,6 +67,31 @@ class MatchedPiece:
     """
 
 
+# %% the grid a sweep walks
+
+
+def offsets_within(radius: float, step: float) -> np.ndarray:
+    """
+    The offsets a sweep tries either side of the place it is centred on.
+
+    Counted outwards from that centre rather than inwards from the edge of the reach, so
+    that widening the reach only *adds* placements: a grid laid out from its own edge is
+    re-phased by every change to how far it reaches, and a peak one reach lands on the
+    next steps over. That shows up as an answer that is not monotonic in the reach,
+    which is the same giveaway a rectification re-framed off its own lattice gives, and
+    it went unseen while every belief reached exactly as far as every other.
+
+    A reach is a bound rather than a suggestion, so the grid stops inside it: a belief
+    says a thing is no further than this from the place it names.
+
+    :param radius: How far, in metres, the grid reaches from its centre.
+    :param step: How far apart, in metres, the grid's positions stand.
+    :return: The offsets, in metres, in increasing order.
+    """
+    outwards = np.arange(int(radius / step) + 1) * step
+    return np.concatenate([-outwards[:0:-1], outwards])
+
+
 # %% fitting them
 
 
@@ -210,10 +235,7 @@ class PieceMatcher:
         :param reach: How far an edge may lie from the outline and still count.
         :return: The best placement.
         """
-        walk = np.arange(-radius, radius + step / 2, step)
-        positions = np.stack(np.meshgrid(walk, walk, indexing="ij"), axis=-1).reshape(
-            -1, 2
-        ) + np.array([center.x, center.y])
+        positions = self.placements_within(center, radius, step)
         return max(
             (
                 self._best_position(piece, edges, positions, angle, reach)
@@ -221,6 +243,26 @@ class PieceMatcher:
             ),
             key=lambda fit: fit.outline_agreement,
         )
+
+    @staticmethod
+    def placements_within(
+        center: PlanarPoint, radius: float, step: float
+    ) -> np.ndarray:
+        """
+        The positions a sweep tries about the place it is centred on.
+
+        Laid out from that centre outwards along both axes, so that widening the reach
+        only adds positions and the answer is monotonic in it.
+
+        :param center: Where on the plane the grid is centred.
+        :param radius: How far, in metres, the grid reaches from its centre.
+        :param step: How far apart, in metres, the grid's positions stand.
+        :return: The world-frame ``(n, 2)`` positions, the centre among them.
+        """
+        walk = offsets_within(radius, step)
+        return np.stack(np.meshgrid(walk, walk, indexing="ij"), axis=-1).reshape(
+            -1, 2
+        ) + np.array([center.x, center.y])
 
     def _best_position(
         self,

@@ -48,12 +48,13 @@ class WorkspaceSurface:
     piece's own height -- so a height belongs to the surface, not to the patch.
     """
 
-    name: PrefixedName
+    entity: KinematicStructureEntity
     """
-    What the world calls the surface this was measured from.
+    The thing of the world this was measured of: the region a supporter declares for
+    itself, or the body carrying it where it declares none.
 
-    A detection carries this to say what it rests on, so it has to be the name the world
-    knows rather than one perception made up.
+    A statement names that entity to say what it is looking on, so the surface has to
+    carry it rather than a name standing in for it.
     """
 
     region: WorkspaceRegion
@@ -102,7 +103,7 @@ class WorkspaceSurface:
         boxes = region.area.as_bounding_box_collection_in_frame(reference_frame)
         if not boxes.bounding_boxes:
             raise SurfaceHasNothingToMeasure(str(region.name))
-        return cls._of_box(region.name, boxes.bounding_box())
+        return cls._of_box(region, boxes.bounding_box())
 
     @classmethod
     def of_body(
@@ -123,22 +124,30 @@ class WorkspaceSurface:
         ).bounding_boxes
         if not boxes:
             raise SurfaceHasNothingToMeasure(str(body.name))
-        return cls._of_box(
-            body.name, max(boxes, key=lambda box: box.scale.x * box.scale.y)
-        )
+        return cls._of_box(body, max(boxes, key=lambda box: box.scale.x * box.scale.y))
+
+    @property
+    def name(self) -> PrefixedName:
+        """
+        What the world calls the thing this was measured of.
+
+        A detection carries this to say what it rests on, since a detection names what
+        it saw rather than holding an entity of a world.
+        """
+        return self.entity.name
 
     @classmethod
     def _of_box(
-        cls, name: PrefixedName, box: VolumetricBoundingBox
+        cls, entity: KinematicStructureEntity, box: VolumetricBoundingBox
     ) -> WorkspaceSurface:
         """
         The surface a box's top face describes.
 
-        :param name: What the world calls the thing the box was measured from.
+        :param entity: The thing of the world the box was measured of.
         :param box: The box, already expressed in the frame the surface is wanted in.
         """
         return cls(
-            name=name, region=WorkspaceRegion.of_box(box), height=float(box.max_z)
+            entity=entity, region=WorkspaceRegion.of_box(box), height=float(box.max_z)
         )
 
 

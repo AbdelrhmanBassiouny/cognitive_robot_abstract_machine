@@ -49,6 +49,7 @@ from experiments.montessori.perception.footprint import (
 from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
     PieceHypothesis,
+    YawInterval,
 )
 from experiments.montessori.perception.imagination import ImaginedWorld
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
@@ -1135,7 +1136,7 @@ class MontessoriPerceptionPipeline:
                 SurfaceSearch(surface=self.lid, boundary=board),
             ]
         asked_about = [
-            search for search in searches if request.searches(search.surface.name)
+            search for search in searches if request.searches(search.surface)
         ]
         narrowed = [self._narrowed(search, request) for search in asked_about]
         return [search for search in narrowed if search is not None]
@@ -1214,6 +1215,50 @@ class MontessoriPerceptionPipeline:
             )
         return placed
 
+    def believed_from(
+        self, request: SceneRequest, search: SurfaceSearch
+    ) -> List[PieceHypothesis]:
+        """
+        What whoever asked for the look believes is on one surface, read from where the
+        statement says the thing sought lies.
+
+        A placement that confines the thing closely -- within a radius of a hole, inside
+        a region -- is a place worth fitting a piece at whether or not any colour
+        separates one there, so it is evaluated the way a place the world believes in
+        is. The pieces tried are the ones that have the stated colour, or every piece
+        where none is stated, and the turns tried are the ones the statement allows.
+
+        :param request: What the look was asked for.
+        :param search: The surface being searched.
+        :return: One hypothesis where the request confines the thing sought and someone
+            vouches for it, and none otherwise.
+        """
+        stretch = request.believed_stretch()
+        if request.believed_by is None or stretch is None:
+            return []
+        across = stretch.x_interval.upper - stretch.x_interval.lower
+        along = stretch.y_interval.upper - stretch.y_interval.lower
+        turn = request.turn
+        return [
+            PieceHypothesis(
+                place=BelievedPlace(
+                    surface=search.surface.name,
+                    center=PlanarPoint(
+                        x=stretch.x_interval.lower + across / 2,
+                        y=stretch.y_interval.lower + along / 2,
+                    ),
+                    radius=max(across, along) / 2,
+                    yaw=(
+                        None
+                        if turn is None
+                        else YawInterval(center=turn.yaw, spread=turn.spread)
+                    ),
+                ),
+                source=request.believed_by,
+                candidates=pieces_colored(request.color),
+            )
+        ]
+
     def board_in(self, frame: RgbdFrame) -> Optional[MontessoriBoardDetection]:
         """
         The board as one frame shows it, which is what says how far its lid reaches and
@@ -1275,7 +1320,7 @@ class MontessoriPerceptionPipeline:
                         frame,
                         imagined,
                         search,
-                        expected,
+                        [*expected, *self.believed_from(request, search)],
                         request.color,
                     )
                 )

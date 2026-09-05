@@ -1,3 +1,4 @@
+import types
 from dataclasses import is_dataclass, fields
 from typing import Optional, List
 
@@ -12,6 +13,8 @@ from ..dataset.example_classes import (
     KRROODPosition,
     GenericClassAssociation,
     GenericClass,
+    GenericContextManager,
+    GenericContextManagerAssociation,
 )
 
 
@@ -123,3 +126,32 @@ def test_make_specialized_dataclass():
     assert value.type == float
     assert optional_value.type == Optional[float]
     assert container.type == List[float]
+
+
+# %% a generic whose alias carries no attributes of its own
+
+
+def test_make_specialized_dataclass_for_an_alias_that_carries_no_attributes():
+    """
+    A class that is a context manager as well as a generic subscripts to a
+    :class:`types.GenericAlias`, which holds no attributes of its own, so nothing
+    building a dataclass for it may write to the alias.
+    """
+    alias = GenericContextManager[float]
+    assert isinstance(alias, types.GenericAlias)
+
+    result = make_specialized_dataclass(alias)
+
+    (value,) = fields(result)
+    assert value.type == float
+
+
+def test_create_nodes_for_a_specialized_generic_whose_alias_carries_no_attributes():
+    classes = [GenericContextManagerAssociation, GenericContextManager]
+
+    diagram = ClassDiagram(classes)
+
+    node = diagram.get_wrapped_class(GenericContextManager[float])
+    assert isinstance(node, WrappedSpecializedGeneric)
+    (value,) = node.fields
+    assert value.type_endpoint is float

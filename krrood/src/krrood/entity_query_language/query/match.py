@@ -197,7 +197,9 @@ class AbstractMatchExpression(Generic[T], ABC):
 
 
 @dataclass(eq=False)
-class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T], HasExpression):
+class Match(
+    Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T], HasExpression
+):
     """
     Construct a query that looks for the pattern provided by the type and the keyword arguments.
     Example usage where we look for an object of type Drawer with body of type Body that has the name"drawer_1":
@@ -501,6 +503,56 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T], HasEx
         self.expression.where(*conditions)
         self.expression.build()
         return self
+
+    def stating(self, **kwargs) -> Match[T]:
+        """
+        The same pattern with more of its attributes stated.
+
+        An attribute says what the thing is and is what
+        :meth:`~krrood.patterns.factory_and_kwargs.HasFactoryAndKwargs.construct_instance`
+        builds one from, where a ``where`` condition is a test over the things the
+        pattern already admits -- so a description is grown by stating, not by
+        conditioning.
+
+        A pattern is partial information about a thing, so refining one leaves it alone
+        and answers another: a match may only be called once, and the one it grew from
+        is usually still held by whoever stated it.
+
+        :param kwargs: What to state, by the attribute's own name.
+        """
+        return type(self)(self.factory, type_=self.type_)(**{**self.kwargs, **kwargs})
+
+    def covers(self, other: Match) -> bool:
+        """
+        Whether everything this pattern states, another states too.
+
+        A pattern stating fewer attributes covers more: one stating none of them covers
+        every pattern over its own kind, which is what lets partial information be read
+        as the set of things it admits.
+
+        :param other: The pattern that may be one of those this one covers.
+        """
+        return (
+            self.type is not None
+            and other.type is not None
+            and issubclass(other.type, self.type)
+            and all(
+                name in other.kwargs and other.kwargs[name] == value
+                for name, value in self.kwargs.items()
+            )
+        )
+
+    def states_the_same(self, other: Match) -> bool:
+        """
+        Whether two patterns say the same thing: the same kind, stated to the same
+        values.
+
+        A match is told apart by which one it is everywhere it is a node of a query, so
+        this is how one written down and passed around as a value is compared instead.
+
+        :param other: The pattern to compare against.
+        """
+        return self.covers(other) and other.covers(self)
 
     def one_condition_at_a_time(self) -> List[Match[T]]:
         """

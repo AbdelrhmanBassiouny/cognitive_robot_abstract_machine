@@ -22,7 +22,10 @@ from experiments.montessori.perception.hypotheses import (
     PieceHypothesis,
 )
 from experiments.montessori.perception.orthophoto import Orthophoto, WorkspaceRegion
-from experiments.montessori.perception.piece_matcher import PieceMatcher
+from experiments.montessori.perception.piece_matcher import (
+    PieceMatcher,
+    offsets_within,
+)
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.perception.pipeline import (
     MontessoriPerceptionPipeline,
@@ -40,6 +43,7 @@ from experiments.montessori.pieces import (
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.world_description.geometry import Color
 
 from .dataset import montessori_scene_fixtures
@@ -394,7 +398,7 @@ def test_a_piece_only_half_in_view_is_not_reported(
 ):
     cut_through_a_piece = MontessoriPerceptionPipeline(
         table=WorkspaceSurface(
-            name=PrefixedName("table", "montessori_scene"),
+            entity=Body(name=PrefixedName("table", "montessori_scene")),
             region=WorkspaceRegion(
                 minimum_x=0.35,
                 maximum_x=1.35,
@@ -404,7 +408,7 @@ def test_a_piece_only_half_in_view_is_not_reported(
             height=renderer.table_height,
         ),
         lid=WorkspaceSurface(
-            name=PrefixedName("board_lid", "montessori_scene"),
+            entity=Body(name=PrefixedName("board_lid", "montessori_scene")),
             region=SCENE_REGION,
             height=renderer.lid_height,
         ),
@@ -420,3 +424,59 @@ def test_a_piece_only_half_in_view_is_not_reported(
 def test_a_cleanly_seen_piece_reports_how_closely_it_fitted(scene: MontessoriScene):
     for detected in scene.shapes:
         assert detected.outline_agreement > PieceMatcher().minimum_agreement
+
+
+# %% widening a belief's reach only widens the search
+
+
+def test_a_wider_reach_tries_every_placement_a_narrower_one_tried():
+    """
+    Widening how far a belief reaches adds placements to try rather than moving the ones
+    already tried.
+
+    A grid laid out from the edge of its own reach is re-phased by every change to that
+    reach, so a peak one reach lands on the next steps over. That is the fault #238
+    found in a clip that re-framed a rectification off its own lattice, and it has the
+    same giveaway: an answer that is not monotonic in the size. It went unseen here
+    because nothing varied a belief's reach until an expectation came to state its own.
+    """
+    step = 0.003
+
+    narrower = offsets_within(0.02, step)
+    wider = offsets_within(0.024, step)
+
+    assert set(np.round(narrower, 9)) <= set(np.round(wider, 9))
+    assert len(wider) > len(narrower)
+
+
+def test_a_sweep_tries_the_place_it_is_centred_on():
+    """
+    Whatever else it reaches, a belief's own centre is a placement, since that is the
+    one placement the belief actually asserts.
+    """
+    assert 0.0 in offsets_within(0.02, 0.003)
+
+
+def test_a_sweep_reaches_no_further_than_the_belief_states():
+    """
+    A belief is a claim about where a thing is, so a reach is a bound rather than a
+    suggestion.
+    """
+    assert max(abs(offsets_within(0.02, 0.003))) <= 0.02
+
+
+def test_a_sweeps_positions_are_anchored_on_the_place_it_is_centred_on():
+    """
+    The grid a fit walks is laid out from the believed centre, so a wider reach tries
+    every position a narrower one tried and the centre itself among them.
+    """
+    centre = PlanarPoint(x=0.8, y=0.1)
+    step = 0.003
+
+    narrower = PieceMatcher.placements_within(centre, 0.02, step)
+    wider = PieceMatcher.placements_within(centre, 0.024, step)
+
+    assert {tuple(row) for row in np.round(narrower, 9)} <= {
+        tuple(row) for row in np.round(wider, 9)
+    }
+    assert any(np.allclose(row, [centre.x, centre.y]) for row in narrower)

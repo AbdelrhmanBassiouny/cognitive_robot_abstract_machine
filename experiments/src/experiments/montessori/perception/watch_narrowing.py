@@ -19,7 +19,7 @@ import logging
 
 from experiments.montessori.hole_geometry import HOLE_NAME_BY_CATEGORY
 from experiments.montessori.perception.detections import DetectedMontessoriShape
-from experiments.montessori.perception.recorded_setup import board_holes_in, lid_surface
+from experiments.montessori.perception.recorded_setup import LID_NAME, board_holes_in
 from experiments.montessori.perception.step_by_step import (
     RecordedLook,
     WatchedCapture,
@@ -84,7 +84,7 @@ def look_for_the_cube_on_the_lid(
     )
     sought = a(DetectedMontessoriShape)()
     return sought.where(
-        lid.name == lid_surface().name,
+        lid.name == LID_NAME,
         SupportedBy(sought.variable, lid),
         LeftOf(sought.variable, square_hole.expression, look.seen_from),
         Above(sought.variable, triangle_hole.expression, look.seen_from),
