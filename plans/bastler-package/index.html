@@ -1,0 +1,1450 @@
+<title>The bastler package: every tooling module and its bash entry points move into it</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>The bastler package: every tooling module and its bash entry points move into it</h1>
+    <p class="description">The workflow tooling grew as loose Python under .claude/ across three separate sys.path entries, so nothing in one directory could import another and the same code was written out repeatedly. This moves all of it into one importable package, then converts the bash entry points into thin shims over it, one layer at a time. The package is named bastler, after the user&#39;s surname and the German word for a tinkerer.</p>
+    <p class="repo-line">
+      10 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/102" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>bastler-package — Roadmap</h4>
+<p>Narrative companion to <code>plan.yaml</code>. Kept short on purpose: the size budget this split was made
+under counts these lines.</p>
+<h5>Where this plan came from</h5>
+<p>Split out of <code>workflow-unification</code> on 2026-08-30, under <code>plan-size-limits</code>'
+<code>split-workflow-unification</code>. That plan had reached 59 items and 16,917 lines across its manifest
+and roadmap, well past the 15-item / 2,000-line budget, and became seven plans seamed on subject.</p>
+<p>This plan is the <code>bastler</code> track, carried across unchanged. Every item keeps its branch, pull
+request number, status and session verbatim. <strong>The full predecessor roadmap remains in the
+personal-notes branch's history</strong>; what is kept here is what binds future work.</p>
+<h5>Why this work exists</h5>
+<p>Three directories under <code>.claude/</code> - <code>hooks/</code>, <code>stack/</code> and <code>skills/plan-dashboard/</code> - are separate
+<code>sys.path</code> roots, so nothing in one can import another. The consequence is not stylistic: the same
+code was written out repeatedly because there was no shared home to put it in, and each duplication
+was recorded on the item that found it rather than fixed.</p>
+<p>The carriers on record when the migration was moved to the front:</p>
+<ul>
+<li>A <code>run_git</code>-style subprocess seam three times, plus <code>stack.py</code>'s deliberately-opposite <code>_git</code>.</li>
+<li>The frozen-dataclass command-class base twice, where making them identical would have meant
+  copying a fifth file in answer to a complaint about duplication.</li>
+<li><code>ItemStatus</code>, and the personal-notes precedence rules' second Python copy.</li>
+<li>The gh-CLI-else-token GitHub backend rule three times, which keeps its own item.</li>
+</ul>
+<h5>Decisions this plan inherits</h5>
+<p>Numbering is the predecessor's, kept so cross-references in item notes still resolve.</p>
+<p><strong>8. A proper package, with boundaries.</strong> All Python under <code>.claude/</code> moves into one package with
+its tests under the standard <code>test/</code> directory. What stays in <code>.claude/</code>: <code>SKILL.md</code> files,
+<code>settings.json</code> and the bash entry points, since Claude Code discovers them by path - they become
+thin wrappers invoking <code>python -m</code>. Zero-install must survive: the package is a plain top-level
+directory importable from the repository root, with a <code>pyproject</code> for <em>optional</em> installation. It
+stays visibly dev-tooling - its own directory, not published, not in the default install.</p>
+<p><strong>12. The bash layer retires into the package.</strong> About 1,300 lines across nine hook scripts and the
+dashboard refresh move in. The permanent bash remainder is roughly eight three-line shims at the
+existing paths, a slimmed configuration file, and the environment-configuration script unchanged,
+since it is pasted by reference into cloud environment setup fields this repository cannot update.
+<code>settings.json</code> stays byte-identical. The Python floor is 3.11.</p>
+<p><strong>13. The package is named <code>bastler</code>, and the migration goes first.</strong> From the first letters of the
+user's surname and the German word for a tinkerer; it supersedes <code>development_tooling</code>, and keeps
+that name's abbreviation-free property. Decision 8 had sequenced the migration <em>last</em>, to avoid
+moving files under in-flight pull requests; it moves to the front because the duplication carriers
+accumulated faster than the review queue drained. The cost was measured rather than guessed - every
+open tooling pull request but one touches Python this moves - and accepted: each merges main across
+the move and re-applies its delta in the package.</p>
+<p><strong>14. Derive rather than declare, and depend on krrood eventually.</strong> What the package knows about
+itself is computed from the directory and the modules rather than written down. And bastler is to
+depend on <code>krrood</code>, to cut duplication rather than mirror its idioms - which makes decision 12's
+version-1 independence a stage rather than a permanent state.</p>
+<h5>The dependency-tier reversal, which later items should not re-derive</h5>
+<p>Three successive shapes existed to protect callers that run before anything is installed: a declared
+tier table, a set of modules that may need the requirements, and an import closure derived from the
+callers themselves. All three are gone. The user's answer is that <strong>nothing should run before an
+install</strong>: the session-start hook installs whatever declared dependency is missing on every start,
+gated on the notes-branch fetch the hook already exits on, reporting a failure on its own summary
+line and finishing the run regardless; Actions runners install the package themselves.</p>
+<p>The two installers diverge on purpose, and the zero-install contract is why: a session installs the
+missing <em>specifiers</em>, because installing the package would leave a second copy of these modules
+beside the clone's own and the clone's copy is what a caller imports; a runner has no such contract.
+Dependencies are declared statically in <code>pyproject</code>, matching what main did for every other
+workspace member, and the package stays out of the workspace members list, since membership would
+put it in the default sync.</p>
+<h5>Landing hazards</h5>
+<ul>
+<li><strong>Whichever lands second rebases.</strong> The migration moves files nearly every open tooling pull
+  request touches. A pull request already through review may instead land just before the
+  migration's final merge, which folds it in on the migration side - cheaper, and the user decides
+  per pull request at merge time.</li>
+<li><strong>The conversion items must follow the in-flight bash-touching pull requests</strong>, not lead them: a
+  wholesale body rewrite cannot be merged by the whichever-lands-second convention.</li>
+<li><strong>Two carriers are unreachable from the migration branch</strong> and stay with
+  <code>bastler-github-api-unification</code>, whose two remaining carriers live on other plans' branches.</li>
+</ul>
+<h5>Process notes worth keeping</h5>
+<ul>
+<li><strong>A green run after a deletion says nothing about what the deletion took with it.</strong> Deleting a
+  block by slicing from one anchor to the next also deleted a test sitting between them, and the
+  suite stayed green. The check is the mutation that used to fail, or the test count. Seen twice in
+  two days.</li>
+<li><strong>Grep for the claim, not for its expected callers.</strong> Three module docstrings kept a justification
+  a review round had already shown false, because nothing looked for the sentence.</li>
+</ul>
+<h5>What actually stalled the extraction, found 2026-09-03</h5>
+<p>The manifest called <code>bastler-package</code> in progress and still a draft. Both were wrong, and the second
+one is what hid the first: <strong>#185 has been out of draft since 2026-08-23</strong>, which in this workflow is
+the promotion approval rather than a loose end, and it has carried <code>needs-resolution</code> since
+2026-08-22, which withholds a branch from promotion. So the work was finished and approved, and held
+at the last step for twelve days by a conflict nothing in the plan recorded.</p>
+<p>The conflict is one file and one kind: <code>.claude/hooks/tests/test_setup_steps.py</code> was added on <code>main</code>
+inside a directory this branch renamed, so git reports <code>CONFLICT (file location)</code> and declines to
+place it. Its silent half is the one this plan's own process note already warns about twice:
+<code>.claude/hooks/setup_steps.py</code> merges with <strong>no conflict at all</strong>, because this branch moved
+<code>.claude/hooks/*.py</code> file by file rather than renaming that directory - and left where it lands it
+breaks the branch's own "no <code>.py</code> remains under <code>.claude/</code>" contract. Third occurrence. The check is
+still <code>git ls-tree -r origin/main --name-only .claude/ | grep '\.py$'</code> against the merged tree, and
+nothing runs it automatically.</p>
+<p>Both were resolved the same day at <code>674f1507f</code>. The named conflict took the new suite at its renamed
+location; the unnamed one took <code>setup_steps.py</code> into the package, where its hand-counted <code>.parent</code>
+chain became <code>package_layout.REPOSITORY_ROOT</code> and its suite lost all three shapes this package exists
+to end at once - a bare module import, a bare sibling import, and a <code>sys.path.insert</code> reaching the
+plan-dashboard directory for <code>build_dashboard.PullRequestLabel</code>. 664 tests pass, against 632.</p>
+<p><code>bastler-first-time-setup</code> landing is what produced both files: upstream #577, merged into <code>main</code> at
+<code>017be2aa2</code> on 2026-09-01, while the manifest carried it as <code>in_progress</code>. This is the
+whichever-lands-second convention working exactly as the landing hazards section says it does.</p>
+<p>Two tooling defects turned up alongside, and neither belongs to this plan:</p>
+<ul>
+<li>The maintenance routine's own comment promises that "later passes skip it rather than re-reporting
+  the same conflict". It re-reported 20 times between 2026-08-31 and 2026-09-03, roughly every two
+  hours. The label suppresses promotion but evidently not the report.</li>
+<li><code>plan-item-resolve/SKILL.md</code> instructs a session to record its findings with
+  <code>plan_item_bootstrap update</code> and to follow <code>${MANIFEST_STALENESS_DOCUMENT}</code>. Neither exists - the
+  script has only <code>record</code> and <code>open</code>, and no <code>manifest-staleness.md</code> is on any branch. The findings
+  here were written by editing <code>plan.yaml</code> directly instead.</li>
+</ul>
+<h5>Open</h5>
+<ul>
+<li>Whether the package is ever published, and whether agent-provider plugins ship with it. Left to
+  their own item; the "never published" claim is deleted from the metadata rather than replaced.</li>
+<li>Two review threads on the extraction stay open on purpose, each answered differently from what it
+  asked. Both are the user's to close.</li>
+</ul></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-extraction">
+        <div class="wave-eyebrow">The package exists</div>
+        <p class="wave-description">The move itself, and the setup path a newcomer reaches it by.</p>
+        <section class="track">
+          <h3 class="track-title">Package extraction and setup</h3>
+          <div class="item-list">
+                <article id="item-bastler-package" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Create the bastler package: the .claude Python and its tests move into it</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-package</span>
+            <span class="mono branch">claude/plan-item-kickoff-workflow-cuare2</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/185" target="_blank" rel="noopener">#185</a>
+            <a class="session-link" href="https://claude.ai/code/session_014kmiZegiD2Q8w2eese2L2L" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve bastler-package bastler-package" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
+(`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`&#39;s seven
+modules, and `.claude/hooks/`&#39;s `plan_item_bootstrap.py`, `plan_manifest_tools.py`,
+`plan_updates_since_support.py`, `plan_item_mode.py` - with their tests under `test/bastler_test/`
+and the CI job repointed and renamed `test_bastler`. Boundaries, unchanged from decisions 8 and 12:
+`SKILL.md` files, `settings.json` and the bash entry points stay in `.claude/`, since Claude Code
+discovers them by path, as thin wrappers calling `python -m` into the package; zero-install survives
+(importable from the repository root, `pyproject` for optional install).
+
+**Re-scoped, renamed and moved to the front 2026-08-20 (decision 13, the user&#39;s call.)** This item
+now creates the package itself off `main` instead of inheriting the one #111 carries, so #111
+rebases onto this branch and folds its modules in under the `bastler` name, and the original
+&#34;sequence it last&#34; constraint is reversed. The cost was measured rather than guessed - every open
+tooling pull request except #155 touches Python this moves - and accepted: each merges `main` across
+the move and re-applies its delta in the package, which is the resolution pattern #111 already
+exercised. A pull request already through review may instead land just before the migration&#39;s final
+merge; the user decides per pull request.
+
+**The duplication carriers are unified in the move rather than pairwise beforehand**, because
+`.claude/hooks/` and `.claude/stack/` are separate `sys.path` entries and nothing in one can import
+the other without the hackery decision 8 ends: `run_git` written out three times, the command-class
+base plus `classproperty` twice (#139&#39;s `MaintenanceCommand`, #151&#39;s `Subcommand`), `ItemStatus`, and
+the personal-notes precedence rules&#39; second Python copy. The GitHub backend rule stays with
+`bastler-github-api-unification`; the `run_git` seam stays `bastler-notes-core-python`&#39;s.
+
+**Dependency tiers were built, then deleted entirely, and the reasoning binds later items.** Three
+successive shapes - a declared tier table, a set of modules that may need the requirements, and an
+import closure derived from the callers that run with nothing installed - all existed to protect
+callers running before an install. The user&#39;s answer was that nothing should run before an install:
+`session-start.sh` now installs whatever of the declared dependencies is missing on every start,
+gated on the notes-branch fetch the hook already exits on, reporting a failure on a `dependencies:`
+summary line and finishing the run regardless. Actions runners install the package themselves.
+`package_layout.py` writes nothing down at all now. The two installers diverge on purpose: a session
+installs the missing *specifiers*, because `pip install ./bastler` would leave a second copy beside
+the clone&#39;s own and the clone&#39;s copy is what a caller imports; a runner has no such contract and
+installs `./bastler`. `bastler/requirements.txt` is deleted and the four distributions are declared
+in `bastler/pyproject.toml`&#39;s `[project] dependencies`, matching what `main` did for every other
+workspace member; `bastler` stays out of `[tool.uv.workspace] members`, since membership would put
+it in the default `uv sync`, which decision 12 rules out. No bash entry point carries embedded
+Python any more.
+
+**Recorded for a later item, not acted on here:** bastler is to depend on `krrood`, to cut
+duplication rather than mirror its idioms (the user, 2026-08-23). That makes decision 12&#39;s
+version-1 independence a stage rather than a permanent state.
+
+State: 632 tests pass, CI green on `7730b5177`, both original dependencies merged - so the
+`depends_on` entries onto them are dropped. Two review threads from the 2026-08-23 round stay open
+on purpose, each answered differently from what it asked: the `RESTACK_STEPS` name that
+`monkeypatch.setattr` takes as a string by its own signature, and a surviving `status_label`
+assertion offered for deletion. Both are the user&#39;s to close.
+
+**Resolved 2026-09-03** at `674f1507f`: `main` merged, `setup_steps.py` folded into the package
+as `bastler/setup_steps.py` and its suite converted off the `sys.path` hackery, 664 tests passing.
+
+**The &#34;still a draft&#34; this note carried was wrong, and so was the absence of a blocker.** #185 has
+been out of draft since the 2026-08-23 round - which in this workflow is the promotion approval, not
+a loose end - and has carried `needs-resolution` since 2026-08-22, which withholds it from promotion
+until the branch merges `main` cleanly again. So the item was not &#34;in progress&#34;: it was finished,
+approved, and held at the last step by a conflict nothing recorded.
+
+One process finding worth carrying, seen twice in two days: deleting a block by slicing from one
+anchor to the next also deleted a test that sat between them, and the suite stayed green, so nothing
+flagged it. A green run after a deletion says nothing about what the deletion took with it - the
+check is the mutation that used to fail, or the test count.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cleared 2026-09-03 by merging `main` at `674f1507f`: `main` merges cleanly again and 664 tests pass. The `needs-resolution` label is still on the pull request - stack.toml says the maintenance routine clears it once the branch merges cleanly, so the next pass should drop it. Until it does, the branch is still withheld from promotion.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-bastler-first-time-setup" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">One-page first-time setup, with the fork/GitHub/Claude steps printed for the reader</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-first-time-setup</span>
+            <span class="mono branch">claude/bastler-setup-first-time-6tfcun</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/203" target="_blank" rel="noopener">#203</a>
+            <a class="session-link" href="https://claude.ai/code/session_01KEdwwdMZ9vokwEx1rWPSsZ" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Off `main`, independent of the package extraction. `check-setup.sh` covers everything a shell can
+inspect and deliberately covers nothing held by a service - which is exactly the three steps a
+first-time user is left holding: the `merged`/`bug`/`in-review` labels a fresh fork lacks, Claude&#39;s
+access to that fork, and the `CLAUDE_PERSONAL_NOTES_*` variables an environment that clones fresh
+each session needs. Those existed only as prose across a 237-line hooks README and a 238-line setup
+skill. Adds `.claude/SETUP.md` and `.claude/hooks/setup_steps.py`, which prints those three steps
+with the fork, the label commands and the variable lines already substituted for the clone it lives
+in, dropping the repository-specific steps rather than guessing when no GitHub remote resolves. The
+two mirrored lists are pinned by test rather than trusted, against `build_dashboard.PullRequestLabel`
+and against `resolve-personal-notes-config.sh`, neither of which is readable at runtime from where
+this script runs. `setup-personal-notes/SKILL.md` is deliberately untouched, so the agent-facing path
+does not conflict with #107, which rewrites it - wiring `setup_steps.py` into the skill belongs on
+top of #107, not underneath it.
+
+Four review rounds, each applied. The three settings become a `PersonalNotesSetting` enum mixing in
+a frozen specification, which needs both `__new__` and `__init__` where `PullRequestField` on main
+needs only the second, because the enum machinery rebuilds a member&#39;s value by calling the mixed-in
+type with that value as its arguments. `LabelPurpose`, a `RepositoryLabel` dataclass and a
+`REQUIRED_LABELS` tuple were three things for one concept and are one `RepositoryLabel` StrEnum
+whose member is its own label name, lined up with `PullRequestLabel` so a contract test can hold the
+member names equal as well as the values. `Host` and `SetupLink` name the three services and four
+fixed pages, so `https://` and each host are written once.
+
+Checking the steps against the services they are about - rather than only against the script -
+is what found the rest. The docs URL named an overview that only points at the list, so a reader
+following it arrived somewhere they could not act on; the environment-variable format silently
+truncates an unquoted value at the first `#`, so a branch or path carrying one would have been set
+to a prefix of itself with nothing to see. And the access step said only &#34;give Claude access&#34;,
+leaving a reader unable to tell whether pushing and opening pull requests were covered: they are,
+and the step says so. Its organization URL was wrong for this product - `claude-tag` is where an
+owner allows repositories, while what gates GitHub sign-in on a Team or Enterprise plan is the
+connector toggle - and the Claude GitHub App is now named as what it is: optional, adding auto-fix,
+granting nothing.
+
+`GitCommandRunner` stays out, measured rather than assumed: importing it from a hook costs a
+production `sys.path.insert` into `.claude/stack/`, which #185 is deleting the last of, and it
+carries no config or remote method. Recorded as a fourth caller waiting on
+`bastler-notes-core-python`&#39;s `git_interface.py`. 561 tests pass. One thread is left open, answered
+differently from what it asked.
+
+**Landed 2026-09-01** as upstream pull request #577, merged into `main` at `017be2aa2`; the manifest
+had carried it as `in_progress` since. `.claude/SETUP.md`, `.claude/hooks/setup_steps.py` and
+`.claude/hooks/tests/test_setup_steps.py` are on `main` now, which is what makes them
+`bastler-package`&#39;s to fold in under the whichever-lands-second convention.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-conversion">
+        <div class="wave-eyebrow">The bash layer becomes shims</div>
+        <p class="wave-description">Each entry point&#39;s body moves onto the package and its script becomes a shim, in dependency order off the core modules.</p>
+        <section class="track">
+          <h3 class="track-title">Bash to Python conversion</h3>
+          <div class="item-list">
+                <article id="item-bastler-notes-core-python" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bash→Python 1: notes-core modules (config, git seam, writer, markers)</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-notes-core-python</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff bastler-package bastler-notes-core-python" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Pure addition to the package, no bash file changes (decision 12). Six modules: `errors.py` (a
+standard-library dataclass-exception base mirroring krrood&#39;s idiom - typed context fields, abstract
+`error_message`/`suggest_correction` composed in `__post_init__` - without importing krrood);
+`personal_notes_configuration.py` (a `ConfigurationSource` StrEnum, a frozen `ResolvedSetting`, and
+`PersonalNotesConfiguration.resolve` with the git-config &gt; environment &gt; default precedence);
+`git_interface.py` (a thin `GitRepository` dataclass as the dependency seam, with the real-git
+`ScratchRepository` harness staying the primary test strategy, no fakes); `notes_branch.py`
+(`fetch_notes_branch` with the upstream-remote fallback, a `ScratchWorktree` context manager with
+pid-and-uuid-suffixed branch names, and a `NotesBranchWriter` with a bounded re-fetch/re-apply push
+retry); `marker_sections.py` (one source for the `CLAUDE.local.md` markers currently duplicated
+between session-start and every save script); and `__main__.py` with only the configuration
+subcommand. Includes a real two-writer non-fast-forward retry test against the bare notes remote.
+
+`git_interface.py` has four callers waiting, not one, which is what makes the seam worth building
+here rather than pairwise. Read against each rather than inferred: #139&#39;s `GitCommandRunner` is not
+a duplicate - its attempt/run split and named methods exist because a push that silently did nothing
+must not read as one that worked, and #135&#39;s script never writes - but #143&#39;s `plan_item_bootstrap`
+`run_git` and #135&#39;s are near-identical, both generic and both raising, differing only in error type
+and parameter order, and `bastler-first-time-setup` is a fourth. The precedent that let #143 keep
+`stack.py`&#39;s overlap does not cover these: that one was accepted because the contracts were
+deliberately opposite (`_git` returns `&#34;&#34;` where `run_git` raises), and these are not.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Create the bastler package: the .claude Python and its tests move into it">bastler-package</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-bastler-save-commands-python" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bash→Python 2: the four notes writers become python -m subcommands</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-save-commands-python</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">`save-personal-notes.sh`, `save-pr-progress.sh`, `write-personal-notes-file.sh` and
+`create-personal-notes-branch.sh` become three-line shims; their bodies move onto the core modules,
+collapsing four near-identical scratch-worktree write dances into `NotesBranchWriter`.
+
+Four known defects are fixed here, each proven by a failing test first: a missing
+`BEGIN-PERSONAL-NOTES` marker pushed the entire `CLAUDE.local.md`, PR-progress section included,
+into the notes file; fixed scratch branch names raced between concurrent sessions; a rejected
+non-fast-forward push lost the edit after the cleanup trap deleted the committed scratch worktree;
+and a trailing flag died with `&#34;$2: unbound variable&#34;` instead of a usage message.
+
+Flag names, stdout lines and exit codes are external API and stay unchanged, pinned by shim-level
+subprocess contract tests. Sequence after the in-flight bash-touching pull requests land: a
+wholesale body rewrite cannot be merged by the whichever-lands-second-merges convention.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Bash→Python 1: notes-core modules (config, git seam, writer, markers) (not ready yet — this item is blocked on it)">bastler-notes-core-python</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-bastler-save-plan-python" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bash→Python 3: save-plan and the plan manifest tools</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-save-plan-python</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">`save-plan.sh` becomes a shim; `plan_manifest_tools.py` is absorbed as `plan_manifest.py`. New
+validation with curated errors instead of `cp`/traceback noise: the roadmap marker block must be
+non-empty, since today an empty block silently overwrites `roadmap.md`, and the
+`--manifest`/`--roadmap` source files must exist. Both existing test files carry over, one with an
+import change and one as the shim contract test.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Bash→Python 2: the four notes writers become python -m subcommands (not ready yet — this item is blocked on it)">bastler-save-commands-python</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-bastler-dashboard-refresh-python" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bash→Python 6: refresh_dashboard orchestration in-process</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-dashboard-refresh-python</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">`refresh_dashboard.sh` becomes a shim over `dashboard_refresh.py`, which calls
+`sync_manifest_status`/`build_dashboard` in-process - the package extraction has moved them by this
+point - and pushes manifest corrections through `NotesBranchWriter` instead of shelling out.
+`refresh_dashboard_support.py`, which exists only as JSON plumbing for the shell orchestrator, is
+deleted along with its constant, and its two operations become internal functions. The merged
+single-JSON stdout contract and the `--plan-id` flag stay unchanged; the existing shell test carries
+over as the shim contract test.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Bash→Python 2: the four notes writers become python -m subcommands (not ready yet — this item is blocked on it)">bastler-save-commands-python</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-bastler-config-shim-slimming" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bash→Python 7: slim the sourced config file to constants</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-config-shim-slimming</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">`resolve-personal-notes-config.sh` keeps its sourcing contract - ten documentation locations plus
+`ci.yml` twice source it for its variables and its cd-to-root side effect, so no `SKILL.md` change
+is mandatory by construction - but shrinks to the cd preamble, the three `NOTES_*` resolutions, the
+path constants and the pure-string path helpers. The behavioural functions are deleted once a grep
+of every `.md` confirms no prose instructs a session to call them.
+
+The residual bash/Python duplication of the precedence rules is guarded by a CI consistency test
+holding the sourced variables equal to the package&#39;s own configuration output. That test has **two**
+Python copies to hold equal, not one: `stack.py` already reimplements the same precedence, and its
+own docstrings concede as much. `plan_item_bootstrap.py` deliberately adds no third - it sources the
+shell file and calls its fetch function rather than restating the rules.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Bash→Python 2: the four notes writers become python -m subcommands (not ready yet — this item is blocked on it)">bastler-save-commands-python</span>
+
+            <span class="chip chip-unmet" title="Bash→Python 3: save-plan and the plan manifest tools (not ready yet — this item is blocked on it)">bastler-save-plan-python</span>
+
+            <span class="chip chip-unmet" title="Bash→Python 4: session-start behind an inert probing shim (not ready yet — this item is blocked on it)">bastler-session-start-python</span>
+
+            <span class="chip chip-unmet" title="Bash→Python 5: check-setup as typed rows (not ready yet — this item is blocked on it)">bastler-setup-checks-python</span>
+
+            <span class="chip chip-unmet" title="Bash→Python 6: refresh_dashboard orchestration in-process (not ready yet — this item is blocked on it)">bastler-dashboard-refresh-python</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-bastler-session-start-python" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bash→Python 4: session-start behind an inert probing shim</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-session-start-python</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">`session-start.sh` keeps its path, so `settings.json` stays byte-identical, but its body becomes the
+one guarded shim: `command -v python3` plus a &gt;= 3.11 version probe, exiting 0 with a single
+diagnostic line when absent, so the hook stays inert on machines without python3. The floor raise is
+user-accepted - every targeted environment ships 3.11 or later.
+
+`session_start.py` reproduces the stdout summary and every written marker byte-for-byte, pinned by
+golden-output fixtures recorded from the bash version before deletion. The `tracking_issue` grep
+pipeline that kills the hook under `pipefail` when the field is absent - found by #121&#39;s first
+session-start tests - becomes a `re.search` returning `None`.
+
+Its two recorded dependencies, `session-start-plan-and-setup-guards` and
+`git-identity-from-personal-notes`, are merged and now live in the `session-notes-infrastructure`
+plan, so they are dropped from `depends_on`; what mattered about them is that their
+`run_hook_script` subprocess tests carry over here as the shim contract tests rather than colliding.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Bash→Python 1: notes-core modules (config, git seam, writer, markers) (not ready yet — this item is blocked on it)">bastler-notes-core-python</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-bastler-setup-checks-python" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bash→Python 5: check-setup as typed rows</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-setup-checks-python</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">`check-setup.sh` becomes a shim over `setup_checks.py`: `SetupCheckIdentifier` and
+`SetupCheckStatus` StrEnums, a frozen `SetupCheckRow`, and a `SetupReport` preserving the exact TSV
+row order and exit-code semantics, which are external API for `/setup-personal-notes` and
+`prerequisite-check.md`. The parsing enums the test file already defines move into the production
+module and the test imports them instead.
+
+Two fixes ride along: the `settings.json` check parses the JSON and verifies a `SessionStart` hook
+command rather than grepping for a substring anywhere in the file, and the inline `python3` heredoc
+becomes a `missing_requirements()` call through `importlib.metadata`. Runs parallel to the other
+conversions off the core item.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Bash→Python 1: notes-core modules (config, git seam, writer, markers) (not ready yet — this item is blocked on it)">bastler-notes-core-python</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-bastler-github-api-unification" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">One github backend: the gh-CLI-else-token rule implemented once</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">bastler-github-api-unification</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">`github-api.sh` (decision 9, arriving with #107) and `pr_state` (arriving with #111) implement the
+same gh-CLI-else-token-and-curl dual-backend rule twice - the strongest concrete duplication on
+record in this work. `.claude/stack/maintenance.py` makes the same calls a third time, in `urllib`
+rather than `curl`; its own review asked directly why not `gh` and why not a GitHub Python library,
+and both were deferred here rather than answered there, since adding a third copy of the rule, even
+a better one, is what this item exists to stop. One `github_backend.py` implements it once and
+`github-api.sh` becomes a shim. Scope-boxed to the backend rule, not the callers&#39; features.
+
+So this item owns one decision beyond the extraction: **which backend all three converge on.** `gh`
+is absent from a session container and present on Actions runners; PyGithub would be the natural
+client but is a dependency. The question is the same for all three carriers and is answered once
+here. `upstream-review-reader` is evidence for it rather than a fourth carrier - it needed the same
+access, chose `gh api graphql` because its Actions context guarantees it, and an Actions-only caller
+can already assume `gh`.
+
+Two of its three recorded dependencies now live in other plans and are dropped from `depends_on`:
+`setup-personal-notes-script` (`stack-tooling-install`) and `shared-pr-state-chips`
+(`plan-dashboards`). Both are still real preconditions - they are the carriers this unifies - and
+are recorded as blockers instead.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Bash→Python 1: notes-core modules (config, git seam, writer, markers) (not ready yet — this item is blocked on it)">bastler-notes-core-python</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan dependency, not representable in depends_on: needs setup-personal-notes-script (#107, stack-tooling-install), which brings github-api.sh - one of the two carriers this item unifies.</div>
+            <div class="blocker">▸ Cross-plan dependency, not representable in depends_on: needs shared-pr-state-chips (#111, plan-dashboards), which brings pr_state - the other carrier this item unifies.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">8</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-bastler-notes-core-python" data-item-identifier="bastler-notes-core-python" onclick="planDashboardHighlightItem(event, this)"><strong>Bash→Python 1: notes-core modules (config, git seam, writer, markers)</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

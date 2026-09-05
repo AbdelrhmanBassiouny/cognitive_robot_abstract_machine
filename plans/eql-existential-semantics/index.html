@@ -1,0 +1,1578 @@
+<title>EQL existential semantics: binding order, semi-join exists, and range restriction</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>EQL existential semantics: binding order, semi-join exists, and range restriction</h1>
+    <p class="description">Rebuild EQL&#39;s existential operator on the standard relational/logic-programming footing. Today exists() takes a redundant quantified variable, exports bindings from inside the quantifier, and short-circuits globally rather than per outer binding — which silently drops matching rows, breaks not_(exists(...)) and for_all(...), and turns a correlated existential into a cross product. The root cause is that bottom-up evaluation gives the quantifier no outer relation to filter, so the operator invented one. The plan fixes the evaluation model first, then makes exists a semi-join and negated exists an antijoin, then removes the now-dead first argument and updates its two consumers — measuring evaluation cost before and after throughout.
+</p>
+    <p class="repo-line">
+      10 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/137" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>EQL existential semantics — roadmap</h4>
+<p>Narrative, findings and design rationale for the <code>eql-existential-semantics</code> plan.
+Structured state lives in the sibling <code>plan.yaml</code>; per-branch review history will live in
+<code>.claude/personal/pr-progress/&lt;branch&gt;.md</code> as each item opens a PR, exactly as the other
+plans in this directory do.</p>
+<p>Created 2026-08-03 from session
+<a href="https://claude.ai/code/session_01WntvmhgA9PggAdpJFQVv2n">https://claude.ai/code/session_01WntvmhgA9PggAdpJFQVv2n</a>, which did the whole
+investigation below empirically before any code was written. No implementation exists
+yet — every item is <code>not_started</code> or <code>blocked</code>.</p>
+<h5>How this started</h5>
+<p>The question was narrow: <em>does <code>exists()</code> need to take the quantified variable as its
+first argument, or is the condition enough?</em> The answer turned out to be "the condition
+is enough", but chasing it uncovered three defects underneath, and the argument itself is
+the least important of them.</p>
+<h5>What was measured, not assumed</h5>
+<p>Every finding below was reproduced against a live engine in that session (probe scripts
+were scratch-only and are not committed; the queries are reproduced verbatim in the
+relevant <code>plan.yaml</code> items so they can be re-derived as failing tests).</p>
+<p><strong>1. <code>exists</code> drops matching rows.</strong> Over three boxes where two contain an apple:</p>
+<pre><code>an(entity(box).where(exists(fruit, HasType(fruit, Apple))))   →  ['two_apples']
+</code></pre>
+<p><code>one_apple</code> is missing. The <code>return</code> after the first witness in <code>Exists._evaluate__</code> is
+global, not per outer binding. Every existing <code>exists</code> test in the repo happens to have
+exactly one matching row, which is why this survived. Prefixing a condition that binds
+the outer variable fixes it:</p>
+<pre><code>.where(HasType(box, Box), exists(fruit, HasType(fruit, Apple)))  →  ['two_apples', 'one_apple']
+</code></pre>
+<p><strong>2. <code>not_(exists(...))</code> returns nothing, and <code>for_all</code> fails identically.</strong> Same cause,
+same workaround. Neither is covered by any existing test.</p>
+<p><strong>3. A correlated existential becomes a cross product.</strong> The yield reads <code>val.bindings</code>
+— the quantified <em>variable's</em> bindings — never <code>cond_val.bindings</code>. An outer selected
+variable bound only inside the condition is therefore dropped:</p>
+<pre><code>set_of(box, shelf).where(exists(fruit, and_(apple, shelf.box_name == box.name)))
+  → [('two_apples','shelf_A'), ('two_apples','shelf_B'), ('two_apples','shelf_C')]
+</code></pre>
+<p><strong>4. The first argument is dead information at every call site.</strong> All five in-repo uses
+already mention it inside the condition. Passing the condition itself as the "variable",
+<code>Exists(cond, cond)</code>, gives the correct answer.</p>
+<p><strong>5. But it is not inert.</strong> It is a real binder with semantic force:
+<code>exists(unrelated_variable, cond)</code> returns wrong rows; <code>exists(empty_domain_variable,
+cond)</code> makes everything false; <code>exists(selected_variable, cond)</code> returns everything. The
+middle two are <em>correct</em> bounded-quantifier semantics — <code>∃v∈∅.φ</code> is false — which is
+precisely why an unrelated variable is dangerous rather than harmless.</p>
+<p>A correction worth recording, because the first pass of this analysis got it wrong: (5)'s
+middle two cases were initially written up as bugs. They are not. Reading the first
+argument as a bounded quantifier <code>∃v ∈ dom(v). φ</code> makes them the defined behaviour. That
+sharpens the argument for removing it instead of weakening it.</p>
+<h5>The literature framing that settled the design</h5>
+<p>Existential operators across formal query languages fall into three families, decided by
+<strong>where the quantified variable's range comes from</strong>.</p>
+<ul>
+<li><strong>Range supplied by the quantifier ⇒ the variable is mandatory.</strong> Tuple relational
+  calculus (<code>∃t ∈ R</code>), Z (<code>∃ x : T | P</code>), Alloy (<code>some x: X | F</code>), OCL
+  (<code>coll-&gt;exists(v | body)</code>), XQuery (<code>some $x in E satisfies P</code>), LINQ
+  (<code>source.Any(x =&gt; …)</code>).</li>
+<li><strong>Range supplied by the body ⇒ no variable.</strong> SQL's <code>EXISTS (subquery)</code>, SPARQL's
+  <code>FILTER EXISTS { pattern }</code>, Cypher's <code>EXISTS { … }</code>, Datalog and Prolog rule bodies,
+  and description logic's <code>∃R.C</code>, which has no variables in its syntax at all. Relational
+  algebra likewise expresses ∃ purely as projection.</li>
+<li><strong>The variable named only to control projection.</strong> Prolog's <code>bagof/3</code> groups by the
+  goal's free variables, and <code>Y^Goal</code> marks <code>Y</code> existential so it stops participating in
+  the grouping; <code>findall/3</code> is <code>bagof</code> with every free variable so marked. Explicitly
+  about <em>which variables escape</em>, not <em>whether the goal is true</em>.</li>
+</ul>
+<p>EQL is unusual: <code>variable(Cabinet, world.views)</code> carries its own domain, so every
+variable is range-restricted at declaration — the property Van Gelder &amp; Topor's safety
+work exists to <em>establish</em> for calculus queries. Neither reason to name the variable
+therefore applies. <strong>EQL's <code>exists</code> is semantically in the body-supplies-the-range family
+but was given the other family's syntax.</strong> That mismatch is the whole issue.</p>
+<p>Both OCL and Alloy show the same drift: OCL permits an implicit iterator
+(<code>coll-&gt;exists(body)</code>), Alloy has the variable-free <code>some expr</code> alongside
+<code>some x: X | F</code>.</p>
+<h5>The design: semi-join, and why nothing escapes</h5>
+<blockquote>
+<p>For each distinct assignment to the outer-visible variables (already bound, or selected
+by the enclosing query), yield it once if at least one assignment to the remaining
+variables satisfies the condition. The remaining variables never escape.</p>
+</blockquote>
+<p>This is <code>R ⋉ S = π_R(R ⋈ S)</code> — the textbook operator, not a novel design. The important
+consequence: because <strong>no new bindings are emitted at all</strong>, there is no witness to
+choose, so the "why only the first answer?" question does not need an answer — it stops
+being askable. The only reason the current code has to pick a witness is that it tries to
+export bindings from inside.</p>
+<p>The local/outer split is decided lexically: a variable is local iff it occurs <em>only</em>
+within the exists subtree. Cypher states the same rule in one sentence — <em>"any variable
+defined within the subquery will not be available outside of the expression"</em> — and the
+computation is identical to Prolog's <code>bagof</code> free-variable rule.</p>
+<p>Two consequences to accept deliberately:</p>
+<ul>
+<li><strong>It is mildly non-compositional.</strong> A condition's local set depends on the query around
+  it. SQL has the same property. It means the set must be computed at build/plan time
+  against the root, and <em>the same condition object reused in two queries can have two
+  different local sets</em>. The codebase already fights this class of problem — see the
+  <code>ActiveConditionsRoot</code> comment in <code>base_expressions.py</code> about a node reused as the
+  condition of more than one <code>Filter</code>.</li>
+<li><strong>If you want the inner rows, don't use <code>exists</code>.</strong> That is SQL's story unchanged:
+  <code>EXISTS</code> is a boolean filter; wanting the apples means writing the join.</li>
+</ul>
+<h6>What to avoid</h6>
+<p>SPARQL 1.1's <code>FILTER EXISTS</code> is the one body-supplies-the-range design that got scoping
+wrong, and the W3C has been unpicking it for years: its substitution-based semantics
+diverges from bottom-up evaluation, variables get replaced even when they contribute
+nothing to the inner results, and substitution can flip <code>MINUS</code> into its disjoint-domain
+case. <strong>Define <code>exists</code> by evaluating the condition under the outer bindings as an
+environment, never by substituting outer values into the condition tree.</strong></p>
+<h5>Why binding order is the prerequisite, not an optimization</h5>
+<p>This is the single most important structural fact in the plan, and it reversed the
+sequencing the session first proposed.</p>
+<p>A correct semi-join implementation was written and run both ways:</p>
+<pre><code>semi_join_exists(apple.color == 'green')                    → ['two_green','no_green','one_green','empty']
+HasType(box, AppleBox) then semi_join_exists(...)           → ['two_green','one_green']
+</code></pre>
+<p>Without a bound outer relation the filter is evaluated once against an empty context,
+answers "true", and every box then passes. <strong>A semi-join is only meaningful relative to
+an outer relation, and EQL's bottom-up evaluation does not have one at the point the
+condition runs.</strong> Shipping the quantifier change first would make <code>exists</code> <em>more</em> wrong.</p>
+<p>The literature names all of this. Applying negation to a goal whose non-local variables
+are unbound is <strong>floundering</strong> (Clark 1978), which is exactly why <code>not_(exists(...))</code>
+needs a hand-placed binding condition in front of it. Datalog's structural answer is
+stratified negation plus an ordering discipline. The canonical way to get top-down
+binding propagation <em>inside</em> a bottom-up engine — without switching to top-down — is
+<strong>magic sets / sideways information passing</strong> with adorned predicates (Bancilhon, Maier,
+Sagiv &amp; Ullman, PODS 1986). The relational-engine equivalent is that the optimizer
+guarantees the outer relation drives the semi-join.</p>
+<p>Note what the <code>HasType(box, Box)</code> workaround actually is: <strong>the user hand-writing a magic
+predicate.</strong> That it works confirms the diagnosis and locates the fix — in the planner,
+as a constraint on evaluation order, not in the user's <code>.where(...)</code> argument order.</p>
+<h5>The disjunction side-finding</h5>
+<p><code>core_logical_operators.py</code> documents <code>OR</code> as an <em>ElseIf</em> that evaluates the right
+operand only when the left is false. Measured behaviour is classical disjunction — the
+union of both branches' solution sets — because selected variables are enumerated
+independently of the condition:</p>
+<pre><code>set_of(box, tag).where(or_(box.name == 'green_box', tag.name == 't1'))
+  → [('green_box','t1'), ('green_box','t2'), ('red_box','t1')]     # exactly the union
+</code></pre>
+<p>Correct, but <em>incidentally</em> correct: nothing states or enforces it and the docstring says
+otherwise. The classical rule is <code>rr(φ ∨ ψ) = rr(φ) ∩ rr(ψ)</code> — a variable is
+range-restricted in a disjunction only if restricted in both branches. Branch-specific
+variables are fine as long as they stay local.</p>
+<p>Inside a semi-join <code>exists</code> the hazard is structurally neutralized, because nothing
+escapes — verified: an OR over two independent local variables inside a semi-join exists
+loses no rows. So this is a <code>where()</code>-level concern, which is why it is a parallel track
+rather than part of the spine.</p>
+<p>Three established designs exist for the unsafe case: Datalog-style rejection, SPARQL's
+partial solution mappings, or today's enumeration-order accident. The user chose
+rejection (2026-08-03), which also matches <code>AGENTS.md</code>'s "programs in illegal states
+should raise".</p>
+<h5>Cross-plan dependency on PR #99</h5>
+<p>PR <strong>#99</strong> (<code>rdr-refactor</code> plan, branch <code>claude/eql-truth-unification-refactor-pfux7f</code>,
+open, labelled <code>in-review</code> / <code>needs-resolution</code>) refactors <code>base_expressions.py</code>,
+<code>logical_quantifiers.py</code> and <code>core_logical_operators.py</code> — the same functions this plan's
+wave 1 touches. It also renamed the quantifier locals this analysis quotes.</p>
+<p>Its description defers an <code>exists</code> defect explicitly:</p>
+<blockquote>
+<p><em>"Also preserved deliberately: <code>evaluate_condition</code> on a satisfied bare <code>exists(...)</code>
+returns <code>False</code>, matching <code>main</code>. That looks like a genuine pre-existing bug, but
+changing it inside a refactor is how downstream packages break — it deserves its own
+change."</em></p>
+</blockquote>
+<p>This plan is that change, and the deferred defect is a named TDD case on
+<code>exists-semijoin</code>. The user chose (2026-08-03) to <strong>block wave 1 on #99 merging</strong> rather
+than stack on its branch or absorb the conflict.</p>
+<h4>99 also carries the in-repo precedent for the benchmarking track: it published a</h4>
+<p>truth-read-count table measured against an <code>origin/main</code> worktree, and its history is the
+warning that motivates measuring downstream — its cost regression was invisible to
+krrood's own suite (cheap comparators) and broke coraplex twice before reaching parity.</p>
+<h5>Decisions on record</h5>
+<p>All 2026-08-03, in the creating session:</p>
+<ul>
+<li><strong>Sequence against #99</strong>: block wave 1 on it merging.</li>
+<li><strong>OR / safe-range</strong>: own parallel track — characterize, then enforce.</li>
+<li><strong>API migration</strong>: hard break, all five call sites in one PR, no deprecation shim.</li>
+<li><strong>Tracking issue</strong>: yes (#137).</li>
+<li><strong><code>for_all</code> keeps its variable.</strong> The ∀/∃ split among a condition's free variables is
+  not derivable and interleaved quantifier order is meaningful. <code>Exists</code> and <code>ForAll</code>
+  sharing <code>QuantifiedConditional</code>'s <code>(left, right)</code> shape is a false symmetry, and it is
+  what pulled the redundant argument in.</li>
+<li><strong>Counting quantifiers are out of scope.</strong> <code>∃≥n</code> is a graded/qualified number
+  restriction, cannot stop at the first witness, and is <code>count(...) &gt;= n</code> — a different
+  operator. Do not generalize <code>exists</code> into it. <em>(Amended 2026-08-29: this is the
+  quantifier over one variable's bindings, which stays out of scope — <code>exists</code> must not
+  be generalized into it. The threshold connective over n named operands
+  (<code>threshold-connective</code>, disjunction-safety track) is the separate operator this
+  decision names, built separately as it implies.)</em></li>
+</ul>
+<h5>Bibliography</h5>
+<p>Cited in the items; collected here so no item has to repeat a full reference.</p>
+<p><strong>Semi-join and decorrelation</strong>
+- Bernstein &amp; Chiu, <em>Using semi-joins to solve relational queries</em>, JACM 1981.
+- Kim, <em>On optimizing an SQL-like nested query</em>, ACM TODS 7(3), 1982.
+- Ganski &amp; Wong, <em>Optimization of nested SQL queries revisited</em>, SIGMOD 1987 — the
+  <strong>count bug</strong>: a witness search not grouped by the outer binding, the same failure class
+  as finding (1) above.
+- Dayal, <em>Of nests and trees</em>, VLDB 1987.
+- Seshadri, Pirahesh &amp; Leung, <em>Complex query decorrelation</em>, ICDE 1996.
+- Neumann &amp; Kemper, <em>Unnesting arbitrary queries</em>.</p>
+<p><strong>Safety and range restriction</strong>
+- Codd, <em>Relational completeness of data base sublanguages</em>, 1972.
+- Chandra &amp; Merlin, <em>Optimal implementation of conjunctive queries</em>, 1977 — conjunctive
+  queries as ∃-quantified conjunctions where projection <em>is</em> the quantifier.
+- Van Gelder &amp; Topor, <em>Safety and translation of relational calculus queries</em>, ACM TODS
+  16(2), 1991.
+- Abiteboul, Hull &amp; Vianu, <em>Foundations of Databases</em>, ch. 5 — safe-range normal form.</p>
+<p><strong>Negation, binding propagation, evaluation strategy</strong>
+- Clark, <em>Negation as failure</em>, 1978 — floundering.
+- Lloyd, <em>Foundations of Logic Programming</em>.
+- Bancilhon, Maier, Sagiv &amp; Ullman, <em>Magic sets and other strange ways to implement logic
+  programs</em>, PODS 1986.
+- Beeri &amp; Ramakrishnan, <em>On the power of magic</em>.</p>
+<p><strong>Language surfaces</strong>
+- Neo4j Cypher manual, <em>EXISTS subqueries</em> —
+  <a href="https://neo4j.com/docs/cypher-manual/current/subqueries/existential/">https://neo4j.com/docs/cypher-manual/current/subqueries/existential/</a>
+- W3C, <em>SPARQL EXISTS report</em> — <a href="https://w3c.github.io/sparql-exists/docs/sparql-exists.html">https://w3c.github.io/sparql-exists/docs/sparql-exists.html</a>
+- <em>The Problem of Correlation and Substitution in SPARQL</em> — <a href="https://arxiv.org/pdf/1801.04387">https://arxiv.org/pdf/1801.04387</a>
+- Seaborne, <em>Substitution of Variables in SPARQL</em> — <a href="https://afs.github.io/substitute.html">https://afs.github.io/substitute.html</a>
+- Patel-Schneider &amp; Martin, <em>EXISTStential Aspects of SPARQL</em> —
+  <a href="https://ceur-ws.org/Vol-1690/paper72.pdf">https://ceur-ws.org/Vol-1690/paper72.pdf</a>
+- Apache Jena ARQ, <em>Negation</em> — <a href="https://jena.apache.org/documentation/query/negation.html">https://jena.apache.org/documentation/query/negation.html</a>
+- Prolog <code>bagof</code>/<code>setof</code>/<code>findall</code> and the <code>^</code> existential marker —
+  <a href="https://en.wikibooks.org/wiki/Prolog/Bagof,_Setof_and_Findall">https://en.wikibooks.org/wiki/Prolog/Bagof,_Setof_and_Findall</a>
+- OCL iterator forms — <a href="https://sunye.github.io/ocl/">https://sunye.github.io/ocl/</a>
+- Baader et al., <em>The Description Logic Handbook</em> — variable-free <code>∃R.C</code>, and <code>≥n R.C</code>
+  for the counting quantifier noted above.</p>
+<h5>Argument-position correlation, raised from match-query-ergonomics (2026-08-23)</h5>
+<p><code>argument-position-correlation</code> was added to the <code>binding-order</code> track from outside this
+plan: krrood PR #192 (plan <code>match-query-ergonomics</code>, issue #181) gives an EQL <code>Match</code> the
+full symbolic surface, and while measuring what a match may be used <em>as</em>, it found that a
+plain query given as a predicate argument shows this plan's own mechanism with no
+quantifier anywhere:</p>
+<table>
+<thead>
+<tr>
+<th>written</th>
+<th>result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>entity(body).where(HasType(entity(body), Handle))</code></td>
+<td>both rows</td>
+</tr>
+<tr>
+<td><code>entity(body).where(HasType(body, Handle))</code></td>
+<td>only the <code>Handle</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>binding-order-planner</code>'s notes already describe that mechanism exactly - evaluated once
+against an empty context, answers true, the selected variable then enumerates freely - but
+its test list is all <code>exists()</code> / <code>not_(exists(...))</code>, and it is not known whether binding
+the outer relation first also correlates an argument that is itself a query. The new item
+depends on it and starts by re-measuring, closing as already-fixed if the planner covers
+it.</p>
+<p>Consequence recorded on both plans: #192 deliberately refuses to let a match reach a
+predicate (<code>HasType(match, ...)</code> raises <code>LiteralConditionError</code>), because coercing it would
+replace that loud error with the silent every-row answer above. The refusal can be lifted
+once this item closes.</p>
+<h5>A threshold connective, raised from the framework rewrite (2026-08-29)</h5>
+<p><code>threshold-connective</code> was added to the <code>disjunction-safety</code> track after noticing that
+giskardpy's <code>Parallel</code> and coraplex's parallel nodes already decide success by a count -
+"at least <em>k</em> of the children succeeded" - and asking whether that is a generalization of
+<code>Or</code> that both could inherit, given that those frameworks' interfaces are to be rewritten
+onto EQL directly.</p>
+<p>It is, but it generalizes <code>And</code> too, and the framing "a superclass of <code>Or</code> with k=1" hides
+that. For a fixed operand list, <code>&gt;=k(phi_1..phi_n)</code> is the disjunction over every k-subset
+of the conjunction of that subset: k=1 is <code>Or</code>, <strong>k=n is <code>And</code></strong>, k=ceil(n/2) is majority.
+Giskardpy already shows both ends on one dial - <code>Parallel.minimum_success</code> defaults to
+<code>None</code> meaning <em>all</em> nodes must be True, and coraplex's <code>TryAll</code> sits at k=1.</p>
+<p>In first-order logic it is a <em>connective</em>, not a quantifier, and it adds no expressive
+power - the subset expansion is propositional, <code>C(n,k)</code> disjuncts, succinctness only. The
+standard reading is a threshold gate / cardinality constraint (<code>atleast(k, [x_1..x_n])</code> in
+SAT and CP), and its pseudo-Boolean encoding <code>k &lt;= sum([phi_i])</code> is literally the line
+giskardpy's <code>build_artifacts</code> already writes. It is monotone and dualizes cleanly:
+<code>not &gt;=k(phi_1..phi_n)</code> is <code>&gt;=(n-k+1)(not phi_1..not phi_n)</code>.</p>
+<p>The neighbouring concept is the counting <em>quantifier</em> <code>exists^{&gt;=k} x. phi(x)</code> - "at least
+k solutions" - which is also plain FOL for each fixed k, and is what description logic's
+qualified number restriction and the counting logics mean. The two coincide only when the
+n operands happen to be one formula over a fixed domain. The frameworks want the
+connective; <strong>EQL already implements the quantifier</strong>, as <code>AtLeast</code> in
+<code>query/quantifiers.py</code>, so that name is taken by the neighbour in the same package.</p>
+<p>That distinction is what keeps this item inside the 2026-08-03 decision above rather than
+against it. The decision rules on the quantifier - <code>exists</code> must not be generalized into
+<code>∃≥n</code> - and names counting as "a different operator"; this item is that different
+operator, built separately. The decision was amended on 2026-08-29 to draw the line
+explicitly, so a reader arriving at either one is not left to re-derive it (user decision,
+same date: restate rather than move the item to a plan of its own, since its
+range-restriction rule is <code>disjunction-range-restriction</code>'s with k generalized and belongs
+beside it).</p>
+<p>Why this is real work rather than a rename, recorded because each point is a decision the
+item has to make rather than inherit:</p>
+<ul>
+<li><code>OR</code> is a <code>LogicalBinaryOperator</code> with <code>left</code>/<code>right</code>, and <code>or_(*conditions)</code> folds an
+  n-ary call into a right-leaning chain through <code>chained_logic</code>. "At least 2 of 3" has no
+  binary fold, so <code>Or</code> cannot both inherit a threshold parent and keep its shape.</li>
+<li>EQL operators are not truth-functional gates: <code>_evaluate__</code> yields <code>OperationResult</code>
+  binding streams with a negation-as-failure fallback, so "at least k succeeded" has to be
+  defined per binding.</li>
+<li>Range restriction becomes a function of k: for k&lt;n any k-subset can be the witness, so
+  an escaping variable must be restricted in every branch (<code>rr(&gt;=k)</code> is the intersection of
+  the branches' <code>rr</code>), exactly <code>disjunction-range-restriction</code>'s rule generalized. Only
+  k=n relaxes to the union, like <code>And</code>. That is why this item depends on it: the general
+  rule cannot be written while its k=1 case is still undefined and its docstring still says
+  "ElseIf".</li>
+<li>On the consumer side the unification is not free. Giskardpy observations are three-valued
+  (<code>trinary_logic_or</code> is Kleene max over True=1, Unknown=0.5, False=0), and <strong>coraplex's
+  <code>TryAll</code> is not <code>Parallel(minimum_success=1)</code></strong>: <code>TryAll</code> observes
+  <code>trinary_logic_or(observations)</code>, which is Unknown while all children are Unknown, whereas
+  <code>Parallel(minimum_success=1)</code> observes <code>1 &lt;= sum(obs == True)</code> and <code>obs == True</code> is a hard
+  comparison, giving False in that same state. A shared superclass has to take a position on
+  Unknown, or carry a failure threshold alongside the success threshold.</li>
+</ul>
+<p>Scope split, decided here rather than left to whoever picks the item up: this item owns the
+operator and its semantics only. Re-expressing giskardpy's <code>Parallel</code> and coraplex's
+<code>ParallelNode</code>/<code>TryAllNode</code> on top of it belongs to <code>eql-performatives</code> (#108), whose
+<code>language-nodes-and-bridge</code> item already owns unifying those combinators with coraplex's
+plan nodes; a cross-plan note was added there so neither plan builds the threshold twice.
+Noted for that item: PR #14 already defines verbalization-only <code>Parallel</code> and <code>TryAll</code>
+classes in <code>entity_query_language/performatives.py</code>, so the names collide and the two
+layers must be kept distinct.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-measurement">
+        <div class="wave-eyebrow">Measurement baseline</div>
+        <p class="wave-description">Establish how EQL evaluation cost is measured before changing the evaluation model, so the binding-order and quantifier work is judged against numbers rather than intuition. PR #99 already set the precedent for this repo with its truth-read-count table.
+</p>
+        <section class="track">
+          <h3 class="track-title">Evaluation cost measurement</h3>
+          <div class="item-list">
+                <article id="item-evaluation-benchmark" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Benchmark harness and baseline for EQL evaluation cost</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">evaluation-benchmark</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff eql-existential-semantics evaluation-benchmark" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">GOAL: a repeatable timing harness for EQL query evaluation, plus a recorded baseline on main, so every later item in this plan reports a measured delta instead of an assertion that it is &#34;probably fine&#34;.
+EXPLORE FIRST: (a) what PR #99 already built — it measured truth-read *counts* against an origin/main worktree and published a before/after table; reuse that methodology and its worktree-comparison trick rather than inventing a second one. (b) Whether pytest-benchmark is already a dependency anywhere in the workspace, or whether a plain timeit-based harness is the lighter fit. (c) Which query shapes actually stress the evaluation model: nested quantifiers, correlated conditions, large flat_variable fan-out, deep attribute chains — the binding-order change in the next wave will move cost between enumeration and filtering, so the harness must separate those, not just report one wall-clock number per query.
+MEASURE AT LEAST: evaluation wall time and result-row count per query shape; number of variable enumerations performed; number of condition evaluations. The last two are what binding order actually changes — wall time alone will not explain a regression.
+TDD: the harness itself needs tests that pin its instrumentation (a query with a known enumeration count reports that count), not just that it runs.
+LITERATURE: the counting model is the standard &#34;logical reads&#34; instrumentation of query engines; Graefe&#39;s Volcano/Cascades work on operator-level instrumentation is the reference for separating enumeration cost from predicate cost.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-benchmark-regression-report" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Re-measure and report the evaluation-cost delta across the whole plan</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">benchmark-regression-report</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">GOAL: close the loop the user asked for — a published before/after on what the binding-order and quantifier changes did to EQL&#39;s evaluation cost, using the wave-0 harness unchanged.
+REPORT: per query shape, the baseline and final numbers for wall time, variable enumerations, and condition evaluations; the binding-order change isolated from the quantifier change, since they push cost in opposite directions (binding first raises enumerations, semi-join lowers condition evaluations). Call out any shape that regressed and say whether it is acceptable.
+EXPLORE FIRST: whether downstream packages (coraplex, semantic_digital_twin) need their own numbers. PR #99&#39;s history is the warning — its cost regression was invisible to krrood&#39;s own suite because krrood tests use cheap comparators, and it broke coraplex twice before reaching parity. A predicate whose __bool__ runs a world deepcopy plus a reachability simulation makes condition-evaluation count the dominant term, so at minimum report that count for a coraplex-shaped predicate.
+TDD: the report is generated by the harness, not hand-written; a test pins that the report generator produces the same numbers as a direct harness run.
+LITERATURE: PR #99&#39;s own truth-read-count table is the in-repo precedent for both the methodology and the presentation format.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Rederive the verbalization and SQL-translation consumers from the condition (not ready yet — this item is blocked on it)">exists-consumers</span>
+
+            <span class="chip chip-unmet" title="Make negated exists an antijoin, and fix for_all the same way (not ready yet — this item is blocked on it)">negation-antijoin</span>
+
+            <span class="chip chip-unmet" title="Range-restrict disjunction: characterize OR, then reject unsafe branches (not ready yet — this item is blocked on it)">disjunction-range-restriction</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-evaluation-model">
+        <div class="wave-eyebrow">Evaluation model: binding order and range restriction</div>
+        <p class="wave-description">The prerequisite wave. A semi-join is only meaningful relative to an outer relation, and negation-as-failure is only sound over bound variables; both are properties of when things get evaluated, not of the quantifier node.
+</p>
+        <section class="track">
+          <h3 class="track-title">Binding order and the outer relation</h3>
+          <div class="item-list">
+                <article id="item-binding-order-planner" class="item status-blocked" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bind a query&#39;s selected variables before evaluating its filter conditions</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-blocked">Blocked</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">binding-order-planner</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resolve">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve eql-existential-semantics binding-order-planner" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">GOAL: the outer relation exists before any filter condition runs. Concretely, an(entity(box).where(&lt;filter&gt;)) binds box first, then evaluates &lt;filter&gt; per binding — rather than letting the condition&#39;s own enumeration be the only thing that ever binds box.
+WHY IT IS THE PREREQUISITE, NOT AN OPTIMIZATION: measured in this session, a correct semi-join exists() evaluated *without* a bound outer relation returns every row rather than the matching ones — it is evaluated once against an empty context, answers &#34;true&#34;, and then the selected variable enumerates freely. The same semi-join with the outer variable bound first returns exactly the right rows. So shipping the quantifier change before this one makes exists *more* wrong, not less. This ordering is the single most important structural fact in the plan.
+EXPLORE FIRST: (a) whether QueryPlanner already has any notion of condition ordering or is greenfield for this. (b) How Where/Filter currently drives evaluation and where an outer-relation step could be introduced without restructuring every operator. (c) Whether the fix belongs at the Filter level (bind selected variables, then filter) or as adornment/binding-pattern metadata carried per condition node — the literature supports the second as more general. (d) The blast radius on coraplex and semantic_digital_twin: PR #99&#39;s history shows krrood&#39;s own suite cannot see costs that break downstream callers.
+A THIRD REPRO, from the match-query-ergonomics plan (2026-08-23, measured on krrood PR #192&#39;s branch): a *query given as an argument* is uncorrelated the same way. HasType(entity(variable), Handle) - a plain query, no quantifier and no match involved - returns every row over a mixed Handle/Container domain, because the argument is evaluated once against an empty context, while HasType(variable, Handle) returns only the Handle. That is why #192 refuses to let a Match reach a predicate at all: coercing it would trade a loud LiteralConditionError for this silent wrong answer. Whoever takes this item should carry the predicate-argument spelling in its test list, not only the exists()/not_(exists()) ones below. TDD (all reproduced this session, all currently failing without a hand-placed binding condition): - not_(exists(apple, apple.color == &#34;green&#34;)) over four boxes returns [] today;
+  must return the two non-matching boxes, including the one with an empty apple
+  list. Prefixing HasType(box, AppleBox) makes it pass today — that prefix is the
+  user hand-writing a magic predicate, and the test must pass without it.
+- for_all(fruit, not_(HasType(fruit, Apple))) returns [] today; must return the
+  box with no apples.
+- A test asserting that condition order within .where(...) does not change the
+  result set, over a query where it currently does.
+
+MEASURE: re-run the wave-0 harness; report enumeration-count and condition-count deltas, not just wall time. Binding first may increase enumerations while cutting condition evaluations — that trade is the point and must be visible.
+LITERATURE: this is bottom-up (naive/semi-naive) evaluation lacking top-down binding propagation. The canonical fix inside a bottom-up engine is magic sets / sideways information passing with adorned predicates — Bancilhon, Maier, Sagiv &amp; Ullman, &#34;Magic sets and other strange ways to implement logic programs&#34; (PODS 1986); Beeri &amp; Ramakrishnan, &#34;On the power of magic&#34;. Applying negation to a goal whose non-local variables are unbound is *floundering* — Clark, &#34;Negation as failure&#34; (1978); Lloyd, &#34;Foundations of Logic Programming&#34;. Datalog&#39;s structural answer is stratified negation plus an ordering discipline that binds a negated subgoal&#39;s non-local variables first. The relational-engine equivalent is that the optimizer guarantees the outer relation drives the semi-join.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Benchmark harness and baseline for EQL evaluation cost (not ready yet — this item is blocked on it)">evaluation-benchmark</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: PR #99 (rdr-refactor) refactors base_expressions.py, logical_quantifiers.py and core_logical_operators.py — the same functions. Start off main once #99 merges.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-argument-position-correlation" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A query given as an argument is evaluated uncorrelated, quantifier or not</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">argument-position-correlation</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Raised from match-query-ergonomics (#181) on 2026-08-23 and measured on krrood PR #192&#39;s branch: over a domain of one Handle and one Container, entity(body).where(HasType(entity(body), Handle)) returns *both* rows, while entity(body).where(HasType(body, Handle)) returns only the Handle. No quantifier and no match is involved, so this is binding-order-planner&#39;s mechanism - the argument is evaluated once against an empty context, answers true, and the selected variable then enumerates freely - in an argument position rather than an exists() body. Separate item rather than a repro on that one because it is not known whether binding the outer relation first also correlates an argument that is itself a query: the first job here is to re-measure once binding-order-planner lands and close this as already-fixed if it is, and only otherwise to correlate the argument. Consequence for #181: EQL match queries deliberately refuse to reach a predicate at all (HasType(match, ...) raises LiteralConditionError) because coercing them would trade that loud error for this silent wrong answer; that refusal can be lifted once this item closes.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Bind a query&#39;s selected variables before evaluating its filter conditions (not ready yet — this item is blocked on it)">binding-order-planner</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Disjunction range restriction</h3>
+          <div class="item-list">
+                <article id="item-disjunction-range-restriction" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Range-restrict disjunction: characterize OR, then reject unsafe branches</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">disjunction-range-restriction</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff eql-existential-semantics disjunction-range-restriction" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">GOAL: OR&#39;s behaviour is stated, tested, and safe. Today core_logical_operators.py documents OR as an &#34;ElseIf&#34; that evaluates the right operand only when the left is False, but measured behaviour is classical disjunction — the union of both branches&#39; solution sets — because selected variables are enumerated independently of the condition. Correct today, but incidentally so: nothing states or enforces it, and the docstring says something else.
+EXPLORE FIRST: (a) find the case, if any, where the ElseIf implementation and classical union actually diverge — a variable mentioned only in the right branch that is neither selected nor otherwise enumerable is the candidate shape. (b) Decide whether EQL wants Datalog-style rejection or SPARQL-style partial solution mappings; the second would require every consumer to tolerate absent bindings, so rejection is the expected answer, but confirm the cost before committing. (c) Whether the same restriction check has a home shared with the binding-order item&#39;s adornment work.
+DESIRED END STATE: rr(φ ∨ ψ) = rr(φ) ∩ rr(ψ) enforced at build time — a variable that must escape a disjunction but is not range-restricted in both branches raises a meaningful custom exception rather than silently producing whatever the enumeration order gives. The ElseIf docstring is corrected to match.
+TDD: - Pin the measured union behaviour: set_of(box, tag).where(or_(box.name == ...,
+  tag.name == ...)) yields exactly the union of the two branches&#39; solution sets
+  (three rows for the two-box/two-tag fixture), so a later refactor cannot quietly
+  turn it back into a fallback.
+- An unsafe disjunction whose escaping variable is restricted in only one branch
+  raises, with the variable named in the message.
+- A branch-local variable appearing in only one branch is accepted, since it never
+  escapes — this is the case that must NOT raise.
+
+NOTE ON SCOPE: inside a semi-join exists this hazard is structurally neutralized, because nothing escapes the quantifier. Verified this session: an OR over two independent local variables inside a semi-join exists loses no rows. So this item is about OR in a plain where(), not about quantifiers — which is why it is a parallel track rather than part of the spine.
+LITERATURE: safe-range calculus and the safe-range normal form — Abiteboul, Hull &amp; Vianu, &#34;Foundations of Databases&#34; ch. 5; Van Gelder &amp; Topor, &#34;Safety and translation of relational calculus queries&#34; (ACM TODS 16(2), 1991); Codd&#39;s relational completeness work for the original safety notion. Datalog expresses disjunction as two rules, each of which must independently bind every head variable. SPARQL&#39;s UNION takes the other branch: solution mappings are partial and a variable is simply unbound in solutions from the other side.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-threshold-connective" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A threshold connective: at least k of n, with Or and And as its ends</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">threshold-connective</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">GOAL: an n-ary threshold connective in core_logical_operators.py - &#34;at least k of these n operands hold&#34; - with Or (k=1) and And (k=n) as its two ends, its first-order reading written down, and its range-restriction rule stated as a function of k.
+IT GENERALIZES And AS WELL AS Or, which the original &#34;superclass of Or with k=1&#34; framing hides. &gt;=k(phi_1..phi_n) is the disjunction over every k-subset of that subset&#39;s conjunction, so k=1 is Or, k=n is And, k=ceil(n/2) is majority. Giskardpy already has both ends on one dial: Parallel.minimum_success=None means all nodes must be True.
+IT IS A CONNECTIVE, NOT A QUANTIFIER, and adds no expressive power - the subset expansion is propositional, C(n,k) disjuncts, succinctness only. It is the threshold gate / cardinality constraint of SAT and CP (atleast(k, [x_1..x_n])), whose pseudo-Boolean encoding k &lt;= sum([phi_i]) is the line giskardpy&#39;s build_artifacts already writes. Monotone, and dualizes: not &gt;=k(phi) is &gt;=(n-k+1)(not phi).
+THE NAME AtLeast IS TAKEN by the neighbouring concept in the same package: query/quantifiers.py&#39;s AtLeast is a SingleValueQuantificationConstraint over a query&#39;s solution count, i.e. the counting quantifier exists^{&gt;=k}, not this connective. Pick a different name.
+EXPLORE FIRST: (a) the structural decision - OR is a LogicalBinaryOperator with left/right and or_(*conditions) folds to a right-leaning chain via chained_logic, but &gt;=k has no binary fold, so either the parent becomes n-ary and OR becomes its (k=1, n=2) instance (changing OR and chained_logic), or the threshold operator is an n-ary sibling and the inheritance runs the other way. This is the biggest open question and should be settled before any code. (b) The per-binding definition: _evaluate__ yields OperationResult binding streams with a negation-as-failure fallback, not booleans, so &#34;at least k succeeded&#34; means counting true branches per candidate binding. (c) Whether the k-generalized safety check shares a home with disjunction-range-restriction&#39;s.
+WHY IT DEPENDS ON disjunction-range-restriction: the safety rule is a function of k -for k&lt;n any k-subset can be the witness, so an escaping variable must be range-restricted in every branch (rr(&gt;=k) = the intersection of the branches&#39; rr), and only k=n relaxes to the union like And. That is exactly that item&#39;s rule generalized, and it cannot be written while its k=1 case is undefined and OR&#39;s docstring still claims &#34;ElseIf&#34; against measured classical-union behaviour.
+TDD: - &gt;=k over n operands agrees with the explicit k-subset disjunction for every k in 1..n on a   small fixture, which pins k=1 to or_ and k=n to and_ against the existing operators rather   than against a retyped literal. - The De Morgan dual holds: not_(&gt;=k(...)) agrees with &gt;=(n-k+1) over the negated operands. - A variable escaping a k&lt;n threshold that is range-restricted in only some branches raises,   with the variable named; a branch-local variable does not raise. - k=n accepts what k&lt;n rejects, which is the one place the rule differs. - Rejects k&lt;1 and k&gt;n at build time with a meaningful custom exception.
+CONSUMER SIDE IS NOT THIS ITEM. Re-expressing giskardpy&#39;s Parallel and coraplex&#39;s ParallelNode/TryAllNode on the operator belongs to eql-performatives (#108), whose language-nodes-and-bridge item already owns that unification; a cross-plan note was added there. Two constraints this item should leave that work able to meet: (a) coraplex&#39;s TryAll is NOT Parallel(minimum_success=1). Giskardpy observations are three-valued (trinary_logic_or is Kleene max over True=1, Unknown=0.5, False=0). TryAll observes trinary_logic_or(observations), which is Unknown while all children are Unknown; Parallel(minimum_success=1) observes 1 &lt;= sum(obs == True) and obs == True is a hard comparison, so the same state gives False. A shared superclass must take a position on Unknown, or carry a failure threshold as well as a success threshold. (b) PR #14 already defines verbalization-only Parallel and TryAll in entity_query_language/performatives.py (Composition.perform() raises), so those names collide with the framework nodes and the two layers must stay distinct.
+LITERATURE: threshold/majority functions and cardinality constraints - Sinz, &#34;Towards an optimal CNF encoding of Boolean cardinality constraints&#34; (CP 2005) for the encodings; pseudo-Boolean constraints generally. For the quantifier side: first-order logic with counting (FOC) and description logic&#39;s qualified number restrictions (&gt;=n R.C) - Baader et al., &#34;The Description Logic Handbook&#34;. Safe-range calculus as in disjunction-range-restriction&#39;s own reading list, since the k&lt;n rule is that rule.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Range-restrict disjunction: characterize OR, then reject unsafe branches (not ready yet — this item is blocked on it)">disjunction-range-restriction</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-quantifier-semantics">
+        <div class="wave-eyebrow">Quantifier semantics: semi-join and antijoin</div>
+        <p class="wave-description">Re-express the quantifiers as the relational operators the literature names, once the evaluation model can supply them with an outer relation.
+</p>
+        <section class="track">
+          <h3 class="track-title">Existential and universal quantifiers</h3>
+          <div class="item-list">
+                <article id="item-exists-semijoin" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Make exists() a semi-join: per outer binding, no escaping locals</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">exists-semijoin</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">GOAL: exists() is a filter on the outer bindings that emits no new bindings at all. For each distinct assignment to the outer-visible variables, yield it once if at least one assignment to the remaining variables satisfies the condition; the remaining variables never escape.
+THE TWO DEFECTS THIS REMOVES, both measured this session: (a) The `return` after the first witness is global rather than per outer binding, so an(entity(box).where(exists(fruit, HasType(fruit, Apple)))) over three boxes returns only the first matching box. Every existing exists test has exactly one matching row, which is why this was never caught. (b) The yield reads val.bindings — the quantified variable&#39;s — never cond_val.bindings, so an outer selected variable bound only inside the condition is dropped, turning a correlated existential into a cross product.
+Once locals stop escaping, there is no witness to choose, and the &#34;why the first answer?&#34; question disappears rather than needing an answer.
+EXPLORE FIRST: (a) how to compute the outer-visible set. The rule is lexical: a variable is local iff it occurs only within the exists subtree. Statically decidable on the expression tree, but it must be computed at build/plan time against the root, not at node construction — and note the consequence that the same condition object reused in two queries has two different local sets. The codebase already fights this class of problem (see the ActiveConditionsRoot comment in base_expressions.py about a node reused as the condition of more than one Filter). (b) Whether Exists should stop being a QuantifiedConditional and become a unary condition wrapper — the shared (left, right) shape with ForAll is what pulled the redundant argument in, and ForAll genuinely needs its variable while Exists does not.
+TDD: - Boxes [two_green, no_green, one_green, empty]: exists over a green apple returns
+  [two_green, one_green]. Fails today, returning [two_green] only.
+- The correlated shape set_of(box, shelf).where(exists(fruit, and_(apple,
+  shelf.box_name == box.name))) returns one row per matching box, not the
+  box × all-shelves cross product it produces today.
+- No local binding appears in any result: the flattened collection variable and
+  the attribute it compares are absent from the output unification.
+- An OR inside the exists whose branches use different local variables loses no
+  rows (verified achievable this session).
+- PR #99&#39;s deferred defect: evaluate_condition on a satisfied bare exists(...)
+  returns False today. #99 preserved it deliberately — &#34;it deserves its own
+  change&#34; — and this is that change.
+
+MEASURE: re-run the harness. A semi-join should *reduce* condition evaluations versus the bare-condition-plus-distinct workaround; confirm rather than assume.
+LITERATURE: the semi-join R ⋉ S = π_R(R ⋈ S) is the textbook implementation — Bernstein &amp; Chiu, &#34;Using semi-joins to solve relational queries&#34; (JACM 1981). The scoping rule is SQL&#39;s and Cypher&#39;s: locals never escape (&#34;any variable defined within the subquery will not be available outside of the expression&#34;, Neo4j Cypher manual, EXISTS subqueries). The same free-variable computation is Prolog&#39;s bagof/3 rule. Decorrelation precedent and its failure modes: Kim, &#34;On optimizing an SQL-like nested query&#34; (ACM TODS 1982), whose algorithm Ganski &amp; Wong, &#34;Optimization of nested SQL queries revisited&#34; (SIGMOD 1987) showed contained the *count bug* — a witness search not grouped by the outer binding, the same failure class as defect (a) above; Dayal (VLDB 1987); Seshadri, Pirahesh &amp; Leung, &#34;Complex query decorrelation&#34; (ICDE 1996); Neumann &amp; Kemper, &#34;Unnesting arbitrary queries&#34;. Cautionary counter-example: SPARQL 1.1&#39;s FILTER EXISTS defines correlation by *substituting* outer values into the pattern, which diverges from bottom-up results and is still being unpicked (W3C SPARQL EXISTS report; &#34;The Problem of Correlation and Substitution in SPARQL&#34;, arXiv 1801.04387). Evaluate the condition under the outer bindings as an environment; do not substitute.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Bind a query&#39;s selected variables before evaluating its filter conditions (not ready yet — this item is blocked on it)">binding-order-planner</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-negation-antijoin" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Make negated exists an antijoin, and fix for_all the same way</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">negation-antijoin</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">GOAL: not_(exists(...)) is an antijoin (R ▷ S) — one row per outer binding with no witness — and for_all stops failing for the same reason exists did.
+EXPLORE FIRST: (a) whether Not wrapping a semi-join Exists gives the antijoin for free once the semi-join yields per outer binding, or whether an explicit antijoin node is needed. Prefer the explicit node if the planner needs to recognize it — &#34;not_(exists(...))&#34; is the shape an optimizer must see to avoid materializing the inner side. (b) ForAll&#39;s variable stays: the ∀/∃ split among a condition&#39;s free variables is not derivable, and interleaved quantifier order is meaningful. Confirm ForAll._invert_ → Exists still type-checks once Exists loses its variable, since that inversion is the one place the two operators&#39; shapes are coupled.
+TDD: - not_(exists(green apple)) returns [no_green, empty] — including the empty-apple
+  box, which is the case a naive &#34;no witness&#34; implementation over an empty
+  enumeration most easily drops.
+- for_all(fruit, not_(HasType(fruit, Apple))) returns the box with no apples;
+  returns [] today.
+- Double negation not_(not_(exists(...))) agrees with exists(...). - An antijoin whose outer binding is unbound at evaluation time raises rather than
+  silently returning everything — the floundering guard, made explicit.
+
+MEASURE: antijoins cannot short-circuit on the outer side; check the harness for a regression on queries with a large outer relation and a cheap inner condition.
+LITERATURE: antijoin as the standard NOT EXISTS implementation; stratified negation in Datalog (Apt/Blair/Walker; Van Gelder) for why the negated subgoal&#39;s non-local variables must be bound first; Clark 1978 for negation as failure and floundering. SPARQL&#39;s MINUS versus NOT EXISTS divergence is the worked example of getting this subtly wrong — worth reading before choosing between an explicit node and a wrapped Not.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Make exists() a semi-join: per outer binding, no escaping locals (not ready yet — this item is blocked on it)">exists-semijoin</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-api-and-consumers">
+        <div class="wave-eyebrow">API surface and consumers</div>
+        <p class="wave-description">Remove the first argument that the semi-join semantics makes dead, and rederive what the verbalization and SQLAlchemy consumers were reading off it.
+</p>
+        <section class="track">
+          <h3 class="track-title">exists() signature and its consumers</h3>
+          <div class="item-list">
+                <article id="item-exists-single-argument" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Drop exists()&#39;s redundant first argument</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">exists-single-argument</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">GOAL: exists(*conditions), joined like where(). Hard break — all five in-repo call sites migrate in the same PR, no deprecation shim (user decision, 2026-08-03: a shim that silently accepts a now-meaningless variable is exactly the misuse-prone interface being removed).
+WHY THE ARGUMENT IS DEAD: all five call sites already mention the first argument inside the condition, so it restates information the condition carries — verified exhaustively this session (explanation.py:70, test_queries.py:772, test_queries.py:1052, test_eql.py:1444, inference_explanation.md:237). Passing the condition itself as the &#34;variable&#34;, Exists(cond, cond), produces the correct answer, which is the sharpest demonstration that it carries nothing.
+WHY IT IS NOT MERELY REDUNDANT BUT HARMFUL: it is a real binder with semantic force, so getting it wrong changes meaning silently. exists(unrelated_variable, cond) returns wrong rows; exists(empty_domain_variable, cond) makes the whole condition false (correct bounded-quantifier semantics — ∃v∈∅ is false — which is exactly why an unrelated variable is dangerous); exists(selected_variable, cond) quantifies away the answer variable and returns everything.
+EXPLORE FIRST: whether the first argument is ever an Attribute chain rather than a Variable — it is (exists(cabinets.drawers, ...) in test_queries.py:1052), so any derivation must work at attribute granularity, not just on _unique_variables_ leaves. This is the main technical risk in the whole API change and should be prototyped before the signature moves.
+TDD: - Every migrated call site keeps its existing assertion, unchanged. - The walrus idiom disappears: exists(var := flat_variable(fb.fruits),
+  HasType(var, Apple)) becomes exists(HasType(flat_variable(fb.fruits), Apple))
+  and returns the same rows.
+- exists() with an Attribute-chain-rooted condition (the cabinets.drawers shape)
+  still resolves its locals correctly.
+- Calling exists with the old two-argument signature fails loudly, not silently.
+LITERATURE: the family taxonomy is decided by where the quantified variable&#39;s range comes from. Range at the quantifier ⇒ the variable is mandatory: tuple relational calculus (∃t ∈ R), Z, Alloy&#39;s `some x: X | F`, OCL&#39;s coll-&gt;exists(v | body), XQuery&#39;s `some $x in E satisfies P`, LINQ&#39;s Any(predicate). Range from the body ⇒ no variable: SQL&#39;s EXISTS (subquery), SPARQL&#39;s FILTER EXISTS { pattern }, Cypher&#39;s EXISTS { }, Datalog/Prolog rule bodies, and description logic&#39;s ∃R.C which has no variables at all. EQL is unusual in that variable(...) carries its own domain, so every variable is range-restricted at declaration — the property Van Gelder &amp; Topor&#39;s safety work exists to establish for calculus queries. So neither reason to name the variable applies: EQL is semantically in the body-supplies-the-range family but was given the other family&#39;s syntax. Both OCL (implicit iterator) and Alloy (`some expr`) show the same drift toward making it optional once derivable.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Make exists() a semi-join: per outer binding, no escaping locals (not ready yet — this item is blocked on it)">exists-semijoin</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-exists-consumers" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Rederive the verbalization and SQL-translation consumers from the condition</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">exists-consumers</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">GOAL: the two consumers that read Exists.variable keep working without it.
+THE CONSUMERS: (a) ExistsRule.build and QuantifierScope.focus in verbalization — &#34;there exists a Robot such that its battery is greater than 0&#34; needs both a noun to introduce and a discourse focus referent for the pronoun. (b) _translate_exists in ormatic/eql_interface.py — it calls _require_dao_class(existential_variable._type_) to build SELECT 1 FROM &lt;DAO&gt;. Neither needs the variable *passed in*; both need it *known*, and it is derivable as free(condition) minus outer-visible.
+EXPLORE FIRST: (a) what the verbalization should say when the derived local set has more than one variable — &#34;there exists a Robot and a Task such that ...&#34; or a different framing? Today&#39;s single-variable framing is all that is exercised, so this is a genuine new question, not a port. (b) Whether the SQL translator&#39;s correlated-subquery construction needs the whole local set or only the one whose DAO becomes the FROM — and what it should do when the local set has two types. Both may warrant an AskUserQuestion rather than a guess.
+TDD: - The existing verbalization doctests keep their exact current output
+  (&#34;there exists a Robot such that its battery is greater than 50&#34;).
+- test_exists_in_where_clause in test_ormatic/test_eql.py keeps passing: the
+  emitted SQL is still a correlated EXISTS subquery over GraspConfigDAO and the
+  two MoveActions with a grasp config come back.
+- A multi-local-variable exists has a defined verbalization and a defined SQL
+  translation — new tests, whatever the answer to the explore questions turns out
+  to be.
+
+LITERATURE: SQL&#39;s EXISTS subquery derives its FROM from the subquery itself, which is precisely the derivation being reimplemented here; Cypher permits omitting MATCH when the subquery is only a pattern, i.e. the engine infers the same thing.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Drop exists()&#39;s redundant first argument (not ready yet — this item is blocked on it)">exists-single-argument</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">9</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(2)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-evaluation-benchmark" data-item-identifier="evaluation-benchmark" onclick="planDashboardHighlightItem(event, this)"><strong>Benchmark harness and baseline for EQL evaluation cost</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-disjunction-range-restriction" data-item-identifier="disjunction-range-restriction" onclick="planDashboardHighlightItem(event, this)"><strong>Range-restrict disjunction: characterize OR, then reject unsafe branches</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

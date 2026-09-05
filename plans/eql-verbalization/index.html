@@ -1,0 +1,1409 @@
+<title>EQL verbalization follow-up (operand naming, disambiguation, sdt migration)</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>EQL verbalization follow-up (operand naming, disambiguation, sdt migration)</h1>
+    <p class="description">Programme following up PR #33&#39;s review: extract a reusable verbalization surface-verification framework onto main, redesign operand naming and same-noun disambiguation to live in the coreference/referring machinery, add abstract-to-concrete-subclass expansion plus first-order (value-agnostic) rendering, then apply all of it to migrate semantic_digital_twin&#39;s predicates off the framework PR #33 currently carries a duplicate of.
+</p>
+    <p class="repo-line">
+      6 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/104" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>eql-verbalization — roadmap &amp; rationale</h4>
+<p>Cross-PR roadmap for the semantic_digital_twin verbalization review on PR #33. Migrated out of
+<code>cram-notes.md</code>'s "EQL verbalization follow-up plan" living-roadmap section (2026-07-29), which
+had grown into the single largest recurring per-session token cost across every branch — see
+<code>plans/workflow-unification/roadmap.md</code>'s "Why this plan exists" for the review that identified
+it. #32 (SymbolicFunction migration) and P1–P3 (#86, #87, #88) are all merged to <code>main</code>. P4 (sdt
+= PR #33) is the last of the original four; P5 was split out of P4's review on 2026-07-30.</p>
+<h5>Finalized design decisions</h5>
+<ol>
+<li>Operand naming: grammatical metadata on the field → field/attribute name → type name
+   (last resort). Provide the metadata mechanism with good defaults (low modelling
+   burden); build on the existing <code>_attribute_name_</code> / possessive / referring
+   microplanning. (Replaces "always the type name", which read awkwardly, e.g. "Point3".)</li>
+<li>Same-type operands: determiners ("a point … the other point"), not numbering ("Point3 1/2").</li>
+<li>Value-agnostic (first-order) + value-using forms, and abstract→concrete-subclass
+   expansion ("a Body or a Region"): their own phase (P3), on <code>concrete_subclasses</code> +
+   <code>RoleFragment.for_type</code> / <code>for_literal</code>.</li>
+<li>Fragments must use <code>Noun</code> / <code>Noun.bare</code> / <code>Noun.the</code>, never a raw <code>WordFragment</code>.</li>
+<li><code>EuclideanPlanarDistance</code>: <code>custom_relation</code> with <code>Prepositions.BETWEEN</code>, not <code>of</code>.</li>
+<li><code>Pose</code> type hints (predicates.py:292, robot_predicates.py:158 are
+   HomogeneousTransformationMatrix): investigate and switch to <code>Pose</code> if correct/clearer.</li>
+<li>No abbreviations (<code>cm</code>→<code>collision_manager</code>); sweep all touched code.</li>
+<li>Keep the functional wrapper name <code>get_volume</code> (the class stays <code>AnnotationVolume</code>).</li>
+<li>ormatic <code>type</code>-mappability PR: DROPPED (maintainer), so excluding <code>SymbolicCallable</code>
+   subclasses from ORM generation is the surviving path for P4's <code>ClassNameLowercased</code>.
+   Superseded 2026-07-30: <code>OPERAND_OVERRIDES</code> no longer exists — P3 replaced it with the
+   <code>SymbolicCallable._example_operand_values_</code> class hook, which the snapshot consults per
+   class. An override belongs on the class, not in a test-side dict.</li>
+<li>Keep surfaces concise (omit root/tip from <code>BlockingBodies</code>); details are query-able.</li>
+<li><code>Reachable</code> reads <em>"a Pose is reachable for the kinematic chain rooted at <code>&lt;root&gt;</code> and
+    ending at <code>&lt;tip&gt;</code>"</em> — the chain is what reaches, and root/tip stay named here (unlike
+    <code>BlockingBodies</code> under decision 10) because reachability is only meaningful relative
+    to them.</li>
+<li>Naming a referent by value <em>and</em> type on first mention (<em>"a gripper of type
+    HasTwoFingers"</em>) is out of P4's scope — it is coreference behaviour, not an sdt
+    wording, and is tracked as its own item (<code>p5-first-mention-type-annotation</code>).</li>
+</ol>
+<h5>Standing conventions — every session on this plan must</h5>
+<ul>
+<li>Critically evaluate first: don't blindly implement; assess vs this codebase's
+  verbalization/EQL architecture, the literature (NLG surface realization, grammar
+  frameworks, snapshot testing), and reliability/scalability/maintainability + SOLID.
+  Surface a better approach or a flaw and discuss before implementing.</li>
+<li>Follow AGENTS.md incl. Version Control (commit as the human identity, no assistant
+  trailers, "Made with the help of Claude." note allowed), no abbreviations, dataclasses,
+  absolute/top-level imports, RST field docstrings, no <code>getattr</code>, guard clauses, SOLID,
+  TDD, black+docformatter (<code>scripts/format_docstrings.py</code>).</li>
+<li>The exhaustive <code>SymbolicSurfaceSnapshot</code> test (now <code>VerbalizationResultsOfPackage</code>, see
+  P1's item note) is the coverage mechanism; keep it green.</li>
+<li>To render sdt/coraplex surfaces locally: build random_events (<code>pip install ./random_events</code>
+  → gives native <code>random_events_lib.reals</code>), <code>pip install trimesh mujoco daqp plyfile lxml</code>,
+  PYTHONPATH = krrood/src + /src + giskardpy/src + probabilistic_model/src +
+  coraplex/src + repo root, and stub <code>giskardpy_bullet_bindings</code> (MagicMock in sys.modules)
+  before importing — rendering needs type names, not physics. CI has the real stack; commit
+  no env hacks.</li>
+</ul>
+<h5>P1–P3 status</h5>
+<p>All three merged to <code>main</code>; see <code>plan.yaml</code>'s item notes for a one-line summary of each and
+<code>.claude/personal/pr-progress/&lt;branch&gt;.md</code> for the full review-round history — that file, not
+this roadmap, is the source of truth for their per-PR detail (<code>plans/README.md</code>'s convention).</p>
+<h5>P4 — sdt migration</h5>
+<p>PR #33 (<code>eql-symbolic-function-sdt</code>, base <code>main</code>), open and draft. As of its last push
+(2026-07-18) <code>mergeable_state</code> was <code>dirty</code> — it predates P1/P2/P3 all merging to <code>main</code>, so it
+needs a rebase (dropping the now-upstreamed surface-verification framework it still carries a
+duplicate of) before any checklist item below can start.</p>
+<h6>P4 sdt checklist (reasoning/predicates.py, queries.py, robot_predicates.py; test snapshot)</h6>
+<ul>
+<li>Reachable: remove <code>fields["tip"].name</code>; reword per decision 11; Pose hint (dec 6).</li>
+<li>No abbreviations sweep (dec 7); <code>Noun</code>/<code>Noun.bare</code>/<code>Noun.the</code> not raw <code>WordFragment</code> (dec 4).</li>
+<li>get_volume wrapper name kept (dec 8).</li>
+<li>Wordings: GetVisibleBodies "the bodies visible to/through a camera"; EuclideanPlanarDistance
+  <code>between</code> (dec 5); IsSupportedBy "a body is supported by another body" (drop threshold);
+  IsPlaceOccupied custom "a place represented by a bounding box at a given pose is occupied by
+  other bodies in the world"; InFrontOf/Above/Below/LeftOf/RightOf/Behind "a point is in front
+  of the other point"; OccludingBodies "the bodies that occlude another body from the view of a
+  camera"; Visible value-agnostic + concrete subclasses; BlockingBodies "the bodies blocking the
+  path to reach a pose" (concise); IsGripperHoldingSomething "a gripper is holding something";
+  BodyInGripperFraction "the part of the body between the fingers of the gripper"; BodiesInGripper
+  "the bodies between the fingers of a gripper"; RobotCollisions "the collision points between a
+  robot and the bodies of the world"; ClassNameLowercased "the lower case form of a class name";
+  AnnotationVolume "the volume of a ".</li>
+<li>Wire the sdt snapshot to the generator; reply-and-resolve each review thread.</li>
+</ul>
+<h6>How the snapshot works now (corrected 2026-07-30)</h6>
+<p>The snapshot module is <em>generated</em>, not hand-written — the hand-written <code>SURFACES</code> tuple
+PR #33 still carries is the wrong shape. <code>krrood/.../testing/result_generation.py</code>'s
+<code>regenerate_verbalization_results</code> is called from a package's own <code>conftest.py</code>
+(<code>test/krrood_test/conftest.py</code> is the reference) so the module is rebuilt every test run
+and an intentional wording change lands as an ordinary diff to review. Verification is
+<code>VerbalizationResultsOfPackage</code> in <code>krrood/.../testing/result_verification.py</code>, with two
+asserts — <code>assert_results_cover_every_callable</code> and
+<code>assert_declared_results_render_as_stated</code>. So P4's snapshot work is adding the
+regeneration call to <code>test/semantic_digital_twin_test/conftest.py</code> plus the two-assert
+test, not editing a committed tuple.</p>
+<h5>P5 — first-mention type annotation (split out of P4, 2026-07-30)</h5>
+<p>From PR #33's <code>BodiesInGripper</code> thread: <em>"maybe one can mention both the name and the
+type … but that would maybe only make sense for the first introduction of the variable in
+the whole verbalized statement."</em> Confirmed out of P4's scope — it is coreference
+behaviour belonging to the <code>ReferringExpressions</code> machinery P2 built, so it applies to
+every package's surfaces at once rather than to sdt's wordings. P4 renders
+<em>"the bodies between the fingers of a gripper"</em> and this item takes the type annotation
+on separately.</p>
+<h5>P4 progress (2026-07-30)</h5>
+<p>Merged <code>main</code> into #33 and did the whole checklist; see
+<code>pr-progress/eql-symbolic-function-sdt.md</code> for the per-step account. Two findings that
+change the roadmap rather than just the PR:</p>
+<ul>
+<li><strong>Decision 1 is inverted from what P2 shipped.</strong> It records "grammatical metadata on the
+  field → field/attribute name → type name (last resort)". <code>operand_head_noun</code>
+  (<code>verbalization/microplanning/referring.py:193</code>) does the opposite: a concrete type's noun
+  always wins, and <code>display_name</code>/field name are consulted <em>only</em> when the type is the
+  uninformative <code>object</code>. The docstring argues for it deliberately, citing the Incremental
+  Algorithm. So <em>"a Point3"</em> → <em>"a point"</em> is not reachable from a field-side override at
+  all; it needs a type-level display noun (the natural home is <code>value_lexicon.type_noun</code>,
+  which today special-cases only primitives). Left as an open thread on #33 with three
+  options for the user; do not "fix" decision 1 either way without that answer.</li>
+<li><strong>Value wordings needed a new vocabulary builder.</strong> Several reviewed sentences name the
+  value with a phrase of its own (<em>"the bodies visible to a camera"</em>) rather than a reading
+  of the class name, which is all <code>FunctionVerbalizationTemplates</code> can express. Added
+  <code>phrase()</code> as the value counterpart of <code>clause()</code>. Decision 4 (<code>Noun</code> over raw
+  <code>WordFragment</code>) is what rules out the alternative, so treat <code>phrase()</code> as the sanctioned
+  way to satisfy both from here on.</li>
+</ul>
+<h5>P4's <code>predicates.py</code> half was built elsewhere, and P4 rebases onto it (2026-08-31)</h5>
+<p><code>knowledge-directed-perception</code>'s item <code>predicates-answer-whether-they-hold</code> (#229,
+<code>sdt_predicates_answer_whether_they_hold</code>, off <code>main</code>) migrated <code>reasoning/predicates.py</code>
+off <code>@symbolic_function</code> onto <code>Predicate</code> / <code>SymbolicFunction</code> classes by the same
+<code>symbolic_callable_to_function</code> mechanism P4 uses - independently, and without either
+plan's manifest naming the other. Every relation P4 converted in that file, #229 had
+converted too; both even write <code>reachable = symbolic_callable_to_function(Reachable)</code> over
+the same class body.</p>
+<p><strong>The developer settled it in #229's favour on 2026-08-31: #229 carries the predicate
+classes, and P4 rebases onto the <code>main</code> that has them</strong> - dropping its own copy of the
+<code>predicates.py</code> migration and re-applying its 34 reviewed wordings onto #229's classes.
+The reasoning was about which rebase is cheaper: this branch is 166 commits behind <code>main</code>,
+<code>dirty</code> in <code>predicates.py</code> specifically and labelled <code>needs-resolution</code>, so it owes that
+rebase either way and meets #229's version of the file whichever order the two land in;
+while P4's two open decisions block it and do not block #229, whose plan has a 2026-09-15
+deadline.</p>
+<p><strong>Nothing else of P4's is affected.</strong> <code>queries.py</code>, <code>robot_predicates.py</code>, <code>phrase()</code> in
+krrood's <code>parts_of_speech</code>, <code>ORMatic.from_package(ignored_base_classes=...)</code> and the
+generated verbalization snapshot wired into sdt's <code>conftest.py</code> are all still this item's,
+and #229 touches none of them. The snapshot in particular is worth landing: sdt has no
+verbalization test on <code>main</code>, which is exactly why #229 shipped four ungrammatical
+sentences before anyone read them.</p>
+<p><strong>Two wordings are already carried across on #229</strong>, and one of them needs a decision here:</p>
+<ul>
+<li>The four relations #229 named for their object (<code>SupportedBy</code>, <code>VisibleTo</code>,
+  <code>InContactWith</code>, <code>Supports</code>) took P4's own reviewed sentences - <em>"is supported by"</em>,
+  <em>"is visible to"</em>, <em>"is in contact with"</em>, <em>"is supporting a body"</em> - rather than a third
+  set. <code>Visible</code> reads <em>"visible </em><em>to</em><em>"</em> there against P4's <em>"visible </em><em>from</em><em>"</em>, following
+  the class name <code>VisibleTo</code>.</li>
+<li><code>Reachable</code> reads <em>"a Pose is reachable by a Tip"</em> on #229, which is what the developer
+  asked for on that pull request (r3896606294). <strong>Decision 11 words the same relation <em>"a
+  Pose is reachable for the kinematic chain rooted at <code>&lt;root&gt;</code> and ending at <code>&lt;tip&gt;</code>"</em></strong>. Both
+  make the pose the subject and differ only in whether both ends of the chain are named;
+  the thread is deliberately left open on #229 for the developer to pick which stands, and
+  whichever he picks is what this rebase should apply.</li>
+</ul>
+<p>Worth carrying into the rebase: <code>Triple</code> derives its verb from the class name, so a
+relation named for its object must state its own clause - inheriting <code>Triple</code> and saying
+nothing is what produced <em>"a Body supports by another Body"</em> on #229.</p>
+<h5>New item: aggregate-repeat-reduction-ignores-same-kind-siblings (2026-09-02)</h5>
+<p>Found on <code>match-query-ergonomics</code>'s PR #196 (<code>aggregate-signature-reads-a-missing-attribute</code>)
+during its self-review round: the developer flagged the closing assert of
+<code>test_ranking_names_the_ordered_by_aggregate_not_the_first_selected</code>
+(<code>test_set_of_ranking.py:337</code>), proposing the trailing bare <em>"the sum"</em> be spelled out in
+full as <em>"the sum of the amount of its tax"</em>.</p>
+<p><strong>Measured, not guessed at.</strong> All 17 tests in the file pass as written, including this one:
+<code>tax</code> is the literal same object in both the ranking frame (<code>.ordered_by(tax, ...)</code>) and the
+selection, so <code>AggregatorRule.build</code>'s coreference (<code>referent_id=node._id_</code> in
+<code>verbalization/grammar/aggregation/rules.py</code>) resolves the trailing <em>"the sum"</em> back to the
+frame's <code>tax</code> mention by identity — exactly what <code>_highest_aggregate_modifier</code>'s docstring
+says it should do. #196's own fix (<code>_expression_signature</code> reading <code>_child_</code> instead of the
+undefined <code>_chain_expression_</code>) is what makes that resolution <em>correct</em> in the first place;
+it is not the same bug.</p>
+<p><strong>The concern is real independent of code correctness.</strong> To a reader, <em>"the sum of the
+amount of its net, and the sum"</em> reads as though the trailing <em>"the sum"</em> refers to the
+noun phrase right before it (<code>net</code>) — proximity is how anaphora normally resolves, and the
+<code>tax</code> antecedent is three clauses back in the ranking frame. That ambiguity only surfaces
+once two aggregates of <em>one kind</em> are both selected, which is exactly the case #196 adds
+coverage for.</p>
+<p><strong>The developer's follow-up</strong> (PR #196, review thread
+<a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3919032569">r3919032569</a>):
+<em>"ok make fixing it an item of its own, I am unsure though if this should be in
+match-query-ergonomics or another plan or a new plan."</em></p>
+<p><strong>Placement, via <code>/add-plan-item</code>.</strong> <code>check_scope_overlap.py</code> against every open pull
+request whose changed paths could plausibly touch this (<code>match-underscore-rename-and-forwarding</code></p>
+<h4>192, <code>chain-signature-reads-attribute-only-names</code> #248, <code>p4-sdt-migration</code> #33) over</h4>
+<p><code>verbalization/grammar/aggregation/rules.py</code>, <code>verbalization/rendering/coreference_processor.py</code>
+and <code>verbalization/microplanning/referring.py</code> reports no shared paths and no duplicate
+intent — nothing unlanded already owns this. Between the three candidates the skill's
+step 5 offers (fold into <code>match-query-ergonomics</code>, new item here, or a new plan of its own),
+put to the developer via <code>AskUserQuestion</code> with the evidence for each: <code>eql-verbalization</code>
+was chosen. The bug lives in <code>CoreferenceProcessor</code>/<code>DistinguisherIndex</code> — the <em>"same-noun-group
+disambiguation (<code>'another Robot'</code>, <code>'a second Robot'</code>)"</em> machinery P2 built, per that class's
+own docstring — not in the underscore-naming convention <code>match-query-ergonomics</code> is
+refactoring; the connection to #196 is only "found while extending its test coverage," not a
+shared root cause. <code>p5-first-mention-type-annotation</code> already sits in this exact track for an
+analogous refinement of the same machinery ("belongs in the ReferringExpressions/coreference
+machinery P2 built, not in any one package's ... wordings" — decision 12 / P5's own item
+note), which is the precedent this new item follows: <code>track: framework-migration</code>,
+<code>depends_on: [p2-operand-naming]</code> (merged), <code>status: not_started</code>.</p>
+<p><strong>Not designed yet, only measured.</strong> The fix likely means <code>AggregatorRule.build</code>'s reduction
+(or the coreference pass that consumes its <code>referent_id</code>) needs to know when an identity
+match is one of several same-kind aggregates in the current scope, and spell the repeat
+mention out in full in that case rather than reducing on identity alone — but whether that
+belongs in <code>AggregatorRule.build</code>, in <code>CoreferenceProcessor</code>, or in <code>DistinguisherIndex</code>
+itself is an open question for whoever picks this item up.</p>
+<p>Replied on PR #196's thread with this outcome and resolved it, since the developer's ask —
+<em>"make fixing it an item of its own"</em> — is now done.</p>
+<h5>P4's rebase is waiting on #229, which has not merged (2026-09-03)</h5>
+<p>The 2026-08-31 decision above — <em>#229 carries the predicate classes and P4 rebases onto the
+<code>main</code> that has them</em> — recorded the outcome but not the precondition, so the item read as
+actionable when it is not. As of 2026-09-03, <strong>#229 is still open and unmerged</strong>: state
+<code>open</code>, out of draft, <code>mergeable_state: clean</code>, base sha <code>fd72af38</code>, which is <code>main</code>'s own
+current tip. <code>main</code>'s <code>reasoning/predicates.py</code> therefore still carries the twelve
+<code>@symbolic_function</code> helpers and the <code>Symbol</code>-derived spatial relations. There is no <code>main</code>
+with #229's classes to rebase onto yet.</p>
+<p><strong>And P4's own test is what makes waiting compulsory rather than merely tidy.</strong>
+<code>test_every_symbolic_callable_declares_its_own_verbalization_fragment</code> asserts that every
+symbolic callable discovered in sdt implements its own <code>_verbalization_fragment_</code> — the test
+that exists precisely so a new <code>@symbolic_function</code> from <code>main</code> cannot merge in unnoticed
+(it is what caught <code>is_body_gripped</code> in round 4). Taking <code>main</code>'s <code>predicates.py</code> today
+would import a dozen callables with no fragment of their own and turn that test red. So
+dropping this branch's copy early is not an option: the drop and #229's landing are one
+step, not two.</p>
+<p><strong>What is separable is the conflict.</strong> <code>git merge-tree</code> puts the entire collision in
+<code>predicates.py</code> and nothing else — <code>ormatic.py</code>, <code>generate_orm.py</code>, <code>queries.py</code>,
+<code>robot_predicates.py</code> and the test files all auto-merge. <code>main</code>'s delta to that file since
+the merge base is three real changes and nothing structural: <code>camera.root_T_forward_view</code>
+plus an explicit <code>field_of_view</code> in <code>get_visible_bodies</code> and <code>occluding_bodies</code>, and
+<code>BoundingBox</code> -&gt; <code>VolumetricBoundingBox</code> in <code>is_place_occupied</code>. Porting those three into
+this branch's migrated classes clears <code>needs-resolution</code>, stops a routine that has
+re-reported the same conflict ten times in a week, and lets CI run again on a branch whose
+last run was 2026-08-24 — while costing only work that #229's landing will supersede anyway.</p>
+<p><strong>The <code>Reachable</code> wording is settled, by a resolve rather than a sentence.</strong> #229's thread
+r3896606294 asked for <em>"Pose Is reachable by Tip"</em>; the reply offered decision 11's longer
+<em>"a Pose is reachable for the kinematic chain rooted at <code>&lt;root&gt;</code> and ending at <code>&lt;tip&gt;</code>"</em> and left
+the thread open for the developer to pick. That thread now reads resolved on #229, where the
+shorter wording stands — so decision 11 is superseded to that extent, read from the resolve
+rather than stated outright.</p>
+<p><strong>A third review thread was open all along and unrecorded.</strong> The item's blockers said two
+decisions; #33 actually has nine unresolved threads, which are three distinct questions once
+the six same-comment repeats of the type-noun thread are collapsed. The third is
+<code>ClassNameLowercased</code>: it renders <em>"the lower case form of the name of a type"</em> rather than
+the reviewer's literal <em>"the lower case form of a class name"</em>, deliberately, to keep the
+operand in the sentence — offered as a choice (r3608403117) and never answered. It blocks
+nothing and needs one word from the developer.</p>
+<h5>aggregate-repeat-reduction: the settled plan (2026-09-03, PR #264)</h5>
+<p>Kicked off in <code>auto</code> mode on <code>claude/eql-verbalization-aggregate-repeat-gdz9g2</code>, cut from
+<code>main</code> (its only dependency, <code>p2-operand-naming</code> / #87, is merged, so nothing else gates it).</p>
+<p><strong>The symptom, re-measured on <code>main</code> rather than taken from #196.</strong> Two manifestations,
+both from one cause:</p>
+<ul>
+<li>ranked (<code>ordered_by(...).limit(1)</code>): <em>"For the Invoice with the highest sum of the amount
+  of its net, report the month of the begin of its period, </em><em>the sum</em><em>, and the sum of the
+  amount of its tax"</em></li>
+<li>ordered (<code>ordered_by(...)</code>, no limit): <em>"For each month, report the sum of the amount of
+  the net of an Invoice and the sum of the amount of its tax ordered by </em><em>the sum</em><em> from
+  highest to lowest"</em></li>
+</ul>
+<p>So this reproduces without #196 — that pull request decides <em>which</em> of the two sums the
+ranking frame names, not whether the shortened mention is ambiguous. Worth recording,
+because the item's own note describes the symptom in #196's wording and could be read as
+making it a prerequisite.</p>
+<p><strong>Design, and why it is not an open question.</strong> The developer already said on #196's thread
+(r3919032569, quoted in this roadmap's "New item" section) that the trailing bare <em>"the
+sum"</em> should be <em>spelled out in full</em>. That rules out the alternative the item's note left
+on the table — registering aggregates in <code>DistinguisherIndex</code> so they read <em>"another sum"</em> /
+<em>"the other sum"</em>. It is also the better answer on its own terms: an aggregate is told apart
+by <em>what it aggregates</em>, not by a determiner, and <em>"the other sum of the amount of its tax"</em>
+is worse than the full description it replaces.</p>
+<p><strong>Where it goes.</strong> <code>AggregatorRule.build</code> is what opts an aggregate into repeat-reduction, by
+giving its noun phrase <code>referent_id=node._id_</code>; it is the same place to decide it must not.
+The knowledge it needs — which aggregation words name more than one aggregate in the scanned
+expression — is pre-scan referring-expression state, so it goes on <code>ReferringExpressions</code>,
+which a rule already reaches through <code>RuleContext.refer</code>.</p>
+<p><code>CoreferenceProcessor</code> and <code>DistinguisherIndex</code> are deliberately untouched. A variable's
+same-noun group <em>is</em> fully told apart by determiner (<em>"a Robot"</em> / <em>"another Robot"</em>), so its
+reduced mentions stay identifying; a general "don't reduce when the noun is shared" guard
+there would regress P2's design for the case P2 was built for.</p>
+<p><strong>Distinctness is counted per aggregate node, not per structural signature.</strong> Two <code>Sum</code>
+objects over the same chain count as two. That is conservative, and a no-op in practice: two
+such nodes carry different <code>_id_</code>s, so no repeat mention arises between them either way. The
+alternative — structural comparison — is <code>_expression_signature</code> in <code>query/assembler.py</code>,
+which #196 is currently changing, so reusing it would couple this branch to an unlanded one.</p>
+<p><strong>Steps, tests first.</strong></p>
+<ol>
+<li>The two end-to-end wordings above, asserted in full, plus a unit test of the new
+   <code>ReferringExpressions</code> state. Planned for <code>test_set_of_ranking.py</code> and <code>test_coreference.py</code>;
+   both moved into one new module during implementation, for the reason in the next section.</li>
+<li><code>microplanning/referring.py</code> — record which aggregations more than one aggregate is built from.</li>
+<li><code>grammar/aggregation/rules.py</code> — give the noun phrase a <code>referent_id</code> only when its
+   aggregation names one aggregate.</li>
+</ol>
+<p>Verification: <code>pytest test/krrood_test/test_eql/test_verbalization</code> (768 passed / 3 skipped
+before the change), which includes <code>test_rule_doctests.py</code>, plus
+<code>scripts/format_docstrings.py</code> on the modified files.</p>
+<p><strong>Scope overlap: avoided rather than accepted.</strong> The first draft of this plan put the tests in
+<code>test_set_of_ranking.py</code>, which unlanded #196 is also appending to, and recorded the resulting
+tail-of-file conflict as a cost to pay. Writing #196's added tests out showed the collision was
+worse than that: it defines an <code>Invoice</code> mimic with exactly the fields this item needs
+(<code>period</code>, <code>net</code>, <code>tax</code>), so the two branches would have defined the same fixture in the same
+module. The tests therefore live in a module of their own,
+<code>test_eql/test_verbalization/test_aggregate_reference.py</code>, named for the behaviour — how a
+computed quantity is referred back to — rather than for <code>set_of</code> ranking, which is the file's
+subject and not this one's. <code>check_scope_overlap.py --base origin/main</code> over the three files this
+branch touches now reports no shared path with #196, #248, #192, #254 or #33.</p>
+<p><strong>What shipped.</strong> <code>ReferringExpressions.shared_aggregations</code> records the aggregations more than
+one aggregate in the scanned expression is built from; <code>AggregatorRule.build</code> gives its noun
+phrase a <code>referent_id</code> only when the aggregation names one aggregate, so an aggregate with a
+same-word sibling is described in full at every mention. Six tests, written first and failing:
+the two ambiguous wordings, the two cases that must still shorten (a lone sum; a sum beside an
+average), and the pre-scan itself. <code>test_eql/test_verbalization</code> 768 -&gt; 774 passed with 3 skipped
+and no existing expectation changed; <code>test_eql</code> 1291 passed (<code>test_typing</code> needs <code>mypy</code>, absent
+from this environment).</p>
+<p><strong>Tooling note, not this item's work.</strong> <code>plan_item_bootstrap.py open</code> could not record this
+item: it writes <code>branch</code> / <code>pull_request_number</code> / <code>status</code> / <code>session</code> at a four-space indent
+into a two-space manifest, so <code>save-plan.sh</code> fails in <code>yaml.safe_load</code>. That is the bug PR</p>
+<h4>160 fixed, which was closed unmerged on 2026-08-30, so it is live on <code>main</code> again. This</h4>
+<p>entry and the manifest fields beside it were written by hand instead.</p>
+<h5>aggregate-repeat-reduction: review round 1 (2026-09-05)</h5>
+<p>Three threads on #264, of which one changes what the plan holds.</p>
+<p><strong><code>Money</code> is now a <code>Role[float]</code></strong> (r3941169916 / r3941170391, applied in <code>ce290914c</code>). The
+test domain wrapped a single float in an <code>amount</code> field; the role expresses the same thing
+without the hop, and it is krrood's own pattern rather than an invention of the test.</p>
+<p>It moved every expectation in the module, which is worth recording because the item's
+"What shipped" paragraph above quotes the old text: a directly aggregated attribute renders
+as a plural generic, <em>"the sum of incomes of Statements"</em>, where the two-navigation chain
+rendered a possessive, <em>"the sum of the amount of its income"</em>. Pre-existing behaviour — a
+plain <code>income: float</code> field reproduces it on <code>main</code> — so it is about chain length, not about
+<code>Role</code>. The change under test is unaffected: reverting the production change on the new
+domain still fails the two ambiguity tests.</p>
+<p><strong>The grouping frame is a candidate item, and its premise is false as stated</strong> (r3941192834,
+left open). The proposal was <em>"For each statement"</em> in place of <em>"For each month"</em>, reasoning
+that grouping by a month reached through a statement is the same as grouping by the
+statement. Evaluated over three statements, two of them in March, the query returns two rows
+with March's income sum <code>30.0</code> — the two March statements are summed together, so a row is
+not a statement. The cardinality runs the other way: one period per statement makes the month
+a function <em>of</em> the statement, while naming the frame after the statement needs the month to
+determine the statement, which no constraint in the model asserts.</p>
+<p>Three generalizations were put to the developer: keep the key as the frame (correct for every
+model, what ships); name the key with the path it is reached by, <em>"For each month of a
+Statement's period"</em> (also always correct, and reverses <code>_group_label</code>'s stated decision to
+name the group rather than a member's navigation); or name the entity only where the model
+can declare that a key identifies its owner, read by a rule rather than guessed from
+cardinality. Recommended the first, with the third once declarable.</p>
+<p>It is a different rule in a different file — <code>_for_each_header</code> / <code>_group_label</code> in
+<code>verbalization/grammar/query/assembler.py</code> — from this item's <code>AggregatorRule.build</code>, so it
+is not being folded into #264. If the developer wants it, it is a new item in this track,
+alongside the separate question of whether a directly aggregated attribute should read
+<em>"the sum of its income"</em> rather than <em>"the sum of incomes of Statements"</em>.</p>
+<h5>The conflict is cleared; the rebase still waits on #229 (2026-09-04)</h5>
+<p>Merged current <code>main</code> into <code>eql-symbolic-function-sdt</code> (<code>f97e7a99</code>), resolving the one
+conflicting file — <code>reasoning/predicates.py</code> — by keeping this branch's migrated classes and
+re-applying <code>main</code>'s three changes to them: <code>camera.root_T_forward_view</code> plus an explicit
+<code>field_of_view</code> in <code>GetVisibleBodies</code> and <code>OccludingBodies</code>, <code>BoundingBox</code> -&gt;
+<code>VolumetricBoundingBox</code> on <code>IsPlaceOccupied.box</code>, and the unused <code>SemanticAnnotation</code> import
+dropped. <code>git merge-tree</code> now reports the branch clean against <code>main</code>, which ends the routine
+that had re-reported the same conflict ten times since 2026-08-28.</p>
+<p><strong>Keeping the copy was the point, not a shortcut.</strong> Dropping <code>predicates.py</code> for <code>main</code>'s
+version — what the 2026-08-31 decision eventually calls for — cannot happen until #229
+lands, because <code>main</code>'s twelve <code>@symbolic_function</code> helpers declare no verbalization
+fragment of their own and
+<code>test_every_symbolic_callable_declares_its_own_verbalization_fragment</code> would go red and stay
+red. The drop and #229's landing are one step.</p>
+<p>Verified on the merged tree: 30 symbolic callables discovered in sdt, all declaring their own
+fragment; <code>assert_results_cover_every_callable</code> and <code>assert_declared_results_render_as_stated</code>
+both pass. The regenerated snapshot changes exactly two things — <code>IsPlaceOccupied</code>'s sentence,
+following the rename, and the generator's own <code>tuple</code>/<code>Tuple</code> spelling, which is the
+pre-existing generator drift already noted in this branch's progress file.</p>
+<p>The three open review decisions are now collected in one comment on #33
+(https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5536810182)
+rather than only living on six scattered threads, since two of them had been recorded as
+blockers for a month without a single place to answer them.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-verbalization-framework">
+        <div class="wave-eyebrow">Verbalization framework + sdt migration</div>
+        <section class="track">
+          <h3 class="track-title">Framework extraction, operand naming, sdt migration</h3>
+          <div class="item-list">
+                <article id="item-p1-surface-verification" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">P1: extract the verbalization surface-verification framework</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">p1-surface-verification</span>
+            <span class="mono branch">claude/eql-verbalization-p1-surface-verification-eqltzc</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/86" target="_blank" rel="noopener">#86</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged to main. Extracted the surface-verification framework (VerbalizationSurface, OverriddenOperand, SymbolicSurfaceSnapshot) out of krrood&#39;s own surface test into a reusable module so any package defining SymbolicCallable subclasses can verify its surfaces. Later renamed/moved by unrelated main-branch work to krrood.entity_query_language.testing.result_verification (VerbalizationResultsOfPackage). Full review-round history: pr-progress/claude/eql-verbalization-p1-surface-verification-eqltzc.md.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-p4-sdt-migration" class="item status-blocked" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">P4: migrate semantic_digital_twin predicates off the framework</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-blocked">Blocked</span>
+              <span class="badge live-badge live-open_draft">Open · Draft</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">p4-sdt-migration</span>
+            <span class="mono branch">eql-symbolic-function-sdt</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33" target="_blank" rel="noopener">#33</a>
+            <a class="session-link" href="https://claude.ai/code/session_017Sij3r2He3kzGwr7zBSc5m" target="_blank" rel="noopener">session ↗</a>
+            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33" target="_blank" rel="noopener">↗ Review</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resolve">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve eql-verbalization p4-sdt-migration" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">2026-07-30: merged main (605 commits), dropping the duplicated surface-verification framework; rebuilt the snapshot on the generated-results pattern; applied every wording from the review plus the no-abbreviation sweep; replied to all 36 review threads and resolved 34. Two krrood additions were needed: phrase() as the value counterpart of clause(), and ORMatic ignored_base_classes replacing a mid-method SymbolicCallable import. Full detail: pr-progress/eql-symbolic-function-sdt.md.
+2026-09-03 resolve run: the `Reachable` wording question this item was recorded as waiting on is no longer open. #229&#39;s thread r3896606294 — the developer&#39;s *&#34;Pose Is reachable by Tip&#34;*, replied to with decision 11&#39;s longer *&#34;a Pose is reachable for the kinematic chain rooted at &lt;root&gt; and ending at &lt;tip&gt;&#34;* as the alternative and deliberately left open for him to pick — now reads resolved on #229, where the shorter wording is what stands. A resolve is not a sentence, so this is read rather than stated: treat #229&#39;s shorter wording as the one to apply in the rebase, and put it back to the developer if he says otherwise. Decision 11 in `roadmap.md` is superseded to that extent.
+2026-09-04 resolve run: merged current `main` into the branch (`f97e7a99`) and cleared the `predicates.py` conflict the routine had re-reported ten times since 2026-08-28. Resolved by keeping this branch&#39;s migrated classes and re-applying `main`&#39;s three changes to them - `camera.root_T_forward_view` plus an explicit `field_of_view` in `GetVisibleBodies`/`OccludingBodies`, `BoundingBox` -&gt; `VolumetricBoundingBox` on `IsPlaceOccupied.box`, and the unused `SemanticAnnotation` import dropped. `git merge-tree` now reports the branch clean against `main`. Verified on the merged tree: 30 symbolic callables discovered, all declaring their own fragment; both snapshot assertions pass; the regenerated snapshot changes only `IsPlaceOccupied`&#39;s sentence (following the rename) and the generator&#39;s own `tuple`/`Tuple` spelling.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="P1: extract the verbalization surface-verification framework">p1-surface-verification</span>
+
+            <span class="chip" title="P2: redesign operand naming and same-noun disambiguation">p2-operand-naming</span>
+
+            <span class="chip" title="P3: abstract-to-concrete-subclass expansion + first-order rendering">p3-concrete-subclass-expansion</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ The rebase this item owes cannot start yet: #229 (`sdt_predicates_answer_whether_they_hold`), which the developer decided on 2026-08-31 should carry the predicate classes, is still **open and unmerged** as of 2026-09-04 (state `open`, not draft, `mergeable_state: clean`). `main`&#39;s `reasoning/predicates.py` therefore still has the twelve `@symbolic_function` helpers and the `Symbol`-derived spatial relations, not #229&#39;s `Predicate` classes. This branch cannot drop its own `predicates.py` migration and take `main`&#39;s side until then, because its own coverage test `test_every_symbolic_callable_declares_its_own_verbalization_fragment` asserts every discovered symbolic callable in sdt implements its own `_verbalization_fragment_` - `main`&#39;s un-migrated helpers do not, so taking `main`&#39;s file today turns this branch&#39;s own test red. The drop and #229&#39;s landing are one step, not two. Nothing an agent can do moves this; #229 is ready for review and waiting on the developer to merge it.</div>
+            <div class="blocker">▸ Three review threads on #33 are still open, not two as previously recorded (9 of 37 threads are unresolved, but six of them are the same decision repeated on consecutive lines of `verbalization_surfaces.py`). All three are collected in one comment for the developer: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5536810182 (1) type-level display noun - `a Point3` -&gt; `a point` (r3608352891, plus the five repeats r3608358590, r3608359011, r3608377541, r3608394028, r3608473110); P2 shipped the opposite precedence to roadmap decision 1, so this needs a type-level display noun in krrood (`value_lexicon.type_noun`), and three options were put to the developer; (2) whether to widen the IK chain so `Reachable.pose` / `BlockingBodies.pose` can be typed `Pose` rather than `HomogeneousTransformationMatrix` (r3608385653 and r3608444608); (3) not previously recorded: `ClassNameLowercased` renders *&#34;the lower case form of the name of a type&#34;* rather than the reviewer&#39;s literal *&#34;the lower case form of a class name&#34;* (r3608403117), deliberately, to keep the operand in the sentence - offered as a choice and left unresolved. This one blocks nothing; it just needs a yes or no.</div>
+            <div class="blocker">▸ sdt `ormatic_interface.py` needs regenerating where ROS is installed - `ignored_base_classes` drops 10 predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI regenerates before tests, so the suite is unaffected.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-p2-operand-naming" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">P2: redesign operand naming and same-noun disambiguation</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">p2-operand-naming</span>
+            <span class="mono branch">claude/eql-verbalization-operand-naming-n0gb95</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/87" target="_blank" rel="noopener">#87</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged to main. The keystone redesign: operand naming and same-noun disambiguation moved entirely into ReferringExpressions/DistinguisherIndex (coreference-driven, identity-keyed), replacing the original parallel predicate-side operand_naming.py module. Gated P3 and P4. Full review-round history: pr-progress/claude/eql-verbalization-operand-naming-n0gb95.md.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-p3-concrete-subclass-expansion" class="item status-done" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">P3: abstract-to-concrete-subclass expansion + first-order rendering</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">p3-concrete-subclass-expansion</span>
+            <span class="mono branch">claude/eql-verbalization-p3-albw76</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/88" target="_blank" rel="noopener">#88</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged to main. Abstract-to-concrete-subclass expansion (&#34;a Body or a Region&#34;) plus first-order (value-agnostic) rendering promoted to production. Also carries P1&#39;s commits merged in directly (confirmed via AskUserQuestion) to reuse its first-order-rendering mechanism rather than duplicate it. Full review-round history: pr-progress/claude/eql-verbalization-p3-albw76.md.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="P2: redesign operand naming and same-noun disambiguation">p2-operand-naming</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-p5-first-mention-type-annotation" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">P5: name a referent by value and type on first mention</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">p5-first-mention-type-annotation</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff eql-verbalization p5-first-mention-type-annotation" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Split out of P4&#39;s BodiesInGripper review thread (confirmed via AskUserQuestion, 2026-07-30): render a referent&#39;s first mention as both its name and its type (&#34;a gripper of type HasTwoFingers&#34;), reverting to the plain noun on later mentions. Belongs in the ReferringExpressions/coreference machinery P2 built, not in any one package&#39;s predicate wordings, so it is its own item rather than part of P4&#39;s sdt surface work.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="P2: redesign operand naming and same-noun disambiguation">p2-operand-naming</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-aggregate-repeat-reduction-ignores-same-kind-siblings" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bug: reducing a repeated aggregate mention to &#34;the sum&#34; is ambiguous when another aggregate of the same kind is also selected</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_draft">Open · Draft</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">aggregate-repeat-reduction-ignores-same-kind-siblings</span>
+            <span class="mono branch">claude/eql-verbalization-aggregate-repeat-gdz9g2</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/264" target="_blank" rel="noopener">#264</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Hwf7n1eUMVXD4vLdQwMYvP" target="_blank" rel="noopener">session ↗</a>
+            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/264" target="_blank" rel="noopener">↗ Review</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve eql-verbalization aggregate-repeat-reduction-ignores-same-kind-siblings" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Found and measured on match-query-ergonomics&#39;s PR #196 (aggregate-signature-reads-a-missing-attribute) self-review round: a ranked set_of selecting two aggregates of one kind (two Sums) verbalizes as &#34;...the sum of the amount of its net, and the sum&#34; - the trailing &#34;the sum&#34; is a correct-by-identity repeat mention of the aggregate named in the ranking frame several clauses earlier (AggregatorRule.build&#39;s referent_id=node._id_, verbalization/grammar/aggregation/rules.py), but reads to a human as referring to the just-mentioned net instead, since proximity is how anaphora normally resolves. All 17 tests in test_set_of_ranking.py pass with the text as generated; this is a wording-ambiguity bug, not a test failure. Not fixed on #196 itself: that PR&#39;s fix is _expression_signature reading the aggregator&#39;s _child_ (verbalization/grammar/query/assembler.py), a different file and a different mechanism from the one this item owns. Placed in eql-verbalization rather than match-query-ergonomics (developer decision, AskUserQuestion 2026-09-02, PR #196 review threads https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3908782904 and https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3919032569): the reduction that produces the ambiguous text lives in CoreferenceProcessor/DistinguisherIndex (verbalization/rendering/coreference_processor.py, verbalization/microplanning/referring.py) - the exact &#34;same-noun-group disambiguation&#34; machinery P2 built for repeated nouns of one type (&#34;a Robot&#34; / &#34;another Robot&#34;), and p5-first-mention-type-annotation already sits in this same track for an analogous refinement of that machinery (&#34;belongs in the ReferringExpressions/coreference machinery P2 built, not in any one package&#39;s ... wordings&#34;). check_scope_overlap.py against every open pull request touching aggregation/rules.py, coreference_processor.py or referring.py (match-underscore-rename-and-forwarding #192, chain-signature-reads-attribute-only-names #248, p4-sdt-migration #33) reports no shared paths and no duplicate intent. The fix likely needs AggregatorRule.build&#39;s reduction (or the coreference pass itself) to know when an identity match is one of several same-kind aggregates in the same scope and spell it out in full in that case rather than reducing on identity alone - the design is not yet worked out, only the symptom and its mechanism are measured.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="P2: redesign operand naming and same-noun disambiguation">p2-operand-naming</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">3</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+        <label class="bug-filter-toggle">
+          <input type="checkbox" id="bug-fixes-only-toggle" onchange="document.getElementById('next-steps-card').classList.toggle('bug-fixes-only', this.checked)">
+          Bug fixes only
+        </label>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-p5-first-mention-type-annotation" data-item-identifier="p5-first-mention-type-annotation" onclick="planDashboardHighlightItem(event, this)"><strong>P5: name a referent by value and type on first mention</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+          <div class="next-group next-recheck">
+            <h4>Blocker may be cleared <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-p4-sdt-migration" data-item-identifier="p4-sdt-migration" onclick="planDashboardHighlightItem(event, this)"><strong>P4: migrate semantic_digital_twin predicates off the framework</strong><br><span class="next-reason">at least one dependency is now ready for review — worth resolving the blocker</span></a>              </li>
+            </ul>
+          </div>
+          <div class="next-group next-review next-group-has-bugs">
+            <h4>Ready to review <span class="next-count-all">(1)</span><span class="next-count-bug">(1)</span></h4>
+            <ul>
+              <li class="next-entry next-entry-bug">
+                <a class="next-item-link" href="#item-aggregate-repeat-reduction-ignores-same-kind-siblings" data-item-identifier="aggregate-repeat-reduction-ignores-same-kind-siblings" onclick="planDashboardHighlightItem(event, this)"><strong>Bug: reducing a repeated aggregate mention to &#34;the sum&#34; is ambiguous when another aggregate of the same kind is also selected</strong> <span class="next-bug-chip">bug</span><br><span class="next-reason">open draft pull request, ready for your review</span></a>                <a class="next-review-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/264" target="_blank" rel="noopener">Review ↗</a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

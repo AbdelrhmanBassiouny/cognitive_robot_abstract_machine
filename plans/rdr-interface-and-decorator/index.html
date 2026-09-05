@@ -1,0 +1,1299 @@
+<title>The interactive expert interface and the @rdr decorator</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>The interactive expert interface and the @rdr decorator</h1>
+    <p class="description">What a user of the engine touches: the case-table rendering, the IPython shell and its magics that ask the expert for conditions and conclusions, the @rdr decorator that declares a model, and the file store that holds it. Stacked on the core engine&#39;s tip and merged after it.</p>
+    <p class="repo-line">
+      5 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/94" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>The interactive expert interface and the @rdr decorator — Roadmap</h4>
+<p>Narrative half of <code>rdr-interface-and-decorator</code>. One of seven plans the
+oversized <code>rdr-refactor</code> was split into on 2026-08-30; the predecessor's full
+3,259-line roadmap remains in the personal-notes branch's history immediately
+before that split commit.</p>
+<h5>What is being built</h5>
+<p>The parts a user of the engine touches, in two stacked chains on top of the
+core engine's tip:</p>
+<ul>
+<li><strong><code>D-ui-rendering</code> (#79) → <code>D-ui</code> (#76)</strong> — case-table rendering and
+  serialization coverage, then the interactive layer itself: the IPython shell,
+  its magics, the conftest fixture and the user guides.</li>
+<li><strong><code>D-store</code> (#80) → <code>D-deco</code> (#77)</strong> — <code>RDRFileStore</code>, which has no decorator
+  dependency and is self-tested, then the <code>@rdr</code> decorator, its template and its
+  documentation.</li>
+</ul>
+<p><code>D-ui-splice-fix</code> (#78) is here as the closed predecessor of the first chain,
+kept because its branch is what let the other two be rebuilt.</p>
+<h5>Why this is separate from the core engine</h5>
+<p>The <code>rdr/</code> package delivery stack is one linear chain of fourteen slices, which
+is over the size budget on its own. The seam is the one the programme's own
+tracks already drew: the engine core is a library, and these five slices are the
+shell, the magics, the decorator and the file store a person interacts with. The
+cost is stated rather than hidden — <code>D-ui-rendering</code> and <code>D-ui-splice-fix</code> stack
+directly on <code>d-core-backend</code> (#210) in <code>rdr-core-engine</code>, and <code>depends_on</code>
+cannot name an item in another plan, so those two edges are recorded as
+<code>blockers</code> and carry no dependency chip or automatic readiness.</p>
+<h5>Decisions that still bind</h5>
+<p><strong>1. Restack these branches by reset, never by merge.</strong> Both #79 and #76 sat on
+a base that led nowhere and still carried #78's <code>cfe32ad0</code>, which reintroduces
+<code>SymbolicExpression._last_parent_of_type_</code> — a symbol main deleted, and a
+structural-accessor read <code>dag-facade-hardening</code>'s guard test forbids. A merge
+keeps an addition the other side never deleted, so the rejected fix would have
+ridden into review. Both were rebuilt as the new base plus the slice's own
+files; pre-rebuild tips are recorded on each item.</p>
+<p><strong>2. The interactive layer absorbs the <code>ExpertInterface</code> segregation.</strong> The
+engine keeps <code>NullProgressReporter</code>, which is the only default correct for a
+caller that knows nothing about its context; the interactive default belongs
+here, in the layer that knows there is a shell to draw on. So attaching an RDR
+to an <code>IPythonInterface</code> installs <code>IPythonProgressBar</code> on it unless the caller
+chose a reporter of their own, and <code>%save</code> persists through <code>rdr.model_saver</code>
+rather than <code>interface.on_save</code>. An unused <code>progress_reporter()</code> method was the
+first shape tried and was the same mistake the segregation diagnosed: a member
+that exists so something <em>could</em> ask, on a class nothing asks. The wiring
+belongs where the two objects meet.</p>
+<p><strong>3. Conformance at rebuild time buys less than it looked like.</strong> These files
+are new in their pull requests rather than pre-existing, so they are held to the
+current <code>AGENTS.md</code> rules — <code># %%</code> headers naming the behaviour, a docstring on
+every function, method and field, no abbreviations — and doing that during the
+rebuild is still right. What is <em>not</em> true is the claim this entry used to make,
+that #76 therefore cost one review round instead of #79's two: #76 drew a
+<strong>fifty-thread</strong> round twenty-five minutes after its rebuild landed. The rules a
+rebuild can satisfy mechanically are the cheap half. The expensive half is the
+design the reviewer reads for — primitives that should be classes, strings that
+should be enum members, a 1,456-line test file — and no amount of pre-formatting
+anticipates that.</p>
+<p><strong>4. A fix scoped to what a thread asked, and no wider.</strong> An abbreviation fix
+cascades to every use site of <em>that</em> function's own local names, because leaving
+three of seven abbreviated names in one function reads as arbitrary — but it is
+not extended to identifiers elsewhere that no thread named. What is knowingly
+left behind is recorded rather than silently skipped.</p>
+<p><strong>5. A fix belongs in the slice that owns the name, even when the thread is
+raised here.</strong> Four of the review round's asks named identifiers this pull
+request does not define: <code>case_table.py</code>'s <code>new_label</code> / <code>corner_label</code>
+defaults and <code>rule_tree_view.py</code>'s <code>elision</code> vocabulary (#79 and #67
+respectively), plus the generated-model header, which comes from
+<code>templates/rdr_module.py.jinja</code> on the base. The available answer inside #76
+was a second enum holding the same strings — a duplicate source of truth, which
+is the very thing the asks exist to remove. So they were answered with where
+the change belongs and left open, rather than satisfied locally. Hand-editing
+one of three generated files was tried and reverted for the same reason: it
+would have desynchronised that copy from its template and its two siblings.</p>
+<p><strong>6. A session that reports itself finished is when to look again, not when to
+stop.</strong> #76's fifty-thread round opened at 14:34Z; the session that rebuilt the
+branch had posted its completion note at 14:09Z and was gone. The item then
+read healthy for the rest of the day while nothing on it was true. This is the
+sixth instance of that class on this plan.</p>
+<p><strong>7. A review round ends when the reviewer says so, not when the replies are
+posted.</strong> The 2026-08-30 round on #76 was recorded here as "five threads answered
+and left open". The reviewer then read those five: three he resolved, accepting the
+answers as given, and two he answered with instructions - the generated-model header
+goes in the pull request that owns the template, and the side-by-side labels go in</p>
+<h4>79. Both arrived at 21:55Z and 21:56Z, half an hour after the session that posted</h4>
+<p>the replies had stopped. Answering a thread is a turn in a conversation, and the
+turn after it is the one that says what happens.</p>
+<p><strong>8. A thread is resolved against the file, not against the intention.</strong> #76's
+<code>rdr/__init__.py</code> thread was resolved on the claim that the pull request no longer
+touches the file. It still did: <code>format_docstrings.py</code> had reflowed the base's
+one-line module docstring into three, so the file stayed in the diff doing exactly
+what the reviewer asked it not to. The re-exports the thread was about were indeed
+gone, which is what made the claim feel true.</p>
+<p><strong>9. A formatter sweep puts untouched files back into the diff.</strong> #76's
+<code>rdr/__init__.py</code> was restored to the base and then reflowed by the PR-wide
+<code>scripts/format_docstrings.py</code> pass, because docformatter expands the base's
+one-line module docstring into three every time it runs over that file. The
+sweep is what AGENTS.md asks for on modified files, so the rule is narrower
+than it reads: it applies to the files a pull request actually changes, and a
+file restored to the base is not one of them.</p>
+<p><strong>10. A cross-plan ask is the developer's call, not the session's.</strong> The
+generated-model header belonged to #66, five branches down and in
+<code>rdr-core-engine</code>. The resolve did the work it owned, replied with where the
+rest belonged and what it would cost, and asked; the answer was to push it and
+regenerate #76's copies. Asking cost one turn. Pushing to another plan's
+in-flight pull request unasked would have cost that plan's manifest its record
+of why its own diff had grown.</p>
+<p><strong>11. The first slice to exercise a path is where the path's defects surface.</strong>
+<code>D-store</code> is the first code anywhere to write a generated <code>FunctionCase</code> to a
+real file and import it back, and doing so turned up two defects that had
+nothing to do with it. <code>function_case.py.jinja</code> opened an <code>if TYPE_CHECKING:</code>
+block unconditionally and looped over <code>type_imports</code> inside it, so a function
+annotated only with builtins produced a block with no body and a module that
+would not parse. And <code>save_rdr_with_case</code> generated the case class against
+<code>code_generation.function_case.FunctionCase</code> while the rdr layer checks
+against its own duplicate, so a loaded case type was one the layer no longer
+recognised, and saving it again dropped the class header. Neither was covered:
+the generator's twenty-four tests all assert substrings of the source and none
+of them ever parsed it.</p>
+<p><strong>12. Decision 5 decides where a fix goes; it does not decide that the fix
+waits.</strong> The template belongs to <code>main</code>, so it is #226, a <code>bug</code> pull request of
+its own with a test that compiles the generated source - and the same one-line
+change is carried on <code>D-store</code> so the branch is verifiable now rather than
+after a five-branch stack lands. It no-ops the moment #226 reaches the base.
+The <code>base_class</code> line belongs to #66, which owns <code>serialization.py</code> and is open
+and unmerged; the developer chose to fix it here and flag the ownership, since
+the slice that first exercises the round trip is the one that can prove it. The
+<code>FunctionCase</code> duplication underneath it - one class on <code>main</code>, a near-identical
+one added by an unlanded rdr slice - is left alone, being neither slice's to
+collapse.</p>
+<p><strong>13. A slice scoped as a port can still be discovering the feature never
+worked.</strong> <code>D-deco</code> was scoped exactly as #79, #76 and #80 were - restack onto
+the rebuilt base, bring the moved interfaces up to date - and the port itself
+was routine. What the port then exposed is that <code>@rdr</code> could not work as a
+decorator at all: the model file imports the decorated function back by name,
+the decorator reads that file <em>during</em> decoration, and at that moment the
+module defining the function is still executing its own body, so the <code>@</code> has
+not bound the name and the import fails on a partially initialized module.
+Broken for every function - a real module and <code>__main__</code> alike - not only for
+the locals the July tests happened to use. Decision 11 one level up: the
+decorator is the first thing anywhere that reads a generated model file while
+its own module is still importing, so it is where that defect could surface.</p>
+<p><strong>14. The sentinel change was a behaviour change nobody had cashed in.</strong>
+Porting <code>UNSET</code> to <code>...</code> looked mechanical, but the old inference path read
+<code>conclusion is UNSET or conclusion is None</code>, so a rule concluding <code>None</code> was
+silently discarded and the function's own return value stood. The base has
+since grown a <code>ConclusionDomain</code> that treats <code>None</code> as a conclusion a domain
+either admits or refuses (<code>ConclusionMayNotBeNone</code>), which makes the second
+half of that test a leftover contradicting the engine. Only <code>...</code> means no
+rule fired now, and a test pins it. A sentinel rename is the moment to ask
+what the old sentinel was also standing in for.</p>
+<p><strong>15. A blocked branch is the one nobody re-measures.</strong> #77 was labelled
+<code>integration-conflict</code> on 2026-08-31 for breaking the integration build in
+combination with the other tips, and the label held it out of every build
+after that. Two things then made the block self-sustaining. No reproduction
+test was pushed onto the branch when it was blocked, and <code>clear-fixed-breaks</code>
+reads an empty reproduction run as <em>nothing recorded</em> rather than <em>everything
+fixed</em>, so the one mechanism that lifts such a label could never fire. And a
+withheld branch contributes to no build, so nothing re-tested it: the branch
+was restacked on 2026-09-02 and its whole stack with it, and no build noticed.
+Re-measured on 2026-09-02 by merging <code>6d97d494</code> into the published build
+<code>dabaf6f2</code> — conflict-free, and the configured suite gives 1041 passed, 0
+failed both with the branch and without it, on the same collected set. The
+break was gone, and had been since the restack. The recorded failure named no
+partner (<code>breaks_against</code> null), so there was never a second branch to
+re-check against either; the only answerable question was whether a current
+build still carried it. Push the reproduction test at the moment of blocking,
+or the block outlives what it was for.</p>
+<h5>The lesson this plan is the case study for</h5>
+<p><strong>Six weeks on a dead base costs three moved interfaces, and none of it is
+visible while the branch cannot be built.</strong> When #79 was finally rebuilt, the
+suite showed 28 failures across two modules, every one the stack having moved
+under a branch that could not follow: a spy holding tuples where the stack now
+has dataclasses, a renamed keyword argument, the <code>...</code> sentinel, and — the one
+that was not a port — two test classes pinning a contract that had been
+<em>deliberately reversed</em>, asserting that a fit saves once per rule when it now
+saves once on its way out. Their replacement already existed on the base, so
+they were dropped rather than rewritten.</p>
+<p>Two defects the interface change had left behind were each invisible to a
+passing suite:</p>
+<ul>
+<li>The <code>%conclusion</code>/<code>%conditions</code> magics had stopped rejecting invalid answers.
+  <code>validate()</code> returns a list of exceptions now; the magic still asked
+  <code>if target_name in errors</code>, always false on a list, so an invalid answer
+  exited the shell instead of re-prompting. Its four tests passed throughout,
+  because their <code>validate</code> double still returned the old mapping — a double
+  that had drifted from the contract it stands in for can only confirm the
+  drift. Bringing it onto the real contract is what produced the failing test.</li>
+<li>The shipped user guide failed when CI executed it. <code>test_eql_documentation.sh</code>
+  runs every guide as a notebook, so a guide is a CI job rather than prose, and
+  it still called an argument the API had renamed. Found by running the script,
+  not by reading the file.</li>
+</ul>
+<h5>Open</h5>
+<ul>
+<li><strong>Neither <code>rdr_decorator.md</code> is in <code>krrood/doc/_toc.yml</code></strong>, and nor is #76's
+  <code>eql_rdr_conclusion_asking.md</code>. The user guide is still a CI job either way -
+  <code>test_eql_documentation.sh</code> runs every file in <code>doc/eql/user/</code>, toc or not -
+  so what is missing is only the built site's navigation. Left to whoever lands
+  the stack rather than making <code>_toc.yml</code> a conflict point across five branches.</li>
+<li><strong><code>decorator.py</code> imports three module-private names from <code>serialization.py</code></strong>
+  (<code>_FACTORY_IMPORT</code>, <code>_CLASS_AND_RULES_SEPARATOR</code>, <code>_TEMPLATES_DIRECTORY</code>) to
+  render the empty rule-tree section. A real smell, and decision 5 says it is
+  not <code>D-deco</code>'s to fix: <code>serialization.py</code> is #66's file. Either those three
+  become public there, or the empty-model rendering moves next to the other
+  serialization concerns.</li>
+<li><strong><code>plan_item_bootstrap.py update</code> writes invalid YAML</strong> when the item it
+  patches ends its block with a list. It indents the fields it inserts to match
+  the list's items - four spaces rather than two - so <code>status:</code> lands inside
+  <code>depends_on</code> and the save fails on a <code>ScannerError</code> whose message names only a
+  line number. <code>D-deco</code> hit it because <code>depends_on</code> is its last field; the
+  manifest was edited directly and <code>save-plan.sh</code> called instead. Belongs to the
+  plan-tracking tooling.</li>
+<li><strong><code>code_generation.imports.validate_annotations</code> raises on Python 3.10 and
+  3.11.</strong> <code>parameter_name in PythonBuiltinParameterNames</code> is a <code>StrEnum</code>
+  value-containment check, which only works from 3.12; <code>krrood</code>'s
+  <code>requires-python</code> says <code>&gt;=3.10</code>. CI runs 3.12, so it is invisible there.
+  Found while verifying <code>D-store</code>, recorded rather than fixed - it is <code>main</code>'s,
+  and #226 is deliberately one root cause.</li>
+<li><strong><code>D-ui-splice-fix</code>'s regression test can be re-added.</strong>
+  <code>TestAttributeReusedInEarlierSiblingBranch</code> needs no production change to pass
+  against the fixed API once <code>test_eql_rdr/</code> lands; it asserts through the RDR
+  layer, which is why #118 could only cover the same defect DSL-only.</li>
+<li><strong>Known conformance debt left alone deliberately</strong> on #76: the
+  <code>try</code>/<code>except</code>-around-attribute-access in <code>prompt_examples.pick_case_attribute</code>,
+  and <code>namespace["quit"]</code> in <code>interactive.py</code>, which has no <code>NamespaceName</code>
+  member the way <code>EXIT</code> does. Both are real rule instances that no thread named
+  and that the PR-wide sweep thread's own categories (abbreviations, docstrings,
+  formatting) do not cover.</li>
+<li><strong>#76 has no open review threads left.</strong> <code>CaseColumnLabel</code> landed in #79 and
+  both readers use it; the generated-model header changed in #66, the pull request
+  that owns the template, with #76 bringing its three <code>fitted_models/</code> copies onto
+  the new wording. The other three of the five left open the developer resolved
+  himself, taking the answers as given.</li>
+<li><strong>The generated header is inconsistent on every branch between #66 and #76</strong>
+  until the stack restacks: those branches carry the template with the old line and,
+  on #76, three generated modules with the new one. Regenerating a model there
+  before #66 arrives puts the old header back.</li>
+<li><strong>Known conformance debt left alone deliberately</strong> on #79: <code>av</code>, <code>sp</code>, <code>d</code> and
+  <code>test_progress_bar.py</code>'s own box-drawing dividers are real instances of rules
+  this pull request's other fixes enforced elsewhere, but no thread named them.
+  Also on #79, <code>TestIPythonProgressBar</code>'s later methods annotate
+  <code>mock_tqdm: pytest.MagicMock</code>, which does not exist — harmless only because
+  <code>from __future__ import annotations</code> keeps the annotation a string.</li>
+</ul>
+<h5>Standing conventions</h5>
+<ul>
+<li>Follow <code>.claude/personal/cram-notes.md</code> and this repository's <code>AGENTS.md</code>.</li>
+<li>SOLID is a review gate: a new capability enters as an abstraction plus small
+  dataclass implementations, and strategies stay substitutable without touching
+  the engine.</li>
+<li>TDD: failing test first, and no test is modified to make something pass.</li>
+<li><code>krrood</code> stays self-contained; world-like scenarios are mimicked in
+  <code>test/krrood_test/dataset</code>.</li>
+<li>The programme's working method — run the probe rather than reasoning, compare
+  sorted collected test ids rather than counts, stage by explicit path — is
+  recorded in <code>rdr-core-engine</code>'s roadmap and applies here unchanged.</li>
+</ul></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-surface">
+        <div class="wave-eyebrow">The user-facing surface</div>
+        <p class="wave-description">Two stacked chains, rendering then the shell, then the decorator and its store.</p>
+        <section class="track">
+          <h3 class="track-title">Rendering and the interactive shell</h3>
+          <div class="item-list">
+                <article id="item-D-ui-rendering" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: case-table rendering + serialization test coverage</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-ui-rendering</span>
+            <span class="mono branch">D-ui-rendering</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/79" target="_blank" rel="noopener">#79</a>
+            <a class="session-link" href="https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-interface-and-decorator D-ui-rendering" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Rebuilt onto `D-core-backend` (#210) on 2026-08-30, which is what unblocked it: its old base `D-ui-splice-fix` (#78, closed unmerged) led nowhere, and the re-target its own note prescribed — `D-core-engine` (#68) — is deferred and leads nowhere either. Rebuilt as a branch reset rather than a merge so #78&#39;s production commit (reintroducing `_last_parent_of_type_`, superseded by #118 and forbidden by dag-facade-hardening&#39;s Wave-1 guard) stays out of #79&#39;s diff; pre-rebuild tip `0a305c68` if it is ever wanted back. `depends_on` now names `d-core-backend`, which is where the branch actually sits.
+Three interfaces had moved under the branch in the six weeks it spent on a dead base and the ported tests were brought up to them; the two `save_path` test classes went with `EQLSingleClassRDR.save_path` itself, their replacement already covered by `test_fit_convergence.py` and `test_serialization.py`. See roadmap.md §34.
+2026-08-30 (later): a fresh `/plan-item-resolve` session picked this item up again and found a review round the rebuild above had drawn minutes after it pushed — 11 threads (missing docstrings and `:param:`/`:return:` docs, missing dataclass field docstrings, four abbreviated names, one box-drawing divider), never recorded here since the previous session had already reported itself finished. Applied and pushed as `8dc1a7c8`: every function/method/field across all eight files this PR adds now has a docstring, the flagged abbreviations (`_val`/`attr` in `case_table.py`, `ser` in `test_case_serializer.py`, `_animal_var`/`_mixed_alt_then_ref_query` in `test_rule_order.py`) are spelled out along with the rest of the same names in the same functions, and the divider is `# %%`. All eleven threads replied to individually (naming the commit) and resolved. `test_eql_rdr` unchanged: 341 passed, 0 failed. Draft was already `true`, so no restore-to-draft was needed. See roadmap.md §35.
+
+2026-08-30 (resolve): `case_table.py` gained `CaseColumnLabel` (`5a84033eb`), the `StrEnum` behind `render_cases_side_by_side`&#39;s `new_label`/`corner_label` defaults. The ask was raised on #76 and the reviewer directed it here, since the file is this slice&#39;s. `test_case_table_side_by_side.py` asserts against the members instead of retyping the strings, and #76 reads them too. Collected set unchanged (341); of those, 262 passed and 79 skipped under the --noconftest run this container allowed, identical before and after.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Stacked on d-core-backend (#210) in the rdr-core-engine plan. depends_on cannot name an item in another plan, so this edge is recorded here instead and carries no dependency chip or automatic readiness.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-D-ui" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-ui</span>
+            <span class="mono branch">D-ui</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/76" target="_blank" rel="noopener">#76</a>
+            <a class="session-link" href="https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-interface-and-decorator D-ui" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">2026-08-23: outstanding work added from the #159 review - **default the progress reporter to IPythonProgressBar here**. The engine keeps NullProgressReporter, which is the only default correct for a caller it knows nothing about; the developer agreed the interactive default belongs in this layer, which is the one that knows there is a shell to draw on. Done 2026-08-30, as part of the same change as the ExpertInterface segregation below - see roadmap.md sections 30 and 36.
+2026-08-30: rebuilt as a branch reset onto the rebuilt `D-ui-rendering` (`5269a778`), so #78&#39;s superseded `_last_parent_of_type_` commit `cfe32ad0` does not survive the restack; pre-rebuild tip `c50d2109` if it is ever wanted back. That commit is why the maintenance pass could not integrate the new base and reported 19 conflicting files. The interactive layer is now on the segregated `ExpertInterface`: `%save` persists through the RDR&#39;s `ModelSaver`, and attaching an RDR to an `IPythonInterface` installs the shell&#39;s progress bar in place of the engine&#39;s null default. Also ported to `AnswerName`/`NamespaceName`, `conclusion_helper`&#39;s presenter/suggester mixins, `...` for `UNSET`, and the validator/backward-inference renames. Two defects fixed with a failing test each: the `%conclusion`/`%conditions` magics no longer rejected invalid answers after `validate()` became a list, and the shipped user guide - which CI executes through `test_eql_documentation.sh` - still called `FunctionInterface(answer_fn=...)`. Every function, method and field across the 21 files this PR adds now carries a docstring. test_eql_rdr: 524 passed, 2 skipped (341 on the base, 183 added). See roadmap.md section 36.
+
+2026-08-30 (later): a fresh `/plan-item-resolve` session found a 50-thread review round opened on #76 between 14:34Z and 17:13Z - twenty-five minutes after the rebuild session posted its own completion note and stopped - and none of it recorded here. Sixth instance of that staleness class on this plan. Applied as `a07a4458` and `c40da8fa`. The substantive part is a redesign the round asked for rather than conformance: the magics are classes under a `Magic` base, each carrying its own name, collaborators and `register(shell)`; `MagicName`, `MagicKind` and `NamespaceKey` replace the name literals and the four private key constants; `%knows` becomes `%sufficient_conditions_for`; the prompt sections become eleven `PromptSection` subclasses identified by a `PromptSectionName` member; and the 1,456-line prompt-sections test splits into four files named for their subjects. `rdr/__init__.py` is restored to the base, so the pull request no longer touches it. Magic selection and registration were reachable only through a real terminal, so eight tests now cover them against a shell stub. test_eql_rdr: 532 passed, 2 skipped. Forty-five threads replied to and resolved; five replied to and left open, because the answer differed from the ask or the identifier belongs to #79, #67 or the base template - see roadmap.md decisions 5 and 6.
+
+2026-08-30 (later still): a `/plan-item-resolve` session read the pull request&#39;s live state and found the round was not finished. The roadmap&#39;s count of five threads answered-and-left-open is stale: the developer resolved three of them, accepting the answers as given (the `match`/`case` lookup table, the removed `except Exception: pass`, and the `elision` rename declined for want of a better word). The remaining two carry fresh instructions rather than agreement, and neither change lands on #76: the generated-model header goes to the pull request that owns `templates/rdr_module.py.jinja`, which is #66 (`D-core-serialization`), open and unmerged; the side-by-side column labels go to #79.
+
+Both dependencies read ready and the head is current: #76&#39;s base sha is #79&#39;s head sha, so there is no restack owed here. The pull request is out of draft, and nothing in the record says a session marked it so, which is why it was left ready rather than restored to draft.
+
+2026-08-30 (resolve): the two threads the reviewer answered at 21.55Z/21.56Z are worked. The side-by-side labels became `CaseColumnLabel` in `case_table.py` on `D-ui-rendering` where he directed them (`5a84033eb`), and this branch merged that tip and put `test_ipython_side_by_side.py` onto the members (`783546029`); that thread is replied to and resolved. `rdr/__init__.py` is out of #76&#39;s diff for real now - the round&#39;s own reply had claimed it was, but the PR-wide `format_docstrings.py` sweep had reflowed the base&#39;s one-line module docstring into three, so the file stayed modified; the formatter reproduces that every time it runs over the file, so the sweep has to skip it. The generated-model header is the one thread still open, and deliberately - `templates/rdr_module.py.jinja` belongs to #66 (`D-core-serialization`), open and unmerged, so by the reviewer&#39;s own rule it changes there, five branches down and in another plan. Replied with the proposed wording and left open pending the developer&#39;s word on whether this session pushes to #66. See roadmap.md sections 7 to 9.
+
+2026-08-30 (resolve, second half): the developer chose to have the header change pushed rather than deferred, so it landed in #66 (`bb01256df`) with the first test of that header, and #76 brought its three `fitted_models/` copies onto the new wording (`1045c6d5a`). Both threads from the round are now replied to and resolved, and the item has no open review threads left. `rdr-core-engine`&#39;s D-core-serialization item records the #66 side. What is knowingly inconsistent until the stack restacks: `rdr_module.py.jinja` on this branch is #66&#39;s file and untouched here, so it still reads the old line while the three generated modules beside it read the new one, and regenerating a model on this branch before #66 arrives would put the old header back.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: case-table rendering + serialization test coverage">D-ui-rendering</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ CI has never run on this branch - the pull request reports zero check runs on any head it has had - so every figure recorded for it is a local measurement. This session could not close that gap either, because the container has no project interpreter provisioned; the suite ran with --noconftest against the packages the rdr modules import (415 passed, 119 skipped of 534 collected, identical before and after the change) and the conftest-dependent tests were not exercised.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-D-ui-splice-fix" class="item status-deferred" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: fix rule-tree splice for attributes reused across sibling branches</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-deferred">Deferred</span>
+              <span class="badge live-badge live-closed_unmerged">Closed (unmerged)</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-ui-splice-fix</span>
+            <span class="mono branch">D-ui-splice-fix</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/78" target="_blank" rel="noopener">#78</a>
+            <a class="session-link" href="https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Reconsider">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-interface-and-decorator D-ui-splice-fix" onclick="planDashboardCopyActionCommand(this)">▸ Reconsider</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Closed 2026-07-31 as superseded by #118, which fixed the same rule-tree splice defect at the façade level from the owning rule-tree context, rather than by reintroducing `_last_parent_of_type_` — a symbol main had deleted, and a structural-accessor read dag-facade-hardening&#39;s guard test forbids. Its regression test was not carried over: it lives in `test/krrood_test/test_eql_rdr/`, absent on main, and asserts through `walk_rules`/`classify_case`, so #118 covers the defect DSL-only at the accessor&#39;s own contract level. The test can be re-added against the fixed API once `test_eql_rdr/` lands, and needs no production change to pass. The branch is kept, which is what let D-ui-rendering and D-ui be rebuilt without it.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Recorded against d-core-backend (#210) in the rdr-core-engine plan, though the item is deferred and its own pull request is closed as superseded by #118.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">The decorator and its model store</h3>
+          <div class="item-list">
+                <article id="item-D-store" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">D-store: RDRFileStore for the @rdr model-file lifecycle</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-store</span>
+            <span class="mono branch">D-store</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/80" target="_blank" rel="noopener">#80</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Lr5K9cBX5g6YrFEErmJMYZ" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-interface-and-decorator D-store" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Path resolution + model-file lifecycle; standalone, no decorator dependency.
+
+2026-08-30 (later): a `/plan-item-resolve` session read the branch&#39;s live state and found the restack the roadmap&#39;s Open section predicted, never recorded on the item: the head is from 2026-07-19, its CI is red, and the branch was skipped by two maintenance passes. Recorded as blockers before any work started.
+
+The slice&#39;s own content survives the rebuild intact - one commit, two new files, and neither exists on the rebuilt base - but it was written against interfaces that have since moved, the same class of drift #79 and #76 each hit: `FunctionInterface(answer_fn=...)` is `answer_function`, `rdr.utils.UNSET` is gone in favour of `...`, and the answer-dictionary keys are `AnswerName` members.
+
+The rebuilt base also now carries a `ModelSaver` abstraction whose `FileModelSaver` performs `RDRFileStore.save`&#39;s exact body, so the store is rebuilt as a `ModelSaver` rather than as a second, parallel persistence path - which is also what lets `@rdr` hand the store straight to `rdr.model_saver`, the seam #76 moved `%save` onto.
+
+2026-08-31 (resolved): rebuilt as a branch reset onto `D-ui`, per decision 1, so #78&#39;s `cfe32ad0` does not survive the restack; pre-rebuild tip `07cb6831`. The slice&#39;s own work replayed unchanged in shape - one commit, `rdr/file_store.py` and its test - and #80 now reads 417 additions across 5 files rather than 14,994 across 47. Restacked a second time onto `1045c6d5a` when `D-ui` gained a commit mid-session. `test_eql_rdr`: 548 passed, 2 skipped, against 532 passed, 2 skipped on the base; whole `krrood_test`, 2359 passed, with only the two Graphviz-binary failures that fail identically on `main`. Verified on Python 3.12, matching CI, because on 3.11 `code_generation.imports.validate_annotations` raises on `parameter_name in PythonBuiltinParameterNames` - a `StrEnum` value-containment check that only works from 3.12, though `requires-python` says 3.10.
+
+The store is now a `ModelSaver`. The base grew that abstraction while this branch sat on a dead base, and `FileModelSaver` already performs the body `save()` would have duplicated; being one is also what lets `@rdr` hand the store to `rdr.model_saver`, the seam #76 moved `%save` onto. Reading a model before one exists raises `ModelFileMissing` rather than a bare `FileNotFoundError`.
+
+Two defects outside this slice had to be fixed for a saved model to load at all - see roadmap sections 11 and 12. The template one is #226 off `main`, ported here; the `save_rdr_with_case` base-class one belongs to #66 and was applied here, because this is the first slice that writes a generated case type to a file and imports it back.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)">D-ui</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-D-deco" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">D-deco: @rdr decorator + RDR file store (final rdr-engine slice)</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-deco</span>
+            <span class="mono branch">D-deco</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/77" target="_blank" rel="noopener">#77</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Wf62T3vDfRPgxbi4ew7KAm" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-interface-and-decorator D-deco" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">rdr() factory + RDRWrapper, stacked on D-store.
+2026-08-31 (resolve): the restack the roadmap&#39;s Open section had predicted since the rebuilds. The head was from 2026-07-19 and still merged D-store&#39;s pre-rebuild tip `07cb6831`, so it carried #78&#39;s `cfe32ad0`; GitHub read the pull request `dirty` at 16,493 additions across 52 files, and two maintenance passes had each hit 44 conflicting files and left it `needs- resolution`. Rebuilt as a branch reset onto `ae3fdb05`, per decision 1, never a merge; pre- rebuild tip `c46c0c5b`. The slice&#39;s own work replays as one commit, 1,529 lines in 6 files.
+The same interface drift #79, #76 and #80 each hit: `rdr.utils.UNSET` is `...`, `EQLSingleClassRDR.save_path` is the `ModelSaver` strategy so the wrapper hands the store to `rdr.model_saver`, `RDRFileStore.func` is `function`, `FunctionInterface(answer_fn=)` is `answer_function`, and the answer keys are `AnswerName` members. Generation also passes `base_class=FunctionCase` - the rdr layer&#39;s own - which is #80&#39;s second defect applied on the generate path rather than only the save path.
+The defect this slice surfaced is that `@rdr` could not work as a decorator at all on the rebuilt base. A model file imports the decorated function back by name and the decorator reads that file during decoration, while the defining module is still executing its own body, so the `@` has not bound the name and the import fails on a partially initialized module - for every function, in a real module and in `__main__` alike. The developer chose the fix in `decorator.py` over `FunctionCaseGenerator` or `RDRFileStore`, both of which belong to other slices: `function_bound_to_its_own_name` binds the undecorated function for the duration of the read and restores what the module held. See roadmap decision 13.
+One deliberate behaviour change: only `...` means no rule fired, so a rule concluding `None` is honoured rather than discarded. See roadmap decision 14.
+Verified on Python 3.12, matching CI. `test_eql_rdr`: 576 passed, 2 skipped, against 549 passed, 2 skipped measured on the base itself - exactly the 27 added, nothing else moved. Both guides&#39; code cells were extracted and executed, which is not optional for the user guide since `test_eql_documentation.sh` runs it as a CI job. CI has never run on this branch&#39;s current stack, so every figure is a local measurement.
+2026-09-02 (integration): the `integration-conflict` block from 2026-08-31 is cleared - the break no longer reproduces. It was recorded with no named partner (`breaks_against` null), so there was never a second branch to re-check against; what could be re-measured is whether a current build still carries the failure, and it does not. Merging this branch&#39;s head `6d97d494` into the published build `dabaf6f2` (`integration-20260901-200409`) is conflict-free and brings the whole `D-core-backend` to `D-deco` stack in, none of which that build carried; the configured integration suite gives 1041 passed, 0 failed on that tree and 1041 passed, 0 failed on the build without it, over the same collected set, since this branch adds no `.claude/` tests. The tree the 08-31 failure was found in no longer exists: this branch was restacked on 2026-09-02 21:12, and `D-store`, `D-ui` and `D-ui-rendering` the same day.
+Nothing could have lifted that block on its own. No reproduction test was pushed onto the branch when it was blocked, and `clear-fixed-breaks` reads an empty reproduction run as nothing recorded rather than everything fixed, so a branch withheld from every build is exactly the one nobody re-measures. See roadmap decision 15.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="D-store: RDRFileStore for the @rdr model-file lifecycle">D-store</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">4</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+        <p class="next-empty">Nothing actionable right now — every item is either in progress, fully blocked, or done.</p>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

@@ -1,0 +1,2884 @@
+<title>ICRA experiments: one simulated pipeline, episodes in SQL, and the four experiments</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>ICRA experiments: one simulated pipeline, episodes in SQL, and the four experiments</h1>
+    <p class="description">Everything the ICRA paper (deadline 2026-09-15) needs that no other plan owns: one integrated pipeline that every scenario runs on in simulation before the robot, a dataclass domain model for scenarios, goals, conditions, perturbations and metrics, episodes recorded through ORMatic into an SQL database and queried by EQL as long-term memory, the per-predicate backend routing and physics verification mechanisms the paper measures, failure typing and prediction, the verbalised-memory and VLM baselines, Experiments A, B and C run in simulation and then on the UR10, Experiment D questioning the episode history in simulation, and the released artifact. Three lanes run in parallel; roadmap.md carries the lane order and the day-by-day budget.
+</p>
+    <p class="repo-line">
+      33 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/252" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>icra-experiments: roadmap</h4>
+<p>The narrative half of <code>plan.yaml</code>: why the plan has the shape it has, what it
+was built on, how the work is distributed, and the day-by-day budget to the
+2026-09-15 deadline. Created 2026-09-03 from the review of the ICRA planning
+memo (<code>icra_plan.tex</code>, dated 3 September) against every tracked plan, the open
+pull requests and the <code>tracy_icra</code> demo branch.</p>
+<h5>What the memo asks for that no plan owned</h5>
+<p>The memo's thesis is one mechanism: the same EQL query answers a question,
+selects which backend answers each predicate, drives what the robot perceives,
+and verifies the result in the digital twin; removing knowledge produces
+failures the query predicts. Its evidence is three experiments on the UR10:</p>
+<ul>
+<li><strong>A</strong>, question answering on the real feed in four buckets (lookup, spatial,
+  temporal, embodiment), against a VLM with the image alone and a VLM with the
+  image plus verbalised working memory, with determinism runs.</li>
+<li><strong>B</strong>, per-predicate backend decomposition of a mixed query with measured
+  narrowing, and a perceive-commit-verify loop under about thirty injected
+  errors with precision and recall.</li>
+<li><strong>C</strong>, insertion under knowledge ablations and a perturbation, every failure
+  typed and predicted before execution.</li>
+</ul>
+<p>Of the twenty plans tracked on 2026-09-03, only <code>knowledge-directed-perception</code>
+carried the deadline, and it owns perception: the surfaces, the perception
+backend, the detector rule tree, expectations from events. Nothing owned the
+experiments, the scenario definitions, the episode recording, the capability
+routing across backends, the physics verification, the failure taxonomy, the
+VLM baselines or the artifact. This plan owns those.</p>
+<h5>What the code already had, and what this plan builds on</h5>
+<p>Recorded so that no item rebuilds it:</p>
+<ul>
+<li><strong>Narrowing is measured.</strong> #238 narrows a look by a whole statement and
+  reports per-frame cost of 0.25 to 0.43 of an unnarrowed look on the six real
+  captures. Experiment B's decomposition half extends that measurement rather
+  than starting it.</li>
+<li><strong>Decomposition exists implicitly.</strong> In #238 the lid and the hole named in a
+  statement are answered from the twin before any look is taken, and #222
+  splits every condition into pushed down, residual or refused. #231 has each
+  detector declare the looks it can answer as an EQL condition. The
+  <code>backend-routing</code> track raises that one level: backends declare
+  capabilities, a planner routes per predicate, and the routing is reported.</li>
+<li><strong>The verification predicates exist.</strong> #229 made support, contact,
+  visibility, reachability, stability, occupancy, inside-of and the six
+  directional relations into predicates with a measurement behind each. The
+  demo already settles shapes in MuJoCo. <code>physics-verification-backend</code> is
+  those predicates evaluated in a copy of the world.</li>
+<li><strong>Episode recording exists in three shapes.</strong> <code>ShapeInsertionExperience</code>
+  with <code>generate_insertion_experience</code> and <code>batch_runner</code>,
+  <code>SortingIterationResult</code> with <code>ResultsDatabase</code> and <code>results_recording</code>, and
+  the console stack's <code>SegmindEventRecord</code> and <code>InsertionAttemptRecord</code>. All
+  go through ORMatic into SQL already. <code>episodes-recorded-through-ormatic</code>
+  replaces the first two with one Episode model and keeps the database
+  plumbing.</li>
+<li><strong>A scenario abstraction and a result model exist.</strong>
+  <code>control_loop_experiments.scenarios</code> has <code>BenchmarkScenario</code> and
+  <code>ScenarioRunner</code>; <code>experiment_definitions</code> has <code>ExperimentResult</code>,
+  <code>ExperimentsTable</code> and <code>TypstRenderer</code>. <code>scenario-domain-model</code> generalises
+  both rather than adding a third.</li>
+<li><strong>Failure diagnosis exists.</strong> <code>insertion_diagnosis.InsertionDiagnosis</code> and
+  <code>InsertionFailureReason</code> already read an attempt's failure from the plan's
+  own failure and the segmind events. <code>failure-taxonomy-and-typing</code> maps each
+  reason to one of the memo's four types.</li>
+<li><strong>The temporal and embodiment answers have sources.</strong> Segmind emits support,
+  loss of support, pick-up, placing and insertion events, detected by EQL
+  rules (not ripple-down rules, which the developer corrected on 2026-09-03).
+  The twin answers what is in the gripper through <code>bodies_in_gripper</code>. The
+  console stack's <code>live_query_source</code> already has presets for "what actions
+  did you perform" and one question per event type.</li>
+<li><strong>Attach on grasp exists.</strong> #169 restored <code>AttachNode</code> and <code>DetachNode</code>
+  behind <code>Context.update_world_model_attachment</code>, so a grasped shape moves
+  with the gripper in the twin. <code>snapshot-working-memory</code> relies on it rather
+  than rebuilding it.</li>
+<li><strong>Verbalisation is deterministic by construction.</strong> The result-verification
+  framework is on main; the scene wordings are on #33, which owes a rebase
+  onto #229 and has two wording decisions only the developer can settle.</li>
+</ul>
+<h5>Corrections the developer made on 2026-09-03</h5>
+<ul>
+<li><strong>SQL is a backend, and long-term memory is a deliverable.</strong> The first
+  review read SQL as present only in the console stack; the developer's
+  direction is that EQL over an SQL database returning domain objects is the
+  long-term memory feature, that episodes of every scenario, real and
+  simulated, are recorded through ORMatic into it, and that they are to be
+  queried. The <code>long-term-memory</code> track exists for that, and the memo's four
+  backends stand.</li>
+<li><strong>Simulation first.</strong> Every scenario, demo and perturbation runs through the
+  full integrated pipeline in simulation before the robot, to save robot time
+  and remove surprises. This is why every experiment has an in-simulation item
+  that its robot item depends on, and why <code>integrated-simulation-pipeline</code> is
+  the foot of the plan.</li>
+<li><strong>Scenarios are data.</strong> A dataclass domain model describes scenarios, goals,
+  conditions, perturbations and metrics at a meta level; each concrete scenario
+  subclasses or instantiates it. Everything tested and running.</li>
+<li><strong>#192 is the developer's.</strong> He is fixing or has fixed it; the integration
+  item keeps it out until he says it is in, because it removes
+  <code>Match.variable</code>, which #159 and so #239 still read.</li>
+<li><strong>Segmind uses EQL rules</strong>, not ripple-down rules.</li>
+</ul>
+<h5>Structural decisions taken at creation</h5>
+<p>Asked and answered by the developer on 2026-09-03:</p>
+<ul>
+<li>The two core mechanisms (per-predicate routing by declared capability, and
+  the physics verification backend) live here, in the <code>backend-routing</code>
+  track, not in <code>knowledge-directed-perception</code>. That plan's
+  <code>imagination-world-rejects-what-a-predicate-refuses</code> item is covered by
+  <code>physics-verification-backend</code> in its narrow form and should be marked so
+  there rather than built twice.</li>
+<li>The integrated simulation pipeline is this plan's foot item. <code>tracy_icra</code>
+  stays the real-robot integration point and takes the integrated branch;
+  <code>knowledge-directed-perception</code>'s three demo items are satisfied by
+  <code>tracy-demo-takes-the-integrated-branch</code> and the robot experiments.</li>
+<li>Three lanes, one per person, below.</li>
+</ul>
+<h5>The three lanes</h5>
+<p>Each lane is one person's ordered list. Items in different lanes run in
+parallel; an item waits only on what <code>depends_on</code> names.</p>
+<p><strong>Lane 1, robot, perception and mechanisms.</strong>
+<code>integrated-simulation-pipeline</code> → <code>simulated-camera-feeds-perception</code> →
+<code>backends-declare-their-capabilities</code> → <code>query-routed-per-predicate</code> →
+<code>physics-verification-backend</code> → <code>snapshot-working-memory</code> →
+<code>tracy-demo-takes-the-integrated-branch</code> → <code>experiment-b-in-simulation</code> →
+the three robot runs, with lanes 2 and 3 at the table.</p>
+<p><strong>Lane 2, experiment infrastructure and long-term memory.</strong>
+<code>scenario-domain-model</code> → <code>episodes-recorded-through-ormatic</code> →
+<code>montessori-scenarios</code> → <code>failure-taxonomy-and-typing</code> →
+<code>knowledge-ablations</code> → <code>perturbations</code> → <code>episodes-queried-by-eql</code> →
+<code>failure-predicted-from-the-query</code> → <code>experiment-c-in-simulation</code>, then
+<code>episode-artifacts-recorded</code> → <code>cross-episode-question-set-and-ground-truth</code> →
+<code>experiment-d-in-simulation</code> (added 2026-09-04; the budget table below does not
+yet account for them).</p>
+<p><strong>Lane 3, baselines, question set, figures and writing.</strong>
+<code>question-set-and-ground-truth</code> → <code>working-memory-verbalised</code> →
+<code>vlm-baseline-harness</code> → <code>paper-figures-from-episodes</code> →
+<code>experiment-a-in-simulation</code> → <code>benchmark-artifact</code>, writing the paper's
+sections 1 to 4 in the gaps and the experiments section from the generated
+tables.</p>
+<h5>The budget: 2026-09-15</h5>
+<p>Twelve days from 2026-09-03. The memo's own timeline is kept where it holds
+and moved where the plans showed it could not: the memo's day one asked for a
+decomposition prototype and attach-on-grasp, both of which exist, and did not
+ask for the integrated simulation pipeline, which is what everything else
+waits on.</p>
+<table>
+<thead>
+<tr>
+<th>when</th>
+<th>lane 1</th>
+<th>lane 2</th>
+<th>lane 3</th>
+<th>state reached</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Thu 3, Fri 4</td>
+<td>integrated pipeline; simulated camera</td>
+<td>domain model; episodes recorded</td>
+<td>question set frozen; memory verbalised</td>
+<td><strong>the simulated demo runs the whole pipeline and records episodes</strong></td>
+</tr>
+<tr>
+<td>Sat 5, Sun 6</td>
+<td>capabilities; routing</td>
+<td>scenarios; taxonomy; ablations; perturbations</td>
+<td>VLM harness; figures script</td>
+<td><strong>go/no-go Sunday evening: routing and physics verification answer a mixed query in simulation</strong></td>
+</tr>
+<tr>
+<td>Mon 7, Tue 8</td>
+<td>physics verification; snapshot memory; tracy takes the branch (robot Tue)</td>
+<td>episodes queried; prediction; Experiment C in simulation</td>
+<td>Experiment A in simulation</td>
+<td><strong>every experiment has run once in simulation</strong></td>
+</tr>
+<tr>
+<td>Wed 9, Thu 10</td>
+<td>Experiment B in simulation, then robot A</td>
+<td>robot C</td>
+<td>robot A ground truth, tables</td>
+<td>robot numbers for A and C</td>
+</tr>
+<tr>
+<td>Fri 11</td>
+<td>robot B</td>
+<td>reruns</td>
+<td>experiments section</td>
+<td>full first draft</td>
+</tr>
+<tr>
+<td>Sat 12, Sun 13</td>
+<td>video</td>
+<td>reruns</td>
+<td>artifact; internal review</td>
+<td>reviewed draft, artifact</td>
+</tr>
+<tr>
+<td>Mon 14, Tue 15</td>
+<td></td>
+<td></td>
+<td>tighten, limitations, submit</td>
+<td>submitted</td>
+</tr>
+</tbody>
+</table>
+<p>If the go/no-go fails, the memo's fallback holds: submit with A and C and
+drop B's injection half, keeping the decomposition numbers from #238.</p>
+<p><strong>Cut order</strong>, from the memo and unchanged: lighting → the optional
+no-narrowing ablation → a second setup → fewer random scenes → B's injection
+half. Never cut: the temporal scenarios, the perturbation conditions, the
+hybrid VLM baseline, the failure-prediction metric, the determinism runs.</p>
+<h5>Cross-plan prerequisites</h5>
+<p>Decided on 2026-09-03: work the paper needs that another plan already owns
+stays in that plan, and the item here that needs it carries a blocker naming
+it. What the deadline still needs from each plan:</p>
+<ul>
+<li><strong>knowledge-directed-perception.</strong> Everything in its <code>surfaces</code>,
+  <code>request-language</code> and <code>method-selection</code> tracks that is built (#202, #205,
+  #216, #221, #222, #225, #227, #229, #231, #232, #236, #238, and #239's
+  knowledge-half commit) is consumed by <code>integrated-simulation-pipeline</code>; the
+  paper does not wait for those pull requests to land. Still needed and not
+  started there: <code>expectations-from-events</code>, which is the failure-detection
+  story and blocks <code>failure-taxonomy-and-typing</code>'s expectation-derived type
+  and <code>experiment-c-in-simulation</code>. Its three demo items are satisfied by
+  <code>tracy-demo-takes-the-integrated-branch</code> and the robot experiments here,
+  and its <code>imagination-world-rejects-what-a-predicate-refuses</code> item is
+  covered in narrow form by <code>physics-verification-backend</code>. Not needed for
+  the paper: <code>competing-explanations</code>, <code>how-to-look-concluded-from-the-request</code>,
+  <code>surfaces-found-by-looking</code>, <code>tune-detection-rules-against-the-camera</code>,
+  <code>robokudo-detector</code>, the rule-tree half of #239, and
+  <code>episode-replayed-into-the-world</code> (#246) unless a recording has to be
+  replayed for the temporal questions.</li>
+<li><strong>montessori-eql-stack.</strong> #244 and #256 are merged into the integrated
+  pipeline; #169 is not, since 2026-09-03 - #256 carries the monitor, the grasp
+  attachment and the recording, split out of #169 so the paper need not take the
+  cramera console. What is left of #169's debt here is the unbounded
+  <code>SimulationTimePacer.sleep()</code>, and that plan owns it. The console stack above #169 (#170, #164, #165, #167,
+  #168) is not needed for any number in the paper; #168's presets are reused
+  by <code>question-set-and-ground-truth</code> as EQL text only. The video may want the
+  console; that is a 12 to 13 September decision.</li>
+<li><strong>eql-verbalization.</strong> #33's reviewed scene wordings are what
+  <code>working-memory-verbalised</code> renders with; the item does not wait for #33 to
+  rebase or land. The two wording decisions open on #33 are the developer's.</li>
+<li><strong>Not on the deadline path:</strong> eql-performatives, eql-existential-semantics,
+  match-query-ergonomics (#192 is the developer's own), the rdr-* plans, and
+  every tooling plan.</li>
+</ul>
+<h5>What this plan takes priority over</h5>
+<p>Until 2026-09-15, the following in-flight work waits unless it unblocks an
+item here: the console UI items of <code>montessori-eql-stack</code> (#176, #177, #180,
+the written-action and detachable-panel items), <code>eql-performatives</code>,
+<code>eql-existential-semantics</code>, the <code>rdr-explanation</code> demo,
+<code>knowledge-directed-perception</code>'s <code>tune-detection-rules-against-the-camera</code>,
+<code>how-to-look-concluded-from-the-request</code>, <code>surfaces-found-by-looking</code> and the
+rule-tree half of #239, and <code>competing-explanations</code> unless Experiment A's
+false positives force it.</p>
+<h5>Memo corrections this plan carries</h5>
+<p>Things the memo states that the code contradicts, to be fixed in the memo
+and the paper rather than worked around:</p>
+<ul>
+<li>There is no in-hand event and no Flanagan model. In-hand is a twin
+  predicate; the pick-up detector is an EQL-rule detector over contact and
+  support.</li>
+<li>The board mesh is 0.865 times the real board (#236). Ground truth from the
+  twin and the no-hole-shape-knowledge condition both need the scale in the
+  twin first.</li>
+<li>Only one of the six recordings carries robot state. Every future take
+  records the transform tree and joint states with the camera.</li>
+<li>The continuous perception node cannot hold the frame budget once the hole
+  layout fit runs (0.56 s against 0.5 s); the snapshot design is what makes
+  that irrelevant.</li>
+</ul>
+<h5>Open questions for the developer</h5>
+<ul>
+<li>Which vision-language model and provider the baseline harness calls, and
+  whether the credentials can be in CI (they need not be; the live test is
+  skipped without them).</li>
+<li>Whether <code>knowledge-directed-perception</code>'s <code>expectations-from-events</code> is
+  still needed for the paper once <code>snapshot-working-memory</code> and
+  <code>failure-taxonomy-and-typing</code> exist, or whether the violated-expectation
+  report folds into the failure typing here.</li>
+</ul>
+<h5>2026-09-03: the foot item takes #256, not #169</h5>
+<p><code>integrated-simulation-pipeline</code> merged <code>montessori_fast_inline_monitor</code> (#169) for three
+things: the segmind event monitor, the attach/detach of a grasped shape behind
+<code>Context.update_world_model_attachment</code>, and the results recording. #169 had meanwhile
+become the cramera console — <strong>164 of its 272 files</strong> — so taking those three meant taking
+the viewer, its CI surface and its review.</p>
+<p>They are their own pull request now: <strong>#256 <code>montessori_monitor_and_recording</code></strong>, between</p>
+<h4>244 and #169 in stack #258. 35 files, and nothing in it imports <code>cramera</code>. The merge</h4>
+<p>order in this item's notes names #256 in #169's place; nothing else about the item
+changed.</p>
+<p>Three wrong-direction imports had to be straightened for that to be true, all on the
+<code>montessori-eql-stack</code> side: <code>MethodPatch</code> moved out of cramera to
+<code>krrood.patterns.method_patch</code>; <code>sorting_progress</code> reads <code>NumericPose</code> from
+<code>semantic_digital_twin.spatial_types.numeric</code>, where it is defined, rather than from
+cramera's re-export; and the one test that drives a monitor into
+<code>MontessoriLiveEventSource</code> stayed with that adapter. That plan's roadmap carries the
+detail.</p>
+<h6>What stays in #169, and why this item does not need it</h6>
+<p><code>franka_montessori_demo.py</code> and the three cramera adapters. <code>SortingRunControl</code> subclasses
+cramera's <code>LiveRunControl</code> ABC and its clock is <code>cramera.live.run_clock.RunClock</code>, so the
+demo entry point cannot cross without inverting that layer — scoped, and deliberately not
+done.</p>
+<p>It is not needed, and checking that is what settled the cut: <strong><code>tracy_icra</code> has no cramera
+and carries its own <code>montessori_demo.py</code>.</strong> So this item's "sorts the board headless" is
+met by that demo, not by <code>franka_montessori_demo</code>. Worth knowing for the meetings this
+item already plans to resolve: <code>tracy_icra</code> built its own <code>experiments/montessori/</code>
+package, and so did #169 — the directory exists on neither <code>main</code> nor #244, so the two
+packages meet here in full, not in a few files.</p>
+<h6>The blocker this item carried is down to one line</h6>
+<p>It named three coraplex failures, a hanging Tracy demo job and an unbounded
+<code>SimulationTimePacer.sleep()</code>. The first two are fixed — the gripper round (<code>7fa4b1936</code>)
+cleared them, and all 24 checks passed on #169's <code>c8bf6f05</code>. Only the unbounded <code>sleep()</code>
+stands, and it is a policy question rather than a bug to guess at: no test reaches it,
+only the demo scripts set <code>context.simulation_clock</code>, but a stalled simulation blocks a
+tick forever.</p>
+<h5>2026-09-03: what the scenario domain model is, and what migrates onto it</h5>
+<p><code>scenario-domain-model</code> (#261, off <code>main</code>, no dependencies) settled on this shape,
+drafted from the item's own notes and from what <code>control_loop_experiments</code> and
+<code>experiment_definitions</code> already do.</p>
+<p><strong>The model</strong>, in <code>experiments/src/experiments/scenarios/</code>:</p>
+<ul>
+<li><code>Scenario</code> builds its world, names its ordered steps, carries its <code>Goal</code> and says
+  whether it runs simulated or on the robot (<code>ExecutionKind</code>, defaulting to simulated,
+  because the plan runs every scenario in simulation first). Which robot it runs on is
+  the second bound generic parameter, read back through <code>SubClassSafeGeneric</code>, so the
+  robot is part of the type rather than an attribute that can disagree with it.</li>
+<li><code>Goal</code> answers whether the trial succeeded, from the world the trial finished in.</li>
+<li><code>Condition</code> switches one knowledge source off before a trial runs, so an ablation is
+  never a code branch inside an action.</li>
+<li><code>Perturbation</code> names the step it is applied at and the change it makes to the world.
+  A step is identified by a member of the scenario family's own <code>StepName</code> enum, so
+  neither the runner nor a perturbation carries a step spelled as a bare string.</li>
+<li><code>Metric</code> reads one number off a finished <code>Trial</code>; <code>Report</code> gathers a metric over the
+  trials as a mean, a standard deviation and a <code>ConfidenceInterval</code>.</li>
+<li><code>ScenarioRunner</code> runs the trials: build the world, apply the conditions, perform each
+  step with the perturbations due at it, ask the goal for the outcome, and record every
+  one of those as a typed entry of the trial's log.</li>
+</ul>
+<p><strong>Decisions taken while drafting it:</strong></p>
+<ul>
+<li><em>Conditions and perturbations belong to a run, not to a scenario.</em> The runner takes
+  them per run, so the same <code>Scenario</code> is what Experiment C runs under every ablation
+  and what Experiment A runs unablated. <code>knowledge-ablations</code> and <code>perturbations</code> add
+  members, not a second scenario each.</li>
+<li><em>The trial log is structured objects, not text.</em> One class per kind of entry, each
+  carrying its own subject, so <code>episodes-recorded-through-ormatic</code> maps them rather than
+  parsing them back out of a string. Nothing here writes them to a file or a database:
+  that is that item's, and this one only builds the record.</li>
+<li><em>The report is rendered by what already renders the experiments.</em> <code>Report</code> produces
+  <code>ExperimentResult</code> rows into an <code>ExperimentsTable</code> and renders through <code>TypstRenderer</code>;
+  <code>ConfidenceInterval</code> joins <code>MeanAndStandardDeviation</code> in <code>experiment_definitions</code>
+  rather than starting a second reporting vocabulary in the new package.</li>
+<li><em>The confidence interval is the normal approximation of the mean's standard error</em>,
+  built on <code>statistics.NormalDist</code> the way <code>free_space_volume_estimation</code>'s Wilson-score
+  interval already is. The Wilson interval stays where it is: it bounds a proportion, it
+  has its own tests, and moving it would be an unrelated refactor.</li>
+<li><em>The new classes stay out of the experiments ORM generation</em>, alongside the
+  control-loop scenario modules that are already ignored there. What of a trial and its
+  log becomes a mapped record is <code>episodes-recorded-through-ormatic</code>'s call, not a side
+  effect of adding the model.</li>
+</ul>
+<p><strong>What migrates onto it:</strong> <code>BenchmarkScenario</code> becomes a <code>Scenario</code>, keeping its seed
+configuration, its world preparation and its motion statechart, and the control-loop's
+own <code>ScenarioRunner</code> becomes a subclass of the model's runner that measures the control
+loop while the motion step runs, so one name means one operation across the workspace.
+The plotter mode and target frequency move from the runner onto the scenario, which is
+where "how to build the world" now lives.</p>
+<p><strong>A caveat worth knowing at review time:</strong> the control-loop tests that actually drive a
+runner are <code>@pytest.mark.slow</code>, and the default CI selection is <code>-m "not slow"</code>, so CI
+proves that the migrated benchmark imports, collects and aggregates, not that it still
+measures a motion. The benchmark wants one manual run before it is trusted.</p>
+<h5>2026-09-03: the recording is taken from #256 without the demo, and the demo branch takes its detectors</h5>
+<p>The developer asked what this plan actually needs from montessori-eql-stack's
+<code>montessori_monitor_and_recording</code> (#256), given that <code>tracy_icra</code> works, the
+knowledge-directed-perception segmind pull requests work, <code>tracy_icra_segmind</code> is waiting to
+be merged into <code>tracy_icra</code>, and what is really wanted is episodes recorded through ORMatic
+with the segmind events in them. Measured rather than argued, and the answer is: about 700 of</p>
+<h4>256's 7,124 lines.</h4>
+<h6>What is needed, and what is not</h6>
+<p>Needed. The <strong>three lines that make ORMatic able to hold a segmind event at all</strong> - the
+<code>experiments</code> ORM interface declaring <code>segmind</code>, <code>generate_orm</code> importing
+<code>segmind.orm.ormatic_interface</code>, and <code>experiments/pyproject.toml</code> declaring the dependency -
+and the <strong>recording trio</strong>: <code>results_database.py</code>, <code>results_recording.py</code> and
+<code>sorting_results.py</code>. That third one is the episode schema, and it imports exactly two things,
+<code>coraplex.plans.plan.Plan</code> and <code>segmind.datastructures.events.DetectionEvent</code>. Nothing in the
+trio touches the simulated world.</p>
+<p>Not needed. <code>world.py</code>, <code>semantics.py</code>, <code>hole_geometry.py</code>, <code>sorting_progress.py</code> and
+<code>insertion_diagnosis.py</code> are the Franka simulated demo's, and <code>tracy_icra</code> has its own
+<code>world.py</code>/<code>semantics.py</code>/<code>hole_geometry.py</code> already (they are close relatives - <code>world.py</code>
+differs by 46 lines out of 1,180 - but they are two branches' copies, not one file).
+<code>event_monitoring.py</code> is not needed either, because <code>tracy_icra_segmind</code> carries its own,
+<code>experiments/tracy_experiments/montessori/event_monitoring.py</code>, wired to
+<code>TracyMontessoriWorld</code> and the Robotiq grasp detectors.</p>
+<p>One correction to a premise: #256 has <strong>no cramera import anywhere</strong> - that was the whole
+point of splitting it out of #169. It is the demo and the world that do not belong here, not
+a viewer dependency.</p>
+<h6>Off main, which is what makes it small</h6>
+<p><code>experiments/montessori/</code> <strong>does not exist on <code>main</code> or on #244</strong>. It exists only on #256,
+which creates it, and on <code>tracy_icra</code>, which has its own. So the extraction cuts off <code>main</code>
+and creates that directory holding only the three recording modules - no perception
+subpackage, no simulated world, and nothing it needs newer than <code>main</code> (<code>Plan</code>,
+<code>DetectionEvent</code>, <code>to_dao</code> and <code>create_engine</code> are all there).</p>
+<h6>The defect that was found on the way</h6>
+<h4>256 had <strong>no <code>experiments/montessori/__init__.py</code></strong>, which #169 carries as an empty file. The</h4>
+<p>split checked out an explicit file list and missed it. <code>pkgutil.walk_packages</code> skips a
+directory without one - demonstrated, not assumed - so the ORM generator was never offered
+<code>SortingIterationResult</code> and <code>to_dao</code> would have had no DAO to find: the recording #256 exists
+to carry could not have worked. Added in <code>589aceefd</code> on that branch, and the extraction takes
+it too.</p>
+<p>That file is also where the <strong><code>Footprint</code> collision</strong> comes back. It is deferred rather than
+avoided: <code>experiments/montessori/perception/footprint.py</code> and
+<code>semantic_digital_twin...graph_of_convex_sets/plotting.py</code> both declare a <code>Footprint</code>, so the
+moment the <code>__init__.py</code> sits over <code>tracy_icra</code>'s perception package the generator emits two
+<code>FootprintDAO</code>s and SQLAlchemy refuses the mapping. <code>knowledge-directed-perception</code>'s
+<code>montessori-classes-in-the-orm</code> (#223) has already renamed the perception one to
+<code>RectifiedFootprint</code>; whichever branch first puts the two together takes that rename rather
+than writing a second one.</p>
+<h6>Merging tracy_icra_segmind is a real merge, and small</h6>
+<p>Not a fast-forward: <code>tracy_icra</code> has moved 20-odd commits past their merge base <code>e034fa791</code>,
+taking the perception work with it. Three conflicts, all identified: <code>experiments/
+requirements.txt</code> (deleted on <code>tracy_icra</code> for <code>main</code>'s inline-pyproject convention, which
+<code>test_dependency_declarations.py</code> tests; <code>flask</code> added on <code>tracy_icra_segmind</code>, so it moves to
+<code>pyproject.toml</code>), <code>segmind/datastructures/events.py</code> (both sides), and
+<code>tracy_experiments/pickup/pickup_demo_real.py</code> (both sides).</p>
+<h6>The collision this plan should actually worry about</h6>
+<p>Not #256. <strong><code>tracy_icra_segmind</code> and #244 independently rewrote the same five segmind files</strong>
+from <code>main</code> - <code>events.py</code>, <code>atomic_event_detectors_nodes.py</code>, <code>base.py</code>,
+<code>spatial_relation_detector_nodes.py</code>, <code>episode_segmenter.py</code> - and a test-merge conflicts in
+every one, plus <code>test_segmind_detectors.py</code>. <strong><code>tracy_icra</code> and #244 both rewrote the MuJoCo
+adapter</strong> as well: <code>multi_sim.py</code> is +272/-14 on <code>tracy_icra</code> and +650/-36 on #244, and both
+add a <code>panda.py</code> (add/add). So "is MuJoCo working well" is not a question about #256; it is
+this meeting, and it belongs to <code>integrated-simulation-pipeline</code> and
+<code>tracy-demo-takes-the-integrated-branch</code>. It also strengthens the case for splitting #244 by
+package, since its segmind third is exactly the colliding part.</p>
+<h6>Not taken from #256, and why</h6>
+<p><code>demonstrations.py</code>'s spin fix is real (a borrowed ROS context raises
+<code>ExternalShutdownException</code> out of a run that succeeded) but <code>tracy_icra</code> uses no
+<code>RobotDemonstrationRosSession</code>, so it is not this plan's. <code>Context.simulation_clock</code>,
+<code>Context.update_world_model_attachment</code>, <code>SimulationTimePacer</code> and the tick budget are all
+absent from <code>tracy_icra</code>; the attachment gate in particular exists so a simulator holding
+objects by contact does not leave the world model believing they are welded, which the MuJoCo
+demos may well want - left as the integration item's call rather than pulled in here.</p>
+<h5>2026-09-03: the recording branch, cut and what it had to rewrite on the way</h5>
+<p><code>run-results-recorded-into-sql</code> is #262, <code>claude/montessori-results-recording-jnrgfy</code>,
+off <code>main</code> with no dependencies. It takes exactly the file list the extraction analysis
+above settled on and nothing else, so the branch that lands is the measured ~700 lines
+rather than a judgement call made file by file at implementation time.</p>
+<p><strong>Taken, verbatim except for the docstrings:</strong> <code>experiments/montessori/__init__.py</code>
+(empty), <code>results_database.py</code>, <code>results_recording.py</code>, <code>sorting_results.py</code>, the three
+test modules that cover them, the <code>montessori_results_session</code> fixture in
+<code>test/experiments_test/conftest.py</code>, and the four declarations - <code>experiments</code> declaring
+<code>("coraplex", "segmind")</code> in <code>orm_interfaces.py</code>, <code>generate_orm.py</code> importing
+<code>segmind.orm.ormatic_interface</code>, and <code>experiments/pyproject.toml</code> declaring <code>segmind</code>.</p>
+<p><strong>Confirmed before cutting, not assumed:</strong> every import the three modules make resolves
+on <code>main</code> already - <code>coraplex.plans.plan.Plan</code>, <code>segmind.datastructures.events</code>,
+<code>krrood.ormatic.data_access_objects.helper.to_dao</code>, <code>krrood.ormatic.utils.create_engine</code>
+and <code>krrood.exceptions.DataclassException</code> are all there, and
+<code>experiments/src/experiments/montessori/</code> exists on neither <code>main</code> nor #244. So the
+branch is additive: it creates the directory and edits four existing files by a line
+each.</p>
+<h6>The dangling references were wider than the item's notes named</h6>
+<p>The item asked for the three modules' docstrings to be rewritten because they name
+<code>franka_montessori_demo</code>, <code>insertion_experience</code> and <code>run_montessori_demo.sh</code>, none of
+which exist on <code>main</code>. Reading them through turned up two more of the same kind, both
+outside a docstring:</p>
+<ul>
+<li><code>DEFAULT_DATABASE_URI</code>'s docstring cites <code>coraplex_panda_demo/demo3.py</code> as the
+  precedent for reusing the <code>semantic_digital_twin</code> role. That path does not exist on
+  <code>main</code> either. The reasoning is kept and the citation dropped.</li>
+<li>Both <code>suggest_correction()</code> methods tell the reader to provision the database "as
+  described in <code>experiments/src/experiments/montessori/README.md</code>". That README exists
+  on no branch at all - not even #256. These are strings a user reads at a failure, so
+  they are repointed at
+  <code>semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql</code>,
+  which does exist on <code>main</code> and is what <code>DEFAULT_DATABASE_URI</code>'s own docstring already
+  names as the provisioning step.</li>
+</ul>
+<p>The <code>franka_montessori_sorting_results</code> database name in <code>DEFAULT_DATABASE_URI</code> was
+initially left alone, on the reasoning that it is a value rather than a reference and
+that renaming it would silently point this branch at a different database from the demo
+branch recording to the same one. <strong>The developer overrode that in review on 2026-09-05</strong>
+(r3941124169, r3941124727), asking why a name tied to one demo survives on a branch the
+Tracy demo will use too.</p>
+<p>Renamed in <code>199c478ac</code> to <code>montessori_sorting_results</code>, with
+<code>FRANKA_MONTESSORI_SORTING_DATABASE_URI</code> becoming <code>MONTESSORI_SORTING_DATABASE_URI</code>.
+Neutral rather than Tracy-specific, which is a deviation from the literal ask and is
+flagged as such on both threads rather than resolved: naming the other robot reproduces
+the same problem one demo later, since #256's Franka demo and the Tracy demo both record
+here and the plan has every scenario, simulated and real, eventually recording through
+this.</p>
+<p>The consequence the original reasoning named is real and now stands as a note on #256
+rather than as a reason not to rename: until that branch takes the same rename, the two
+record to different databases on the same host.</p>
+<p>The four <code>franka_montessori_sorting_results</code> literals in the two test modules moved with
+it. They are throwaway URIs rather than copies of <code>DEFAULT_DATABASE_URI</code> - the tests
+assert that whichever database name they passed comes back in the failure message - so
+they did not force the rename, but leaving them would have kept the word the review
+objected to. That divergence is the first place these test modules stop being
+byte-identical to #256's.</p>
+<h6>The <strong>init</strong>.py, and why a test rather than a comment proves it</h6>
+<p><code>pkgutil.walk_packages</code> skips a directory with no <code>__init__.py</code>, so without that empty
+file the ORM generator is never offered <code>SortingIterationResult</code> and <code>to_dao</code> has no DAO
+to find - the recording could not work at all. That is demonstrated rather than asserted
+in prose: <code>test_montessori_sorting_results.py</code> imports <code>ShapeInsertionResultDAO</code> from the
+generated <code>experiments.orm.ormatic_interface</code> and round-trips a result through it, so
+deleting the <code>__init__.py</code> fails a test rather than quietly disabling the feature. This
+is the defect #256 carried until <code>589aceefd</code>.</p>
+<h6>Verification, and what it does not cover</h6>
+<p><code>scripts/regenerate_all_orm.py</code>, then the three new test modules plus
+<code>test/version_test/test_dependency_declarations.py</code> - the last being what proves the
+<code>pyproject.toml</code> line is not merely cosmetic, since <code>sorting_results.py</code> is the first
+file under <code>experiments/src</code> to import <code>segmind</code>.</p>
+<p>Not covered, and deliberately: nothing here exercises a Postgres database. The tests
+reach a Postgres URI only on a port nothing listens on, to prove an unreachable database
+falls back rather than fails, so CI needs no credentials and no service.</p>
+<h6>The Footprint collision is recorded on the pull request, not fixed on it</h6>
+<p>The <code>__init__.py</code> is what will eventually trigger it: it makes ORMatic walk
+<code>experiments/montessori</code>, and on <code>tracy_icra</code> that directory holds
+<code>perception/footprint.py</code>, whose <code>Footprint</code> collides with
+<code>semantic_digital_twin...graph_of_convex_sets.plotting.Footprint</code> - two <code>FootprintDAO</code>
+classes, and SQLAlchemy refuses the mapping. Nothing on <code>main</code> triggers it today.</p>
+<h4>223 already renames the perception one to <code>RectifiedFootprint</code>, so this branch writes</h4>
+<p>no second rename; #262's description carries the hazard for whichever branch first puts
+the two together.</p>
+<h6>What the branch could and could not prove in a session container</h6>
+<p>Green here: <code>test_dependency_declarations.py</code> (20 passed, and failing as expected with the
+<code>segmind</code> line removed, so the declaration is load-bearing),
+<code>test/cognitive_robot_abstract_machine_test/</code> (61 passed, covering the
+<code>("coraplex", "segmind")</code> declaration and its generation order), and the <code>__init__.py</code>
+claim itself - <code>pkgutil.walk_packages</code> over <code>experiments</code> yields the three montessori
+modules with the file present and nothing with it removed.</p>
+<p>Not runnable there: <code>scripts/regenerate_all_orm.py</code> and the three new test modules, all
+for the same reason - no ROS. The generator dies resolving giskardpy's
+<code>DebugExpressionPublisher</code>, <code>segmind.datastructures.events</code> imports <code>geometry_msgs</code>, and
+the <code>experiments_test</code> conftest imports <code>rclpy</code>. The regeneration fails identically on
+unmodified <code>main</code> in that container, which is what settles it as the environment rather
+than the change; CI runs both inside the ROS image. Worth knowing for every later item of
+this track: anything touching the generated <code>experiments</code> interface is CI-verified, not
+session-verified.</p>
+<h6>The tracy_icra_segmind merge, as it actually resolved</h6>
+<p>Merged as <code>a80e86926</code> and pushed to <code>tracy_icra</code> on 2026-09-03. No pull request: a
+merge between two of the developer's own branches, done on their explicit instruction.</p>
+<p>The three conflicts the plan predicted were the three that occurred, against merge base
+<code>e034fa791</code> with <code>tracy_icra</code> 472 commits past it.</p>
+<p><strong><code>experiments/requirements.txt</code></strong> stayed deleted, and <code>flask</code> moved to
+<code>experiments/pyproject.toml</code> as planned. What the plan did not anticipate is that the
+merge is also the moment <code>experiments/src</code> first imports <code>segmind</code> at all -- four
+modules do, three of them new here -- so <code>test_imported_workspace_members_are_declared</code>
+demanded <code>segmind</code> be declared alongside <code>flask</code>. Confirmed by running that test with
+the declaration removed: it fails, and passes with it.</p>
+<p><strong><code>segmind/datastructures/events.py</code></strong> took <code>tracy_icra_segmind</code>'s content whole -- the
+<code>Body | Region</code> <code>with_object</code>, <code>GraspEvent</code>, <code>LossOfGraspEvent</code>, <code>LiftEvent</code>,
+<code>StopLiftEvent</code>, <code>InsertionEvent.through_hole</code> as a field rather than a property, and
+the switch from <code>tracked_object.collision.combined_mesh</code> to <code>tracked_object.combined_mesh</code>
+so a hole's <code>Region</code> root works too -- laid over <code>tracy_icra</code>'s rename of <code>BoundingBox</code>
+to <code>VolumetricBoundingBox</code>. That rename is not optional: <code>BoundingBox</code> no longer exists
+in <code>semantic_digital_twin.world_description.geometry</code> on <code>tracy_icra</code>, so the incoming
+spelling would not have imported. <code>Region.combined_mesh</code> does exist there, so the other
+half of the change stands as written.</p>
+<p><strong><code>pickup_demo_real.py</code></strong> kept both sides: <code>tracy_icra</code>'s <code>--record</code> rosbag arguments and
+this branch's event dashboard and slip watch, with argument parsing ahead of the dashboard
+so a bad flag exits before a web server starts.</p>
+<h6>The one judgement call, recorded because it is a hardware number</h6>
+<p><code>SHAPE_TABLE_CLEARANCE</code> and <code>GRASP_HEIGHT_OFFSET</code> looked like a value conflict and were
+not. <code>tracy_icra_segmind</code> deleted <code>SHAPE_TABLE_CLEARANCE</code> outright: it stopped spawning
+shapes hovering above the table (so SegMind's own support and contact detectors see them
+resting on it) and raised the <em>grasp target</em> by <code>GRASP_HEIGHT_OFFSET</code> instead, which is
+the same physical distance under a different decomposition. Both of the old constant's
+readers are gone, so keeping it would have left a dead name and lost the offset.</p>
+<p><code>tracy_icra</code> had meanwhile tuned that distance from 0.032 to 0.04 on hardware, in
+<code>e8aef78f6</code> ("Added recording for rosbags"), alongside the same move for <code>PLACE_HOVER</code>.
+The merge carries the 0.04 onto <code>GRASP_HEIGHT_OFFSET</code>. Taking the incoming 0.032 would
+have silently reverted a hardware tuning; taking the old name would have broken the new
+design. <strong>If 0.04 was tuned against the old spawn-hovering geometry specifically rather
+than against where the arm has to reach, this is the line to revisit</strong> -- it is the only
+number in the merge that came from a run rather than from either branch's text.</p>
+<h6>The silent-conflict sweep, and what it found</h6>
+<p>Six passes over the merged tree, none of which an import resolver or pyflakes would have
+made:</p>
+<ol>
+<li><strong>Module-level name inventory</strong> on both sides against the merge base. <code>tracy_icra</code>
+   removed twelve names in the four source packages; every one turned out to have moved
+   modules rather than vanished, and every reader still resolves. <code>tracy_icra_segmind</code>
+   removed exactly one, <code>SHAPE_TABLE_CLEARANCE</code>, handled above.</li>
+<li><strong>Import resolution</strong> over the whole tree without executing anything, diffed against
+   both parents. The merge introduces no unresolved import.</li>
+<li><strong>Identifier-shaped string literals</strong> in every merged-in file, checked against what the
+   tree defines. All resolve -- including <code>_KNUCKLE_JOINT_TEMPLATE</code>'s
+   <code>"{side}_robotiq_85_left_knuckle_joint"</code> and <code>"/{side}_gripper/joint_states"</code>, which
+   are the names <code>TracyJoint</code> and Giskard's Tracy config still use.</li>
+<li><strong>Attribute reads</strong> in every merged-in file. Everything unmatched is stdlib or
+   third-party; nothing from the workspace is dangling. <code>end_effector.thumb.tip</code> and
+   <code>.finger.tip</code> resolve through the <code>HasTwoFingers</code> mixin that <code>TracyLeftGripper</code> carries.</li>
+<li><strong>Keyword arguments</strong> against the signatures the merged tree declares, diffed against
+   the same sweep run on <code>tracy_icra_segmind</code> itself. The merge introduces none.</li>
+<li><strong>Enum members</strong> named by merged-in files, against 204 enums. All resolve.</li>
+</ol>
+<p>The near miss worth naming: <code>grasp_detector_nodes.py</code> calls
+<code>contact(object, finger_tip)</code> and expects a bool, while <code>tracy_icra</code> rewrote
+<code>reasoning/predicates.py</code> (+567/-195) and turned <code>contact</code> from a plain function into
+<code>symbolic_callable_to_function(InContactWith)</code>. That is safe -- the wrapper returns the
+computed value when no argument is a variable, which is what it exists for -- but only
+because the migration was built to preserve the name's call behaviour. The base version's
+<code>threshold</code> parameter is now <code>maximum_distance</code>; the single call site passes neither.</p>
+<h6>Tests were not run here, and why</h6>
+<p><code>test/segmind_test</code> and <code>test/experiments_test</code> cannot run in a Claude Code web session:
+<code>segmind.datastructures.events</code> imports <code>geometry_msgs.msg</code> at module scope, and <code>rclpy</code>
+has no PyPI distribution at all. CI runs both inside a ROS container
+(<code>ghcr.io/&lt;repo&gt;:jazzy</code>, with <code>/opt/ros/cram-env</code>), which is where they have to be run.
+The local <code>uv</code> is also older than CI's and cannot parse the root <code>pyproject.toml</code>'s
+<code>override-dependencies</code> map form.</p>
+<p>What was verified locally instead: every file the merge touches parses, the six sweeps
+above, and <code>test_dependency_declarations.py</code> executed directly against all ten workspace
+members -- twenty checks, all passing, which is the test that governs the
+<code>requirements.txt</code> resolution.</p>
+<p><code>ci.yml</code> triggers on push to <code>main</code> and on pull requests, so this push to <code>tracy_icra</code>
+runs nothing. <strong>The suites still need a run</strong> -- on the next pull request that carries
+this branch, or by hand in the container.</p>
+<h5>2026-09-04: the integrated branch, its merge order and the four meetings it resolves</h5>
+<p><code>integrated-simulation-pipeline</code> is #265, <code>claude/icra-experiments-simulation-pipeline-w4ep7n</code>,
+cut off <code>main</code> with no dependencies. The merge order is the item's own, with one branch added
+and one done-criterion changed; both are recorded below rather than left to the diff.</p>
+<p>The order, and what each merge actually cost, measured by a dry run over the real branches
+before anything was committed:</p>
+<table>
+<thead>
+<tr>
+<th>step</th>
+<th>branch</th>
+<th>conflicts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>#244 <code>sdt_segmind_krrood_from_fast_monitor</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>2</td>
+<td>#256 <code>montessori_monitor_and_recording</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>3</td>
+<td>#262 <code>claude/montessori-results-recording-jnrgfy</code></td>
+<td>3 add/add: the recording trio</td>
+</tr>
+<tr>
+<td>4</td>
+<td>#229 <code>sdt_predicates_answer_whether_they_hold</code></td>
+<td><code>reasoning/predicates.py</code> and its test</td>
+</tr>
+<tr>
+<td>5</td>
+<td>#238 <code>claude/kdp-search-constraints-pfaph7</code></td>
+<td><code>world.py</code>, <code>semantics.py</code>, <code>hole_geometry.py</code> and their three tests</td>
+</tr>
+<tr>
+<td>6</td>
+<td>#236 <code>claude/plan-item-kickoff-ge8541</code></td>
+<td><code>perception/pipeline.py</code>, <code>perception/recorded_setup.py</code></td>
+</tr>
+<tr>
+<td>7</td>
+<td>#231 <code>claude/choose-detection-method-gf64yp</code></td>
+<td>four perception modules, <code>geometry.py</code>, one test</td>
+</tr>
+<tr>
+<td>8</td>
+<td>#223 <code>claude/montessori-classes-orm-s7vxu1</code></td>
+<td>the <code>RectifiedFootprint</code> rename over the perception tips</td>
+</tr>
+<tr>
+<td>9</td>
+<td>#239 <code>3a493be9</code> only</td>
+<td>cherry-pick, the measured colours and finishes</td>
+</tr>
+</tbody>
+</table>
+<h6>The three meetings the item predicted, and the fourth it did not</h6>
+<p>Predicted and confirmed: <strong>#262 against #256</strong> on the recording trio, resolved by taking</p>
+<h4>262's copies, which are the same modules with the dangling references repointed;</h4>
+<p><strong>#244 against #229</strong> on <code>reasoning/predicates.py</code> (+184 against a 759-line rewrite) and
+<code>geometry.py</code>; and <strong>#231's <code>EdgeFitDetector</code> rename</strong>, which arrives with step 7.</p>
+<p>Not predicted, and the one that would have stopped the branch: **the perception stack and</p>
+<h4>256 each build their own <code>experiments/src/experiments/montessori/</code>**. The directory exists</h4>
+<p>on neither <code>main</code> nor #244 — #202 creates it with 43 files, #256 with 10, and their
+<code>world.py</code>, <code>semantics.py</code> and <code>hole_geometry.py</code> are close relatives rather than one file
+(1,180 against 1,149 lines; 479 against 318; 236 against 293). The item's notes named this
+collision as <code>tracy_icra</code> against #169; on this branch it is the perception lineage against</p>
+<h4>256, and it meets in full.</h4>
+<p>The perception lineage's copies survive. They are the larger, reviewed lineage that is
+landing on <code>main</code> through #202, and the extraction analysis of 2026-09-03 had already judged</p>
+<h4>256's copies to be "the Franka simulated demo's". What the monitor needs from them is</h4>
+<p>narrow — <code>event_monitoring.py</code> imports exactly <code>MontessoriShape</code> from <code>semantics</code> and
+<code>MontessoriWorld</code> from <code>world</code>, both of which the perception copy defines — so the merge
+order puts #256 before #238 and takes #238's side, and only what the monitor needs and the
+perception copy lacks is carried forward.</p>
+<h6>#223 joins the merge list, because this is the branch that puts the two Footprints together</h6>
+<p><code>roadmap.md</code> already assigned the <code>Footprint</code> rename to "whichever branch first puts the two
+together". That is this branch, and the trigger is exactly the one predicted: #262's
+<code>experiments/montessori/__init__.py</code> makes <code>pkgutil.walk_packages</code> descend into the
+directory, where the perception stack's <code>perception/footprint.py</code> declares a <code>Footprint</code>
+that collides with <code>semantic_digital_twin...graph_of_convex_sets.plotting.Footprint</code>. Two
+<code>FootprintDAO</code> classes and SQLAlchemy refuses the mapping.</p>
+<h4>223 already renamed the perception one to <code>RectifiedFootprint</code>, so the branch merges #223</h4>
+<p>rather than writing a second rename. It goes in after the perception tips, not before, so
+the rename lands over them instead of being conflicted against by each in turn.</p>
+<h6>The done-criterion moved, because neither demo entry point lands here</h6>
+<p>The item's notes ask for <code>franka_montessori_demo</code> and the Tracy simulated demo to sort the
+board headless. Checked rather than assumed: <code>franka_montessori_demo.py</code> exists only on</p>
+<h4>169, which is deliberately excluded, and <code>montessori_demo.py</code> only on <code>tracy_icra</code>, which</h4>
+<p>this branch does not merge — <code>tracy-demo-takes-the-integrated-branch</code> merges in the other
+direction, and later. So as the merge list stands the criterion is not checkable on this
+branch at all.</p>
+<p>Settled with the developer on 2026-09-04: <strong>this branch writes its own headless integration
+test</strong> over the merged world, event monitor and predicates, and the demo proof belongs to
+<code>tracy-demo-takes-the-integrated-branch</code>. Porting a copy of <code>montessori_demo.py</code> here was
+the alternative, and it was rejected because a copy carrying no shared history buys a
+checkable criterion now at the price of an add/add conflict when the two branches meet.</p>
+<h6>What this branch cannot verify, and who does</h6>
+<p><code>scripts/regenerate_all_orm.py</code>, <code>test/experiments_test</code> and <code>test/segmind_test</code> do not run
+in a Claude Code session container: the generator dies resolving giskardpy's
+<code>DebugExpressionPublisher</code>, <code>segmind.datastructures.events</code> imports <code>geometry_msgs</code> at
+module scope, and <code>rclpy</code> has no PyPI distribution. This is the same limit #262 recorded,
+and it applies to every item of this track. CI runs both inside the ROS image, so the merge
+resolutions and the ORM regeneration are CI-verified rather than session-verified.</p>
+<h5>2026-09-04: what the merge actually cost, and the two branches it could not take</h5>
+<p>Six of the nine steps landed on #265. The three predicted meetings resolved as planned;
+a fourth appeared that the notes had named in the wrong pairing; and two branches turned
+out not to be mergeable as text at all.</p>
+<h6>predicates.py is rewritten by three branches, not two</h6>
+<p>The item's notes predicted #244 against #229. The perception lineage rewrites the same
+file too, +1107/-257, and its version is a superset of #229's by name - the two carry the
+same class design, including the verbalization fragments, though their merge base is
+<code>main</code> and neither is an ancestor of the other.</p>
+<p>So #238's copy takes the structure and #244's numeric readings are re-applied over it.</p>
+<h4>238 had meanwhile redesigned the view-relation machinery entirely - <code>axis</code> as a</h4>
+<p><code>ClassVar[SpatialVariables]</code> plus a <code>positive_side</code> flag, in place of #244's <code>ViewAxis</code>
+enum and <code>signed_distance_along_axis</code> - so the fast path is re-expressed rather than
+restored: <code>unit_axis_of</code> is the one home for the direction maths, and both <code>_direction</code>
+and <code>SupportedBy</code> read through it. <code>Below(...)()</code> and #244's numeric reading were checked
+to be the same comparison before one replaced the other.</p>
+<p>This matters because #244's four tests assert the path builds nothing symbolic, and they
+are in the tree. Dropping the fast path would have failed them, and AGENTS.md forbids
+adjusting a test to fit.</p>
+<h6>the montessori package meets in full, and it costs one module</h6>
+<p>Predicted, but as <code>tracy_icra</code> against #169. On this branch it is the perception lineage
+against #256. The perception copies survive, for the reasons the extraction analysis of
+2026-09-03 already gave.</p>
+<p>The cost is <code>sorting_progress.py</code>. It reads <code>shape_key</code>, <code>object_name</code>,
+<code>insertion_target_for</code> and <code>has_fallen_through</code>, all four of which belong to #256's
+semantics copy and have no counterpart in the surviving one, whose vocabulary is
+<code>hole_for</code>, <code>fits_through</code> and <code>cross_section_size</code>. Nothing imports it but its own test,
+and the same analysis had already called it the Franka demo's, so it was removed rather
+than kept alive by porting four members of the losing copy onto the winning one.</p>
+<h6>the Footprint rename was taken without its branch</h6>
+<p>The hazard fired exactly as predicted, and it is blocking rather than cosmetic: without
+the rename the ORM regeneration this item owes cannot run at all. #223's identifier was
+applied directly, character for character, so the two do not fight when #223 lands.</p>
+<h6>#231 and #223 both fork before #236 rewrote BoardDetector</h6>
+<p>This is the finding that stopped the merge, and it is one finding covering both branches.
+Neither is a text merge onto this branch: each has to be re-applied onto a detector that
+has since been rewritten.</p>
+<h4>231 is the harder half, and it is a design synthesis rather than a conflict resolution.</h4>
+<p>It renames <code>LoosePieceDetector</code> to <code>EdgeFitDetector</code>, makes it a <code>PieceDetector</code> declaring
+a <code>capability(look)</code>, adds <code>ColorBlobDetector</code> beside it, and restructures the pipeline's
+<code>look()</code> around <code>detector_rules.detectors_for(...)</code>. The perception tip meanwhile grew the
+same class expectation-driven and colour-narrowed search with <code>Occupancy</code> de-duplication.
+A merged pipeline has to do both. That is ~200 conflicted lines over 10 hunks through the
+core perception loop, and nothing on this branch can be executed to check the result.</p>
+<p>Left for a deliberate pass rather than resolved under the deadline. The #239 cherry-pick
+waits on it, since <code>3a493be9</code> sits on top of #231.</p>
+<h6>nothing on this branch has been run, and that is now measured rather than assumed</h6>
+<p>The workspace does not install in a session container: <code>random_events</code> needs a C++ library
+that will not build there, and the ROS imports #262 already recorded stand. Verification
+was static - whole-tree parse, no leftover markers, every workspace import in the merged
+and edited files resolved against what its module defines, and the four missing members
+confirmed absent before <code>sorting_progress.py</code> was removed.</p>
+<p>One process note worth keeping: <code>format_docstrings.py</code> over "modified files" reformats
+everything a merge dragged in, which on an integration branch is most of the tree and
+would conflict with every owning branch. It was restricted to the files this branch
+actually edited.</p>
+<h6>2026-09-04: a fourth experiment, because long-term memory was built but never scored</h6>
+<p>The developer noticed that the plan tracks no long-term-memory <em>experiment</em> and asked
+where those items were. They were half there. <code>episodes-recorded-through-ormatic</code> and
+<code>episodes-queried-by-eql</code> build the machinery, <code>segmind-detectors-on-the-demo-branch</code> is
+<code>done</code> (and so hidden by the dashboard's default "hide done items" toggle, which is why it
+looked absent), and the segmind events are in the episode model's own notes. What was
+missing was anything that <em>measures</em> it: Experiments A, B and C all ask about the current
+scene, <code>experiment-a-in-simulation</code> depends on <code>episodes-recorded-through-ormatic</code> but not
+on <code>episodes-queried-by-eql</code>, so the long-term-memory spelling of the temporal bucket that
+<code>question-set-and-ground-truth</code> explicitly calls for had no consumer. The plan's own
+description calls long-term memory a deliverable, and it was producing no number.</p>
+<h6>What Experiment D asks</h6>
+<p>The same four buckets, asked of the history rather than the scene: has this happened to
+the robot before and in which episode; what the goal and the conditions were at that time;
+what differed between the earlier episodes and the current one that bears on the question;
+and how a failure was resolved the last time it happened. That last one is why
+<code>episodes-recorded-through-ormatic</code> grew a line: it recorded the failure type observed and
+predicted, but not what was <em>done</em> after the failure, and nothing else in the record
+carries the resolution.</p>
+<h6>The three decisions taken, and why</h6>
+<p><strong>Its own experiment, not a fourth bucket of A.</strong> A and D put different systems under
+test — one VLM looking at an image of the current scene, one VLM reading a corpus of past
+episodes — with different ground truth and a different fairness argument. Folding them
+makes A's per-bucket accuracy table mix two incomparable systems.</p>
+<p><strong>Simulation only.</strong> The questions are about recorded episodes, so they do not care
+whether an episode came from the robot or the simulator; the robot episodes A and C record
+join the same corpus. This buys a whole experiment for no robot time. The condition is
+that simulated episodes must record video and simulation data, which is
+<code>episode-artifacts-recorded</code>.</p>
+<p><strong>The VLM gets the whole corpus, capped so it fits — not a retrieval step.</strong> Retrieval was
+considered first and rejected: it scales to any corpus, but a wrong answer is then
+ambiguous between "retrieval never surfaced the episode" and "the model had it and
+reasoned wrong", which is exactly the distinction the experiment exists to make. Capping
+the number of episodes a question may reach over, derived from what the model's context
+holds once the video frames are sampled, means the model is provably given everything the
+SQL backend can see over the same episodes — so a loss is a reasoning failure. The cap
+becomes the baseline's stated limitation in the paper.</p>
+<p>That decision also simplifies the availability metric the developer asked for. With one
+shared corpus rather than a per-system retrieval, <em>whether the information needed to answer
+is present at all</em> is a property of the corpus, measured once, not a per-system score. A
+question nothing could have answered is then scored apart from one both systems had the
+evidence for.</p>
+<h6>Why <code>episode-artifacts-recorded</code> is separate rather than folded</h6>
+<p>The scope check (<code>check_scope_overlap.py --base origin/main</code>) found no in-flight branch
+sharing this work's paths: #265, #262, #256 and <code>tracy_icra</code> share none, and #261 shares
+only <code>experiment_definitions.py</code>. <code>experiments/src/experiments/scenarios</code> and
+<code>experiments/src/experiments/montessori</code> are absent from <code>main</code> because #261 and #262
+create them — unlanded parents this sits on, not owners of it.</p>
+<p>The one real fold candidate was <code>episodes-recorded-through-ormatic</code>, which is
+<code>not_started</code> with no branch. It stayed separate because the artifacts need
+<code>simulated-camera-feeds-perception</code> (lane 1) for the camera frames, and folding would put
+lane 2's foot item — which four other items wait on — behind lane 1's second item.</p>
+<p>Duplicate-intent scan: <code>montessori_event_replay</code> (#165) records <code>DemoRecording</code> /
+<code>RecordedFrame</code>, but those are world-state snapshots in a rolling in-memory buffer for the
+console's replay viewer, inside <code>cramera</code>, which this plan excludes. Not a per-episode
+video on disk, so not a duplicate.</p>
+<h6>Left to the developer</h6>
+<p>The budget table above allocates twelve days across three experiments. A fourth is not in
+it, and re-budgeting an 11-day deadline is the developer's call, not something to invent
+here. One suggestion to accept or reject: if time runs short, cut D's VLM arm first and
+keep the EQL-over-SQL numbers, which need no external model or credentials — the same
+shape the memo's cut order already takes with B's injection half.</p>
+<p>The open question about which vision-language model and provider the baseline calls now
+covers D as well, and gains a second part: how many episodes fit one context once video
+frames are sampled, which is what sets D's cap.</p>
+<h5>2026-09-05: the expectation mechanism gets its own simulated test</h5>
+<p>Raised by the developer on knowledge-directed-perception's #257 (r3940274577): <em>"I want
+to test that with an actual robot plan execution in simulation with perturbations, check
+if that is already in the icra-experiments plan such that it tests this whole expectation
+process or not, if not then we need to add it there."</em></p>
+<p>It was not. <code>perturbations</code> builds the perturbations and <code>experiment-c-in-simulation</code>
+runs the insertion trial under every condition and types every failure, but nothing
+between them asserts that the <em>expectation</em> an insertion arms is contradicted in the
+relation the perturbation actually breaks: Experiment C reads the failure type off the
+evidence, and a wrong expectation report would be typed and counted rather than caught.
+<code>failure-taxonomy-and-typing</code> and <code>experiment-c-in-simulation</code> both carry a blocker naming
+expectations-from-events as their input, which is the sign that its correctness was being
+assumed downstream rather than tested anywhere.</p>
+<p>So <code>expectation-checked-under-perturbation-in-simulation</code> is new, in the <code>failure</code> track,
+depending on <code>perturbations</code> and <code>integrated-simulation-pipeline</code>. Its four cases are the
+four outcomes the report can have, since the relation that fails names the perturbation
+and an unperturbed run fails none, and one of them matters beyond the mechanism: it is the
+first check of the <em>success</em> case against a real look, where a piece sunk in its hole has
+to be told from one standing over it. On #257 that case is checked only against a stated
+sighting, because a look reports a piece's height from the depth image with a fallback
+that puts every unresolved piece standing on the plane it was found in.</p>
+<p>Recorded here rather than on that plan because the test belongs to the pipeline that can
+run a plan, and that pipeline is this plan's <code>integrated-simulation-pipeline</code>.</p>
+<h5>2026-09-05: the scenario model is bound to the twin, and what that cost</h5>
+<p>First review round on #261 (four threads, all four taken as asked). Recorded because two
+of them change the model's shape rather than its wording.</p>
+<p><strong>Deleted <code>ExecutionKind</code>.</strong> <code>coraplex.datastructures.enums.ExecutionType</code> already spells
+<code>REAL</code> and <code>SIMULATED</code> (plus <code>SEMI_REAL</code> and <code>NO_EXECUTION</code>), <code>experiments</code> already
+depends on coraplex, and <code>real_stretch_apartment_demo</code> already uses it. The field is
+<code>execution_type</code> now, on <code>Scenario</code>, <code>TrialStarted</code> and <code>Trial</code> alike.</p>
+<p><strong>Bound both type parameters to the twin</strong>: <code>WorldType</code> to
+<code>semantic_digital_twin.world.World</code>, <code>RobotType</code> to
+<code>semantic_digital_twin.robots.robot_parts.AbstractRobot</code>. They were left open so the model
+and its tests would import without the twin, which is what let them run in a session
+container - a container limitation rather than a design argument, since every real
+consumer imports the twin anyway.</p>
+<p>The cost is real and lands entirely on the control loop benchmark: <code>GiskardTester</code> is not
+a <code>World</code>, so <code>BenchmarkScenario</code> can no longer call its harness one. It builds the
+harness, holds it for as long as a trial runs in it, and hands the runner the <code>World</code> the
+harness manages (<code>GiskardTester.world</code>); its own hooks - <code>seed_joint_state</code>, <code>prepare</code>,
+<code>build_motion_statechart</code> - still take the <code>BenchmarkRobot</code>, because the scenario passes
+it to them rather than the runner.</p>
+<p>That in turn re-typed the runner. <code>ScenarioRunner</code> was <code>Generic[WorldType, RobotType]</code>,
+where the robot existed only to keep <code>ControlLoopMeasurement.perform_step</code> substitutable.
+It is <code>Generic[ScenarioType, WorldType]</code> now, which is what a measuring runner actually
+needs: <code>ControlLoopMeasurement(ScenarioRunner[BenchmarkScenario, World])</code> reads the
+harness off the scenario it was handed without narrowing what <code>perform_step</code> accepts, and
+the robot stays part of the scenario's type where it belongs.</p>
+<p><strong>The trial's clock moved onto its log.</strong> <code>time.perf_counter</code> was spelled at every log
+entry, so the elapsed time was subtracted in four places. <code>TrialLog</code> holds <code>started_at</code>
+and answers <code>elapsed_seconds</code> off <code>time.monotonic</code>, which is both the abbreviation-free
+name and the right clock for a duration.</p>
+<h6>The container can run these tests after all</h6>
+<p>Worth recording for every later item of this lane, because the earlier note here said the
+opposite. The tests now import <code>World</code> and <code>AbstractRobot</code>, neither of which imports in a
+session container - <code>semantic_digital_twin.world</code> wants <code>giskardpy_bullet_bindings</code> and
+<code>robots.robot_parts</code> wants ROS's <code>xacro</code>. Both are stubbable: two empty modules on
+<code>PYTHONPATH</code>, plus <code>giskardpy/src</code> on it, and <code>World()</code> constructs and the 46 tests run.
+So a scenario-model test is session-verifiable, not only CI-verifiable. What still is not
+is anything touching the generated ORM interface or <code>segmind</code>.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-foundation">
+        <div class="wave-eyebrow">One pipeline every scenario runs on</div>
+        <p class="wave-description">The integrated simulation pipeline, the scenario domain model and the episode recording. Everything later stacks on these three, and all three can start today in parallel.</p>
+        <section class="track">
+          <h3 class="track-title">The integrated pipeline</h3>
+          <div class="item-list">
+                <article id="item-integrated-simulation-pipeline" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">One branch on which the simulated demo runs perception, monitor, predicates and events together</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_draft">Open · Draft</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">integrated-simulation-pipeline</span>
+            <span class="mono branch">claude/icra-experiments-simulation-pipeline-w4ep7n</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/265" target="_blank" rel="noopener">#265</a>
+            <a class="session-link" href="https://claude.ai/code/session_01G5fPjf58191jHuL1dvrKNv" target="_blank" rel="noopener">session ↗</a>
+            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/265" target="_blank" rel="noopener">↗ Review</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve icra-experiments integrated-simulation-pipeline" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a grasped shape behind Context.update_world_model_attachment, and the montessori world and semantics it monitors - #256 imports no cramera at all), the recording half of #256 as its own branch off main (run-results-recorded-into-sql), the predicate classes (#229), the perception stack tip (#238, which carries #221, #222 and #227) and the hole layout fit (#236, which carries #225 and #232), the detector choice by rule (#231, 13 commits, no rule-engine dependency) and only the one knowledge-half commit of #239 (3a493be9, the measured colours and finishes on the twin): the rest of #239 is 177 commits of the RDR stack and stays out. Resolve the known meetings once and record them in roadmap.md: #223&#39;s RectifiedFootprint rename, #231&#39;s EdgeFitDetector rename, #244 and #229 both editing reasoning/predicates.py and geometry.py. Inherits one piece of open debt from that stack, which is prerequisite work: SimulationTimePacer.sleep has no bound. The demo entry point stays in #169, since franka_montessori_demo.py is bound to cramera through SortingRunControl, so the headless demo this item is done by is tracy_icra&#39;s own montessori_demo.py rather than that one. Done when franka_montessori_demo and the Tracy simulated demo both sort the board headless with the event monitor ticking and every test module of the merged packages collected and green in CI. Keep #192 out until the developer says it is in; it removes Match.variable, which #159 and therefore #239 still read.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: this item merges montessori-eql-stack&#39;s montessori_monitor_and_recording (#256) rather than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was split out of #169 so this plan need not take the cramera console with the monitor. As of 2026-09-03 it takes only the monitor half of #256: the recording half is being cut off main as its own item, run-results-recorded-into-sql, which this item merges instead. What is left of that debt here is one item: SimulationTimePacer.sleep() waits on the simulation clock with no bound, so a stalled simulation blocks a tick forever. No test reaches it - only the demo scripts set context.simulation_clock - but it is a real hang, and what a stalled simulation should do is the developer&#39;s call. The three coraplex failures and the hanging Tracy demo this blocker used to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on #169&#39;s c8bf6f05.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-simulated-camera-feeds-perception" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A MuJoCo camera feeds the perception pipeline the same frames the real camera does</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">simulated-camera-feeds-perception</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">What makes simulation-first testing honest for perception. MujocoCamera renders colour and depth; wrap them as the RgbdFrame the pipeline reads, with intrinsics and camera pose taken from the twin, so MontessoriPerceptionBackend answers a look in simulation exactly as it does off a capture. The six real captures remain the regression set for detection; this item&#39;s tests assert that a simulated scene with the board and four pieces reports every piece once with the right category. Stated colours and finishes on the simulated objects come from the values #239 measured off the real ones.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="One branch on which the simulated demo runs perception, monitor, predicates and events together (not ready yet — this item is blocked on it)">integrated-simulation-pipeline</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-tracy-demo-takes-the-integrated-branch" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">tracy_icra takes the integrated branch and the real robot runs it</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">tracy-demo-takes-the-integrated-branch</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The bridge to the robot, and the one item on this plan that needs the robot before any experiment does. Merge the integrated branch into tracy_icra, run the demo on the UR10 with the live camera, and keep a capture of the run. This is knowledge-directed-perception&#39;s demo-runs-on-grounded-perception in that plan&#39;s words; it is tracked here because the branch it runs is this plan&#39;s. From then on every later merge into tracy_icra is a merge of the integrated branch, never of individual stacks. Record the transform tree and joint states with the camera in every take from now on; five of the six existing recordings hold no robot state and cannot supply a history.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="One branch on which the simulated demo runs perception, monitor, predicates and events together (not ready yet — this item is blocked on it)">integrated-simulation-pipeline</span>
+
+            <span class="chip chip-unmet" title="A MuJoCo camera feeds the perception pipeline the same frames the real camera does (not ready yet — this item is blocked on it)">simulated-camera-feeds-perception</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-segmind-detectors-on-the-demo-branch" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The demo branch takes its own segmind detectors, grasp events and gripper feedback</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">segmind-detectors-on-the-demo-branch</span>
+            <span class="mono branch">tracy_icra</span>
+            <span class="muted">no pull request yet</span>
+            <a class="session-link" href="https://claude.ai/code/session_016LPo74ksuCPpkqgpvpz7eY" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merge tracy_icra_segmind into tracy_icra. Not a fast-forward: tracy_icra has moved 20-odd commits past their merge base e034fa791, taking the knowledge-directed-perception work with it, so this is a real merge. Three conflicts, all identified 2026-09-03. experiments/requirements.txt was deleted on tracy_icra (main&#39;s convention is inline pyproject dependencies, and test_dependency_declarations tests it) and gained flask on tracy_icra_segmind, so the resolution is to keep the file deleted and declare flask in experiments/pyproject.toml. segmind/datastructures/events.py was changed on both sides (+44/-21 arriving through tracy_icra&#39;s perception merges, +104/-24 here). And tracy_experiments/pickup/pickup_demo_real.py was changed on both sides. What the branch brings: grasp_detector_nodes.py, the gripper-feedback and event- dashboard modules, its own background threaded event_monitoring.py for TracyMontessoriWorld, and a much larger detector test suite.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Scenarios as data</h3>
+          <div class="item-list">
+                <article id="item-scenario-domain-model" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">scenario-domain-model</span>
+            <span class="mono branch">claude/icra-experiments-scenario-domain-n7zwpr</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/261" target="_blank" rel="noopener">#261</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Y2R5PzHHiVS7EvnAZ1J2yc" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve icra-experiments scenario-domain-model" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The meta level the developer asked for: a Scenario names how to build its world and which robot and execution kind (simulated or real) it runs on; a Goal names what counts as success; a Condition names one knowledge source switched on or off; a Perturbation names a change applied to the world at a step; a Metric names one number read off a finished Trial; a Report gathers metrics over trials with confidence intervals. A ScenarioRunner executes trials, writes structured logs and renders the report. Generalise what exists rather than adding a third shape: control_loop_experiments.scenarios already has BenchmarkScenario and ScenarioRunner, and experiment_definitions has ExperimentResult, ExperimentsTable and TypstRenderer; the new model subsumes both and the old ones migrate onto it. Concrete scenarios subclass or instantiate these, never re-describe them. Fully unit-tested against a trivial scenario that needs no simulator, so the model&#39;s tests run everywhere.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-montessori-scenarios" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The memo&#39;s scenes and scripted scenarios as Scenario instances that run in simulation</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">montessori-scenarios</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Random layouts with all four pieces, partial scenes with two or three, near-ambiguous layouts with the cube and cylinder aligned in camera depth, a lighting change (a MujocoLight edit in simulation), and the four scripted temporal scenarios: static, robot pick-and-place, an external body pushing a piece while the robot is idle, and a piece in the gripper at query time. Each is a Scenario with a seeded layout so a run is reproducible, and each has a test that builds it headless and asserts its own precondition (the ambiguous layout really is aligned in depth, the in-gripper scenario really holds the piece).</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports">scenario-domain-model</span>
+
+            <span class="chip chip-unmet" title="One branch on which the simulated demo runs perception, monitor, predicates and events together (not ready yet — this item is blocked on it)">integrated-simulation-pipeline</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Episodes recorded and queried</h3>
+          <div class="item-list">
+                <article id="item-run-results-recorded-into-sql" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Where a run records its results, and the plan-and-events schema it records</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">run-results-recorded-into-sql</span>
+            <span class="mono branch">claude/montessori-results-recording-jnrgfy</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/262" target="_blank" rel="noopener">#262</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Hye1f4d5KoNGxtFtWF3XV7" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve icra-experiments run-results-recorded-into-sql" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Cut the recording half of montessori-eql-stack&#39;s montessori_monitor_and_recording (#256) as a pull request of its own, off main. Three modules and about 700 lines: results_database.py resolves where a run records and reports whether that database can be reached and written to, results_recording.py records best effort so a database problem cannot lose a finished run, and sorting_results.py is the schema itself - a realized coraplex Plan plus the segmind DetectionEvents detected inside it. With them, the three lines that make the recording possible at all: the experiments ORM interface declares segmind, generate_orm imports segmind.orm.ormatic_interface, and experiments/pyproject declares the dependency. Plus experiments/montessori/__init__.py, without which pkgutil skips the directory and the generator is never offered SortingIterationResult. Off main rather than off tracy_icra or #256, and this is what makes it small: experiments/montessori does not exist on main at all, so the branch creates the directory holding only these modules, and nothing it needs is newer than main. The rest of #256 stays where it is - the simulated world, semantics, hole geometry, sorting progress and insertion diagnosis are another demo&#39;s, and its event monitor is one tracy_icra_segmind already has its own of. The Footprint collision is deferred, not avoided: experiments/montessori/perception/footprint.py and semantic_digital_twin...graph_of_convex_sets/plotting.py both declare a Footprint, so the moment this branch&#39;s __init__.py sits over tracy_icra&#39;s perception package the generator emits two FootprintDAO classes and SQLAlchemy refuses the mapping. knowledge-directed-perception&#39;s montessori-classes-in-the-orm (#223) already renames the perception one to RectifiedFootprint; whichever branch first puts the two together takes that rename.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-episodes-recorded-through-ormatic" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Every trial, event, query, answer and failure recorded through ORMatic into SQL</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">episodes-recorded-through-ormatic</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff icra-experiments episodes-recorded-through-ormatic" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">One Episode model for simulation and the robot: the scenario and condition it ran under, its trials, the segmind events seen per tick, every query asked with its per-predicate backend assignment, answer and latency, every insertion attempt with its outcome, the failure type observed and predicted, and what was done after a failure - retried, changed or abandoned. That last is what answers &#34;how did you resolve this the last time it happened&#34;; nothing else in the record carries it, and it was added on 2026-09-04 when Experiment D was planned. Recorded through ORMatic the way ShapeInsertionExperience and SortingIterationResult already are, and replacing both with the one model rather than standing beside them; ResultsDatabase and results_recording keep deciding where and whether a run records. The runner records as it goes, so a run that dies keeps its finished trials, following batch_runner&#39;s reasoning. Tests record a trivial episode into SQLite and read it back through the generated interface.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports">scenario-domain-model</span>
+
+            <span class="chip" title="Where a run records its results, and the plan-and-events schema it records">run-results-recorded-into-sql</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-episodes-queried-by-eql" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Long-term memory answered by EQL through the SQL backend, and reports read from it</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">episodes-queried-by-eql</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The SQL backend is one of the paper&#39;s four: the same query language over recorded episodes returns domain objects, so the temporal bucket can be answered from long-term memory (&#34;which pieces did you pick up in the last run&#34;, &#34;how often did the square hole fail&#34;) and the Report of every experiment is computed from the database rather than from in-process results. Tests assert that a query over a recorded episode returns the same objects the runner wrote, and that a report regenerated from the database equals the one the runner rendered.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Every trial, event, query, answer and failure recorded through ORMatic into SQL (not ready yet — this item is blocked on it)">episodes-recorded-through-ormatic</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-episode-artifacts-recorded" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">An episode keeps its video, its simulation data and its question-and-answer transcript beside the database</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">episode-artifacts-recorded</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The rows say what happened; these are what a reader - or a vision-language model - can look at, and without them Experiment D has no baseline to compare against. The video is the frames MujocoCamera already renders for MontessoriPerceptionBackend, written per episode rather than discarded; the simulation data is the run&#39;s own files, the world it built and the plan it realized; the transcript is every question with its answer, which the episode rows already carry per query, rendered as one readable document. Artifacts sit beside the database addressed by the episode&#39;s identifier, so a row references one rather than holding it - the separation ResultsDatabase already draws between where a run records and what it records. Its own item rather than folded into episodes-recorded-through-ormatic because it needs the simulated camera, and folding it would put lane 2&#39;s foot item behind lane 1&#39;s second. Tests record a two-trial episode and read its video, its files and its transcript back from the episode.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Every trial, event, query, answer and failure recorded through ORMatic into SQL (not ready yet — this item is blocked on it)">episodes-recorded-through-ormatic</span>
+
+            <span class="chip chip-unmet" title="A MuJoCo camera feeds the perception pipeline the same frames the real camera does (not ready yet — this item is blocked on it)">simulated-camera-feeds-perception</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-mechanism">
+        <div class="wave-eyebrow">What the paper measures</div>
+        <p class="wave-description">The two mechanisms the thesis sentence names (per-predicate backend routing, perceive-commit-verify in physics), the snapshot working memory, failure typing and prediction, and the baselines the experiments compare against.</p>
+        <section class="track">
+          <h3 class="track-title">Routing, verification and working memory</h3>
+          <div class="item-list">
+                <article id="item-backends-declare-their-capabilities" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">backends-declare-their-capabilities</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The capability table the memo publishes, as code rather than a table written by hand: QueryBackend gains capability(), the same shape #231 gave detectors, stating the predicate and statement forms the backend answers and the precondition on the knowledge state under which it answers them (the native twin backend for a body already believed in, perception for a pose stated as ..., the SQL backend for anything about a past episode, physics for a derived physical fact). Rendering the declarations of all four backends is what prints the paper&#39;s table. Tests pin one declaration per backend against a statement it accepts and one it refuses.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="One branch on which the simulated demo runs perception, monitor, predicates and events together (not ready yet — this item is blocked on it)">integrated-simulation-pipeline</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-query-routed-per-predicate" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A statement is routed per predicate by capability and knowledge state, and the routing is reported</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">query-routed-per-predicate</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The mechanism the thesis sentence names. A planner splits a statement into its predicates, assigns each to the backend whose capability admits it under the current twin state, orders them twin first, then perception for what the twin cannot answer, then physics for derived facts, and falls back to the next capable backend when one refuses. It returns a QueryPlan beside the answer: per-predicate assignment, detector calls, region searched and latency, which is exactly what Experiment B tabulates. #238 already does this implicitly for one statement (the lid and the hole are answered from the twin before the look); this item makes it general and visible. The mixed statement &#34;the cyan piece left of the triangle on the table&#34;, with the triangle believed in versus not, is the test.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin (not ready yet — this item is blocked on it)">backends-declare-their-capabilities</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-physics-verification-backend" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Perceive, commit, verify: detections spawned into a physics copy of the world and derived facts re-evaluated there</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">physics-verification-backend</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A backend that spawns what perception reported into a copy of the world, steps MuJoCo, and evaluates the derived predicates there: Stable, contact and penetration, InsideOf, the directional relations and Reachable, all of which #229 already made predicates. It reports agreement or disagreement with the perception backend per fact, never re-checking the committed pose itself. This is the narrow form of knowledge-directed-perception&#39;s imagination-world item, built here because the paper measures it; that plan&#39;s item is noted as covered by this one. Tests inject a floating piece, a penetrating piece and a wrongly classified piece and assert each disagreement fires.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin (not ready yet — this item is blocked on it)">backends-declare-their-capabilities</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-snapshot-working-memory" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Working memory as a snapshot: the twin follows kinematics while acting and re-perceives only when idle and changed</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">snapshot-working-memory</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">During manipulation the grasped piece moves with the gripper through the attachment #169 restored, and perception is not consulted. When idle, a look is taken at a low rate and a piece&#39;s pose is committed only when it differs from the believed pose by more than a threshold measured as three standard deviations over a static scene. The threshold is measured in simulation first and again on the robot, both numbers recorded. Fits the frame budget the continuous node cannot: #236&#39;s layout fit costs 0.56 s per frame against the node&#39;s 0.5 s period, which is fine at idle rate.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="A MuJoCo camera feeds the perception pipeline the same frames the real camera does (not ready yet — this item is blocked on it)">simulated-camera-feeds-perception</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Typed and predicted failures</h3>
+          <div class="item-list">
+                <article id="item-failure-taxonomy-and-typing" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Every failed trial typed as semantic, geometric, perceptual or execution from the evidence</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">failure-taxonomy-and-typing</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff icra-experiments failure-taxonomy-and-typing" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A FailureType enum with the four members, and the rule that assigns one to a finished trial from the plan&#39;s own failure, the segmind events and the violated expectation. Extends insertion_diagnosis.InsertionDiagnosis and InsertionFailureReason, which already diagnose an attempt from events, rather than a second diagnosis; each existing reason maps to one type. Recorded on the Trial and so in the episode. Tests cover one trial per type.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports">scenario-domain-model</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: the violated-expectation input comes from knowledge-directed-perception&#39;s expectations-from-events (not started there), which that plan owns. Typing from the plan&#39;s failure and the segmind events can be built first; the expectation-derived type waits on it.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-failure-predicted-from-the-query" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The failure type predicted from the query result before execution, and scored against what happened</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">failure-predicted-from-the-query</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">H4. Before an insertion executes, the QueryPlan and its answer predict the type: several candidate holes answer the target description, so semantic; Reachable is false for the grasp or the release pose, so geometric; the physics backend disagrees with perception or nothing was detected, so perceptual; otherwise none predicted. Precision and recall of prediction against the observed type are Metrics on the Report. Tests build one query result per predicted type.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Every failed trial typed as semantic, geometric, perceptual or execution from the evidence (not ready yet — this item is blocked on it)">failure-taxonomy-and-typing</span>
+
+            <span class="chip chip-unmet" title="A statement is routed per predicate by capability and knowledge state, and the routing is reported (not ready yet — this item is blocked on it)">query-routed-per-predicate</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-knowledge-ablations" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Each knowledge source switched off through a Condition, never through a code branch</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">knowledge-ablations</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The memo&#39;s conditions as Condition instances: full; no working memory; no hole-shape knowledge (the board&#39;s holes unknown to the twin, which also needs the mesh scale 0.865 #236 measured to be in the twin first, so the full condition is honest); no degree-of-freedom limits; no pickup detection; no predicate-narrowed perception. Each condition removes one thing the action reads from the twin or the backends, so the action&#39;s code has no ablation flags of its own. A test per condition asserts the knowledge really is absent (the query that would read it fails or returns nothing).</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="The memo&#39;s scenes and scripted scenarios as Scenario instances that run in simulation (not ready yet — this item is blocked on it)">montessori-scenarios</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-perturbations" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">perturbations</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Perturbation instances the runner applies at a named step: the target hole moved 10 cm, a fixed offset added to a reported pose, a detection relabelled as another piece, an external body pushing a piece while the robot is idle. In simulation they act on the MuJoCo world or on the perception result; on the robot the same Perturbation renders a one-line instruction to the person at the table, so the protocol is the same object. Experiment B&#39;s ~30 injected events and Experiment C&#39;s perturbation conditions are drawn from these.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="The memo&#39;s scenes and scripted scenarios as Scenario instances that run in simulation (not ready yet — this item is blocked on it)">montessori-scenarios</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-expectation-checked-under-perturbation-in-simulation" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A robot plan run in simulation under a perturbation, and the violated expectation reported as the failure</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">expectation-checked-under-perturbation-in-simulation</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Added 2026-09-05 at the developer&#39;s ask on knowledge-directed-perception&#39;s #257 (r3940274577). The expectation process - an action&#39;s declared effect armed as relations of the twin&#39;s vocabulary, Segmind&#39;s events moving the belief by what each declares, a look asked for the same relations, and the violated ones reported as the failure - is tested there over a rendered scene and a hand-built world, never over a plan the robot actually executes. This item runs the insertion plan in the integrated simulation and applies one perturbation from `perturbations` at a named step, asserting that the expectation the release armed is contradicted in exactly the relation the perturbation breaks: a piece pushed off the lid after the release contradicts Near and InsideRegion, a release that stops short so the piece rests on the lid contradicts InsideRegion alone, a piece the gripper never let go of is reported as nothing found, and an unperturbed run contradicts nothing. It is also the first place the success case is checked against a look rather than a stated sighting, which is where a piece sunk in its hole has to be told from one standing over it. A test of the mechanism end to end rather than an experiment, so it sits in the failure track beside the perturbations it draws on; experiment-c-in-simulation reads its result rather than re-establishing it. Cross-plan: the mechanism is knowledge-directed-perception&#39;s expectations-from-events (#257) and its general half lives in segmind.expectations; this item does not start before that branch is merged into the integrated branch.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push (not ready yet — this item is blocked on it)">perturbations</span>
+
+            <span class="chip chip-unmet" title="One branch on which the simulated demo runs perception, monitor, predicates and events together (not ready yet — this item is blocked on it)">integrated-simulation-pipeline</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Verbalised memory and the VLM baselines</h3>
+          <div class="item-list">
+                <article id="item-working-memory-verbalised" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Working memory rendered as deterministic English: objects, poses, relations, events, gripper contents</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">working-memory-verbalised</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A fixed set of EQL queries over the twin whose answers are rendered through the verbalization framework on main, concatenated in a fixed order with rounded numbers, so the same state always produces the same text. The scene wordings #33 carries (support, the directional relations, visibility, reachability) are the ones to use; where #33 is not yet rebased onto #229, take its reviewed wordings rather than inventing new ones. A snapshot test pins the text for one simulated scene.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="One branch on which the simulated demo runs perception, monitor, predicates and events together (not ready yet — this item is blocked on it)">integrated-simulation-pipeline</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-vlm-baseline-harness" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The same questions asked of a vision-language model, image only and image plus verbalised memory</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">vlm-baseline-harness</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A harness that sends each question with the camera image, and again with the verbalised working memory prepended, parses the answer into the question&#39;s answer type and scores it against ground truth. The model sits behind an interface so the provider is one class; CI runs against a recorded-answer mock, and the live test is skipped without credentials. Each question is also run five times on the same scene to report answer variance, for the VLM systems and for EQL alike. Which provider and model to use is the developer&#39;s call and is not taken here. What it sends is an assembled context rather than an image and a prepended string, so the episode corpus of Experiment D is a third system on the same harness rather than a second one.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Working memory rendered as deterministic English: objects, poses, relations, events, gripper contents (not ready yet — this item is blocked on it)">working-memory-verbalised</span>
+
+            <span class="chip chip-unmet" title="The twelve questions in four buckets, as EQL and English, with ground truth and structural requirements (not ready yet — this item is blocked on it)">question-set-and-ground-truth</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-episode-corpus-given-whole-to-the-vlm" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The vision-language model is given the whole episode corpus: every episode&#39;s video, files and transcript in one context</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">episode-corpus-given-whole-to-the-vlm</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">What makes Experiment D&#39;s comparison fair, and the reason a loss there reads as reasoning rather than lookup: every episode a question may reach over goes into one context - sampled video frames, the run&#39;s files, the question-and-answer transcript - so the model is given everything the SQL backend can see over the same episodes. That is only possible with a cap, and the cap is derived rather than chosen: how many episodes fit once the frames are sampled to the model&#39;s context budget. It is the baseline&#39;s stated limit in the paper, and it bounds how far back a question can reach. Assembled from what episode-artifacts-recorded wrote. A retrieval step over an unbounded corpus was considered and rejected on 2026-09-04; roadmap.md carries why.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="An episode keeps its video, its simulation data and its question-and-answer transcript beside the database (not ready yet — this item is blocked on it)">episode-artifacts-recorded</span>
+
+            <span class="chip chip-unmet" title="The same questions asked of a vision-language model, image only and image plus verbalised memory (not ready yet — this item is blocked on it)">vlm-baseline-harness</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-evidence">
+        <div class="wave-eyebrow">Experiments in simulation, then on the robot, then released</div>
+        <p class="wave-description">Each experiment runs end to end in simulation first, with its episodes in the database and its report generated, and only then on the robot. The artifact packages what both produced.</p>
+        <section class="track">
+          <h3 class="track-title">Experiment A: question answering</h3>
+          <div class="item-list">
+                <article id="item-question-set-and-ground-truth" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The twelve questions in four buckets, as EQL and English, with ground truth and structural requirements</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">question-set-and-ground-truth</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff icra-experiments question-set-and-ground-truth" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Freeze first, on the memo&#39;s day one. Lookup (links, joints, gripper finger pose), spatial (what, where, colour, surface, left or right), temporal (moved, moved by you, picked up) and embodiment (in hand), each a Question dataclass carrying its EQL, its English, its answer type and the inputs it structurally requires (the memo&#39;s table). The temporal questions have two spellings: over working memory (segmind events) and over long-term memory (the SQL backend). Ground truth is the twin in simulation, exact, and the calibrated twin plus a human check on the robot, stated as such. Several of these already exist as presets in the console stack&#39;s live_query_source; reuse their EQL.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports">scenario-domain-model</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-experiment-a-in-simulation" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Experiment A run end to end in simulation: scenes, temporal scenarios, determinism, three systems, report</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">experiment-a-in-simulation</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Every scene and scripted scenario through the runner, every question through EQL and both VLM systems, five repetitions for variance, episodes in the database, the accuracy-per-bucket, latency, variance and footprint tables generated. The point is that the robot runs are a rerun of a script that already works, with only the scenes replaced.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="The twelve questions in four buckets, as EQL and English, with ground truth and structural requirements (not ready yet — this item is blocked on it)">question-set-and-ground-truth</span>
+
+            <span class="chip chip-unmet" title="The memo&#39;s scenes and scripted scenarios as Scenario instances that run in simulation (not ready yet — this item is blocked on it)">montessori-scenarios</span>
+
+            <span class="chip chip-unmet" title="A statement is routed per predicate by capability and knowledge state, and the routing is reported (not ready yet — this item is blocked on it)">query-routed-per-predicate</span>
+
+            <span class="chip chip-unmet" title="The same questions asked of a vision-language model, image only and image plus verbalised memory (not ready yet — this item is blocked on it)">vlm-baseline-harness</span>
+
+            <span class="chip chip-unmet" title="Every trial, event, query, answer and failure recorded through ORMatic into SQL (not ready yet — this item is blocked on it)">episodes-recorded-through-ormatic</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-experiment-a-on-the-robot" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Experiment A on the UR10: random, partial and ambiguous scenes, temporal scenarios, determinism</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">experiment-a-on-the-robot</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">15 to 20 random scenes, five partial, five near-ambiguous, the four temporal scenarios five times each, every query five times; lighting only if time remains. Robot state recorded with the camera in every take. Ground truth annotated the same day.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Experiment A run end to end in simulation: scenes, temporal scenarios, determinism, three systems, report (not ready yet — this item is blocked on it)">experiment-a-in-simulation</span>
+
+            <span class="chip chip-unmet" title="tracy_icra takes the integrated branch and the real robot runs it (not ready yet — this item is blocked on it)">tracy-demo-takes-the-integrated-branch</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Experiment B: decomposition and verification</h3>
+          <div class="item-list">
+                <article id="item-experiment-b-in-simulation" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Experiment B in simulation: mixed-predicate routing with and without the twin&#39;s knowledge, and verification under injected errors</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">experiment-b-in-simulation</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">H1 and H3. The mixed statements with the triangle believed in versus not, reporting per-predicate assignment, region size, detector calls and latency, extending the ratios #238 already measured on the six captures. Then about thirty injected events (offsets, wrong object, pushes) through the perceive-commit-verify loop, reporting precision and recall of disagreement as a detector.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="A statement is routed per predicate by capability and knowledge state, and the routing is reported (not ready yet — this item is blocked on it)">query-routed-per-predicate</span>
+
+            <span class="chip chip-unmet" title="Perceive, commit, verify: detections spawned into a physics copy of the world and derived facts re-evaluated there (not ready yet — this item is blocked on it)">physics-verification-backend</span>
+
+            <span class="chip chip-unmet" title="Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push (not ready yet — this item is blocked on it)">perturbations</span>
+
+            <span class="chip chip-unmet" title="Every trial, event, query, answer and failure recorded through ORMatic into SQL (not ready yet — this item is blocked on it)">episodes-recorded-through-ormatic</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-experiment-b-on-the-robot" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Experiment B on the UR10</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">experiment-b-on-the-robot</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The same script on the live feed. The memo&#39;s cut order drops the injection half first and keeps the decomposition half; the simulation numbers stand in for whatever is cut, stated as such.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Experiment B in simulation: mixed-predicate routing with and without the twin&#39;s knowledge, and verification under injected errors (not ready yet — this item is blocked on it)">experiment-b-in-simulation</span>
+
+            <span class="chip chip-unmet" title="tracy_icra takes the integrated branch and the real robot runs it (not ready yet — this item is blocked on it)">tracy-demo-takes-the-integrated-branch</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Experiment C: manipulation under ablations</h3>
+          <div class="item-list">
+                <article id="item-experiment-c-in-simulation" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Experiment C in simulation: every condition, twenty to thirty trials, typed and predicted failures</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">experiment-c-in-simulation</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The insertion trial from a randomised start pose under every condition, board-level completion reported too, every failure typed and every prediction scored, the stacked failure-type bars generated from the database. Runs in batches the way batch_runner already does, so hundreds of trials survive the process&#39;s memory growth.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Each knowledge source switched off through a Condition, never through a code branch (not ready yet — this item is blocked on it)">knowledge-ablations</span>
+
+            <span class="chip chip-unmet" title="Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push (not ready yet — this item is blocked on it)">perturbations</span>
+
+            <span class="chip chip-unmet" title="The failure type predicted from the query result before execution, and scored against what happened (not ready yet — this item is blocked on it)">failure-predicted-from-the-query</span>
+
+            <span class="chip chip-unmet" title="Long-term memory answered by EQL through the SQL backend, and reports read from it (not ready yet — this item is blocked on it)">episodes-queried-by-eql</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: the failure-detection story (perception looks where the action promised and reports the difference) is knowledge-directed-perception&#39;s expectations-from-events, which that plan owns and has not started. Without it Experiment C reports typed failures but not detected ones.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-experiment-c-on-the-robot" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Experiment C on the UR10: twenty trials per condition</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">experiment-c-on-the-robot</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Twenty trials per condition, thirty only if the pipeline is stable; the perturbation conditions are never cut. Two days of robot time.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Experiment C in simulation: every condition, twenty to thirty trials, typed and predicted failures (not ready yet — this item is blocked on it)">experiment-c-in-simulation</span>
+
+            <span class="chip chip-unmet" title="tracy_icra takes the integrated branch and the real robot runs it (not ready yet — this item is blocked on it)">tracy-demo-takes-the-integrated-branch</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Experiment D: long-term memory across episodes</h3>
+          <div class="item-list">
+                <article id="item-cross-episode-question-set-and-ground-truth" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The questions asked of the episode history, with ground truth read from what the runner recorded</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">cross-episode-question-set-and-ground-truth</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Four kinds, each a Question in the shape question-set-and-ground-truth already defines - EQL, English, answer type, and the facts it structurally requires - but spelled over the SQL backend and reaching across episodes rather than into the current scene: has this happened to the robot before and in which episode; what the goal and the conditions were at that time; what differed between the earlier episodes and the current one that bears on the question; and how a failure was resolved the last time it happened. This is the second spelling question-set-and-ground-truth already names for the temporal bucket, carried to every bucket. Ground truth is read from the recorded trial log directly and never through the query under test - the runner&#39;s record is what actually happened, and a query checked against itself proves nothing.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Long-term memory answered by EQL through the SQL backend, and reports read from it (not ready yet — this item is blocked on it)">episodes-queried-by-eql</span>
+
+            <span class="chip chip-unmet" title="The twelve questions in four buckets, as EQL and English, with ground truth and structural requirements (not ready yet — this item is blocked on it)">question-set-and-ground-truth</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-experiment-d-in-simulation" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Experiment D in simulation: the episode history questioned through EQL and through the vision-language baseline</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">experiment-d-in-simulation</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">First a corpus worth asking about: the scenarios run under varied conditions and perturbations so the history holds repeats, failures resolved differently, and goals that changed between runs. Then every question through both systems, repeated for variance the way Experiment A does, reporting accuracy against the recorded ground truth, latency, determinism across repetitions, and information availability - whether the corpus holds the facts a question declares it requires. Availability is measured on the corpus once rather than per system, because both systems see the same episodes, so a question nothing could have answered is scored apart from one both had the evidence for. Simulation only, decided 2026-09-04: the questions are about recorded episodes, so the robot episodes Experiments A and C record join the same corpus without a robot session of their own.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="The questions asked of the episode history, with ground truth read from what the runner recorded (not ready yet — this item is blocked on it)">cross-episode-question-set-and-ground-truth</span>
+
+            <span class="chip chip-unmet" title="The vision-language model is given the whole episode corpus: every episode&#39;s video, files and transcript in one context (not ready yet — this item is blocked on it)">episode-corpus-given-whole-to-the-vlm</span>
+
+            <span class="chip chip-unmet" title="The memo&#39;s scenes and scripted scenarios as Scenario instances that run in simulation (not ready yet — this item is blocked on it)">montessori-scenarios</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Figures and the artifact</h3>
+          <div class="item-list">
+                <article id="item-paper-figures-from-episodes" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Every table and figure in the paper regenerated by one script from the episode database</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">paper-figures-from-episodes</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The writer&#39;s item, started before any experiment has run so the first draft&#39;s tables are already the script&#39;s output on simulated data and the robot numbers drop in by rerunning it. Confidence intervals on every rate.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Long-term memory answered by EQL through the SQL backend, and reports read from it (not ready yet — this item is blocked on it)">episodes-queried-by-eql</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-benchmark-artifact" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The released artifact: scenes, ground truth, questions, prompts, conditions, captures and the episode database</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">benchmark-artifact</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A repository a reader can run the simulation experiments from and compare against the robot episodes with: the Scenario definitions, the question set, the VLM prompts, the Condition and Perturbation definitions, the six captures plus every new one, and a dump of the episode database. The rosbags stay out (4.7 GB). Packaged on the memo&#39;s 12 to 13 September.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Experiment A on the UR10: random, partial and ambiguous scenes, temporal scenarios, determinism (not ready yet — this item is blocked on it)">experiment-a-on-the-robot</span>
+
+            <span class="chip chip-unmet" title="Experiment B on the UR10 (not ready yet — this item is blocked on it)">experiment-b-on-the-robot</span>
+
+            <span class="chip chip-unmet" title="Experiment C on the UR10: twenty trials per condition (not ready yet — this item is blocked on it)">experiment-c-on-the-robot</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">29</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">3</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(3)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-episodes-recorded-through-ormatic" data-item-identifier="episodes-recorded-through-ormatic" onclick="planDashboardHighlightItem(event, this)"><strong>Every trial, event, query, answer and failure recorded through ORMatic into SQL</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-failure-taxonomy-and-typing" data-item-identifier="failure-taxonomy-and-typing" onclick="planDashboardHighlightItem(event, this)"><strong>Every failed trial typed as semantic, geometric, perceptual or execution from the evidence</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-question-set-and-ground-truth" data-item-identifier="question-set-and-ground-truth" onclick="planDashboardHighlightItem(event, this)"><strong>The twelve questions in four buckets, as EQL and English, with ground truth and structural requirements</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+          <div class="next-group next-review">
+            <h4>Ready to review <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-integrated-simulation-pipeline" data-item-identifier="integrated-simulation-pipeline" onclick="planDashboardHighlightItem(event, this)"><strong>One branch on which the simulated demo runs perception, monitor, predicates and events together</strong><br><span class="next-reason">open draft pull request, ready for your review</span></a>                <a class="next-review-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/265" target="_blank" rel="noopener">Review ↗</a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

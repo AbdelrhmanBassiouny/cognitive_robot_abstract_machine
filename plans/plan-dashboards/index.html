@@ -1,0 +1,1669 @@
+<title>The plan dashboard: what it shows, what it gets wrong, and what it can publish</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>The plan dashboard: what it shows, what it gets wrong, and what it can publish</h1>
+    <p class="description">The renderer behind /plan-dashboard. Bug fixes to what it computes about an item&#39;s readiness and drift, chips and toggles that keep a large plan legible, and the shared pull-request-state module that lets one page carry CI, size and conflict information rather than only the manifest&#39;s own view of itself.</p>
+    <p class="repo-line">
+      13 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/102" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>plan-dashboards — Roadmap</h4>
+<p>Narrative companion to <code>plan.yaml</code>. Kept short on purpose: the size budget this split was made
+under counts these lines.</p>
+<h5>Where this plan came from</h5>
+<p>Split out of <code>workflow-unification</code> on 2026-08-30, under <code>plan-size-limits</code>'
+<code>split-workflow-unification</code>. That plan had reached 59 items and 16,917 lines across its manifest
+and roadmap, well past the 15-item / 2,000-line budget, and became seven plans seamed on subject.</p>
+<p>This plan is the <code>dashboards</code> track, carried across unchanged. Every item keeps its branch, pull
+request number, status and session verbatim. <strong>The full predecessor roadmap remains in the
+personal-notes branch's history</strong>; what is kept here is what binds future work.</p>
+<h5>Why this work exists</h5>
+<p>Two dashboard pipelines existed - a stack board and the plan dashboards - each fetching pull request
+state and rendering it. The one-dashboard decision of 2026-07-31 retired the board: GitHub's native
+stack map covers derived stack mechanics, so the plan dashboards are the single surface. That made
+this renderer the only page anyone reads about in-flight work, and its computation bugs stopped
+being cosmetic.</p>
+<p>Most items here are bug fixes with the same shape: a predicate that was <em>nearly</em> right, whose
+failure inverted the intent rather than merely narrowing it. Dependency-free items dropped out of
+the ready list entirely; a dependency becoming more finished made its dependent look less reviewable;
+an item stacked on a dead base had no signal anywhere. Each was fixed on its own root cause, one
+pull request each, per the standing rule for bug fixes.</p>
+<h5>Decisions this plan inherits</h5>
+<p>Numbering is the predecessor's, kept so cross-references in item notes still resolve.</p>
+<p><strong>5. The plan data model and the stack data model stay separate.</strong> The board is derived mechanics
+now - pull request bases and git ancestry; plans are intent over time, with waves, tracks and
+dependencies. Only the fetch and render layer unifies, which is what <code>shared-pr-state-chips</code> is.</p>
+<p><strong>3. Portability.</strong> A plan without an upstream configured renders no promotion group and no links;
+no repository is named outside configuration defaults.</p>
+<p><strong>13. The bastler pivot inverted one dependency.</strong> <code>shared-pr-state-chips</code> no longer creates the
+tooling package - <code>bastler-package</code> does, off main - so that branch rebases onto it and folds its
+modules in under the package's naming. What stays this item's own is the feature half.</p>
+<h5>Conventions this track settled</h5>
+<ul>
+<li><strong>Whichever lands second merges.</strong> Seven items here edit <code>build_dashboard.py</code> and its template with
+  no dependency between them. That is textual overlap, not ownership, and it has been the working
+  arrangement throughout.</li>
+<li><strong>Bug-fix pull requests carry the <code>bug</code> label; tooling that never existed does not.</strong> An item that
+  <em>surfaces</em> bug fixes is not itself a bug fix.</li>
+<li><strong>Wording is not pinned by tests.</strong> Twice a round added a test asserting a rendered sentence, and
+  twice the user cut it: nobody parses a drift description or a summary line, so pinning the sentence
+  buys a failing test per reword and catches no defect. What survives asserts that each case renders
+  <em>something</em>, and pins rules rather than phrasings.</li>
+<li><strong>Check the neighbours before defending a guard.</strong> Three rounds argued about one test, and what
+  ended it was reading how the module already treats the identical pattern - not reasoning about what
+  the test was worth.</li>
+</ul>
+<h5>Landing hazards</h5>
+<ul>
+<li><strong>The formatter's non-convergence is positional.</strong> An attribute docstring directly before a
+  decorated definition makes <code>docformatter</code> drop a blank line, <code>black</code> restore it, and
+  <code>format_docstrings.py</code> discard the lot - so the whole file is silently declined. Two changes here
+  hit it by placing a new class at exactly that adjacency, and the fix both times was placement.
+  <code>stack.py</code> is in the identical state and is left alone.</li>
+<li><strong>The package extraction moves this file wholesale.</strong> Every open item here merges main across that
+  move and re-applies its delta.</li>
+<li><strong>Screenshots are binary and regenerated from the committed example</strong>, so two branches that both
+  regenerate them conflict. Whoever lands second re-regenerates, which is mechanical since the image
+  is deterministic from the fixture.</li>
+</ul>
+<h5>Open</h5>
+<ul>
+<li><strong>No automated audit of the dashboard URL cache.</strong> The recording fix validates at write time and
+  nothing re-checks later, and an entry has already gone dead on its own afterwards. Worth having,
+  because a stale entry costs a duplicate artifact rather than an error.</li>
+<li><strong>No recorded rule for an ambiguous title.</strong> The recorder refuses when two artifacts share a plan's
+  title and demands an explicit URL, which is right, but leaves the caller with nothing to choose by.
+  Most-recently-updated is what both hand corrections have used.</li>
+<li><strong>Cross-plan dependencies are not representable</strong> - now the item <code>cross-plan-dependencies</code>,
+  added 2026-09-03 at the developer's direction with the reference form <code>&lt;plan-id&gt;/&lt;item-id&gt;</code>
+  (the colon suggested here earlier is superseded). Until it lands, a precondition in another plan
+  stays a <code>blockers</code> entry, as <code>shared-pr-state-chips</code>, rdr-explanation's <code>rdr-why-answer</code> and
+  three items of <code>icra-experiments</code> record today.</li>
+</ul>
+<h5>shared-pr-state-chips: the fold onto bastler, 2026-09-02</h5>
+<p>The manifest called this item blocked on the bastler dependency and on a <code>main</code> conflict; what
+had actually stalled it was the 2026-08-30 review round - nineteen threads the manifest never
+mentioned. Recorded first, resolved second.</p>
+<p>The resolution was the fold decision 13 already described, done as a merge of #185's head rather
+than a re-cut: #185 already contained this branch's last merge of <code>main</code>, so the merge brought no
+stray <code>main</code> commits into the diff against the new base. Check
+<code>git merge-base --is-ancestor &lt;this branch's main merge-base&gt; &lt;parent head&gt;</code> before choosing
+merge over re-cut; it decides whether the diff stays clean.</p>
+<p>Two threads were answered differently from what they asked and are left open for the user:
+<code>GitCommandRunner</code> in the tests, and the request to discuss the rebase options.</p>
+<p><strong>The formatter hazard above, explained.</strong> <code>format_docstrings.py</code> declines a file whenever
+docformatter would expand a one-line member docstring at the end of a class body: the expansion
+eats the blank line black then restores, and the script keeps the black-only result. A file
+converges only if its member docstrings already carry the three-line form the tool produces. The
+position matters only because the last member of a class is where the eaten blank line sits.
+<code>stack.py</code> and <code>build_dashboard.py</code> were already declined on #185's head and stay black-only.</p>
+<h5>cross-plan-dependencies: the settled plan, 2026-09-03</h5>
+<p>Kicked off in <code>auto</code> mode, so this is the record the approval step never produced.</p>
+<p><strong>The reference form</strong> is <code>&lt;plan-id&gt;/&lt;item-id&gt;</code>, decided by the developer; a bare id keeps
+meaning this plan, and a reference naming this plan's own id is rejected rather than
+accepted as a synonym, so one item has one spelling. A second separator is malformed
+rather than read as a nested path.</p>
+<p><strong>Validation resolves, it does not trust.</strong> <code>validate_plan</code> gains the referenced plans as
+a second input and rejects an unknown plan, an unknown foreign item, a self-plan
+reference and a malformed reference. Because a reference cannot be resolved without the
+other manifests, a cross-plan entry with no plans directory available is itself rejected -
+the alternative, passing it unchecked, is the same silent-ready fault this item fixes.
+The cycle check runs over the union graph, keyed by canonical reference; a node in the
+plan under validation keeps its bare id, so a same-plan cycle is reported exactly as it
+was before.</p>
+<p><strong>The plans directory is the one new input</strong>, and the dashboard URL cache is read from
+inside it (<code>_generated/dashboard-urls.yaml</code>) rather than passed separately: it already
+lives in the directory the plans live in, so a second argument would be a second way to
+say the same thing. Threaded through <code>build_dashboard.py</code>,
+<code>check_dependency_readiness.py</code> and - found by reading rather than assumed -
+<code>sync_manifest_status.py</code>, which validates the manifest too and would otherwise fail the
+refresh before rendering. <code>refresh_dashboard.sh</code> passes it on.</p>
+<p><strong>One resolver, <code>items_by_reference</code></strong>, serves every reader of <code>depends_on</code>, so the
+readiness rule, the chips, the two sidebar lists and the readiness script cannot disagree
+about what a reference means. A foreign item is classified against its own plan's
+<code>default_repository</code>.</p>
+<p><strong>Stacking depth stays same-plan.</strong> An indent level is a position on this page, and a
+foreign parent is not on it.</p>
+<p><strong>The latent fault fixed on the way</strong>: <code>_dependencies_are_ready</code> skipped an identifier it
+could not resolve, so a mistyped dependency counted as ready and its dependent got a
+"Start now" button.</p>
+<h6>What is deliberately not in this pull request</h6>
+<p>The five recorded cross-plan blockers this item exists to convert - <code>icra-experiments</code>'
+<code>integrated-simulation-pipeline</code>, <code>failure-taxonomy-and-typing</code> and
+<code>experiment-c-in-simulation</code>, this plan's <code>shared-pr-state-chips</code>, and
+<code>rdr-explanation</code>'s <code>rdr-why-answer</code> - are plan data on the personal-notes branch, not
+code on this branch. They are also <strong>sequenced after this lands</strong>: every session runs the
+tooling from its own checkout, so a manifest carrying <code>&lt;plan-id&gt;/&lt;item-id&gt;</code> before <code>main</code>
+can resolve it fails validation on every <code>/plan-dashboard</code> run for those plans. All five
+target ids were checked to resolve: <code>montessori-eql-stack/montessori_fast_inline_monitor</code>,
+<code>knowledge-directed-perception/expectations-from-events</code>,
+<code>bastler-package/bastler-package</code> (#185) and <code>rdr-core-engine/d-core-backend</code> (#210).</p>
+<h6>Landing hazards, both recorded rather than pre-resolved</h6>
+<p><code>#185</code> moves every <code>.claude/</code> Python module into the <code>bastler</code> package, and <code>#184</code>, <code>#157</code>,
+<code>#206</code> and <code>#111</code> also edit <code>build_dashboard.py</code>. The track's rule is that whichever lands
+second merges, so this is based off <code>main</code>.</p>
+<p>Worth naming because it is the same idea under a different name: <code>#184</code> introduces
+<code>_resolved_dependencies_of</code>, absorbing the <code>depends_on</code>-resolution comprehension its
+callers each wrote out. That is the resolution <em>call site</em>; <code>items_by_reference</code> is what a
+reference resolves <em>through</em>. Whichever lands second should compose them into one path
+rather than leave two, and <code>#184</code>'s <code>stall_reason</code> becomes another reader of the resolver
+in that merge.</p>
+<p><code>#184</code>'s review also produced two conventions this item follows without importing their
+code: rendered wording is never pinned by a test, and a rendered page is read by class
+rather than matched as a string. The <code>TextOfElementsWithClass</code> helper that does the second
+lives on <code>#184</code>'s branch, so this branch asserts the chip's own fields and leaves adopting
+that helper to the merge - building a second copy of it is how two branches end up with
+one artifact twice.</p>
+<p>Note for that merge: <code>items_by_reference</code> is now <code>DependencyResolver</code>, so the one path the
+two branches should converge on is a class, not a dict.</p>
+<h6>What the review round settled, 2026-09-03</h6>
+<p>Seven threads and one note on the review itself, applied in <code>b9e53be9</code>. Three of them
+changed a decision recorded above rather than only the code, so they belong here.</p>
+<p><strong>Read what a reference names, not what the directory holds.</strong> The first cut loaded every
+manifest under the plans directory up front. The reviewer's objection is the one this
+plan's sibling <code>plan-size-limits</code> exists for: a per-plan budget is defeated the moment one
+plan's dashboard run pulls in every other plan's contents. <code>PlanDirectory</code> now opens the
+directory - reading only the small URL cache - and reads one manifest the first time
+something names its plan, so a plan nothing depends on costs what an absent plan costs.
+The skill's extraction narrowed to match: <code>*/plan.yaml</code> and the URL cache, never a
+roadmap, and step 1 now says in as many words not to read any of them by hand. What
+reaches the page from a foreign plan was already bounded to one chip - reference, title,
+plan title, live state - and <code>plan-schema.md</code> now writes that down so it stays that way.</p>
+<p><strong>An entry that names nothing is a class, not a hole.</strong> The silent-ready fault was fixed
+by returning <code>None</code> per unresolvable entry and having every caller refuse to treat <code>None</code>
+as satisfied - which works, and puts the same guard in three places. <code>Dependency</code> is now
+an ABC over <code>ResolvedDependency</code> and <code>UnresolvedDependency</code>: an entry always resolves to
+<em>something</em>, the something answers <code>False</code> to both readiness questions, and the guards,
+the <code>zip</code> over <code>depends_on</code> and the renderer's <code>_dashboard_url_of</code> all disappear. The
+general lesson, since it is the third time this file has hit it: when a hole in a
+collection needs the same check at every reader, the hole wanted to be a subclass.</p>
+<p><strong>One resolver means one class, not one dict.</strong> <code>items_by_reference</code> was a dict the
+renderer built and every reader indexed; <code>check_dependency_readiness.py</code> had its own
+<code>_resolve</code> doing the same job beside it. Both are <code>DependencyResolver</code> now, so the claim
+that every reader of <code>depends_on</code> goes through one resolver is enforced rather than
+observed.</p>
+<p>The rest were fixed strings and nested functions: <code>ManifestKey</code>, <code>PlanFile</code>,
+<code>SUPPORTED_SCHEMA_VERSION</code>, <code>DependencyReadiness</code>/<code>ReadinessField</code> in place of a
+four-key dict written twice, and <code>DependencyGraph</code>/<code>CycleSearch</code>/<code>VisitState</code> in place of
+a function holding two closures and three bare integers. On the test side the rule that
+paid off is worth keeping: <strong>assert against the file that declares the value, not a
+retyped copy</strong> - the fixture plans' repository, titles and pull request numbers are read
+back out of their manifests through a shared <code>tests/fixture_plans.py</code>, and only the ids
+are named in code, because an id is how a test points at a fixture at all.</p>
+<h5>shared-pr-state-chips: the 2026-09-03 naming round</h5>
+<p>Recorded before it was resolved, because the manifest again did not say what was wrong. The
+item read <code>in_progress</code> with two blockers, both about the bastler fold and both stale: #185's
+<code>main</code> conflict had cleared, and #111's own state was healthy - all 23 checks green, <code>clean</code>
+against its new base, out of nothing. What had stalled it was a review round from that morning
+that nothing recorded: seven threads, none of them a defect, all naming rules.</p>
+<p><strong>Same shape as the 2026-08-30 stall, one round later.</strong> Both times the recorded blocker named
+a dependency, and both times the real one was an unanswered review round on the branch's own
+diff. The dependency blocker is true and worth keeping; what it is not is a reason the item
+cannot move. Worth stating as a rule: a blocker naming something outside the item never
+explains why the item itself is idle, so when both are present the review round is the one to
+read first.</p>
+<p><strong>What the round asked for.</strong> No abbreviations, in five places plus the module name itself:
+<code>pr_state.py</code> became <code>pull_request_state.py</code> and <code>ci</code> became <code>continuous_integration</code> on the
+two key enums, on <code>PullRequestLiveState</code> and on <code>PullRequestRecord</code>. <code>PullRequestDetailPayload</code>
+wanted a clearer name, and dropping "Detail" made it <em>correct</em> as well as shorter - the class
+renders <code>to_list_entry()</code> as well as <code>to_json()</code>, so naming it after one endpoint described
+half of what it does. The rest were strings that already had enums and were being spelled by
+hand anyway: <code>in-review</code>, <code>bug</code>, and <code>board.json</code>.</p>
+<p><strong>The line the rename stopped at, and the developer's overrule.</strong> The round drew a line at the
+enum member's <em>value</em>: a name is an identifier, a value is a wire format, so
+<code>CONTINUOUS_INTEGRATION = "ci"</code> satisfied the no-abbreviations rule while leaving <code>board.json</code>
+and <code>pr_data.json</code> readable by <code>stack.py</code>'s <code>ForkPullRequest.ci</code> and <code>maintenance_board.py</code>.
+Left open rather than decided, because every chip field is optional, so a writer and reader
+disagreeing about the key renders already-fetched data chipless instead of failing.</p>
+<p><strong>The developer answered no line: "yes rename it everywhere and also in any existing files that
+will be read."</strong> The distinction was real but not the one that decides it - a stored key with
+two spellings in the repository is worse than a rename that reaches two extra files. The rule
+to carry forward is the narrower one that survived: <em>asking</em> was right, because the failure
+mode was silent; drawing the line unasked would not have been.</p>
+<p><strong>The convergence check the formatter hazard needs.</strong> <code>format_docstrings.py</code> prints nothing for
+a file it does not have to touch, and its decline message shares a line with the progress bar -
+so <code>grep -v '^Formatting'</code> swallows exactly the message you are looking for. Check a file's
+convergence <em>in the repository</em>, never on a copy in a scratch directory: black reads its line
+length from the nearest <code>pyproject.toml</code>, so a scratch copy reports a conflict the real file
+does not have. A clean <code>git worktree</code> at the commit in question is what answers the question
+"was this already declined, or did I just break it?"</p>
+<h5>shared-pr-state-chips: the value rename, same evening</h5>
+<p>Four threads: the answer above, two restating it on the two enum members, and one asking why
+<code>Payload</code> had survived a request to rename it. All applied in <code>477f4dc34</code>, and every thread of
+both 2026-09-03 rounds is now resolved. What is worth keeping is three findings the rename
+turned up, none of which was the rename itself.</p>
+<p><strong>A stored key can have a writer nothing routes through the enum.</strong> <code>board.json</code> is written in
+two places: <code>PullRequestExport.to_board_document</code> through <code>BoardEntryKey</code>, and
+<code>maintenance_board.as_json</code> through <code>asdict</code> on <code>stack.PullRequest</code> - where the <em>field name</em> is
+the key. Renaming only the enum would have left one writer emitting <code>ci</code> and <code>load_board</code>
+reading <code>continuous_integration</code>. Before touching a stored key, find every writer, and do not
+assume the enum is the whole set: <code>asdict</code>, <code>**kwargs</code> and <code>model_dump</code> all serialize a name
+that no enum sees.</p>
+<p><strong>The guard that would have caught it existed on one document and not the other.</strong>
+<code>board.json</code> had <code>test_the_written_board_parses_back_into_the_records_it_was_built_from</code>;
+<code>pr_data.json</code> had nothing pinning its writer and reader to the same keys, because every test
+of it builds its mapping <em>through</em> <code>PullRequestDataKey</code> - so both sides move together and a
+one-sided rename passes. A round trip that names no key is the only test that catches this;
+each <code>pr_data</code> chip field being optional is what makes the failure silent rather than loud.
+Written first and checked to fail on a deliberate one-sided rename before the real one.</p>
+<p><strong>A rename is a reading pass over files you would not otherwise open.</strong> It turned up
+<code>maintenance_board.as_json</code> spelling <code>pull_requests</code> one line below the enum that owns it, and
+<code>test_stack.py</code> spelling <code>"failure"</code> where <code>CheckConclusion</code> exists. Both are the finding the
+2026-08-30 round asked to be applied everywhere, sitting in files no earlier round had reason
+to read.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-corrections">
+        <div class="wave-eyebrow">What the dashboard computes</div>
+        <p class="wave-description">Bugs in readiness, drift and merge-state classification, each fixed on its own root cause.</p>
+        <section class="track">
+          <h3 class="track-title">Computation fixes</h3>
+          <div class="item-list">
+                <article id="item-ready-to-start-dependency-free-fix" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Fix ready-to-start dashboard list dropping dependency-free items</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">ready-to-start-dependency-free-fix</span>
+            <span class="mono branch">claude/funny-feynman-wexezs</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/103" target="_blank" rel="noopener">#103</a>
+            <a class="session-link" href="https://claude.ai/code/session_016mfBqcBibxA7Wa5eNfWtoL" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. `_compute_next_steps` skipped items with no dependencies at all, so a dependency-free
+not-started item never reached the ready-to-start list. Found when `plan-updates-since-helper`
+failed to appear in the sidebar. Fixed with a failing test first, plus a companion test pinning that
+a dependency-free *blocked* item stays out of both lists.
+
+Two pre-existing tests carried an incidental dependency-free not-started fixture item that
+legitimately became ready-to-start under the corrected semantics; that item&#39;s status changed to
+blocked so each test keeps isolating only the behaviour it names, with no assertion touched.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-dependency-chips-blocked-fix" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Show unmet dependency chips as blocked on plan dashboards</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">dependency-chips-blocked-fix</span>
+            <span class="mono branch">claude/plan-dashboard-dependencies-1am49n</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/105" target="_blank" rel="noopener">#105</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. Renders an item&#39;s unmet dependencies as blocked chips instead of neutral ones. A
+pre-existing bug-fix pull request, adopted under the every-fork-pull-request-belongs-to-a-plan rule.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-merge-timestamp-required-fix" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Reject closed pull request data that omits merged_at</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">merge-timestamp-required-fix</span>
+            <span class="mono branch">claude/cram2-main-drift-4owm9a</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/119" target="_blank" rel="noopener">#119</a>
+            <a class="session-link" href="https://claude.ai/code/session_01BsUHGwZaRpxo97jVDUmaau" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. Opened from false drift flags this plan&#39;s own dashboard raised - &#34;closed without merging&#34;
+for two pull requests GitHub records as merged. The root cause is the hand-assembled
+`pr_data.json`: `merged_at` is the only signal separating merged from closed-unmerged, since `state`
+is `&#34;closed&#34;` for both, `list_pull_requests` lets a caller drop it through `fields`, and the fetch
+document only ever required `labels`. `from_mapping` now raises `MissingMergeTimestampError` for a
+closed entry missing the key, keeping key-present-and-null as the genuine closed-unmerged case, and
+the fetch document names the minimum field set.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-ready-to-review-merged-dependency" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Ready-to-review drops items whose dependency has already merged</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">ready-to-review-merged-dependency</span>
+            <span class="mono branch">claude/plan-item-kickoff-workflow-s9e8bj</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/122" target="_blank" rel="noopener">#122</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Ltrz1G8qwSHgo6jyfeV1EU" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. `_compute_ready_to_review` admitted an item only when every dependency had an *open* pull
+request, which inverted the intent: an item whose dependency merely had an open draft was listed,
+while one whose dependency had fully landed was not, so a dependency becoming more finished made its
+dependent look less reviewable. Found while working `sidebar-bug-fix-chips` and deliberately kept
+out of it, one root cause per bug fix. The user confirmed the oversight reading before anything
+changed, per the rule against inventing a reason for existing behaviour.
+
+**The consolidation this work proposed and must not revive:** folding the predicate onto
+`is_ready_to_unblock_dependents()` is wrong, because that one excludes `OPEN_DRAFT` - a draft is
+unsafe to build a *branch* on - while this list deliberately includes a draft dependency. The two
+differ by exactly `OPEN_DRAFT`, and that difference is the real distinction: safe-to-build-on
+requires out-of-draft, worth-reviewing-behind requires only that the base exists. Delivered instead
+as `Item.is_ready_for_dependent_review()`, composing `has_open_pull_request` with
+`is_effectively_done()`.
+
+The screenshot regeneration recipe, since no script exists: render `example/` with
+`build_dashboard.py`, then headless Chromium with
+`--blink-settings=preferredColorScheme=0` for the dark theme the committed images use, cropped to a
+100px bottom margin.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-deferred-dependency-drift-check" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Flag an item stacked on a deferred/closed dependency instead of leaving it to a stale note</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">deferred-dependency-drift-check</span>
+            <span class="mono branch">claude/deferred-dependency-drift-pr-qxpfsm</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/184" target="_blank" rel="noopener">#184</a>
+            <a class="session-link" href="https://claude.ai/code/session_01VBa9VPHJW4VjpWtdq1XLE2" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve plan-dashboards deferred-dependency-drift-check" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Found 2026-08-12 in `rdr-refactor`&#39;s D-ui stack: `D-ui-splice-fix` was closed as superseded, but
+`D-ui-rendering` still depends on it and is still in progress, with no automated signal anywhere
+that its base is dead - only a previous session&#39;s freeform note, which nothing re-reads.
+`_drift_description_of` only compared an item&#39;s own status against its own live state, and
+`_compute_next_steps` only evaluates not-started and blocked items, so an in-progress item stacked
+on a dead dependency slipped past every check. Same defect shape as `landed-parent-detection`, which
+taught the restack plan to decide a parent has landed from git ancestry rather than board
+membership, never ported to the `depends_on` graph.
+
+The condition is **deferred, or closed unmerged** - not `is_ready_to_unblock_dependents()`, which is
+also false for a not-started dependency and for an open draft, and stacking on an open draft is this
+repository&#39;s normal workflow, so a check built on it would flag most of every plan. Shipped as
+`Item.stall_reason`. `drift_description` became `drift_flags`, because an item can carry manifest
+drift and a stalled dependency at once and reporting one would hide the other. Only direct
+`depends_on` is checked - an item further up is stacked on a base that is itself alive - and each
+flag names the stalled dependency&#39;s own `depends_on` as the reparent target.
+
+Five review rounds, all applied, converging on one lesson worth carrying: **check the neighbours
+before defending a guard.** Three rounds argued about whether tests should pin the drift sentences,
+and what ended it was reading how the module already treats the identical pattern - `display_label`
+on two enums is built the same way, carries the identical silent-`None` exposure, and is covered by
+two spot checks. The parametrised guards were deleted; what survives pins rules rather than
+phrasings. Given up deliberately and stated on the thread: a cause added later without a match
+branch shows as &#34;None&#34; on the page rather than as a failing test.
+
+Two mechanical findings the rounds left behind. `DashboardCssClass` moved into production, since
+`status_and_drift_css_class` was already spelling one class itself; its placement is load-bearing,
+because an attribute docstring directly before a decorated definition makes docformatter drop a
+blank line, black restore it, and `format_docstrings.py` discard the lot - the non-convergence this
+file was in until the first round. And a `TextOfElementsWithClass` `HTMLParser` subclass reads the
+page by class instead of matching strings, which is what let the hand-modelled `markupsafe.escape()`
+call go.
+
+State: draft, 267 plan-dashboard tests. Live, the check flags exactly one item and the right one.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-cross-plan-dependencies" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Let depends_on name an item in another plan, resolved live at dashboard time</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">cross-plan-dependencies</span>
+            <span class="mono branch">claude/plan-dashboards-cross-dependencies-h3icfd</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/253" target="_blank" rel="noopener">#253</a>
+            <a class="session-link" href="https://claude.ai/code/session_01U2r4CGpBKiD551i2FE5NXW" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve plan-dashboards cross-plan-dependencies" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Decided by the developer on 2026-09-03, taking the roadmap&#39;s open entry &#34;Cross-plan dependencies are not representable&#34; and choosing the reference form `&lt;plan-id&gt;/&lt;item-id&gt;` (a slash cannot occur in either kebab-case id, so a bare id keeps meaning this plan). Not a bug fix: tooling that never existed, so no `bug` label.
+What it changes. The schema (plan-schema.md) admits the form. validate_plan resolves a cross-plan entry against that plan&#39;s manifest and rejects an unknown plan or item with the same shape of error as UnknownDependency; a reference to the plan&#39;s own id is rejected too (use the bare id); the cycle check runs over the union graph. build_dashboard and refresh_dashboard.sh take the directory holding every plan (the personal-notes checkout save-plan.sh already extracts for the branch index, via plan_manifest_tools&#39; walk) so the referenced manifests load; pr-data-fetching.md widens the fetch to every pull request a cross-plan dependency names, and the foreign item&#39;s repository defaults to its own plan&#39;s default_repository. One resolver, items_by_reference, serves every reader of depends_on: _dependencies_are_ready, _dependency_chips_of, the ready-to-review rule (the dependency needs an open pull request), #184&#39;s stall_reason, and check_dependency_readiness.py (which gains the same directory argument, so plan-item-kickoff and plan-item-resolve see readiness the dashboard sees). The chip reads `plan-id/item-id`, its tooltip carries the foreign item&#39;s title, plan and live state, and it links to that plan&#39;s dashboard from the URL cache when the cache has one. Stacking depth counts same-plan edges only; a foreign parent is not on the page.
+One latent fault fixed on the way rather than left: _dependencies_are_ready today skips an identifier it cannot resolve, so a mistyped dependency counts as ready. After this item an unresolvable entry is a validation error, never silently ready.
+Review round 2026-09-03, seven threads plus a note about context, all applied in b9e53be9. Its substance changed three things the plan above described differently. PlanDirectory reads one manifest on demand rather than every manifest up front, and the skill extracts manifests and the URL cache only, never another plan&#39;s roadmap - the reviewer&#39;s point being that a per-plan size budget is defeated the moment one plan&#39;s dashboard run drags in another&#39;s contents. The resolver&#39;s list carries no None: Dependency is a family, ResolvedDependency plus UnresolvedDependency, which keeps every entry countable without a hole and moves readiness, the chip and live-state classification onto it - so items_by_reference became DependencyResolver, shared with check_dependency_readiness.py, whose own duplicate _resolve is gone. The union-graph walk and its cycle search became DependencyGraph and CycleSearch, no nested functions. Fixed strings got one home each: ManifestKey, PlanFile, SUPPORTED_SCHEMA_VERSION, and a DependencyReadiness dataclass behind the readiness JSON; the tests read every fixture value back out of the manifests that declare it, through a shared tests/fixture_plans.py.
+Done when the recorded cross-plan blockers become references and render as chips: icra-experiments&#39; integrated-simulation-pipeline -&gt; montessori-eql-stack/montessori_fast_inline_monitor, its failure-taxonomy-and-typing and experiment-c-in-simulation -&gt; knowledge-directed-perception/expectations-from-events, this plan&#39;s shared-pr-state-chips -&gt; the bastler-package item carrying #185, and rdr-explanation&#39;s rdr-why-answer -&gt; the rdr-core-engine item carrying #210. Tests: the validation cases, resolution against a second fixture manifest, a foreign draft versus a foreign ready dependency in the ready-to-start lists, the chip, the readiness script, and the shell entry point&#39;s new argument. Off main; #184, #157, #206 and #111 also edit build_dashboard.py, and the track&#39;s rule is that whichever lands second merges.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-legibility">
+        <div class="wave-eyebrow">Keeping a large plan readable</div>
+        <p class="wave-description">Chips, toggles and the masthead - what a plan with dozens of items needs to stay an overview.</p>
+        <section class="track">
+          <h3 class="track-title">Legibility and navigation</h3>
+          <div class="item-list">
+                <article id="item-sidebar-bug-fix-chips" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Mark bug-fix pull requests with a chip in the dashboard sidebar</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">sidebar-bug-fix-chips</span>
+            <span class="mono branch">claude/dashboard-bugfix-pr-section-161vf8</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/120" target="_blank" rel="noopener">#120</a>
+            <a class="session-link" href="https://claude.ai/code/session_01UkRVjgoWouwbndZa1siY29" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. Surfaces bug-fix pull requests in the &#34;What to do next&#34; sidebar.
+
+**The design reversal that defines it.** The first attempt was a separate top &#34;Bug fixes&#34; group with
+its own outline; the user rejected it, because the sidebar groups by *action* and being a bug fix is
+not one - such items already sit in ready-to-start, blocker-may-be-cleared or ready-to-review - and a
+fifth outline would collide with the per-group outlines, which are not mutually exclusive with it.
+So it is an attribute, rendered as a chip on the entry wherever the item already appears, never
+moving an item between groups. Adds `Item.is_bug_fix`, giving the already-defined but unused
+`PullRequestLabel.BUG` its first consumer, and collapses four near-identical sidebar group blocks
+into one `next_step_group` macro so the chip has a single home.
+
+Extended with the filter the chip made possible: a &#34;Bug fixes only&#34; checkbox, rendered only when
+some entry is a bug fix so it can never empty the card, with both per-group counts rendered up front
+and swapped by CSS rather than recomputed in script.
+
+It carries no `bug` label of its own: it surfaces bug fixes, it does not fix one.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-dashboard-chip-notes-collapse" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Collapse plan-item notes on dashboard chips behind an expand arrow</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">dashboard-chip-notes-collapse</span>
+            <span class="mono branch">claude/dashboard-chip-collapse-g5uyj1</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/124" target="_blank" rel="noopener">#124</a>
+            <a class="session-link" href="https://claude.ai/code/session_01HaU9fwvtLUvFh4k93K6p5C" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. Raised against a screenshot of this very plan&#39;s own dashboard: one card&#39;s notes ran to
+several hundred words and alone filled the viewport, leaving one item visible at a time and
+defeating the dashboard&#39;s purpose as an overview. Fixed by wrapping the notes in a
+collapsed-by-default `&lt;details&gt;`/`&lt;summary&gt;` toggle, reusing the CSS-only arrow-toggle pattern
+already in the file rather than inventing new script. No Python change was needed, and the sidebar
+cards are unaffected since they render short fixed one-liners.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-dashboard-url-cache-integrity" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Record dashboard URLs from the live artifact listing instead of by hand</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">dashboard-url-cache-integrity</span>
+            <span class="mono branch">claude/plan-dashboard-cache-drift-0g2s1w</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/150" target="_blank" rel="noopener">#150</a>
+            <a class="session-link" href="https://claude.ai/code/session_01CtpkhY4uomdaWY2rv25WaY" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. Five of six plans plus the master index pointed at artifacts that did not exist, and two
+plans had duplicate dashboards. Hand-corrected at least six times and drifted again every time, so
+the question was the mechanism rather than the mapping.
+
+Classifying every URL ever written against the live artifact listing separated by run kind: bulk
+refresh named a real artifact 0 times in 23, first publish 10 in 13, corrections 15 in 15 - and
+every correction had been made from an `Artifact action: &#34;list&#34;`. The cache *read* was never at
+fault. The skill asked the session to hand-write the YAML with &#34;your updated url(s)&#34;, but on an
+in-place update there is no returned URL to copy, so a UUID was invented and nothing checked it; the
+next run passed that dead URL, could not update a missing page, minted a fresh artifact, and
+produced the duplicate. Both live pairs arose that way. Fixed by moving the write into
+`record_dashboard_url.py`, which resolves the URL from the listing by title so no UUID passes
+through the session, and refuses an unlisted URL, a title matching nothing, and a title matching
+several.
+
+**The gap it left, and the evidence that it matters.** Nothing re-checks an entry after write time.
+Five days later a reconciled entry this item had recorded as verified went dead on its own, and
+recovery meant resolving from the live listing by hand - into exactly the ambiguous case the script
+refuses. Two things that argues for when this is picked back up: an audit is worth having, because a
+stale entry costs a duplicate artifact rather than an error; and the refusal on an ambiguous title
+is right but leaves the caller no recorded rule for choosing - most-recently-updated is what both
+corrections have used.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-deferred-items-hidden-by-default" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Hide deferred items in the dashboard by default, behind their own toggle</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">deferred-items-hidden-by-default</span>
+            <span class="mono branch">claude/hidden-deferred-plan-items-6weef1</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/157" target="_blank" rel="noopener">#157</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Je624Mq716GToQRqtkTXXn" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve plan-dashboards deferred-items-hidden-by-default" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A deferred item is intentionally paused or superseded, so it is the same kind of noise on a
+dashboard as a done one, and done items have been hidden behind a sidebar toggle since the dashboard
+existed. `rdr-refactor` shows it: eight of its items are deferred and sit inline among the live ones.
+This gives deferred its own checkbox, hidden by default, parallel to &#34;Show done / merged items&#34;.
+
+The substance is the indentation, not the checkbox. An item&#39;s indent level is its depth in the
+same-track `depends_on` chain, and the existing toggle already carries a second precomputed level -
+&#34;as if every done item were not a dependency at all&#34; - so a dependent dedents to zero rather than
+hanging one level in from an invisible parent. A second independent toggle makes that four
+combinations, not two, so `StackedItem` stops carrying named pairs of fields and carries one
+position per filter state, keyed by a `StatusFilter` enum whose value doubles as the page&#39;s CSS
+class and the item&#39;s custom-property suffix. Adding a third hidden status later is then data rather
+than another pair of fields and another template branch.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-dashboard-refresh-button" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Refresh button in the dashboard masthead, copying the command that rebuilds the page</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">dashboard-refresh-button</span>
+            <span class="mono branch">claude/rdr-dashboard-refresh-button-tpuvo9</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/206" target="_blank" rel="noopener">#206</a>
+            <a class="session-link" href="https://claude.ai/code/session_0112C4kGpRE6uLmi5Lwkghx2" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve plan-dashboards dashboard-refresh-button" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Raised while refreshing a dashboard: a published page is a snapshot of the moment it was rendered
+and nothing on it can republish it, so getting a current one meant recalling both the skill name and
+the plan&#39;s id from outside the page that needs them. The masthead now carries a Refresh button
+copying `/plan-dashboard &lt;plan-id&gt;`, with a hint beside it so it is not read as an in-page reload.
+
+The item action buttons and this one are the same affordance - a button whose click copies a slash
+command - so they share one `CopyableCommand` base and one macro rather than a second copy of the
+markup and the clipboard handler.
+
+One existing test changed rather than a behaviour: an assertion that no action command appeared
+anywhere on the page was a proxy for the done item&#39;s own card having no button, and a page-level
+button legitimately introduces one, so it narrows to the item commands the test actually names.
+
+Landing order rather than a dependency: the bastler migration moves this file verbatim, so whichever
+of the two lands second carries the other&#39;s change through the merge it already needs. Deliberately
+not done: the overview screenshot predates the button, and re-rendering it headlessly would leave it
+visually inconsistent with the two beside it.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-live-state">
+        <div class="wave-eyebrow">Live pull request state on the page</div>
+        <p class="wave-description">The shared fetch/compute module, and the promotion surface it makes possible.</p>
+        <section class="track">
+          <h3 class="track-title">Shared pull request state</h3>
+          <div class="item-list">
+                <article id="item-shared-pr-state-chips" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">PR 3: shared pull_request_state module + LOC/CI/conflict chips in plan dashboards</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">shared-pr-state-chips</span>
+            <span class="mono branch">claude/shared-pr-state-chips</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/111" target="_blank" rel="noopener">#111</a>
+            <a class="session-link" href="https://claude.ai/code/session_01PDkiMhjnoromH2KP2z8Koy" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve plan-dashboards shared-pr-state-chips" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">One pull-request-state fetch/compute module - CI rollup, lines changed against base, mergeable
+probe, session-link parse - shared by `stack.py` and the dashboard&#39;s own pull-request data fetching,
+plus board-semantics chips on dashboard items and a headless static-HTML build entry point for the
+Pages Action, with the Artifact path still working during the transition. `pr_state` also reads a
+pull request&#39;s native stack object through REST, GraphQL being unusable from sessions, and renders a
+stack chip when the pull request is a stack member; that addition is specified but not yet
+implemented.
+One old bug was fixed in the port and is worth not reintroducing: `merge-tree` exits 1 for both a
+conflict and a missing reference, so the old probe reported a typo as a conflict. The port verifies
+references first.
+**Re-scoped 2026-08-20 by the bastler pivot.** This pull request no longer creates the tooling
+package - `bastler-package` does, off `main` - and the dependency inverted: once that branch exists,
+#111 rebases onto it and folds its `development_tooling` modules and test suite into `bastler` under
+its naming, deleting the repository-root `sys.path` insert. What stays this item&#39;s own is the
+feature half: the chips, the `pr_state` module itself, and `build_site.py`.
+Its dependency on `stack-tooling-on-main` is merged and now lives in the `stack-tooling-install`
+plan, so it is dropped from `depends_on`. The live dependency on `bastler-package` crosses a plan
+boundary and is recorded as a blocker instead.
+**Resolved 2026-09-02 on the state actually found, not the state recorded.** The manifest called this item blocked on the bastler dependency and on a main conflict; the stall was the 2026-08-30 review round, which the manifest never mentioned. The two &#34;rebase onto bastler&#34; threads are answered by decision 13 itself, so the resolution is the fold: base moved to #185&#39;s head, `development_tooling` deleted and its two modules re-homed as `bastler.pr_state` and `bastler.personal_notes`, `build_site.py` re-homed as `bastler.build_site`, the four test modules and two stubs into `test/bastler_test`, the repository-root `sys.path` inserts and the second CI invocation deleted. The seventeen code-quality threads are applied in the same pass, since each one reshapes code the fold is already moving.
+**Folded 2026-09-02** (23f54b22, d6b8035a): #185&#39;s head merged in, base retargeted to `claude/plan-item-kickoff-workflow-cuare2`, `development_tooling` gone - `bastler.pr_state`, `bastler.personal_notes`, `bastler.build_site`, tests and stubs in `test/bastler_test`, 698 tests in `test_bastler`&#39;s one invocation. The seventeen code-quality threads are applied and resolved: pr_state&#39;s loose functions are the classes `CheckRollup`, `ClaudeSessionLink`, `ChangeSize`, `PullRequestExport`, `RepositoryEndpoints`, `PullRequestFetcher` and `LocalGitProbe`; every payload key, list filter, check state, board key and pr_data key is a StrEnum; constants are ClassVars; `PersonalNotesBranch` fetches through the shell function `bastler.stack` already used, which moved there; `build_site` parses the manifest through the dashboard&#39;s validated `Plan` and reports through dataclasses with to_json/from_json; tests build payloads through `PullRequestDetailPayload`, use `ScratchRepository`, read the plan from a dataset file, and every fake is a dataclass. `CredentialVariable` in `maintenance_constants` is the one home of the two token variables.
+Two things learned in the fold worth keeping. The merge brought no stray main commits into the diff because #185 already contained this branch&#39;s last merge of main - check `git merge-base --is-ancestor` before choosing merge over re-cut. And `format_docstrings.py` declines a file whenever docformatter would expand a one-line member docstring at the end of a class, because the expansion eats the blank line black then restores; a new file converges only if its member docstrings are already in the three-line form the tool produces, which is what the branch&#39;s new modules now carry. `stack.py` and `build_dashboard.py` were already declined on #185&#39;s head and stay black-only.
+Still this item&#39;s own: the stack chip read from the pull request&#39;s native stack object, specified 2026-07-31 and not implemented.
+**The 2026-09-03 review round, found by /plan-item-resolve and not recorded before it.** Nine threads are unresolved: the two from 2026-08-30 left open on purpose, and seven new ones the manifest never mentioned. All seven are naming rules rather than defects - no abbreviations in identifiers (`ci`, and the module `pr_state` itself), a clearer name for `PullRequestDetailPayload`, the `in-review` literal that `PullRequestLabel` already has a member for, and `board.json` wanting a constant. Nothing else flagged the stall because the fold left the pull request healthy: all 23 checks pass on bfc1e9b7 and it is `clean` against its new base.
+**Resolved 2026-09-03** (9dc34b3a). All seven are applied: `bastler/pr_state.py` is `bastler/pull_request_state.py` with its three test modules renamed after it, `ci` is `continuous_integration` on `BoardEntryKey`, `PullRequestDataKey`, `PullRequestLiveState` and `PullRequestRecord`, `PullRequestDetailPayload` is `PullRequestPayload`, and the last hand-spelled strings that already had enums read them - `PullRequestLabel.IN_REVIEW`, `PullRequestLabel.BUG`, and `BOARD_DOCUMENT_NAME` for `board.json`, which `BOARD_PATH` is now built from. 730 tests pass.
+One half was deliberately left and asked about on the thread: the `&#34;ci&#34;` each renamed enum member carries as its *value*, the on-disk key in `board.json` and `pr_data.json`.
+**The value renamed too, 2026-09-03 evening** (477f4dc34), the user answering &#34;yes rename it everywhere and also in any existing files that will be read&#34;, plus three further threads restating it and the `Payload` one. Both key enums carry `&#34;continuous_integration&#34;` now. The board key turned out not to be written through the enum at all - `maintenance_board.as_json` serializes `stack.PullRequest` with `asdict`, so the *field name* is the key - so `stack.PullRequest.ci` and `stack.Branch.ci` are renamed as well, and their readers in `stack.py` and `maintenance_board.py` follow. Both documents&#39; schemas are re-spelled where they are written down: `.claude/stack/README.md` and `pr-data-fetching.md`. No `ci` identifier or key is left in `bastler/` or `test/bastler_test/`.
+`pr_data.json` had no test holding its writer and its reader to the same keys - they sit in different modules, and every other test builds its mapping *through* the key enum, so a one-sided rename passed the whole suite while silently blanking every chip. Added first, and checked to fail on a one-sided rename before the rename was made; `board.json` already had its equivalent, which is what would have caught the `asdict` half.
+`PullRequestPayload` is `PullRequestResponse` in `pull_request_responses.py`. The previous round dropped &#34;Detail&#34; and kept &#34;Payload&#34;, which was half the ask; &#34;response&#34; is the word the module had already settled on, in the fake transport&#39;s `responses` field. `check_runs_payload` and the production `CheckRollup.from_payload` follow it.
+Two hand-spelled strings found in files the rename already touched: `maintenance_board.as_json` spelled `pull_requests` one line below the enum that owns it, and `test_stack.py` spelled `&#34;failure&#34;` where `CheckConclusion` exists. The check chip&#39;s label reads `checks passing` rather than `ci passing` - display text rather than a key, so outside what was asked, and flagged on the thread as such. 731 tests pass.
+**Out of draft 2026-09-03 19:45, by the user**, having merged #185&#39;s newer head in at 19:35 (`61139c04a`, on top of `477f4dc34`). Under the personal-notes convention that is the record of the changes having been read and accepted, and it ends the session&#39;s work on the pull request - so the two 2026-08-30 threads below stay open for the user rather than being chased, and the stack chip stays unimplemented. The item is still `in_progress` rather than `done`: out of draft is not merged, and landing still waits on #185.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan dependency, not representable in depends_on: this branch is stacked on bastler-package (#185, bastler-package plan) since 2026-09-02 - its base is that branch and its modules are folded into the package. #185 is open, out of draft and promoted upstream (cram2-link-sent) but unmerged. Its main conflict is gone as of 2026-09-03: it is mergeable, with one unrelated robotics check red (test_each_lib (giskardpy)). This item lands only after it does; GitHub retargets the base to main by itself when it merges. cross-plan-dependencies (#253) is what turns this entry into a depends_on reference.</div>
+            <div class="blocker">▸ Two review threads from the 2026-08-30 round are left open on purpose, each answered on the thread and waiting on the user: GitCommandRunner in the tests (answered with ScratchRepository, because GitCommandRunner imports bastler.stack, which imports pull_request_state) and the &#34;discuss the rebase options&#34; thread (three options and the one taken are on it). These are the item&#39;s only open threads: every thread of both 2026-09-03 rounds is applied and resolved.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-ready-to-promote-upstream-links" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">ready-to-promote-upstream-links</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff plan-dashboards ready-to-promote-upstream-links" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A fifth sidebar group - &#34;Ready to promote&#34; - listing every item whose fork pull request is
+open-and-ready, cleanly mergeable and based on the fork&#39;s default branch, each with a one-click link
+opening the upstream compare-and-create page with the title and body prefilled and the fork pull
+request linked from it. This is the Routine&#39;s phase-3 link building turned into a surface instead of
+an emailed summary: the same compare URL, computed at dashboard build time, so it reaches the user
+with no scheduled run - which is what the cutover requires of every deterministic duty.
+
+Portability applies as everywhere else: the upstream is a new optional `plan.yaml` field, never a
+hardcoded repository, and a plan without it renders no group and no links.
+
+Decisions settled with the user at planning time: the link builder lands in the package next to
+`pr_state`, so the scheduled Action can reuse it verbatim; the prefilled body is the fork pull
+request&#39;s own description truncated to one paragraph plus a link back, matching the doctrine&#39;s
+existing warning that a compare URL silently drops an over-long body; check state is a chip and
+never excludes an item, since a red robotics job routinely has nothing to do with the pull request
+under it; and an item leaves the list when the user applies the `in-review` label after clicking
+Create, with `cram2-link-sent` left alone entirely, since it exists only to stop the Routine
+re-emailing a link and a stateless recomputed list does not need it.
+
+Requires three fields in `pr_data.json` that its dependency&#39;s entries do not yet carry - `base`,
+`title` and `body` - plus the fetch document&#39;s minimum field set updated to match.
+
+It depends on `sidebar-bug-fix-chips` for a concrete reason worth keeping: adding a fifth sidebar
+group is one `next_step_group` call once that macro has landed, and a fifth copy of the markup if it
+has not.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="PR 3: shared pull_request_state module + LOC/CI/conflict chips in plan dashboards">shared-pr-state-chips</span>
+
+            <span class="chip" title="Mark bug-fix pull requests with a chip in the dashboard sidebar">sidebar-bug-fix-chips</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">5</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">7</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-ready-to-promote-upstream-links" data-item-identifier="ready-to-promote-upstream-links" onclick="planDashboardHighlightItem(event, this)"><strong>PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

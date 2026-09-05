@@ -1,0 +1,1532 @@
+<title>DAG-vs-tree facade hardening in SymbolicExpression</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>DAG-vs-tree facade hardening in SymbolicExpression</h1>
+    <p class="description">Close the design smell where EQL&#39;s SymbolicExpression - a genuine rooted DAG (shared subexpressions; _parents_ is a list) - exposes tree-shaped _parent_/_root_ accessors (a single first-attached &#34;primary&#34; parent and a walk up that chain). The in-flight stack (#89/#90/#92) already fixed the individual leaks via evaluation-scoped context; this plan does the root-cause hardening they deferred: make the structural accessors hard to misuse, fix the remaining QuantifiedConditional cache-staleness bug, and add a systematic audit plus a guard test.
+</p>
+    <p class="repo-line">
+      8 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/96" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>DAG-vs-tree façade hardening in <code>SymbolicExpression</code></h4>
+<h5>Why this exists</h5>
+<p>EQL's <code>SymbolicExpression</code> (<code>krrood/src/krrood/entity_query_language/core/base_expressions.py</code>)
+is a genuine <strong>rooted DAG</strong>: a node carries <code>_parents_</code> as a <em>list</em>, and subexpressions are
+deliberately shared (<code>MappedVariable</code> singletons, a condition reused across two queries). Yet
+its public navigation is <strong>tree-shaped</strong>:</p>
+<ul>
+<li><code>_parent_</code> returns a single <strong>primary</strong> parent (<code>_parent__</code>) — whichever was attached <em>first</em>.</li>
+<li><code>_root_</code> walks <em>only that primary-parent chain</em> up to one root.</li>
+</ul>
+<p>Per the NLG/compiler/query-plan literature, a DAG's defining property versus a tree is exactly
+that a node has <em>many</em> parents (common-subexpression sharing, LLVM's plural <code>users()</code>), and a
+shared node's "parent"/"root" is only well-defined <strong>relative to who is asking</strong>. So singular
+<code>_parent_</code>/<code>_root_</code> answer a <em>construction-history</em> question where callers usually need a
+<em>context/ownership</em> one. This mismatch has produced a family of real, separately-fixed bugs.</p>
+<h5>What the in-flight stack already did (Wave 0)</h5>
+<p>The maintainer has been fixing the individual leaks, each by resolving the owner from
+<strong>evaluation-scoped context</strong> rather than the structural pointer — which is precisely the
+design the literature points to (dynamic context / inherited attributes), and which the
+codebase already had the machinery for (<code>ActiveConditionsRoot</code>, <code>OutermostQueryClaim</code>,
+<code>TruthValueOperatorChildren</code> in <code>evaluation_context.py</code>):</p>
+<ul>
+<li><strong>#90</strong> (<code>bug</code>): <code>is_condition_participant</code> read a shared node's structural <code>_parent_</code> →
+  dropped <code>satisfied_condition_ids</code>. Fixed with a per-pass <code>TruthValueOperatorChildren</code> record.</li>
+<li><strong>#89</strong>: removed the dead <code>_last_parent_of_type_</code> recovery; extended <code>ActiveConditionsRoot</code>
+  with <code>has_condition()</code> decided once at claim time.</li>
+<li><strong>#92</strong> (<code>bug</code>): <code>_root_</code>'s single-parent walk <em>was</em> a real bug in
+  <code>InferenceExplanation.query_root</code> (fixed via <code>OutermostQueryClaim</code> storing the claimed query
+  node) plus a <code>QueryGraph</code> memoization order-bug.</li>
+</ul>
+<p>Key fact established while designing this plan: evaluation is <strong>top-down recursion over
+<code>_children_</code></strong> — nothing walks <em>up</em> <code>_parent_</code> to drive evaluation. The structural pointer is
+only construction bookkeeping plus a documented fallback for when no evaluation context is
+active. That is what makes the hardening below low-risk.</p>
+<h5>What this plan adds (Wave 1)</h5>
+<p>The point-fixes above leave two things open, which this plan closes:</p>
+<ol>
+<li>
+<p><strong>The root cause is untreated.</strong> Every fix is local ("resolve from context <em>here</em>"). The
+   façade itself (<code>_parent_</code>, <code>_root_</code>) is still public and un-renamed, so it keeps <em>inviting</em>
+   the next semantic misuse. The hardening is to (A) rename the structural accessors to
+   <code>_structural_parent_</code>/<code>_structural_root_</code> so their name announces "construction/layout shape,
+   not authoritative ownership", keeping <code>_parents_</code> as the real relation; (B) consolidate the
+   repeated "use context else structural fallback" dance into one reusable <code>EvaluationContext</code>
+   accessor; and add a name-based <strong>guard test</strong> so semantic modules physically can't reach the
+   structural accessor again.</p>
+</li>
+<li>
+<p><strong>One known bug remains</strong>, flagged out-of-scope in #92:
+   <code>QuantifiedConditional._ids_of_variables_to_add_to_sources_</code> (<code>logical_quantifiers.py:147</code>)
+   is a <code>@cached_property</code> over <code>_root_query_._selected_variables_</code> — a shared <code>Exists</code>/<code>ForAll</code>
+   node caches the <em>first</em> query's answer and reuses it in the second. This is a <em>different
+   class</em> of problem (a query-dependent value cached per node at all), fixed by resolving the
+   owning query from context per pass and keying any cache by owning-query id.</p>
+</li>
+</ol>
+<h6>Sequencing and positioning</h6>
+<p>Work composes <strong>on top of</strong> the #89/#90/#92 stack and must not redo or conflict with it. The
+bug + audit item (<code>quantified-conditional-and-audit</code>) depends on all three landing; the rename
+item (<code>facade-rename-and-guard</code>) is deliberately <strong>sequenced last</strong> because it is the largest
+diff and collides most with the stack — doing it after the bug PR lets it rebase cleanly. The
+name-based guard test lives with the rename item, since it can only assert on the renamed
+<code>_structural_*</code> accessors.</p>
+<h5>Conventions and verification</h5>
+<ul>
+<li>TDD throughout (AGENTS.md): each fix begins with a failing shared-node regression test in the
+  #90/#92 shape (a node shared across two independent queries, asserting the second query's own
+  evaluation is correct). krrood-internal mimics only — no cross-package imports.</li>
+<li>Run with the project interpreter via pytest: <code>test_eql</code>, <code>test_ormatic</code>, <code>test_class_diagrams</code>,
+  <code>test_ripple_down_rules</code>; expect the #89/#90/#92 baselines to stay green with new tests added.</li>
+<li><code>black</code> + <code>docformatter</code> (<code>scripts/format_docstrings.py</code>) on touched files; RST field
+  docstrings; absolute/top-level imports; no <code>getattr</code>; guard clauses; SOLID.</li>
+<li>Commits authored as the human identity, no assistant trailers; "Made with the help of Claude."
+  note permitted.</li>
+</ul>
+<h5>Design origin</h5>
+<p>This plan was migrated from an approved Claude Code plan-mode plan produced in the session that
+first raised the "isn't it weird for a DAG to ask for a root / a node to ask for the parent?"
+question, then cross-checked against the live #89/#90/#92 stack. Per-branch working notes, when
+branches exist, live in <code>.claude/personal/pr-progress/&lt;branch&gt;.md</code> as usual and are not
+duplicated here.</p>
+<h5>Addendum (2026-07-31) — the <code>insert_at</code> splice is this defect, on <code>main</code>, today</h5>
+<p>A <code>/plan-item-resolve</code> session working <code>rdr-refactor</code>'s <code>D-core-support</code> (#67) hit a
+review thread calling <code>enforce_parent_consistency</code> in <code>rdr/rule_tree_view.py</code> a code
+smell — <em>"why isn't it consistent in the first place?"</em> Tracing that question led
+here, and turned up a concrete instance of this plan's defect class sitting on <code>main</code>.</p>
+<p><code>ConclusionSelector.insert_at</code> (<code>rules/conclusion_selector.py:67</code>) splices a new branch
+above <code>anchor._parent_</code>:</p>
+<pre><code># Splice above the anchor's structural parent — a ConclusionSelector for a node already
+# in a rule tree, or a Filter for a direct WHERE condition.
+previous_parent = anchor._parent_
+</code></pre>
+<p>That is first-attached-wins on a node that is routinely shared. When a rule tree first
+uses an attribute inside a <code>Comparator</code> in one branch (<code>refinement(eggs == False)</code>) and
+later refines on it bare (<code>refinement(eggs)</code>) in a sibling branch, <code>anchor._parent_</code>
+points at the incidental <code>Comparator</code>; the splice rewires that comparator's operand and
+drags the new refinement chain out of the tree. Measured consequence, from #78: loading
+a human-fitted zoo model dropped 12 of its 21 rules (accuracy 101/101 → 71/101).</p>
+<p>Three things make this worth its own item rather than folding into Phase D:</p>
+<ul>
+<li><strong>It is construction-time, not evaluation-time.</strong> Wave 0's machinery
+  (<code>ActiveConditionsRoot</code>, <code>OutermostQueryClaim</code>, <code>TruthValueOperatorChildren</code>) is all
+  evaluation-scoped, and nothing is evaluating when a rule tree is spliced. The fix uses
+  the <em>other</em> context that already exists: the <code>with</code>-context stack
+  <code>create_and_update_rule_tree</code> resolves its anchor from via
+  <code>_get_current_context_condition</code>. Same principle — parent relative to who is asking —
+  applied at the other end of the lifecycle. So it needs none of Wave 0 and is
+  <code>depends_on: []</code>.</li>
+<li><strong>It is reproducible on <code>main</code> with core EQL plus <code>rules/</code> alone.</strong> No RDR layer, no
+  mimic of another package: build a node attached under two parents, splice, assert the
+  splice took the asking branch's edge rather than the first-attached one. A genuine
+  failing-first test at the accessor's own contract level.</li>
+<li><strong>Leaving it to Phase D would land it after the rename, which is backwards.</strong> The
+  rename is sequenced last precisely because it is the largest diff; this fix is small,
+  wanted now, and removes work from another plan.</li>
+</ul>
+<h6>Why this supersedes <code>rdr-refactor</code>'s #78</h6>
+<p>PR #78 (<code>D-ui-splice-fix</code>, <code>bug</code>) fixes the same bug the other way: it reintroduces
+<code>SymbolicExpression._last_parent_of_type_</code> and has <code>insert_at</code> walk up to the anchor's
+most recent <code>ConclusionSelector</code>/<code>Filter</code> parent. That is a heuristic over <code>_parents_</code> —
+a semantic module reading structural parentage, which is exactly what Phase D's guard
+test is meant to forbid and what Phase A's rename would break. It also re-adds the
+symbol <strong>#89 deleted from <code>main</code></strong> (verified absent there), so the programme would delete
+it, re-add it, and delete it again.</p>
+<h4>78's scope note says it is based on <code>D-core-engine</code> rather than <code>main</code> "because</h4>
+<p><code>insert_at</code> does not exist on <code>main</code> yet". That was true when written on 2026-07-16 and
+is now stale: <code>rules/</code> has since landed on <code>main</code>, <code>insert_at</code> with it. Nothing about
+this fix needs the RDR stack.</p>
+<p>So #78 reduces to its regression test, re-pointed at the fixed API, or closes as
+superseded — a call for whoever picks up either item first.</p>
+<h6>Effect on the programme's sequencing</h6>
+<p><code>rdr-refactor</code>'s Wave-0 stack still goes first overall: <code>facade-rename-and-guard</code> is a
+repo-wide rename in <code>base_expressions.py</code>, the file that 12-PR stack contests most, and
+every merge to <code>main</code> while it is open costs a full cascade restack. This item is the
+exception that jumps the queue — it is small, lands off <code>main</code>, and <em>removes</em> a future
+cascade instead of adding one.</p>
+<h6>How it was fixed (#118, 2026-07-31)</h6>
+<p>The addendum's premise held: a kickoff session reproduced the bug on <code>main</code> with core
+EQL plus <code>rules/</code> alone, no RDR layer and no serializer — the earlier sibling's
+<code>Comparator</code> ends up with a <code>Refinement</code> as its left operand.</p>
+<p>Two findings shaped the design, both of which rule out the obvious shapes:</p>
+<ul>
+<li><strong>The owning edge cannot be read off the node when the block is entered.</strong> At
+  <code>with refinement(shared_node)</code>, the node's <code>_parent_</code> is <em>already</em> the unrelated
+  comparator — that is the bug itself. The edge has to be inherited from the enclosing
+  context, whose own owning parent is the selector <code>insert_at</code> just created and is a
+  parent of the new branch too.</li>
+<li><strong>It cannot be captured once, either.</strong> Repeated edits inside one block re-splice the
+  same anchor, replacing that edge each time, so a write-once record goes stale after the
+  first nested statement. <code>insert_at</code> refreshes it after splicing.</li>
+</ul>
+<p>So the context stack now holds <code>RuleTreeContext(condition, owning_parent)</code> instead of
+bare expressions, and <code>insert_at</code> splices above the recorded parent, falling back to the
+structural one only when no enclosing context anchors on the anchor — which keeps the
+explicit-anchor API working outside any <code>with</code> block. No <code>_parents_</code> heuristic is
+involved, so Phase A's rename and Phase D's guard test stay compatible with it.</p>
+<h4>78 was <strong>closed as superseded</strong> the same day. Of the two options the section above</h4>
+<p>offers, only one was actually available: "re-point its regression test at the fixed API"
+is not, since <code>TestAttributeReusedInEarlierSiblingBranch</code> lives in
+<code>test/krrood_test/test_eql_rdr/</code> — a directory that does not exist on <code>main</code> — and
+asserts through <code>walk_rules</code>/<code>classify_case</code> from the RDR layer. #118 covers the same
+defect DSL-only at the accessor's own contract level instead, so no coverage is lost on
+<code>main</code>; the RDR-level test can be re-added against the fixed API once <code>test_eql_rdr/</code>
+lands, with no production change needed for it to pass.</p>
+<p>One consequence for the other plan: <code>rdr-refactor</code>'s #79 (<code>D-ui-rendering</code>) is based on
+the <code>D-ui-splice-fix</code> branch. Closing the PR does not delete that branch, so #79 is not
+broken, but it can no longer land through #78 and needs re-targeting onto
+<code>D-core-engine</code>. Left to #79's own session; recorded in <code>rdr-refactor</code>'s manifest.</p>
+<h5>Addendum (2026-08-01) — rustworkx considered and declined; ownership collaborator watch-item</h5>
+<p>The #90 review summary asked whether the growing evaluation-context machinery
+(<code>ActiveConditionsRoot</code>, <code>TruthValueOperatorChildren</code>, <code>EvaluatedExpressionIds</code>,
+<code>OutermostQueryClaim</code>, <code>SubqueryResultCache</code> — five parallel record classes in
+<code>evaluation_context.py</code>) should be replaced by a graph library such as rustworkx, with
+its traversal algorithms and queries. Discussed in-session and accepted: <strong>no</strong>, for the
+evaluation-time machinery — with one structural conclusion and one escape hatch.</p>
+<p>Why a materialized graph does not fit the recurring bugs:</p>
+<ul>
+<li>Every bug in this plan's family (#89, #90, #92, #118) was an <strong>ownership</strong> bug —
+  "which of a shared node's several parents/roots is relevant to the party asking right
+  now" — never a <strong>traversal</strong> bug. A rustworkx graph answers traversal questions
+  (ancestors, paths, reachability) and would faithfully return <em>all</em> of a shared node's
+  parent edges; choosing among them requires knowing which query/pass/rule-tree block is
+  currently executing, which is dynamic state a static graph cannot hold. The contextvar
+  machinery would still be needed to pick — the graph adds nothing to the picking.</li>
+<li>Evaluation is lazy, streaming, top-down recursion over <code>_children_</code> with
+  short-circuiting and per-pass state. Mirroring it into a <code>PyDiGraph</code> means a build
+  step plus node-index bookkeeping per pass and a parallel mutable annotation store kept
+  in sync — which is exactly what <code>EvaluationContext</code> already is, minus a graph copy
+  nothing would query.</li>
+<li>Where the questions <em>are</em> structural and post-hoc, rustworkx <strong>is</strong> already the
+  implementation: <code>QueryGraph</code> materializes the expression DAG for visualization and
+  satisfaction coloring. The accepted split: static/structural questions → materialized
+  rustworkx graph; dynamic/"who is asking" questions → evaluation-scoped context.</li>
+</ul>
+<p>What <em>does</em> deserve refactoring is the record-class sprawl itself, and that is Phase B:
+consolidate the repeated "resolve from context, else structural fallback" dance into
+reusable <code>EvaluationContext</code> accessors. <code>is_child_of_truth_value_operator</code> (added in</p>
+<h4>90's review round) is deliberately its first slice. Related accepted conclusion:</h4>
+<p><code>is_condition_participant</code> stays — its question is positional/per-edge (a bare
+<code>Variable</code> is a condition only <em>as</em> a direct child of a <code>TruthValueOperator</code>), so it can
+be neither a type property nor a construction-time node tag; its final shape is a thin
+dispatcher (explicit caller-known parent → evaluation context → structural fallback).</p>
+<p>Watch-item (recorded on <code>quantified-conditional-and-audit</code>): if Phase C's
+per-owning-query caching multiplies the records further, fold them into a single
+ownership collaborator on <code>EvaluationContext</code> rather than adding a sixth parallel class.</p>
+<p>Escape hatch: revisit a per-pass materialized view only if evaluation-time code ever
+needs <em>bulk</em> structural queries on hot paths (e.g. "all conditions in this query's
+subtree relative to a given owner"); no current call site does.</p>
+<h5>Addendum (2026-08-03) — <code>non-mutating-negation</code>, filed from rdr-refactor's #41</h5>
+<p>A <code>/plan-item-resolve</code> session on <code>rdr-refactor</code>'s <code>rdr-backward-inference</code> (#41) was asked
+to settle a review question: should <code>GuardCondition.negated</code> be dropped in favour of wrapping
+the guard expression in <code>Not()</code>, so a guard's expression is always required to be true?</p>
+<p>The answer turned on this plan's defect class, which is why the item lands here.</p>
+<p><code>Not()</code>-wrapping is genuinely the cleaner representation — cleaner at four of six concrete
+use sites across that plan (it deletes <code>_materialize</code> outright, simplifies <code>holds_for</code>, and
+reduces <code>_active_path</code>'s positive-occurrence check to an identity test). It loses on exactly
+one point: <code>factories.not_</code> → <code>SymbolicExpression._invert_</code> → <code>Not(self)</code> →
+<code>base_expressions.py:299</code> <code>child._parent_ = self</code>. Negating a node that belongs to a live
+tree reparents it. That is the tree-shaped-facade-over-a-DAG problem this plan exists to
+close, at construction time rather than evaluation time — the same shape as
+<code>insert-at-ownership-parentage</code>.</p>
+<p>The developer kept the flag on that basis and asked for the underlying defect to be tracked
+here rather than bundled into #41 (the bottom of a seven-PR stack, where every extra commit
+costs a cascade restack).</p>
+<p>The concrete instance is <code>rdr/condition_resolver.py:104</code>: <code>_materialize</code> calls
+<code>not_(guard.expression)</code> on a live rule-tree node — so the no-mutation rule is honoured
+during traversal and violated at rule-insertion time. That call site is not on <code>main</code> yet;
+it arrives with #41. So the item's real content is the first half — a way to build a negated
+view without adopting the operand — and the call site is repointed whenever the RDR stack
+lands, in whichever order the two merge.</p>
+<p>Worth carrying forward: <strong>once this lands, <code>rdr-refactor</code> should revisit
+<code>GuardCondition.negated</code>.</strong> The recommendation recorded on #41 was explicitly conditional —
+"keep the flag now, revisit when #96 lands a safe constructor" — and this item is that
+condition. Its own analysis is in <code>rdr-refactor</code>'s roadmap §12; the short version is that
+verbalization does not decide the question (the verbalizer already handles both an
+<code>(expression, polarity)</code> pair and a native <code>Not(Comparator)</code>), so the hazard is the whole
+argument.</p>
+<h5>Addendum (2026-08-04) — <code>rule-tree-context-stack-ownership</code>, stacked on #118</h5>
+<p>Looking at #118, the developer asked whether the <code>with</code>-context stack still needs to be a
+class variable: <em>"if we make the root <code>with</code>-block expression itself own and create a new
+stack instance, then inner <code>with</code> blocks can take that context by checking their root
+<code>with</code>-block stack and updating it."</em></p>
+<h6>The first half of the idea is impossible, and the reason is this plan's own defect class</h6>
+<p>Every reader of the stack was traced on #118's tip. Four of them are reached from objects
+that have never been related to the enclosing block:</p>
+<ul>
+<li><code>Conclusion.__post_init__</code> (<code>rules/conclusion.py</code>) — an <code>add(...)</code> written in a block body
+  is a brand-new node whose only links are downward.</li>
+<li><code>Refinement</code>/<code>Alternative</code>/<code>Next._get_current_context_condition</code> — reached from
+  <code>create_and_update_rule_tree</code>, a <strong>classmethod</strong>. There is no instance at all, only <code>cls</code>
+  and freshly built conditions that are by construction not yet in the rule tree.</li>
+</ul>
+<p>The only route from any of them to an enclosing root is <code>_conditions_root_</code> → <code>_root_</code>, the
+single first-attached primary-parent walk that Phase A renames and Phase D's guard test
+forbids. Using it to locate the builder's stack would be unreliable on shared nodes <em>and</em>
+be deleted by this plan's own end state. The other escape — changing the DSL so the block
+object is the receiver (<code>with query as tree: tree.add(...)</code>) — does make instance ownership
+work, and was rejected: it rewrites every doc example and every rule test for no behavioural
+gain.</p>
+<p>So some ambient lookup is unavoidable. What the item removes is the <em>process-global mutable
+list</em>, not the ambience.</p>
+<h6>The second half of the idea is right, and the repo already does it at the other end</h6>
+<p><code>evaluation_context.py</code> holds <code>_evaluation_context_var: ContextVar[Optional[EvaluationContext]]</code>,
+and <code>SymbolicExpression._evaluate_</code> has the <em>outermost</em> evaluation create the context, install
+it, and reset the token in <code>finally</code> (<code>owns_an_evaluation_context</code>). Construction-time context
+now mirrors it exactly: a <code>RuleTreeContextStack</code> created by the outermost <code>with</code> block, held
+in a <code>ContextVar</code>, discarded when that block closes. Evaluation-time and construction-time
+context finally have the same shape, which is the framing this plan has used since its
+2026-07-31 addendum.</p>
+<p>Honest about what a <code>ContextVar</code> is and is not: it is still module-level state. What changes
+is its <em>scope</em> (per-thread, per-task) and its <em>lifetime</em> (bounded by the outermost block, not
+the process). It does not isolate a task spawned inside a block, and it does not unwind a
+suspended generator that abandoned one. Both are documented on the class rather than designed
+around.</p>
+<h6>What the block record has to carry, and why</h6>
+<p>The obvious shape — one anchor hook used by both <code>__enter__</code> and <code>__exit__</code> — is wrong for
+<code>Query</code>. Inside <code>with query:</code>, a top-level <code>refinement(...)</code> splices a <code>Refinement</code> above the
+conditions root and rewires the <code>Filter</code>'s child, so <code>query._conditions_root_</code> afterwards
+returns a <em>different</em> node than it did at entry; recomputing the anchor at exit would raise a
+false imbalance. So a <code>RuleTreeBlock</code> records the expression whose <code>__enter__</code> opened it,
+separately from the <code>RuleTreeContext</code> the block contributes — and <code>RuleTreeContext</code> keeps</p>
+<h4>118's two fields untouched, both to minimise rebase pain and to keep the value object</h4>
+<p><code>insert_at</code> mutates distinct from the frame record.</p>
+<p>The knock-on is the cleanest part of the change: <code>Query.__enter__</code> disappears entirely.
+<code>Query</code> overrides only <code>_rule_tree_anchor_</code>, so a query module no longer reaches into
+base-class state, and the enter/exit asymmetry (<code>Query</code> pushed but never defined <code>__exit__</code>)
+is gone.</p>
+<h6>Known defect shipped uncovered, on the developer's call</h6>
+<p>With two threads inside <code>with</code> blocks, one thread's blind <code>__exit__</code> pops the <em>other</em>
+thread's frame, after which its <code>add(...)</code> lands in the wrong rule tree. It is real and
+deterministically expressible with <code>threading.Event</code> barriers (in-repo precedent:
+<code>test_isolated_expert_answers_path_is_safe_under_concurrent_use</code>), and the <code>ContextVar</code>
+fixes it. The developer chose to scope this item to the encapsulation plus the meaningful
+exceptions, so the regression test is <strong>not</strong> written and the item does <strong>not</strong> carry the
+<code>bug</code> label. Recorded here so the gap is deliberate rather than forgotten.</p>
+<h6>Landed as #142 (draft, 2026-08-04)</h6>
+<p>Nine failing-first tests, then the move: <code>rule_tree_context.py</code>, the two new
+exceptions, and the five call sites. <code>test_eql</code> + <code>test_ormatic</code> +
+<code>test_class_diagram</code> + <code>test_ripple_down_rules</code> at 1415 passed, 6 skipped; the two
+<code>test_object_diagram</code> failures are the missing Graphviz <code>dot</code> binary #118 already
+recorded. #118's two splice regression tests pass unmodified, which is the evidence
+that <code>anchored_on</code> still hands back the live <code>RuleTreeContext</code> that <code>insert_at</code>
+mutates.</p>
+<p>Its base was #118's branch, not <code>main</code>. <strong>#118 merged on 2026-08-05</strong>, so GitHub
+auto-retargeted #142 onto <code>main</code>, and <code>main</code> was merged into the branch. That merge
+was clean: a stack-maintenance routine had reported a conflict, but its comment named
+no conflicting files and none existed — the branch already contained #118's commits,
+so <code>main</code>'s merge of them had nothing to conflict with. The <code>needs-resolution</code> label
+it added was cleared, since a labelled branch is skipped by later passes and would
+otherwise have stayed stuck. Promotion is no longer gated on #118; it waits only on
+the PR leaving draft, which is this workflow's author sign-off.</p>
+<h6>Positioning</h6>
+<p>Stacked on <code>insert-at-ownership-parentage</code> (#118) because it collides textually with that
+PR in <code>__enter__</code>/<code>__exit__</code>, not because it needs it: the <code>ClassVar</code> predates #118, which
+only changed its element type, so the work stands alone once #118 lands. Filed under the
+<code>facade-rename</code> track rather than <code>bugs-and-audit</code> — it is the construction-time counterpart
+of Phase B's "one reusable accessor", not a bug fix. No dependency was added to
+<code>facade-rename-and-guard</code>; that item is sequenced last and rebases over this one.</p>
+<h5>Addendum (2026-08-07) — #92's fix 2 was dissolved by #90's own review round</h5>
+<h4>92 sat blocked from 2026-08-03 to 2026-08-07 with a <code>needs-resolution</code> label and a</h4>
+<p>merge conflict in <code>query_graph.py</code>. Not CI — all 20 checks were green — and not review:
+the PR has <strong>zero</strong> review threads, and all three of its comments are automated
+stack-maintenance reports naming that same one file and declining to guess.</p>
+<h6>Why it conflicted</h6>
+<h4>92's branch merged an <em>earlier</em> state of #90's branch. Verified: #90's final tip</h4>
+<p><code>d63dce6b</code> is <strong>not</strong> an ancestor of #92's head, but <strong>is</strong> an ancestor of <code>main</code>.</p>
+<h4>90's 2026-08-01 review round then changed <code>query_graph.py</code> in ways that delete the</h4>
+<p>machinery #92's fix 2 was built on — the <code>is_condition_participant</code> call in
+<code>construct_graph</code>'s <code>is_satisfied</code>, the <code>parent</code> threading, and the not-supplied
+sentinel.</p>
+<p>This is exactly the hazard already recorded on <code>pr-90-is-condition-participant</code>
+("#92 … must re-merge tip 58671190; construct_graph parent-param revert may
+conflict"). The warning was right, and the item it was recorded on is the one that
+came true.</p>
+<h6>The finding: fix 2 is dead code on <code>main</code></h6>
+<p><code>construct_graph</code>'s satisfaction check on <code>main</code> is now</p>
+<pre><code>is_satisfied = (
+    self.satisfied_condition_ids is not None
+    and expression._id_ in self.satisfied_condition_ids
+)
+</code></pre>
+<p>— <strong>position-independent</strong>. Fix 2's bug required a position-dependent term to be
+computed at the first-visited position and then memoized. With that term gone, the
+first visit computes what every later visit would, so the memoization cannot stale.</p>
+<p>Verified empirically rather than argued: applied to a clean <code>main</code>, #92's fix-2 test
+<strong>passes</strong> unmodified, and #92's fix-1 test <strong>fails</strong> with a genuine assertion error.
+So fix 1 is still needed and fix 2 is not.</p>
+<p>The trap avoided: keeping #92's <code>_is_satisfied()</code> helper would have reinstated the
+very check #90's review removed as redundant, with the <code>or</code>-fold over the memoized
+node existing only to work around the check it reinstates. A "keep both sides"
+resolution was also not viable on its own terms — the auto-merge is broken <em>outside</em>
+the conflict markers, since <code>construct_graph</code>'s signature loses <code>parent</code> (main's side)
+while the body still passes <code>parent</code> to <code>self._is_satisfied(...)</code> twice.</p>
+<h6>How it was resolved</h6>
+<p><code>query_graph.py</code> taken from <code>main</code> wholesale, so the branch no longer touches that
+file at all. Fix 2's regression test kept, retargeted as a guard that the
+classification stays independent of visit order, and renamed after that behaviour
+rather than after the mechanism it used to exercise — it passes on <code>main</code>, which is
+what makes it a guard rather than a fix. #92 now reduces to fix 1: <code>OutermostQueryClaim</code>
+gaining the claimed node, the <code>query.py</code> call site, and <code>_resolve_query_root</code>.</p>
+<p>Full run on the resolved tip: <code>test_eql</code> + <code>test_ormatic</code> + <code>test_class_diagram</code> +
+<code>test_class_diagrams</code> + <code>test_ripple_down_rules</code> at <strong>1437 passed, 7 skipped</strong>, zero
+failures. Unlike the runs recorded for #118 and #142, the two <code>test_object_diagram</code>
+tests pass here — the Graphviz <code>dot</code> binary was installed in this session's
+environment, so that long-standing pair of failures is confirmed environmental rather
+than a real defect.</p>
+<h6>One item handed to Phase D</h6>
+<p><code>_is_faded_gate</code> reads <code>node.parent</code>, while <code>_add_children_to_graph</code> reassigns
+<code>child_node.parent</code> on <em>every</em> visit — so for a node reached through two parents, the
+faded BFS sees only the last-assigned one. Same defect class as everything else in
+this plan, but no failing test was constructed for it and it is outside #92's proven
+scope, so it is recorded on <code>quantified-conditional-and-audit</code> rather than folded in.</p>
+<h6>A note on the generic lesson</h6>
+<p>The plan's own machinery caught this: the cross-item warning recorded on #90 named
+both the file and the mechanism, and it was accurate months before it fired. What it
+could not do was update #92's manifest entry, which still read "mergeable clean" four
+days after the branch went <code>dirty</code>. Live PR state belongs in the manifest as soon as
+it is fact — a stale "clean" is what made this look like an idle item rather than a
+blocked one.</p>
+<h6>Review round (2026-08-07) — the ownership accessor landed early, on <code>SymbolicExpression</code></h6>
+<h4>92's review round was three naming-and-placement threads, but one of them moves this</h4>
+<p>plan's own end state forward and is worth recording.</p>
+<p>The developer asked of <code>_resolve_query_root</code> (then a module-private function in
+<code>explanation.py</code>): <em>"Is this method not general for all expressions? If it is generally
+useful to all expressions then it should be moved to the core base expressions inside
+SymbolicExpression."</em> It is, and it was. It now lives as
+<code>SymbolicExpression._evaluating_query_root_</code>, directly beside <code>_root_</code> and <code>_root_query_</code>.</p>
+<p>That placement matters beyond tidiness: <strong><code>_root_</code> and <code>_evaluating_query_root_</code> are now
+the structural and ownership answers to the same question, sitting side by side on the
+same class.</strong> Phase A renames the first to <code>_structural_root_</code>; the second is already
+named for what it resolves from. So the pair reads as the contrast this plan exists to
+draw, rather than one accessor silently doing both jobs — and Phase B's "one reusable
+accessor" gains a second concrete slice on the <em>expression</em> side, after
+<code>is_child_of_truth_value_operator</code>'s slice on the <code>EvaluationContext</code> side.</p>
+<p>Two smaller outcomes:</p>
+<ul>
+<li><code>OutermostQueryClaim</code> → <code>OutermostQuery</code>, and <code>EvaluationContext.outermost_query_claim</code>
+  → <code>outermost_query</code>; the word "claim" is gone from the class, its field docstrings and
+  <code>is_nested</code>'s. The record classes named in the 2026-08-01 addendum should be read under
+  the new name from here on.</li>
+<li><code>OutermostQuery._query_id</code> collapsed into <code>node</code>. Fix 1 added <code>node</code> and left the id
+  beside it, so the class briefly tracked one fact twice; <code>node is None</code> is exactly
+  "nothing recorded yet". Worth noting for the Phase C watch-item: when the records are
+  folded into a single ownership collaborator, this one is already down to one field.</li>
+</ul>
+<p>No production behaviour changed in this round — the fix-1 regression test passes
+unmodified across it, which is what makes it a refactor rather than a second fix.</p>
+<h6>Second review round (2026-08-07) — <code>Role[Query]</code> declined, and the merge deferred to Phase C</h6>
+<p>Two design questions on #92's new accessor, both settled by the developer in session.</p>
+<p><strong><code>OutermostQuery</code> as <code>Role[Query]</code> — declined.</strong> The naming genuinely fits; "outermost
+query" is role-shaped language, and <code>krrood.patterns.role.Role</code> is the repo's own pattern
+for it. It fails on the import graph. <code>class OutermostQuery(Role[Query])</code> evaluates <code>Query</code>
+at class-creation time — a base-class expression, which <code>from __future__ import
+annotations</code> does not defer — and <code>Role.get_role_taker_type</code> resolves the parameter at
+runtime as well. But <code>evaluation_context.py</code> deliberately keeps <em>every</em> expression type
+behind <code>TYPE_CHECKING</code>: it is a leaf that <code>query.py</code> and <code>base_expressions.py</code> both import
+at runtime and that imports nothing back. Requiring <code>Query</code> at runtime closes that into a
+cycle.</p>
+<p>Two further reasons, either of which would matter on its own:</p>
+<ul>
+<li><code>Role.role_taker</code> is required and keyword-only, but this record is created empty by
+  <code>EvaluationContext</code>'s <code>default_factory</code> and filling it <em>is</em> its job. A role cannot exist
+  un-taken, so adopting one means <code>Optional[OutermostQuery] = None</code> plus moving the
+  first-wins arbitration onto <code>EvaluationContext</code> — a restructure, not a change of base.</li>
+<li><code>Role.__eq__</code> is identity-only and a role is never equal to its taker. This plan is about
+  ownership <em>identity</em>, and the path ends in <code>explanation.query_root is second_query._root_</code>.
+  A role there either gets unwrapped to <code>.role_taker</code> at every use site, earning nothing, or
+  silently breaks identity comparisons.</li>
+</ul>
+<p>Underneath all three: after <code>_query_id</code> collapsed away, the class is one optional reference
+plus arbitration, with no role-specific fields. "Outermost in this pass" is a fact the
+<em>pass</em> owns, which is why it belongs on <code>EvaluationContext</code> beside <code>ActiveConditionsRoot</code>
+and <code>TruthValueOperatorChildren</code> rather than on the query. Noted for anyone revisiting: there
+is no <code>Role[...]</code> subclass anywhere in <code>krrood/src</code> today, so this would have been the
+pattern's first production use, on the evaluation hot path.</p>
+<p><strong>The merge with <code>_root_query_</code> is Phase C's, not #92's.</strong> The developer asked whether the
+new accessor should replace <code>_root_query_</code> outright. It should, eventually — but not as a
+refactor. <code>_root_query_</code>'s only consumer is
+<code>QuantifiedConditional._ids_of_variables_to_add_to_sources_</code>, which needs a real <code>Query</code> for
+<code>_selected_variables_</code>; <code>_evaluation_root_query_</code> falls back to <code>_root_</code>, which is any
+expression. Merging therefore means narrowing the fallback to a <code>Query</code>-typed lookup — which
+is the <em>same edit</em> as fixing that consumer's shared-quantifier cache staleness, this plan's
+Phase C. Doing it in #92 would have made it a two-bug PR without the failing-first
+shared-quantifier test that fix requires.</p>
+<p>So #92 keeps the rename only: <code>_evaluating_query_root_</code> → <code>_evaluation_root_query_</code>, taking
+the neighbouring <code>_root_query_</code>'s phrasing. Phase C collapses the two into one property named
+<code>_root_query_</code>, and this name disappears.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-wave-0">
+        <div class="wave-eyebrow">Wave 0 - prerequisite leak-fixes (in-flight)</div>
+        <p class="wave-description">The already-open stack that fixes the individual shared-node leaks by resolving the owner from evaluation-scoped context instead of the structural pointer. This plan composes on top of it.
+</p>
+        <section class="track">
+          <h3 class="track-title">In-flight leak-fixes (#89/#90/#92)</h3>
+          <div class="item-list">
+                <article id="item-pr-90-is-condition-participant" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Fix is_condition_participant misclassifying nodes shared across queries</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">pr-90-is-condition-participant</span>
+            <span class="mono branch">claude/entity-query-parent-props-w789od</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/90" target="_blank" rel="noopener">#90</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Aa2WZP5URWHoQDTpL34m9L" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">bug label; open draft, mergeable clean. Adds TruthValueOperatorChildren to EvaluationContext (per-pass parent) - the exact latent bug flagged during this plan&#39;s design as the TDD seed. 2026-08-01 review round handled (commit 58671190): new EvaluationContext. is_child_of_truth_value_operator accessor (first slice of Wave 1 Phase B), redundant participant check dropped from construct_graph (membership in satisfied_condition_ids already implies it), sentinel removed, abbreviations fixed. 5/8 threads resolved; 3 judgment threads left open with justifications. Summary discussion held and accepted by the developer 2026-08-01 (after a false start where the commit was pushed before the discussion): is_condition_participant stays as a thin dispatcher (explicit parent -&gt; evaluation context -&gt; structural fallback) - its question is positional/per-edge, so it cannot become a type property or a construction-time tag; no rustworkx for evaluation-time tracking (see roadmap addendum); the real refactor is Phase B consolidation. Warning: PR #92 merges this branch and touches query_graph.py - it must re-merge tip 58671190 (construct_graph parent-param revert may conflict). 2026-08-03 review round handled (commit d63dce6b, via /plan-item-resolve): the TruthValueOperatorChildren docstring&#39;s unexplained &#34;DAG&#34; reference was spelled out and named explicitly as SymbolicExpression&#39;s own directed acyclic graph of parents, disambiguating it from QueryGraph; thread resolved, test_eql (1143 passed, 3 skipped) and test_ormatic (132 passed) rerun clean.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-pr-92-shared-node-followups" class="item status-done" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Fix _root_-based query_root for a variable shared across two queries</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">pr-92-shared-node-followups</span>
+            <span class="mono branch">claude/dag-parent-root-and-querygraph-followups</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/92" target="_blank" rel="noopener">#92</a>
+            <a class="session-link" href="https://claude.ai/code/session_011nQuYfjic8RoZYhWk9z3AB" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">bug label; open draft. Was blocked 2026-08-03..2026-08-07 on a needs-resolution merge conflict in query_graph.py, not on CI (all 20 checks green) or review (zero review threads) - three routine comments, all naming that one file. Cause: this branch merged an earlier state of #90&#39;s branch (#90&#39;s tip d63dce6b is not an ancestor of it, but is of main), and #90&#39;s review round then deleted the machinery fix 2 was built on - exactly the hazard recorded on pr-90-is-condition-participant. Resolved 2026-08-07 (via /plan-item-resolve): fix 2 is dead on main, since #90 removed the position-dependent is_condition_participant term from construct_graph&#39;s is_satisfied as redundant, so the memoization can no longer stale. Verified empirically - fix 2&#39;s test passes on main unmodified, fix 1&#39;s fails there. query_graph.py resolved to main&#39;s version wholesale (the branch no longer touches it); fix 2&#39;s test kept as a visit-order-independence guard, renamed after that behaviour. What remains is fix 1 only: OutermostQueryClaim.node + _resolve_query_root, 4 files, +118/-10. Full run 1437 passed, 7 skipped, zero failures. PR title/body rewritten to match; needs-resolution label cleared by hand so later maintenance passes stop skipping the branch. 2026-08-07 review round handled (commit 82859a81): three threads, all naming-and-placement, all replied to and resolved. OutermostQueryClaim -&gt; OutermostQuery and outermost_query_claim -&gt; outermost_query (the word &#34;claim&#34; removed from the class, its field docstrings and is_nested); _query_id collapsed into node, since storing the node made the id redundant - a redundancy this PR itself introduced; and _resolve_query_root moved off explanation.py onto SymbolicExpression as the _evaluating_query_root_ property, beside _root_ and _root_query_, on the developer&#39;s observation that nothing about it was specific to inference variables. Four new tests (three for OutermostQuery&#39;s own contract, one pinning the fallback branch, which nothing covered); 1441 passed, 7 skipped. Second review round (commit a9682633): the property renamed again to _evaluation_root_query_ on the developer&#39;s preference for the neighbouring _root_query_&#39;s phrasing. Two design questions settled and recorded in the roadmap addendum - the Role[Query] proposal for OutermostQuery declined (it would close an import cycle, since evaluation_context.py keeps every expression type behind TYPE_CHECKING while query.py and base_expressions.py import it at runtime), and the full merge of _evaluation_root_query_ into _root_query_ deferred to Phase C, which is where that consumer&#39;s bug fix belongs. Also flagged for Phase D and not fixed here: _is_faded_gate reads node.parent while _add_children_to_graph reassigns child_node.parent on every visit, so a node reached through two parents keeps only the last-assigned one. Still explicitly flags the QuantifiedConditional cache staleness as out-of-scope - picked up by this plan&#39;s Wave 1.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Fix is_condition_participant misclassifying nodes shared across queries">pr-90-is-condition-participant</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-pr-89-drop-dead-parent-recovery" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Drop the dead _last_parent_of_type_ conditions-root recovery</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">pr-89-drop-dead-parent-recovery</span>
+            <span class="mono branch">conditions-root-drop-dead-parent-recovery</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/89" target="_blank" rel="noopener">#89</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Open draft (mergeable_state unstable at last check). Removes _last_parent_of_type_; extends ActiveConditionsRoot.has_condition(). Also tracked in rdr-refactor as a side-quest that unblocks #41.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-wave-1">
+        <div class="wave-eyebrow">Wave 1 - root-cause hardening &amp; audit</div>
+        <p class="wave-description">The make-it-hard-to-misuse work those PRs consciously deferred.
+</p>
+        <section class="track">
+          <h3 class="track-title">Remaining bug + systematic audit</h3>
+          <div class="item-list">
+                <article id="item-quantified-conditional-and-audit" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Fix QuantifiedConditional cache staleness + systematic shared-node audit</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">quantified-conditional-and-audit</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff dag-facade-hardening quantified-conditional-and-audit" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">bug-labeled PR. Phase C: stop caching a per-query value on a shared Exists/ForAll node (_ids_of_variables_to_add_to_sources_, a @cached_property over _root_query_ at logical_quantifiers.py:147); resolve the owning query from context (reuse #92&#39;s OutermostQueryClaim) and key any cache by owning-query id on EvaluationContext. Watch-item (accepted 2026-08-01): evaluation_context.py already carries five parallel record classes; if Phase C adds per-owning-query caching, fold the records into a single ownership collaborator on EvaluationContext instead of growing a sixth parallel class. Phase D (audit half): enumerate remaining semantic _root_/_root_query_/_parent_ reads and per-node caches, TDD a shared-node regression test for each unsafe one, fix via the context accessor. TDD throughout; krrood-internal mimics only. Also handed over from #92&#39;s second review round (2026-08-07): Phase C must collapse SymbolicExpression._evaluation_root_query_ (added by #92) and _root_query_ into a single property named _root_query_. They cannot merge before then - _root_query_&#39;s only consumer needs a real Query for _selected_variables_, while _evaluation_root_query_ falls back to _root_, which is any expression - so the merge means narrowing the fallback to a Query-typed lookup, which is the same edit as this item&#39;s own fix. Handed over from #92 on 2026-08-07: _is_faded_gate (query_graph.py) reads node.parent while _add_children_to_graph reassigns child_node.parent on every visit, so a node reached through two parents keeps only the last-assigned one for the faded BFS. Same defect class; no failing test constructed for it yet. Phase D&#39;s audit scope explicitly includes rules/conclusion_selector.py (on main) and, once rdr-refactor&#39;s Wave-0 stack lands, rdr/rule_tree.py and rdr/rule_tree_view.py - the RDR rule-tree consumers are not on main yet, so an audit run before then silently under-covers them.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Drop the dead _last_parent_of_type_ conditions-root recovery">pr-89-drop-dead-parent-recovery</span>
+
+            <span class="chip" title="Fix is_condition_participant misclassifying nodes shared across queries">pr-90-is-condition-participant</span>
+
+            <span class="chip" title="Fix _root_-based query_root for a variable shared across two queries">pr-92-shared-node-followups</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-insert-at-ownership-parentage" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Resolve insert_at splice parentage from the owning rule-tree context</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">insert-at-ownership-parentage</span>
+            <span class="mono branch">claude/dag-facade-hardening-emrhza</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/118" target="_blank" rel="noopener">#118</a>
+            <a class="session-link" href="https://claude.ai/code/session_01ScQBrWpJoYmhB9T8uBuxWp" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged 2026-08-05. bug label. Fixed by carrying the owning parent edge on the `with`-context stack (RuleTreeContext in core/base_expressions.py) rather than by any `_parents_` heuristic, so Phase A&#39;s rename and Phase D&#39;s guard test stay compatible. #78 closed as superseded 2026-07-31; its regression test was not carried over (it lives in test_eql_rdr/, absent on main). ConclusionSelector.insert_at (rules/conclusion_selector.py:67) splices above `anchor._parent_`, the first-attached primary parent, so a shared-identity MappedVariable used inside a Comparator in one branch and bare in a sibling branch splices above the incidental Comparator and drags the new refinement out of the rule tree. This plan&#39;s own defect class, at construction time rather than evaluation time: resolve the parent relative to the asking rule-tree context (the `with`-context stack create_and_update_rule_tree already uses via _get_current_context_condition) instead of reading the structural pointer. Deliberately depends_on nothing - it needs none of Wave 0&#39;s evaluation-scoped machinery and is reproducible on main with core EQL plus rules/ alone, so it lands early rather than behind the rename. Supersedes rdr-refactor&#39;s D-ui-splice-fix (#78).</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-non-mutating-negation" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Negating a live expression must not reparent it</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">non-mutating-negation</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff dag-facade-hardening non-mutating-negation" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Surfaced 2026-08-03 by rdr-refactor&#39;s #41 review thread r3702021144, which asked whether GuardCondition.negated could be replaced by wrapping the guard expression in Not(). It cannot, today, and the reason is this plan&#39;s defect class: factories.not_ -&gt; SymbolicExpression._invert_ -&gt; Not(self) -&gt; base_expressions.py:299 child._parent_ = self, so negating a node that belongs to a live tree reparents it. The developer kept the flag on that basis and asked for the underlying defect to be filed here. The concrete instance is rdr/condition_resolver.py:104, where _materialize calls not_(guard.expression) on a live rule-tree node - honouring the no-mutation rule during traversal and violating it at rule-insertion time. Two halves, and only the first belongs to this plan: a way to build a negated view of an expression without adopting the operand (the same &#34;resolve ownership from the asking context rather than the structural pointer&#34; move as insert-at-ownership-parentage, applied to construction). The _materialize call site is then a one-line follow-up, but condition_resolver.py is not on main yet - it arrives with rdr-refactor&#39;s #41 - so the fix lands here and the call site is repointed whenever that stack lands, whichever order they merge in. Once this exists, rdr-refactor should revisit GuardCondition.negated: the #41 analysis found Not()-wrapping cleaner at 4 of 6 concrete sites, with this hazard the only thing standing against it.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Facade rename + reusable accessor + guard</h3>
+          <div class="item-list">
+                <article id="item-facade-rename-and-guard" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Rename structural accessors + reusable ownership accessor + guard test</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">facade-rename-and-guard</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Sequenced last to rebase cleanly (largest diff; collides with the leak-fix stack). Phase A: rename _parent__/_parent_ -&gt; _structural_parent_ and _root_ -&gt; _structural_root_ (keep _parents_ authoritative); update the construction/layout call sites. Phase B: consolidate the &#34;resolve from evaluation context else structural fallback&#34; pattern into one reusable EvaluationContext accessor (Open/Closed), behaviour-preserving - generalize from is_child_of_truth_value_operator, its first slice (landed via #90&#39;s review round, commit 58671190). The 2026-08-01 discussion confirmed this consolidation, not a graph library, is the right refactor for the context machinery (roadmap addendum). Phase D (guard half): architectural test asserting semantic modules never reference the _structural_* accessors, so the class cannot silently reappear.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Fix QuantifiedConditional cache staleness + systematic shared-node audit (not ready yet — this item is blocked on it)">quantified-conditional-and-audit</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-rule-tree-context-stack-ownership" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Replace the class-level with-context stack with a root-owned RuleTreeContextStack</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_draft">Open · Draft</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">rule-tree-context-stack-ownership</span>
+            <span class="mono branch">claude/symbolic-expression-stack-refactor-ridull</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/142" target="_blank" rel="noopener">#142</a>
+            <a class="session-link" href="https://claude.ai/code/session_01PoUhMvymUQjsGL1JFpBsez" target="_blank" rel="noopener">session ↗</a>
+            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/142" target="_blank" rel="noopener">↗ Review</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve dag-facade-hardening rule-tree-context-stack-ownership" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Not a bug PR - no bug label. Raised 2026-08-04 by the developer looking at #118: _symbolic_expression_stack_ is still a ClassVar mutable list on SymbolicExpression. Verified that the literal proposal (the root with-block owns the stack and inner blocks find it through their root) cannot work: add(), refinement(), alternative() and next_rule() are reached from freshly built, unattached nodes - the three selectors through classmethods with no instance at all - so the only route to an enclosing root is _conditions_root_/_root_, this plan&#39;s own facade. Ambient lookup is therefore unavoidable; what goes is the process-global mutable list. The second half of the idea stands and already has a precedent at the other end of the lifecycle: evaluation_context.py&#39;s _evaluation_context_var ContextVar, owned by the outermost _evaluate_ (owns_an_evaluation_context). Same shape here - a RuleTreeContextStack created by the outermost with block, held in a ContextVar, discarded when that block closes. Knock-on wins: Query.__enter__ deletes entirely (Query overrides only _rule_tree_anchor_, so a query module no longer pushes onto base-class state with no matching __exit__), the three selectors&#39; duplicated stack lookups collapse into one ConclusionSelector._enclosing_condition_, and the four DSL entry points raise RuleTreeEditWithoutEnclosingBlock instead of a raw AttributeError outside a with block - user-facing, since scope.py injects Add/Refinement/Alternative/Next into the expert shell namespace. Removes one future Phase D guard-test violation (Conclusion.__post_init__&#39;s dead _conditions_root_ fallback); leaves insert_at&#39;s anchor._parent_ fallback and Alternative&#39;s _parent_/_conditions_root_ reads for Phase D, none made worse. Deliberately excluded on the developer&#39;s call: the cross-thread regression test - one thread&#39;s blind __exit__ popping another&#39;s frame is real and the ContextVar fixes it, but it ships uncovered (see roadmap addendum). PR #142 opened as a draft 2026-08-04 based off #118&#39;s branch. #118 merged 2026-08-05, so GitHub auto-retargeted #142 onto main; main was merged into the branch (clean, no conflicts, contrary to a routine&#39;s report that named no conflicting files) and the needs-resolution label cleared. Promotion is no longer blocked - it waits only on the PR leaving draft. Subscribed to its activity.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Resolve insert_at splice parentage from the owning rule-tree context">insert-at-ownership-parentage</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">3</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">4</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(2)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-quantified-conditional-and-audit" data-item-identifier="quantified-conditional-and-audit" onclick="planDashboardHighlightItem(event, this)"><strong>Fix QuantifiedConditional cache staleness + systematic shared-node audit</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-non-mutating-negation" data-item-identifier="non-mutating-negation" onclick="planDashboardHighlightItem(event, this)"><strong>Negating a live expression must not reparent it</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+          <div class="next-group next-review">
+            <h4>Ready to review <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-rule-tree-context-stack-ownership" data-item-identifier="rule-tree-context-stack-ownership" onclick="planDashboardHighlightItem(event, this)"><strong>Replace the class-level with-context stack with a root-owned RuleTreeContextStack</strong><br><span class="next-reason">open draft pull request, ready for your review</span></a>                <a class="next-review-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/142" target="_blank" rel="noopener">Review ↗</a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

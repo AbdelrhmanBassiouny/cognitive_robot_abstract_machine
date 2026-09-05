@@ -1,0 +1,1597 @@
+<title>Plans and roadmaps stay small, enforced by tooling</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>Plans and roadmaps stay small, enforced by tooling</h1>
+    <p class="description">Make plan size a property the tooling holds rather than one sessions have to remember. A hard budget covers a plan&#39;s plan.yaml and roadmap.md together; save-plan.sh refuses a save that breaks it; /plan-create and /add-plan-item read the budget and open a new plan instead of growing a full one; and the roadmap-writing guidance across the plan skills stops asking for detail the budget cannot afford. Because the budget is enforced by refusal, the two plans already over it are split first.
+</p>
+    <p class="repo-line">
+      6 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/200" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>Plans stay small — Roadmap</h4>
+<p>Narrative half of <code>plan-size-limits</code>. Kept deliberately short: a plan about
+size budgets that spends its own budget on prose would be its own
+counter-example.</p>
+<h5>Why</h5>
+<p>Plan size has been governed by guidance, and guidance has not held.
+<code>plan-create/SKILL.md</code> already warns that "an over-modelled plan is worse than
+a flat one", and it has not stopped two plans from reaching 49 and 55 items.</p>
+<p>Measured on the personal-notes branch, 2026-08-28:</p>
+<table>
+<thead>
+<tr>
+<th>plan</th>
+<th>items</th>
+<th>manifest</th>
+<th>roadmap</th>
+<th>total</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>eql-verbalization</td>
+<td>5</td>
+<td>100</td>
+<td>133</td>
+<td>233</td>
+</tr>
+<tr>
+<td>eql-performatives</td>
+<td>9</td>
+<td>166</td>
+<td>139</td>
+<td>305</td>
+</tr>
+<tr>
+<td>eql-existential-semantics</td>
+<td>9</td>
+<td>480</td>
+<td>296</td>
+<td>776</td>
+</tr>
+<tr>
+<td>dag-facade-hardening</td>
+<td>8</td>
+<td>293</td>
+<td>530</td>
+<td>823</td>
+</tr>
+<tr>
+<td>match-query-ergonomics</td>
+<td>6</td>
+<td>345</td>
+<td>1047</td>
+<td>1392</td>
+</tr>
+<tr>
+<td>montessori-eql-stack</td>
+<td>13</td>
+<td>389</td>
+<td>1245</td>
+<td>1634</td>
+</tr>
+<tr>
+<td><strong>rdr-refactor</strong></td>
+<td><strong>49</strong></td>
+<td><strong>1000</strong></td>
+<td><strong>2676</strong></td>
+<td><strong>3676</strong></td>
+</tr>
+<tr>
+<td><strong>workflow-unification</strong></td>
+<td><strong>55</strong></td>
+<td><strong>4326</strong></td>
+<td><strong>9933</strong></td>
+<td><strong>14259</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The distribution is bimodal, not a gradient: six plans cluster at or below 13
+items and 1,634 lines, and two sit 2–9× beyond. A budget can therefore separate
+them without disturbing anything healthy.</p>
+<p>The growth mechanism matters for the design. During the single session that
+created this plan, <code>workflow-unification</code> grew <strong>51 manifest lines and 103
+roadmap lines while gaining zero items</strong> — narrative accreting onto entries that
+already existed. A rule policed per new item cannot see that, which is why the
+budget counts lines in both files rather than items alone.</p>
+<p>A second cost, measured 2026-08-29. An oversized plan also makes its own
+published dashboard expensive to <em>re</em>publish. 88% of <code>workflow-unification</code>'s
+1.26 MB artifact is plan content — 62% the embedded <code>roadmap.md</code>, 26% item
+notes — so page size tracks plan size almost directly. When another session has
+published since, the <code>Artifact</code> tool refuses the publish until the live version
+has been read in full: 16 reads at today's size, ~2 at the budget. That gate is
+harness-side, so nothing in this repository can narrow it to a diff; shrinking
+the plan is the only lever there is.</p>
+<h5>Decisions</h5>
+<p><strong>1. Hard refusal, not a growth-only gate.</strong> (user, 2026-08-28) A save leaving a
+plan over budget is refused outright. The alternative considered was refusing
+only saves that <em>add</em> an item, letting oversized plans keep recording state
+forever. Rejected: it would have left the two outliers permanently exempt from
+the rule they motivated. The cost accepted is that both must be split before the
+gate can land, which is wave 2.</p>
+<p><strong>2. One budget across <code>plan.yaml</code> and <code>roadmap.md</code>.</strong> (user, 2026-08-28) Two
+separate limits were considered, as was a manifest-only limit with roadmap
+minimalism left to guidance. Rejected for the reason the request states: that
+guidance is exactly what has not worked. <code>match-query-ergonomics</code> shows why a
+combined budget is the right shape — 6 items but a 1,047-line roadmap, so an
+item-count limit alone would rate it healthy.</p>
+<p><strong>3. Budget set at 15 items / 2,000 combined lines.</strong> (user, 2026-08-28) Chosen
+against the table above: clear of the largest healthy plan with headroom, and
+unambiguously below both outliers. A tighter 12/1,500 was considered and
+rejected because it would have pulled <code>montessori-eql-stack</code> into the migration
+for no benefit.</p>
+<p><strong>4. Wave order is measure → migrate → refuse.</strong> The gate cannot land first
+without stranding the plans it is meant to fix, including the manifest tracking
+this very work. Wave 1 is therefore report-only.</p>
+<h5>Why this is its own plan</h5>
+<p>Every comparable plan-tooling change to date is an item in
+<code>workflow-unification</code>'s <code>personal-data</code> track — <code>add-plan-item-skill</code> (#135),
+<code>plan-item-bootstrap</code> (#143), <code>plan-item-execution-modes</code> (#149),
+<code>manifest-currency-first</code> (#151), <code>setup-runs-without-asking</code> (#156),
+<code>plan-item-bootstrap-yaml-indent</code> (#160). This is the first to break that
+pattern.</p>
+<p>The reason is mechanical rather than stylistic. Under decision 1, the moment the
+gate lands, <code>save-plan.sh</code> refuses every save of <code>workflow-unification</code> until it
+is split — including the saves recording the status of the items doing the
+splitting. A plan cannot track the work that disables its own saving.</p>
+<p>The <code>/add-plan-item</code> scope check supports the separation independently:
+<code>check_scope_overlap.py --base origin/main</code> over the paths this work touches
+returned <code>paths_absent_from_base: []</code>, so no unlanded branch introduces them and
+none is a candidate owner. Grepping the four plan-tooling branches in flight
+(#151, #154, #156, #185) for any size/limit/split concept returned nothing, and
+no item in any of the eight plans covers it.</p>
+<h5>Landing hazards</h5>
+<ul>
+<li>~~<strong><code>.claude/shared/plan_model.py</code> is not on <code>main</code>.</strong>~~ Settled by #207: the
+  budget lives in <code>.claude/hooks/plan_size_budget.py</code>, a module of its own on
+  <code>main</code>, rather than as a third copy of a file that exists only on #151 and
+  #154 - the #106/#110 failure. Moving it into <code>.claude/shared/</code> once that
+  module lands is a rename, not a merge.</li>
+<li><strong>#185 (bastler-package) relocates the ground.</strong> It moves
+  <code>plan_manifest_tools.py</code> to <code>bastler/plan_manifest_tools.py</code> and its tests to
+  <code>test/bastler_test/</code>, and edits <code>save-plan.sh</code> plus the <code>add-plan-item</code>,
+  <code>plan-item-kickoff</code> and <code>plan-item-resolve</code> skill documents. Whichever lands
+  second rebases.</li>
+<li><strong>#151, #154 and #156 all edit <code>plan-create/SKILL.md</code></strong> and the kickoff/resolve
+  skills. Overlap rather than ownership, but worth coordinating before
+  <code>minimal-roadmap-writing</code> starts.</li>
+<li><strong>The splits move live data every session reads.</strong> <code>branch-index.tsv</code> and
+  <code>dashboard-urls.yaml</code> are keyed by plan id; both must be regenerated, or
+  <code>session-start.sh</code> stops resolving branches to plans and <code>/plan-dashboard</code>
+  publishes duplicate pages under the new ids.</li>
+</ul>
+<h5>Open</h5>
+<ul>
+<li>Whether the budget is a single pair of constants or configurable per plan. The
+  plan assumes fixed constants; a plan that genuinely needs more is the signal to
+  split it, which is the whole premise.</li>
+<li>Whether the dashboard should show a plan's budget consumption. Not currently an
+  item — it is reporting, and the gate is the enforcement.</li>
+</ul>
+<h5>Review round of 2026-08-30 (#207)</h5>
+<p>Five of seven threads are answered and resolved; two are open on the reviewer's
+own decision.</p>
+<p><strong>5. No constant sits mid-module, and no free functions.</strong> (reviewer) The budget
+became <code>SizeBudget</code>'s own <code>MAXIMUM_ITEMS</code>/<code>MAXIMUM_LINES</code> class variables rather
+than a <code>PLAN_SIZE_BUDGET</code> instance built halfway down the file - an instance
+cannot move to the top, since the class has to exist first. <code>SizeBudget()</code> is
+now the budget, which is what <code>refuse-oversized-save</code> will import. The eight
+free functions moved onto <code>PlanSize</code>, a new <code>PlansDirectory</code> (the directory and
+its two filenames, which were three loose primitives) and a new <code>SizeReport</code>
+(the plans with the budget judging them).</p>
+<p><strong>6. A dependency is written down once.</strong> (reviewer) The hardcoded <code>import yaml</code>
+probe is gone. <code>.claude/hooks/requirements.txt</code> is the one place the hooks' own
+dependencies are stated, and <code>missing_requirements.py</code> reports whichever of a
+requirements file's distributions are absent - generic, so <code>check-setup.sh</code>
+dropped its inline copy of the same parse and calls it too. The file needed a
+<code>.gitignore</code> exception: the repository ignores <code>*.txt</code> wholesale, so without one
+it would never have reached CI, and the report's tests read it from disk.</p>
+<p><strong>7. A filename is written down once too.</strong> (reviewer) <code>HookScript</code>,
+<code>PlanDocument</code> and <code>PLANS_DIRECTORY</code> already existed and were being duplicated
+by the tests; they are now imported. <code>ScratchRepository.install_hook_modules</code>
+names hook modules by the module objects. <code>resolve-personal-notes-config.sh</code>
+gained <code>CREATE_PERSONAL_NOTES_BRANCH_SCRIPT</code>, <code>HOOKS_REQUIREMENTS_FILE</code>,
+<code>MISSING_REQUIREMENTS_SCRIPT</code>, <code>PLAN_SIZE_BUDGET_SCRIPT</code> and
+<code>PLAN_SIZE_REPORT_SCRIPT</code>.</p>
+<h6>Open with the reviewer</h6>
+<ul>
+<li><strong>Should <code>plan-size-report.sh</code> be Python?</strong> It can be, but the notes-branch
+  config resolver is bash and has no Python half, so a Python entry point has to
+  shell back into it or port it. Every hook entry point needing the config is
+  bash for that reason. Porting the resolver is its own item if wanted, and it
+  collides with #185.</li>
+<li><strong>Do the eight scripts on <code>main</code> that spell <code>create-personal-notes-branch.sh</code>
+  convert now or later?</strong> The constant exists for them; converting here widens
+  this PR into files it does not otherwise touch.</li>
+</ul>
+<h6>Second pass of the same round, resolved in e4ba75a7</h6>
+<p>Three more small threads landed on #207 after the first six were already
+answered - none of them recorded in this plan's manifest until this resolve
+found them live on GitHub rather than in <code>blockers</code>.</p>
+<p><strong>8. No constant may just point to another constant.</strong> (reviewer) The test's
+<code>MANIFEST_FILENAME</code>, <code>ROADMAP_FILENAME</code> and <code>SCRIPT_NAME</code> module constants were
+each nothing but <code>PlanDocument.MANIFEST</code>, <code>PlanDocument.ROADMAP</code> and
+<code>HookScript.PLAN_SIZE_REPORT</code> under a second name. The reviewer flagged two of
+the three explicitly and left the third ("same comment as above") - all three
+are gone now, and every use site names the real definition directly.</p>
+<p><strong>9. The rendered report itself hardcoded the two filenames.</strong> (reviewer) The
+budget line printed the literal <code>"plan.yaml and roadmap.md"</code> instead of reading
+<code>PlanDocument.MANIFEST</code>/<code>PlanDocument.ROADMAP</code>. Fixed by importing
+<code>PlanDocument</code> into <code>plan_size_budget.py</code> - no import cycle, since
+<code>plan_item_bootstrap</code> does not import this module - and by adding
+<code>plan_item_bootstrap</code> to the integration test's scratch-layout installs, since
+the script now needs it too when run as a real subprocess.</p>
+<p>Unrelated to this item: <code>#207</code>'s <code>giskardpy</code> check is red on the current head
+(<code>test_collision_matrix_tool.py::test_script_launch_and_kill</code>, a
+<code>subprocess.TimeoutExpired</code>), a ROS2 integration test this diff does not touch.
+Left alone rather than re-run or investigated further here.</p>
+<h5>Kickoff 2026-08-30: <code>split-workflow-unification</code> — the seams, measured</h5>
+<p>Session: https://claude.ai/code/session_019636yuByUTH6aFiEQdDztc</p>
+<p><code>size-budget-and-report</code> (#207) is open and non-draft, so this item's only dependency is
+ready to build on.</p>
+<h6>Measured, not assumed: the tracks alone do not get under budget</h6>
+<p>The item's notes say the five existing tracks "already name the natural seams". Measured
+on the live manifest today (59 items, 5,129 manifest + 11,788 roadmap = 16,917 lines), a
+straight by-track split leaves two of the five plans still over:</p>
+<table>
+<thead>
+<tr>
+<th>track</th>
+<th>items</th>
+<th>manifest</th>
+<th>roadmap</th>
+<th>total</th>
+<th>verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>personal-data</td>
+<td>16</td>
+<td>798</td>
+<td>3,531</td>
+<td>4,329</td>
+<td>over both halves</td>
+</tr>
+<tr>
+<td>stack-tooling</td>
+<td>18</td>
+<td>2,598</td>
+<td>5,735</td>
+<td>8,333</td>
+<td>over both halves</td>
+</tr>
+<tr>
+<td>dashboards</td>
+<td>12</td>
+<td>533</td>
+<td>1,246</td>
+<td>1,779</td>
+<td>within</td>
+</tr>
+<tr>
+<td>bastler</td>
+<td>10</td>
+<td>491</td>
+<td>669</td>
+<td>1,160</td>
+<td>within</td>
+</tr>
+<tr>
+<td>cutover</td>
+<td>3</td>
+<td>138</td>
+<td>134</td>
+<td>272</td>
+<td>within</td>
+</tr>
+</tbody>
+</table>
+<p>Roadmap lines are attributed by counting each <code>## Update</code> section's mentions of item ids
+and pull request numbers. <code>stack-tooling</code> is over the line budget on its manifest alone,
+before a word of roadmap: one item, <code>integration-branch</code>, carries 585 manifest lines.</p>
+<p>So the split is a partition <strong>and</strong> a compression, and both halves need a stated rule.</p>
+<h6>Seven plans, seamed on subject</h6>
+<p><code>stack-tooling</code> and <code>personal-data</code> each split in two along a seam their own items already
+draw; the other three tracks become plans unchanged.</p>
+<ol>
+<li><code>stack-tooling-install</code> (7) — the tooling on main and the skills that install it:
+   <code>setup-personal-notes-pr101</code>, <code>stack-tooling-on-main</code>, <code>setup-stacked-prs-skill</code>,
+   <code>setup-personal-notes-script</code>, <code>native-stacks-prototype</code>, <code>unfetched-parent-branches</code>,
+   <code>session-branch-base</code>.</li>
+<li><code>stack-maintenance</code> (11) — the pass that runs over a live stack: the executor,
+   reparenting, upstream review reading, manifest currency, promotion, and the whole
+   integration-branch family.</li>
+<li><code>plan-tracking-skills</code> (6) — <code>add-plan-item-skill</code>, <code>plan-item-bootstrap</code>,
+   <code>plan-item-execution-modes</code>, <code>plan-item-bootstrap-yaml-indent</code>, <code>plan-item-edit-guard</code>,
+   <code>report-document-naming</code>.</li>
+<li><code>session-notes-infrastructure</code> (10) — the session-start hook, notes, git identity,
+   settings sync and the conventions that ride in them.</li>
+<li><code>plan-dashboards</code> (12) — the <code>dashboards</code> track unchanged.</li>
+<li><code>bastler-package</code> (10) — the <code>bastler</code> track unchanged.</li>
+<li><code>workflow-cutover</code> (3) — the <code>cutover</code> track unchanged.</li>
+</ol>
+<p>The seams were chosen to keep live dependency edges inside one plan, not by subject alone:
+moving <code>pinned-stack-tooling</code> to <code>stack-maintenance</code> (which is what it is — the tool a
+maintenance pass runs) is what removes the last live edge crossing the stack-tooling seam.</p>
+<h6><code>depends_on</code> cannot cross a plan, so five edges dissolve and three demote</h6>
+<p><code>build_dashboard.validate_plan</code> raises <code>UnknownDependency</code> for any <code>depends_on</code> entry that
+names no item in the same manifest, so the split cannot preserve a cross-plan edge. Nine
+edges cross a track today. Five name items that are already <code>done</code> — a satisfied
+dependency carries no information the dashboard acts on, so those are dropped and stated
+in the depending item's <code>notes</code> instead.</p>
+<p>Three name live items and cannot be kept without merging plans that would then be over
+budget again:</p>
+<ul>
+<li><code>shared-pr-state-chips</code> → <code>bastler-package</code></li>
+<li><code>bastler-github-api-unification</code> → <code>setup-personal-notes-script</code></li>
+<li><code>bastler-github-api-unification</code> → <code>shared-pr-state-chips</code></li>
+</ul>
+<p>These become <code>blockers</code> entries naming the other plan and item. The cost is real and worth
+recording: those three items lose their dependency chips and their automatic readiness
+computation, and keep only the free-text blocker a human reads. A cross-plan reference in
+the schema (<code>&lt;plan-id&gt;:&lt;item-id&gt;</code>) would restore it, and is code rather than data — a
+candidate item for whichever plan ends up owning the dashboard, not for this one.</p>
+<h6>The compression rule</h6>
+<p>Splitting alone leaves <code>stack-tooling</code>'s successors far over, so each successor roadmap is
+rewritten rather than sliced:</p>
+<ul>
+<li><strong>Keep</strong> what binds future work: the plan's "why", the target architecture, the numbered
+  design decisions, standing risks and hazards, open questions, and any conclusion a later
+  item depends on.</li>
+<li><strong>Compress</strong> the per-round implementation narrative of items that are already merged to
+  a line or two naming the outcome. The pull request is that record, and it is linked.</li>
+<li><strong>Compress item <code>notes</code></strong> the same way, hardest on <code>done</code> items.</li>
+</ul>
+<p>Nothing is destroyed: the full 11,788-line roadmap stays reachable in the personal-notes
+branch's own history.</p>
+<h6>Mechanics the split has to get right</h6>
+<ul>
+<li><code>save-plan.sh</code> writes one plan's two files and regenerates <code>branch-index.tsv</code> across
+  every manifest, so the branch index self-heals. It cannot <em>delete</em> the old plan
+  directory — that needs its own commit on the notes branch.</li>
+<li><code>_generated/dashboard-urls.yaml</code> is keyed by plan id and is written by the
+  <code>plan-dashboard</code> skill, not by <code>save-plan.sh</code>. The <code>workflow-unification</code> key is removed
+  by hand; the seven new keys are minted by publishing each new dashboard.</li>
+<li>Every item keeps its <code>pull_request_number</code>, <code>branch</code>, <code>status</code> and <code>session</code> verbatim.</li>
+<li>All seven plans keep <code>tracking_issue: 102</code>. Reusing the existing mailbox keeps the
+  continuity that seven new issues would scatter, and creating issues is not this item's
+  to do.</li>
+</ul>
+<h6>No branch and no pull request</h6>
+<p>Personal-notes data only, per the item's own notes and the <code>eql-roadmap-migration</code>
+precedent. This session's designated branch stays empty; the manifest's <code>branch</code> and
+<code>pull_request_number</code> stay <code>null</code>.</p>
+<h5>Done 2026-08-30: <code>split-workflow-unification</code> — seven plans, 16,917 lines to 2,916</h5>
+<p>Pushed to the notes branch as <code>e69094af3</code>; dashboard URLs recorded in <code>273436cb9</code>. Structural record
+on tracking issue #102.</p>
+<table>
+<thead>
+<tr>
+<th>new plan</th>
+<th>items</th>
+<th>lines</th>
+<th>was</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>stack-tooling-install</code></td>
+<td>7</td>
+<td>435</td>
+<td><code>stack-tooling</code>, install half</td>
+</tr>
+<tr>
+<td><code>stack-maintenance</code></td>
+<td>11</td>
+<td>737</td>
+<td><code>stack-tooling</code>, pass half</td>
+</tr>
+<tr>
+<td><code>plan-tracking-skills</code></td>
+<td>6</td>
+<td>299</td>
+<td><code>personal-data</code>, plan-item skills</td>
+</tr>
+<tr>
+<td><code>session-notes-infrastructure</code></td>
+<td>10</td>
+<td>415</td>
+<td><code>personal-data</code>, hook and notes</td>
+</tr>
+<tr>
+<td><code>plan-dashboards</code></td>
+<td>12</td>
+<td>419</td>
+<td><code>dashboards</code>, unchanged</td>
+</tr>
+<tr>
+<td><code>bastler-package</code></td>
+<td>10</td>
+<td>413</td>
+<td><code>bastler</code>, unchanged</td>
+</tr>
+<tr>
+<td><code>workflow-cutover</code></td>
+<td>3</td>
+<td>198</td>
+<td><code>cutover</code>, unchanged</td>
+</tr>
+</tbody>
+</table>
+<p>Measured against the live notes branch afterwards: every plan in the directory is now within the
+budget except <code>rdr-refactor</code> (49 items, 4,282 lines), which is <code>split-rdr-refactor</code>'s work.</p>
+<h6>What the split preserved, and how that was checked rather than trusted</h6>
+<p>All 59 items are present exactly once and none is invented, checked by set comparison against the
+source manifest; every successor passes <code>build_dashboard.validate_plan</code>; and each item's <code>branch</code>,
+<code>pull_request_number</code>, <code>status</code> and <code>session</code> are copied field-for-field by the builder rather than
+retyped. The dashboards then rendered against live GitHub with <strong>zero drift flags across all seven</strong>,
+which is the independent confirmation that no status was changed by the move.</p>
+<h6>What it could not preserve</h6>
+<p>Three live <code>depends_on</code> edges crossed a plan boundary and are now <code>blockers</code>, so those items lose
+their dependency chips and automatic readiness. Merging the plans that would keep them puts two of
+them back over budget, so this is a cost rather than an oversight. A <code>&lt;plan-id&gt;:&lt;item-id&gt;</code> reference
+in the schema would restore it, and is a candidate item for <code>plan-dashboards</code>.</p>
+<h6>What the compression rule turned out to be worth</h6>
+<p>The manifests alone were 5,129 lines for 59 items - one item carried 585 - because notes had been
+accreting per resolve session rather than being rewritten. Compressing to what binds future work took
+the manifests to 2,203 and the roadmaps from 11,788 to 713. Nothing is destroyed: the full
+predecessor roadmap is in the notes branch's history immediately before the split commit.</p>
+<p>This is direct evidence for <code>minimal-roadmap-writing</code>, the item that changes what the skills ask
+sessions to write: 94% of the roadmap was per-round implementation narrative about merged pull
+requests, and the pull requests are that record already.</p>
+<h6>Left alone deliberately</h6>
+<p><code>_generated/branch-index.yaml</code> still names <code>workflow-unification</code>. Nothing reads it - <code>save-plan.sh</code>
+regenerates only the <code>.tsv</code>, and a grep of <code>.claude/</code> finds no reader - so it is a dead generated file
+predating this work, and deleting it is outside this item.</p>
+<h5>Done 2026-08-30: <code>split-rdr-refactor</code> — seven plans, 4,372 lines to 1,806</h5>
+<p>Pushed to the notes branch as <code>397532690</code>. Both plans that motivated the budget are now
+under it, so <code>refuse-oversized-save</code> is unblocked.</p>
+<table>
+<thead>
+<tr>
+<th>new plan</th>
+<th>items</th>
+<th>lines</th>
+<th>was</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>eql-core-and-code-generation</code></td>
+<td>6</td>
+<td>177</td>
+<td>the EQL/codegen foundation, all merged</td>
+</tr>
+<tr>
+<td><code>rdr-core-engine</code></td>
+<td>14</td>
+<td>517</td>
+<td>the <code>rdr/</code> package stack</td>
+</tr>
+<tr>
+<td><code>rdr-interface-and-decorator</code></td>
+<td>5</td>
+<td>242</td>
+<td>the D-ui and D-deco tracks</td>
+</tr>
+<tr>
+<td><code>test-suite-fixes</code></td>
+<td>3</td>
+<td>180</td>
+<td>the flaky-marker and pytest-conversion items</td>
+</tr>
+<tr>
+<td><code>rdr-explanation</code></td>
+<td>8</td>
+<td>239</td>
+<td>the Why &amp; Montessori wave</td>
+</tr>
+<tr>
+<td><code>rdr-engine-extensions</code></td>
+<td>10</td>
+<td>301</td>
+<td>waves 1–3 and the architecture brief</td>
+</tr>
+<tr>
+<td><code>rdr-expert-framework</code></td>
+<td>3</td>
+<td>150</td>
+<td>the expert-capabilities track</td>
+</tr>
+</tbody>
+</table>
+<h6>The item's own note predicted the wrong seam, and measuring is what caught it</h6>
+<p>The note said the plan's waves "already separate the engine work from the Why &amp; Montessori
+track and the expert framework, which is the likely seam." Measured, a by-wave split does
+not get under budget: wave 0 alone holds <strong>26 of the 49 items, 867 manifest lines and about
+2,565 of the 3,259 roadmap lines</strong> — 92% of the roadmap attributed by counting each
+addendum's mentions of item ids and pull request numbers. The other six waves together are
+23 items and under 700 lines. So the split had to cut <em>inside</em> wave 0, which the note did
+not anticipate.</p>
+<p>The seam it cuts on is subject: the EQL core and <code>code_generation</code> extraction under the
+engine (all merged, and not RDR work at all); the <code>rdr/</code> package delivery stack itself; the
+interactive shell, magics, decorator and file store on top of it; and the repository-wide
+test-suite defects the stack surfaced but does not own. That last group is three items and
+looks thin, but folding it anywhere would have put unrelated work in a plan already at the
+budget — the same reasoning <code>workflow-cutover</code> was kept separate under.</p>
+<h6>The cost, which is larger than the sibling split's</h6>
+<p><code>depends_on</code> cannot cross a plan, so <strong>seven live edges dissolve into <code>blockers</code></strong> here
+against the sibling's three. The reason is structural rather than a partition mistake:
+<code>d-core-backend</code> and <code>d-core-single-class</code> are the trunk, and six items across four
+different subjects stack directly on them. Keeping any one of those dependents with the
+engine pushes <code>rdr-core-engine</code> over 15 items. Three further edges name items that have
+already merged and are dropped into the depending item's notes instead.</p>
+<p>That makes ten items in this programme with no dependency chip and no automatic readiness.
+The <code>&lt;plan-id&gt;:&lt;item-id&gt;</code> reference already noted as a candidate for <code>plan-dashboards</code> would
+restore all of them, and this split roughly triples the case for it.</p>
+<h6>Verified rather than trusted</h6>
+<p>All 49 items are present exactly once and none is invented, by set comparison against the
+source; every successor passes <code>build_dashboard.validate_plan</code>; every item's <code>title</code>,
+<code>branch</code>, <code>repository</code>, <code>pull_request_number</code>, <code>status</code> and <code>session</code> are byte-identical to
+the source, checked field-by-field rather than by reading the diff; and every declared track
+has at least one item. The branch index went from 125 branches to 125, with <strong>none unmapped
+and 42 remapped</strong>, so <code>session-start.sh</code> resolves every branch exactly as before.</p>
+<p>One warning from the index regeneration is pre-existing, not this split's:
+<code>conditions-root-drop-dead-parent-recovery</code> is claimed by both <code>dag-facade-hardening</code> and
+this plan's <code>eql-core-and-code-generation</code>, and it mapped to <code>dag-facade-hardening</code> before
+the split too.</p>
+<h6>The compression rule paid the same way it did on the sibling</h6>
+<p>The predecessor's roadmap was 3,259 lines, of which sections 1–4 (266 lines) are the design
+and the standing conventions and the remaining 31 addenda are per-round narrative about
+individual pull requests. Rewriting rather than slicing took the seven roadmaps to 855 lines
+total and the manifests from 1,113 to 951. What was kept is what binds future work: the
+locked engine decisions, the open design questions nobody has answered, the standing hazards
+— the wedged CI merge refs, the tracked generated interface, the formatter's fourteen-instance
+regression — and the programme's own working method, which is recorded once in
+<code>rdr-core-engine</code>'s roadmap and referenced from the others rather than copied into each.</p>
+<p>Second independent confirmation of <code>minimal-roadmap-writing</code>'s premise: 92% of this roadmap
+was narrative about merged pull requests, against the sibling's 94%.</p>
+<h6>Left alone deliberately</h6>
+<p><code>rdr-refactor</code> was a live plan while this ran — another session pushed a resolve to it
+mid-way through, so the source was re-read from the current tip before building. The seven
+successors all keep <code>tracking_issue: 94</code>, reusing the existing mailbox rather than scattering
+the continuity across seven new issues. Personal-notes data only, so no branch and no pull
+request, per the item's own notes and the sibling split's precedent.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-budget">
+        <div class="wave-eyebrow">Wave 1 - the budget, measured</div>
+        <p class="wave-description">The budget exists and every plan can be measured against it, but nothing is refused yet. Report-only, so no plan is stranded while the migration below is still outstanding.
+</p>
+        <section class="track">
+          <h3 class="track-title">The budget and its report</h3>
+          <div class="item-list">
+                <article id="item-size-budget-and-report" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A named size budget, and a report of every plan against it</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">size-budget-and-report</span>
+            <span class="mono branch">claude/plan-size-limits-budget-alp8p2</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/207" target="_blank" rel="noopener">#207</a>
+            <a class="session-link" href="https://claude.ai/code/session_01SziLFUkhv1REwwQM8dQoJj" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve plan-size-limits size-budget-and-report" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The budget as named constants - 15 items and 2,000 combined plan.yaml + roadmap.md lines - with a typed check and a command reporting every plan against it. Report-only: nothing is refused at this stage, so it can land while workflow-unification and rdr-refactor are still over. Numbers chosen from the live measurement on 2026-08-28: the largest healthy plan is montessori-eql-stack at 13 items / 1,634 lines, and the two outliers are 3,676 and 14,259 lines, so the budget clears six of eight plans untouched. The count must parse the YAML rather than grep it - rdr-refactor reads 0 items under `grep &#39;^  - id:&#39;` because its manifest indents differently, and 49 once parsed. Landed as .claude/hooks/plan_size_budget.py, a module of its own on main rather than a third copy of .claude/shared/plan_model.py - the later items import the budget from there.
+The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZE_BUDGET constant: SizeBudget carries MAXIMUM_ITEMS/MAXIMUM_LINES as class variables its fields default to, so SizeBudget() is the budget and wave 3&#39;s refusal imports the class, not a constant. The free functions are gone onto PlanSize, a new PlansDirectory and a new SizeReport. The round also produced .claude/hooks/missing_requirements.py plus .claude/hooks/requirements.txt - a generic &#34;which requirements are absent&#34; check that check-setup.sh now shares -and it established that no test or script spells a filename another module defines: HookScript, PlanDocument and PLANS_DIRECTORY are the definitions, and resolve-personal-notes-config.sh gained CREATE_PERSONAL_NOTES_BRANCH_SCRIPT, HOOKS_REQUIREMENTS_FILE, MISSING_REQUIREMENTS_SCRIPT, PLAN_SIZE_BUDGET_SCRIPT and PLAN_SIZE_REPORT_SCRIPT. Whether plan-size-report.sh should be Python is open with the reviewer: the notes-branch config resolver is bash with no Python half, so a Python entry point needs that resolver ported first - its own item if wanted.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Two review threads on #207 are open on questions only the reviewer can answer, both replied to and neither resolved: whether the eight scripts already on main that spell &#34;create-personal-notes-branch.sh&#34; should be converted to the new CREATE_PERSONAL_NOTES_BRANCH_SCRIPT constant in this PR or a follow-up, and whether plan-size-report.sh should be Python. A second, later pass of the same 2026-08-30 round added three more small threads (two pass-through test constants, one hardcoded filename pair) that this manifest never recorded before they were fixed; all three are resolved in e4ba75a7. The giskardpy check on #207 is also red, but it is an unrelated ROS2 integration test (test_collision_matrix_tool.py::test_script_launch_and_kill, subprocess.TimeoutExpired) that this item&#39;s diff does not touch - not a blocker for this item, and not fixed here.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-migration">
+        <div class="wave-eyebrow">Wave 2 - split the plans already over it</div>
+        <p class="wave-description">The two oversized plans come under budget. This must land before any refusal, or their own state becomes unsaveable mid-flight.
+</p>
+        <section class="track">
+          <h3 class="track-title">Splitting the oversized plans</h3>
+          <div class="item-list">
+                <article id="item-split-workflow-unification" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Split workflow-unification into plans under the budget</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">split-workflow-unification</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <a class="session-link" href="https://claude.ai/code/session_019636yuByUTH6aFiEQdDztc" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">55 items / 14,259 lines becomes several under-budget plans. Its existing tracks - personal-data, stack-tooling, dashboards, bastler, cutover - already name the natural seams. Personal-notes data only, so branch stays null and no pull request is opened; the precedent is that plan&#39;s own eql-roadmap-migration item. The split rewrites _generated/branch-index.tsv and _generated/dashboard-urls.yaml, both keyed by plan id, so every moved item&#39;s branch mapping and every cached dashboard URL must be regenerated - otherwise session-start.sh stops finding items by branch and /plan-dashboard mints duplicate pages for the new ids. Every item carrying an open pull request keeps its number across the move. Second reason, measured 2026-08-29: at 15,447 source lines this plan&#39;s dashboard renders to a 1.26 MB, 12,194-line artifact, and the Artifact tool refuses a publish over another session&#39;s newer version until that version has been read in full - 16 reads, against roughly 2 for a plan at the budget. The split is what makes republishing affordable; the gate itself is harness-side and cannot be narrowed to a diff from here.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="A named size budget, and a report of every plan against it">size-budget-and-report</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-split-rdr-refactor" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Split rdr-refactor into plans under the budget</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">split-rdr-refactor</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">49 items / 3,676 lines, same treatment and same index regeneration as the sibling split. Its waves already separate the engine work from the Why &amp; Montessori track and the expert framework, which is the likely seam.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="A named size budget, and a report of every plan against it">size-budget-and-report</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-enforcement">
+        <div class="wave-eyebrow">Wave 3 - refusal and the skills</div>
+        <p class="wave-description">The gate starts refusing, and the skills that write plans learn to route new work elsewhere and to write less.
+</p>
+        <section class="track">
+          <h3 class="track-title">The save gate and the writing skills</h3>
+          <div class="item-list">
+                <article id="item-refuse-oversized-save" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Refuse a save that leaves a plan over budget</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">refuse-oversized-save</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff plan-size-limits refuse-oversized-save" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">save-plan.sh gains the gate, with a typed error naming which half of the budget was blown and by how much. The natural seam is alongside the existing `plan_manifest_tools.py read-id` call the script already makes before pushing. Depends on both splits: landing this while either plan is still over would refuse every save of that plan, including the ones recording this plan&#39;s own progress.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Split workflow-unification into plans under the budget">split-workflow-unification</span>
+
+            <span class="chip" title="Split rdr-refactor into plans under the budget">split-rdr-refactor</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-new-plan-when-full" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Open a new plan instead of growing a full one</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">new-plan-when-full</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff plan-size-limits new-plan-when-full" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">/plan-create and /add-plan-item read the budget and route new work to a new plan when the plan they would otherwise grow is at it. Only needs the budget to exist, not the splits, so it can land ahead of wave 2. This item is the reason the plan exists: without it the budget is a wall with no door.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="A named size budget, and a report of every plan against it">size-budget-and-report</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-minimal-roadmap-writing" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Write roadmap sections against the budget, not against completeness</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">minimal-roadmap-writing</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff plan-size-limits minimal-roadmap-writing" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">plan-create/SKILL.md currently instructs the opposite - &#34;preserve its detail rather than compressing it away&#34; - and plan-item-kickoff and plan-item-resolve append unbounded narrative through record&#39;s --roadmap-section. Both change so the budget is not re-spent within weeks of a split. Measured evidence that per-item discipline cannot catch this: during the session that created this plan, workflow-unification grew 51 manifest and 103 roadmap lines while gaining zero items.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="A named size budget, and a report of every plan against it">size-budget-and-report</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">3</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">2</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(3)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-refuse-oversized-save" data-item-identifier="refuse-oversized-save" onclick="planDashboardHighlightItem(event, this)"><strong>Refuse a save that leaves a plan over budget</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-new-plan-when-full" data-item-identifier="new-plan-when-full" onclick="planDashboardHighlightItem(event, this)"><strong>Open a new plan instead of growing a full one</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-minimal-roadmap-writing" data-item-identifier="minimal-roadmap-writing" onclick="planDashboardHighlightItem(event, this)"><strong>Write roadmap sections against the budget, not against completeness</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

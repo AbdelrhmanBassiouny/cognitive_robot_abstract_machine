@@ -1,0 +1,1192 @@
+<title>Cutover: one published site, no scheduled LLM run, the old branches retired</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>Cutover: one published site, no scheduled LLM run, the old branches retired</h1>
+    <p class="description">The end state the workflow-unification work was for. Plan dashboards publish themselves from a single Pages site; the scheduled LLM Routine is replaced by a plain Action for the deterministic duties and on-demand sessions for the judgment ones; and the superseded tooling branch is tagged and deleted once one green cycle has run on the new paths.</p>
+    <p class="repo-line">
+      4 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/102" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>workflow-cutover — Roadmap</h4>
+<p>Narrative companion to <code>plan.yaml</code>. Kept short on purpose: the size budget this split was made
+under counts these lines.</p>
+<h5>Where this plan came from</h5>
+<p>Split out of <code>workflow-unification</code> on 2026-08-30, under <code>plan-size-limits</code>'
+<code>split-workflow-unification</code>. That plan had reached 59 items and 16,917 lines across its manifest
+and roadmap, well past the 15-item / 2,000-line budget, and became seven plans seamed on subject:
+<code>stack-tooling-install</code>, <code>stack-maintenance</code>, <code>plan-tracking-skills</code>,
+<code>session-notes-infrastructure</code>, <code>plan-dashboards</code>, <code>bastler-package</code> and this one.</p>
+<p>This plan is the <code>cutover</code> track, carried across unchanged. Every item keeps its branch, pull
+request number, status and session verbatim.</p>
+<p><strong>The full 11,788-line predecessor roadmap is not lost</strong> - it remains in the personal-notes
+branch's own history, at <code>.claude/personal/plans/workflow-unification/roadmap.md</code> before the split
+commit. What is kept here is what binds future work; the per-round implementation narrative of
+merged items lives in the pull requests themselves, which each item's notes link.</p>
+<h5>Why this work exists</h5>
+<p>The workflow machinery had grown into four storage locations plus a live scheduled LLM Routine, and
+the endgame this plan owns is the state it was all meant to reach:</p>
+<ul>
+<li><strong>One published surface.</strong> Plan dashboards publish from a single Pages site, with the stack board
+  retired in favour of GitHub's native stack map (the one-dashboard decision, 2026-07-31).</li>
+<li><strong>No scheduled LLM run at all.</strong> A plain scheduled Action takes the deterministic duties -
+  fork-main fast-forward, label hygiene, the upstream-link comment, the site build, the happy-path
+  cascade - and the judgment residue runs in on-demand sessions surfaced by the dashboard rather
+  than by a timer. That finally aligns the machinery with the no-scheduled-checks rule.</li>
+<li><strong>The superseded branches retired</strong>, once one green cycle has run on the new paths.</li>
+</ul>
+<p>What was <em>not</em> found in the original review, and is worth keeping: the four-way storage split is
+load-bearing rather than accidental. Fork main must mirror upstream, personal data cannot live on a
+merged branch, and one repository gets one Pages site.</p>
+<h5>Decisions this plan inherits</h5>
+<p>Numbering is the predecessor's, kept so cross-references in item notes still resolve.</p>
+<p><strong>3. Portability.</strong> No repository names outside configuration defaults and documentation examples.
+The site's repository, branch and upstream become repository variables rather than literals.</p>
+<p><strong>4. The hard rules stay inline in the prompt</strong>, because they must bind before the first tool call -
+a webhook event can arrive before any file is read. <em>Partly reversed in practice</em>: once the doctrine
+became a skill the rules no longer bind before the first file is read, and the window is one turn.
+Accepted because this plan deletes the scheduled run anyway.</p>
+<p><strong>9. The GitHub steps in this system do not need a session.</strong> The accounting that said otherwise was
+wrong: the authenticated login, the label reads and the label creates are all plain API calls. This
+is why the deterministic duties can move to an Action at all.</p>
+<h5>Standing risks</h5>
+<ul>
+<li><strong>The site lives on a regenerated branch.</strong> The workflow runs from the fork's default branch,
+  which is the integration branch, and that branch is rebuilt from scratch - a rebuild that drops
+  the tip carrying the workflow takes it off the default branch and manual dispatch stops being
+  offered until a later build carries it again.</li>
+<li><strong>The base-change credential is unverified in the Action.</strong> A session's own git-proxy credential
+  refuses a base change while its MCP client performs one; the Action's credential is a third
+  identity again. Verify it with a real base change before relying on it.</li>
+<li><strong>Two operations stay outside the harness.</strong> Tag pushes and branch deletes get a 403 through a
+  session's git proxy and no tool substitutes, so <code>tooling-branch-retirement</code>'s last two steps are
+  the user's to run. A session can do every verification and prepare the exact commands.</li>
+</ul>
+<h5>Open</h5>
+<ul>
+<li>Whether the Pages workflow eventually lands on <code>main</code> or gains a cron. Neither was done: the cron
+  was not asked for and the no-scheduled-checks rule makes it the user's call.</li>
+<li>Whether the every-fork-pull-request-belongs-to-a-plan invariant is enforced at site-build time.
+  Recorded when the one-dashboard decision was taken, carried by nothing yet.</li>
+</ul>
+<h5>The 2026-09-04 review round on #218, and what it found about the other branches</h5>
+<p>The item read <code>in_progress</code> with no blocker while a 26-thread review round sat unanswered on its
+own head commit. Nothing about its recorded state said it was stuck, which is why the blocker was
+written before the resolution started rather than after it.</p>
+<p>Four of the asks are one complaint restated - hard-coded strings where a <code>StrEnum</code> member belongs -
+and the round is otherwise <code>payload</code> as a name, missing per-member docstrings, and a common base for
+the error classes. Three are questions, and two of those turn out to be about branches other than
+this one:</p>
+<ul>
+<li><strong>The vocabulary this branch should use already exists on #111.</strong> <code>RefreshArgument</code>,
+  <code>RefreshSummaryKey</code>, <code>SitePath</code>, <code>RepositoryEndpoints</code>, <code>PullRequestListFilter</code> and <code>IssueField</code>
+  are all in <code>bastler/build_site.py</code> and <code>bastler/pull_request_state.py</code>, and #111 names a decoded
+  response <code>detail</code> and a request body <code>body</code> - which is the answer to "rename payload". Adopting
+  those names here makes the eventual merge an adoption rather than a conflict, so the overlap the
+  item's notes already record stays a single-file one.</li>
+<li><strong><code>workflow_document.py</code> (#211) is a second overlap, and a real one.</strong> Naming the workflow's keys
+  for <code>test_plan_dashboards_workflow.py</code> builds a small piece of what that 664-line module already
+  models. It is on <code>.claude/stack/</code> on an unlanded branch, so this branch cannot import it; the
+  vocabulary here is deliberately sized to these tests and named after its equivalents, and the
+  richer version wins whenever the two meet.</li>
+<li><strong>Bash to Python is the settled direction, and <code>publish_site.sh</code> was the last new bash.</strong>
+  <code>bastler-package</code> carries a seven-item Bash→Python series; none of its items covers this file,
+  because the file does not exist on <code>main</code>. Converting it here is the answer to the review's
+  question rather than a new claim on that plan's scope.</li>
+</ul>
+<p>Left for the user: whether the Artifact publishing path is retired now the dashboards publish to
+Pages. That would delete <code>record_dashboard_url.py</code>, <code>_generated/dashboard-urls.yaml</code> and the
+"republish the dashboard" convention every plan skill follows, so it is a plan-level scope change
+rather than a review fix.</p>
+<h5>The Artifact path is now a tracked retirement, not an open question</h5>
+<p><code>artifact-path-retirement</code> was added on 2026-09-04, at the user's direction, from a review comment
+on #218 asking whether the Artifact tool is still needed now the dashboards publish to Pages.</p>
+<p>It belongs to this plan rather than to <code>plan-dashboards</code>, whose files it deletes, because it is what
+finishes this plan's own first goal: one published surface. It carries the same gate as
+<code>tooling-branch-retirement</code> - one green cycle on the new path before the old one goes - and the same
+shape of question, which is what makes the two siblings rather than one item.</p>
+<p>The three things it has to settle are recorded on the item, because each is a way the Artifact still
+does something Pages does not: the site is public where an Artifact is private, the workflow reaches
+only the pull requests whose base already carries it, and a manifest edit raises no event, so the
+republish becomes a dispatch rather than a skill invocation.</p>
+<h5>What the round changed, and the two threads it did not close</h5>
+<p>Pushed as <code>d61619ac</code>. The four recurring asks are answered across the branch's own files, and the
+answer to the largest of them came from reading #111 rather than from inventing names: every
+vocabulary this branch needed - <code>RefreshArgument</code>, <code>RefreshSummaryKey</code>, <code>SitePath</code>,
+<code>RepositoryEndpoints</code>, <code>PullRequestListFilter</code>, <code>IssueField</code>, and <code>detail</code>/<code>body</code> in place of
+<code>payload</code> - already exists in <code>bastler/build_site.py</code> and <code>bastler/pull_request_state.py</code>. Taking
+those names makes the single-file overlap the item's notes record an adoption rather than a rename.</p>
+<p><code>publish_site.sh</code> is now <code>publish_site.py</code> on a <code>GitCommandRunner</code> that <code>PersonalNotesBranch</code> reads
+through too. That answers two threads at once, and it is where <code>bastler-package</code>'s Bash-to-Python
+series was going anyway - none of its seven items covers this file only because the file does not
+exist on <code>main</code>.</p>
+<p>Two asks are answered differently from how they were put, so they stay open for the user rather than
+being resolved:</p>
+<ul>
+<li><strong>The git command runner</strong> is this package's own, not <code>.claude/stack/maintenance_git_commands.py</code>'s.
+  That module imports <code>stack</code>, and reaching it at all depends on another skill directory's conftest
+  having inserted its path - which happens to hold under CI's single pytest run and is not a
+  dependency worth taking. #111's <code>bastler/personal_notes.py</code> runs git through a private method for
+  the same reason.</li>
+<li><strong>The error base</strong> covers the errors this branch introduces. <code>build_dashboard.py</code>'s
+  <code>MissingMergeTimestampError</code>, <code>MalformedPullRequestDataError</code> and <code>PlanValidationError</code> predate the
+  branch and sit outside its diff; retrofitting them widens the pull request rather than answering
+  the review.</li>
+</ul>
+<p>Of those two, the user closed the error-base thread himself; the git-command-runner one is still
+open, and is the only thread on the pull request that is.</p>
+<h5>The 2026-09-05 round: one ask, and what making it true exposed</h5>
+<p>One comment - <em>always use dataclasses</em>, on the fake transport in <code>test_build_site.py</code> - answered in
+<code>8afbbe30</code>. It is worth recording because the fix was not the class it pointed at.</p>
+<p>That class had a hand-written <code>__init__</code> for one reason: to hold a builder function the conftest
+handed it. The builder was a closure returning a bare <code>dict</code>, and the two fixtures underneath it
+were closures over their configuration as well. So the review found one dataclass missing and the
+scaffolding behind it turned out to be three classes written as functions:</p>
+<ul>
+<li>the pull request a fake listing serves is now a <code>PullRequestDetail</code> dataclass with <code>to_json()</code>,</li>
+<li>the scratch repositories are a <code>ScratchNotesRemote</code> holding the remote, the seed checkout and the
+  clone as named paths, in a <code>tests/scratch_repositories.py</code> of their own,</li>
+<li>and <code>scratch_git</code> is a <code>GitCommandRunner</code> pointed with the <code>in_directory()</code> the production class
+  already had, rather than a factory that built one.</li>
+</ul>
+<p>The move to a named module had a second effect the round did not set out to get. The <code>plan_files</code>
+fixture existed <em>only</em> because <code>conftest</code> is not a module name a test can safely import by - four
+test directories share one path under CI's single pytest run, and its docstring said so. With the
+type in a module with its own name, the fixture is gone and the tests import the class.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-cutover">
+        <div class="wave-eyebrow">Cutover and retirement</div>
+        <p class="wave-description">Each item flips a live system onto the new path and retires the old one.</p>
+        <section class="track">
+          <h3 class="track-title">Cutover and retirements</h3>
+          <div class="item-list">
+                <article id="item-stack-board-single-site" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">PR 4: plans-only Pages site (stack board retired for the native stack map)</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">stack-board-single-site</span>
+            <span class="mono branch">claude/dashboard-publish-automation-hnfi5a</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/218" target="_blank" rel="noopener">#218</a>
+            <a class="session-link" href="https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve workflow-cutover stack-board-single-site" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Re-scoped 2026-07-31 to the user&#39;s one-dashboard decision: no board index is built at all.
+GitHub&#39;s native stack map covers derived stack mechanics, so the plan dashboards are the single
+surface, published as `_site/plans/&lt;id&gt;/` with no live session. Shipped 2026-08-30 as draft #218 off
+`main` rather than stacked on #111, at the user&#39;s instruction not to wait - the workflow does
+nothing until it is on a base branch, and #111 has been conflict-blocked since the 2026-08-29
+maintenance pass. Both recorded dependencies were dropped for the same reason; neither is needed by
+what shipped. The site publishes from this fork&#39;s own Pages, so the repository override is gone.
+
+Three facts the build established, each recorded because a later change would otherwise rediscover
+them. **Which branch carries the workflow decides which trigger can reach it**: `workflow_dispatch`
+is offered only from the default branch (here, `integration`), a `pull_request` run uses that pull
+request&#39;s own merge ref so it fires only where the base already carries the file, and `push` fires
+on the branch it names. No workflow design substitutes one for another. **The `github-pages`
+environment accepts deployments only from the default branch**, so `actions/deploy-pages` is
+rejected before the first step of any pull request run, and nothing reachable from `GITHUB_TOKEN`
+relaxes it; the site is pushed to a branch of its own that Pages serves from, with `pages_site.py`
+pointing Pages there through the API, so a fresh fork still needs no settings visit.
+**`fetch-depth: 0` is load-bearing**, not caution: neither that push nor the notes-branch worktree
+the merged-to-done correction commits in can push from a shallow clone.
+
+`build_site.py` is a deliberate single-file overlap with #111 - same path, same command-line
+contract - so whichever lands second takes #111&#39;s richer version, and this branch&#39;s `github_api.py`
+and `personal_notes.py` are then deletable in favour of the package. 50 new tests, 293 in the
+plan-dashboard suite. Verified end to end against live GitHub with the notes remote redirected to a
+local mirror: all ten plans rendered. The rejected environment deployment is pinned out by a test of
+its own.
+
+The user does not want this on `main` (2026-08-30). What that costs, stated rather than worked
+around: the `pull_request` trigger then covers this pull request alone. Un-drafting it makes it
+eligible for the next integration rebuild, which puts it on the default branch and makes
+`workflow_dispatch` available. Closing the rest of the gap means landing it on `main` later or
+adding a cron - deliberately not added, since the no-scheduled-checks rule makes that the user&#39;s
+call. Living on `integration` is fragile in one way worth knowing: that branch is regenerated from
+scratch, so a rebuild that drops this tip takes the workflow off the default branch with it.
+
+Left undone and carried by nothing else: the every-fork-pull-request-belongs-to-a-plan invariant,
+the repo/branch/upstream repository variables, and three inconsistent poll-interval statements.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Two review rounds are answered and pushed - the 26-thread round of 2026-09-04 as `d61619ac`, and the single dataclass ask of 2026-09-05 as `8afbbe30`; what is left is the user&#39;s own re-review. One thread stays open because it was answered differently from how it was asked: the git-command-runner one, where the runner adopted is this package&#39;s own rather than `.claude/stack`&#39;s, since importing that would take a dependency on another skill directory&#39;s `sys.path` insertion. The user closed the error-base and Artifact threads themselves.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-artifact-path-retirement" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Retire the Artifact publishing path once the Pages site has run one green cycle</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">artifact-path-retirement</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff workflow-cutover artifact-path-retirement" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Raised by the user on #218&#39;s review of `SKILL.md` (2026-09-04): now the dashboards publish to
+Pages, is the Artifact path still needed? Kept out of #218 as a plan-level scope change rather
+than a review fix, and tracked here because it is what finishes this plan&#39;s own &#34;one published
+surface&#34; goal.
+
+What retiring it removes: `record_dashboard_url.py` and its tests, the
+`_generated/dashboard-urls.yaml` cache, `plan-dashboard/SKILL.md` step 3, and the &#34;republish the
+dashboard&#34; instruction every plan skill and the personal notes carry - each of which would
+instead dispatch the workflow.
+
+Three things to settle first, because they are what the Artifact still does and Pages does not.
+The Pages site is public on the fork while an Artifact is private, so retiring it publishes the
+plan data&#39;s rendering to anyone with the URL - the data itself is already public on
+`claude/personal-notes`, so this is a discoverability change rather than a disclosure one, but it
+is the user&#39;s call. The workflow only covers plans once it is on a base branch that carries it,
+which today is #218&#39;s own pull request alone. And a manifest edit raises no event GitHub can
+see, so the republish becomes a `workflow_dispatch` call rather than a skill invocation.
+
+Gate: one green site-Action cycle, the same bar `tooling-branch-retirement` already uses.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="PR 4: plans-only Pages site (stack board retired for the native stack map)">stack-board-single-site</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-routine-cutover" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Retire the scheduled LLM Routine: deterministic Action + on-demand sessions</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">routine-cutover</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <a class="session-link" href="https://claude.ai/code/session_017JMftn3ujp7xsyhwcMaF75" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve workflow-cutover routine-cutover" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no scheduled LLM run
+at all, which finally aligns the Routine with the no-scheduled-checks rule. A plain scheduled Action
+takes the deterministic duties - fork-main fast-forward from cram2/main, label hygiene, the
+cram2-link comment, the plans-site build, and the happy-path cascade, since `gh stack sync` is
+documented as safe in automation and Actions runners ship `gh`. The judgment residue - cascade
+conflicts, red CI after a restack - runs in on-demand sessions surfaced by the dashboard rather than
+by a timer. The gate is unchanged: only after the stack tooling is on cram2/main and fork main
+fast-forwards; one green Action cycle flips this done. The live Routine is trigger
+`trig_01N79jHmLo3bSbg8pLM6MNTB` (&#34;PR Stack Monitor and Update&#34;), which the final cutover deletes.
+
+**The base-change 403 is one credential, not the platform** (corrected 2026-08-02 by
+`session-safe-pr-reparent`&#39;s probe). The MCP `update_pull_request` tool changes a base fine, verified
+on throwaway pull request #129, so the &#34;no session can ever reparent&#34; reading was wrong and there is
+no close-and-recreate fallback to inherit. The Action&#39;s own credential is a third identity again;
+verify it with a real base change from the Action before relying on it, and if it does 403, call the
+same REST endpoint under a token that does not carry the restriction rather than degrade to
+renumbering pull requests.
+
+**Detection must be event-triggered, and one event type wider than first designed.** Tracing #40/#41
+on 2026-08-02 showed the human action was correct maintenance, not a mistake automation should
+prevent: the user closed #40 after rebuilding its branch, and its successor #53 merged normally nine
+days later. The real defect is that *any* pull request leaving the open set drops it from
+`board.json`, whether it closes unmerged or merges and GitHub auto-closes it. `pull_request: closed`
+fires for both, so the Action re-sweeps git ancestry for every remaining open fork pull request&#39;s
+base on that one event - not only the closed pull request&#39;s own branch. In the real case that would
+have caught #41&#39;s orphaning at #53&#39;s merge, days before a review round noticed it by accident.
+
+**The interim pointer prompt is adopted and live** (2026-08-02). The user replaced the Routine&#39;s
+~17.5k-token inline prompt with the short pointer this item specified: HARD RULES inline, because
+they must bind before any file is read, plus &#34;read `.claude/stack/ROUTINE.md` and execute&#34;. It
+resolves `origin/main` first and falls back to the landed-parent-detection branch while
+`.claude/stack/` is still in review, so that branch is live production input and an edit to
+`ROUTINE.md` ships on push with no deploy step. That is what stops doctrine corrections needing a
+manual paste. Adoption immediately exposed a latent ordering bug, fixed in #117: SETUP step 0 
+asserted that `stack.py` and `stack.toml` were already on the checkout, written in anticipation of a
+landing that had not happened. Under the pointer the Routine would have resolved its doctrine,
+believed the tooling present, and failed on the first `stack.py` call in phase 2 - after phase 1 had
+already mutated pull requests. Step 0 now fetches `.claude/stack/` from the same ref instead of
+asserting it. Two deletions fall due when `.claude/stack/` reaches main: the pointer prompt&#39;s
+second source line, which needs a manual paste, and step 0&#39;s fetch fallback. Neither breaks anything
+if forgotten; both are dead weight.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-tooling-branch-retirement" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Tag and delete claude/stack-workflow-tooling after one green cycle</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">tooling-branch-retirement</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Only after one full Routine cycle and one site-Action cycle have run green on the new paths. Tag for
+history first.
+
+Platform constraint, recorded 2026-07-29 and unchanged: tag pushes and branch deletes get a 403
+through a session&#39;s git proxy, so those two steps run outside the harness - the user&#39;s machine, or
+`gh api`. A session can still do every verification and prepare the exact commands. The sibling
+`session-hooks-retirement` hit the same wall and the user ran the delete.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Retire the scheduled LLM Routine: deterministic Action + on-demand sessions (not ready yet — this item is blocked on it)">routine-cutover</span>
+
+            <span class="chip" title="PR 4: plans-only Pages site (stack board retired for the native stack map)">stack-board-single-site</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">2</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">2</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-artifact-path-retirement" data-item-identifier="artifact-path-retirement" onclick="planDashboardHighlightItem(event, this)"><strong>Retire the Artifact publishing path once the Pages site has run one green cycle</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

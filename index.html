@@ -1,0 +1,265 @@
+<title>Plan Dashboards</title>
+<style>
+  :root {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+      --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+      --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+      --status-done: #4FCB6C; --status-done-tint: #123420;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  a { color: var(--accent-strong); }
+  .page { max-width: 760px; margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
+  header { border-bottom: 1px solid var(--border); padding-bottom: 1.25rem; margin-bottom: 2rem; }
+  .eyebrow { font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.72rem; color: var(--accent-strong); margin: 0 0 0.6rem; }
+  h1 { font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; font-size: 1.6rem; font-weight: 700; margin: 0 0 0.5rem; text-wrap: balance; }
+  .sub { color: var(--text-muted); max-width: 60ch; margin: 0; }
+  .plan-list { display: flex; flex-direction: column; gap: 0.85rem; }
+  .plan-card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.1rem 1.25rem;
+  }
+  .plan-card:hover { border-color: var(--accent); }
+  .plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  .plan-title { font-size: 1.05rem; font-weight: 700; margin: 0; }
+  .plan-progress { font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; }
+  .plan-desc { color: var(--text-muted); font-size: 0.88rem; margin: 0.4rem 0 0.75rem; max-width: 62ch; }
+  .bar { height: 6px; border-radius: 999px; background: var(--surface-alt); overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+  .plan-card.complete { opacity: 0.62; }
+  .plan-card.complete .bar-fill { background: var(--status-done); }
+  .no-dashboard { color: var(--text-muted); font-style: italic; font-size: 0.8rem; }
+  .empty { color: var(--text-muted); font-style: italic; }
+  footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-muted); }
+</style>
+
+<div class="page">
+  <header>
+    <p class="eyebrow">Plan Dashboards</p>
+    <h1>Every tracked plan</h1>
+    <p class="sub">Initiatives spanning multiple pull requests and sessions, tracked under <code class="mono">.claude/personal/plans/*/plan.yaml</code>. Each links to its own live dashboard.</p>
+  </header>
+
+  <div class="plan-list">
+    <a class="plan-card" href="/plans/bastler-package/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">The bastler package: every tooling module and its bash entry points move into it</h2>
+        <span class="plan-progress mono">1 / 10 done</span>
+      </div>
+      <p class="plan-desc">The workflow tooling grew as loose Python under .claude/ across three separate sys.path entries, so nothing in one directory could import another and the same code was written out repeatedly. This moves all of it into one importable package, then converts the bash entry points into thin shims over it, one layer at a time. The package is named bastler, after the user&#39;s surname and the German word for a tinkerer.</p>
+      <div class="bar"><div class="bar-fill" style="width: 10.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/dag-facade-hardening/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">DAG-vs-tree facade hardening in SymbolicExpression</h2>
+        <span class="plan-progress mono">4 / 8 done</span>
+      </div>
+      <p class="plan-desc">Close the design smell where EQL&#39;s SymbolicExpression - a genuine rooted DAG (shared subexpressions; _parents_ is a list) - exposes tree-shaped _parent_/_root_ accessors (a single first-attached &#34;primary&#34; parent and a walk up that chain). The in-flight stack (#89/#90/#92) already fixed the individual leaks via evaluation-scoped context; this plan does the root-cause hardening they deferred: make the structural accessors hard to misuse, fix the remaining QuantifiedConditional cache-staleness bug, and add a systematic audit plus a guard test.</p>
+      <div class="bar"><div class="bar-fill" style="width: 50.0%"></div></div>
+    </a>
+    <a class="plan-card complete" href="/plans/eql-core-and-code-generation/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">EQL core semantics and the code-generation extraction</h2>
+        <span class="plan-progress mono">6 / 6 done</span>
+      </div>
+      <p class="plan-desc">The EQL-side foundation the RDR engine is built on: the query class refactor&#39;s spec/product lifecycle, the core semantics prep, the extraction of krrood.code_generation out of the RDR package, the removal of the dead conditions-root parent recovery, and unified OperationResult truth. Every item has merged; the plan is kept as the record of what the layer below the engine already settled.</p>
+      <div class="bar"><div class="bar-fill" style="width: 100.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/eql-existential-semantics/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">EQL existential semantics: binding order, semi-join exists, and range restriction</h2>
+        <span class="plan-progress mono">0 / 10 done</span>
+      </div>
+      <p class="plan-desc">Rebuild EQL&#39;s existential operator on the standard relational/logic-programming footing. Today exists() takes a redundant quantified variable, exports bindings from inside the quantifier, and short-circuits globally rather than per outer binding — which silently drops matching rows, breaks not_(exists(...)) and for_all(...), and turns a correlated existential into a cross product. The root cause is that bottom-up evaluation gives the quantifier no outer relation to filter, so the operator invented one. The plan fixes the evaluation model first, then makes exists a semi-join and negated exists an antijoin, then removes the now-dead first argument and updates its two consumers — measuring evaluation cost before and after throughout.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/eql-performatives/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">EQL performatives: a speech-act layer over EQL descriptions</h2>
+        <span class="plan-progress mono">0 / 9 done</span>
+      </div>
+      <p class="plan-desc">Add a performative (speech-act) layer over EQL descriptions - query acts (Find/Generate/Report), assertion acts (Inform/Explain/Warn), and composition combinators (Sequential/Parallel/TryInOrder/TryAll) - carried by a register layer that chooses a description&#39;s opening verb and field-binding keyword, then unify those combinators with coraplex&#39;s executable plan nodes so one tree both executes and verbalizes. Two English-grammar features (subject/verb agreement, scalar vs. collection cardinality) were split out from underneath it and land first.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/eql-verbalization/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">EQL verbalization follow-up (operand naming, disambiguation, sdt migration)</h2>
+        <span class="plan-progress mono">3 / 6 done</span>
+      </div>
+      <p class="plan-desc">Programme following up PR #33&#39;s review: extract a reusable verbalization surface-verification framework onto main, redesign operand naming and same-noun disambiguation to live in the coreference/referring machinery, add abstract-to-concrete-subclass expansion plus first-order (value-agnostic) rendering, then apply all of it to migrate semantic_digital_twin&#39;s predicates off the framework PR #33 currently carries a duplicate of.</p>
+      <div class="bar"><div class="bar-fill" style="width: 50.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/icra-experiments/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">ICRA experiments: one simulated pipeline, episodes in SQL, and the four experiments</h2>
+        <span class="plan-progress mono">1 / 33 done</span>
+      </div>
+      <p class="plan-desc">Everything the ICRA paper (deadline 2026-09-15) needs that no other plan owns: one integrated pipeline that every scenario runs on in simulation before the robot, a dataclass domain model for scenarios, goals, conditions, perturbations and metrics, episodes recorded through ORMatic into an SQL database and queried by EQL as long-term memory, the per-predicate backend routing and physics verification mechanisms the paper measures, failure typing and prediction, the verbalised-memory and VLM baselines, Experiments A, B and C run in simulation and then on the UR10, Experiment D questioning the episode history in simulation, and the released artifact. Three lanes run in parallel; roadmap.md carries the lane order and the day-by-day budget.</p>
+      <div class="bar"><div class="bar-fill" style="width: 3.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/knowledge-directed-perception/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Knowledge-directed Montessori perception</h2>
+        <span class="plan-progress mono">1 / 29 done</span>
+      </div>
+      <p class="plan-desc">Perception that decides where to look and how to look from what the robot knows, rather than from constants written into the pipeline. The supporting surfaces, their extent and their finish come from the semantic digital twin; a query is answered by looking, through a perception backend of the entity query language that pushes what it can into the search and filters the rest afterwards; which detector answers it is a rule decision over the target and the surface; and Segmind&#39;s support events plus an action&#39;s declared effects arm what perception expects to find, which is what makes a failure detectable. Detectors sit behind an interface, so a RoboKudo analysis engine can be one of them without the reasoning layer knowing.
+The deliverable is the running demo on tracy_icra, not the pull requests: every item merges into that branch as soon as it works, without waiting for its own pull request to land on main, and each wave has a demo item that says what has to be true on the real robot before the wave counts as finished.
+The deadline is 2026-09-15, thirteen working days from 2026-08-28. That is less than the full scope needs, so every item is to be built in the narrowest form that demonstrates its claim - see roadmap.md&#39;s budget section for what narrows and what must not be dropped.</p>
+      <div class="bar"><div class="bar-fill" style="width: 3.4%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/match-query-ergonomics/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">EQL match query ergonomics: drop the .expression / .variable detours</h2>
+        <span class="plan-progress mono">2 / 7 done</span>
+      </div>
+      <p class="plan-desc">Remove the two documented detours match queries force on users - match.expression for symbolic attribute access and quantification, and match.variable for where-conditions. Root cause: Match does not follow the CanBehaveLikeAVariable underscore-sandwich convention Query uses, so its plain public fields (parent, variable, type, conditions, domain, factory, kwargs, ...) shadow domain attribute names and symbolic access cannot be forwarded. The two handles also silently diverge: a where-condition built from a query-rooted attribute does not filter at all, and a selection built from match.variable drops the match&#39;s conditions. Fix the semantics bug first, then make Match behave like a variable, then let the factories accept a Match directly and migrate consumers and docs.</p>
+      <div class="bar"><div class="bar-fill" style="width: 28.6%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/montessori-eql-stack/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Montessori demo EQL stack</h2>
+        <span class="plan-progress mono">2 / 15 done</span>
+      </div>
+      <p class="plan-desc">The six-PR stacked chain that takes the Montessori demo from a fast inline monitor to a fully interactive EQL console: workspace-wide class naming with as-you-type completion, &#34;where is ...?&#34; queries with viewer highlighting, demo recording with replay around queried events, the asked question read back in English, and spoken questions answered by matching presets. One strict stack: each PR is based on the previous one (GitHub stack #173). A second wave extends the landed stack with acting from the console, annotated replay, and live tabbed panels.</p>
+      <div class="bar"><div class="bar-fill" style="width: 13.3%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/plan-dashboards/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">The plan dashboard: what it shows, what it gets wrong, and what it can publish</h2>
+        <span class="plan-progress mono">7 / 13 done</span>
+      </div>
+      <p class="plan-desc">The renderer behind /plan-dashboard. Bug fixes to what it computes about an item&#39;s readiness and drift, chips and toggles that keep a large plan legible, and the shared pull-request-state module that lets one page carry CI, size and conflict information rather than only the manifest&#39;s own view of itself.</p>
+      <div class="bar"><div class="bar-fill" style="width: 53.8%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/plan-size-limits/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Plans and roadmaps stay small, enforced by tooling</h2>
+        <span class="plan-progress mono">2 / 6 done</span>
+      </div>
+      <p class="plan-desc">Make plan size a property the tooling holds rather than one sessions have to remember. A hard budget covers a plan&#39;s plan.yaml and roadmap.md together; save-plan.sh refuses a save that breaks it; /plan-create and /add-plan-item read the budget and open a new plan instead of growing a full one; and the roadmap-writing guidance across the plan skills stops asking for detail the budget cannot afford. Because the budget is enforced by refusal, the two plans already over it are split first.</p>
+      <div class="bar"><div class="bar-fill" style="width: 33.3%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/plan-tracking-skills/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">The plan-item skills: deciding where work goes, and recording it before doing it</h2>
+        <span class="plan-progress mono">3 / 6 done</span>
+      </div>
+      <p class="plan-desc">The skills a session uses to place a piece of work and to keep the manifest honest about it - deciding whether something is new work or a change to work in flight, opening an item&#39;s branch and draft pull request before implementation rather than after, and choosing whether a kickoff asks for approval or proceeds.</p>
+      <div class="bar"><div class="bar-fill" style="width: 50.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/rdr-core-engine/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">The EQL-native RDR core engine, landed as a split-PR stack</h2>
+        <span class="plan-progress mono">4 / 14 done</span>
+      </div>
+      <p class="plan-desc">The rdr/ package itself, delivered bottom-up as a stack of topic-oriented pull requests: backward inference and condition resolvers, the conclusion helpers, the underspecified adapter, corner-case provenance, the rule-tree unparser, the observer and rule-tree view, the Expert policy split, the single-class inference engine and the underspecified-query backend, plus the runtime behaviour left open when no rule fires.</p>
+      <div class="bar"><div class="bar-fill" style="width: 28.6%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/rdr-engine-extensions/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Feature layer, multi-tree engines, concept trees, OO integration and TMS</h2>
+        <span class="plan-progress mono">0 / 10 done</span>
+      </div>
+      <p class="plan-desc">Everything the forward architecture puts on top of the single-class engine: named memoized features computed once per case, the MCRDR and GRDR multi-tree engines, concept trees declared as vocabulary with a stratified dependency graph, per-class definition RDRs with candidate generators, JTMS justification recording, and the architecture brief that documents the finished whole.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/rdr-expert-framework/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Capability-guarded experts and their collaboration</h2>
+        <span class="plan-progress mono">0 / 3 done</span>
+      </div>
+      <p class="plan-desc">Promote an expert&#39;s applicability to a first-class, evaluable EQL guard, so the engine gates delegation on the guard rather than on the expert&#39;s type; then let experts cooperate, and let them say why they can or cannot handle a situation.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/rdr-explanation/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Why-questions on RDR conclusions, and the Montessori demo that narrates them</h2>
+        <span class="plan-progress mono">1 / 8 done</span>
+      </div>
+      <p class="plan-desc">Explaining a conclusion the engine reached: the WhyQuestion/WhyAnswer value objects and the engine&#39;s why() surface, the causal &#39;because&#39; vocabulary that verbalizes them, the why(...) query factory, the backend explanation semantics behind decision queries, rendering an explanation for whoever is receiving it, and the shape-sorting demo that narrates its own choices.</p>
+      <div class="bar"><div class="bar-fill" style="width: 12.5%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/rdr-interface-and-decorator/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">The interactive expert interface and the @rdr decorator</h2>
+        <span class="plan-progress mono">0 / 5 done</span>
+      </div>
+      <p class="plan-desc">What a user of the engine touches: the case-table rendering, the IPython shell and its magics that ask the expert for conditions and conclusions, the @rdr decorator that declares a model, and the file store that holds it. Stacked on the core engine&#39;s tip and merged after it.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/session-notes-infrastructure/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Personal notes and the session-start hook: the state a session is handed before it acts</h2>
+        <span class="plan-progress mono">7 / 10 done</span>
+      </div>
+      <p class="plan-desc">The personal-notes branch and the SessionStart hook that reads it. What a session is given at start - a fresh base, the right git identity, the local settings, the plan its branch belongs to, and a setup verdict - and the conventions those carry, each made a mechanism rather than a line of prose someone has to remember.</p>
+      <div class="bar"><div class="bar-fill" style="width: 70.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/stack-maintenance/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">The maintenance pass and the integration branch: running a stack of pull requests</h2>
+        <span class="plan-progress mono">4 / 12 done</span>
+      </div>
+      <p class="plan-desc">What keeps a stack of pull requests moving without a person driving each step: a deterministic executor that fast-forwards, restacks, promotes and reports; reparenting a child whose parent has landed; reading upstream review threads from a fork; and a regenerated integration branch that answers whether the in-flight branches actually coexist.</p>
+      <div class="bar"><div class="bar-fill" style="width: 33.3%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/stack-tooling-install/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Stack tooling on main, and the skills that install it anywhere</h2>
+        <span class="plan-progress mono">3 / 7 done</span>
+      </div>
+      <p class="plan-desc">Getting the stacked-pull-request workflow&#39;s machinery out of a personal tooling branch and onto main as reviewed code, with guided setup for a repository that takes it natively and for a fork that has to overlay it. Portability is the rule throughout: no repository names outside configuration defaults.</p>
+      <div class="bar"><div class="bar-fill" style="width: 42.9%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/test-suite-fixes/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Test-suite defects found while landing the RDR stack</h2>
+        <span class="plan-progress mono">1 / 3 done</span>
+      </div>
+      <p class="plan-desc">Repository-wide test-suite work that the RDR stack surfaced but does not own: the rerun plugin a @pytest.mark.flaky marker needs to do anything, the MCRDR test suppressed as flaky when its failure was deterministic and already fixed, and the unittest modules still to convert to pytest.</p>
+      <div class="bar"><div class="bar-fill" style="width: 33.3%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/workflow-cutover/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Cutover: one published site, no scheduled LLM run, the old branches retired</h2>
+        <span class="plan-progress mono">0 / 4 done</span>
+      </div>
+      <p class="plan-desc">The end state the workflow-unification work was for. Plan dashboards publish themselves from a single Pages site; the scheduled LLM Routine is replaced by a plain Action for the deterministic duties and on-demand sessions for the judgment ones; and the superseded tooling branch is tagged and deleted once one green cycle has run on the new paths.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
+    </a>
+  </div>
+
+  <footer>
+    Generated by <code class="mono">/plan-dashboard</code> (no argument) from every <code class="mono">plans/*/plan.yaml</code> found on the personal-notes branch.
+  </footer>
+</div>

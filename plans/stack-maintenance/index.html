@@ -1,0 +1,2207 @@
+<title>The maintenance pass and the integration branch: running a stack of pull requests</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>The maintenance pass and the integration branch: running a stack of pull requests</h1>
+    <p class="description">What keeps a stack of pull requests moving without a person driving each step: a deterministic executor that fast-forwards, restacks, promotes and reports; reparenting a child whose parent has landed; reading upstream review threads from a fork; and a regenerated integration branch that answers whether the in-flight branches actually coexist.</p>
+    <p class="repo-line">
+      12 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/102" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>stack-maintenance — Roadmap</h4>
+<p>Narrative companion to <code>plan.yaml</code>. Kept short on purpose: the size budget this split was made
+under counts these lines.</p>
+<h5>Where this plan came from</h5>
+<p>Split out of <code>workflow-unification</code> on 2026-08-30, under <code>plan-size-limits</code>'
+<code>split-workflow-unification</code>. That plan had reached 59 items and 16,917 lines across its manifest
+and roadmap, well past the 15-item / 2,000-line budget, and became seven plans seamed on subject.</p>
+<p>This plan is the pass half of the old <code>stack-tooling</code> track - what runs <em>over</em> a live stack, and the
+integration branch built from it. Getting the tooling onto main and installing it elsewhere is
+<code>stack-tooling-install</code>. The track was 18 items and 8,333 lines, over both halves of the budget; the
+seam is chosen so no live dependency edge crosses it, which is why <code>pinned-stack-tooling</code> sits here.</p>
+<p>Every item keeps its branch, pull request number, status and session verbatim. <strong>The full predecessor
+roadmap remains in the personal-notes branch's history</strong>; what is kept here is what binds future work.</p>
+<h5>Why this work exists</h5>
+<p>Two separate constraints, and they produced the plan's two tracks.</p>
+<p><strong>The pass had no executor.</strong> Every fetch, merge, rebase and push in the workflow was performed by a
+session following prose, and the board was hand-assembled from tool output. That is the same
+hand-assembled-input failure class that produced false merged/closed verdicts elsewhere: a dropped
+field is indistinguishable from a legitimately absent one.</p>
+<p><strong>Upstream review throughput is the binding constraint on daily work.</strong> Pull requests are produced
+faster than the upstream merges them, so shipped-but-unreviewed features are unusable, and two
+in-flight features that conflict only discover it at the far end of the review queue. The integration
+branch answers whether the in-flight branches coexist, by being rebuilt from scratch and worked from
+rather than merged out of.</p>
+<h5>Decisions this plan inherits</h5>
+<p>Numbering is the predecessor's, kept so cross-references in item notes still resolve.</p>
+<p><strong>5. The plan data model and the stack data model stay separate.</strong> The board is derived mechanics -
+pull request bases and git ancestry; plans are intent over time.</p>
+<p><strong>11. GitHub maintains the mechanics; we maintain policy.</strong> The restack subsystem was cut rather than
+trimmed. This plan executes an already-derived plan; it does not re-derive structure.</p>
+<p><strong>12. The standard-library tier</strong>, which is why the shared modules extracted here import nothing, and
+why a <code>classproperty</code> was written by hand rather than imported.</p>
+<p><strong>13. The package extraction moves every file here</strong>, so each open branch merges main across that move
+and re-applies its delta.</p>
+<h5>Rules this plan established</h5>
+<ul>
+<li><strong>Compute a write from what the pull request carries now, not from the snapshot the pass opened
+  with.</strong> This is the single most repeated defect on record here: promotion promoted a branch the same
+  pass had just conflicted on and stripped the label withholding it, because both read the board
+  export; and selection carried a branch the same pass had just blocked, because the stack was read
+  before the restack that wrote the label. Both are the same shape, met months apart.</li>
+<li><strong>A command's exit status must agree with its own report.</strong> A restack that hit a conflict exited 0,
+  as did a run whose fast-forward was refused - and a caller acting on the status alone is precisely
+  what the no-LLM endgame is. Every command derives its status from one mapping over the report.</li>
+<li><strong>A test that reads ambient state cannot assert about the state it is reading.</strong> Met twice in one
+  pull request: a local board file the pass writes, and a token a session environment exports.</li>
+<li><strong>A sentence describing what the code does has nothing holding it true</strong>, so it is a future lie with
+  a delay attached. That rule, the user's, cut the maintenance skill's central step from about 70
+  lines to 30: what is left is what the agent decides.</li>
+<li><strong>The tool a pass runs must be pinned for the length of the pass</strong>, because the in-tree path is
+  tracked content and a pass switches branch in the checkout it runs from. The pin must carry every
+  sibling directory the tool's modules name in a path insertion, and keep the layout - flattened, the
+  same insertion resolves outside the copy.</li>
+<li><strong>A blocking label needs a clearing condition that matches how it is set.</strong> The conflict label is
+  cleared automatically when GitHub stops reporting a conflict; a semantic break never makes a pull
+  request conflicted, so it needs a second label and a different clearing condition - a marked
+  reproduction passing.</li>
+<li><strong>A note saying an operation is blocked is a claim with an expiry date.</strong> One such note was carried
+  verbatim through two entries and had two expiries at once: the client had changed and the target had
+  moved. Attempting a recorded-as-blocked step, when it is cheap and reversible, is worth more than
+  restating it.</li>
+<li><strong>A test that pins a contract must read the artifact the contract is about.</strong> One did not, for four
+  review rounds, and the tell was available the whole time: it imported nothing that produced a
+  document. Related: <strong>a reviewer returning to the same line is evidence the answer has not landed</strong>,
+  not that the question has been asked already.</li>
+<li><strong>A label that makes later passes skip a branch removes the only thing that would have retried
+  it.</strong> The conflict label was invented so a pass reports a conflict once rather than every run, and
+  it clears only when GitHub stops reporting one - which only a resolution produces. So a branch it
+  marks is never re-attempted by the mechanism that marked it. One branch sat conflicted for eighteen
+  days and eight passes, and its recorded blocker named the most recent pass rather than the first, so
+  the manifest described a one-day-old problem.</li>
+<li>
+<p><strong>A repair rule needs its own evidence, not a shape match.</strong> A blind regular expression fixing five
+  broken words happened to be right; run over the whole plan it turned up seven more, one of which it
+  would have corrupted.</p>
+</li>
+<li>
+<p><strong>A branch a pipeline creates needs a take-down rule of its own, not one hanging off the happy
+  path.</strong> Publishing dropped a build's branch, and nothing else did - so every other ending left
+  one, four times a day, and eight had gathered before anyone counted. The rule that works is what
+  <em>keeps</em> a thing rather than what drops it: a build branch is kept while a pull request is still
+  open against it, which covers both the candidate judging it and a filtered build somebody is
+  working from, and it needs no knowledge of how the run that made it ended.</p>
+</li>
+<li><strong>A pipeline that publishes to the branch it runs from can delete itself, and nothing in the design
+  said it could not.</strong> The pipeline lives only on two unlanded branches, so any build that leaves them
+  out has no <code>integration-refresh.yml</code> in it - and publishing moves the fork's <em>default</em> branch, which
+  is where a schedule registers from. One green build assembled without those two branches would take
+  the scheduled workflow down and leave nothing able to publish a later one. The guard belongs before
+  every other fix here: the first candidate that can actually be judged is otherwise the one that ends
+  the automation. <strong>Built on 2026-08-31</strong>, and the shape that works is a refusal inside the one
+  function both routes to the pointer go through, testing what the tree <em>carries</em> rather than what the
+  run intended - a guard on the judged path alone is one the recorded pass walks straight past, and the
+  recorded pass is what publishes on the ordinary day when nothing has moved. Presence is not the whole
+  test either: a workflow left with only a dispatch is a rebuild somebody has to remember to press.</li>
+<li><strong>What a thing is opened <em>against</em> is part of whether it can be measured at all.</strong> The candidate's
+  base was chosen to carry meaning - <code>find-candidate</code> tells a full build from a <code>--plan</code> one by it -
+  and that made it a base nobody could check against. A discriminator and a merge target are two jobs,
+  and one field doing both fails at the one that is load-bearing for the whole pipeline.</li>
+<li><strong>A measurement that explains more than one design is recorded once and referred to.</strong> The
+  candidate check timing was written out at four of the designs it shapes, in three modules, and
+  each copy goes stale on its own with no reader able to tell which is current. What made the
+  duplication findable was making the numbers <em>data</em> - <code>CandidateCheckTiming</code> - so a test can
+  derive the figure it looks for from the record rather than carrying a second copy of it.</li>
+<li><strong>A trigger is only safe to add once you can say what stops it.</strong> Answering to CI completing
+  over a build branch starts a rebuild that opens the next candidate, whose CI completes in turn.
+  It terminates because a build whose tree is already recorded as passing publishes with no
+  candidate at all - the pass record, built for a different reason, is what bounds the loop.</li>
+<li><strong>Introducing a model does not retire the hand-rolled readers it replaces</strong>, because nothing
+  breaks when it lands. <code>workflow_document.py</code> was written to stop <code>integration-refresh.yml</code> being
+  walked as nested string keys, and a whole section of <code>test_integration_verdict.py</code> went on doing
+  exactly that through the round that introduced it and the two after. Only searching for the old
+  shape finds them.</li>
+<li><strong>A fix that two unlanded branches each own half of belongs on whichever one can test it.</strong>
+  <code>plan_item_bootstrap</code>'s <code>update</code> writes item fields at a hardcoded four-space indent; #160 fixes
+  that with an <code>ItemIndentation</code> read off the manifest, but predates <code>update</code> entirely, so a failing
+  test for the reported reproduction cannot even be written there. This branch introduces <code>update</code>,
+  <code>ValueStyle.SEQUENCE</code> and <code>manifest-staleness.md</code> - the document that tells every plan skill to run
+  the broken command - so it is where the two halves meet. The user chose the fold on 2026-08-30 over
+  a third branch stacked on both; a third branch editing the same emitter is the collision pattern
+  this repository has already paid for twice.</li>
+<li>
+<p><strong>A reported symptom is a place to look, not a fact to carry.</strong> The report's example of the
+  unquoted-scalar defect was a blocker containing <code>#</code>, and blockers turn out to round-trip: a
+  sequence entry is quoted when it is short and folded when it is long, and both survive. The defect
+  is real but sits on <code>ValueStyle.PLAIN</code> keys. Reproducing before recording is what separated them,
+  and the same run turned up a third defect nobody had reported - <code>depends_on</code> declared <code>PLAIN</code> while
+  every manifest writes it as a block sequence, so replacing it orphans its entries.</p>
+</li>
+<li>
+<p><strong>A discriminator set in the call that creates the thing beats one written afterwards.</strong> Moving the
+  candidate's base off <code>integration</code> needed something else to tell the build a run may publish from a
+  <code>--plan</code> one, and the two candidates were a label and the title. The title won on failure mode
+  rather than on structure: a label is a second call, and a candidate no reader recognises is one no
+  later run settles - which is the wedge the base change exists to end, so introducing a second way
+  into it would be a poor trade. It also keeps <code>CandidatePullRequests</code> denied the pass's writes, which
+  is deliberate.</p>
+</li>
+<li><strong>A rule that stops a run must be one something later can clear.</strong> <code>CANDIDATE_UNCHECKED</code> was a
+  correct diagnosis - nothing is starting a check - attached to the wrong action: stopping meant the
+  rebuild never reached the step that would have replaced the candidate, so every later run inherited
+  the same one and the pipeline could not recover from an outage it had itself detected. Closing and
+  carrying on costs nothing, because the take-down already keeps only what an open pull request refers
+  to, and the run still exits with the status so nobody stops looking.</li>
+<li><strong>A test that its own mutation walks past is worse than no test.</strong> One written this round asserted
+  that a candidate's description names the branch a green build moves; the name appears twice in the
+  description, so replacing the load-bearing one still passed. Removed rather than kept, since a
+  passing assertion is read as coverage.</li>
+<li>
+<p><strong>An expectation recorded as expected rather than measured is worth measuring before acting on it.</strong>
+  This item carried a hazard about <code>#151</code> being a draft at the root of the pipeline chain. <code>#154</code> is
+  based on <code>main</code>, and <code>#151</code> is not a draft; the hazard never applied. One <code>list_pull_requests</code> call
+  answered it.</p>
+</li>
+<li>
+<p><strong>A run that stops on a failure has to say what it had built.</strong> The first bootstrap dispatch failed
+  its local suite, and <code>RefreshPipeline._build</code> prints the build's own document only on the branch
+  that is <em>not</em> <code>TESTS_FAILED</code> - so the run reported <code>tests-failed (11)</code> and nothing else, swallowing
+  the <code>left_out</code> that has to be read before anything can be published. The collision survived only
+  because <code>block-branch</code> writes to the culprit's pull request rather than to the run's log, which is a
+  different channel and a different reader.</p>
+</li>
+<li>
+<p><strong>The suite catching a break before a candidate exists is the design working, not the pipeline
+  failing.</strong> #110 and #80 merge cleanly and break together; no per-branch check can see that, and the
+  local run answered it in two and a half minutes rather than after a matrix. What it costs is that
+  the run stops there, so a cycle that hits one exercises nothing downstream of the build.</p>
+</li>
+<li>
+<p><strong>A rule that ends a run must be one the run could not have handled itself.</strong> Stopping on the first
+  cross-branch break looked like the conservative choice and was the expensive one: two dispatches and
+  two hours of queue bought two labels and no build. What the run cannot use is the <em>tree</em>, which
+  carries the culprit; the build without it is one the same run can make, and is what the next rebuild
+  would have produced anyway. The bound that remains is a budget, plus the one case that genuinely
+  cannot continue - a search that blamed no single tip, which would rebuild the same failing tree.</p>
+</li>
+<li>
+<p><strong>A block whose recorded comment names the pair but not the cause is a diagnosis nobody can act
+  on.</strong> #162 sat labelled <code>integration-conflict</code> for a day against #151 with the comment saying only
+  that the two merge cleanly and fail together. One merge and one suite run named it in two minutes:
+  <code>PendingPromotionsCommand</code> declares itself with <code>classproperty</code>, and #151 deletes that module when
+  it moves the command base to <code>.claude/shared/command_line.py</code>. The class is text only #162 has, so
+  the two edits never touch the same lines and the merged file keeps a decorator whose import the
+  other branch removed - which is why no conflict and no per-branch check could see it. Recording the
+  reproduction rather than the pair is what makes the next such block one somebody picks up.</p>
+</li>
+<li><strong>A fix for a cross-branch break has to be checked against the merge, not only against its own
+  branch.</strong> The first attempt here was green on both trees and still wrong: the reproduction test
+  landed next to a block #151 deletes, so the merged tree conflicted instead of breaking. That trades
+  a silent failure for a loud one and fixes nothing - the build skips the tip either way. Placing it
+  between two tests #151 leaves byte-identical is what made the merge clean, and only re-running the
+  merge showed the difference.</li>
+<li><strong>Adapting to an unlanded sibling means adopting its shape, never rebuilding it.</strong> #162 converts
+  the one command it introduces and leaves its five siblings on <code>classproperty</code> deliberately:
+  converting them is #151's change, and a branch that makes it twice is the duplicated-artifact
+  pattern this stack has already paid for. The inconsistency is real and self-clearing - once #151
+  lands, every command is a plain property and the converted one is the consistent one.</li>
+</ul>
+<h5>The integration branch's design, stated once</h5>
+<ul>
+<li><strong>It gates nothing.</strong> Promotion asks whether a branch is ready for upstream review; integration asks
+  whether the branches coexist. Gating promotion on a clean build would block A because B conflicts
+  with it, with no principled reason A is the one that waits.</li>
+<li><strong>No CI gate on entry, but a known failure is excluded.</strong> Requiring <em>green</em> deadlocks against the
+  restack, since restacking rewrites heads and every restacked branch reads pending. Excluding a tip
+  that has already finished red has no such deadlock and is self-limiting.</li>
+<li><strong>Conflicts skip and continue</strong>, because a build that halts leaves nothing to work from, and the
+  report names the conflicting pair rather than the casualty.</li>
+<li><strong>Only reviewed work is carried, read down the whole chain.</strong> A tip contains its stack, so filtering
+  tips alone merges a ready pull request together with the drafts beneath it.</li>
+<li><strong>The candidate pull request exists to trigger CI and nothing else.</strong> A pushed build collects no
+  checks, because CI triggers on push to main and on pull requests only. Green force-updates the
+  pointer and closes the candidate unmerged; merging would give the pointer a history the next build
+  cannot regenerate.</li>
+<li><strong>Judgement lives in a skill, not the script</strong>, and the skill resolves bounded by <em>where the
+  resolution lands</em> rather than by how confident it is. Asking is about whose decision it is:
+  uncertainty about facts is resolved by reading, uncertainty about intent is asked.</li>
+<li><strong>A build is keyed on its git tree</strong>, because re-assembling the same branches over the same base
+  gives a new commit every time and the same tree every time. Only passes are recorded; a red is
+  cleared by re-running the same commit.</li>
+</ul>
+<h5>Standing risks</h5>
+<ul>
+<li><strong>The pipeline runs from the fork's default branch, which is a build output</strong>, so it always lags
+  whatever is in flight - and a pipeline that cannot publish cannot carry its own fix. A dispatch on
+  the working branch is the bootstrap.</li>
+<li><strong>Queue delay is measured in hours, not minutes</strong> (19 minutes and 2h47m on two candidates), so no
+  in-job wait can outwait it. The verdict is read by a later run - started by CI completing over the
+  build branch, with the schedule left as the floor under it. The figures live in
+  <code>CandidateCheckTiming</code> rather than in the prose of every design they explain.</li>
+<li><strong>A default-token-triggered event creates no workflow run</strong>, so anything opening a candidate needs a
+  provisioned token. Related trap: the checkout action persists that token as an http header that
+  overrides credentials in a push URL.</li>
+<li><strong>Localisation reaches the tooling suite, not the docker matrix</strong>, so a genuine break only the matrix
+  sees is still unlocalised. That is <code>red-candidate-localisation</code>.</li>
+<li><strong>rerere replays a textually matching resolution automatically</strong>, so a skill-authored one that is
+  semantically wrong is reapplied unreviewed on every later build. Provenance is recorded and replays
+  are never silent.</li>
+<li><strong>Every build so far omits the pipeline itself.</strong> #211 conflicts with #160's branch over
+  <code>plan_item_bootstrap.py</code>, so the build skips it - and it is the tip of the stack carrying #154, where
+  <code>integration.py</code> and the refresh workflow live. Measured on the 2026-08-30 build: nine branches
+  carried, neither of those two, no pipeline in the tree. Folding #160 is what clears it. Since
+  2026-08-31 such a build is refused rather than published, so a pipeline-less build is loud and once
+  per rebuild rather than fatal and once and for all. <strong>#160 was closed the same day, superseded by
+  #151</strong>, so the collision that skipped #211 is off the board and the next build should carry the
+  pipeline - expected rather than measured, since none has been assembled since.</li>
+<li><strong>Answered on 2026-08-31, and it was the last thing in the way.</strong> Candidate #228, opened against
+  <code>main</code>, had its first check eleven seconds after opening and its build carries the pipeline - so
+  what follows is history rather than a standing risk.</li>
+<li><strong>A candidate opened against the branch it replaces stops being checkable once that branch falls
+  behind.</strong> <code>integration</code> is itself an older build of the same branches, so a new build conflicts with
+  it, GitHub computes no merge reference, and a <code>pull_request</code> run - which checks that reference out -
+  is never created. The rebuild then stops on a candidate nothing can judge and never reaches the step
+  that would have replaced it. Measured on 2026-08-30: candidate #220 had no <code>refs/pull/220/merge</code> and
+  no checks after eleven hours, while the same build opened against <code>main</code> had both within twenty
+  seconds. This is why one build is the only one this pipeline has ever judged. <strong>Both halves fixed on
+  2026-08-31</strong> in <code>c77b9ea79</code>: every candidate is opened against the base its build was assembled over,
+  and one nothing can judge is closed and replaced rather than stopped on.</li>
+</ul>
+<h5>The bootstrap, and how it ended</h5>
+<p>Four dispatches on 2026-08-31, because a pipeline that cannot publish cannot carry its own fix and
+every trigger is read from the copy on the branch it publishes to.</p>
+<ol>
+<li><strong>17</strong> — reached the build, suite failed, blocked #110, ended. 1h45m of queue for one label.</li>
+<li><strong>18</strong> — same again, blocked #107. Two runs, two labels, no candidate. That is what made
+   stop-on-first-break indefensible.</li>
+<li><strong>19</strong> — with block-and-continue: whole cycle in seven minutes, one break blocked (#162), build
+   assembled without it, <strong>candidate #228 opened against <code>main</code></strong>. First check eleven seconds later,
+   against eleven hours and nothing for #220. All 24 green.</li>
+<li><strong>20</strong> — settled #228, recorded its tree, moved <code>integration</code> onto the judged commit, closed the
+   candidate unmerged, dropped its branch, then assembled the next build and opened #230 for it.</li>
+</ol>
+<p><code>integration</code> now carries the schedule and the <code>workflow_run</code> trigger, so the pipeline runs itself
+from here; #230 needs no dispatch. <strong>The lesson worth keeping is the ordering</strong>: the guard that
+refuses a pipeline-less build had to land before the first judgeable candidate, because the first
+green build was otherwise the one that would have ended the automation.</p>
+<h5>Open</h5>
+<ul>
+<li>Whether an already-registered scheduled run's notification setting can be changed in place, which
+  <code>promotion-summaries-and-table</code> must know before any document tells anyone how to do it. Still open;
+  the 2026-09-01 resolve cleared that item's integration block and answered its rebase question, and
+  touched neither this nor the item's own remaining work.</li>
+<li>The git-command vocabulary question, answered with measurements and deliberately left to
+  <code>bastler-notes-core-python</code>, which owns the git seam by name and has four callers waiting - one with
+  a deliberately opposite contract. Deciding the ergonomics before the raise-versus-answer-nothing
+  question is settled means deciding them twice.</li>
+<li>The wire format of the integration reports is deliberately unguarded, recorded rather than quietly
+  dropped: with writer and reader both reading the same enum, a value rename changes both identically.
+  The place to close it is a consumer that actually runs.</li>
+<li><code>integration.py</code>'s own line count against the 400-line rule, offered rather than done.</li>
+</ul>
+<h5>The <code>integrated</code> label, and why it is a reconciliation</h5>
+<p>Placed by <code>/add-plan-item</code> rather than assumed into the integration track. The scope
+check ran against <code>origin/main</code>: seven of the nine paths the work touches do not exist
+on the base at all, and #211 shares all nine, so it stacks on #211 rather than branching
+off <code>main</code>.</p>
+<p>It is a new item rather than a fold because it survives the trigger-to-look test in both
+directions. Strip the edits to #211's files and a new subject remains — persisting a
+build's per-tip outcomes and reconciling a label across every pull request the build
+considered — while the edit half is one call at the publish moment plus a <code>StackLabel</code>
+member and a <code>stack.toml</code> default. And once #211 lands it stands alone: it adds a
+capability rather than correcting what #211 introduced.</p>
+<p><strong>Written at publish, not at assemble, and that is what makes persistence necessary.</strong>
+<code>RefreshPipeline.run</code> settles the <em>previous</em> run's candidate before assembling this
+run's build, so the published build's report is not in memory when the pointer moves.
+A label written at assemble time would claim membership of a build that may go red and
+never be adopted — which is the one thing the label must never say. So each build's
+per-tip outcome is recorded under a <code>refs/</code> namespace on the fork, keyed by build
+branch, reusing the shape <code>integration_block_record.py</code> and the pass record already
+use rather than adding a second persistence mechanism.</p>
+<p><strong>Removal is the half that makes it a reconciliation rather than a write.</strong> It has to
+cover every pull request the build <em>considered</em>, <code>report.left_out</code> included, whose tips
+were never attempted. A pull request labelled by an earlier run and merely absent from
+this one's report is exactly the case the label exists to clear. This is what
+distinguishes it from every label write the tooling already has: <code>integration-conflict</code>,
+the promotion link and a block lift are each one branch and one subject.</p>
+<p><code>TipStatusSpecification.integrated</code> already answers, per status, whether a tip's commits
+reached the finished branch, and is deliberately answered per status so a status added
+later has to declare which it is. That predicate is reused, not re-derived.</p>
+<p>Two publish paths move the pointer — <code>SettleCandidateCommand._publish_what_passed</code> and
+<code>_publish_recorded_pass</code> for a build whose tree already passed — so both label, through
+one reconciler called from two sites.</p>
+<p>The read side is deliberately out of scope: the dashboard renderer has its own
+<code>PullRequestLabel</code> enum, which belongs to <code>plan-dashboards</code>. This item owns the write.</p>
+<h5><code>integrated-label</code>: the plan settled on 2026-09-03</h5>
+<p>Kicked off in <code>auto</code> mode on #260, based on #211's branch
+(<code>claude/plan-item-kickoff-workflow-unification-wg4w4x</code>) rather than <code>main</code>: <code>git ls-tree origin/main</code>
+over the nine paths the work touches returns only <code>stack.py</code>, <code>stack.toml</code> and <code>README.md</code>, so six of
+the nine exist on #211 alone. Both dependencies came back <code>open_ready</code>; #211 publishes them both.</p>
+<p><strong>The recorded design is followed as written, with two names corrected against the code.</strong> The item's
+scope note names a <code>StackLabel</code> member and a <code>SettleCandidateCommand._publish_recorded_pass</code>. Neither
+exists: the label enum is <code>stack.DefaultLabel</code>, whose <code>configuration_key</code> derives <code>Configuration</code>'s own
+field name, and the second publish path is <code>PublishRecordedPassCommand.run</code>
+(<code>RefreshPipeline._publish_recorded_pass</code> is the pipeline method that invokes it as a subprocess). Both
+paths funnel through the module-level <code>integration_candidate_commands.publish</code>, so there are two call
+sites, as recorded.</p>
+<p><strong>Only the integrated set is persisted, not both sides of the outcome.</strong> The removal half has to cover
+<code>report.left_out</code>, tips considered and not carried, and a pull request labelled by an earlier run and
+absent from this report entirely. Reconciling to an exact set - the pull requests carrying the label are
+exactly the ones the published build integrated - covers all three through one rule, where persisting
+both sides would cover only the first two. The <code>refs/</code> namespace therefore holds one reference per
+integrated tip, keyed by build branch, in the shape <code>integration_block_record.py</code> uses.</p>
+<p><strong>A build branch with no records reconciles nothing</strong>, rather than stripping the label off everything.
+An unrecorded build is one assembled before this landed, or by a path that did not record; treating its
+absence as "carried nothing" would clear a whole fork's labels on the first publish after an upgrade.
+The same distinction <code>BlockStanding.UNRECORDED</code> already draws.</p>
+<p><strong>Records are kept while their build branch is, and dropped when it is not.</strong> That is the take-down rule
+<code>TakeDownUnreferencedBuildsCommand</code> already applies to the branches themselves, so a filtered <code>--plan</code>
+build and a build whose suite failed can both record without accumulating: neither is ever published, and
+both lose their branch. Recording is unconditional at assemble time for the same reason - what must not
+be written early is the <em>label</em>, not the record.</p>
+<p><strong>No comment accompanies the label.</strong> A block lift comments because it is telling one branch's owner that
+a decision about their branch changed; membership of a build changes for roughly ten branches four times
+a day, and a comment per branch per build is noise on every pull request in flight. The label alone is
+the signal. The label writes are printed to standard error, the way <code>BuildCommand._lift_what_the_suite_cleared</code>
+already prints its own, so the document on standard output stays one document.</p>
+<p><strong>The <code>integrated</code> label is not added to the setup check.</strong> GitHub's set-labels endpoint creates a label
+that does not exist, so an unconfigured fork needs nothing; <code>check-setup.sh</code>'s label step covers <code>merged</code>,
+<code>bug</code> and <code>in-review</code> because those are read or applied elsewhere.</p>
+<p><strong>Met while bootstrapping, not fixed here</strong>: <code>plan_item_bootstrap</code>'s <code>open</code> writes item fields at
+<code>ITEM_FIELD_INDENT = "    "</code> while this manifest indents them by two, so the save it attempted produced
+a <code>yaml.parser.ParserError</code> and the entry was written by hand instead. That is the defect #151 owns, by
+the fold recorded above; this branch would be the third to edit the same emitter.</p>
+<p><strong>Two departures from the plan above, both recorded on #260 rather than asked about.</strong> The
+reconciler is called from <code>integration_candidate_commands.publish</code> itself rather than from the two
+commands: both reach that one function, and the pipeline guard already sits there for the stated
+reason that there is no publication it does not apply to. Same outcome on both paths, one seam, and
+a third publication path inherits it instead of being trusted to remember it. And
+<code>forget_dropped_builds</code> asked the fork for every branch even with nothing recorded - a read on every
+publication that can drop nothing - found by the suite rather than by the new tests, guarded, and
+pinned by a test whose fork refuses to be asked.</p>
+<p><strong>Two behaviour changes the review has to weigh.</strong> <code>integration.py build</code> now writes to the fork on
+every run, one reference per carried tip, where before it wrote only when a readmitted branch's
+block was lifted. And <code>publish-recorded-pass</code> now needs a credential, because reconciling reads the
+fork's open pull requests; it only ever runs inside the pipeline, which provisions one.</p>
+<p>1032 tests pass across the four directories CI runs, from 1015 on the base; eight mutations checked.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-pass">
+        <div class="wave-eyebrow">The maintenance pass</div>
+        <p class="wave-description">The executor, what it decides for itself, and the version of itself it runs.</p>
+        <section class="track">
+          <h3 class="track-title">Maintenance pass</h3>
+          <div class="item-list">
+                <article id="item-stack-maintenance-executor" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Deterministic maintenance executor: board, fast-forward, restack, run-report</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">stack-maintenance-executor</span>
+            <span class="mono branch">claude/plan-item-kickoff-workflow-koufa6</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/139" target="_blank" rel="noopener">#139</a>
+            <a class="session-link" href="https://claude.ai/code/session_014E9nB1MUvm4jwgC2UTN5GT" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. Every fetch, merge, rebase and push in the workflow was performed by a session following
+prose, and the board was hand-assembled from tool output - the same hand-assembled-input failure
+class as the dropped merge timestamp. Verified rather than assumed: `grep &#34;git push&#34;` over
+`stack.py`&#39;s 1,600 lines returned nothing, so it was read-only derivation only.
+
+**The credential probe came back the opposite way round from the fear it was written against.** On a
+throwaway pull request, four calls minutes apart through the same token and proxy: label write 200,
+comment 201, body-only description write 200, and - as a control on the same pull request - a
+base-branch change 403. So the recorded 403 is a property of the *base field* specifically, not of
+writes generally and not of the credential. Label writes, conflict comments and description writes
+are all available to deterministic code; only the base change needs the MCP client. That table is
+what the cutover&#39;s Action needs for its own credential.
+
+Delivered as its own module with zero edits to `stack.py`, keeping that file&#39;s read-only contract.
+Forcing is decided in exactly one place and only for the rebase strategy, and even then with a lease,
+so a branch somebody else moved comes back push-rejected and untouched. Scope widened once the probe
+landed: a conflict is now handled end to end - the branch is labelled, its owner gets a comment
+naming the conflicting files, and the next pass reads the merge state to either withhold the branch
+or clear the label and restack it, which closes the loop the label was invented for.
+
+**Three defects only the live runs found, and they are one lesson three times: a write computed from
+a snapshot a later step invalidates.** The pass exported a board at the start, `restack` then
+labelled a conflicted branch live, and `promote` read neither back - so promotion promoted a branch
+the same pass had just conflicted on and computed a whole-set label write from a stale list, silently
+stripping the label. Both now read off the pull request record `promote` already fetches. Separately,
+a `restack` that hit a conflict exited 0, as did a `run-report` whose fast-forward was refused: a
+caller acting on the status alone would have read both as nothing outstanding, so every command now
+derives its status from one mapping over the report. And CI caught an ordering defect a local run
+could not, because a session environment exports a token and the wrong branch was never taken -
+**a test that reads ambient state cannot assert about the state it is reading**, met twice in one
+pull request.
+
+**Review shaped this file more than any other.** The skill now leads with the single JSON report and
+demotes the individual commands to a resume reference, which was only possible once the doctrine was
+split away from the command descriptions into a &#34;what this pass never does&#34; section. Dispatch is
+open/closed - each command a subclass discovered from `__subclasses__()`, so a command that exists but
+is unreachable is not expressible - while the restack&#39;s steps stay *listed*, because their order is
+the procedure and a mutation check proved it load-bearing. The command name and description went
+through three rounds before landing: a plain class property silently loses abstractness, because
+`ABCMeta` decides what is abstract with `getattr`, which calls the descriptor and gets a string back.
+
+**One rule from the user that cut the skill in half**: a sentence describing what the code does has
+nothing holding it true, so it is a future lie with a delay attached. Out went every description of
+mechanics documented next to the code that does it; what is left is what the agent decides.
+
+The formatter finding worth carrying: `format_docstrings.py` reported no change on the flagged file
+while `docformatter` disagreed on 33 docstrings, because the script keeps black&#39;s content whenever
+docformatter&#39;s result does not survive a second black pass - one blank line, after an attribute
+docstring immediately preceding a decorated definition. The file was not unformatted through an
+omission; the repository&#39;s own formatter had silently declined it.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-manifest-currency-first" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Write the manifest and republish the dashboard before anything else, at every transition</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">manifest-currency-first</span>
+            <span class="mono branch">claude/plan-manifest-update-priority-ex2zst</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/151" target="_blank" rel="noopener">#151</a>
+            <a class="session-link" href="https://claude.ai/code/session_01LDVvWsb7wFEeH3roTnD3FR" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve stack-maintenance manifest-currency-first" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Every skill that can affect a plan must treat writing the manifest and republishing the dashboard as
+its first priority, at every point that makes a recorded field stale. The bootstrap item inverted this
+ordering for exactly one moment - a kickoff whose plan has just been approved; this generalizes it to
+every transition and every bound skill. **The premise is recorded rather than asserted**: this work&#39;s
+roadmap named the manifest &#34;the least accurate source&#34; three times in one week, and each time
+everything needed to diagnose the item was already on the pull request.
+
+**Two premises the item&#39;s own notes carried were disproved by reading the code.** The instruction to
+reuse the existing sync script is wrong and following it would have been worse than not: that script
+imports the renderer, which imports templating libraries at module level, so a hook cannot import it
+at all - and it answers a different question, post-hoc and GitHub-side. The split is by what each can
+*see*: the dashboard compares the manifest against GitHub after the fact, while `check` compares it
+against local git before a push, which the dashboard can never see. And writing notes through the
+existing setter silently corrupted the manifest, latent since the field members were added with no
+writer: the block-styled pattern matched the key line while the renderer emitted a single line, so the
+indented body was orphaned and YAML read it as a continuation, concatenating the old note onto the
+new one. The result still validated, so nothing caught it.
+
+**Reversed at the user&#39;s request**: the maintenance pass now writes and publishes rather than
+reporting. One of the two recorded reasons for the asymmetry was simply wrong - the non-interactive
+flag suppresses the question tool and nothing else, and the pass runs as a live session, so the
+Artifact tool was reachable throughout; the reasoning was about the mode&#39;s *name* rather than what the
+mode does. The second reason survives and bounds the change: which status a reparent or promotion
+implies is a reading rather than a mechanical fact, so the pass writes only what it decided itself and
+reports the rest. The blocker carries its owner, so a pass replaces and withdraws its own entries and
+never a person&#39;s.
+
+**A repair rule needs its own evidence, not a shape match.** A subcommand was built to rejoin words a
+folding bug had broken; counting broken words per commit then showed eleven of the twelve predate that
+code entirely - they are hand-wrapped prose, a session breaking a line at a hyphen. So the fix is
+deterministic and at write time (a hyphen immediately before a hard-wrapped break is closed up; a
+suspended hyphen keeps its space, because a person types those on one line), and the repair
+subcommand was cut as a YAGNI smell whose stated justification was spent. Worth carrying: five words
+had been fixed earlier with a blind regular expression and that only happened to be right - running
+the same rule over the whole plan turned up seven more, one of which it would have corrupted.
+
+`.claude/shared/` holds four standard-library-only modules both this branch and the executor needed.
+**The git seam is the one extraction that was not mechanical**: the three copies&#39; contracts are
+deliberately opposite - one raises, `stack.py`&#39;s answers nothing on failure, a third raises a domain
+error - so a single function could not have served them. The executor&#39;s runner already had both
+halves, so it was moved rather than redesigned. Its 152 tests passing unchanged is the evidence the
+never-raises contract survived rather than being quietly tightened. Four production `sys.path` inserts
+are the cost, the first in this repository, and the package extraction removes all four.
+
+`classproperty` is deleted rather than shared, reversing the shape the executor adopted over three
+rounds: both parsers are built from *instances*, and grep found no class-level reader in production,
+so plain abstract properties give the same refusal at the same moment - which also avoided copying
+that file into a second directory in answer to a complaint about duplication.
+
+The wire-format guard is the opposite call from its sibling&#39;s, deliberately: the report&#39;s keys become
+an enum but the tests keep their string literals, because two other programs parse that format.
+Single-sourcing an external contract deletes the guard the duplicated literals were providing, and
+whether to replace it with a dedicated test or keep the literals depends on who reads the contract.
+
+**The `update` subcommand this item exists to provide is the one thing that could not record
+this item.** Run against a real plan for the first time rather than a fixture, it wrote `status`
+and `blockers` four spaces in and orphaned them inside the preceding note, and the manifest
+stopped parsing. `ITEM_FIELD_INDENT`, `BLOCK_BODY_INDENT` and `SEQUENCE_ENTRY_INDENT` each
+assume items sit one level inside `items:`; every plan here writes them flush with it, so no
+fixture caught what every real caller would hit. #160 owns half the fix and is based on main -
+its `ItemIndentation` reads the depth off the manifest being edited - but
+`render_sequence_entry` and the block-body indent arrived with this branch&#39;s own
+`ValueStyle.SEQUENCE`, which does not exist on main, so #160 cannot reach them. Whether #160
+widens after this lands or this branch adopts its `ItemIndentation` and #160 folds is an
+ordering call left to the user; duplicating the class across both is the one option ruled out.
+This entry was written with `save-plan.sh` directly in the meantime.
+
+**The ordering call in the paragraph above was made: this branch adopts #160&#39;s `ItemIndentation`
+and #160 folds into it.** Reproduced again on 2026-08-30 against `rdr-interface-and-decorator`&#39;s
+`D-ui` and `D-store`, whose `depends_on` is a written-out block sequence: `update --status` emits
+the field four spaces in, directly under the last sequence entry, and `yaml.safe_load` refuses it.
+
+Two further defects in the same emitter came out of reproducing it, neither of them #160&#39;s.
+Every `ValueStyle.PLAIN` value is written bare, so one containing a space and then `#` reads back
+truncated at that point - the reported example, a blocker, is not actually affected, because a
+sequence entry is already quoted or folded and `title` is double-quoted. And
+`ManifestKey.DEPENDS_ON` is declared `PLAIN` while every manifest writes it as a block sequence,
+so `value_span` stops at the key&#39;s own line and replacing the field orphans its entries - the
+same corruption this note records for `notes`, still latent only because `update` exposes no
+`--depends-on`. The branch was opened in
+https://claude.ai/code/session_01SgGzMvxTxaePhpkT28uuJV, which the `session` field named until
+this entry moved it to the session continuing the work.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Deterministic maintenance executor: board, fast-forward, restack, run-report">stack-maintenance-executor</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-promotion-summaries-and-table" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Promote with a written summary, and report the links as a table rather than a notification</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">promotion-summaries-and-table</span>
+            <span class="mono branch">claude/plan-item-kickoff-workflow-y38l38</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/162" target="_blank" rel="noopener">#162</a>
+            <a class="session-link" href="https://claude.ai/code/session_011YSZKEo4k6b18EHERUZDWV" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve stack-maintenance promotion-summaries-and-table" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The user&#39;s requirements for a pass&#39;s promotion phase: the compare-and-create link must be built by the
+script rather than assembled by the session; the upstream pull request must open with a title and with
+a body that always links back to the fork pull request and otherwise carries text the caller supplies;
+the skill must always supply that text as a point-based summary; neither the skill nor a scheduled run
+may send a notification; and every promoted branch must be reported as a table in the session the pass
+ran in.
+Three of those already have a home - the link builder owns the encoding, the title passes through, and
+the &#34;full detail&#34; link back is already appended. **What is missing is the body itself.** It is derived
+from the fork description&#39;s first paragraph verbatim, so the upstream reader gets whatever that
+description happened to open with, and one opening with a heading, a badge or a link opens the upstream
+pull request with that. Nobody has written a word for the upstream reader.
+**The body cannot be derived, which is what makes this the one model-shaped step in an otherwise
+mechanical pass**: the script owns the title, the fork link, the encoding, the length budget and the
+table, and the session supplies only the bullets. Proposed interface, to settle at kickoff: the
+commands read summaries from a file keyed by fork pull request number, and a promotable branch with no
+entry is reported as awaiting one rather than promoted with a body nobody wrote. Two invocations is the
+honest shape, since a summary cannot exist before the pass has decided a branch is promotable.
+The table replaces a hand-assembly the skill asks for today, which is a rendering and therefore belongs
+to the executor - one command emitting a markdown row per pending promotion. **Notifications off is the
+reason the table has to exist**: the skill&#39;s finish section currently rests on &#34;a scheduled run emails
+its summary, so the summary *is* the delivery&#34;, and that premise goes.
+Open and not to be invented: an already-registered scheduled run&#39;s notification setting has no field on
+the update API, so whether it can be changed in place or needs re-registering has to be checked before
+any document tells anyone how to do it.
+The dependency on `pinned-stack-tooling` is a real ordering constraint rather than a courtesy: that
+branch rewrites every command invocation in the skill and asserts the exact set still run from the
+working tree, so a command added here must be pinned too.
+Resolved on 2026-09-01. The `integration-conflict` block was `PendingPromotionsCommand` naming itself with `class_property.classproperty`: `manifest-currency-first` (#151) deletes that module when it moves the command base to `.claude/shared/command_line.py`, and because the new class is text only this branch has, the two merge with no conflict and the merged tree fails at import. Fixed here under the `adapt` verdict - the descriptor bought nothing, since `COMMANDS` builds every command and the parser is handed instances. The five sibling commands keep `classproperty` deliberately rather than this branch building #151&#39;s conversion a second time. Measured: 579 pass on the branch, 697 merged with #151, no conflict. Label removed.
+The rebase onto #151 the review thread asks about is answered and declined: #151 is 0 behind `main` now, so the August objection is gone, but this branch&#39;s base is #158, and keeping the chain would mean restacking a branch already promoted upstream for a code-standard conversion that whichever item lands `.claude/shared/` does for all 14 exceptions at once.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Deterministic maintenance executor: board, fast-forward, restack, run-report">stack-maintenance-executor</span>
+
+            <span class="chip" title="Pin the stack tooling for the length of a maintenance pass">pinned-stack-tooling</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-landed-parent-detection" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Decide a parent has landed from git ancestry, not board membership</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">landed-parent-detection</span>
+            <span class="mono branch">claude/stack-landed-parent-detection</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/117" target="_blank" rel="noopener">#117</a>
+            <a class="session-link" href="https://claude.ai/code/session_01URVDhViP2TijuQAHAysUKL" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. The board carries only *open* fork pull requests, so a parent branch whose own pull request
+was closed is absent from it, and both consumers read that absence as &#34;no parent&#34;: the restack left
+the child on the stale parent instead of reparenting onto the upstream base, and the promotion check
+treated the missing parent as a root and reported the child promotable. Both now derive from a merged
+predicate answered from git ancestry - the test the doctrine already names as the definition of
+merged.
+
+**Reversed mid-review, and the reversal is the point.** The first revision treated the stack-member
+422 as report-and-continue, which optimised for the diff-size symptom rather than the goal: a child
+left on a landed base cannot reach main and is closed outright when the base is deleted, so deferring
+the reparent leaves the pull request broken while the pass re-reports it every run. The doctrine also
+rules out fast-forwarding the landed base as a shortcut - it fixes the merge base only, and
+desynchronises a stack&#39;s recorded base when that base is the stack&#39;s trunk.
+
+Validated against the real 7-pull-request stack the bug was found on, not only its own tests: the
+pre-fix planner reparents onto the stale branch exactly as described, and the fixed one emits `main`
+while leaving the rest of the chain untouched. The live repair then took that pull request&#39;s diff from
+268 files and +27,825 lines to 7 files and +1,318, keeping its number, labels and review thread.
+
+Its unfinished half became `unfetched-parent-branches`: this made the decision ancestry-based but
+never made the ref that decision reads present.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-session-safe-pr-reparent" class="item status-done" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Reparent a base through the GitHub MCP server, not a raw PATCH</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">session-safe-pr-reparent</span>
+            <span class="mono branch">claude/stack-landed-parent-detection</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/117" target="_blank" rel="noopener">#117</a>
+            <a class="session-link" href="https://claude.ai/code/session_01WvRrTrtiznzAyvaoeCdNSq" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged, sharing its sibling&#39;s pull request. **Premise disproven and item re-scoped.** It was spun out
+on the reading that changing any pull request&#39;s base 403s from a session unconditionally, and was to
+replace every reparent with close-old and create-new. A direct probe showed the block is a property
+of *one client*: the MCP `update_pull_request` tool changed the base successfully while a raw request
+through the session git proxy 403&#39;d on the same pull request minutes apart. The earlier attempt only
+ever saw the 403 because the stacks endpoints have no MCP tool, so that session was already in the
+other client and stayed there.
+
+So: no close-and-create fallback, and no reparent-recovery script - the one previously recorded as
+already scoped elsewhere was never actually written, verified rather than assumed, and with the base
+change available there is nothing for it to work around. Not writing new mechanics also matches the
+standing direction that GitHub maintains the mechanics and we maintain policy.
+
+**Base changes are not a third member of the tag-push and branch-delete family.** Those two have no
+alternative client at all and stay genuinely blocked; this one simply needed the other one.
+
+It has no pull request of its own by design. It was opened stacked on its sibling and then folded
+into it on the user&#39;s instruction that a pull request must be self-sufficient and correct: its only
+purpose was correcting a section that pull request had just introduced, so leaving it stacked meant
+the parent would sit in review carrying an instruction already known to 403.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Decide a parent has landed from git ancestry, not board membership">landed-parent-detection</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-upstream-review-reader" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Read upstream review threads from a fork via a dispatched Action</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">upstream-review-reader</span>
+            <span class="mono branch">claude/automate-upstream-reviews-0fte9f</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/146" target="_blank" rel="noopener">#146</a>
+            <a class="session-link" href="https://claude.ai/code/session_01MQavvbnknGrFiw6q7ccZaE" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged. Review threads on the upstream reached a session only by the user reading them and retyping
+them, making them the bottleneck on every review round.
+
+**Measured rather than assumed, and the measurement is what decided the shape.** The upstream is
+public and git-readable from a session, but its REST API and even its HTML are 403 for a session not
+scoped to it, and GraphQL is refused for every repository including the fork&#39;s own. Thread
+resolved-state exists *only* in GraphQL and the user required it, so no script running in a session
+can produce this report.
+
+The read therefore runs as a dispatched Action on the contributor&#39;s own fork, where `gh` and a token
+are already present, and the session reads the job log over plain REST - verified, all three
+endpoints answer 200. Queue time on this fork measured a median and maximum of 0s over the last 14
+completed runs, so the round trip is the job itself. Dispatch-only, never scheduled. Portable by
+construction: the upstream comes from configuration and the fork owner from the runner context, so no
+repository is named anywhere.
+
+This is also the shape the integration pipeline&#39;s own verdict read later reuses.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-pinned-stack-tooling" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Pin the stack tooling for the length of a maintenance pass</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">pinned-stack-tooling</span>
+            <span class="mono branch">claude/stack-tooling-pinning-qf5r2m</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/158" target="_blank" rel="noopener">#158</a>
+            <a class="session-link" href="https://claude.ai/code/session_016DukdvsJzggwAAF3CkKaDZ" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve stack-maintenance pinned-stack-tooling" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Found while running a maintenance pass, and fixed at the source rather than worked around. The skill
+invoked the tooling by its in-tree path for a whole run, which assumes that path is the same file from
+step 0 to the end - and it is not, since it is tracked content and a pass switches branch in the
+checkout it runs from. The failure is either loud (a command validated in step 0 comes back as an
+invalid choice, which is exactly what a rename produces) or quiet (the same command name answering
+with semantics the skill does not describe). In the reported run it produced a string of spurious
+failures partway through a restack, survived only because the operator hand-copied the tool to a
+stable path.
+
+`pin-tooling` copies the modules and configuration - not the board, which belongs to the pass that
+exported it - to a digest-named directory outside every checkout. Digest naming makes pinning
+idempotent per version and stops a later pass overwriting the copy an earlier one is still running;
+the copy is staged beside its destination and moved whole, so a caller never invokes a half-written
+one. Deterministic rather than a note to remember: a test asserts the skill runs nothing else from
+the working tree.
+
+**The review-level question - whether fast-forwarding and restacking everything first would solve
+this instead - is circular**, and that is the answer rather than a preference: the restack is
+performed by the tool whose version is in question, so uniformity arrives at the *end* of a pass and
+the tool must be stable at the start. It also cannot reach the branches that differ most, which are
+exactly the ones being withheld. And a branch whose own diff edits the tooling is meant to differ.
+
+**An integration build found the pin incomplete, which is how a pinned tool fails worst.**
+`pin_to` listed one directory&#39;s contents and copied them flat, complete only while the tool imports
+nothing outside that directory. Built together with a branch that had moved shared modules into a
+sibling directory, the pinned copy died on its first import - so the pin produced a program that
+cannot start. Both halves had to change, and the second is easy to miss: the copy now carries every
+sibling directory the tool&#39;s own modules name in a `sys.path` insertion, read out of the modules by an
+`ast` walk rather than listed beside them, *and* it keeps the layout instead of flattening it - such an
+insertion is relative to the module making it, so flattened the same line resolves outside the copy
+and finds whatever happens to be there.
+
+Using the real runner in the test exposed a weakness the raw invocation had hidden: the helper created
+the branch and then wrote the other version, so the working tree changed because the test wrote it
+rather than because version control moved it - a weaker reproduction than the bug. Both versions are
+committed at install time now and the step is nothing but a branch switch.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-integration">
+        <div class="wave-eyebrow">The integration branch</div>
+        <p class="wave-description">A branch regenerated from upstream plus every reviewed tip, built to be worked from rather than merged out of, and judged by real CI.</p>
+        <section class="track">
+          <h3 class="track-title">Integration branch</h3>
+          <div class="item-list">
+                <article id="item-integration-branch" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Regenerated personal integration branch: build, check, resolve, report</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">integration-branch</span>
+            <span class="mono branch">claude/plan-item-kickoff-workflow-ixbvxl</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/154" target="_blank" rel="noopener">#154</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve stack-maintenance integration-branch" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The constraint is upstream review throughput: pull requests are produced faster than the upstream
+merges them, so shipped-but-unreviewed features are unusable in daily work, and two in-flight features
+that conflict only discover it at the far end of the review queue. The answer is a regenerated
+integration branch - the upstream base with every in-flight reviewed tip merged on top, rebuilt from
+scratch on demand, existing to be built *from* rather than to be history. Nothing merges out of it.
+
+**It gates nothing, and that is a decision rather than an omission.** Promotion asks whether a branch
+is ready for upstream review, judged against upstream main; integration asks whether the branches
+coexist. Gating promotion on a clean build would block A because B conflicts with it, with no
+principled reason A is the one that waits.
+
+**No CI gate on entry** either: it would deadlock against the restack, since restacking rewrites heads,
+CI re-runs, every restacked branch reads pending, and a green filter yields a near-empty build. A
+single run on the finished branch replaces it and is strictly more informative - it catches semantic
+conflicts that per-branch CI structurally cannot, such as A renaming a method while B adds a caller,
+both green, merging clean and breaking on import. Conflicts skip and continue rather than halting,
+reversing the original stop-on-conflict spec, because a build that halts leaves nothing to work from.
+The report names the conflicting *pair* rather than the casualty, since &#34;B skipped&#34; is not actionable.
+
+**Only reviewed work is carried, and that is not the one-line filter it reads as.** A tip contains its
+whole stack, so filtering tips alone would merge a ready pull request together with the drafts beneath
+it - the reading of &#34;only ready pull requests&#34; that quietly does the opposite. Readiness is read down
+the entire chain: a stack draft at its root is left out entire, and the branch merged for a stack is
+the last one reached before its first draft.
+
+**Judgement lives in a skill, not the script.** The script detects, attributes and skips;
+`/integration-conflict-triage` judges each pair reconcile, stack or defer. It resolves too, but bounded
+by *where the resolution lands* rather than by how confident it is - the artifact decides the risk. On
+defer it resolves fully into the rerere cache, since nothing touches a feature branch and the build is
+regenerated anyway, so a wrong answer costs one cache entry. On reconcile it proposes and does not
+apply, because that is a real code change to a published pull request under review. On stack it
+reports. **Asking is not driven by confidence**, which would make the skill a prompt generator whose
+questions get rubber-stamped: uncertainty about *facts* is resolved by reading, uncertainty about
+*intent* is asked.
+
+**One hazard follows from a skill authoring resolutions rather than replaying a human&#39;s**: rerere
+matches on the conflict preimage and replays automatically, so a textually matching but semantically
+wrong resolution is reapplied unreviewed on every later build. A recorded resolution therefore carries
+its provenance and the report distinguishes skill-authored replays from human ones.
+
+**Two failure shapes git makes identical, told apart before the design was committed to.** A merge that
+fails leaving no unmerged paths is not a conflict - unrelated histories, an unresolvable reference - and
+a *replayed* resolution also fails leaving no unmerged paths, because the replay has already staged
+them, distinguishable only by what git says on stderr. So the replay marker has to be read before the
+unmerged-paths rule. Two later defects came from getting the neighbourhood of that rule wrong: reading
+the marker before asking which paths were unmerged is right for a fully replayed merge and wrong for a
+partially replayed one, since rerere replays per conflict rather than per merge; and resolving git&#39;s
+common-directory answer against the process&#39;s directory rather than the runner&#39;s wrote a build&#39;s
+fixtures over the real provenance manifest, observed rather than reasoned about.
+
+**Two naming and basing constraints that are not cosmetic.** Builds are `integration-&lt;timestamp&gt;` with
+a hyphen, because git stores refs as files, so a path-shaped name cannot exist while the plain branch
+does - the obvious naming is the one git refuses. And `integration-conflict` must be a second blocking
+label rather than a reuse of `needs-resolution`: the withholding step clears that one whenever GitHub
+stops reporting a conflict, and a semantic break never makes a pull request conflicted, so reusing it
+means the next pass strips it and the loop reopens.
+
+**Basing, and the lesson it left.** The recorded &#34;reparent this onto its parent branch&#34; step was
+attempted rather than restated, and both halves of the claim were wrong: the base change is not blocked
+(the MCP client performs it), and the reparent was wrong to do, because the parent branch was 159
+commits behind main, so basing on it swelled the diff from 45 files to 261. Reverted immediately.
+**A note saying an operation is blocked is a claim with an expiry date** - this one had two at once, the
+client changed and the target moved, and it had been carried forward verbatim through two entries.
+
+**Six review rounds, and the thread worth carrying is the one about a contract test.** It was defended
+across five rounds and deleted in the sixth, and both were right at the time. For four rounds the
+objection was answered on its own terms while the test asserted the enum against a copy of itself;
+fixing that in round five made the real question askable - is one deliberate line per breaking change
+worth it when no reader executes the contract - and that answer was the user&#39;s to give. Two general
+rules came out of it: **a test that pins a contract must read the artifact the contract is about**, and
+**a reviewer returning to the same line is evidence the answer has not landed, not that the question has
+been asked already.** The wire format is now deliberately unguarded, recorded on the pull request rather
+than quietly dropped; the natural place to close it is a consumer that actually runs.
+
+Two smaller general findings. **A mechanical rename across a file reaches identifiers inside names it
+was never meant to touch**, and only reading the names back catches it. And **a helper whose only
+content is a type conversion is a docstring explaining a surprise** - two helpers were deleted once the
+single defaulted argument moved to the call site.
+
+Its recorded dependency was corrected once already, from the executor to `manifest-currency-first`,
+after the chain became linear; the executor stays a dependency transitively.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Write the manifest and republish the dashboard before anything else, at every transition">manifest-currency-first</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-integration-branch-ci-verdict" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Move the integration branch&#39;s verdict to CI, with a stable branch and a targeted job</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">integration-branch-ci-verdict</span>
+            <span class="mono branch">claude/plan-item-kickoff-workflow-unification-wg4w4x</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/211" target="_blank" rel="noopener">#211</a>
+            <a class="session-link" href="https://claude.ai/code/session_01KgTu7rha5xxBYAVm41e3uV" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve stack-maintenance integration-branch-ci-verdict" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Part D of `integration-branch`&#39;s review round: the verdict moves from a local test run to real CI.
+Folded back onto that item&#39;s branch after being split out, so it has no pull request of its own - the
+scope test inverted at the fold, because it had first been run against *planned* content none of which
+had been written, the same expiry a basing decision has.
+
+**One measured fact shapes the whole design**: `ci.yml` triggers on push to `main` and on
+`pull_request` and nothing else, so a pushed build collects no checks at all. That is what makes a
+candidate pull request the only shape that reaches a verdict rather than one option among several.
+The candidate is never merged - a build is regenerated from scratch, so it shares no history with the
+branch it replaces and merging would give that branch a history the next build cannot regenerate.
+Green force-updates the pointer onto the build and closes the candidate unmerged; red closes it naming
+the failing checks; unfinished does nothing and says so with its own status.
+
+**Two kickoff conclusions were corrected by measurement.** A marked-only job cannot be the build&#39;s
+verdict, because with no matching tests pytest exits 5 - so a healthy build&#39;s marked job is empty and
+says nothing; the marker keeps its place aimed at whether a recorded break is *fixed*, which is the
+automatic clearing condition `integration-conflict` shipped without. And nothing that opens the
+candidate may use the default token, since GitHub creates no workflow run from an event it triggered -
+a fine-grained token is a required setup step, not a hardening. One trap found while probing it: the
+checkout action persists the default token as an http header that overrides credentials in a push URL,
+so the token has to be handed to the checkout rather than to the push.
+
+**Six defects found after the pipeline had published zero builds, each measured rather than guessed.**
+The rebuild&#39;s own check was judging branches, because a rebuild triggered by a branch leaving draft
+attaches its own check to that branch&#39;s head, and the red-tip exclusion then left that branch out of
+the build its flip had asked for - the pipeline&#39;s check names are read off the workflow files now, and
+holding them to being shared with no other workflow is what found a probe job colliding with `ci.yml`&#39;s
+names. The `pull_request` arm could not work at all, because it correctly pins the checkout to the
+default branch and that branch is a *build output*, so it always lags whatever is in flight; a
+too-old pipeline is an answer now rather than a usage error. The warm-up was one to two orders of
+magnitude short and no constant fixes it - measured queue delays of 19 minutes and 2h47m - so the
+verdict moved off the run that opens the candidate entirely: a rebuild settles whatever an earlier run
+left, then assembles the next. The maintenance pass was adopting candidates, which is how the pointer
+branch would accumulate history across rebuilds; the exclusion moved to the one place both readers
+derive their work from. And what passed is remembered now, keyed on a build&#39;s git *tree* - because
+re-assembling the same branches over the same base gives a new commit every time and the same tree
+every time - as one git reference each, which needs nothing created or merged, cannot lose a
+concurrent write, and carries its own age so pruning needs no object fetch. Only passes are recorded,
+deliberately: a red is cleared by re-running the same commit.
+
+**Selection learned three things, each from a build going wrong.** Blocking labels: the stack was read
+*before* the restack ran and built from the same object, so labels that pass had just written were
+invisible - the same snapshot-invalidated-by-a-later-step shape as the promotion incident. A branch&#39;s
+own checks: a build was guaranteed red whenever any carried tip was red alone, so a finished-badly tip
+and anything standing on it is left out, named apart from blocked because what lets it back in is its
+checks going green rather than a label coming off. This does not reopen the no-CI-gate decision, whose
+reasoning still holds: requiring *green* empties the build after every restack, while excluding a
+*known* failure has no such deadlock and is self-limiting, since a restacked branch reads running and
+is carried.
+
+The targeted job&#39;s first real run failed for a reason that follows from its own design: collecting
+from the repository root loads every `conftest.py`, including the robotics stack&#39;s, so a runner
+carrying the tooling dependencies alone died during collection before reaching a reproduction. It
+collects the four directories the tooling CI job names, read off that job rather than listed a second
+time, since what makes the two trees the same is the install.
+
+Also settled: the pipeline runs from the default branch rather than waiting for `main`, because a
+schedule registers from the *default* branch and that branch is main plus every carried tip - the
+proof was already sitting there. And this branch stays out of draft deliberately, overriding the
+re-draft convention, because a draft is excluded from every build.
+
+Deliberately kept rather than removed: the local test run. It caught a real cross-branch break hours
+before any candidate existed, and it answers before a build is pushed rather than after a matrix has
+run. What the CI verdict replaces is the *publishing* decision.
+
+**The review round of 2026-08-30 found the one thing the design had no rule for: a branch the pipeline creates and nothing takes down.** `publish()` dropped a build&#39;s branch because the pointer then held the same commit, and that was the *only* path that did - so a candidate closed red, one nothing ever reported a check against, and a build superseded before it was judged each left a branch for good, at four rebuilds a day. Eight had gathered on the fork; seven had a closed candidate. The rule now is what keeps a build rather than what drops it: a pull request still open against it, which covers the candidate judging it and a filtered `--plan` build somebody is working from, and it runs before a rebuild reaches anything it can stop on, since a run that stopped early is exactly the kind that left one. It narrows the earlier decision to keep a red build&#39;s branch for whoever reads its checks rather than reversing it - that branch now lasts until the next rebuild instead of forever.
+
+**One complaint, made about four lines, reached a fifth nobody had looked at.** Asking for structure over hard-coded keys turned up `GitHubRepository.open_pull_request` sending `{&#34;title&#34;, &#34;head&#34;, &#34;base&#34;, &#34;body&#34;}` and reading `[&#34;number&#34;]` back straight past the enum that reads them, with no test over the payload at all - found only because the *test* records built beside it were being routed through that enum. And a whole section of `test_integration_verdict.py` was still walking `integration-refresh.yml` by hand, having survived the round that introduced `workflow_document.py` intact: a model does not retire the hand-rolled readers it replaces, because nothing breaks when it lands.
+**Both threads the 2026-08-30 round left open are answered, and the recorded blocker had the first
+one wrong.** The repeated string was never the `sys.path` insertion `bastler-package` owns: asked
+again, the author said it is the measured check timing, written out at four of the designs it
+explains. It is one `CandidateCheckTiming` in `integration_verdict.py` now, referred to rather than
+restated, held by one test that derives the figure from the record and one that holds each design to
+naming it. The limit is stated rather than hidden - the first catches a numeral, not a restatement
+spelled out in words.
+And the cadence is no longer a scope call. Told what a `workflow_run` trigger on `ci.yml` completing
+would buy, the author asked only where it should land, and the mechanical check answered: every file
+it touches is absent from `main`, so it folded here. **What made it safe to add is that it stops
+itself** - the run it starts assembles the next build, and a build whose tree is already recorded as
+passing publishes with no candidate, so once nothing in flight has moved there is no matrix left to
+answer to. Two spellings a workflow forces are asserted against their definitions: `workflow_run`
+matches a workflow&#39;s *name* rather than its file, and a workflow&#39;s branch filter does not take the
+character class `BUILD_BRANCH_PATTERN` uses, so reusing it would have matched nothing - silently, in
+the losing direction, both times.
+**The pipeline was found deadlocked on 2026-08-30, and the base of the candidate is why.** A build is
+opened against `integration`, which is the branch it will replace - and that branch is itself an
+older build of the same branches, so the two conflict and GitHub can compute no merge reference,
+which is what a `pull_request` run checks out. No reference, no run, no verdict, and a rebuild that
+stops on the candidate it cannot judge. **It is not self-recovering**, and it explains why one build
+is the only one this pipeline has ever judged: it works while `integration` is close behind and
+wedges permanently once it is not.
+The fix is not the one-line base swap it looks like. `find-candidate` tells the candidate to settle
+from a `--plan` build by *which branch it was opened against*, deliberately - so opening every
+candidate against the upstream base needs a discriminator that is not the base, or a one-plan build
+gets published over everything in flight. Two halves are wanted: open candidates against a base the
+build always merges with, and make an unjudgeable candidate something a rebuild closes and moves past
+rather than stops on - without the second, an outage long enough to let `integration` drift wedges it
+again with no way out.
+**The verification run of 2026-08-30 confirmed the base diagnosis and found something worse behind
+it.** Opened against `main`, the same build had its merge reference within seconds and 23 checks
+within twenty, all green - where the candidate against `integration` had neither in eleven hours. But
+the build carries no pipeline: nine branches, and neither of the two the pipeline lives on, because
+#211 conflicts with #160&#39;s branch over `plan_item_bootstrap.py`. **Publishing it would have deleted
+the automation** - `integration` is the default branch a schedule registers from, so a build with no
+`integration-refresh.yml` in it takes the scheduled workflow down and leaves nothing able to publish a
+later build. Nothing was published. The order the remaining work has to happen in follows from that: a
+guard against publishing a build that would remove the pipeline comes *before* making candidates
+judgeable, because the first checkable green build is otherwise the one that ends the pipeline.
+
+**That guard is built, and it is the first of the three.** `publish()` refuses a build whose tree
+carries no rebuild - the refresh workflow and the entry points it drives, derived from the enums
+naming them rather than listed again - and refuses it on both routes to the pointer, since a guard
+on the judged path alone is one the recorded pass walks straight past, and the recorded pass is what
+publishes on the ordinary day. Presence is not the whole test: a workflow left with only a dispatch
+is a rebuild somebody has to remember to press, so the carried workflow is asked whether it still
+answers to the schedule. A refused build stops the rebuild rather than being judged - a matrix would
+reach the same answer - which turned `_publish_recorded_pass` into a status rather than a bool.
+
+**It reaches the run that needs it before it reaches the default branch**, which is the part worth
+stating: a scheduled run executes the published copy and so predates the guard, but nothing can
+publish through that copy today - no tree is recorded as passing, and no candidate can be judged -
+while the bootstrap dispatch checks out `github.ref` and therefore runs the guard. So the one run
+that could have ended the pipeline is the one it is in force for.
+
+Retired on the way through: `VerdictReport` modelled the settling&#39;s document and had no production
+caller, the command hand-building a second copy of the same keys beside it. The command emits the
+report now and takes its exit status from the `published` field it carries, so a run cannot exit
+success over a report saying it published nothing. 926 tests pass, from 913; six mutations checked.
+
+**#160 was closed on 2026-08-31, superseded by #151, so the fold is done and the blocker naming it
+is gone.** What kept the pipeline out of every build was that #160&#39;s branch was carried first and
+collided with this one over `plan_item_bootstrap.py`; with it closed it is off the board, so a build
+should now carry #211 and the #154 beneath it. Recorded as expected rather than as measured: no
+build has been assembled since, and the first one&#39;s `left_out` is what confirms it. One thing to
+check with it - #151 is a draft, and readiness is read down the whole chain, so anything rooted on
+it is left out entire.
+
+**The base is fixed, in `c77b9ea79`, and the discriminator is the title rather than a label.** Every candidate is opened against the base its build was assembled over, which a build merges with by construction; `CandidateTitle` says which plans a build was asked for, and `candidate_for_everything_in_flight` replaces `open_candidate_on`. The title won over a label on one argument: it is set in the call that creates the candidate, where a label is a second call that can fail on its own - and a candidate nothing recognises is one no later run settles, which is the wedge being fixed rather than a new one to introduce. `BoardExport.is_a_candidate` needed no code change, as recorded, and a test now holds both kinds off the export both a build and a maintenance pass derive their work from. An unjudgeable candidate is closed and replaced now rather than stopping the run, and the run still exits `CANDIDATE_UNCHECKED`, so nothing is lost by carrying on. 967 tests pass across the four directories CI runs, from 956; seven mutations checked, and an eighth test was removed rather than kept because its own mutation walked past it.
+
+**Two recorded expectations were refuted by looking at the fork before dispatching.** `#154` is based on `main` rather than on `#151`&#39;s branch, and `#151` is not a draft - so the &#34;readiness is read down the whole chain, and anything rooted on a draft is left out entire&#34; hazard recorded here does not apply to the pipeline chain at all. It is `main` to `#154` to `#211`, neither a draft, neither carrying a blocking label. No candidate was open, so the bootstrap had nothing to settle first.
+
+**One defect found in the way, reported rather than folded in.** `plan_item_bootstrap.py update` writes an item&#39;s fields at a hardcoded four-space indent, so replacing this item&#39;s `blockers` emitted the key inside `depends_on`&#39;s sequence and the manifest no longer parsed. It reproduces the defect `manifest-currency-first` already records against its own branch, which is where the `ItemIndentation` fix belongs - #151 introduces `update` and `ValueStyle.SEQUENCE`, so it is the only branch that can test one. Reported rather than folded in here; every manifest write in this session went through a hand-edited splice and `save-plan.sh` instead.
+
+**The first bootstrap dispatch reached the build and stopped at the suite, which is the pipeline working rather than failing.** `find-candidate` answered `no-candidate-open` - the new title discriminator&#39;s first live exercise - the base came forward, the build assembled, and the local suite then failed on it: #110 and #80 merge cleanly and break together. `block-branch` labelled #110 `integration-conflict` and said so on the pull request. No candidate was opened, so the base change, the discriminator and the close-and-move-past rule are all still unexercised against real GitHub; the next rebuild leaves #110 out and should reach one.
+
+**One gap the run exposed, in `RefreshPipeline._build`.** A build that fails its suite prints neither its own report nor the block&#39;s: the branch that reports a status other than `TESTS_FAILED` prints `assembled.output`, and the `TESTS_FAILED` branch above it returns without printing either document. So the run says `tests-failed (11)` three times and nothing else - and `left_out`, the one thing that has to be read before a second dispatch can publish, is exactly what it swallows. The collision itself was still recoverable, but only because `block-branch` writes to the culprit&#39;s pull request rather than to the run&#39;s log.
+
+**Two dispatches, two breaks, no candidate - and that is what made the stop-on-first-break rule indefensible.** Run 17 blocked #110 after 1h45m of queue; run 18 then blocked #107, which is #110&#39;s own base. Each break cost a whole cycle because the rebuild ended on it, and there was no reason it had to: the tree that failed carries the culprit, but the build *without* the culprit is one the same run can make, and it is exactly what the next rebuild would have produced a cycle later. `ba65d62bc4` blocks and assembles again, bounded at five by `BREAKS_ONE_REBUILD_BLOCKS` - a budget rather than a measurement, since what a run blocked stands either way. A search that could blame no single tip still ends the run, because it leaves the same branches to merge and so would rebuild the same failing tree for ever. A recovering run exits success, as a build that left a tip out already does: the break is reported on the culprit&#39;s own pull request, which is where its owner reads it.
+
+**The reporting gap was wider than the one reported.** `_build` printed the build&#39;s document only on the statuses that leave nothing to judge - so neither a failed suite nor a *successful* build ever said what it had left out, and the one document that has to be read before publishing had never been printed by any run that could publish. Every attempt prints it now, and the block prints what it blocked, read through the key the block writes rather than through the verdict&#39;s, which has no name for a blocked branch.
+
+**The pipeline reached a judged candidate on 2026-08-31, which is what all of this was for.** Run 19 ran the whole cycle in seven minutes: `no-candidate-open`, base forward, a build whose suite failed, one break blocked - #162 against #151 - and then, in the same run, the build without it, `no-recorded-pass`, and candidate #228. The block-and-continue rule is what turned two dispatches and two hours of queue into one seven-minute run.
+
+**The base change is confirmed against real GitHub.** #228 is opened against `main`, and GitHub reported its first check eleven seconds after it opened, where #220 - opened against `integration` - had no merge reference and no check after eleven hours. Twenty-four checks; every one that finished in the first six minutes passed.
+
+**And the build carries the pipeline, measured rather than expected.** #211 is among the ten tips merged, #154 comes with it as its base, and the tree holds `integration-refresh.yml`, `integration.py` and `integration_pipeline.py` with the schedule intact - so the guard that refuses a build carrying no rebuild has something to pass for the first time. The `left_out` that says so was printed by the run itself, which is the reporting fix working: 47 branches left out, 25 for their own red checks, 14 blocked and 8 unreviewed.
+
+**The pipeline published on 2026-08-31, which is the whole item done end to end.** Run 20 settled #228 on its green matrix, recorded the build&#39;s tree under `refs/integration/passed/build-tree`, moved `integration` onto `9d48f9bf00` - the exact commit the 24 checks passed over - closed #228 unmerged, dropped its build branch, and then assembled the next build and opened candidate #230 for it. Verified against git rather than against the run&#39;s exit status: `integration` is that commit, its tree carries `integration-refresh.yml`, `integration_pipeline.py` and `integration_verdict.py`, and both `c77b9ea79` and `ba65d62bc4` are ancestors of it.
+
+**That ends the bootstrap.** Every trigger is read from the copy on `integration`, and `integration` now carries the schedule and the `workflow_run` trigger from this branch - so the schedule and CI-completing both run the new pipeline, and #230 will be settled without anyone dispatching anything. The four dispatches were needed only because a pipeline that cannot publish cannot carry its own fix.
+
+**One reporting gap of the same shape remains, found by reading the log of the run that published.** `RefreshPipeline._act_on` returns `None` on a settling that succeeded, without printing `settled.output` - so the verdict document, which carries `verdict`, `published` and `missing_pipeline`, is printed on every path except the one where a build was actually published. The run that finally moved the pointer said nothing about having moved it; the only line in its log naming any of this is the build&#39;s own `&#34;tests_passed&#34;: true`. Not fixed here.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Regenerated personal integration branch: build, check, resolve, report">integration-branch</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-red-candidate-localisation" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Localise a red candidate to the branches that caused it</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">red-candidate-localisation</span>
+            <span class="mono branch">claude/plan-item-kickoff-workflow-unification-wg4w4x</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/211" target="_blank" rel="noopener">#211</a>
+            <a class="session-link" href="https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve stack-maintenance red-candidate-localisation" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">What happens when the candidate&#39;s verdict comes back red for a reason the local suite cannot see. The
+local localisation re-assembles the tips and re-runs the configured tooling suite, so it reaches a
+break between two branches whose tooling code disagrees and reaches nothing in the docker matrix.
+
+**The gap is narrower than it was.** A candidate can go red for two reasons: a tip whose checks had not
+finished when the build was assembled and have since failed, which the next rebuild leaves out by
+itself; or a genuine break only the matrix sees, where two branches each pass their own run, merge
+cleanly, and fail a matrix job together. Only the second needs this item, and only the second is a
+break in the sense the workflow means.
+
+Localising it means re-running the matrix rather than a suite: push each prefix of the merge order as
+its own branch, dispatch a run for each, and read the conclusions - against roughly twenty minutes a
+run and sixteen jobs apiece. The waiting, the concurrency, the credential and what a partial answer
+means are all different from the local path. **Measure the cheaper variant first**: re-run only the
+failing job per prefix, which the per-library job names make expressible.
+
+It does not replace the local localisation, which answers before a build is pushed.
+
+**Review turned the pipeline from YAML into code, and the reason is the one that matters.** Every
+decision the rebuild block made was a decision about an exit status, and written in a job&#39;s `run:`
+those were loops and exit-code literals nothing could run outside a runner - so there was no way to be
+wrong about an exit code and find out before a scheduled run did the wrong thing silently. The workflow
+dropped 223 lines to about 107 and calls one command. Four guards that had asserted the shape of the
+shell were replaced by two stronger ones: every subcommand a rebuild names checked against the live
+registry, and the keys the steps hand each other held equal across the two enums that write and read
+them.
+
+A workflow is parsed once into named things now, so no reader indexes into a mapping under keys it
+spells itself - and writing that caught the hazard it exists to prevent: **a trigger block is not
+under `&#34;on&#34;`**, because YAML reads a bare `on` key as the boolean, so triggers live under `True` and a
+reader that forgets concludes the workflow responds to nothing. Similarly, the matrix&#39;s libraries are
+derived from the matrix job rather than enumerated, because an enum matching the workflow and held by
+nothing would answer a new library&#39;s failures as naming no library at all - silent, and in the
+direction that loses a real break.
+
+**One collision the round uncovered, which a union type had been hiding**: two push methods across a
+class boundary were the same git command under two names with incompatible signatures, and nothing had
+passed the new type down that path yet. There is one push now, on the runner that runs git, taking the
+object that already decides forcing.
+
+**One defect the tests could not have caught by reading, and did not.** A conditional written as a
+folded scalar whose continuation lines were indented further than its first is kept verbatim by YAML,
+so it parsed cleanly into a string with newlines inside an expression, for GitHub to reject at run
+time - while the assertion about it passed throughout. Found by printing the parsed value.
+
+**And one shape the pipeline got wrong twice in the same place**: settling closed the candidate on any
+verdict that was not &#34;running&#34;, and &#34;absent&#34; is what a candidate opened two seconds ago looks like,
+before GitHub has created its run. The first reading closed the pull request, no run was ever created,
+and every later reading found the same absence. Both readings come from one predicate now, so the close
+and the exit status cannot disagree about which verdicts are answers.
+
+The git-command-vocabulary thread is answered with measurements and left open, because the question is
+owned elsewhere: no git command name is spelled twice for the same operation, so an enum would be 16
+members with one reader each, and the class-per-command hierarchy is what the method signature already
+is. It goes to `bastler-notes-core-python`, which owns the git seam by name and has four callers
+waiting - deciding the ergonomics before the raise-versus-answer-nothing question is settled means
+deciding them twice.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Move the integration branch&#39;s verdict to CI, with a stable branch and a targeted job">integration-branch-ci-verdict</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-per-plan-integration-branches" class="item status-deferred" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">One integration branch per plan, and a complete branch built from their last green builds</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-deferred">Deferred</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">per-plan-integration-branches</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Reconsider">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve stack-maintenance per-plan-integration-branches" onclick="planDashboardCopyActionCommand(this)">▸ Reconsider</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Proposed by the user and recorded without being built: one integration branch per plan, plus a complete
+branch merging them. Everything below is settled by measurement; **the deferral is the only part that
+is a judgement.**
+
+The scope check was run rather than eyeballed, and the answer is that this is a new item: strip the
+edits to the files its siblings introduce and what remains is nine build branches, nine candidate
+cycles, a complete branch with a build rule of its own and per-plan cleanup - substantial and standing
+alone by a wide margin.
+
+**The partition is real**: 9 plans, 125 indexed branches, 63 open pull requests; every sampled
+open-pull-request head has a plan, and stacks stay inside one, including a chain that looks
+cross-domain and is filed entirely under one plan.
+
+**It saves no CI on its own.** The complete branch&#39;s tree changes whenever any sub-build changes, so
+one branch moving still forces a full check at the top: one matrix run today becomes two. The saving
+people expect from it is the pass record, which needs no new branches at all.
+
+**The complete check cannot be waived.** Six of the nine plans all edit the shared library, and the
+cross-library job exists because these packages import each other. Only the tooling-only plan is
+separable.
+
+What it does buy is one free level of attribution - a red sub-build is an intra-plan break,
+all-green-sub-builds-but-red-complete is a cross-plan one, which halves the localisation search - and
+graceful degradation. **But only in a form other than the one proposed**: merging current tips leaves
+one red area blocking everyone, so the complete branch is built from each plan&#39;s *last known-green
+sub-build*, which composes with the pass record rather than needing a mechanism of its own.
+
+Per-plan branches do not change what a session clones: the fork has one default branch, so they are
+opt-in checkouts.
+
+Deferred for sequencing rather than doubt. The pipeline has published very little; nine sub-branches,
+nine candidates per cycle, nine times the stale-branch cleanup and the adoption defect multiplied by
+nine is how you end up unable to tell which layer is broken. Revisit once green cycles have run and the
+real cost is known. **Reachable before then without any of it**: a `--plan` filter carries one plan&#39;s
+tips through the ordinary build and candidate, which answers &#34;does this plan hold together on its own&#34;
+- most of what the topology was wanted for - with no extra branch and nothing that can publish.
+
+**Asked for again on 2026-08-30, in four parts, and only one of them is this item.** The request was a control on the plan-dashboard index: tick the plans to integrate, press integrate, and get a copied command that runs integration over them, labels the conflicts and leaves a dedicated branch to work from - plus a choice of what the build is based on, from a dropdown of the author&#39;s own branches. Running over chosen plans and labelling the conflicts already exist, as `--plan` and the `plans` dispatch input that `integration-branch-ci-verdict` shipped, and `integration-conflict`. The dashboard control is `plan-dashboards`&#39; work and has a sibling in flight there, `dashboard-refresh-button` (#206), which copies the command that rebuilds - this is the same shape one level up. Choosing the base is new to both: it is `configuration.upstream_base` today, read from `stack.toml`, and nothing takes one per run. The dedicated per-plan branch is this item, and the deferral still holds for the reason it was written - the pipeline has published nothing, so nine sub-branches and nine candidate cycles would multiply a defect nobody has seen a clean cycle of yet.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Move the integration branch&#39;s verdict to CI, with a stable branch and a targeted job">integration-branch-ci-verdict</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-integrated-label" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Label every pull request the integration branch carries, and unlabel the ones it drops</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">integrated-label</span>
+            <span class="mono branch">claude/stack-maintenance-kickoff-9kal0j</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/260" target="_blank" rel="noopener">#260</a>
+            <a class="session-link" href="https://claude.ai/code/session_016Fms9hs3XuS3a5wgc5ts3x" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve stack-maintenance integrated-label" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Move the integration branch&#39;s verdict to CI, with a stable branch and a targeted job">integration-branch-ci-verdict</span>
+
+            <span class="chip" title="Localise a red candidate to the branches that caused it">red-candidate-localisation</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">7</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">4</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+        <p class="next-empty">Nothing actionable right now — every item is either in progress, fully blocked, or done.</p>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

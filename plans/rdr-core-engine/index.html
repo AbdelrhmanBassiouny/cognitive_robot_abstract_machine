@@ -1,0 +1,1602 @@
+<title>The EQL-native RDR core engine, landed as a split-PR stack</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>The EQL-native RDR core engine, landed as a split-PR stack</h1>
+    <p class="description">The rdr/ package itself, delivered bottom-up as a stack of topic-oriented pull requests: backward inference and condition resolvers, the conclusion helpers, the underspecified adapter, corner-case provenance, the rule-tree unparser, the observer and rule-tree view, the Expert policy split, the single-class inference engine and the underspecified-query backend, plus the runtime behaviour left open when no rule fires.</p>
+    <p class="repo-line">
+      14 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/94" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>The RDR core engine — Roadmap</h4>
+<p>Narrative half of <code>rdr-core-engine</code>. One of seven plans the oversized
+<code>rdr-refactor</code> was split into on 2026-08-30; the predecessor's full 3,259-line
+roadmap remains in the personal-notes branch's history immediately before that
+split commit. This plan carries the programme's working method, because that is
+where it was learned and where most of the remaining work is.</p>
+<h5>What is being built</h5>
+<p>An EQL-native Ripple-Down Rules engine: the rule tree is a live EQL DAG rather
+than strings or an AST round-trip, RDR is an <code>EvaluationObserver</code> over EQL
+evaluation, the tree grows by inserting <code>Refinement</code>/<code>Alternative</code> selectors
+into that live DAG, expert answers are live EQL expressions, and persistence is
+Python source through the unparser. It is delivered as a stack of
+topic-oriented pull requests rather than as one mega-branch, each carrying its
+own tests, merged bottom-up with a cascade after each landing.</p>
+<p>The chain, in dependency order: <code>ripple-down-rules-refactor</code> (#53) →
+<code>rdr-backward-inference</code> (#41) → <code>D-core-aid</code> (#63) → <code>D-core-underspecified</code>
+(#64) → <code>D-core-corner-case</code> (#65) → <code>D-core-serialization</code> (#66) →
+<code>D-core-support</code> (#67) → <code>d-core-expert</code> (#98) → <code>d-core-single-class</code> (#159) →
+<code>d-core-backend</code> (#210). The user-facing layers continue in
+<code>rdr-interface-and-decorator</code>, stacked on #210.</p>
+<h5>Decisions locked in, and what depends on them</h5>
+<p><strong>1. The three-way split of the mega-slice.</strong> <code>D-core-engine</code> (#68) drew 71
+review threads and a request to split; it is superseded by <code>d-core-expert</code> →
+<code>d-core-single-class</code> → <code>d-core-backend</code>, and is kept only as a branch. Nothing
+can land through it, which two later sessions each rediscovered the hard way
+when an item's own note named it as a restack target.</p>
+<p><strong>2. Engine behaviour, settled in #68's review.</strong> <code>classify()</code> returns the
+sentinel rather than <code>None</code> when no rule fires; non-convergence raises
+<code>RDRDidNotConvergeError</code> and <code>max_passes</code> is gone, bounded instead by
+oscillation detection plus a termination test; <code>rdr/exceptions.py</code> holds the
+<code>DataclassException</code> hierarchy; conclusion validation lives on
+<code>ConclusionDomain</code>; an <code>AnswerName</code> enum replaces the duplicated <code>"conditions"</code>
+/ <code>"conclusion"</code> strings; <code>CaseContext</code> is built by the engine and threaded down
+as a parameter object; progress and save use Null-Object defaults; and
+<code>backend.infer</code> splits into a pure <code>infer</code> yielding <code>UnificationDict</code> and an
+eager <code>fill</code>.</p>
+<p><strong>3. <code>GuardCondition.negated</code> is a polarity flag, not a <code>Not()</code> wrapper.</strong>
+<code>not_()</code> reparents a live rule-tree node, which corrupts the tree the guard
+belongs to. The decision carries an explicit expiry: <code>Not()</code>-wrapping is cleaner
+at four of six use sites and wins outright once <code>dag-facade-hardening</code> (#96)
+lands a non-mutating negation. The rationale lives in the field's own docstring,
+because its design document is on a dropped path and will never land.</p>
+<p><strong>4. Per-selector traversal semantics are a family, kept over advice.</strong>
+<code>rdr/branch_semantics.py</code> holds one <code>SelectorBranchSemantics</code> class per
+selector, carrying both <code>sibling_guards</code> and <code>branches</code>, dispatched through
+<code>krrood/patterns/specificity_ranking.py</code>. This session's own recommendation was
+to collapse it onto the selector classes; the developer kept the family, and
+that thread is theirs to close. One coupling worth carrying if it ever does
+move: the natural return type would be an <code>(expression, polarity)</code> pair, which
+is an EQL-level concept rather than an RDR one.</p>
+<p><strong>5. Neither the selectors nor <code>GuardCondition</code> move.</strong>
+<code>rules/conclusion_selector.py</code> is on main with EQL-core consumers — the public
+<code>refinement()</code>/<code>alternative()</code>/<code>next_rule()</code> DSL, <code>scope.py</code>, <code>query_graph.py</code> —
+so moving the selectors into <code>rdr/</code> points the DSL front door at the RDR
+subpackage. Moving <code>GuardCondition</code> into <code>rules/</code> is the same error smaller: it
+is a backward-chaining concept whose every consumer is in <code>rdr/</code>.</p>
+<p><strong>6. <code>...</code> replaces <code>UNSET</code>, and <code>rdr/utils.py</code> is gone.</strong> Both are singletons
+compared with <code>is</code>, so every site substituted unchanged. <code>AnswerName</code> and
+<code>NamespaceName</code> moved together into <code>rdr/answer_vocabulary.py</code> — one module,
+because <code>AnswerName.example_assignment</code> is built over
+<code>NamespaceName.CASE_VARIABLE</code> and both must sit below <code>interface.py</code> and
+<code>exceptions.py</code> to avoid a circular import. <code>allow_unset</code> and the <code>test_unset_*</code>
+names are deliberately unchanged: "unset" there names the state the expert left
+the conclusion in, not the identifier.</p>
+<p><strong>7. <code>ExpertInterface</code> carries only the expert Q&amp;A surface.</strong> Model persistence
+and fitting progress were three unrelated responsibilities in one class, and the
+engine reached two levels deep to write <code>expert.interface.on_save</code>. The RDR now
+holds a <code>ModelSaver</code> and a <code>ProgressReporter</code> as its own collaborators with
+Null-Object defaults. Giving the RDR the <em>whole</em> interface was considered and
+overshoots — it would hand the engine the Q&amp;A mechanism and force it back on
+every <code>ask_for_*</code> call.</p>
+<p><strong>8. A fit saves once on its way out, not once per inserted rule.</strong> The save
+sits in a <code>finally</code>, so a crash keeps the rules it authored. An empty tree is
+deliberately not saved: saving unconditionally let <code>EmptyRuleTreeError</code> from
+inside the <code>finally</code> replace the exception the caller actually needed to see. A
+saver that fails for any <em>other</em> reason still masks the fit's exception, and
+catching that to hide it is what <code>AGENTS.md</code> rules out, so it is the developer's
+call.</p>
+<p><strong>9. The condition resolver takes the RDR.</strong> <code>resolve(rdr, context)</code>, typed
+under <code>TYPE_CHECKING</code>, so nothing is imported from <code>single_class</code> at runtime and
+the unit tests still need no engine. The corner-case gate applies once on
+<code>ConditionResolver.resolve</code> and delegates to an abstract
+<code>_resolve_against_corner_case</code>, so a future strategy inherits the precondition
+rather than restating it. An earlier objection that this created coupling was
+wrong, and checking the import graph before offering a coupling argument is the
+habit that would have caught it.</p>
+<p><strong>10. <code>RDRBackend</code> inherits <code>QueryBackend</code>.</strong> Neither concrete base fits —
+<code>SelectiveBackend</code> raises on exactly the ellipsis matches this backend exists
+for, and <code>GenerativeBackend</code> constructs new instances where this completes an
+attribute on existing ones — but neither reaches <code>QueryBackend</code> itself, whose
+whole ABC is <code>evaluate(expression)</code>. <code>evaluate</code> is <code>fill</code>'s eager completion and
+returns an iterator rather than being a generator, so a non-<code>Match</code> expression
+raises <code>QueryIsNotAMatch</code> at the call rather than at first iteration. Narrowing
+the parameter to <code>Match</code> was rejected as a Liskov violation.</p>
+<h5>Open, and genuinely undecided</h5>
+<ul>
+<li><strong>A labelling fit never checks convergence.</strong> Two cases labelled differently
+  but justified by a condition they share end with <code>fit</code> returning normally and
+  the first classifying as the second's label; the same input <em>with</em> targets
+  raises <code>RDRDidNotConvergeError</code>. Reproduced. Not fixed, because the fix
+  changes what a labelling fit costs a human — a second pass re-asks about cases
+  their own rule broke. Three options are on thread <code>r3838361318</code>.</li>
+<li><strong>Seven design threads from the 2026-08-23 review on #159</strong> remain open and
+  were deliberately not guessed at, among them whether the retry's gate should
+  key on <em>"did we ask the expert"</em> rather than on <code>resolution_mode</code>.</li>
+<li><strong>The <code>GroundTruth</code> type alias on #210</strong> — whether it should become a class.
+  Nothing in <code>entity_query_language/rdr/</code> expresses a per-case ground-truth
+  supplier; the only thing that does is the legacy package this split retires.
+  Three options are on the thread.</li>
+<li><strong><code>test_null_saver_writes_nothing_for_a_fitted_tree</code> asserts nothing</strong> on #98
+  and is reported but unfixed.</li>
+</ul>
+<h5>Standing hazards</h5>
+<ul>
+<li><strong>CI is wedged on #98, #159 and #210's own merge refs.</strong> All three read
+  <code>mergeable_state: unknown</code> and queue no runs however many times they are
+  pushed; <code>ci.yml</code>'s trigger is unfiltered and the merges are trivial
+  fast-forwards, so the wedge is GitHub-side. A base move followed by a push
+  cleared it once and has since failed twice. A branch opened fresh off a wedged
+  one gets one working push and then wedges too. The remedy nobody has tried is
+  closing the wedged pull request and opening a new one for the same branch.</li>
+<li><strong>The cascade did not stall uniformly.</strong> Measure how far behind each branch is
+  before planning a steward pass rather than assuming stack order tracks it.</li>
+<li><strong>Two generated files, not one, were conflicting on #67 — cleared
+  2026-08-31.</strong> <code>test/krrood_test/dataset/ormatic_interface.py</code> was tracked
+  only here and is now removed from the index, with <code>main</code>'s
+  <code>**/ormatic_interface.py</code> ignore rule arriving in the same merge. The second,
+  <code>verbalization_results.py</code>, is tracked <em>everywhere</em>, so untracking was never
+  its answer: this branch's older generator emitted <code>typing_extensions.Tuple</code>
+  where the current one emits stdlib <code>tuple[...]</code>, and the fix was to take the
+  base's output. Both remain regenerated at test time, so a dirty tree after a
+  sweep is still the normal state.</li>
+<li><strong><code>open_ready</code> means open plus non-draft, and deliberately not more.</strong> It
+  answers <em>"can a dependent safely start stacking on this?"</em>, which stayed true
+  of #67 throughout the six days it was unmergeable against its own base.
+  Folding <code>mergeable_state</code> in would buy a visibility problem with a false
+  negative; the visibility belongs in a per-item mergeable chip instead.</li>
+<li>**<code>scripts/format_docstrings.py</code> regresses <code>:return: ``x</code> <code>to</code>:return:``x``` ** and rewrites unrelated docstrings wholesale — fourteen
+  recorded instances. Every round reverts its churn by hand and keeps its output
+  only where the file is being rewritten anyway. It wants a package-wide pass of
+  its own, which nobody has taken.</li>
+</ul>
+<h5>The working method this programme arrived at</h5>
+<p>Recorded because each entry cost a round to learn, and because the next session
+inherits them rather than rediscovering them.</p>
+<ul>
+<li><strong>Run the probe; do not reason about the code.</strong> It rescued a retry loop about
+  to be deleted as dead, disproved a claimed soundness bug in <code>_leaf_guards</code>,
+  disproved a claimed simplification of <code>evaluate()</code> that would have made every
+  false leaf guard read as true, showed that comparing only against the
+  preceding pass makes the convergence check hang rather than fail, and caught a
+  <code>finally</code> that swallowed the caller's exception. Six entries, none visible in
+  a diff.</li>
+<li><strong>An assertion that looks specific is often vacuous.</strong> <code>==</code> on symbolic
+  expressions builds a truthy <code>Comparator</code>, so nine assertions constrained
+  nothing until they compared <code>_id_</code>. A membership test passed because a
+  <em>different</em> code path already established the fact it asserted. The lens that
+  catches these is mutation: six minutes of wall clock, and it should be the
+  default rather than the exception.</li>
+<li><strong>Compare sorted collected test ids, never counts.</strong> A conflict resolved the
+  obvious way silently dropped six tests and the count read as a clean merge.</li>
+<li><strong>A local sweep in a bare container shows <em>no new failures</em>, never <em>no
+  failures</em>.</strong> CI is the load-bearing check. But the gap was always the
+  container: a 3.12 venv with the workspace requirements and editable
+  <code>random_events</code>/<code>probabilistic_model</code> runs the suite green, including the
+  tests earlier rounds recorded as an unfixable local gap.</li>
+<li><strong>Before untracking a generated file, check whether it is tracked on
+  <code>main</code>.</strong> #67's conflict was recorded for six weeks as one file's problem
+  with one file's answer. When it finally got worked, a second generated file
+  was conflicting too — and that one is committed on <code>main</code> and on every branch
+  in the chain, so untracking it would have been a regression rather than the
+  fix. "It is generated" says how it got there, not whether the repository
+  keeps it.</li>
+<li><strong>A routine that reports the same conflict every pass is not making
+  progress.</strong> Six identical skip comments accumulated on #67 between 08-13 and
+  08-28 while the branch and everything stacked above it sat still. The label
+  is working as designed — later passes skip rather than re-report — so the
+  signal that needs watching is the repeat count, not the newest comment.</li>
+<li><strong>Stage by explicit path; never <code>git add -u</code>.</strong> A test sweep regenerates
+  <code>ormatic_interface.py</code>, <code>query_graph.pdf</code>, <code>drawer_explanation.pdf</code> and
+  <code>verbalization_results.py</code>. A dirty tree after a sweep is the normal state
+  here, not a signal to commit.</li>
+<li><strong>Finish a rename by grepping the whole tree, not by re-reading the diff.</strong>
+  One rename was counted twice from its own diff and still undercounted: four
+  renames, fourteen stale readers, two of them in production source the diff
+  never contained.</li>
+<li><strong>A reviewer reads a diff, not a rationale.</strong> Where a change to an earlier
+  pull request's file belongs is settled mechanically — if making it downstream
+  conflicts, it belongs upstream — but a correct commit message does not rescue
+  a diff the reviewer cannot make sense of.</li>
+<li><strong>Re-read a pull request's threads immediately before reporting a round
+  finished.</strong> Nine recorded rounds were reported as complete while a review that
+  had opened minutes earlier went unrecorded, twice by less than ten minutes.</li>
+<li><strong>Read upstream state before concluding why a branch is not moving.</strong> A
+  branch that looked unpromotable was already promoted and under review; the
+  label three separate mechanisms key on is applied by hand, so it is the part
+  most likely to be wrong.</li>
+<li><strong>A session that opens a pull request adds its item in the same turn.</strong> Two
+  pull requests existed in no plan at all for over a week, invisible to every
+  dashboard and readiness check, while the roadmap wrote about them.</li>
+</ul>
+<h5>Standing conventions</h5>
+<ul>
+<li>Follow <code>.claude/personal/cram-notes.md</code> and this repository's <code>AGENTS.md</code>.</li>
+<li>SOLID is a review gate: a new capability enters as an abstraction plus small
+  dataclass implementations, and strategies stay substitutable without touching
+  the engine.</li>
+<li>TDD: failing test first, and no test is modified to make something pass.</li>
+<li><code>krrood</code> stays self-contained; world-like scenarios are mimicked in
+  <code>test/krrood_test/dataset</code>.</li>
+<li><code>plan_item_bootstrap.py</code> writes item fields at four-space indentation while
+  these manifests sit at two, so <code>open</code>/<code>record</code>/<code>update</code>/<code>block</code> produce YAML
+  that does not parse, and <code>save-plan.sh</code>'s error is swallowed by
+  <code>capture_output</code>. Edit the manifest directly and say so. The fix is
+  <code>plan-tracking-skills</code>' <code>plan-item-bootstrap-yaml-indent</code> (#160), unlanded.</li>
+<li>Subscribing to tracking issue #94 has been refused by the permission
+  classifier in every container that has tried it, nine times. A skill relying
+  on it for concurrent-change awareness should assume it will not work.</li>
+</ul></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-stack">
+        <div class="wave-eyebrow">The split-PR stack</div>
+        <p class="wave-description">One linear chain from ripple-down-rules-refactor to the backend tip, merged bottom-up with a cascade after each landing.</p>
+        <section class="track">
+          <h3 class="track-title">The stack, bottom-up</h3>
+          <div class="item-list">
+                <article id="item-ripple-down-rules-refactor" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">ripple_down_rules refactor (reconciled to code_generation)</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">ripple-down-rules-refactor</span>
+            <span class="mono branch">ripple-down-rules-refactor</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/53" target="_blank" rel="noopener">#53</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Replaces closed PR #40. Qt/GUI + JSON serialization removed here.
+
+Landed on top of code-generation-extract (#39), now in the eql-core-and-code-generation plan; that dependency has merged, so the edge is recorded here rather than as a cross-plan reference the schema cannot express.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-rdr-backward-inference" class="item status-done" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: backward inference + condition resolvers</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">rdr-backward-inference</span>
+            <span class="mono branch">rdr-backward-inference</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/41" target="_blank" rel="noopener">#41</a>
+            <a class="session-link" href="https://claude.ai/code/session_012xQWiZExn9frHtbfm44eR1" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged 2026-08-10 as the stack bottom. Four things it settled bind later work. `GuardCondition.negated` stays a polarity flag rather than a `Not()` wrapper, because `not_()` reparents a live rule-tree node; revisit once dag-facade-hardening (#96) lands a non-mutating negation, since `Not()`-wrapping is cleaner at four of six use sites. `rdr/branch_semantics.py` holds per-selector traversal semantics as a `SubClassSafeGeneric` family, kept at the developer&#39;s call over this plan&#39;s own recommendation to collapse it onto the selector classes; that thread is theirs to close. `rdr/utils.py` is deleted and `...` replaces `UNSET`, on the reading that the sentinel means an oracle must supply this value, which is what `CountRange` already reads it as. `rdr/exceptions.py` first exists here.
+
+Two threads are open by design: `query_graph.pdf` is half-answered, since untracking the generated PDFs is a main-level fix nobody has taken; and `parameterizer.py:167` raises `InvalidEllipsis` for a conclusion whose type is outside random_events&#39; compatible types, whose reachability is filed on no-rule-fired-resolution.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="ripple_down_rules refactor (reconciled to code_generation)">ripple-down-rules-refactor</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-backward-inference-rename-completion" class="item status-done" style="--indent-level: 2; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Finish the four backward-inference renames left unfinished on main</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">backward-inference-rename-completion</span>
+            <span class="mono branch">claude/rdr-refactor-steward-pass-uxewqh</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/161" target="_blank" rel="noopener">#161</a>
+            <a class="session-link" href="https://claude.ai/code/session_01LeZ4Mkr4tfdKjvEcJrz32C" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Off main, like #89: #41&#39;s cascade renamed four things and left readers of the old names behind, which AGENTS.md counts as an unfinished rename. Opened 2026-08-13 covering two of them (ConclusionKnowledge, what_do_we_know_about, 5 readers); widened 2026-08-22 after the #63 review surfaced the other two (TargetKnowledgeResolver -&gt; TargetSufficientConditionsBasedResolver, renamed on main in ed7b3766, and _materialize -&gt; GuardCondition.as_expression). The undercount is the lesson: the missed readers were found by grepping main, not by reading the diff, and two sit in production source where no review of a test-only diff could see them. Scope settled 2026-08-22: keeps backward_inference.py&#39;s and condition_resolver.py&#39;s docstrings plus test_backward_inference.py&#39;s test name; test_condition_resolver.py went to #63 at the developer&#39;s direction, so no file is touched by both. Was untracked in any plan until 2026-08-22 - the developer caught that on #63.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: backward inference + condition resolvers">rdr-backward-inference</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-D-core-aid" class="item status-done" style="--indent-level: 2; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: ConclusionAid (expert-labelling assistance)</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-merged">Merged</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-core-aid</span>
+            <span class="mono branch">D-core-aid</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/63" target="_blank" rel="noopener">#63</a>
+            <a class="session-link" href="https://claude.ai/code/session_01FAzdUMtdoASWUESoTsfDD6" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merged, and promoted upstream as cram2 #557. The upstream review settled this item&#39;s substance: `aid.py` became `conclusion_helper.py`, and `ConclusionAid` split into a `ConclusionHelper` base plus `ConclusionSupportPresenter.present()` and `ConclusionSuggester.suggest()` mixins that a helper opts into. Dropping the two no-op defaults is the substance rather than the rename: a consumer now selects the helpers that suggest instead of assuming every helper answers both hooks.
+
+The consumers on #67, #98 and #159 were renamed in the same round rather than left to the cascade, because a merge of this rename into a branch whose imports still say `aid` produces no conflict at all and fails at import instead. LucaKro&#39;s separate review, that the class is used nowhere but the tests, is unanswered and the developer&#39;s; the fact that answers it is that `present()` has no production call site anywhere in the stack while `suggest()` has one.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: backward inference + condition resolvers">rdr-backward-inference</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-D-core-underspecified" class="item status-in_progress" style="--indent-level: 3; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: underspecified-match adapter</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-core-underspecified</span>
+            <span class="mono branch">D-core-underspecified</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/64" target="_blank" rel="noopener">#64</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine D-core-underspecified" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-aid (1ad96142); one conflict, an add/add on rdr/exceptions.py between this branch&#39;s underspecified-target exceptions and main&#39;s AmbiguousBranchSemanticsError. Unioned - no class name collides - and given %% section headers.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: ConclusionAid (expert-labelling assistance)">D-core-aid</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-D-core-corner-case" class="item status-in_progress" style="--indent-level: 4; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: corner-case provenance store</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-core-corner-case</span>
+            <span class="mono branch">D-core-corner-case</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/65" target="_blank" rel="noopener">#65</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine D-core-corner-case" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-underspecified (07545624); the same rdr/exceptions.py add/add recurring, this time also carrying CaseNotSerializableError. Unioned again.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: underspecified-match adapter">D-core-underspecified</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-D-core-serialization" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 2;">
+      <div class="wrap-arrow wrap-arrow-all">◄ continues from <span class="mono">D-core-corner-case</span> <span class="wrap-parent-title">(RDR engine: corner-case provenance store)</span></div>
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: rule-tree unparser (rdr_to_python)</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-core-serialization</span>
+            <span class="mono branch">D-core-serialization</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/66" target="_blank" rel="noopener">#66</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine D-core-serialization" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The rule-tree unparser, plus the `type_hints.py` to `object_to_source.py` rename its own review asked for. Restacked and cascaded. One finding worth keeping: the rename&#39;s claim to update every importer was narrower than stated, and CI caught `template_file_creator.py` importing the deleted module — a file neither side&#39;s diff touched, so git&#39;s merge never flagged it. That is the failure mode this stack has now hit three times.
+
+2026-08-30: the generated module&#39;s header changed here (`bb01256df`), because this slice owns `templates/rdr_module.py.jinja`. A review thread on #76 objected that the models say &#34;Do not edit by hand&#34; while the policy is narrower - edits to keep existing rules working when an API or a domain model changes are fine, changing the tree&#39;s structure or adding rules is not - and the developer directed the wording to whichever pull request owns the template. `test_serialization.py` gained the first test of that header, reading the expected text from the template through the module&#39;s own path constants rather than retyping it. Pushed from a `/plan-item-resolve` session on `rdr-interface-and-decorator`&#39;s D-ui item, at the developer&#39;s explicit instruction, rather than by this plan&#39;s own work; #76 carries the matching update to its three `fitted_models/` copies. Not verified by running the suite: the container had no project interpreter and `random_events_lib` is an unbuilt compiled extension there, so the new test needs a run in a real environment.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: corner-case provenance store">D-core-corner-case</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-D-core-support" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 3;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: observer, rule-tree view, and remaining support modules</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-core-support</span>
+            <span class="mono branch">D-core-support</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/67" target="_blank" rel="noopener">#67</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine D-core-support" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Restacked 2026-08-12 out of the six days it spent unmergeable, which was what stopped the whole stack landing. Two resolutions outlive that round: `base_expressions.py` keeps main&#39;s `set_active_root_if_not_set` API at this branch&#39;s own placement, hoisted out of the `owns_an_evaluation_context` branch so it also runs under a pre-installed context; and the conclusion gate reads `if not is_active_root` now that eql-truth-unification deleted `is_condition_false`. It also carries D-core-aid&#39;s helper split, `ZooDataset` in place of the positional `(animals, targets)` load, and its four unittest modules converted to pytest.
+
+2026-08-31: restacked again (`a5c26de7`) and the six-pass conflict is cleared. The steward reported the identical conflict on 08-13, 08-18, 08-22, 08-23 and twice on 08-28, skipping the branch each time, which is what had held this branch and everything above it. Both conflicting paths were generated artifacts and neither conflict was a choice between authored versions. `test/krrood_test/dataset/ormatic_interface.py` is removed from the index, and the merge brings main&#39;s `**/ormatic_interface.py` ignore rule that this branch&#39;s `.gitignore` did not yet carry, so it stays untracked; `krrood_test/conftest.py` regenerates it at module level before its own star import, so nothing needed the committed copy. The record was wrong about the second file: `verbalization_results.py` is tracked on main and on every branch in the chain, so untracking is not its answer - the whole difference was this branch&#39;s older generator emitting `typing_extensions.Tuple` where the current one emits stdlib `tuple[...]`, so it took the base&#39;s version as stale generator output. Both core-EQL fixes were checked present at their intended placement in the merged file rather than trusted to the auto-merge.
+
+Not verified by running the suite: `random_events_lib` is an unbuilt compiled extension in the resolving container, so the EQL package cannot be imported there at all. CI is the load-bearing check for this push. The `needs-resolution` label clears on the routine&#39;s next pass.
+
+Two review threads remain open and are the developer&#39;s, not code: whether `rule_tree_view.py:255`&#39;s `enforce_parent_consistency` should be removed by making the DAG consistent by construction, and whether the &#34;no planning wording in source&#34; instruction belongs in AGENTS.md.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: rule-tree unparser (rdr_to_python)">D-core-serialization</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-d-core-expert" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 4;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: Expert policy split</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">d-core-expert</span>
+            <span class="mono branch">D-core-expert</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/98" target="_blank" rel="noopener">#98</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Gid5Qw9cbedssFEqojo1SK" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine d-core-expert" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The Expert policy split, and the parameter-object work handed to it from the single-class plan. What it establishes for everything above: `ExpertInterface` carries only the expert Q&amp;A surface, while the RDR holds a `ModelSaver` (in `serialization.py`, beside `save_rdr_with_case`) and a `ProgressReporter` as its own collaborators with Null-Object defaults — which deletes the engine&#39;s `expert.interface.on_save` reach-through. `ConditionResolver.resolve(rdr, context)` takes the RDR under `TYPE_CHECKING` and applies the corner-case gate once for the whole family, so a strategy inherits the precondition rather than restating it. `AnswerName` and `NamespaceName` live together in `rdr/answer_vocabulary.py`, because `AnswerName.example_assignment` is built over `NamespaceName.CASE_VARIABLE` and both must sit below `interface.py` and `exceptions.py` to avoid a circular import.
+
+Outstanding. The interactive layer absorbs the segregation&#39;s cost, reported at comment 5201827158 and now carried by the D-ui item in the rdr-interface-and-decorator plan. `test_null_saver_writes_nothing_for_a_fitted_tree` asserts nothing — `tmp_path` is never handed to `NullModelSaver`, and swapping in a genuinely writing saver leaves it passing — reported on the pull request and not fixed. Three of the seven remaining unittest modules in `test_eql_rdr` are this pull request&#39;s, and the options were put to the developer rather than chosen. CI has queued nothing since 82eb69fb (2026-08-12).</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: observer, rule-tree view, and remaining support modules">D-core-support</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-d-core-single-class" class="item status-in_progress" style="--indent-level: 3; --indent-level-hidden-done: 0;">
+      <div class="wrap-arrow wrap-arrow-hidden-done">◄ continues from <span class="mono">d-core-expert</span> <span class="wrap-parent-title">(RDR engine: Expert policy split)</span></div>
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: EQLSingleClassRDR core inference engine</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">d-core-single-class</span>
+            <span class="mono branch">D-core-single-class</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/159" target="_blank" rel="noopener">#159</a>
+            <a class="session-link" href="https://claude.ai/code/session_012Fy3CmMRRy1m5DtzVUhP2X" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine d-core-single-class" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The `EQLSingleClassRDR` inference engine, ported from the superseded mega-slice. What it settled: a fit saves once on its way out through a `finally`, not once per inserted rule, so a crash keeps the rules it authored — and an empty tree is deliberately not saved, because saving unconditionally let `EmptyRuleTreeError` replace the exception the caller needed to see. `TemporaryModelSaver` is the default. The `SelfReferentialInsertionError` retry loop is reachable rather than dead — an expert answering with `context.trace.firing_anchor` reaches it — so it is kept, and `ConditionsNotInsertable` carries the `answer_name` the re-prompt reads. The convergence check keeps its any-earlier-pass semantics: the oscillation fixture runs {red} to {blue} to {red}, so comparing only against the preceding pass never terminates. `conditions_root` is correct because the engine has exactly one construction path, pinned by reachability rather than by reading `_parent_`.
+
+One real defect found and deliberately not fixed: `fit` without targets never re-checks convergence, so two cases labelled differently but justified by a shared condition end with the first classifying as the second&#39;s label, where the same input with targets raises `RDRDidNotConvergeError`. Three options are on thread r3838361318; the fix changes what a labelling fit costs a human. Seven design threads from the 2026-08-23 review remain open and were not guessed at, among them whether the retry&#39;s gate should key on whether the expert was asked rather than on `resolution_mode`.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: Expert policy split">d-core-expert</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-d-core-backend" class="item status-in_progress" style="--indent-level: 4; --indent-level-hidden-done: 1;">
+      <div class="wrap-arrow wrap-arrow-hidden-done">◄ continues from <span class="mono">d-core-expert</span> <span class="wrap-parent-title">(RDR engine: Expert policy split)</span></div>
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: underspecified-query RDR backend</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">d-core-backend</span>
+            <span class="mono branch">D-core-backend</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/210" target="_blank" rel="noopener">#210</a>
+            <a class="session-link" href="https://claude.ai/code/session_015bucsUoPW3ktQ1NnTZbbVx" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine d-core-backend" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The underspecified-query RDR backend, and the stack tip. `RDRBackend` inherits `QueryBackend`, whose whole ABC is `evaluate(expression)`; neither concrete base fits, since `SelectiveBackend` raises on exactly the ellipsis matches this backend exists for and `GenerativeBackend` constructs new instances where this completes an attribute on existing ones, but neither of those reaches `QueryBackend` itself. `evaluate` is `fill`&#39;s eager completion, so the decision-query pattern `an(InsertionAction)(slot=...).evaluate(backend=rdr)` works; it returns an iterator rather than being a generator, so a non-`Match` expression raises `QueryIsNotAMatch` at the call. Narrowing the parameter to `Match` was rejected as a Liskov violation.
+
+Two decisions taken differently from what a thread asked, recorded rather than done silently: `key_from_attribute` became `ModelKey.from_attribute` rather than moving to `core/helpers.py`, since a `core/` module naming an `rdr/` dataclass as its return type inverts the layering; and `fit` calls the engine&#39;s `fit` once over the filtered domain instead of the mega-slice&#39;s per-case `fit_case` loop, which would both save the whole model per case and lose convergence.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: EQLSingleClassRDR core inference engine">d-core-single-class</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ The GroundTruth thread on backend.py:36 is answered and deliberately left open. No dataclass in entity_query_language/rdr/ expresses a per-case ground-truth supplier; the only one that does is ripple_down_rules CaseQuery._target, in the package this split retires. Whether the type alias should become a class of its own is the developer&#39;s call, with three options on the thread.</div>
+            <div class="blocker">▸ CI check test_each_lib (semantic_digital_twin) fails on test_multi_sim.py::test_world_sim_state_sync, a physics-settling assertion this pull request&#39;s krrood/rdr files cannot reach. It is not this branch&#39;s work and cannot be fixed inside it. #190 added pytest-rerunfailures to the dev extra on main (merged 2026-08-24) so that test&#39;s @pytest.mark.flaky reruns instead of failing outright, but D-core-backend and every branch from D-core-support up is 342 commits behind main and still lacks it, leaving the mark inert. Only a steward cascade clears it.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Superseded slices</h3>
+          <div class="item-list">
+                <article id="item-D-core-engine" class="item status-deferred" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR engine: EQLSingleClassRDR core inference engine</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-deferred">Deferred</span>
+              <span class="badge live-badge live-open_draft">Open · Draft</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">D-core-engine</span>
+            <span class="mono branch">D-core-engine</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/68" target="_blank" rel="noopener">#68</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Reconsider">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine D-core-engine" onclick="planDashboardCopyActionCommand(this)">▸ Reconsider</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Superseded by the topic split (d-core-expert -&gt; d-core-single-class -&gt; d-core-backend) after the PR #68 review asked to split the mega-slice. PR #68 closed once the split PRs open.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: observer, rule-tree view, and remaining support modules">D-core-support</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-rdr-engine-umbrella" class="item status-deferred" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">RDR/EQL engine umbrella (superseded by the split stack)</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-deferred">Deferred</span>
+              <span class="badge live-badge live-closed_unmerged">Closed (unmerged)</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">rdr-engine-umbrella</span>
+            <span class="mono branch">rdr-engine</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/38" target="_blank" rel="noopener">#38</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Reconsider">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine rdr-engine-umbrella" onclick="planDashboardCopyActionCommand(this)">▸ Reconsider</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Closed unmerged once the remainder was split into #58..#68 above.
+
+Opened on top of eql-core-prep (#28), now in the eql-core-and-code-generation plan; that dependency has merged.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-runtime">
+        <div class="wave-eyebrow">Engine runtime behaviour</div>
+        <p class="wave-description">Behaviour the stack deliberately left interim.</p>
+        <section class="track">
+          <h3 class="track-title">No-rule-fired handling and provenance</h3>
+          <div class="item-list">
+                <article id="item-no-rule-fired-resolution" class="item status-blocked" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">No-rule-fired handling: warn / ask-expert / default-conclusion modes + provenance</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-blocked">Blocked</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">no-rule-fired-resolution</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resolve">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-core-engine no-rule-fired-resolution" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Beyond interim classify-&gt;UNSET. Conclusion provenance coordinates with Wave-3 JTMS (rdr-justifications). 2026-08-09: the sentinel itself is being unified with ... (Ellipsis) -- see rdr-backward-inference and roadmap Sec.17 -- so this item now inherits &#34;no conclusion&#34; being spelled the same way as &#34;generate one&#34;. Two consequences it owns. (1) Expert delegation: once ... is the sentinel, an expert typing `conclusion = ...` in the shell is asking the generative backend to supply the value, but make_conclusion_validator (rdr/expert.py:94) currently rejects that as &#34;No rule fired for this case&#34; unless allow_unset. Routing it to a backend instead is a capability the engine does not have, and it belongs here rather than on any D-core slice. (2) The parameterizer narrowing: parameterizer.py:167 raises InvalidEllipsis outside random_events compatible_types, so a non-enumerable conclusion (str/arbitrary class) left unclassified may be unrepresentable as ... -- if reachable, the no-rule-fired modes are where the answer lives.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="RDR engine: EQLSingleClassRDR core inference engine">d-core-single-class</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Blocked until the Wave-0 engine stack lands on main.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">7</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">2</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">4</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-recheck">
+            <h4>Blocker may be cleared <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-no-rule-fired-resolution" data-item-identifier="no-rule-fired-resolution" onclick="planDashboardHighlightItem(event, this)"><strong>No-rule-fired handling: warn / ask-expert / default-conclusion modes + provenance</strong><br><span class="next-reason">at least one dependency is now ready for review — worth resolving the blocker</span></a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>
