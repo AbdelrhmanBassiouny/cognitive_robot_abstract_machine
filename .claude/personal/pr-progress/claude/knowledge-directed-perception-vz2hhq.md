@@ -38,13 +38,43 @@ Tests first for each of 2 and 3.
 
 ## Done
 
-- Branch cut from #266, bootstrap commit pushed, draft PR #275 opened.
-- `plan.yaml` (branch/PR/session/status) and the roadmap section recorded on
-  personal-notes.
+- Branch cut from #266, draft PR #275 opened, `plan.yaml` and the roadmap section
+  recorded on personal-notes, dashboard republished.
+- Step 1 done and pushed (`e1d8206dc`): #259 merged in, three conflicts resolved.
+  `pipeline.detect` keeps #266's delegation to `LookRules` and now builds its
+  `SceneToSearch` from `table_in(frame)`, which is where #259's find-the-table-by-looking
+  takes effect. 456 passed, 2 skipped, 16 xfailed across `test/experiments_test`.
+- Environment: this container had no project dependencies. `uv sync --extra dev` (with a
+  pip-installed uv 0.12, the preinstalled 0.8 cannot parse this `pyproject.toml`), ROS
+  Jazzy `rclpy` and friends from apt, and a `ros_jazzy.pth` in the venv. Run tests with
+  `LD_LIBRARY_PATH=/opt/ros/jazzy/lib AMENT_PREFIX_PATH=/opt/ros/jazzy .venv/bin/python -m
+  pytest ... --orm-build=never`; `--orm-build=never` is needed because the experiments ORM
+  wants `json_msgs`, which exists only in the CI image.
 
-## Next
+## Next — blocked on a design call
 
-Step 1 - merge #259 in and resolve the three conflicts.
+Steps 2 and 3 are stated in the plan above, but authoring either tree through
+`EQLSingleClassRDR.from_underspecified` hits something `LookRules` did not:
+
+- `DetectorRules`'s discriminating condition is `surface.finish == MATTE`, which is the
+  *rules'* knowledge (the colour blob is cheaper there — #231 measured 89 ms against
+  126 ms), not either detector's capability. #266's
+  `state_the_detectors_own_condition` expert therefore cannot author this tree, and
+  `ConditionResolver` cannot either — it only reuses conditions already in the tree.
+  Fitting on capabilities alone would answer a mirror-finished surface by the colour
+  blob wherever colour separates the piece, reversing #231's measured decision.
+- `SurfaceRules`'s fitting cases need an `RgbdFrame`, because
+  `MeasuredSurfaceFinder.capability` reads `frame.carries_depth`. Authoring by `fit`
+  means constructing example pictures inside production code.
+
+Put to the developer rather than decided.
+
+## Also found, not fixed here
+
+- `TargetOnSurface.target_outline_is_known` is `target.outline is not None` over a
+  `KnownPiece` whose `outline` is a non-optional `np.ndarray`, so it is unconditionally
+  True — the same defect the item's own notes record for `SoughtSurface`. Semantics kept
+  for now; it is a question about `KnownPiece`, not about this item.
 
 ## Blocked / to report
 
