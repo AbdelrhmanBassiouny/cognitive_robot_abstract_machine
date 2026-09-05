@@ -1,0 +1,815 @@
+schema_version: 1
+id: knowledge-directed-requests
+title: 'Knowledge-directed perception: query language and method selection'
+description: 'The requests wave of knowledge-directed-perception (split out on 2026-09-05 to get
+  every successor under the plan-size budget): perception as an entity query language backend beside
+  the native and SQLAlchemy ones, so asking is evaluating rather than calling a pipeline by hand.
+  The backend pushes what it can of a query''s conditions into the search and filters the rest over
+  the detections that come back; a rule tree over the target and the surface says which detector
+  runs and how its parameters are set. Depends on two items of `knowledge-directed-grounding` that
+  could not be preserved as `depends_on` across the plan split - see the affected items'' own `blockers`.
+  See `knowledge-directed-grounding`''s roadmap.md for the programme-wide why, the three waves, the
+  deadline budget and the sequencing decisions this plan inherits.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 201
+waves:
+- id: requests
+  name: A query is answered by looking
+  description: 'Perception becomes an entity query language backend beside the native and SQLAlchemy
+    ones, so asking is evaluating rather than calling a pipeline by hand: the backend pushes what
+    it can of a query''s conditions into the search, filters the rest over the detections that come
+    back, and a rule tree over the target and the surface says which detector runs.'
+tracks:
+- id: request-language
+  name: Perception as a query backend
+  wave: requests
+  description: 'The backend itself and the compiler behind it, following the shape SQLAlchemyBackend
+    already set: take the query, translate it into another engine''s plan, execute it there.'
+- id: method-selection
+  name: Choosing how to look
+  wave: requests
+  description: The digital twin extension and the rule tree that reads it. The annotation touches
+    only semantic_digital_twin, so it can be written before or alongside the request language.
+- id: demo-requests
+  name: The demo asks by query
+  wave: requests
+items:
+- id: perception-backend
+  title: Answer a query by looking, as a backend of the entity query language
+  branch: perception_eql_backend
+  pull_request_number: 222
+  track: request-language
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01MotUMLrQxbZKQWs4BADwkj
+  blockers:
+  - '`test_each_lib (krrood)` is red on #222, and every branch stacked on it inherits it - #227,
+    #231, #238, #239, #259 and everything past them. The failure is not this item''s diff at all,
+    and it was already fixed before this item looked at it: **#251**, open off `main` since 2026-09-03,
+    is the fix. It is an order-dependent test on `main` - `test_draw_evaluated_tree_for_drawer_cabinet_rdr`
+    loads a model directory that only `test_save_and_load_drawer_cabinet_rdr`, earlier in the same
+    file, writes, and which `git ls-files` reports as untracked generated output. Sequentially the
+    two line up by luck; CI runs `pytest -n auto`, where they can land on different xdist workers.
+    #222 flipped it because it is the first branch in the stack to add krrood tests, which changes
+    the count xdist distributes by. #222''s check clears once it takes #251 in - that merge is not
+    done. A second pull request off `main` re-derived the same fix on 2026-09-05 and was closed as
+    a duplicate; the two changes it carried that #251 does not - `GeneralRDR.load` chaining its cause,
+    and a generated model''s import root reaching the search path - are **#269**, and neither is
+    needed for this check.'
+  - The `needs-resolution` label the maintenance routine set on the 2026-09-02 conflict is still
+    on the branch, so it stays withheld from promotion until the routine's own next pass clears it,
+    which it can now that the branch merges cleanly.
+  - Depends on `knowledge-directed-grounding`'s `surfaces-from-world` (in_progress) - a cross-plan
+    dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot
+    cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no
+    automatic readiness or dependency chip.
+  - Depends on `knowledge-directed-grounding`'s `detect-per-supporting-surface` (in_progress) - a
+    cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on`
+    cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker,
+    with no automatic readiness or dependency chip.
+  notes: 'Answers a query by looking, as a `PerceptionBackend` beside `EntityQueryLanguageBackend`
+
+    and `SQLAlchemyBackend` - `SQLAlchemyBackend` already sets the shape (translate the query
+
+    into another engine''s plan, run it there), and the compiler from a query to a detection
+
+    pipeline is the same move against a camera. It subclasses `SelectiveBackend`: a camera
+
+    reports what is really there and cannot invent an attribute nobody can see (the plan''s own
+
+    open question, answered here). Conditions are split the way a query planner splits them:
+
+    those that can be pushed down shape the search (the selected type, `is_supported_by`,
+
+    narrowed for the deadline to exactly the forms the demo writes); everything else is a
+
+    residual filter over what came back, never silently dropped; a condition that fits neither
+
+    raises `BackendCannotResolveCondition`. `PerceivedObjects` (the domain that ran the whole
+
+    pipeline on iteration) is retired - a query then runs only what it asked for.
+
+
+    Resolved 2026-08-31 in `auto` mode, reversing the plan''s own first sketch at the
+
+    developer''s direction: the backend is *generative*, not selective, because with no belief
+
+    yet the look is what brings the instance into existence rather than selecting from a given
+
+    domain (`an(MontessoriShapeDetection)(supporting_surface=lid, pose=...)`, where `...`
+
+    narrows nothing because it is the statement asking the look to supply it). The general half
+
+    - `PerceptionBackend`, `LookRequest`, the `Directive.LOOK_FOR` member - now lives in
+
+    krrood beside the other backends, gaining krrood no dependency on `experiments`;
+
+    `MontessoriPerceptionBackend` carries only that a look is taken by this pipeline and
+
+    narrows by supporting surface. The predicate/semantic-annotation redesign five of the
+
+    review''s threads asked for is not here - it is `perception-predicates-guide-the-search`,
+
+    stacked on this branch at the developer''s own placement.
+
+
+    Restacked 2026-09-02 to sit under `main`''s entity query language work; the merge meets
+
+    `Directive` on every branch stacked past this one, and the resolution (keep `main`''s
+
+    `DISTRIBUTION_OVER` framing, add `LOOK_FOR` beside it) is recorded once here rather than
+
+    re-derived by each descendant.
+
+    '
+- id: perception-predicates-guide-the-search
+  title: Guide the search by predicates and annotations, not by attribute names
+  branch: claude/plan-item-kickoff-perception-ogf2g9
+  pull_request_number: 227
+  track: request-language
+  depends_on:
+  - perception-backend
+  - predicates-answer-whether-they-hold
+  status: in_progress
+  session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
+  notes: 'Raised by the developer across five review threads on #222, which are one ask: a look should
+    be narrowed by what the world means, not by an attribute spelled as a string. SUPPORTING_SURFACE_ATTRIBUTE_NAME
+    = "supporting_surface" and the mimic''s PLACE_ATTRIBUTE_NAME are the smell; AGENTS.md''s own
+    rule against a literal duplicating a value with its own source of truth condemns them independently
+    of the redesign, and #222 leaves them standing with a test asserting the name is a real field.
+
+    What replaces them, in the developer''s words: predicates for support and for spatial relations
+    - LeftOf, RightOf and the rest - inheriting from Predicate rather than Symbol, and then used
+    to devise the search rather than merely evaluated. "So I need to look on top of a bright shiny
+    surface that has this size and look for an object supported by it and is left of another object
+    that has a cyan colour, all these are clues that help us devise a pipeline and find the object
+    we are looking for."
+
+    Two mechanisms come with it, both the developer''s. A spatial predicate can be read as a Region
+    with extents, so the image and the depth are clipped to where the thing can be before anything
+    is detected - which is the same economy #222''s supporting-surface narrowing already buys, stated
+    in the world''s vocabulary instead of an attribute''s. And a predicate no algorithm covers becomes
+    a rejection sampler: detect what the other conditions do reach, spawn the instances found into
+    a copy of the world - an imagination world - evaluate the predicate there with real Body and
+    SemanticAnnotations, and delete what it rejects.
+
+    Stacked on #222 rather than folded into it, which is the developer''s own placement on r3893312001
+    ("you can make this a separate PR that this one here is stacked under"). The threads are r3893160382,
+    r3893312001, r3893499716, r3893602153 and r3893576773; the sixth, r3893463818, is close to choose-detection-method''s
+    existing claim and is recorded there rather than here.
+
+    Overlaps pieces-looked-for-where-expected, added the same day and not visible to the session
+    that wrote this. Both items end at the same thing - a stretch of the world a sought object is
+    expected to lie in, used to narrow the search before detecting - reached from opposite ends:
+    this item says where the constraint *comes from* (a predicate in the world''s own vocabulary,
+    read as a Region), that one says what the searcher *does* with it (a believed pose and yaw interval,
+    swept by the piece matcher). They must share the one type rather than each build it. Whichever
+    starts second takes the other''s, and the sequencing follows from the tracks they already sit
+    in: that item is in `surfaces` and depends only on one-detection-per-thing, so it lands first
+    and defines the belief; this one supplies it from a predicate. The imagination-world rejection
+    sampler is this item''s alone and duplicates nothing.'
+- id: predicates-answer-whether-they-hold
+  title: Let a predicate answer whether it holds, with the measurement behind it
+  branch: sdt_predicates_answer_whether_they_hold
+  pull_request_number: 229
+  track: request-language
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
+  blockers:
+  - 'Review thread r3896606294 on `predicates.py:348` is answered and deliberately left
+
+    open: `Reachable` now reads *"a HomogeneousTransformationMatrix is reachable by a
+
+    Body"*, as the thread asked, but eql-verbalization decision 11 words the same relation
+
+    *"a Pose is reachable for the kinematic chain rooted at <root> and ending at <tip>"*.
+
+    Both make the pose the subject; they differ in whether root and tip are both named, and
+
+    only the developer can say which of the two stands once #33 rebases onto this branch.'
+  notes: 'The developer''s direction on 2026-08-31, correcting a call `perception-predicates-guide-
+
+    the-search` made: a relation that computes a ratio should still be a `Predicate`, with
+
+    `__call__` answering a truth value, the ratio read from a method of its own, and a
+
+    threshold field with a default turning the one into the other - rather than the
+
+    `SymbolicFunction` that item had made `InsideOf` into. Applies to every relation of that
+
+    shape in `reasoning/predicates.py`: `is_body_in_region`, and the truth-valued relations
+
+    that are only `@symbolic_function`s today (support, contact, visibility, reachability,
+
+    occupancy). krrood''s own `symbolic_callable_to_function` keeps the function spelling
+
+    working off one implementation, so no caller in coraplex, segmind or giskardpy has to
+
+    change.
+
+
+    Its own pull request off `main`, since it is a change to `semantic_digital_twin`''s
+
+    vocabulary rather than to perception (the same placement `surface-finish-annotation`
+
+    has); the knowledge-directed items that need it merge it in rather than waiting for it to
+
+    land.
+
+
+    Resolved 2026-08-31. Verified and settled at the developer''s direction: this branch''s
+
+    predicate classes are the ones to keep, and `montessori-eql-stack`''s `eql-verbalization`
+
+    (#33, 166 commits behind `main` and dirty in `predicates.py`) rebases onto this branch and
+
+    ports its 34 reviewed wordings across, rather than each side keeping its own copy. Two
+
+    faults the resolve found and fixed: a keyword rename broke `semantic_annotations/mixins.py`
+
+    in a ROS-only module local verification could not see, and four `Triple`-based relations
+
+    rendered ungrammatically because `Triple` reads a verb off a class name that is not
+
+    verb-first - both fixed. Review thread r3896606294 (`Reachable`''s subject wording) is left
+
+    open at the developer''s own request; only he can settle it once #33 rebases here.
+
+    '
+- id: search-clipped-to-a-predicates-region
+  title: Clip the search to the region a spatial predicate allows
+  branch: claude/kdp-search-constraints-pfaph7
+  pull_request_number: 238
+  track: request-language
+  depends_on:
+  - perception-predicates-guide-the-search
+  status: in_progress
+  session: https://claude.ai/code/session_013HJ4gSb7tjesc6vB1GAtwu
+  blockers:
+  - 'One of the six review threads of 2026-09-02 is still open, and it is the developer''s to close
+    rather than work for this item. r3915277277 asked the demonstration to read `show_step_by_step(query)`;
+    it reads `show_step_by_step(look_for_the_cube_on_the_lid, WatchedCapture.from_command_line())`,
+    whose first argument is how to state the query about a look rather than a Match already stated,
+    because the statement is written over bodies of a world and over where the camera stood and neither
+    exists before the look is taken. He accepted that shape on 2026-09-02 and the thread is left
+    open only because resolving a thread answered differently is his call. The other two open threads
+    stopped being this item''s on the same day: r3915356623 became the item how-to-look-concluded-from-the-request,
+    and r3915631447 was folded into imagination-world-rejects-what-a-predicate-refuses.'
+  - Depends on `knowledge-directed-grounding`'s `pieces-looked-for-where-expected` (in_progress)
+    - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on`
+    cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker,
+    with no automatic readiness or dependency chip.
+  notes: 'Clips the search to the region a spatial predicate allows - the same economy the
+
+    supporting-surface pushdown already buys, stated in the world''s vocabulary instead of an
+
+    attribute''s, so narrowing stops being a filter over what a detector returned and becomes
+
+    less picture to search in the first place. Depends on `perception-predicates-guide-the-
+
+    search` (where a statement''s predicates are read at all) and `pieces-looked-for-where-
+
+    expected` (which owns the *believed place* type this item''s clip is built from) - building
+
+    either half twice is the duplication this plan has already paid for.
+
+
+    Widened 2026-09-01 at the developer''s ask, from the two relations the parent item could
+
+    read to every relation that says where a thing may be: `semantic_digital_twin` gains
+
+    `PlacementRelation` (a relation answers the stretch of world it leaves, and whether one
+
+    place satisfies it, exactly rather than from a box) and the six view-dependent relations
+
+    lose their six near-identical `__call__`s; krrood gains `Relation` (a predicate asserted
+
+    about one subject, of which `Triple` is the two-operand case). `Between`, `Near` and
+
+    `Colored` are new.
+
+
+    Third round (2026-09-01): a direction is read from where the *camera* stands, not the
+
+    world''s own axes, so left/right/above mean what they mean on screen
+
+    (`RgbdFrame.point_of_view`), which needed `PlacementRelation.allowed_part_of` since a
+
+    camera-relative direction runs across the world''s own axes. Measured on
+
+    `tracy_pickup_demo` with the camera as the point of view: *right of* the square hole
+
+    leaves the cylinder, *above* leaves the cube, and the demonstration states *above* with a
+
+    test pinning both answers. Cost over the six captures: 0.25x for the surface alone, 0.40x
+
+    for a direction, 0.30x for a 50 mm radius, 0.25x for all of them with colour.
+
+
+    The demonstration became one call: a whole statement, read one condition at a time by
+
+    `Match.one_condition_at_a_time`, with `PerceptionBackend` answering descriptions (the lid,
+
+    the hole) out of the domain the statement itself gave them rather than fetching them
+
+    beforehand; a description no single thing answers stays a refused condition. Review round
+
+    of 2026-09-02 resolved three of six threads (docstring wording, a renamed predicate, moved
+
+    module-level constants); 467 passed, 1 skipped, 11 xfailed. One thread stays open at the
+
+    developer''s discretion (see blockers) - the demonstration''s own call shape, which he
+
+    accepted on 2026-09-02.
+
+    '
+- id: imagination-world-rejects-what-a-predicate-refuses
+  title: Reject what a predicate refuses, by testing it in a copy of the world
+  branch: claude/knowledge-directed-perception-imagination-g9hsnr
+  pull_request_number: 255
+  track: request-language
+  depends_on:
+  - perception-predicates-guide-the-search
+  - search-clipped-to-a-predicates-region
+  status: in_progress
+  session: https://claude.ai/code/session_01WDteX4z7jQUBG4FZqMKG5m
+  notes: 'The developer''s third mechanism on r3893499716, deferred out of #227 as a second pull
+    request''s worth of work: a predicate no search algorithm covers is still answerable, by detecting
+    what the other conditions do reach, spawning what was found into a copy of the world, evaluating
+    the predicate there against real Body and SemanticAnnotations, and deleting what it rejects.
+
+    It is what closes the gap #227 leaves open. A look reports sightings rather than the things a
+    relation is written over - a MontessoriShapeDetection is a dataclass, not a Body - so #227 has
+    a backend promise to check its own narrowing relations, and refuses any other relation outright.
+    Spawning the sightings into an imagination world is what gives every other predicate something
+    real to be evaluated against, so nothing has to be refused for want of a subject.
+
+    Duplicates nothing: the roadmap''s "Two items that meet at one type" records this mechanism as
+    this item''s alone.
+
+
+    Widened 2026-09-02 at the developer''s decision, taking r3915631447 from #238: MontessoriShapeDetection
+    is renamed DetectedMontessoriShape and made a Role for MontessoriShape, and both halves belong
+    here rather than on #238. Role[T] is pure composition and takes its role taker explicitly, so
+    every detection needs a MontessoriShape - a HasRootBody annotation over a body in a world - and
+    a look reports what it saw before anything of the sort is in the world. Spawning what was found
+    into a copy of the world is exactly what this item builds, so this is where the role taker first
+    exists. It also makes the gap above close by construction: a detection that is a role of a world
+    entity gives every predicate a real subject, so nothing has to be refused for want of one.
+
+
+    The rename waits here rather than landing on #238 for a second reason the developer weighed:
+    it is 51 references across 10 files, and #232, #236 and #239 would each inherit it as a conflict.
+    Naming the type once, when it is what it will finally be, costs those three branches nothing.
+
+
+    Built 2026-09-03 as #255, off #238 rather than off #227: the rename is 53 references across 11
+    files on #238''s tree and six of those files exist on no earlier branch, so renaming on #227
+    would have named the type on half its readers and handed #238 the rest as a conflict. search-clipped-to-a-predicates-region
+    is therefore recorded as a dependency. The round found a second shape of the same fault the item
+    was raised about: a relation stated about the thing sought alone was never refused at all, only
+    evaluated natively where it raised AttributeError on a dataclass. Both are closed by the detection
+    having a body behind it.'
+- id: how-to-look-concluded-from-the-request
+  title: Work out how to answer a look from the request, instead of being handed a pipeline
+  branch: claude/plan-item-kickoff-perception-idzwsk
+  pull_request_number: 266
+  track: request-language
+  depends_on:
+  - choose-detection-method
+  - detector-parameters-from-knowledge
+  status: in_progress
+  session: https://claude.ai/code/session_0139rDK7uNEvtjEVZ5krjS4h
+  notes: 'Raised by the developer on `search-clipped-to-a-predicates-region`''s review (r3915356623),
+
+    2026-09-02: the pipeline''s own six fields are not one kind of thing - the world already
+
+    supplies the table, lid, world and reference frame (`of_world`); `detector-parameters-
+
+    from-knowledge` concludes `headroom`; only the two detectors are genuinely hand-wired. So
+
+    the pipeline is the residue of everything not yet knowledge-directed, and this item builds
+
+    the last piece: a rule tree that concludes *how to answer a look* - which detectors run
+
+    over which surfaces - from the request itself, grown by an expert as new kinds of request
+
+    turn up rather than configured in advance.
+
+
+    Stacks on the RDR stack''s tip (`EQLSingleClassRDR`, model store, `@rdr` decorator) through
+
+    `detector-parameters-from-knowledge` rather than being merged onto this item''s own branch
+
+    directly, for the reason `choose-detection-method` already gave: merging the stack
+
+    directly would add nine to twenty-thousand lines of another plan''s work to a pull request
+
+    whose own change is a few hundred.
+
+
+    Review round of 2026-09-05, resolved as `0063f9824` then `0063f9824`+ (second pass): the
+
+    hand-written case class and the attribute name spelled as a string are both gone - the
+
+    tree is built from the statement *a request whose detector is to be worked out*, so what a
+
+    rule reads is a property of the request itself. The detector concept moved to krrood as
+
+    `PerceptionDetector`, generic over the kind of look it answers (via
+
+    `SubClassSafeGeneric`), which `PieceDetector` (`choose-detection-method`) now inherits
+
+    instead of duplicating (losing 40 lines); a detector''s capability is asked with
+
+    `asked_about`, not `answers`, since a `Query` is always truthy. 61 passed, 1 skipped then
+
+    53 passed, 1 skipped across the two rounds; 443 passed, 1 skipped, 11 xfailed overall.
+
+
+    Three things put back to the developer rather than built, each with a reply on its own
+
+    thread: wiring one detector per *part* of a description; conditions stated in the twin''s
+
+    own vocabulary for this family (waits on `imagination-world-rejects-what-a-predicate-
+
+    refuses` making a detection a `Role` over a world entity); and this family conditioning on
+
+    the sensor itself. `SUPPORTING_SURFACE_ATTRIBUTE_NAME` is a landing note rather than a
+
+    fix: it is already removed on `perception-predicates-guide-the-search` and survives only
+
+    on this sibling stack until the two stacks meet.
+
+    '
+- id: surface-finish-annotation
+  title: Say in the digital twin how a surface takes light
+  branch: sdt_surface_finish_annotation
+  pull_request_number: 216
+  track: method-selection
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_019FYgjdCK7BStm7KdSDyrwY
+  notes: 'The digital twin models a surface''s colour but not its finish, which is the property that
+    decides whether colour segmentation works at all: the brushed steel table throws a diffuse, piece-coloured
+    reflection with no sharp boundary anywhere, which is why the edge fit had to be written. A matte
+    / glossy / mirror finish annotation is what turns "the steel table and the wooden lid need different
+    pipelines" into something the robot knows rather than a branch somebody wrote. Touches only semantic_digital_twin,
+    so it can start off main immediately.
+
+    Built 2026-08-29 as 80100bd4 on #216: SurfaceFinish (matte / glossy / mirror) beside Color and
+    Texture, and Shape.finish carrying it, optional so that None means the finish has not been stated
+    rather than that it is matte. Adding it forced Shape''s own constructor arguments to be read
+    once by Shape.arguments_from_json instead of a fourth time in each of Sphere, Cylinder and Box,
+    and Mesh.from_trimesh to carry a finish, which is the only appearance property a mesh has no
+    other carrier for. 45 tests pass in test_shape.py against 25 on the parent, the whole semantic_digital_twin
+    suite''s failing and erroring set is unchanged, and the regenerated ORM maps the field as Mapped[Optional[SurfaceFinish]]
+    on PolymorphicEnumType.
+
+    The developer took #216 out of draft on 2026-08-29, which ends the building session''s work on
+    it: CI was green on 21 of 23 checks with the other two still running and none red, and the pull
+    request now waits on review rather than on this plan. Two decisions are recorded rather than
+    left implicit, both in roadmap.md: no adapter infers a finish from MuJoCo specular/shininess/reflectance,
+    and a derived supporting-surface Region does not inherit its body''s finish - detect-per-supporting-surface
+    has to declare it on the region it builds.'
+- id: surfaces-found-by-looking
+  title: Find a surface in the image from what the world says it is like
+  branch: claude/plan-item-kickoff-kdp-34snn0
+  pull_request_number: 259
+  track: method-selection
+  depends_on:
+  - perception-backend
+  - surface-finish-annotation
+  - choose-detection-method
+  status: in_progress
+  session: https://claude.ai/code/session_01DnVSdcxop561xKAGeg61MG
+  notes: 'Finds a surface in the picture from what the twin already says it is like - a large
+
+    horizontal plane, mirror-finished, colourless, of about the modelled size - stated as an
+
+    entity query language expression rather than read off a constant or a body''s collision
+
+    shape, since neither is a measurement of where the table really is and the demo has
+
+    already drifted from its own model once. `SurfaceFinder`/`SurfaceRules` is
+
+    `choose-detection-method`''s claim turned on the surface itself. Deliberately after the
+
+    deadline''s critical path - the demo runs on a tuned workspace (`tune_workspace`), and this
+
+    replaces the tuning rather than unblocking anything.
+
+
+    Built and reviewed 2026-09-05, five threads answered the same day (430 passed against
+
+    429). `SoughtSurface` was a flattening of what the world already states and two of its
+
+    three fields were pure duplication (`AGENTS.md`''s own rule against a value spelled twice);
+
+    it now holds the surface the world models and the frame it is sought in, and conditions
+
+    read directly into them - EQL traverses nested attributes and properties, so the case
+
+    class was never needed for the engine''s sake.
+
+
+    Four threads left open, each answered differently and folded into new items: the
+
+    finish-on-the-twin duplication folds into `imagination-world-rejects-what-a-predicate-
+
+    refuses`''s recorded world; the case-class flattening this item, `choose-detection-method`
+
+    and `how-to-look-concluded-from-the-request` all share becomes `a-look-is-described-by-a-
+
+    match`; calibrating the camera against the twin and combining the two finders becomes
+
+    `camera-pose-fitted-to-the-model`. A red `test_each_lib` check traced (see
+
+    `perception-backend`''s blockers) to krrood entering the stack at #222, not to this
+
+    branch''s own diff.
+
+    '
+- id: choose-detection-method
+  title: Choose the detector by rule from the target and the surface
+  branch: claude/choose-detection-method-gf64yp
+  pull_request_number: 231
+  track: method-selection
+  depends_on:
+  - perception-backend
+  - surface-finish-annotation
+  status: in_progress
+  session: https://claude.ai/code/session_01JzpfVmddAPa4ZTJYSEEqAF
+  notes: 'The detector interface the backend dispatches to, chosen by a rule tree over properties
+    of
+
+    the surface and the target - this is where perception measurably gets better as the robot
+
+    knows more, and the item the paper''s central claim rests on. Two shapes for the same claim
+
+    were both built and layered at the developer''s direction: each detector declares the looks
+
+    it can answer as an entity query language condition (his own suggestion, r3893463818), and
+
+    a ripple-down tree chooses among the ones that can (the item''s own original design).
+
+
+    Built 2026-08-31 as PR #231, `69f30348a`. The planned third rule - a target wearing the
+
+    surface''s own hue falls back to the edge fit - turned out not to be a rule but the colour
+
+    blob''s own capability going false, so the tree ships the two rules the deadline''s budget
+
+    asks for: mirror-finish and known geometry selects the edge fit, matte and no finish
+
+    selects the colour blob, at 89 ms against 126 ms on the same work (speed being the honest
+
+    justification once `detect-per-supporting-surface` made the edge fit work on the lid too).
+
+
+    Corrected 2026-08-31: earlier notes recorded this item as blocked on krrood''s ripple-down
+
+    rules becoming usable, which read the D-core-* stack''s *merge* state as its *usability* -
+
+    contradicting the plan''s own rule that `depends_on` means stacked on, never waiting for a
+
+    merge. The EQL-native rule trees (`EQLSingleClassRDR` and its stack, all open, out of
+
+    draft and reviewed) are usable today; only the classic `krrood.ripple_down_rules` machinery
+
+    is not. This item keeps its own stated tree anyway, at the developer''s decision, since
+
+    `EQLSingleClassRDR.query` is authored by fitting cases rather than taking one already
+
+    built, and merging that stack in would add 9,236 lines to a 600-line pull request; the
+
+    engine''s `fit`/`render_tree`/model-store machinery is what the next two items are written
+
+    around instead.
+
+
+    Review round of 2026-08-31, resolved as `92afdcd82`: the tree is stated once, in
+
+    `DetectorRules.__post_init__`, rather than rebuilt inside the evaluating method - the
+
+    whole point of an EQL rule tree is that a new situation can be added to it, which
+
+    `add_rule` now does live. Choosing for one surface costs 1.0 ms against 4.4 ms. 233 tests
+
+    pass against 230. One thread stays open at the developer''s own discretion: nothing yet
+
+    asks an expert when no rule fires, since the expert interface lives on the unmerged
+
+    RDR stack rather than on `main`.
+
+    '
+- id: detector-parameters-from-knowledge
+  title: Take the detectors' numbers from the objects and the surfaces they look at
+  branch: claude/knowledge-directed-perception-detector-zrm57t
+  pull_request_number: 239
+  track: method-selection
+  depends_on:
+  - choose-detection-method
+  status: in_progress
+  session: https://claude.ai/code/session_014LgGAmWL8JZM3qW7pwwnbp
+  notes: 'The detectors'' numbers - hue windows, size ranges, edge-agreement thresholds, mesh
+
+    classification thresholds, and (widened 2026-08-31) the numbers that say *how to search*
+
+    (seed radius, step, candidate set, required lead) - are knowledge about the pieces, the
+
+    surfaces and the lighting, not properties of the detector reading them. They move onto the
+
+    twin''s objects and surfaces, concluded for a run by a ripple-down rule tree the same way
+
+    `choose-detection-method`''s tree concludes which detector runs; the contour accept/reject
+
+    chain (`pipeline.py:619`) becomes rules the same way. This is where a situation the robot
+
+    knows more about (which piece it released over which hole) warrants a measurably different
+
+    parametrization than one it does not - the plan''s central claim in a quantity that can be
+
+    plotted.
+
+
+    Ownership of `test_every_piece_resting_on_the_lid_is_found` moved to
+
+    `pieces-looked-for-where-expected` on 2026-08-31: those failures are a seeding fault, not a
+
+    parameter fault, and that item is not behind the same blocker this one was.
+
+
+    Corrected 2026-08-31, the same correction `choose-detection-method` made: this item was
+
+    recorded as blocked on krrood''s ripple-down rules, which are usable today on `main`
+
+    (EQL-native) and on the open, out-of-draft `EQLSingleClassRDR` stack (#159) - `depends_on`
+
+    means stacked on, never waiting for a merge. Stacks on #159 rather than on
+
+    `choose-detection-method`''s own hand-written tree, since `render_tree` is what this item''s
+
+    own ask for "an inspectable rule tree" actually names.
+
+    '
+- id: tune-detection-rules-against-the-camera
+  title: Conclude a detection rule while watching the camera, with its numbers on sliders
+  branch: perception_interactive_rule_tuning
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - detector-parameters-from-knowledge
+  status: not_started
+  notes: 'The developer''s own suggestion on #202: an interactive presenter for the ripple-down
+
+    rules'' `ConclusionHelper`, showing the live camera feed beside the parameters it would
+
+    conclude, so an expert sees what a value does before committing it as a rule. Needs
+
+    `detector-parameters-from-knowledge`''s rule-concluded parameters to present.
+
+
+    Un-deferred 2026-08-31 at the developer''s direction: what the deferral was mostly paying
+
+    for - the interactive expert interface, the model-file store, the `@rdr` decorator - is
+
+    already written, open, out of draft and reviewed on the RDR stack. What remains is only
+
+    the perception-side presenter that puts the camera beside the parameters; it stacks on the
+
+    tip of that stack, with `detector-parameters-from-knowledge` (which supplies the
+
+    parameters to present) beneath it in the same stack.
+
+    '
+- id: a-look-is-described-by-a-match
+  title: Describe a look by an underspecified match over the twin's own entities, not by a case class
+  branch: null
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - choose-detection-method
+  - surfaces-found-by-looking
+  - how-to-look-concluded-from-the-request
+  status: not_started
+  notes: 'Added 2026-09-05 at the developer''s direction on #259 (r3940339984 and r3940357436): "why
+    not replace this with an EQL match statement of semdt semantic annotation or kinematic structure
+    entities?", and "eql based rdrs (pr 77 for example) can take an underspecified match statement
+    and get needed information from it to evaluate the rule tree of the rdr."
+
+    Every rule tree on this plan states its conditions over a hand-written case class that flattens
+    what the world already states, because the tree needs one variable to bind: TargetOnSurface on
+    #231, RequestedLook on #266, and SoughtSurface on #259. The last of the three is what raised
+    it, and reading it is what showed how bad the shape is - two of its three fields were a copy
+    of WorkspaceSurface.finish and a constant that of set True unconditionally, so the base rule''s
+    condition could never be false. AGENTS.md''s own rule against a value spelled in two places condemns
+    each of them independently of any redesign.
+
+    What replaces them is one mechanism rather than three separate corrections: the description a
+    rule tree is stated over is an underspecified Match over the twin''s own entities - a Body, a
+    Region, a HasSupportingSurface - read by an EQL-based ripple-down rule tree that takes what it
+    needs from the match. A rule then states a condition in the world''s own vocabulary and nothing
+    has to be flattened for it first.
+
+    Stacks on #77, the tip of the RDR stack (#159 -> #210 -> #79 -> #76 -> #80 -> #77), which is
+    why it is not folded into any of the three branches carrying a case class: #231 refused merging
+    #159 twice over for the same reason, that it adds 9,236 lines over 50 files to a pull request
+    whose own change is a few hundred, and #77 adds 22,745. depends_on names the three items whose
+    case classes it removes, since none of them can be removed before it exists.
+
+    One measurement to carry into it, taken on #259 while answering the same thread: EQL conditions
+    traverse nested attributes and property reads - sought.surface.region.area > 0.0 and sought.frame.carries_depth
+    both bind and evaluate. So a case class was never needed for the engine''s sake even without
+    the RDR stack, which is why the duplicated half of SoughtSurface could be removed on #259 and
+    only the Match itself waits for this item.
+
+    Corrected 2026-09-05 by #266''s own review round: EQLSingleClassRDR.from_underspecified is on
+    #159, not on #77, so the Match-reading half of this item does not need the tip of the RDR stack
+    and #266 used it - the same shape of correction as the 2026-08-31 "unmerged is not unusable"
+    one. What remains for this item is the other half, which is what actually needs the stack: a
+    Match over the twin''s own entities rather than over a plain description. RequestedLook no longer
+    exists to be removed; TargetOnSurface and SoughtSurface still do. Measured while answering the
+    same round: a case class was never needed for the engine''s sake, since EQL traverses nested
+    attributes and property reads, so what is left here is the vocabulary the conditions are stated
+    in rather than the shape the engine demands.
+
+    '
+- id: camera-pose-fitted-to-the-model
+  title: Correct where the camera stands by fitting what is seen to what the twin models
+  branch: null
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - surfaces-found-by-looking
+  status: not_started
+  blockers:
+  - Depends on `knowledge-directed-grounding`'s `holes-fitted-like-pieces` (in_progress) - a cross-plan
+    dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot
+    cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no
+    automatic readiness or dependency chip.
+  notes: 'Added 2026-09-05 at the developer''s direction on #259, folding the two threads he asked
+    to keep together (r3940349876 and r3940351882): "since we have a 3d model of the world, we can
+    use this information to maybe even calibrate the camera ... and find the best matching transformation
+    that would make fit our expectation from the 3d modeled digital twin", and "so basically we can
+    combine ModelledSurface with MeasuredSurface as well to get the best estimate and update our
+    belief about the camera transformation accordingly and get the best fitting surface?"
+
+    It arrives as a third SurfaceFinder rather than as a change to either of the two #259 ships.
+    SurfaceFinder is the interface and SurfaceRules already chooses among whatever declares it can
+    answer, so a finder that takes the world''s statement and the depth together, solves for the
+    transform that best explains both, and answers the surface plus a corrected camera pose slots
+    in with one add_rule and no edit to what is there.
+
+    Three measurements bear on it, and two of them cut against the obvious version.
+
+    The camera transform is already good in z on this setup. #259''s first build fitted the table''s
+    height as well as its extent and answered 0.8804 to 0.8811 m against the modelled 0.88 on all
+    six captures - about a millimetre - and moving the plane by it moved every detection on every
+    capture, up to 3.4 mm and 0.19 agreement, which is why that branch ships measuring the extent
+    alone. So there is not much transform error left to recover from the table.
+
+    Where the model and the world really disagree is not the transform. #236 measured the board mesh
+    at 0.865 of the real board, a similarity fit with a 2.1-2.6 mm residual, and no rectification
+    plane closes it, since doing so puts the holes below the table the board stands on. That is a
+    wrong model rather than a wrong pose, and a solve with only a transform to move would absorb
+    it into one. #236''s own framing is the right one here too: a law that must hold, and then a
+    hypothesis about which of the things it is written over is the one that is wrong.
+
+    What genuinely is there to fit is over-constrained. The table plane holds about 34% of 693k points
+    on the bare steel, 69% with a mat, and the board''s own outline is measured every frame with
+    its layout known exactly - two independent observations of one rigid transform, in a scene where
+    a wrong one has visible consequences. So the fit is well posed; what it needs is to be told which
+    side is trusted, per capture, since the recorded layout has already drifted in x and y while
+    the height agreed exactly, and an unconstrained solve will happily explain a wrong board pose
+    as a camera error.
+
+    Two things it needs that #259 does not have. A camera pose is a value on one RgbdFrame, so a
+    correction has nowhere to live between frames - the same gap #232 filled for pieces with BelievedPlace
+    and a BeliefSource - and until it does, "update our belief accordingly" is a returned number
+    nobody keeps rather than an operation. And the two finders are today layered rather than independent:
+    the measurement never grows past what the model allows, only cuts it down, which is deliberate
+    and is what keeps a run searching only ground the world described. Combining properly means letting
+    the measurement move the model, which is a different contract and is why this is a new finder
+    under a new rule rather than a tweak to MeasuredSurfaceFinder.
+
+    '
+- id: demo-asks-by-query
+  title: The demo's perception runs because a query was evaluated
+  branch: tracy_icra
+  pull_request_number: null
+  track: demo-requests
+  depends_on:
+  - choose-detection-method
+  status: not_started
+  blockers:
+  - Depends on `knowledge-directed-grounding`'s `demo-runs-on-grounded-perception` (not_started)
+    - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on`
+    cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker,
+    with no automatic readiness or dependency chip.
+  notes: 'Every perception call in montessori_demo.py goes through the backend rather than calling
+    the pipeline by hand, and the detector that answers is the one the rule tree chose from the surface
+    and the target - visibly a different one for the steel table than for the board''s lid. This
+    is the wave''s claim made demonstrable: the same question, answered differently because the robot
+    knows what it is looking at.'
