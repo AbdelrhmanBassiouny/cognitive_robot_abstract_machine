@@ -2,61 +2,62 @@
 
 Plan `knowledge-directed-perception`, track `request-language`. Based on #239
 (`claude/knowledge-directed-perception-detector-zrm57t`), which merges #159
-(`EQLSingleClassRDR`) in. Both dependencies (#231, #239) report `open_ready`.
+(`EQLSingleClassRDR`) in.
 
-## The plan, and it held
+## Round one: the rule tree (118fb140)
 
-Make *how a look is answered* a rule tree over the request, instead of the two
-hand-written steps in `MontessoriPerceptionPipeline.detect`.
+Made *how a look is answered* a rule tree over the request instead of the two hand-written
+steps in `MontessoriPerceptionPipeline.detect`. 412/1/16 against 397/1/16 on the parent;
+three mutation checks, each failing its own test.
 
-1. `RequestedLook` — the plain properties a rule reads about one request.
-2. `WayOfLooking`, with `FindTheBoard` and `FindThePieces`, each stating the requests it
-   answers as an entity query language condition.
-3. `LookRules` — `EQLSingleClassRDR` over `RequestedLook`, authored by fitting known
-   requests through an expert that reads the condition off the way being fitted.
-4. The pipeline drops `board_detector` and `detector_rules` for one `look_rules`; six
-   fields become five, and a way of looking is handed `SceneToSearch` and nothing else.
-5. A test grows the tree at runtime and fails if the tree is rebuilt where it is read.
+## Round two: the review of 2026-09-05 (0bb9aa89a)
 
-## Done
+Four threads, one ask with four faces, all four replied to and **none resolved** — each has
+a half answered differently, and the standing rule is to leave those for the developer.
 
-- Branch re-cut off #239's tip (it arrived cut from `integration`), #266 opened as a
-  draft, `plan.yaml` and `roadmap.md` recorded by hand (`plan_item_bootstrap.py`'s
-  four-space item indent still does not match this plan's two-space manifest — eighth
-  round).
-- All five steps built and pushed as `118fb140`.
-- **412 passed, 1 skipped, 16 xfailed** against **397/1/16** on the parent, in a worktree
-  with its own `*/src` on `PYTHONPATH`. The 15 added and nothing else moved.
-- Three mutation checks, each failing its own test and nothing else.
-- `scripts/format_docstrings.py` over every touched file.
-- PR description rewritten to match what was built; roadmap section appended; dashboard
-  republished.
+- **No case class, no attribute-name string.** `RequestedLook` and
+  `WAY_OF_LOOKING_ATTRIBUTE_NAME` are gone. The rules come from
+  `from_underspecified(a(SceneRequest)(detector=...))`; conditions are stated over the
+  request, and the two a rule reads are properties derived from its `detection_type`.
+- **One detector concept.** `PerceptionDetector` in krrood beside `PerceptionBackend`,
+  binding the kind of look it answers as a type parameter. `PieceDetector` (#231) had its
+  own copy of the same four members and now inherits it. `WayOfLooking` → `SceneDetector`,
+  `take` → `detect`.
+- **krrood gained a mimic family and six tests**, so the concept is exercised without the
+  demo — and the mimic is where conditioning on what the sensor provides is shown.
+- 414/1/16 experiments against 412/1/16 on the previous tip; 1554/3 krrood against 1548/3.
+  Both baselines in a worktree with its own `*/src` on `PYTHONPATH`.
 
 ## Findings worth carrying
 
-- **A rule concluding a collaborator cannot be persisted.** `EQLSingleClassRDR` saves its
-  model as Python source on every fit, and the serializer spells only enum members,
-  numbers, strings, bools and `None`. `NullModelSaver` states that. **#239 will meet the
-  same wall** when it concludes a `DetectionParameters`.
-- **A capability claiming too much is refused when the rules are built**, not at look
-  time: the fit stops converging. Recorded rather than pinned, since it pins the engine's
-  convergence rule rather than this item's claim.
+- **A rule concluding a collaborator cannot be persisted.** The serializer spells enum
+  members, numbers, strings, bools and `None`. **#239 will meet the same wall** when it
+  concludes a `DetectionParameters`.
+- **`from_underspecified` is on #159, not #77** — half of `a-look-is-described-by-a-match`'s
+  premise is wrong, and that item's notes are corrected. It only lacked a `model_saver`.
+- **A case class was never needed for the engine's sake**: EQL traverses nested attributes
+  and property reads. Second item in two days to spend one on a constraint that is not there.
+- **A detector must state identity comparison itself** once it is a dataclass, or `add()`
+  refuses to conclude one.
 
-## Next
+## Open, for the developer
 
-Nothing outstanding on this branch. It is a draft awaiting review; the item stays
-`in_progress` until it is reviewed.
+- Wiring a detector per *part* of one description (thread r3941256826).
+- Conditions in the twin's own vocabulary for this family — waits on #255 making a detection
+  a `Role` over a world entity (r3941290762).
+- This family conditioning on the sensor: its look would have to carry what the *source*
+  offers, since the rules are stated before any frame exists (r3941305756).
+- The remote branch was merged forward by a maintenance pass mid-round; that merge is in.
 
 ## Deliberately out of scope
 
-- `headroom` — #239's to conclude, and its `DetectionParameters` is still unbuilt there.
-- Skipping the board pass for a piece request — it would misattribute a piece on the lid
-  to the table, since the board detection supplies the surfaces' extents.
-- Narrowing the candidate pieces from the request — #239's widening; #232 moved the
-  seeded half onto the belief.
+- `headroom` — #239's to conclude.
+- Skipping the board pass for a piece request — would misattribute a lid piece to the table.
+- Narrowing the candidate pieces from the request — #239's widening.
+- `SUPPORTING_SURFACE_ATTRIBUTE_NAME` in `backend.py` — the same smell, #227's to remove.
 
-## Open
+## Note
 
-- The tracking issue (201) subscription was refused by this session's permission
-  classifier, and the artifact watch could not be armed either, so this session sees no
-  events for either. Read the tracking issue's comments directly before any later round.
+The tracking issue (201) subscription and the artifact watch were both refused by this
+session's permission classifier, so it sees no events for either. Read the tracking issue's
+comments directly before any later round.
