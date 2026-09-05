@@ -24,6 +24,9 @@ tracy_icra	icra-foundation
 claude/icra-experiments-scenario-domain-n7zwpr	icra-foundation
 claude/montessori-results-recording-jnrgfy	icra-foundation
 claude/icra-experiments-ormatic-episodes-ib9lr3	icra-foundation
+claude/episode-replayed-world-kickoff-6ye5bb	knowledge-directed-expectation
+claude/plan-item-kickoff-expectations-2zvpmn	knowledge-directed-expectation
+perception_robokudo_detector	knowledge-directed-expectation
 montessori_perception_on_main	knowledge-directed-grounding
 perception_surfaces_from_world	knowledge-directed-grounding
 perception_per_supporting_surface	knowledge-directed-grounding
@@ -43,9 +46,6 @@ claude/plan-item-kickoff-kdp-34snn0	knowledge-directed-perception
 claude/choose-detection-method-gf64yp	knowledge-directed-perception
 claude/knowledge-directed-perception-detector-zrm57t	knowledge-directed-perception
 perception_interactive_rule_tuning	knowledge-directed-perception
-claude/episode-replayed-world-kickoff-6ye5bb	knowledge-directed-perception
-claude/plan-item-kickoff-expectations-2zvpmn	knowledge-directed-perception
-perception_robokudo_detector	knowledge-directed-perception
 claude/match-query-ergonomics-idk9w2	match-query-ergonomics
 claude/match-query-ergonomics-where-rooted-b876wm	match-query-ergonomics
 claude/match-query-interface-refactor-l55jym	match-query-ergonomics

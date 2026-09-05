@@ -1,0 +1,293 @@
+schema_version: 1
+id: knowledge-directed-expectation
+title: 'Knowledge-directed perception: expectation and failure detection'
+description: 'The expectation wave of knowledge-directed-perception (split out on 2026-09-05 to get
+  every successor under the plan-size budget): what the robot did, and what Segmind saw it do, say
+  where a thing should now be. Perception looks there, and reports a violated expectation as a failure
+  rather than as an absence - the end-to-end story the paper is written around. Depends on items
+  of `knowledge-directed-requests` and `knowledge-directed-grounding` that could not be preserved
+  as `depends_on` across the plan split - see the affected items'' own `blockers`. See `knowledge-directed-grounding`''s
+  roadmap.md for the programme-wide why, the three waves, the deadline budget and the sequencing
+  decisions this plan inherits.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 201
+waves:
+- id: expectation
+  name: Perception knows what should be true
+  description: What the robot did, and what Segmind saw it do, say where a thing should now be. Perception
+    looks there, and reports a violated expectation as a failure rather than as an absence.
+tracks:
+- id: events
+  name: Expectation and failure
+  wave: expectation
+- id: executors
+  name: A second detector behind the interface
+  wave: expectation
+  description: The evidence that the reasoning layer is executor-agnostic, and the route by which
+    this work reaches RoboKudo after the deadline.
+- id: demo-expectation
+  name: The demo detects and recovers from a failure
+  wave: expectation
+items:
+- id: episode-replayed-into-the-world
+  title: Replay a recorded episode into the world so Segmind can say what happened
+  branch: claude/episode-replayed-world-kickoff-6ye5bb
+  pull_request_number: 246
+  track: events
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01UdpwcAQGVFCKEy8VA2iFwv
+  blockers:
+  - One of the four review threads of 2026-09-03 is left open deliberately, and it is the developer's
+    to close rather than work for this item. r3927219116 asked for docstrings everywhere they are
+    missing in the pull request; every file it touches was swept with an AST walk and two places
+    are left bare on purpose - the two new exceptions' error_message / suggest_correction overrides,
+    whose contracts DataclassException states on its own abstract methods and which no DataclassException
+    subclass anywhere in this workspace documents, and DataPlayer.__post_init__ / FilePlayer.__post_init__,
+    which this branch neither adds nor changes. Both are stated on the thread with an offer to add
+    them either way. The other three threads are answered exactly as asked and resolved.
+  notes: 'An expectation about where a thing now is comes from what was done to it, and on a
+
+    recording nothing has been done to anything until the recording is replayed. Segmind
+
+    already has the extension point - `EpisodePlayer` -> `DataPlayer` -> `FilePlayer` - so a
+
+    player reading a rosbag''s transform tree and joint states is the same kind of member over
+
+    a different file, and `EpisodeSegmenterExecutor` produces support/pick-up/placing/
+
+    insertion events over it unchanged. Touches only segmind, so it started immediately, off
+
+    `main`.
+
+
+    A measured constraint that decides what this can be asked for: only one of the six
+
+    recorded bags (`tracy_pickup_demo`) carries the robot at all (`/tf`, `/tf_static`,
+
+    `/joint_states`, 150 s, 253,000 messages); the other five hold only camera topics. So a
+
+    replayed episode gives event history for the pick-up demo and anything recorded from now
+
+    on, but not for the five scene captures - those get their expectations from the board and
+
+    the action model directly, which is why `pieces-looked-for-where-expected` does not
+
+    depend on this item. Recording `/tf` and `/joint_states` alongside the camera in future
+
+    would remove the split entirely.
+
+
+    Resolved 2026-09-03 in `auto` mode; green on all 23 checks throughout, `mergeable_state`
+
+    clean. Answered as `3b3e3f53`/`f9a961fc`: the sampling generator became three named classes
+
+    (`RecordedMessage`, `RecordedState`, `RecordingSampler`) each with one subject; ROS
+
+    message-type strings became `RosbagMessageType`/`RosbagTopic` members with a test pinning
+
+    every one against the type store. 53 passed, 1 skipped, against 48/1. One review thread
+
+    (docstrings on two pre-existing, undocumented methods) is left open at the developer''s
+
+    discretion.
+
+    '
+- id: expectations-from-events
+  title: Expect what the action promised, and report the difference as a failure
+  branch: claude/plan-item-kickoff-expectations-2zvpmn
+  pull_request_number: 257
+  track: events
+  depends_on:
+  - episode-replayed-into-the-world
+  status: in_progress
+  session: https://claude.ai/code/session_0124wGjWgkgfuDHX1xTJh6St
+  blockers:
+  - 'One thread is open on #257 and it is the developer''s to settle. r3940953108 asked whether an
+    event''s declared effect duplicates Segmind''s statechart, and on 2026-09-05 he proposed making
+    InsideOf answer for regions as the fix. Measured on the plate scene: it already does - Region
+    is a KinematicStructureEntity and every attribute the reading touches is on that base - answering
+    1.000 sunk in the hole, 0.500 standing on the plate over it and 0.000 lifted clear, at 23x less
+    cost than InsideRegion. But it counts vertices inside a bounding box rather than volume inside
+    a shape, so its own default of 0.5 reads the over-the-hole case as in the hole, while the detectors''
+    0.9 reads it correctly. So the fold works at 0.9, and what is his to decide is whether the threshold
+    may carry that correctness and whether InsideOf gains the allowed_space InsideRegion has as a
+    PlacementRelation.'
+  - r3940991795, HasPosition versus his HasLocation, was resolved by the developer without a rename
+    being asked for; recorded here only because the name is still his to change.
+  - 'Two threads opened on #257 on the evening of 2026-09-05 are answered as 3d4b8457 and left open,
+    both being questions rather than asks. r3941751684 asked why Match.stating is needed when a where
+    statement is extendable: because the two extend different halves of a match, and only an attribute
+    reaches construct_instance, so a condition cannot supply the subject that makes the relation
+    exist - said honestly, with the one production caller named and the fold offered. r3941771838
+    asked for a helper and for whether subclassing Match was worth it: object_stated_by is the helper
+    and it turned up a latent KeyError for a relation stating nothing on the other side, and the
+    answer on the subclass is no, chiefly because its equality override contradicted Match''s identity
+    equality silently.'
+  - Depends on `knowledge-directed-requests`'s `imagination-world-rejects-what-a-predicate-refuses`
+    (in_progress) - a cross-plan dependency that `split-knowledge-directed-perception` could not
+    preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as
+    this free-text blocker, with no automatic readiness or dependency chip.
+  - Depends on `knowledge-directed-grounding`'s `pieces-looked-for-where-expected` (in_progress)
+    - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on`
+    cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker,
+    with no automatic readiness or dependency chip.
+  notes: 'Segmind already emits support/loss-of-support/pick-up/placing/insertion events over
+
+    `is_supported_by`. Perception keeps a set of expectations from them - after
+
+    `LossOfSupport(piece, table)` stop searching the table; after `Placing(piece, lid)` search
+
+    the lid - and the action model gets there first, since an action declares its effect before
+
+    the event confirms it. The same mechanism is free failure detection: perception looked
+
+    exactly where the action promised, found nothing (or something else), and says so.
+
+
+    Widened 2026-08-31 from an expectation naming a surface to one carrying a pose: an
+
+    expectation is a belief about where an object is - a region, a yaw interval, and the
+
+    surface it should rest on - propagated by the action''s declared effect and confirmed or
+
+    refuted by events; the rule that carries the weight is that a belief only decays when
+
+    something acts on the object, which is what makes a history tractable where a single frame
+
+    is not. This is exactly the hypothesis `pieces-looked-for-where-expected` evaluates, which
+
+    is why the two are linked.
+
+
+    Built 2026-09-03 as PR #257, over the merge of three dependency stacks
+
+    (`pieces-looked-for-where-expected`, `perception-backend`, `episode-replayed-into-the-
+
+    world`) - the first item on the plan whose dependencies span that many. 482 passed against
+
+    453 on the merge. The item''s own reach exposed a fault worth more than the feature:
+
+    `PieceMatcher`''s search grid was not monotonic in radius (a lattice-phase bug, fixed). The
+
+    four lid expected-to-fail marks still do not come off: two of the four captures now do get
+
+    a history-seeded fit, but it reaches a lower agreement than a ghost cylinder at the same
+
+    place, which is exactly `competing-explanations`'' claim to settle - stating a reach that
+
+    happens to work is the tuning this plan has refused three times over.
+
+
+    The design went through many review rounds (2026-09-03 through 2026-09-05) that
+
+    progressively moved the mechanism into general Segmind/krrood vocabulary rather than a
+
+    Montessori-specific hierarchy: `Expectation`/`Expectations` are now general Segmind
+
+    concepts; an event''s support effect is declared on the event class itself
+
+    (`SupportEffect`, `EventWithSupportEffect`) rather than inferred; a stated relation is an
+
+    ordinary entity-query-language `Match` over the relation''s own class (an earlier
+
+    `StatedRelation` subclass of `Match` was tried and reverted - "I don''t think inheriting
+
+    from match is the right approach ... use match instead of stated relation altogether");
+
+    `HasPosition` replaced the `Placed` union; and `Expectation.holds_now()` answers what is
+
+    expected against the world the robot already has. A red CI (nine of twenty-three checks,
+
+    an `AttributeError` in `make_specialized_dataclass`''s memoization meeting a `GenericAlias`)
+
+    was root-caused and fixed as `1e93c138` - not this branch''s design fault, but its first
+
+    exposure, since it is the first branch to reach a generic that is also a context manager.
+
+    By the last measured head: krrood 1,337 passed/3 skipped, segmind 88 passed/1 skipped,
+
+    experiments 521 passed/1 skipped/11 xfailed.
+
+
+    Two threads remain open at the developer''s own discretion (see blockers): whether `InsideOf`
+
+    (which already answers 1.000/0.500/0.000 sunk/over/clear at 23x less cost than
+
+    `InsideRegion`, but reads a bounding box rather than a shape''s volume) may absorb
+
+    `InsideRegion`''s statechart role at a 0.9 threshold; and a naming question, `HasPosition`
+
+    versus `HasLocation`.
+
+    '
+- id: predicted-state-from-declared-effects
+  title: Predict the twin's current state from what the actions and the events declared, and ask
+    perception from it
+  branch: null
+  pull_request_number: null
+  track: events
+  depends_on:
+  - expectations-from-events
+  status: not_started
+  notes: 'Added 2026-09-04 at the developer''s ask on #257 (r3934932647 and r3937639689). expectations-from-events
+    keeps what holds of one piece the robot acted on, from the action''s declared effect and each
+    event''s declared Effect, both stated as the twin''s own relations. This is the general form
+    of that: a predicted current state of the digital twin, built by applying every declared effect
+    of the actions performed and the events seen to the world the robot has - explicit effect and
+    occurrence rules, each event and each action saying queryably what now holds and what no longer
+    does, kept inside what the domain model can express so the frame problem of situation calculus
+    does not arise - from which perception is asked richer questions: the gripper no longer holding
+    the piece, the piece resting where it was left, supported by the surface it was left on. Where
+    an effect cannot be enumerated in advance it is concluded by the EQL-native ripple-down rules
+    on the #77 stack, so knowledge is added as rules rather than as code. An action''s pre- and post-conditions
+    in coraplex are the same statements for actions, and where the two meet is worked out here. The
+    prediction is what the simulation and the twin''s own state should already agree with when the
+    plan was executed there; the case it exists for is another agent acting, or the world disagreeing,
+    which is what a look is then asked about. It meets icra-experiments'' snapshot-working-memory
+    and failure-taxonomy-and-typing, which are the state and the failure side of the same thing;
+    which of the three owns which half is the developer''s to settle when it starts. Probabilistic
+    fusion (a Kalman or particle filter) is not part of it: the relations are true or false and a
+    belief is confirmed or refuted, and the accurate pose is a different question the paper''s claim
+    does not need.
+
+    '
+- id: robokudo-detector
+  title: Answer a request with a RoboKudo analysis engine
+  branch: perception_robokudo_detector
+  pull_request_number: null
+  track: executors
+  depends_on: []
+  status: deferred
+  blockers:
+  - 'Deferred past the 2026-09-15 deadline: nothing depends on it and no demo item needs it.'
+  - Depends on `knowledge-directed-requests`'s `choose-detection-method` (in_progress) - a cross-plan
+    dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot
+    cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no
+    automatic readiness or dependency chip.
+  notes: 'One adapter implementing the detector interface over a RoboKudo analysis engine, so the
+    rule tree can choose a learned detector (RoboKudo ships CLIP and YOLO annotators) for a target
+    with no geometric model. Proves the reasoning layer is executor-agnostic and is the route by
+    which this work moves into RoboKudo after the deadline. Deliberately last and expected to fall
+    after it: nothing else depends on it, no demo item needs it, and it is the first thing to drop
+    if the deadline tightens.'
+- id: demo-detects-and-recovers-a-failed-insert
+  title: A failed insertion is noticed because perception looked where the action promised
+  branch: tracy_icra
+  pull_request_number: null
+  track: demo-expectation
+  depends_on:
+  - expectations-from-events
+  status: not_started
+  blockers:
+  - Depends on `knowledge-directed-requests`'s `demo-asks-by-query` (not_started) - a cross-plan
+    dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot
+    cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no
+    automatic readiness or dependency chip.
+  notes: 'The end-to-end story the paper is written around: the robot picks a piece, Segmind''s LossOfSupportEvent
+    takes the table out of the search, the insertion''s declared effect points perception at the
+    board''s lid, and when the insertion fails perception finds the piece somewhere the plan did
+    not expect and says so. Recovery follows from that report. Narrowed for the deadline: report
+    the violated expectation, and let recovery be the plan re-asking rather than a policy of its
+    own. If the deadline forces a cut, this is the item to protect and robokudo-detector is the one
+    to drop.'

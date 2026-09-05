@@ -1,0 +1,58 @@
+# Knowledge-directed perception: expectation and failure detection
+
+One of three successors to `knowledge-directed-perception`, split on 2026-09-05 for
+`plan-size-limits` (tracking issue #200). **See `knowledge-directed-grounding`'s
+roadmap.md for the programme-wide why, the three waves, the deadline budget, the shared
+"stacked on, never waiting for a merge" and "demo merges into `tracy_icra` as soon as it
+works" rules, and the sequencing decisions this plan inherits.** Per-round implementation
+narrative about already-built items is compressed into each item's own `notes` in
+`plan.yaml`; the full predecessor roadmap stays reachable in the personal-notes branch's
+history immediately before the split commit.
+
+## The recording constraint that shapes what this wave can ask for
+
+Measured on `episode-replayed-into-the-world`: of the six rosbags recorded on 2026-08-28,
+only `tracy_pickup_demo` carries the robot itself (`/tf`, `/tf_static`, `/joint_states`).
+The other five hold camera topics only. So a replayed episode gives an event history for
+the pick-up demo and for anything recorded from now on, but not for the five scene
+captures - those get their expectations from the board and the action model directly,
+which is why `pieces-looked-for-where-expected` (`knowledge-directed-grounding`) does not
+depend on this track. Recording `/tf` and `/joint_states` alongside the camera in future
+recordings would remove the split entirely; worth doing before the next capture session.
+
+## Standing decision: a belief decays only when something acts on it
+
+`expectations-from-events`'s central rule: an object's believed pose does not decay on its
+own between frames. Released over a hole, it is believed to be at that hole, turned any
+way within the release's spread; still grasped, its pose is the gripper's; acted on by
+nothing, its pose is exactly where it was last seen. This is what makes a history
+tractable where a single frame is not, and it is the rule any future extension of belief
+tracking in this programme should preserve rather than re-derive.
+
+## Standing hazard: a generic that is also a context manager broke ORM generation workspace-wide
+
+Fixed as `1e93c138` on `expectations-from-events`. `make_specialized_dataclass`'s
+memoization cached on the type alias object itself rather than on the class it names,
+which is fine for an ordinary `Generic` subscript but raises `AttributeError:
+'types.GenericAlias' object has no attribute '__memo__'` for a class whose
+`__class_getitem__` returns a bare `types.GenericAlias` - which krrood's own `Variable` is,
+being a context manager. Every ORM-building CI job failed identically regardless of which
+package it was building for, because the failure is in the shared code path. A generic
+that is also a context manager is now in krrood's shared test dataset, so its own conftest
+would fail at collection if this regressed. Worth checking first if any future item in
+this programme sees every CI job fail identically.
+
+## Open, at the developer's own discretion (not this plan's to resolve)
+
+- `expectations-from-events`: whether `InsideOf` (which already answers the sunk/over/
+  clear cases at 23x less cost than `InsideRegion`, but reads a bounding box rather than a
+  shape's volume) may absorb `InsideRegion`'s statechart role at a 0.9 threshold, and
+  whether `InsideRegion` should carry `PlacementRelation`'s `allowed_space`.
+- `expectations-from-events`: `HasPosition` versus `HasLocation` as the field's name -
+  resolved without a rename being asked for, recorded only because the name is still his
+  to change.
+- `expectations-from-events`: the four lid expected-to-fail marks do not come off yet. Two
+  of the four now get a history-seeded fit, but it loses to a ghost cylinder at the same
+  place by a small margin - which is `competing-explanations`'s claim
+  (`knowledge-directed-grounding`, `surfaces` track) to settle, not a threshold to tune
+  here.
