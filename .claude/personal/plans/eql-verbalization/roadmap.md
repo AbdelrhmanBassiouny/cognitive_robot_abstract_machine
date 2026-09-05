@@ -399,6 +399,52 @@ is not being folded into #264. If the developer wants it, it is a new item in th
 alongside the separate question of whether a directly aggregated attribute should read
 *"the sum of its income"* rather than *"the sum of incomes of Statements"*.
 
+## aggregate-repeat-reduction: review round 2 — the ranked frame named the wrong row (2026-09-05)
+
+Three threads on #264, one per ranked expectation, all asking for the same sentence: *"For the
+month with the highest …, report the month, the sum of incomes of statements, and the sum of
+expenses of statements."*
+
+**Measured before changing anything, and it was a defect rather than a wording preference.** The
+ranked query with `limit(1)` returns one row, and that row is a month group — over three
+statements, two of them in March, the row is March with income sum `30.0`. The frame said *"For
+the Statement with the highest sum"*, which names something else: the top statement by income is
+the `20.0` one, whose own sums are `20.0` / `2.0`. The sentence described a query nobody wrote.
+
+**This is the mirror of round 1's r3941192834, and it settles the opposite way for the same
+reason.** There the proposal was to name an *unranked* grouping frame after the entity, which is
+wrong because a row is a group; here the *ranked* frame was already naming the entity, which is
+wrong for exactly that reason. One principle — the frame names whatever a row is — reaching
+opposite verdicts because the two frames started from opposite defaults.
+
+**What shipped (`ccb7a780a`).** `RankedRow` in `grammar/query/assembler.py` says what one row of
+a ranked report is, and each kind names itself: `GroupRow` when the report groups, `EntityRow`
+when it does not. `_ranked_columns_prose` then names a run of group-key columns as the group
+(*"the month"*, *"the year and month"* for a composite key) rather than a member's navigation to
+it (*"the month of the begin of its period"*), which after the frame change had no subject left
+to hang *"its"* on. The ungrouped ranked report is unchanged — its rows really are entities.
+`group_label` moved to module level and is now the only place deciding how a group key is named,
+shared by the ranked frame, `_for_each_header` and `_distinct_keys`.
+
+**Two consequences the plan should carry.**
+
+- Seven expectations in `test_set_of_ranking.py` moved, every one a grouped ranked report that
+  asserted the entity frame. Inside them `its revenue` became `the revenue of a
+  ProfitAndLossStatement`: the frame no longer introduces the entity, so an aggregate's first
+  mention names its own root. Later mentions still pronominalise. The sentences are longer, and
+  *"its"* without an antecedent would be worse — but if the developer wants the pronoun back,
+  reintroducing the entity somewhere is a separate design question.
+- **The scope-overlap finding recorded in "the settled plan" is superseded.** That section chose
+  a new test module specifically to keep this branch off `test_set_of_ranking.py`, which #196 is
+  appending to. The ranked-frame fix puts it back on that file — unavoidably, since the file is
+  where the wrong expectations live. #196's added
+  `test_ranking_names_the_ordered_by_aggregate_not_the_first_selected` is a grouped ranked report
+  too, so its *"For the Invoice with the highest sum of the amount of its tax, …"* becomes *"For
+  the month with the highest …"* once both land: one string for whichever merges second, a
+  wording collision rather than a logic one. The separate-module decision still stands on its own
+  merits (it avoided both branches defining the same `Invoice` fixture); what is no longer true is
+  the PR description's claim of no shared path, which has been corrected there.
+
 ## The conflict is cleared; the rebase still waits on #229 (2026-09-04)
 
 Merged current `main` into `eql-symbolic-function-sdt` (`f97e7a99`), resolving the one
