@@ -1,0 +1,150 @@
+schema_version: 1
+id: icra-foundation
+title: 'ICRA experiments: one pipeline every scenario runs on'
+description: >-
+  The foot of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits' roadmap.md for why). The integrated simulation pipeline every scenario, demo and experiment stacks on, the dataclass scenario/goal/condition/perturbation/metric domain model with its runner, and every trial, event, query, answer and failure recorded through ORMatic into SQL and read back as long-term memory. icra-mechanism and icra-evidence both depend on items here; those edges could not cross the plan boundary and are recorded as blockers on their side instead (see their roadmap.md).
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 252
+waves:
+- id: foundation
+  name: One pipeline every scenario runs on
+  description: >-
+    The integrated simulation pipeline, the scenario domain model and the episode recording. Everything later stacks on these three, and all three can start today in parallel.
+tracks:
+- id: integration
+  name: The integrated pipeline
+  wave: foundation
+  description: >-
+    Lane 1. One branch carrying the perception stack, the monitor stack, the predicates and a simulated camera, on which the simulated demo runs the same pipeline the robot will.
+- id: scenario-model
+  name: Scenarios as data
+  wave: foundation
+  description: >-
+    Lane 2. The dataclass domain model that describes a scenario, its goal, the knowledge conditions it runs under, the perturbations applied to it and the metrics it reports, plus the runner that executes it with logs and a report.
+- id: long-term-memory
+  name: Episodes recorded and queried
+  wave: foundation
+  description: >-
+    Lane 2. Every trial, event, query, answer and failure recorded through ORMatic into SQL, in simulation and on the robot alike, and read back through the SQL backend as long-term memory.
+items:
+- id: integrated-simulation-pipeline
+  title: >-
+    One branch on which the simulated demo runs perception, monitor, predicates and events together
+  branch: claude/icra-experiments-simulation-pipeline-w4ep7n
+  pull_request_number: 265
+  track: integration
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01G5fPjf58191jHuL1dvrKNv
+  blockers:
+  - >-
+    Cross-plan: this item merges montessori-eql-stack's montessori_monitor_and_recording (#256) rather than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was split out of #169 so this plan need not take the cramera console with the monitor. As of 2026-09-03 it takes only the monitor half of #256: the recording half is being cut off main as its own item, run-results-recorded-into-sql, which this item merges instead. What is left of that debt here is one item: SimulationTimePacer.sleep() waits on the simulation clock with no bound, so a stalled simulation blocks a tick forever. No test reaches it - only the demo scripts set context.simulation_clock - but it is a real hang, and what a stalled simulation should do is the developer's call. The three coraplex failures and the hanging Tracy demo this blocker used to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on #169's c8bf6f05.
+  notes: >-
+    The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a grasped shape behind Context.update_world_model_attachment, and the montessori world and semantics it monitors - #256 imports no cramera at all), the recording half of #256 as its own branch off main (run-results-recorded-into-sql), the predicate classes (#229), the perception stack tip (#238, which carries #221, #222 and #227) and the hole layout fit (#236, which carries #225 and #232), the detector choice by rule (#231, 13 commits, no rule-engine dependency) and only the one knowledge-half commit of #239 (3a493be9, the measured colours and finishes on the twin): the rest of #239 is 177 commits of the RDR stack and stays out. Resolve the known meetings once and record them in roadmap.md: #223's RectifiedFootprint rename, #231's EdgeFitDetector rename, #244 and #229 both editing reasoning/predicates.py
+    and geometry.py. Inherits one piece of open debt from that stack, which is prerequisite work: SimulationTimePacer.sleep has no bound. The demo entry point stays in #169, since franka_montessori_demo.py is bound to cramera through SortingRunControl, so the headless demo this item is done by is tracy_icra's own montessori_demo.py rather than that one. Done when franka_montessori_demo and the Tracy simulated demo both sort the board headless with the event monitor ticking and every test module of the merged packages collected and green in CI. Keep #192 out until the developer says it is in; it removes Match.variable, which #159 and therefore #239 still read.
+- id: segmind-detectors-on-the-demo-branch
+  title: >-
+    The demo branch takes its own segmind detectors, grasp events and gripper feedback
+  branch: tracy_icra
+  pull_request_number: null
+  track: integration
+  depends_on: []
+  status: done
+  session: https://claude.ai/code/session_016LPo74ksuCPpkqgpvpz7eY
+  notes: >-
+    Merge tracy_icra_segmind into tracy_icra. Not a fast-forward: tracy_icra has moved 20-odd commits past their merge base e034fa791, taking the knowledge-directed-perception work with it, so this is a real merge. Three conflicts, all identified 2026-09-03. experiments/requirements.txt was deleted on tracy_icra (main's convention is inline pyproject dependencies, and test_dependency_declarations tests it) and gained flask on tracy_icra_segmind, so the resolution is to keep the file deleted and declare flask in experiments/pyproject.toml. segmind/datastructures/events.py was changed on both sides (+44/-21 arriving through tracy_icra's perception merges, +104/-24 here). And tracy_experiments/pickup/pickup_demo_real.py was changed on both sides. What the branch brings: grasp_detector_nodes.py, the gripper-feedback and event- dashboard modules, its own background threaded event_monitoring.py for TracyMontessoriWorld, and a much larger detector test suite.
+- id: simulated-camera-feeds-perception
+  title: >-
+    A MuJoCo camera feeds the perception pipeline the same frames the real camera does
+  branch: null
+  pull_request_number: null
+  track: integration
+  depends_on:
+  - integrated-simulation-pipeline
+  status: not_started
+  notes: >-
+    What makes simulation-first testing honest for perception. MujocoCamera renders colour and depth; wrap them as the RgbdFrame the pipeline reads, with intrinsics and camera pose taken from the twin, so MontessoriPerceptionBackend answers a look in simulation exactly as it does off a capture. The six real captures remain the regression set for detection; this item's tests assert that a simulated scene with the board and four pieces reports every piece once with the right category. Stated colours and finishes on the simulated objects come from the values #239 measured off the real ones.
+- id: tracy-demo-takes-the-integrated-branch
+  title: >-
+    tracy_icra takes the integrated branch and the real robot runs it
+  branch: null
+  pull_request_number: null
+  track: integration
+  depends_on:
+  - integrated-simulation-pipeline
+  - simulated-camera-feeds-perception
+  status: not_started
+  notes: >-
+    The bridge to the robot, and the one item on this plan that needs the robot before any experiment does. Merge the integrated branch into tracy_icra, run the demo on the UR10 with the live camera, and keep a capture of the run. This is knowledge-directed-perception's demo-runs-on-grounded-perception in that plan's words; it is tracked here because the branch it runs is this plan's. From then on every later merge into tracy_icra is a merge of the integrated branch, never of individual stacks. Record the transform tree and joint states with the camera in every take from now on; five of the six existing recordings hold no robot state and cannot supply a history.
+- id: scenario-domain-model
+  title: >-
+    Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports
+  branch: claude/icra-experiments-scenario-domain-n7zwpr
+  pull_request_number: 261
+  track: scenario-model
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01Y2R5PzHHiVS7EvnAZ1J2yc
+  notes: >-
+    The meta level the developer asked for: a Scenario names how to build its world and which robot and execution kind (simulated or real) it runs on; a Goal names what counts as success; a Condition names one knowledge source switched on or off; a Perturbation names a change applied to the world at a step; a Metric names one number read off a finished Trial; a Report gathers metrics over trials with confidence intervals. A ScenarioRunner executes trials, writes structured logs and renders the report. Generalise what exists rather than adding a third shape: control_loop_experiments.scenarios already has BenchmarkScenario and ScenarioRunner, and experiment_definitions has ExperimentResult, ExperimentsTable and TypstRenderer; the new model subsumes both and the old ones migrate onto it. Concrete scenarios subclass or instantiate these, never re-describe them. Fully unit-tested against a trivial scenario that needs no simulator, so the model's tests run everywhere.
+- id: montessori-scenarios
+  title: >-
+    The memo's scenes and scripted scenarios as Scenario instances that run in simulation
+  branch: null
+  pull_request_number: null
+  track: scenario-model
+  depends_on:
+  - scenario-domain-model
+  - integrated-simulation-pipeline
+  status: not_started
+  notes: >-
+    Random layouts with all four pieces, partial scenes with two or three, near-ambiguous layouts with the cube and cylinder aligned in camera depth, a lighting change (a MujocoLight edit in simulation), and the four scripted temporal scenarios: static, robot pick-and-place, an external body pushing a piece while the robot is idle, and a piece in the gripper at query time. Each is a Scenario with a seeded layout so a run is reproducible, and each has a test that builds it headless and asserts its own precondition (the ambiguous layout really is aligned in depth, the in-gripper scenario really holds the piece).
+- id: run-results-recorded-into-sql
+  title: >-
+    Where a run records its results, and the plan-and-events schema it records
+  branch: claude/montessori-results-recording-jnrgfy
+  pull_request_number: 262
+  track: long-term-memory
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01Hye1f4d5KoNGxtFtWF3XV7
+  notes: >-
+    Cut the recording half of montessori-eql-stack's montessori_monitor_and_recording (#256) as a pull request of its own, off main. Three modules and about 700 lines: results_database.py resolves where a run records and reports whether that database can be reached and written to, results_recording.py records best effort so a database problem cannot lose a finished run, and sorting_results.py is the schema itself - a realized coraplex Plan plus the segmind DetectionEvents detected inside it. With them, the three lines that make the recording possible at all: the experiments ORM interface declares segmind, generate_orm imports segmind.orm.ormatic_interface, and experiments/pyproject declares the dependency. Plus experiments/montessori/__init__.py, without which pkgutil skips the directory and the generator is never offered SortingIterationResult. Off main rather than off tracy_icra or #256, and this is what makes it small: experiments/montessori does not exist on main at all, so the branch
+    creates the directory holding only these modules, and nothing it needs is newer than main. The rest of #256 stays where it is - the simulated world, semantics, hole geometry, sorting progress and insertion diagnosis are another demo's, and its event monitor is one tracy_icra_segmind already has its own of. The Footprint collision is deferred, not avoided: experiments/montessori/perception/footprint.py and semantic_digital_twin...graph_of_convex_sets/plotting.py both declare a Footprint, so the moment this branch's __init__.py sits over tracy_icra's perception package the generator emits two FootprintDAO classes and SQLAlchemy refuses the mapping. knowledge-directed-perception's montessori-classes-in-the-orm (#223) already renames the perception one to RectifiedFootprint; whichever branch first puts the two together takes that rename.
+- id: episodes-recorded-through-ormatic
+  title: >-
+    Every trial, event, query, answer and failure recorded through ORMatic into SQL
+  branch: claude/icra-experiments-ormatic-episodes-ib9lr3
+  pull_request_number: 271
+  track: long-term-memory
+  depends_on:
+  - scenario-domain-model
+  - run-results-recorded-into-sql
+  status: in_progress
+  session: https://claude.ai/code/session_012ouWhruGFvn9D5AvPmQNRa
+  notes: >-
+    One Episode model for simulation and the robot: the scenario and condition it ran under, its trials, the segmind events seen per tick, every query asked with its per-predicate backend assignment, answer and latency, every insertion attempt with its outcome, the failure type observed and predicted, and what was done after a failure - retried, changed or abandoned. That last is what answers "how did you resolve this the last time it happened"; nothing else in the record carries it, and it was added on 2026-09-04 when Experiment D was planned. Recorded through ORMatic the way ShapeInsertionExperience and SortingIterationResult already are, and replacing both with the one model rather than standing beside them; ResultsDatabase and results_recording keep deciding where and whether a run records. The runner records as it goes, so a run that dies keeps its finished trials, following batch_runner's reasoning. Tests record a trivial episode into SQLite and read it back through the generated interface.
+- id: episodes-queried-by-eql
+  title: >-
+    Long-term memory answered by EQL through the SQL backend, and reports read from it
+  branch: null
+  pull_request_number: null
+  track: long-term-memory
+  depends_on:
+  - episodes-recorded-through-ormatic
+  status: not_started
+  notes: >-
+    The SQL backend is one of the paper's four: the same query language over recorded episodes returns domain objects, so the temporal bucket can be answered from long-term memory ("which pieces did you pick up in the last run", "how often did the square hole fail") and the Report of every experiment is computed from the database rather than from in-process results. Tests assert that a query over a recorded episode returns the same objects the runner wrote, and that a report regenerated from the database equals the one the runner rendered.
+- id: episode-artifacts-recorded
+  title: >-
+    An episode keeps its video, its simulation data and its question-and-answer transcript beside the database
+  branch: null
+  pull_request_number: null
+  track: long-term-memory
+  depends_on:
+  - episodes-recorded-through-ormatic
+  - simulated-camera-feeds-perception
+  status: not_started
+  notes: >-
+    The rows say what happened; these are what a reader - or a vision-language model - can look at, and without them Experiment D has no baseline to compare against. The video is the frames MujocoCamera already renders for MontessoriPerceptionBackend, written per episode rather than discarded; the simulation data is the run's own files, the world it built and the plan it realized; the transcript is every question with its answer, which the episode rows already carry per query, rendered as one readable document. Artifacts sit beside the database addressed by the episode's identifier, so a row references one rather than holding it - the separation ResultsDatabase already draws between where a run records and what it records. Its own item rather than folded into episodes-recorded-through-ormatic because it needs the simulated camera, and folding it would put lane 2's foot item behind lane 1's second. Tests record a two-trial episode and read its video, its files and its transcript back from
+    the episode.
