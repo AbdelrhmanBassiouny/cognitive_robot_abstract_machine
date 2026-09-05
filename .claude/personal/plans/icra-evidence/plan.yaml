@@ -1,0 +1,205 @@
+schema_version: 1
+id: icra-evidence
+title: >-
+  ICRA experiments: experiments in simulation, then on the robot, then released
+description: >-
+  The evidence wave of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits' roadmap.md for why): Experiments A, B, C and D, each run end to end in simulation before the robot, and the released artifact. Every experiment stacks on icra-foundation's scenario model and episode recording, and most stack on icra-mechanism's routing, verification and baselines too; those depends_on edges could not cross the plan boundary and are recorded as blockers instead (see roadmap.md).
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 252
+waves:
+- id: evidence
+  name: Experiments in simulation, then on the robot, then released
+  description: >-
+    Each experiment runs end to end in simulation first, with its episodes in the database and its report generated, and only then on the robot. The artifact packages what both produced.
+tracks:
+- id: experiment-a
+  name: 'Experiment A: question answering'
+  wave: evidence
+  description: Lane 3 in simulation, robot time shared.
+- id: experiment-b
+  name: 'Experiment B: decomposition and verification'
+  wave: evidence
+  description: Lane 1.
+- id: experiment-c
+  name: 'Experiment C: manipulation under ablations'
+  wave: evidence
+  description: Lane 2.
+- id: experiment-d
+  name: 'Experiment D: long-term memory across episodes'
+  wave: evidence
+  description: >-
+    Lane 2. The questions Experiment A asks about the current scene, asked instead of the episode history, against a vision-language model given the whole recorded corpus. Simulation only.
+- id: release
+  name: Figures and the artifact
+  wave: evidence
+  description: Lane 3.
+items:
+- id: question-set-and-ground-truth
+  title: >-
+    The twelve questions in four buckets, as EQL and English, with ground truth and structural requirements
+  branch: null
+  pull_request_number: null
+  track: experiment-a
+  depends_on: []
+  status: not_started
+  notes: >-
+    Freeze first, on the memo's day one. Lookup (links, joints, gripper finger pose), spatial (what, where, colour, surface, left or right), temporal (moved, moved by you, picked up) and embodiment (in hand), each a Question dataclass carrying its EQL, its English, its answer type and the inputs it structurally requires (the memo's table). The temporal questions have two spellings: over working memory (segmind events) and over long-term memory (the SQL backend). Ground truth is the twin in simulation, exact, and the calibrated twin plus a human check on the robot, stated as such. Several of these already exist as presets in the console stack's live_query_source; reuse their EQL.
+  blockers:
+  - >-
+    Cross-plan: depends on icra-foundation's `scenario-domain-model` (in_progress, PR #261), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+- id: experiment-a-in-simulation
+  title: >-
+    Experiment A run end to end in simulation: scenes, temporal scenarios, determinism, three systems, report
+  branch: null
+  pull_request_number: null
+  track: experiment-a
+  depends_on:
+  - question-set-and-ground-truth
+  status: not_started
+  notes: >-
+    Every scene and scripted scenario through the runner, every question through EQL and both VLM systems, five repetitions for variance, episodes in the database, the accuracy-per-bucket, latency, variance and footprint tables generated. The point is that the robot runs are a rerun of a script that already works, with only the scenes replaced.
+  blockers:
+  - >-
+    Cross-plan: depends on icra-foundation's `montessori-scenarios` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-mechanism's `query-routed-per-predicate` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-mechanism's `vlm-baseline-harness` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-foundation's `episodes-recorded-through-ormatic` (in_progress, PR #271), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+- id: experiment-a-on-the-robot
+  title: >-
+    Experiment A on the UR10: random, partial and ambiguous scenes, temporal scenarios, determinism
+  branch: null
+  pull_request_number: null
+  track: experiment-a
+  depends_on:
+  - experiment-a-in-simulation
+  status: not_started
+  notes: >-
+    15 to 20 random scenes, five partial, five near-ambiguous, the four temporal scenarios five times each, every query five times; lighting only if time remains. Robot state recorded with the camera in every take. Ground truth annotated the same day.
+  blockers:
+  - >-
+    Cross-plan: depends on icra-foundation's `tracy-demo-takes-the-integrated-branch` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+- id: experiment-b-in-simulation
+  title: >-
+    Experiment B in simulation: mixed-predicate routing with and without the twin's knowledge, and verification under injected errors
+  branch: null
+  pull_request_number: null
+  track: experiment-b
+  depends_on: []
+  status: not_started
+  notes: >-
+    H1 and H3. The mixed statements with the triangle believed in versus not, reporting per-predicate assignment, region size, detector calls and latency, extending the ratios #238 already measured on the six captures. Then about thirty injected events (offsets, wrong object, pushes) through the perceive-commit-verify loop, reporting precision and recall of disagreement as a detector.
+  blockers:
+  - >-
+    Cross-plan: depends on icra-mechanism's `query-routed-per-predicate` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-mechanism's `physics-verification-backend` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-mechanism's `perturbations` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-foundation's `episodes-recorded-through-ormatic` (in_progress, PR #271), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+- id: experiment-b-on-the-robot
+  title: Experiment B on the UR10
+  branch: null
+  pull_request_number: null
+  track: experiment-b
+  depends_on:
+  - experiment-b-in-simulation
+  status: not_started
+  notes: >-
+    The same script on the live feed. The memo's cut order drops the injection half first and keeps the decomposition half; the simulation numbers stand in for whatever is cut, stated as such.
+  blockers:
+  - >-
+    Cross-plan: depends on icra-foundation's `tracy-demo-takes-the-integrated-branch` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+- id: experiment-c-in-simulation
+  title: >-
+    Experiment C in simulation: every condition, twenty to thirty trials, typed and predicted failures
+  branch: null
+  pull_request_number: null
+  track: experiment-c
+  depends_on: []
+  status: not_started
+  blockers:
+  - >-
+    Cross-plan: the failure-detection story (perception looks where the action promised and reports the difference) is knowledge-directed-perception's expectations-from-events, which that plan owns and has not started. Without it Experiment C reports typed failures but not detected ones.
+  - >-
+    Cross-plan: depends on icra-mechanism's `knowledge-ablations` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-mechanism's `perturbations` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-mechanism's `failure-predicted-from-the-query` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-foundation's `episodes-queried-by-eql` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  notes: >-
+    The insertion trial from a randomised start pose under every condition, board-level completion reported too, every failure typed and every prediction scored, the stacked failure-type bars generated from the database. Runs in batches the way batch_runner already does, so hundreds of trials survive the process's memory growth.
+- id: experiment-c-on-the-robot
+  title: 'Experiment C on the UR10: twenty trials per condition'
+  branch: null
+  pull_request_number: null
+  track: experiment-c
+  depends_on:
+  - experiment-c-in-simulation
+  status: not_started
+  notes: >-
+    Twenty trials per condition, thirty only if the pipeline is stable; the perturbation conditions are never cut. Two days of robot time.
+  blockers:
+  - >-
+    Cross-plan: depends on icra-foundation's `tracy-demo-takes-the-integrated-branch` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+- id: cross-episode-question-set-and-ground-truth
+  title: >-
+    The questions asked of the episode history, with ground truth read from what the runner recorded
+  branch: null
+  pull_request_number: null
+  track: experiment-d
+  depends_on:
+  - question-set-and-ground-truth
+  status: not_started
+  notes: >-
+    Four kinds, each a Question in the shape question-set-and-ground-truth already defines - EQL, English, answer type, and the facts it structurally requires - but spelled over the SQL backend and reaching across episodes rather than into the current scene: has this happened to the robot before and in which episode; what the goal and the conditions were at that time; what differed between the earlier episodes and the current one that bears on the question; and how a failure was resolved the last time it happened. This is the second spelling question-set-and-ground-truth already names for the temporal bucket, carried to every bucket. Ground truth is read from the recorded trial log directly and never through the query under test - the runner's record is what actually happened, and a query checked against itself proves nothing.
+  blockers:
+  - >-
+    Cross-plan: depends on icra-foundation's `episodes-queried-by-eql` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+- id: experiment-d-in-simulation
+  title: >-
+    Experiment D in simulation: the episode history questioned through EQL and through the vision-language baseline
+  branch: null
+  pull_request_number: null
+  track: experiment-d
+  depends_on:
+  - cross-episode-question-set-and-ground-truth
+  status: not_started
+  notes: >-
+    First a corpus worth asking about: the scenarios run under varied conditions and perturbations so the history holds repeats, failures resolved differently, and goals that changed between runs. Then every question through both systems, repeated for variance the way Experiment A does, reporting accuracy against the recorded ground truth, latency, determinism across repetitions, and information availability - whether the corpus holds the facts a question declares it requires. Availability is measured on the corpus once rather than per system, because both systems see the same episodes, so a question nothing could have answered is scored apart from one both had the evidence for. Simulation only, decided 2026-09-04: the questions are about recorded episodes, so the robot episodes Experiments A and C record join the same corpus without a robot session of their own.
+  blockers:
+  - >-
+    Cross-plan: depends on icra-mechanism's `episode-corpus-given-whole-to-the-vlm` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Cross-plan: depends on icra-foundation's `montessori-scenarios` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+- id: paper-figures-from-episodes
+  title: >-
+    Every table and figure in the paper regenerated by one script from the episode database
+  branch: null
+  pull_request_number: null
+  track: release
+  depends_on: []
+  status: not_started
+  notes: >-
+    The writer's item, started before any experiment has run so the first draft's tables are already the script's output on simulated data and the robot numbers drop in by rerunning it. Confidence intervals on every rate.
+  blockers:
+  - >-
+    Cross-plan: depends on icra-foundation's `episodes-queried-by-eql` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+- id: benchmark-artifact
+  title: >-
+    The released artifact: scenes, ground truth, questions, prompts, conditions, captures and the episode database
+  branch: null
+  pull_request_number: null
+  track: release
+  depends_on:
+  - experiment-a-on-the-robot
+  - experiment-b-on-the-robot
+  - experiment-c-on-the-robot
+  status: not_started
+  notes: >-
+    A repository a reader can run the simulation experiments from and compare against the robot episodes with: the Scenario definitions, the question set, the VLM prompts, the Condition and Perturbation definitions, the six captures plus every new one, and a dump of the episode database. The rosbags stay out (4.7 GB). Packaged on the memo's 12 to 13 September.
