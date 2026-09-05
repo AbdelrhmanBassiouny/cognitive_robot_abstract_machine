@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from plan_item_bootstrap import PlanDocument
 from plan_size_budget import SizeBudget
 from scratch_repository import NOTES_BRANCH, ScratchRepository
 
@@ -167,9 +168,9 @@ def test_refuses_a_save_that_would_leave_the_plan_over_the_item_budget(
     save_plan_repository: ScratchRepository,
 ):
     manifest_path = save_plan_repository.write(
-        "plan.yaml", oversized_item_manifest(SizeBudget().maximum_items + 1)
+        PlanDocument.MANIFEST, oversized_item_manifest(SizeBudget().maximum_items + 1)
     )
-    roadmap_path = save_plan_repository.write("roadmap.md", "roadmap\n")
+    roadmap_path = save_plan_repository.write(PlanDocument.ROADMAP, "roadmap\n")
     result = run_save_plan(
         save_plan_repository,
         "test-plan",
@@ -186,10 +187,10 @@ def test_refuses_a_save_that_would_leave_the_plan_over_the_line_budget(
     save_plan_repository: ScratchRepository,
 ):
     manifest_path = save_plan_repository.write(
-        "plan.yaml", "id: test-plan\nitems: []\n"
+        PlanDocument.MANIFEST, "id: test-plan\nitems: []\n"
     )
     roadmap_path = save_plan_repository.write(
-        "roadmap.md",
+        PlanDocument.ROADMAP,
         "".join(f"line {number}\n" for number in range(SizeBudget().maximum_lines)),
     )
     result = run_save_plan(
@@ -206,9 +207,9 @@ def test_refuses_a_save_that_would_leave_the_plan_over_the_line_budget(
 
 def test_a_refused_save_pushes_nothing(save_plan_repository: ScratchRepository):
     manifest_path = save_plan_repository.write(
-        "plan.yaml", oversized_item_manifest(SizeBudget().maximum_items + 1)
+        PlanDocument.MANIFEST, oversized_item_manifest(SizeBudget().maximum_items + 1)
     )
-    roadmap_path = save_plan_repository.write("roadmap.md", "roadmap\n")
+    roadmap_path = save_plan_repository.write(PlanDocument.ROADMAP, "roadmap\n")
     run_save_plan(
         save_plan_repository,
         "test-plan",
@@ -228,9 +229,9 @@ def test_a_refused_save_pushes_nothing(save_plan_repository: ScratchRepository):
 
 def test_a_plan_within_budget_still_saves(save_plan_repository: ScratchRepository):
     manifest_path = save_plan_repository.write(
-        "plan.yaml", oversized_item_manifest(SizeBudget().maximum_items)
+        PlanDocument.MANIFEST, oversized_item_manifest(SizeBudget().maximum_items)
     )
-    roadmap_path = save_plan_repository.write("roadmap.md", "roadmap\n")
+    roadmap_path = save_plan_repository.write(PlanDocument.ROADMAP, "roadmap\n")
     result = run_save_plan(
         save_plan_repository,
         "test-plan",
