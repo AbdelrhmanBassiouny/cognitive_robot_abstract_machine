@@ -471,6 +471,38 @@ items:
       the same object. Experiment B's ~30 injected events and Experiment C's
       perturbation conditions are drawn from these.
 
+  - id: expectation-checked-under-perturbation-in-simulation
+    title: "A robot plan run in simulation under a perturbation, and the violated expectation reported as the failure"
+    branch: null
+    pull_request_number: null
+    track: failure
+    depends_on: [perturbations, integrated-simulation-pipeline]
+    status: not_started
+    notes: >-
+      Added 2026-09-05 at the developer's ask on knowledge-directed-perception's
+      #257 (r3940274577). The expectation process - an action's declared effect
+      armed as relations of the twin's vocabulary, Segmind's events moving the
+      belief by what each declares, a look asked for the same relations, and
+      the violated ones reported as the failure - is tested there over a
+      rendered scene and a hand-built world, never over a plan the robot
+      actually executes. This item runs the insertion plan in the integrated
+      simulation and applies one perturbation from `perturbations` at a named
+      step, asserting that the expectation the release armed is contradicted in
+      exactly the relation the perturbation breaks: a piece pushed off the lid
+      after the release contradicts Near and InsideRegion, a release that stops
+      short so the piece rests on the lid contradicts InsideRegion alone, a
+      piece the gripper never let go of is reported as nothing found, and an
+      unperturbed run contradicts nothing. It is also the first place the
+      success case is checked against a look rather than a stated sighting,
+      which is where a piece sunk in its hole has to be told from one standing
+      over it. A test of the mechanism end to end rather than an experiment,
+      so it sits in the failure track beside the perturbations it draws on;
+      experiment-c-in-simulation reads its result rather than re-establishing
+      it. Cross-plan: the mechanism is knowledge-directed-perception's
+      expectations-from-events (#257) and its general half lives in
+      segmind.expectations; this item does not start before that branch is
+      merged into the integrated branch.
+
   - id: failure-predicted-from-the-query
     title: "The failure type predicted from the query result before execution, and scored against what happened"
     branch: null

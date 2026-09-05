@@ -861,3 +861,31 @@ shape the memo's cut order already takes with B's injection half.
 The open question about which vision-language model and provider the baseline calls now
 covers D as well, and gains a second part: how many episodes fit one context once video
 frames are sampled, which is what sets D's cap.
+
+## 2026-09-05: the expectation mechanism gets its own simulated test
+
+Raised by the developer on knowledge-directed-perception's #257 (r3940274577): *"I want
+to test that with an actual robot plan execution in simulation with perturbations, check
+if that is already in the icra-experiments plan such that it tests this whole expectation
+process or not, if not then we need to add it there."*
+
+It was not. `perturbations` builds the perturbations and `experiment-c-in-simulation`
+runs the insertion trial under every condition and types every failure, but nothing
+between them asserts that the *expectation* an insertion arms is contradicted in the
+relation the perturbation actually breaks: Experiment C reads the failure type off the
+evidence, and a wrong expectation report would be typed and counted rather than caught.
+`failure-taxonomy-and-typing` and `experiment-c-in-simulation` both carry a blocker naming
+expectations-from-events as their input, which is the sign that its correctness was being
+assumed downstream rather than tested anywhere.
+
+So `expectation-checked-under-perturbation-in-simulation` is new, in the `failure` track,
+depending on `perturbations` and `integrated-simulation-pipeline`. Its four cases are the
+four outcomes the report can have, since the relation that fails names the perturbation
+and an unperturbed run fails none, and one of them matters beyond the mechanism: it is the
+first check of the *success* case against a real look, where a piece sunk in its hole has
+to be told from one standing over it. On #257 that case is checked only against a stated
+sighting, because a look reports a piece's height from the depth image with a fallback
+that puts every unresolved piece standing on the plane it was found in.
+
+Recorded here rather than on that plan because the test belongs to the pipeline that can
+run a plan, and that pipeline is this plan's `integrated-simulation-pipeline`.
