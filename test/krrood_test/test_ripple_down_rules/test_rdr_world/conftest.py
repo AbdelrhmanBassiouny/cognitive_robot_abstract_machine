@@ -138,6 +138,41 @@ def drawer_cabinet_rdr(drawer_cabinet_human_expert) -> GeneralRDR:
     return rdr
 
 
+@dataclass
+class SavedRDRModel:
+    """
+    A model written to disk, and where to read it back from.
+    """
+
+    directory: str
+    """
+    The directory the model was saved into.
+    """
+
+    name: str
+    """
+    The name the model was saved under.
+    """
+
+    def load(self) -> GeneralRDR:
+        """
+        :return: The model read back from where it was saved.
+        """
+        return GeneralRDR.load(self.directory, model_name=self.name)
+
+
+@pytest.fixture
+def saved_drawer_cabinet_rdr(drawer_cabinet_rdr) -> SavedRDRModel:
+    """
+    Fixture to write the drawer and cabinet model to disk, so that a test reading it
+    back provisions it itself rather than relying on another test having saved it.
+    """
+    directory = os.path.join(
+        dirname(__file__), "..", "test_results", "world_drawer_cabinet_rdr"
+    )
+    return SavedRDRModel(directory, drawer_cabinet_rdr.save(directory))
+
+
 @pytest.fixture
 def drawer_cabinet_ai_rdr(drawer_cabinet_ai_expert) -> GeneralRDR:
     world = handles_and_containers_world()
