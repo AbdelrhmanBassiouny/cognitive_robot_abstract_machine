@@ -5680,3 +5680,83 @@ head, which is the two tests added; segmind 88 passed and 1 skipped against 84/1
 added; experiments with the six ROS modules excluded 519 passed, 1 skipped, 11 xfailed
 against 518/1/11, the one added. The twin's failing set is unchanged by name.
 
+
+## `perception-backend`: the red krrood check root-caused, and it was never this branch's (2026-09-05)
+
+The bisect above placed `test_each_lib (krrood)` on #222 and stopped there, because the
+failing test is byte-identical to `main` and `main` is green. Both facts are true and the
+conclusion drawn from them was still wrong. The fault is on `main`; #222 only made it
+visible. It is fixed in **#268**, off `main`, with the `bug` label.
+
+### The test loads something no fixture provides
+
+`test_draw_evaluated_tree_for_drawer_cabinet_rdr` calls
+`GeneralRDR.load(filename, model_name="world_rdr")` and nothing in its setup ever saved
+that model. `test_results/world_drawer_cabinet_rdr/` is untracked generated output --
+`git ls-files` reports **0 tracked files** under it, against 9 elsewhere in
+`test_results/` -- and the only writer is `test_save_and_load_drawer_cabinet_rdr`, three
+tests earlier in the same file. In file order the two line up and the module passes. CI
+runs `pytest -n auto`, where the two can land on different xdist workers and the draw test
+reaches the load first.
+
+### It reproduces on a clean checkout, deleting nothing
+
+Running that one test on its own, `git status` empty and all 9 tracked `test_results`
+files present, gives CI's error verbatim:
+
+```
+RDRLoadError: Could not load the rdr model world_rdr from .../world_drawer_cabinet_rdr/world_rdr
+```
+
+This is what the withdrawn reproduction was reaching for and got wrong by deleting tracked
+files. The directory it needed to be missing was the *untracked* one, which a fresh
+checkout never has in the first place.
+
+### Why #222 and not #221
+
+#222 is the first branch in this stack that adds krrood *tests* -- a new module of them.
+That changes the suite's test count, which is what xdist's distribution is computed from,
+so a latent order dependency that had been landing green flipped and stayed flipped for
+everything stacked past it. Nothing about #222's own 260 lines of krrood source is
+involved. The bisect's evidence was sound; what it could not see is that "first branch to
+touch krrood" and "the branch whose diff causes it" are not the same claim.
+
+### What #268 changes
+
+A `saved_drawer_cabinet_rdr` fixture writes the model and says where it went, so each test
+that reads it back provisions it itself. All six tests in the module now pass run
+individually with the generated directory absent, which is the property the parallel run
+needs and the one that was missing. No assertion changed -- the defect was the undeclared
+precondition, not what the test checks.
+
+`GeneralRDR.load` now chains the cause (`from e`). That was the one real finding the
+earlier round recorded, and it is why CI reported no reason at all.
+
+The latent fragility is fixed too, and it was worth more than it looked. `save` writes
+`__init__.py` only into the directory it is handed, while the import root is the first
+ancestor *without* one -- so a generated model was importable only when it happened to sit
+under a package root already on the search path. `make_path_importable` puts that root on
+the path when generated code is imported, which is also what lets a model be saved into a
+temporary directory at all. The walk that finds the root is factored out of
+`get_import_path_from_path`, which keeps its behaviour and loses a hand-rolled `/` split.
+
+### Verification, and the one thing this container could not do
+
+`test_ripple_down_rules`: **78 passed** against **76** on `main`, the two added being the
+new tests. Full `test/krrood_test`: **2280 passed**, 5 skipped. The only failures on either
+side are `test_object_diagram`'s two, which need the graphviz `dot` binary this container
+lacks. Every test in `test_rdr_world.py` was also run on its own with the generated
+directory removed.
+
+`pytest -n` could not be run here -- the sandbox blocks it -- so the scheduling half is
+read off the workflow's own `pytest -n auto` rather than observed. The order dependency
+itself needs no parallelism to demonstrate, which is why that gap does not weaken the
+diagnosis.
+
+### For the stack
+
+#268 is based on `main`, not on #222, because it touches only files that exist on `main`
+and changes nothing #222 introduced -- removing its edits leaves #222 exactly as it is.
+Fixing it on #222 would also have left `main` and every other branch carrying the same
+latent fault. #222, #231, #238, #239, #259 and #266 all go green on this check once they
+take `main` in after #268 lands; none of those merges is done here.

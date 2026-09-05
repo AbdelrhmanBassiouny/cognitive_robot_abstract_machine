@@ -486,18 +486,14 @@ items:
   blockers:
     - >-
       `test_each_lib (krrood)` is red on #222, and every branch stacked on it inherits it - #227,
-      #231, #238, #239, #259 and everything past them. Bisected across the stack on 2026-09-05:
-      #221 is green on all 23 checks, #222 is red on krrood alone, and the one failing test,
-      `test_rdr_world.py::test_draw_evaluated_tree_for_drawer_cabinet_rdr` with `RDRLoadError:
-      Could not load the rdr model world_rdr`, is byte-identical to `main`, whose own latest CI is
-      green. #222 is the first branch in this stack to touch krrood, so the failure is this item's
-      to root-cause rather than any dependent's. It does not reproduce in a container: that module
-      alone and the whole `test_ripple_down_rules` directory both pass on a clean tree carrying
-      #222's krrood changes, so it is an interaction with something the full CI run does. An
-      apparent local reproduction was invalid and is withdrawn in roadmap.md - it came from
-      deleting `test_results/`, whose contents are tracked despite the directory being named in
-      `.gitignore`. The one real finding is diagnosability: `GeneralRDR.load` raises `RDRLoadError`
-      without `from e`, so CI reports no cause at all.
+      #231, #238, #239, #259 and everything past them. Root-caused on 2026-09-05 and fixed in
+      #268, off `main`: the failure is not this item's diff at all. It is an order-dependent test
+      on `main` - `test_draw_evaluated_tree_for_drawer_cabinet_rdr` loads a model directory that
+      only `test_save_and_load_drawer_cabinet_rdr`, earlier in the same file, writes, and which
+      `git ls-files` reports as untracked generated output. Sequentially the two line up by luck;
+      CI runs `pytest -n auto`, where they can land on different xdist workers. #222 flipped it
+      because it is the first branch in the stack to add krrood tests, which changes the count
+      xdist distributes by. #222's check clears once it takes #268 in - that merge is not done.
     - >-
       The `needs-resolution` label the maintenance routine set on the 2026-09-02 conflict is still
       on the branch, so it stays withheld from promotion until the routine's own next pass clears
