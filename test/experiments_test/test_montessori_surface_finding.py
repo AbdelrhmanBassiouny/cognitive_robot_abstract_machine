@@ -26,8 +26,10 @@ from experiments.montessori.perception.surface_finding import (
     MeasuredSurfaceFinder,
     ModelledSurfaceFinder,
     SoughtSurface,
+    SurfaceFinder,
     SurfaceRules,
 )
+from krrood.entity_query_language.backends import PerceptionDetector
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
@@ -365,10 +367,49 @@ def test_a_rule_added_while_the_rules_are_in_use_changes_the_next_answer() -> No
         frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
     )
     assert rules.finder_for(glossy) is rules.modelled
-    rules.add_rule(
-        rules.stated_surface.surface.finish == SurfaceFinish.GLOSSY, rules.measured
-    )
+    rules.add_rule(glossy, rules.measured)
     assert rules.finder_for(glossy) is rules.measured
+
+
+def test_the_rules_are_stated_over_the_surface_being_sought() -> None:
+    """
+    What a rule reads is the surface being sought itself, and what the rules work out
+    about it is the slot that surface leaves open, so neither is named a second time
+    here.
+    """
+    rules = SurfaceRules()
+
+    assert rules.rules.case_type is SoughtSurface
+    assert rules.rules.conclusion_attribute_name in vars(
+        SoughtSurface(
+            modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
+            frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
+        )
+    )
+
+
+def test_the_rules_can_be_read_as_a_tree() -> None:
+    """
+    A tree of rules is worth having only if it can be read, so the finder chosen for one
+    surface is named in the rendering of the rules that chose it.
+    """
+    rules = SurfaceRules()
+    sought = SoughtSurface(
+        modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT, SurfaceFinish.MIRROR),
+        frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
+    )
+
+    assert type(rules.measured).__name__ in rules.render_tree(sought)
+
+
+def test_a_finder_answers_the_kind_of_look_it_binds() -> None:
+    """
+    A finder is one of the same family of detectors every other look is answered by, and
+    what its conditions may read is part of its signature rather than a field stating it
+    again.
+    """
+    assert issubclass(SurfaceFinder, PerceptionDetector)
+    assert MeasuredSurfaceFinder.look_type() is SoughtSurface
 
 
 def test_the_rules_answer_a_mirror_finished_surface_from_the_picture() -> None:
@@ -420,7 +461,10 @@ def test_each_finder_declares_the_surfaces_it_can_answer() -> None:
         frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
     )
     answers = [
-        (finder.answers(bounded), finder.answers(unbounded))
+        (
+            bool(finder.asked_about(bounded).tolist()),
+            bool(finder.asked_about(unbounded).tolist()),
+        )
         for finder in (ModelledSurfaceFinder(), MeasuredSurfaceFinder())
     ]
     assert answers == [(True, False), (True, False)]
@@ -473,6 +517,6 @@ def test_a_measurement_is_declared_only_where_there_is_depth_to_take_it_in() -> 
     colour_only = replace(seen, depth=np.zeros((480, 640), dtype=float))
     finder = MeasuredSurfaceFinder()
     assert [
-        finder.answers(SoughtSurface(mirror, seen)),
-        finder.answers(SoughtSurface(mirror, colour_only)),
+        bool(finder.asked_about(SoughtSurface(mirror, seen)).tolist()),
+        bool(finder.asked_about(SoughtSurface(mirror, colour_only)).tolist()),
     ] == [True, False]

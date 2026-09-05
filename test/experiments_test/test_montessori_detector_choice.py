@@ -112,6 +112,16 @@ def _piece_of_category(category: MontessoriShapeCategory) -> KnownPiece:
     return piece
 
 
+def _piece_of_no_outline(hue: int = 30) -> KnownPiece:
+    """
+    A piece whose shape is not modelled, which is the look the edge fit declares it
+    cannot answer.
+
+    :param hue: The colour it was measured to be, as OpenCV reports hue.
+    """
+    return replace(_piece_of_hue(hue), outline=None)
+
+
 def _color_of_hue(hue: int) -> Color:
     """
     The colour a hue names, at full saturation and brightness.
@@ -124,12 +134,18 @@ def _color_of_hue(hue: int) -> Color:
 # %% what the rules read
 
 
-def test_a_target_takes_the_finish_the_surface_states():
+def test_a_look_reads_the_finish_off_the_surface_it_holds():
+    """
+    A look holds the surface itself rather than a copy of what it happens to say, so
+    what a rule reads about a surface is what the world states about it, with nothing in
+    between to fall out of step with it.
+    """
     surface = _surface(finish=SurfaceFinish.MIRROR)
 
-    look = TargetOnSurface.of(surface, _piece_of_hue(30))
+    look = TargetOnSurface(surface, _piece_of_hue(30))
 
-    assert look.surface_finish is SurfaceFinish.MIRROR
+    assert look.surface is surface
+    assert look.surface.finish is SurfaceFinish.MIRROR
 
 
 def test_a_target_whose_hue_is_far_from_the_surface_separates_from_it():
@@ -137,7 +153,7 @@ def test_a_target_whose_hue_is_far_from_the_surface_separates_from_it():
     target_hue = surface_hue + HUE_TOLERANCE + 1
     surface = _surface(color=_color_of_hue(surface_hue))
 
-    look = TargetOnSurface.of(surface, _piece_of_hue(target_hue))
+    look = TargetOnSurface(surface, _piece_of_hue(target_hue))
 
     assert hue_distance(surface_hue, target_hue) > HUE_TOLERANCE
     assert look.target_separates_from_the_surface_by_color
@@ -148,7 +164,7 @@ def test_a_target_wearing_the_surfaces_own_hue_does_not_separate_from_it():
     target_hue = 21
     surface = _surface(color=_color_of_hue(surface_hue))
 
-    look = TargetOnSurface.of(surface, _piece_of_hue(target_hue))
+    look = TargetOnSurface(surface, _piece_of_hue(target_hue))
 
     assert hue_distance(surface_hue, target_hue) <= HUE_TOLERANCE
     assert not look.target_separates_from_the_surface_by_color
@@ -157,7 +173,7 @@ def test_a_target_wearing_the_surfaces_own_hue_does_not_separate_from_it():
 def test_a_target_on_a_surface_of_unstated_color_is_not_claimed_to_separate():
     surface = _surface(color=None)
 
-    look = TargetOnSurface.of(surface, _piece_of_hue(30))
+    look = TargetOnSurface(surface, _piece_of_hue(30))
 
     assert not look.target_separates_from_the_surface_by_color
 
@@ -167,7 +183,7 @@ def test_the_hue_separation_wraps_around_the_colour_circle():
     target_hue = HUE_RANGE - 1
     surface = _surface(color=_color_of_hue(surface_hue))
 
-    look = TargetOnSurface.of(surface, _piece_of_hue(target_hue))
+    look = TargetOnSurface(surface, _piece_of_hue(target_hue))
 
     assert not look.target_separates_from_the_surface_by_color
 
@@ -176,14 +192,14 @@ def test_the_hue_separation_wraps_around_the_colour_circle():
 
 
 def test_the_edge_fit_answers_a_look_for_a_piece_of_known_outline():
-    look = TargetOnSurface.of(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
+    look = TargetOnSurface(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
 
     assert EdgeFitDetector().asked_about(look).tolist()
 
 
 def test_the_color_blob_answers_only_where_colour_separates_the_target():
     separating, merging = (
-        TargetOnSurface.of(_surface(color=_color_of_hue(20)), _piece_of_hue(hue))
+        TargetOnSurface(_surface(color=_color_of_hue(20)), _piece_of_hue(hue))
         for hue in (20 + HUE_TOLERANCE + 1, 21)
     )
     detector = ColorBlobDetector()
@@ -194,12 +210,12 @@ def test_the_color_blob_answers_only_where_colour_separates_the_target():
 
 def test_a_detector_states_the_looks_it_answers_once_and_is_asked_per_look():
     detector = EdgeFitDetector()
-    look = TargetOnSurface.of(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
+    look = TargetOnSurface(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
 
     assert detector.asked_about(look).tolist()
     stated = detector.answerable_looks
     assert not detector.asked_about(
-        replace(look, target_outline_is_known=False)
+        replace(look, target=_piece_of_no_outline())
     ).tolist()
 
     assert detector.answerable_looks is stated
@@ -217,7 +233,7 @@ def rules() -> DetectorRules:
 
 
 def test_a_mirror_surface_is_looked_at_by_fitting_edges(rules):
-    look = TargetOnSurface.of(
+    look = TargetOnSurface(
         _surface(finish=SurfaceFinish.MIRROR, color=_color_of_hue(20)),
         _piece_of_hue(60),
     )
@@ -226,7 +242,7 @@ def test_a_mirror_surface_is_looked_at_by_fitting_edges(rules):
 
 
 def test_a_matte_surface_is_looked_at_by_colour_where_colour_separates(rules):
-    look = TargetOnSurface.of(
+    look = TargetOnSurface(
         _surface(finish=SurfaceFinish.MATTE, color=_color_of_hue(20)),
         _piece_of_hue(60),
     )
@@ -235,7 +251,7 @@ def test_a_matte_surface_is_looked_at_by_colour_where_colour_separates(rules):
 
 
 def test_a_target_wearing_a_matte_surfaces_hue_falls_back_to_fitting_edges(rules):
-    look = TargetOnSurface.of(
+    look = TargetOnSurface(
         _surface(finish=SurfaceFinish.MATTE, color=_color_of_hue(19)),
         _piece_of_hue(21),
     )
@@ -244,13 +260,13 @@ def test_a_target_wearing_a_matte_surfaces_hue_falls_back_to_fitting_edges(rules
 
 
 def test_a_surface_of_unstated_finish_is_looked_at_by_fitting_edges(rules):
-    look = TargetOnSurface.of(_surface(color=_color_of_hue(20)), _piece_of_hue(60))
+    look = TargetOnSurface(_surface(color=_color_of_hue(20)), _piece_of_hue(60))
 
     assert isinstance(rules.detector_for(look), EdgeFitDetector)
 
 
 def test_the_rules_answer_with_a_detector_they_were_given(rules):
-    look = TargetOnSurface.of(
+    look = TargetOnSurface(
         _surface(finish=SurfaceFinish.MATTE, color=_color_of_hue(20)),
         _piece_of_hue(60),
     )
@@ -259,10 +275,15 @@ def test_the_rules_answer_with_a_detector_they_were_given(rules):
 
 
 def test_a_look_no_detector_answers_is_refused(rules):
+    """
+    A piece whose outline is not modelled has nothing for the edge fit to lay over what
+    the camera saw, and on a surface whose colour it shares nothing for the colour blob
+    to cut it out of, so the look is refused rather than answered by a detector that
+    declared it could not.
+    """
     look = TargetOnSurface(
-        surface_finish=SurfaceFinish.MATTE,
-        target_outline_is_known=False,
-        target_separates_from_the_surface_by_color=True,
+        _surface(finish=SurfaceFinish.MATTE, color=_color_of_hue(19)),
+        _piece_of_no_outline(21),
     )
 
     with pytest.raises(NoDetectorAnswersTheLook):
@@ -271,13 +292,37 @@ def test_a_look_no_detector_answers_is_refused(rules):
 
 def test_every_detector_the_rules_choose_declared_it_could_answer(rules):
     looks = [
-        TargetOnSurface.of(_surface(finish=finish, color=_color_of_hue(19)), piece)
+        TargetOnSurface(_surface(finish=finish, color=_color_of_hue(19)), piece)
         for finish in (None, SurfaceFinish.MATTE, SurfaceFinish.MIRROR)
         for piece in (_piece_of_hue(21), _piece_of_hue(60))
     ]
 
     for look in looks:
         assert rules.detector_for(look).asked_about(look).tolist()
+
+
+def test_the_rules_are_stated_over_the_look_itself(rules):
+    """
+    What a rule reads is the look being taken, and what the rules work out about it is
+    the slot that look leaves open, so neither is named a second time here.
+    """
+    assert rules.rules.case_type is TargetOnSurface
+    assert rules.rules.conclusion_attribute_name in vars(
+        TargetOnSurface(_surface(), _piece_of_hue(30))
+    )
+
+
+def test_the_rules_can_be_read_as_a_tree(rules):
+    """
+    A tree of rules is worth having only if it can be read, so the detector chosen for
+    one look is named in the rendering of the rules that chose it.
+    """
+    look = TargetOnSurface(
+        _surface(finish=SurfaceFinish.MATTE, color=_color_of_hue(20)),
+        _piece_of_hue(60),
+    )
+
+    assert type(rules.color_blob).__name__ in rules.render_tree(look)
 
 
 # %% growing the rules while they are in use
@@ -320,13 +365,13 @@ def test_a_situation_the_rules_did_not_cover_is_given_a_rule_while_they_are_in_u
     rules,
 ):
     added = DetectorAddedAfterTheRulesWereStated()
-    look = TargetOnSurface.of(
+    look = TargetOnSurface(
         _surface(finish=SurfaceFinish.GLOSSY, color=_color_of_hue(19)),
         _piece_of_hue(21),
     )
     assert rules.detector_for(look) is rules.edge_fit
 
-    rules.add_rule(rules.stated_look.surface_finish == SurfaceFinish.GLOSSY, added)
+    rules.add_rule(look, added)
 
     assert rules.detector_for(look) is added
 
@@ -334,17 +379,20 @@ def test_a_situation_the_rules_did_not_cover_is_given_a_rule_while_they_are_in_u
 def test_a_rule_added_while_the_rules_are_in_use_leaves_the_stated_ones_answering(
     rules,
 ):
-    matte = TargetOnSurface.of(
+    matte = TargetOnSurface(
         _surface(finish=SurfaceFinish.MATTE, color=_color_of_hue(20)),
         _piece_of_hue(60),
     )
-    mirror = TargetOnSurface.of(
+    mirror = TargetOnSurface(
         _surface(finish=SurfaceFinish.MIRROR, color=_color_of_hue(20)),
         _piece_of_hue(60),
     )
 
     rules.add_rule(
-        rules.stated_look.surface_finish == SurfaceFinish.GLOSSY,
+        TargetOnSurface(
+            _surface(finish=SurfaceFinish.GLOSSY, color=_color_of_hue(19)),
+            _piece_of_hue(21),
+        ),
         DetectorAddedAfterTheRulesWereStated(),
     )
 
@@ -499,9 +547,7 @@ def test_the_world_states_a_finish_so_a_look_at_its_lid_is_answered_by_colour(ru
     [board] = montessori.world.get_semantic_annotations_by_type(ShapeSortingBoard)
     lid = WorkspaceSurface.of_body(board.root, montessori.world.root)
 
-    look = TargetOnSurface.of(
-        lid, KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
-    )
+    look = TargetOnSurface(lid, KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE])
 
     assert rules.detector_for(look) is rules.color_blob
 
@@ -511,7 +557,7 @@ def test_the_worlds_own_table_is_looked_at_by_fitting_edges(rules):
     [table] = montessori.world.get_semantic_annotations_by_type(Table)
     surface = WorkspaceSurface.of_body(table.root, montessori.world.root)
 
-    look = TargetOnSurface.of(
+    look = TargetOnSurface(
         surface, KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     )
 
@@ -523,7 +569,7 @@ def test_a_piece_wearing_the_boards_own_wood_falls_back_to_fitting_edges(rules):
     [board] = montessori.world.get_semantic_annotations_by_type(ShapeSortingBoard)
     lid = WorkspaceSurface.of_body(board.root, montessori.world.root)
 
-    look = TargetOnSurface.of(
+    look = TargetOnSurface(
         lid, KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
     )
 
