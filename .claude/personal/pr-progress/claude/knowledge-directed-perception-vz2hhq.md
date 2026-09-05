@@ -51,30 +51,31 @@ Tests first for each of 2 and 3.
   pytest ... --orm-build=never`; `--orm-build=never` is needed because the experiments ORM
   wants `json_msgs`, which exists only in the CI image.
 
-## Next — blocked on a design call
+## Done (continued)
 
-Steps 2 and 3 are stated in the plan above, but authoring either tree through
-`EQLSingleClassRDR.from_underspecified` hits something `LookRules` did not:
+- Steps 2 and 3 done and pushed (`d3413bb08`). `TargetOnSurface` stops flattening and
+  holds the surface and the piece; `SoughtSurface` gains the open slot; both trees moved
+  onto `EQLSingleClassRDR.from_underspecified`; `SurfaceFinder` became a
+  `PerceptionDetector[SoughtSurface]`. 461 passed, 2 skipped, 16 xfailed against the
+  456 baseline. Docstrings formatted.
 
-- `DetectorRules`'s discriminating condition is `surface.finish == MATTE`, which is the
-  *rules'* knowledge (the colour blob is cheaper there — #231 measured 89 ms against
-  126 ms), not either detector's capability. #266's
-  `state_the_detectors_own_condition` expert therefore cannot author this tree, and
-  `ConditionResolver` cannot either — it only reuses conditions already in the tree.
-  Fitting on capabilities alone would answer a mirror-finished surface by the colour
-  blob wherever colour separates the piece, reversing #231's measured decision.
-- `SurfaceRules`'s fitting cases need an `RgbdFrame`, because
-  `MeasuredSurfaceFinder.capability` reads `frame.carries_depth`. Authoring by `fit`
-  means constructing example pictures inside production code.
+## The two design calls, as answered
 
-Put to the developer rather than decided.
+Both were put to the developer and both took the recommended option:
 
-## Also found, not fixed here
+- **Where the discriminating condition comes from.** Each rules class supplies its own
+  expert, answering with the detector's capability and'ed with the situation the rules
+  choose it in (`surface.finish == MATTE` for the colour blob, `== MIRROR` for the
+  measurement). The situation is read off the look the rule is being stated from, not
+  hardcoded — which is also what makes `add_rule` work for a finish nobody foresaw. The
+  first build did hardcode it, and the glossy `add_rule` test caught that.
+- **How `SurfaceRules` gets its fitting cases.** Minimal example pictures built in the
+  rules: a one-pixel `RgbdFrame` that does or does not carry depth, which is everything
+  a rule reads of a picture.
 
-- `TargetOnSurface.target_outline_is_known` is `target.outline is not None` over a
-  `KnownPiece` whose `outline` is a non-optional `np.ndarray`, so it is unconditionally
-  True — the same defect the item's own notes record for `SoughtSurface`. Semantics kept
-  for now; it is a question about `KnownPiece`, not about this item.
+## Next
+
+Nothing outstanding on the branch. It is a draft; CI has not been read for this push.
 
 ## Blocked / to report
 
