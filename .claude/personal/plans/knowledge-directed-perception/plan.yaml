@@ -1621,6 +1621,25 @@ items:
     them, the second carrying the honest account he asked for of what subclassing Match
     bought and cost. krrood 1337 passed and 3 skipped against 1336; segmind 88 and 1 skipped
     unchanged; experiments 521, 1 skipped, 11 xfailed against 520.
+
+    The red CI of 2026-09-05, read for the first time on this branch and fixed as 1e93c138.
+    Nine of the twenty-three checks were failing and all nine were one crash: every job that
+    builds the ORM interfaces died with AttributeError: 'types.GenericAlias' object has no
+    attribute '__memo__', whichever package the job was for. #255 is green on all 23, so it
+    was this branch's. make_specialized_dataclass was memoized, and memoize caches on the
+    object it is handed - a type alias here rather than an instance, and a class whose
+    __class_getitem__ comes from types.GenericAlias rather than from Generic subscripts to an
+    alias that holds no attributes at all. krrood's own Variable is one, being a context
+    manager, and the segmind generator reaches Variable[Relation] through the Match[Relation]
+    fields an expectation and an event's Effect are written with. The result is cached against
+    the alias instead of on it. A generic that is also a context manager is in krrood's shared
+    test dataset now, so its own conftest fails at collection if the fix is reverted. One thing
+    is put to the developer rather than decided: segmind's interface now maps Match_RelationDAO
+    and Variable_RelationDAO, which follows from the design he asked for, and an ignored_classes
+    entry is where it goes if he would rather the query graph stayed out of the schema. Whole
+    krrood suite 2340 passed, 5 skipped, 2 failed - the two being test_object_diagram's, which
+    needs a graphviz binary this container has not got; segmind 88 and 1 skipped and experiments
+    521, 1 skipped, 11 xfailed, both unchanged.
 - id: predicted-state-from-declared-effects
   title: Predict the twin's current state from what the actions and the events declared, and ask perception from it
   branch: null

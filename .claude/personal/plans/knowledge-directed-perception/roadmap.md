@@ -6420,3 +6420,73 @@ already holds, which is where that question belonged.
 `.claude/hooks/plan_item_bootstrap.py` still writes item fields at four-space indentation
 against this plan's two, so `plan.yaml` was edited directly again -- the ninth round to
 work around one unfixed script, and still wanting its own bug-fix pull request.
+
+### `expectations-from-events`: the red CI of 2026-09-05, and a cache written onto its own key
+
+The item's own notes had said, three rounds running, that CI on the head was unread. Read
+on 2026-09-05: **nine of the twenty-three checks were failing**, and all nine were one
+crash. `#255` is green on all 23, so every one of them was this branch's.
+
+#### One crash, nine jobs
+
+Every job that builds the ORM interfaces — `semantic_digital_twin`, `experiments`,
+`giskardpy`, `coraplex`, and the four notebook/quiz/demo jobs — died the same way, inside
+**segmind's** generator whichever package the job was for, because they all run
+`cognitive_robot_abstract_machine.orm_generation` over every generator in dependency order:
+
+```
+segmind/scripts/generate_orm.py:32  ORMatic.from_package([segmind], ...)
+  class_diagram.py:1214  _create_nodes_for_specialized_generic_type_hints
+  class_diagram.py:396   make_specialized_dataclass(self.clazz)
+  krrood/utils.py:694    self.__memo__ = {}
+AttributeError: 'types.GenericAlias' object has no attribute '__memo__'
+```
+
+Worth recording as a shape rather than an incident: **a red check on a job whose sources
+the diff does not contain is not automatically someone else's.** The bisect of 2026-09-05
+on the other stack made exactly that reading and had to be corrected. Here the opposite
+holds — the diff touches only `segmind` and `experiments`, and it broke `giskardpy` and
+`coraplex` too, because the thing it broke is a *build step* every job runs.
+
+#### The cache was written onto its own key
+
+`memoize` caches "at the instance level": it writes `__memo__` onto the object it is
+handed. `make_specialized_dataclass` is not a method — its first argument is a *type
+alias*, a value, so the memo went onto the alias. That works for a `typing._GenericAlias`,
+which carries a `__dict__`, and cannot work for a `types.GenericAlias`, which does not.
+
+Which kind you get is decided by whose `__class_getitem__` the MRO finds first.
+`contextlib.AbstractContextManager` sets `__class_getitem__ = classmethod(GenericAlias)`,
+and krrood's own `Variable` inherits it *before* `Generic` — so **`Variable[X]` has never
+been buildable**, on any branch. Nothing had reached it: the segmind generator reaches it
+now through `Match[Relation]`, since `Match.variable` is a `Variable[T]`, and `Match` is
+what an expectation and an event's `Effect` are written with.
+
+So the fix is where the mismatch is, not where the crash surfaced: the result is cached
+**against** the alias (`lru_cache`, which is already this repository's idiom for a pure
+function of its argument) rather than **on** it. Two ways of writing one specialization
+now share the class built for it, which the previous shape only got by accident when
+`typing` happened to hand back the same alias object.
+
+The mimic is a generic that is also a context manager, in krrood's shared test dataset —
+so the guard is not only the two tests that name it: with the fix reverted, **krrood's own
+`conftest.py` fails at collection**, which is the same failure CI hit.
+
+#### One consequence left for the developer
+
+With the generator running, segmind's interface maps a little of the query language
+itself — `Match_RelationDAO` and `Variable_RelationDAO` beside `EffectDAO` and
+`ExpectationDAO`. That follows from the design he asked for (the relations expected *are*
+matches) and it builds and imports. Whether the query graph belongs in the schema is his
+call, and `ignored_classes` in `segmind/scripts/generate_orm.py` is the one line that
+answers it; not taken here.
+
+#### Verification, and what a container cannot do
+
+Whole `test/krrood_test`: **2340 passed, 5 skipped, 2 failed** — the two being
+`test_object_diagram`'s, which shell out to a graphviz `dot` binary this container has not
+got. `test/segmind_test` 88 passed and 1 skipped, `test/experiments_test` (six ROS modules
+excluded) 521 passed, 1 skipped, 11 xfailed — both unchanged from the previous head. The
+generators were run the way CI runs them, `semantic_digital_twin` then `segmind` in
+dependency order, and the segmind interface imports afterwards. `giskardpy` and the two
+after it need `rclpy`, which this container has not got, so CI answers for those.
