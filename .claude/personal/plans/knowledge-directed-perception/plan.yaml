@@ -1421,10 +1421,15 @@ items:
     as a PlacementRelation.'
   - 'r3940991795, HasPosition versus his HasLocation, was resolved by the developer without
     a rename being asked for; recorded here only because the name is still his to change.'
-  - 'Two threads opened on #257 on the evening of 2026-09-05, both about what f7112120 left
-    in krrood. r3941751684 asks why Match.stating is needed when a where statement is
-    extendable; r3941771838 asks for a helper for reading the object off a relation stated
-    as a match, and for an honest account of whether subclassing Match was worth it.'
+  - 'Two threads opened on #257 on the evening of 2026-09-05 are answered as 3d4b8457 and
+    left open, both being questions rather than asks. r3941751684 asked why Match.stating is
+    needed when a where statement is extendable: because the two extend different halves of a
+    match, and only an attribute reaches construct_instance, so a condition cannot supply the
+    subject that makes the relation exist - said honestly, with the one production caller
+    named and the fold offered. r3941771838 asked for a helper and for whether subclassing
+    Match was worth it: object_stated_by is the helper and it turned up a latent KeyError for
+    a relation stating nothing on the other side, and the answer on the subclass is no, chiefly
+    because its equality override contradicted Match''s identity equality silently.'
   depends_on:
   - imagination-world-rejects-what-a-predicate-refuses
   - pieces-looked-for-where-expected
@@ -1576,7 +1581,19 @@ items:
     that InsideRegion is a PlacementRelation whose allowed_space a search reads while
     InsideOf answers no stretch of world.
 
-    against 84; experiments 519 against 518; the twin''s 27 failures identical by name.
+    The round of 2026-09-05 (late), two threads and one commit, 3d4b8457. What a stated
+    relation relates the thing sought to has its own name now, object_stated_by, beside the
+    other readers - which is what the developer asked for, and writing it showed the old
+    expression raised a bare KeyError for a relation stating nothing on the other side. No
+    statement can produce one, since every relation of the twin requires both operands, but
+    Expectations.expect is public and reaches it; it answers None, a look narrowed by it
+    narrows nothing, and a sighting satisfies it by resting on anything. Match.stating stays,
+    with its docstring saying what distinguishes it from where: only an attribute reaches
+    construct_instance, so a condition cannot supply the subject that makes a relation exist.
+    Both threads are questions rather than asks and both are left open with the answer on
+    them, the second carrying the honest account he asked for of what subclassing Match
+    bought and cost. krrood 1337 passed and 3 skipped against 1336; segmind 88 and 1 skipped
+    unchanged; experiments 521, 1 skipped, 11 xfailed against 520.
 - id: predicted-state-from-declared-effects
   title: Predict the twin's current state from what the actions and the events declared, and ask perception from it
   branch: null

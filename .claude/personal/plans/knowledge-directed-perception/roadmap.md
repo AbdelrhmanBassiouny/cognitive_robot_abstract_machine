@@ -6214,3 +6214,79 @@ second one.
 `test/krrood_test/test_eql` 1311 passed and 3 skipped, no failures, the two tests added
 here among them; `test/experiments_test` with the six ROS modules excluded 414 passed, 1
 skipped, 16 xfailed, unchanged from the previous head.
+
+### `expectations-from-events`: the two questions of 2026-09-05 (late), and what an attribute is for
+
+Two threads on #257, both about what the previous round left in krrood, and both questions
+rather than asks — so both are answered on their threads and left open. One commit,
+`3d4b8457`.
+
+#### `where` and `stating` extend different halves of a match
+
+*"a where statement is extendable anyway right? if so why do we need this stating method?"*
+
+It is extendable, and it extends the wrong half. `where` extends **conditions**, which are
+tests over things the pattern already admits; `stating` extends **attributes**, which are the
+pattern. The decisive reason a condition cannot stand in is `construct_instance()`: it builds
+the relation from `kwargs`, so the subject has to be a stated attribute.
+`relation_asserted_about` has to *produce* `SupportedBy(supported=…, supporting=lid)`, and
+there is no candidate yet for a condition to filter.
+
+Two mechanical reasons beside it: `Match.__call__` raises `CalledMatchMultipleTimes` on a
+second call, so attributes are stated once and cannot be grown the way conditions can; and
+`where` mutates in place and returns `self`, while a relation stated about the thing sought is
+held by a belief and asked about many subjects in turn, so growing one has to leave the one in
+hand alone.
+
+**Honestly, `stating` has one production caller** — `relation_asserted_about` — and it was kept
+on `Match` because refining a partial description is general, and because folding it into that
+caller means spelling `type(stated)(stated.factory, type_=stated.type_)(…)` from outside the
+class. The fold was offered on the thread rather than taken.
+
+The docstring is what failed to prevent the question, so it now says the distinction: an
+attribute says what the thing is and is what `construct_instance` builds one from, where a
+`where` condition is a test over what the pattern already admits.
+
+#### A helper, and the bug asking for it exposed
+
+*"this here is more complicated to access. Maybe make a helper method for getting this."*
+
+`object_stated_by(stated)` now sits beside the other readers in `backends.py`, so
+`LookRequest.related_by` and `RestsOnTheSurfaceNamed.holds_for` stop spelling
+`stated.kwargs[stated.type.object_name()]` twice.
+
+**That expression raised a bare `KeyError` for a relation stating nothing on the other side** —
+`an(SupportedBy)()`, which Segmind already writes as what an effect ends. No *statement* can
+produce one, since every relation of the twin requires both operands, but `Expectations.expect`
+is public and reaches `look_request` → `related_by`. The helper answers `None`, a look narrowed
+by it narrows nothing (*supported by something* is no narrower than *somewhere*), and a
+sighting satisfies it by resting on anything, which every sighting does since
+`supporting_surface` is required. Two tests, both mutation-checked.
+
+#### Was subclassing `Match` worth it: no, and not for the obvious reason
+
+Asked and answered on the thread, since he asked for it critically. What the subclass bought
+was real: one attribute instead of a function call, one home for the relation-specific
+operations, and a type that read as *a relation stated about something* rather than *a match
+over a relation*.
+
+What it cost is more. `Match` is a query-graph node — identity equality, a build lifecycle, a
+call-once contract, `where` that mutates — and a subclass inherits all of it whether it means it
+or not. **The equality override is the real damage and it was silent:** defining `__eq__` as
+mutual coverage contradicts `Match`'s identity equality, so anything holding matches in a set or
+keyed by identity would have behaved differently for that one subclass, and nothing in this
+branch puts matches in sets, so no test would have caught it. It also fragments the vocabulary,
+which is the developer's own point, and forecloses generality — a relation of three operands, or
+one stated about something other than its subject, needs nothing new now.
+
+The cost of *not* subclassing is exactly his comment: reading an operand is a function call, and
+the readers are module functions rather than methods. Recorded as a cost rather than argued
+away, with the note that if that family grows past its five members it wants a home rather than
+a module.
+
+#### Verification
+
+`test/krrood_test/test_eql` 1337 passed and 3 skipped against 1336, the one added;
+`test/segmind_test` 88 passed and 1 skipped, unchanged; `test/experiments_test` with the six ROS
+modules excluded 521 passed, 1 skipped, 11 xfailed against 520. The twin was not re-run: this
+head changes no file in it.
