@@ -485,11 +485,19 @@ items:
   session: https://claude.ai/code/session_01MotUMLrQxbZKQWs4BADwkj
   blockers:
     - >-
-      Nothing on the branch. #222 is green on all 23 checks, `mergeable_state: clean` since the
-      restack of 2026-09-02, out of draft, and all nine of its review threads are resolved. It still
-      carries the `needs-resolution` label the maintenance routine set on the conflict; that label
-      is cleared by the routine's own next pass now that the branch merges cleanly, and until it is,
-      the branch is withheld from promotion.
+      `test_each_lib (krrood)` is red on #222, and every branch stacked on it inherits it - #227,
+      #231, #238, #239, #259 and everything past them. Bisected across the stack on 2026-09-05:
+      #221 is green on all 23 checks, #222 is red on krrood alone, and the one failing test,
+      `test_rdr_world.py::test_draw_evaluated_tree_for_drawer_cabinet_rdr` with `RDRLoadError:
+      Could not load the rdr model world_rdr`, is byte-identical to `main`, whose own latest CI is
+      green. #222 is the first branch in this stack to touch krrood, so the failure is this item's
+      to root-cause rather than any dependent's. It does not reproduce with that module run alone
+      on a branch carrying #222's krrood changes, so it is an order-dependent interaction with the
+      rest of the krrood suite rather than a change to the test.
+    - >-
+      The `needs-resolution` label the maintenance routine set on the 2026-09-02 conflict is still
+      on the branch, so it stays withheld from promotion until the routine's own next pass clears
+      it, which it can now that the branch merges cleanly.
   notes: >
     Resolved 2026-08-31 in `auto` mode, and the round changed two things the manifest and roadmap
     had recorded as settled, both at the developer's direction.
@@ -985,7 +993,22 @@ items:
     count erroring with 1494 passed and no failing assertion. This branch''s diff is entirely inside
     experiments/, the base #231 is green on that same job with byte-identical sdt sources, and #231
     is red on krrood which is green here - two branches failing on two jobs neither touches. Not
-    this diff, recorded in a comment on the pull request rather than worked around.'
+    this diff, recorded in a comment on the pull request rather than worked around.
+
+    Corrected 2026-09-05, and the correction is left beneath the note rather than rewritten into
+    it: krrood is red here too, on the same head. The bisect says where it belongs - #221 is green
+    on all 23 checks, #222 is red on krrood alone, and every branch stacked on #222 inherits it, so
+    test_draw_evaluated_tree_for_drawer_cabinet_rdr is perception-backend''s to root-cause and is
+    recorded as a blocker there. The sdt world-count error is still not this diff: #231 is green on
+    that job with byte-identical sdt sources, and this branch touches no file outside experiments/.
+
+    The developer answered the round the same day, and the two proposed items are added.
+    a-look-is-described-by-a-match replaces SoughtSurface, TargetOnSurface and RequestedLook with
+    an underspecified Match read by an EQL-based ripple-down rule tree on the #77 stack.
+    camera-pose-fitted-to-the-model folds the calibration thread and the combine-the-finders
+    thread, at his direction, since both are the same third SurfaceFinder. The finish-on-the-twin
+    thread stays open and answered differently: #238''s recorded_world already builds the bodies,
+    so the fold there is one line rather than a third copy written here.'
 - id: choose-detection-method
   title: Choose the detector by rule from the target and the surface
   branch: claude/choose-detection-method-gf64yp
@@ -1154,6 +1177,101 @@ items:
     perception-side presenter that puts the live camera beside the parameters a rule would
     conclude. It keeps its dependency on detector-parameters-from-knowledge, which is what gives
     it parameters to conclude at all, and that item stacks on #159 in the same stack.'
+- id: a-look-is-described-by-a-match
+  title: Describe a look by an underspecified match over the twin's own entities, not by a case class
+  branch: null
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - choose-detection-method
+  - surfaces-found-by-looking
+  - how-to-look-concluded-from-the-request
+  status: not_started
+  notes: >
+    Added 2026-09-05 at the developer's direction on #259 (r3940339984 and r3940357436): "why not
+    replace this with an EQL match statement of semdt semantic annotation or kinematic structure
+    entities?", and "eql based rdrs (pr 77 for example) can take an underspecified match statement
+    and get needed information from it to evaluate the rule tree of the rdr."
+
+    Every rule tree on this plan states its conditions over a hand-written case class that flattens
+    what the world already states, because the tree needs one variable to bind: TargetOnSurface on
+    #231, RequestedLook on #266, and SoughtSurface on #259. The last of the three is what raised
+    it, and reading it is what showed how bad the shape is - two of its three fields were a copy of
+    WorkspaceSurface.finish and a constant that of set True unconditionally, so the base rule's
+    condition could never be false. AGENTS.md's own rule against a value spelled in two places
+    condemns each of them independently of any redesign.
+
+    What replaces them is one mechanism rather than three separate corrections: the description a
+    rule tree is stated over is an underspecified Match over the twin's own entities - a Body, a
+    Region, a HasSupportingSurface - read by an EQL-based ripple-down rule tree that takes what it
+    needs from the match. A rule then states a condition in the world's own vocabulary and nothing
+    has to be flattened for it first.
+
+    Stacks on #77, the tip of the RDR stack (#159 -> #210 -> #79 -> #76 -> #80 -> #77), which is
+    why it is not folded into any of the three branches carrying a case class: #231 refused merging
+    #159 twice over for the same reason, that it adds 9,236 lines over 50 files to a pull request
+    whose own change is a few hundred, and #77 adds 22,745. depends_on names the three items whose
+    case classes it removes, since none of them can be removed before it exists.
+
+    One measurement to carry into it, taken on #259 while answering the same thread: EQL conditions
+    traverse nested attributes and property reads - sought.surface.region.area > 0.0 and
+    sought.frame.carries_depth both bind and evaluate. So a case class was never needed for the
+    engine's sake even without the RDR stack, which is why the duplicated half of SoughtSurface
+    could be removed on #259 and only the Match itself waits for this item.
+- id: camera-pose-fitted-to-the-model
+  title: Correct where the camera stands by fitting what is seen to what the twin models
+  branch: null
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - surfaces-found-by-looking
+  - holes-fitted-like-pieces
+  status: not_started
+  notes: >
+    Added 2026-09-05 at the developer's direction on #259, folding the two threads he asked to keep
+    together (r3940349876 and r3940351882): "since we have a 3d model of the world, we can use this
+    information to maybe even calibrate the camera ... and find the best matching transformation
+    that would make fit our expectation from the 3d modeled digital twin", and "so basically we can
+    combine ModelledSurface with MeasuredSurface as well to get the best estimate and update our
+    belief about the camera transformation accordingly and get the best fitting surface?"
+
+    It arrives as a third SurfaceFinder rather than as a change to either of the two #259 ships.
+    SurfaceFinder is the interface and SurfaceRules already chooses among whatever declares it can
+    answer, so a finder that takes the world's statement and the depth together, solves for the
+    transform that best explains both, and answers the surface plus a corrected camera pose slots
+    in with one add_rule and no edit to what is there.
+
+    Three measurements bear on it, and two of them cut against the obvious version.
+
+    The camera transform is already good in z on this setup. #259's first build fitted the table's
+    height as well as its extent and answered 0.8804 to 0.8811 m against the modelled 0.88 on all
+    six captures - about a millimetre - and moving the plane by it moved every detection on every
+    capture, up to 3.4 mm and 0.19 agreement, which is why that branch ships measuring the extent
+    alone. So there is not much transform error left to recover from the table.
+
+    Where the model and the world really disagree is not the transform. #236 measured the board
+    mesh at 0.865 of the real board, a similarity fit with a 2.1-2.6 mm residual, and no
+    rectification plane closes it, since doing so puts the holes below the table the board stands
+    on. That is a wrong model rather than a wrong pose, and a solve with only a transform to move
+    would absorb it into one. #236's own framing is the right one here too: a law that must hold,
+    and then a hypothesis about which of the things it is written over is the one that is wrong.
+
+    What genuinely is there to fit is over-constrained. The table plane holds about 34% of 693k
+    points on the bare steel, 69% with a mat, and the board's own outline is measured every frame
+    with its layout known exactly - two independent observations of one rigid transform, in a scene
+    where a wrong one has visible consequences. So the fit is well posed; what it needs is to be
+    told which side is trusted, per capture, since the recorded layout has already drifted in x and
+    y while the height agreed exactly, and an unconstrained solve will happily explain a wrong
+    board pose as a camera error.
+
+    Two things it needs that #259 does not have. A camera pose is a value on one RgbdFrame, so a
+    correction has nowhere to live between frames - the same gap #232 filled for pieces with
+    BelievedPlace and a BeliefSource - and until it does, "update our belief accordingly" is a
+    returned number nobody keeps rather than an operation. And the two finders are today layered
+    rather than independent: the measurement never grows past what the model allows, only cuts it
+    down, which is deliberate and is what keeps a run searching only ground the world described.
+    Combining properly means letting the measurement move the model, which is a different contract
+    and is why this is a new finder under a new rule rather than a tweak to MeasuredSurfaceFinder.
 - id: episode-replayed-into-the-world
   title: Replay a recorded episode into the world so Segmind can say what happened
   branch: claude/episode-replayed-world-kickoff-6ye5bb

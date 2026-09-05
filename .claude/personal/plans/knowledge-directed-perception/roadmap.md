@@ -5430,3 +5430,117 @@ went on the pull request and the push of `946017c70` is the one re-run the rule 
 Worth generalizing alongside what #238 recorded about having no CI at all: **a check red on
 a job whose sources the diff does not contain is answerable from the diff rather than from a
 re-run**, and comparing which job each sibling failed on is cheaper evidence than either.
+
+## The red CI on this stack, bisected: krrood enters at #222 (2026-09-05)
+
+Two checks are red on `surfaces-found-by-looking`'s head, and neither is that branch's
+diff — which is entirely inside `experiments/`. The bisect is recorded once here rather
+than re-derived on each of the six branches stacked past #222, all of which show the same
+red.
+
+| branch | `test_each_lib (krrood)` | `test_each_lib (semantic_digital_twin)` |
+| --- | --- | --- |
+| `main` (`f6a53cf93`) | green | green |
+| #221 `detect-per-supporting-surface` | green | green |
+| #222 `perception-backend` | **red** | green |
+| #231 `choose-detection-method` | **red** | green |
+| #259 `surfaces-found-by-looking` | **red** | **red** |
+
+### krrood is #222's
+
+`test_rdr_world.py::test_draw_evaluated_tree_for_drawer_cabinet_rdr` fails with
+`RDRLoadError: Could not load the rdr model world_rdr`, 1 failed against 2294 passed.
+Three facts place it:
+
+- **#221 is green on all 23 checks and #222 is red on krrood alone.** Everything between
+  them is #222's own diff plus the `main` it merged in on 2026-09-02.
+- **#222 is the first branch in this stack that touches krrood at all** — 260 lines over
+  `backends.py`, `core/base_expressions.py`, `exceptions.py` and
+  `verbalization/vocabulary/english.py`. Every branch below it edits only `experiments/`.
+- **The failing test file is byte-identical to `main`**, and `main`'s own latest CI run is
+  green across the matrix.
+
+So it is not a test that was changed and not a failure any dependent introduced. It is
+`perception-backend`'s to root-cause, and is recorded as a blocker on that item.
+
+**What is known about the mechanism, for whoever picks it up.** The module passes when run
+alone on a branch carrying #222's krrood changes, so this is an order-dependent
+interaction with the rest of the krrood suite rather than a change to the test. Two
+properties of the test itself are what make that possible, and both are worth fixing
+whatever the cause turns out to be:
+
+- `test_draw_evaluated_tree_for_drawer_cabinet_rdr` loads a model from
+  `test_results/world_drawer_cabinet_rdr`, a **gitignored** directory written by
+  `test_save_and_load_drawer_cabinet_rdr` — a different test, earlier in the same module.
+  So the test depends on another test's side effect on disk, and on its own guess at the
+  name: the save test uses the name `save()` returned, while the draw test hardcodes
+  `model_name="world_rdr"`. `GeneralRDR.save` keeps an already-set `self.model_name`, so
+  the two only agree while nothing has named that object first.
+- `GeneralRDR.load` catches `FileNotFoundError`, `ValueError`, `SyntaxError` and
+  `ModuleNotFoundError` and raises `RDRLoadError` **without `from e`**, logging the real
+  cause only as a warning. That is why CI reports no reason at all, and it is why the
+  cheapest first step is the one-line diagnosability fix rather than a guess.
+
+A third, unrelated latent fault surfaced while reproducing: `datasets.py` writes the
+zoo-dataset cache into that same gitignored `test_results/` at **import time** without
+creating it, so collection of three modules fails outright on a checkout where nothing has
+created the directory first.
+
+### The semantic_digital_twin error is the module-scoped world count
+
+`test/conftest.py`'s `count_worlds` is `autouse=True, scope="module"`: it yields, then
+`gc.collect()`s and raises `MemoryError` if `objgraph.count("World") > 30`. Being
+module-scoped, it is attributed to whichever test happened to run last in the module —
+here `test_column_indices_of_degree_of_freedom_outside_the_state`, three lines that create
+no world of their own — with **1494 passed and no failing assertion**. #231 is green on
+that job with byte-identical `semantic_digital_twin` sources, so this is an accumulation
+across the module rather than anything a diff outside `experiments/` could have caused.
+
+Its message and its threshold also disagree: it raises *"more than 20 worlds"* on a
+`> 30` test.
+
+**Generalizing, alongside what #238 recorded about having no CI at all:** a check red on a
+job whose sources the diff does not contain is answerable by walking the stack, and
+comparing which job each ancestor failed on is cheaper evidence than any re-run. #221 being
+green is what turned "two branches failing on two jobs neither touches" into a single named
+owner.
+
+## Two items from #259's review round (2026-09-05)
+
+Both are the developer's decisions on threads he answered the same day, and both are
+recorded here because each replaces something that exists in more than one place.
+
+**`a-look-is-described-by-a-match`** (r3940339984, r3940357436). Every rule tree on this
+plan binds a hand-written case class that flattens what the world already states:
+`TargetOnSurface` on #231, `RequestedLook` on #266, `SoughtSurface` on #259. Reading the
+last of them is what showed the shape is worse than a smell — two of its three fields were
+a copy of `WorkspaceSurface.finish` and a flag `of` set `True` unconditionally, so the base
+rule's condition could never be false. An EQL-based RDR that takes an underspecified
+`Match` over the twin's own entities removes all three, which is why it is one item rather
+than three corrections. It stacks on #77 for the same reason #231 refused #159 twice: 9,236
+lines over 50 files there, 22,745 on #77, against a few hundred of its own.
+
+Measured while answering the thread, and worth carrying in: **EQL conditions already
+traverse nested attributes and property reads** (`sought.surface.region.area > 0.0`,
+`sought.frame.carries_depth`). So a case class was never needed for the *engine's* sake,
+even without the RDR stack — which is what let #259 remove the duplicated half immediately
+and leave only the `Match` itself to this item.
+
+**`camera-pose-fitted-to-the-model`** (r3940349876, r3940351882, folded at his direction).
+A third `SurfaceFinder` that takes the world's statement and the depth together, solves for
+the transform explaining both, and answers a corrected camera pose — one `add_rule`, no
+edit to the two #259 ships. Three measurements shape it, two of them against the obvious
+version: the transform is already good to about a millimetre in z here (0.8804–0.8811 m
+against a modelled 0.88), so there is little to recover from the table; #236's board mesh is
+**0.865** of the real board with a 2.1–2.6 mm residual, a wrong *model* that a
+transform-only solve would absorb into a wrong *pose*; and the fit is genuinely
+over-constrained (a plane holding ~34% of 693k points, plus a board outline measured every
+frame with its layout known exactly), so what it needs is to be told which side is trusted
+per capture.
+
+Two gaps it inherits: a camera pose is a value on one `RgbdFrame`, so a correction has
+nowhere to live between frames — the gap #232 filled for pieces with `BelievedPlace` and a
+`BeliefSource` — and the two finders are today **layered, not independent**, since the
+measurement only ever cuts the model's bound down. Combining properly means letting a
+measurement *move* the model, which is a different contract and is why this is a new finder
+rather than a tweak to `MeasuredSurfaceFinder`.
