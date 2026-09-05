@@ -18,12 +18,21 @@ of the same name.
 - Replied on all nineteen threads; resolved the ones done as asked.
 - Manifest, roadmap, and the new `icra-experiments` item
   `expectation-checked-under-perturbation-in-simulation`.
+- The evening round of 2026-09-05 (e5d12093), which took both recommendations the morning
+  had left open: `StatedRelation` is a `Match` over the relation's own class (with equality
+  as mutual coverage, since `Match` is `eq=False`) and `stated_in` reads a statement's
+  relations; an `Expectation` is a `Match` about its subject, so `holds_now()` answers it
+  against the world; `WorkspaceSurface` carries the entity it was measured of, which
+  inverted `recorded_setup`; `HasPosition` replaces the `Placed` union; `colors` answers
+  every colour.
 
 ## Next
 
 - Nothing on the branch. CI on the new head unread.
-- Two discussions open for the developer: `StatedRelation` as a `Match` (on #227's
-  ground), and the measured surface carrying its entity (recorded_setup / #238).
+- Two threads open for the developer: whether an event's declared effect should fold onto
+  the statechart's own containment detectors (it should, once a hole's region is a
+  containment candidate and the relation is settled), and `HasPosition` versus his
+  `HasLocation`.
 - The lid marks stay four; a history reaches two of them, and the rest is
   `competing-explanations`'.
 - A look cannot tell a sunk piece from one standing over the hole; the success case is
@@ -38,6 +47,8 @@ of the same name.
   `world_entity.py` too.
 - Segmind's tests need the root `conftest.py` (apartment fixture); run them without
   `--noconftest`. The experiments modules run with `--noconftest`.
-- Fetch the notes branch immediately before every save; `plan_item_bootstrap.py update`
-  is not in this checkout, so edit the manifest in a worktree and save with
-  `save-plan.sh --manifest --roadmap`.
+- Fetch the notes branch immediately before every save, and fetch the *branch* too: the
+  remote gained a merge of #255 mid-round, so a push was refused until it was merged in.
+- Edit the manifest and roadmap between CLAUDE.local.md's own markers and run
+  `save-plan.sh <plan-id>`; that path works in this checkout where
+  `plan_item_bootstrap.py` does not.
