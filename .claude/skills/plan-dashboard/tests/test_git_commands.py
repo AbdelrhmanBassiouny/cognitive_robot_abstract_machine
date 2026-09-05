@@ -25,10 +25,10 @@ def repository(tmp_path: Path, scratch_git) -> GitCommandRunner:
     A scratch repository with one commit, and a runner pointed at it.
 
     :param tmp_path: pytest's per-test temporary directory.
-    :param scratch_git: The scratch git runner factory.
+    :param scratch_git: The scratch git runner.
     :return: The runner.
     """
-    git = scratch_git(tmp_path)
+    git = scratch_git.in_directory(tmp_path)
     git.run("init", "--quiet")
     (tmp_path / FILE_WITH_TRAILING_BLANK_LINE).write_text("content\n\n")
     git.run("add", ".")

@@ -9,6 +9,7 @@ own test module and is not re-tested here.
 """
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -30,6 +31,8 @@ from github_api import (
     RepositoryEndpoints,
 )
 from personal_notes import PersonalNotesBranch, PlanDocument
+from pull_request_detail import PullRequestDetail
+from scratch_repositories import PlanFiles
 from site_fixtures import (
     RECORDED_ARGUMENTS_FILENAME,
     UNREFERENCED_PULL_REQUEST,
@@ -48,6 +51,11 @@ The repository both fixture plans reference, read off one of them rather than re
 the build's own reuse of a single listing depends on their agreeing.
 """
 
+ENDPOINTS = RepositoryEndpoints(REPOSITORY)
+"""
+The endpoints the fake transport answers on.
+"""
+
 TRACKING_ISSUE_URL = (
     f"https://github.com/{REPOSITORY}/issues/{SitePlanId.FIRST.plan.tracking_issue}"
 )
@@ -55,41 +63,33 @@ TRACKING_ISSUE_URL = (
 REFERENCED_PULL_REQUEST = SitePlanId.FIRST.referenced_item.pull_request_number
 
 
+@dataclass
 class PlanDataFakeApi(GitHubApi):
     """
     Serves the tracking issue and the pull requests the seeded plans are checked
     against - one they reference and one they do not.
     """
 
-    def __init__(self, pull_request_detail):
-        self.pull_request_detail = pull_request_detail
-        self.endpoints = RepositoryEndpoints(REPOSITORY)
-
     def get(self, path: str, parameters: Mapping[str, str] | None = None) -> Any:
-        if path == self.endpoints.issue(SitePlanId.FIRST.plan.tracking_issue):
+        if path == ENDPOINTS.issue(SitePlanId.FIRST.plan.tracking_issue):
             return {IssueField.URL.value: TRACKING_ISSUE_URL}
         if parameters[PullRequestListParameter.PAGE] != "1":
             return []
         return [
-            self.pull_request_detail(
-                REFERENCED_PULL_REQUEST, state=PullRequestState.OPEN, draft=True
-            ),
-            self.pull_request_detail(
-                UNREFERENCED_PULL_REQUEST, state=PullRequestState.OPEN
-            ),
+            PullRequestDetail(REFERENCED_PULL_REQUEST, draft=True).to_json(),
+            PullRequestDetail(UNREFERENCED_PULL_REQUEST).to_json(),
         ]
 
 
 @pytest.fixture
-def two_plans(plan_files) -> dict:
+def two_plans() -> dict:
     """
     Both fixture plans, read off disk to seed a scratch notes branch with.
 
-    :param plan_files: The plan-files type.
     :return: The plans, keyed by identifier.
     """
     return {
-        str(plan_id): plan_files(
+        str(plan_id): PlanFiles(
             manifest=plan_id.document(PlanDocument.MANIFEST),
             roadmap=plan_id.document(PlanDocument.ROADMAP),
         )
@@ -98,24 +98,23 @@ def two_plans(plan_files) -> dict:
 
 
 @pytest.fixture
-def build_site(notes_clone, two_plans, pull_request_detail, tmp_path: Path):
+def build_site(notes_clone, two_plans, tmp_path: Path):
     """
     Build a site builder wired to a scratch clone, the fake transport and a stub
     refresh.
 
-    :param notes_clone: The scratch notes-branch builder.
+    :param notes_clone: The scratch notes remote.
     :param two_plans: The plans to seed.
-    :param pull_request_detail: The GitHub response builder.
     :param tmp_path: pytest's per-test temporary directory.
     :return: The builder factory, called with the refresh script to drive.
     """
-    clone = notes_clone(two_plans)
+    clone = notes_clone.seed(two_plans)
 
     def build(stub: SiteStub = SiteStub.REFRESH_DASHBOARD) -> SiteBuilder:
         return SiteBuilder(
             output_directory=tmp_path / OUTPUT_DIRECTORY_NAME,
             site_base_url=SITE_BASE_URL,
-            api=PlanDataFakeApi(pull_request_detail),
+            api=PlanDataFakeApi(),
             notes=PersonalNotesBranch.resolve(clone),
             refresh_dashboard_script=stub.path,
         )

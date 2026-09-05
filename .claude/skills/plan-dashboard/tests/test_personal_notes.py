@@ -22,6 +22,7 @@ from personal_notes import (
     PlanDocument,
     PlanFileMissingError,
 )
+from scratch_repositories import PlanFiles
 
 CONFIGURATION_SCRIPT = (
     Path(__file__).parent.parent.parent.parent
@@ -59,14 +60,13 @@ ABSENT_DOCUMENT = "absent.md"
 
 
 @pytest.fixture
-def two_plans(plan_files) -> dict:
+def two_plans() -> dict:
     """
     Two plans to seed a scratch notes branch with, deliberately out of sorted order.
 
-    :param plan_files: The plan-files type.
     :return: The plans, keyed by identifier.
     """
-    files = plan_files(manifest=MANIFEST_TEXT, roadmap=ROADMAP_TEXT)
+    files = PlanFiles(manifest=MANIFEST_TEXT, roadmap=ROADMAP_TEXT)
     return {SECOND_PLAN_ID: files, FIRST_PLAN_ID: files}
 
 
@@ -75,11 +75,11 @@ def fetched_notes(notes_clone, two_plans) -> PersonalNotesBranch:
     """
     The notes branch of a scratch clone holding those two plans, already fetched.
 
-    :param notes_clone: The scratch notes-branch builder.
+    :param notes_clone: The scratch notes remote.
     :param two_plans: The plans to seed.
     :return: The fetched branch.
     """
-    notes = PersonalNotesBranch.resolve(notes_clone(two_plans))
+    notes = PersonalNotesBranch.resolve(notes_clone.seed(two_plans))
     notes.fetch()
     return notes
 
@@ -91,7 +91,7 @@ def test_resolve_falls_back_to_the_defaults(tmp_path: Path, scratch_git):
     """
     A clone that configures nothing is read at the zero-config remote and branch.
     """
-    scratch_git(tmp_path).run("init", "--quiet")
+    scratch_git.in_directory(tmp_path).run("init", "--quiet")
 
     notes = PersonalNotesBranch.resolve(tmp_path)
 
@@ -105,7 +105,7 @@ def test_resolve_prefers_the_environment_variable_over_the_default(
     """
     An environment variable overrides the default when git config sets nothing.
     """
-    scratch_git(tmp_path).run("init", "--quiet")
+    scratch_git.in_directory(tmp_path).run("init", "--quiet")
     monkeypatch.setenv(NOTES_BRANCH_SETTING.environment_variable, "notes/elsewhere")
 
     assert PersonalNotesBranch.resolve(tmp_path).branch == "notes/elsewhere"
@@ -117,7 +117,7 @@ def test_resolve_prefers_git_config_over_the_environment_variable(
     """
     Repository git config wins over the environment variable.
     """
-    git = scratch_git(tmp_path)
+    git = scratch_git.in_directory(tmp_path)
     git.run("init", "--quiet")
     git.run("config", NOTES_BRANCH_SETTING.git_config_key, "notes/from-config")
     monkeypatch.setenv(NOTES_BRANCH_SETTING.environment_variable, "notes/from-variable")
@@ -129,7 +129,7 @@ def test_an_unfetchable_branch_is_an_error(tmp_path: Path, scratch_git):
     """
     A clone whose remote serves no notes branch has no plan data to build from.
     """
-    scratch_git(tmp_path).run("init", "--quiet")
+    scratch_git.in_directory(tmp_path).run("init", "--quiet")
 
     with pytest.raises(PersonalNotesUnavailableError) as raised:
         PersonalNotesBranch.resolve(tmp_path).fetch()
@@ -149,23 +149,19 @@ def test_plan_identifiers_lists_every_plan_sorted(fetched_notes: PersonalNotesBr
 
 
 def test_plan_identifiers_ignores_a_directory_without_a_manifest(
-    notes_clone, two_plans, scratch_git, tmp_path: Path
+    notes_clone, two_plans
 ):
     """The generated siblings under the plans directory are not plans - only a
     directory holding a manifest is."""
-    clone = notes_clone(two_plans)
-    seed = tmp_path / "seed"
-    generated = seed / PLANS_DIRECTORY / GENERATED_SIBLING_DIRECTORY
+    clone = notes_clone.seed(two_plans)
+    generated = notes_clone.checkout / PLANS_DIRECTORY / GENERATED_SIBLING_DIRECTORY
     generated.mkdir(parents=True)
     (generated / GENERATED_SIBLING_FILE).write_text("")
-    seed_git = scratch_git(seed)
-    seed_git.run("add", ".")
-    seed_git.run("commit", "--quiet", "--message", "add a generated sibling")
-    seed_git.run(
-        "push",
-        "--quiet",
-        str(tmp_path / "remote.git"),
-        NOTES_BRANCH_SETTING.default,
+    checkout_git = notes_clone.git.in_directory(notes_clone.checkout)
+    checkout_git.run("add", ".")
+    checkout_git.run("commit", "--quiet", "--message", "add a generated sibling")
+    checkout_git.run(
+        "push", "--quiet", str(notes_clone.remote), NOTES_BRANCH_SETTING.default
     )
 
     notes = PersonalNotesBranch.resolve(clone)

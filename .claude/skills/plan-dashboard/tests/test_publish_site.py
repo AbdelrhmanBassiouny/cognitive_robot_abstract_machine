@@ -9,7 +9,6 @@ adds no commit.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 import pytest
 
@@ -21,6 +20,7 @@ from publish_site import (
     SitePublisher,
     SiteSourceMissingError,
 )
+from scratch_repositories import CLONE_DIRECTORY, SCRATCH_REMOTE_DIRECTORY
 
 REPOSITORY_FILE = "placeholder"
 """
@@ -114,15 +114,15 @@ def publishing_clone(tmp_path: Path, scratch_git) -> PublishingClone:
     A scratch clone with a bare remote to publish into, and the publisher between them.
 
     :param tmp_path: pytest's per-test temporary directory.
-    :param scratch_git: The scratch git runner factory.
+    :param scratch_git: The scratch git runner.
     :return: The clone, ready to publish.
     """
-    remote = tmp_path / "remote.git"
-    scratch_git(tmp_path).run("init", "--quiet", "--bare", str(remote))
+    remote = tmp_path / SCRATCH_REMOTE_DIRECTORY
+    scratch_git.in_directory(tmp_path).run("init", "--quiet", "--bare", str(remote))
 
-    clone = tmp_path / "clone"
+    clone = tmp_path / CLONE_DIRECTORY
     clone.mkdir()
-    clone_git = scratch_git(clone)
+    clone_git = scratch_git.in_directory(clone)
     clone_git.run("init", "--quiet")
     (clone / REPOSITORY_FILE).write_text("")
     clone_git.run("add", ".")
