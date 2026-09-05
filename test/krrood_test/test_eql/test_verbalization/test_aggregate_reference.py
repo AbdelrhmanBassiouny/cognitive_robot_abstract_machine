@@ -2,7 +2,7 @@
 Tests for how a computed quantity is referred back to.
 
 An aggregate is named in full when it is introduced and shortened to its bare
-aggregation word on a later mention (*"the sum of the amount of its income"* -> *"the
+aggregation word on a later mention (*"the sum of incomes of Statements"* -> *"the
 sum"*). The word identifies the quantity only while it is the only aggregate of its
 kind: once a query selects two sums, the short form names either one, so each is
 described in full at every mention instead. An aggregate is told apart by what it
@@ -21,18 +21,16 @@ from krrood.entity_query_language.verbalization.microplanning.referring import (
 )
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import Aggregations
+from krrood.patterns.role import Role
 
 # %% mimic domain
 
 
-@dataclass
-class Money:
+@dataclass(eq=False)
+class Money(Role[float]):
     """
-    An amount of money, so an aggregate has a chain of its own to name.
+    An amount of money, the leaf an aggregate sums over.
     """
-
-    amount: float
-    """How much money it is — the leaf an aggregate sums over."""
 
 
 @dataclass
@@ -42,7 +40,9 @@ class Period:
     """
 
     month: int
-    """The month the statement covers, used as the grouping key."""
+    """
+    The month the statement covers, used as the grouping key.
+    """
 
 
 @dataclass
@@ -52,7 +52,9 @@ class Statement:
     """
 
     period: Period
-    """The span the amounts below are taken over."""
+    """
+    The span the amounts below are taken over.
+    """
 
     income: Money
     """
@@ -77,8 +79,8 @@ def test_a_ranked_sum_is_described_in_full_when_another_sum_is_selected():
     sum named right beside it.
     """
     statement = variable(Statement, domain=None)
-    income = eql.sum(statement.income.amount)
-    expenses = eql.sum(statement.expenses.amount)
+    income = eql.sum(statement.income)
+    expenses = eql.sum(statement.expenses)
     query = a(
         set_of(statement.period.month, income, expenses)
         .grouped_by(statement.period.month)
@@ -86,9 +88,9 @@ def test_a_ranked_sum_is_described_in_full_when_another_sum_is_selected():
         .limit(1)
     )
     assert verbalize_expression(query) == (
-        "For the Statement with the highest sum of the amount of its income, "
-        "report the month of its period, the sum of the amount of its income, "
-        "and the sum of the amount of its expenses"
+        "For the Statement with the highest sum of incomes of Statements, "
+        "report the month of its period, the sum of incomes of Statements, "
+        "and the sum of expenses of Statements"
     )
 
 
@@ -99,17 +101,17 @@ def test_an_ordered_by_sum_is_described_in_full_when_another_sum_is_selected():
     it.
     """
     statement = variable(Statement, domain=None)
-    income = eql.sum(statement.income.amount)
-    expenses = eql.sum(statement.expenses.amount)
+    income = eql.sum(statement.income)
+    expenses = eql.sum(statement.expenses)
     query = a(
         set_of(statement.period.month, income, expenses)
         .grouped_by(statement.period.month)
         .ordered_by(income, descending=True)
     )
     assert verbalize_expression(query) == (
-        "For each month, report the sum of the amount of the income of a Statement "
-        "and the sum of the amount of its expenses "
-        "ordered by the sum of the amount of its income from highest to lowest"
+        "For each month, report the sum of incomes of Statements "
+        "and the sum of expenses of Statements "
+        "ordered by the sum of incomes of Statements from highest to lowest"
     )
 
 
@@ -122,7 +124,7 @@ def test_a_lone_sum_is_shortened_on_its_repeat_mention():
     shortens to it.
     """
     statement = variable(Statement, domain=None)
-    income = eql.sum(statement.income.amount)
+    income = eql.sum(statement.income)
     query = a(
         set_of(statement.period.month, income)
         .grouped_by(statement.period.month)
@@ -130,7 +132,7 @@ def test_a_lone_sum_is_shortened_on_its_repeat_mention():
         .limit(1)
     )
     assert verbalize_expression(query) == (
-        "For the Statement with the highest sum of the amount of its income, "
+        "For the Statement with the highest sum of incomes of Statements, "
         "report the month of its period and the sum"
     )
 
@@ -141,8 +143,8 @@ def test_a_sum_is_shortened_alongside_an_aggregate_of_another_kind():
     average is still the only sum, so it shortens.
     """
     statement = variable(Statement, domain=None)
-    income = eql.sum(statement.income.amount)
-    expenses = eql.average(statement.expenses.amount)
+    income = eql.sum(statement.income)
+    expenses = eql.average(statement.expenses)
     query = a(
         set_of(statement.period.month, income, expenses)
         .grouped_by(statement.period.month)
@@ -150,9 +152,9 @@ def test_a_sum_is_shortened_alongside_an_aggregate_of_another_kind():
         .limit(1)
     )
     assert verbalize_expression(query) == (
-        "For the Statement with the highest sum of the amount of its income, "
+        "For the Statement with the highest sum of incomes of Statements, "
         "report the month of its period, the sum, "
-        "and the average of the amount of its expenses"
+        "and the average of expenses of Statements"
     )
 
 
@@ -168,8 +170,8 @@ def test_an_aggregation_two_aggregates_share_is_recorded_as_shared():
     query = a(
         set_of(
             statement.period.month,
-            eql.sum(statement.income.amount),
-            eql.sum(statement.expenses.amount),
+            eql.sum(statement.income),
+            eql.sum(statement.expenses),
         ).grouped_by(statement.period.month)
     )
     referring = ReferringExpressions.from_expression(query)
@@ -184,8 +186,8 @@ def test_an_aggregation_only_one_aggregate_uses_is_not_shared():
     query = a(
         set_of(
             statement.period.month,
-            eql.sum(statement.income.amount),
-            eql.average(statement.expenses.amount),
+            eql.sum(statement.income),
+            eql.average(statement.expenses),
         ).grouped_by(statement.period.month)
     )
     referring = ReferringExpressions.from_expression(query)
