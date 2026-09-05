@@ -51,9 +51,8 @@ from experiments.montessori.perception.footprint import (
 )
 from experiments.montessori.perception.look_choice import (
     LookRules,
-    RequestedLook,
+    SceneDetector,
     SceneToSearch,
-    WayOfLooking,
 )
 from experiments.montessori.perception.orthophoto import (
     Orthophoto,
@@ -1000,7 +999,7 @@ def _to_world_outline(contour: np.ndarray, orthophoto: Orthophoto) -> np.ndarray
 
 
 @dataclass(eq=False)
-class FindTheBoard(WayOfLooking):
+class FindTheBoard(SceneDetector):
     """
     Answers a look by finding the shape-sorting board and the holes cut through its lid.
 
@@ -1013,7 +1012,7 @@ class FindTheBoard(WayOfLooking):
     Finds the board and its holes.
     """
 
-    def capability(self, request: RequestedLook) -> ConditionType:
+    def capability(self, request: SceneRequest) -> ConditionType:
         """
         Answers a request the board, or one of its holes, can answer.
 
@@ -1021,7 +1020,7 @@ class FindTheBoard(WayOfLooking):
         """
         return request.the_board_is_asked_for
 
-    def take(self, scene: SceneToSearch) -> MontessoriScene:
+    def detect(self, scene: SceneToSearch) -> MontessoriScene:
         """
         Find the board.
 
@@ -1042,7 +1041,7 @@ class FindTheBoard(WayOfLooking):
 
 
 @dataclass(eq=False)
-class FindThePieces(WayOfLooking):
+class FindThePieces(SceneDetector):
     """
     Answers a look by searching every surface the request asks about for the loose
     pieces standing on it.
@@ -1070,7 +1069,7 @@ class FindThePieces(WayOfLooking):
     without this way of looking changing.
     """
 
-    def capability(self, request: RequestedLook) -> ConditionType:
+    def capability(self, request: SceneRequest) -> ConditionType:
         """
         Answers a request a loose piece can answer.
 
@@ -1078,7 +1077,7 @@ class FindThePieces(WayOfLooking):
         """
         return request.pieces_are_asked_for
 
-    def take(self, scene: SceneToSearch) -> MontessoriScene:
+    def detect(self, scene: SceneToSearch) -> MontessoriScene:
         """
         Search each surface the request asks about, on its own plane.
 
@@ -1251,11 +1250,11 @@ class MontessoriPerceptionPipeline:
 
         :param frame: The camera data to search.
         :param request: What the look was asked for, unnarrowed by default.
-        :raises NoWayOfLookingAnswersTheRequest: If no rule says how to answer it.
+        :raises NoDetectorAnswersTheRequest: If no rule says how to answer it.
         :return: What the look found.
         """
         scene = self.scene_to_search(frame, request)
-        return self.look_rules.way_of_looking_for(RequestedLook.of(request)).take(scene)
+        return self.look_rules.detector_for(request).detect(scene)
 
     def scene_to_search(
         self, frame: RgbdFrame, request: SceneRequest = SceneRequest()

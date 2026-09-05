@@ -7,17 +7,19 @@ about the pieces by searching every surface they can rest on. That choice used t
 branch written into the pipeline, which meant a request nobody foresaw could only be
 answered by editing the code that reads it.
 
-It is a rule tree here instead, over what the request states, so a new kind of request
-is given a rule by an expert while the rules are in use. The tree is krrood's
-:class:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`, whose rules
-are authored by fitting known requests through an expert -- the same path an expert
-correcting an answer later takes, rather than a separate authoring model.
+It is a rule tree here instead, stated over the request itself -- the description of
+what is sought, which is what the rules are asked about and what a condition reads. The
+tree is krrood's
+:class:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`, built from
+the underspecified statement *a request whose detector is to be worked out*, so what is
+described and what is left open are read off that statement rather than named again
+here.
 
-Each way of looking states the requests it can answer as an entity query language
-condition, exactly as
-:meth:`~experiments.montessori.perception.detector_choice.PieceDetector.capability`
-states the looks a detector answers, so a way added to the rules brings its own
-condition with it.
+Each detector states the requests it can answer as an entity query language condition,
+which is
+:meth:`~krrood.entity_query_language.backends.PerceptionDetector.capability` and is the
+same statement every family of detectors makes about itself, so a detector added to the
+rules brings its own condition with it.
 """
 
 from __future__ import annotations
@@ -25,28 +27,26 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from krrood.entity_query_language.factories import ConditionType
-from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
-from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.interface import (
-    AnswerRequest,
-    CaseContext,
-    FunctionInterface,
+from krrood.entity_query_language.backends import (
+    PerceptionDetector,
+    state_the_detectors_own_condition,
 )
+from krrood.entity_query_language.factories import a
+from krrood.entity_query_language.rdr.expert import Expert
+from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.serialization import NullModelSaver
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import Dict, List, Optional, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriScene,
     MontessoriShapeDetection,
-    ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.exceptions import (
-    NoWayOfLookingAnswersTheRequest,
+    NoDetectorAnswersTheRequest,
 )
 from experiments.montessori.perception.orthophoto import Orthophoto, OrthophotoProjector
 from experiments.montessori.perception.scene_request import SceneRequest
@@ -54,60 +54,6 @@ from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceS
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
-
-# %% what the rules read about a request
-
-WAY_OF_LOOKING_ATTRIBUTE_NAME = "way_of_looking"
-"""
-The attribute of a request the rules conclude, which the engine predicts by name.
-"""
-
-
-@dataclass(frozen=True)
-class RequestedLook:
-    """
-    One request, read as the plain properties a rule states its conditions over.
-
-    Everything a rule reads is stated here rather than reached for through the request,
-    so a rule is a condition over named properties and the reading of the request
-    happens once, in :meth:`of`.
-    """
-
-    pieces_are_asked_for: bool
-    """
-    Whether a loose piece is a thing this request can be answered with.
-    """
-
-    the_board_is_asked_for: bool
-    """
-    Whether the board, or one of the holes cut through its lid, is a thing this request
-    can be answered with.
-    """
-
-    way_of_looking: Optional[WayOfLooking] = None
-    """
-    How this request is to be answered, which is what the rules conclude.
-
-    Unset on a request put to the rules: the engine predicts this attribute rather than
-    reading it, and it is declared here because naming a field is how a conclusion is
-    named.
-    """
-
-    @classmethod
-    def of(cls, request: SceneRequest) -> RequestedLook:
-        """
-        Read what a look was asked for.
-
-        :param request: What the statement asks a look for.
-        """
-        return cls(
-            pieces_are_asked_for=request.wants(MontessoriShapeDetection),
-            the_board_is_asked_for=(
-                request.wants(MontessoriBoardDetection)
-                or request.wants(ShapeSortingHoleDetection)
-            ),
-        )
-
 
 # %% the material one look works over
 
@@ -237,34 +183,22 @@ class SceneToSearch:
         ]
 
 
-# %% what a way of looking is
+# %% what a detector of this scene is
 
 
-class WayOfLooking(ABC):
+class SceneDetector(PerceptionDetector[SceneRequest], ABC):
     """
-    One way of answering a look at the Montessori scene.
+    Something that answers a look at the Montessori scene.
 
-    A way of looking states the requests it can answer, so the rules choose between ways
-    by matching a request against what each one says rather than by naming them.
+    Its capability is stated over the request itself, so a detector is chosen by
+    matching what was asked for against what each detector says it can answer rather
+    than by naming detectors in the code that reads the request.
     """
 
     @abstractmethod
-    def capability(self, request: RequestedLook) -> ConditionType:
+    def detect(self, scene: SceneToSearch) -> MontessoriScene:
         """
-        The requests this way of looking can answer, as a condition over a request.
-
-        Written as an entity query language condition rather than as a predicate on a
-        value, so the same statement both decides one request and becomes the rule that
-        concludes this way of looking.
-
-        :param request: The :class:`RequestedLook` variable to state the condition over.
-        :return: The condition, which holds exactly for the requests this way answers.
-        """
-
-    @abstractmethod
-    def take(self, scene: SceneToSearch) -> MontessoriScene:
-        """
-        Take the look this way of looking was chosen for.
+        Take the look this detector was chosen for.
 
         :param scene: What was asked for, and the frame to answer it from.
         :return: What the look found.
@@ -274,44 +208,23 @@ class WayOfLooking(ABC):
 # %% the rules
 
 
-def state_the_ways_own_condition(
-    context: CaseContext, requests: List[AnswerRequest]
-) -> Dict[AnswerName, Any]:
-    """
-    Answer the engine's question about a new rule with the condition the way of looking
-    being fitted already states about itself.
-
-    Only conditions are ever asked for, since every request the rules are fitted with
-    names the way that answers it.
-
-    :param context: The request being fitted, and the way of looking it is fitted to.
-    :param requests: The answers asked for, which this reads nothing from.
-    :return: The conditions answer.
-    """
-    return {
-        AnswerName.CONDITIONS: context.target_conclusion.capability(
-            context.case_variable
-        )
-    }
-
-
 @dataclass
 class LookRules:
     """
-    The rule tree that says how a look at this scene is answered.
+    The rule tree that says which detector answers a look at this scene.
 
     Its rules are krrood ripple-down rules whose conditions are entity query language
-    expressions over what a request states, so a request the rules get wrong is
-    corrected by adding a rule rather than by editing the ones already stated, and the
-    tree can be read (:meth:`render_tree`) rather than only run.
+    expressions over the request itself, so a request the rules get wrong is corrected
+    by adding a rule rather than by editing the ones already stated, and the tree can be
+    read (:meth:`render_tree`) rather than only run.
     """
 
-    find_the_board: WayOfLooking
+    find_the_board: SceneDetector
     """
     Answers a request the board or one of its holes can answer.
     """
 
-    find_the_pieces: WayOfLooking
+    find_the_pieces: SceneDetector
     """
     Answers a request a loose piece can answer, reporting the board it measured the
     surfaces by along with them.
@@ -321,88 +234,91 @@ class LookRules:
     """
     The rules themselves, as one tree that outlives the requests it answers.
 
-    Nothing is persisted when a rule is added: a rule concludes the way of looking
-    itself rather than a name for one, and the engine writes a model file as Python
-    source, which can spell an enum member or a number but not a collaborator. The rules
-    are recovered by stating them again from the ways, which is what building this does.
+    Nothing is persisted when a rule is added: a rule concludes the detector itself
+    rather than a name for one, and the engine writes a model file as Python source,
+    which can spell an enum member or a number but not a collaborator. The rules are
+    recovered by stating them again from the detectors, which is what building this
+    does.
     """
 
     expert: Expert = field(init=False, repr=False, compare=False)
     """
-    Asked for a new rule's condition, which it reads off the way of looking being
-    fitted.
+    Asked for a new rule's condition, which it reads off the detector being fitted.
     """
 
     def __post_init__(self) -> None:
         """
-        State the rules by fitting the requests each way of looking answers.
+        State the rules by fitting the requests each detector answers.
 
         The engine authors its own tree, so a rule is written by putting a known request
-        and the way that answers it to it, and each way supplies the condition from its
-        own :meth:`~WayOfLooking.capability`.
+        and the detector that answers it to it, and each detector supplies the condition
+        from its own
+        :meth:`~krrood.entity_query_language.backends.PerceptionDetector.capability`.
         """
         self.expert = Expert(
-            interface=FunctionInterface(answer_function=state_the_ways_own_condition)
+            interface=FunctionInterface(
+                answer_function=state_the_detectors_own_condition
+            )
         )
-        self.rules = EQLSingleClassRDR(
-            RequestedLook,
-            WAY_OF_LOOKING_ATTRIBUTE_NAME,
-            model_saver=NullModelSaver(),
+        self.rules = EQLSingleClassRDR.from_underspecified(
+            a(SceneRequest)(detector=...), model_saver=NullModelSaver()
         )
-        answered = self.requests_each_way_answers()
+        answered = self.requests_each_detector_answers()
         self.rules.fit(
             cases=[request for request, _ in answered],
-            targets=[way for _, way in answered],
+            targets=[detector for _, detector in answered],
             expert=self.expert,
         )
 
-    def requests_each_way_answers(self) -> List[Tuple[RequestedLook, WayOfLooking]]:
+    def requests_each_detector_answers(
+        self,
+    ) -> List[Tuple[SceneRequest, SceneDetector]]:
         """
-        The known kinds of request, each paired with the way of looking that answers it.
+        The known kinds of request, each paired with the detector that answers it.
 
         The unnarrowed request is fitted alongside the two narrowed ones, so the rules
         are held to answering it rather than left to happen to.
         """
         return [
-            (RequestedLook.of(SceneRequest()), self.find_the_pieces),
+            (SceneRequest(), self.find_the_pieces),
             (
-                RequestedLook.of(SceneRequest(detection_type=MontessoriShapeDetection)),
+                SceneRequest(detection_type=MontessoriShapeDetection),
                 self.find_the_pieces,
             ),
             (
-                RequestedLook.of(SceneRequest(detection_type=MontessoriBoardDetection)),
+                SceneRequest(detection_type=MontessoriBoardDetection),
                 self.find_the_board,
             ),
         ]
 
-    def way_of_looking_for(self, request: RequestedLook) -> WayOfLooking:
+    def detector_for(self, request: SceneRequest) -> SceneDetector:
         """
-        How one request is to be answered.
+        The detector that answers one request.
 
         :param request: What the look was asked for.
-        :raises NoWayOfLookingAnswersTheRequest: If no rule reaches this request.
+        :raises NoDetectorAnswersTheRequest: If no rule reaches this request.
         """
         concluded = self.rules.classify(request)
         if concluded is ...:
-            raise NoWayOfLookingAnswersTheRequest(str(request))
+            raise NoDetectorAnswersTheRequest(str(request))
         return concluded
 
-    def add_rule(self, request: RequestedLook, way: WayOfLooking) -> None:
+    def add_rule(self, request: SceneRequest, detector: SceneDetector) -> None:
         """
         State a kind of request the rules do not yet cover.
 
-        The rule joins the tree already in use, so such a request is answered by *way*
-        from the next call onwards without any of the rules already stated being
-        rewritten. That is what a tree of rules is for, and it is the path an expert
-        correcting an answer takes.
+        The rule joins the tree already in use, so such a request is answered by
+        *detector* from the next call onwards without any of the rules already stated
+        being rewritten. That is what a tree of rules is for, and it is the path an
+        expert correcting an answer takes.
 
         :param request: The kind of request that was not covered.
-        :param way: The way of looking that answers it, which supplies the rule's
+        :param detector: The detector that answers it, which supplies the rule's
             condition from its own capability.
         """
-        self.rules.fit_case(request, way, self.expert)
+        self.rules.fit_case(request, detector, self.expert)
 
-    def render_tree(self, request: RequestedLook) -> str:
+    def render_tree(self, request: SceneRequest) -> str:
         """
         The rules as a tree, with the rule that answers one request marked out.
 

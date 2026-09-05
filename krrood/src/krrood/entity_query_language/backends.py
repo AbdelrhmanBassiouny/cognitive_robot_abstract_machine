@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
+from functools import cached_property
 from operator import eq
 from types import EllipsisType, NoneType
 from typing import Generic, Iterable, Type, TypeVar
@@ -42,10 +43,19 @@ from krrood.entity_query_language.exceptions import (
     SelectiveBackendCannotResolveEllipsisMatch,
     UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration,
 )
-from krrood.entity_query_language.factories import entity, set_of, variable
+from krrood.entity_query_language.factories import (
+    ConditionType,
+    an,
+    entity,
+    set_of,
+    variable,
+)
 from krrood.entity_query_language.query.match import Match, AttributeMatch
 from krrood.entity_query_language.query.query import Entity, Query
+from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
+from krrood.entity_query_language.rdr.interface import AnswerRequest, CaseContext
 from krrood.ormatic.eql_interface import eql_to_sql
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 try:
     from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
@@ -267,6 +277,102 @@ class LookRequest(Generic[T]):
             if stated.attribute_name == attribute_name:
                 return stated.value
         return None
+
+
+LookT = TypeVar("LookT")
+
+
+@dataclass(eq=False)
+class PerceptionDetector(Generic[LookT], SubClassSafeGeneric, ABC):
+    """
+    Something that answers a look, and states for itself which looks it can answer.
+
+    What a detector can answer is its own statement rather than a caller's knowledge of
+    which detector is which, so a detector is never chosen for a look it declared it
+    cannot answer, and one added later brings its own condition with it.
+
+    The kind of look a detector answers is the type parameter it binds, so what its
+    conditions may read is part of its signature: bind the situation a look is decided
+    from -- what is being sought, what the world says about it, what the sensor
+    provides -- and state conditions over that.
+    """
+
+    __hash__ = object.__hash__
+    """
+    A detector is the one it is: two configured alike are not the same detector, and a
+    rule concludes the detector itself rather than a name for one, so it is compared and
+    hashed by identity.
+
+    Restated here because the generic base compares by value, which unsets hashing.
+    """
+
+    @abstractmethod
+    def capability(self, look: LookT) -> ConditionType:
+        """
+        The looks this detector can answer, as a condition over a look.
+
+        Written as an entity query language condition rather than as a predicate on a
+        value, so the same statement both decides one look and becomes a rule in the
+        tree that chooses among the detectors that can answer it.
+
+        :param look: The variable to state the condition over, of the kind this detector
+            binds.
+        :return: The condition, which holds exactly for the looks this detector answers.
+        """
+
+    @classmethod
+    def look_type(cls) -> Type[LookT]:
+        """
+        The kind of look this detector answers, read off the type parameter it binds.
+        """
+        return cls.get_generic_type_parameters()[0]
+
+    @cached_property
+    def stated_look(self) -> LookT:
+        """
+        The variable this detector states its own capability over.
+
+        The statement is made once and one look at a time is bound to this to ask it.
+        """
+        return variable(self.look_type(), domain=[])
+
+    @cached_property
+    def answerable_looks(self) -> Query:
+        """
+        The looks this detector can answer, stated once over :attr:`stated_look`.
+        """
+        return an(entity(self.stated_look).where(self.capability(self.stated_look)))
+
+    def answers(self, look: LookT) -> bool:
+        """
+        Whether this detector declares it can answer one look.
+
+        :param look: The look to put to it.
+        """
+        self.stated_look._update_domain_([look])
+        return bool(self.answerable_looks.tolist())
+
+
+def state_the_detectors_own_condition(
+    context: CaseContext, requests: List[AnswerRequest]
+) -> Dict[AnswerName, Any]:
+    """
+    Answer a rule engine's question about a new rule with the condition the detector
+    being fitted already states about itself.
+
+    Rules choosing among detectors are authored by putting a known look and the detector
+    that answers it to the engine, and only conditions are ever asked for, since the
+    detector is the conclusion rather than something to be worked out.
+
+    :param context: The look being fitted, and the detector it is fitted to.
+    :param requests: The answers asked for, which this reads nothing from.
+    :return: The conditions answer.
+    """
+    return {
+        AnswerName.CONDITIONS: context.target_conclusion.capability(
+            context.case_variable
+        )
+    }
 
 
 @dataclass

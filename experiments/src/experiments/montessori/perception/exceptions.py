@@ -277,7 +277,7 @@ class NoDetectorAnswersTheLook(DataclassException):
 
 
 @dataclass
-class NoWayOfLookingAnswersTheRequest(DataclassException):
+class NoDetectorAnswersTheRequest(DataclassException):
     """
     Raised when no rule says how a request is to be answered, so nothing would be run
     for it and reporting nothing found would be a lie about the scene.
@@ -293,6 +293,6 @@ class NoWayOfLookingAnswersTheRequest(DataclassException):
 
     def suggest_correction(self) -> str:
         return (
-            "State the way of looking that answers this kind of request, through "
+            "State the detector that answers this kind of request, through "
             "LookRules.add_rule, or ask for something a stated rule already reaches."
         )
