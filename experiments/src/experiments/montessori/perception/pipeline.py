@@ -27,7 +27,7 @@ from dataclasses import dataclass, field, replace
 import cv2
 import numpy as np
 from krrood.entity_query_language.factories import ConditionType
-from typing_extensions import Dict, List, Optional, Sequence, Tuple
+from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detector_choice import (
@@ -48,6 +48,11 @@ from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
     Footprint,
     FootprintClassifier,
+)
+from experiments.montessori.perception.look_choice import (
+    LookRules,
+    SceneDetector,
+    SceneToSearch,
 )
 from experiments.montessori.perception.orthophoto import (
     Orthophoto,
@@ -990,55 +995,145 @@ def _to_world_outline(contour: np.ndarray, orthophoto: Orthophoto) -> np.ndarray
     )
 
 
-@dataclass
-class RectifiedFrame:
-    """
-    One camera frame, and every horizontal plane it has been rectified onto.
+# %% the ways a look is answered
 
-    A plane is rectified once however many detectors read it: the surfaces a look searches
-    and the detectors chosen for them ask for overlapping planes, and rectifying is the
-    most expensive thing a look does.
-    """
 
-    frame: RgbdFrame
+@dataclass(eq=False)
+class FindTheBoard(SceneDetector):
     """
-    The camera data every plane is rectified from.
+    Answers a look by finding the shape-sorting board and the holes cut through its lid.
+
+    Compared by identity rather than by value, since the rules conclude this object
+    itself and two ways configured alike are not the same way.
     """
 
-    projector: OrthophotoProjector
+    board_detector: BoardDetector = field(default_factory=BoardDetector)
     """
-    Rectifies the frame onto a plane, over the stretch of table perception searches.
-    """
-
-    views: Dict[float, Orthophoto] = field(default_factory=dict)
-    """
-    The planes rectified so far, by their height above the world frame's origin.
+    Finds the board and its holes.
     """
 
-    edges: Dict[float, EdgeDistances] = field(default_factory=dict)
-    """
-    The edges read off each rectified plane so far, by that plane's height.
-    """
-
-    def at(self, height: float) -> Orthophoto:
+    def capability(self, request: SceneRequest) -> ConditionType:
         """
-        The frame rectified onto one horizontal plane.
+        Answers a request the board, or one of its holes, can answer.
 
-        :param height: Height of the plane above the world frame's origin, in metres.
+        :param request: The request to state the condition over.
         """
-        if height not in self.views:
-            self.views[height] = self.projector.project(self.frame, height)
-        return self.views[height]
+        return request.the_board_is_asked_for
 
-    def edges_at(self, height: float) -> EdgeDistances:
+    def detect(self, scene: SceneToSearch) -> MontessoriScene:
         """
-        How far each point of one rectified plane lies from an edge the camera saw.
+        Find the board.
 
-        :param height: Height of the plane above the world frame's origin, in metres.
+        :param scene: What was asked for, and the frame to answer it from.
         """
-        if height not in self.edges:
-            self.edges[height] = EdgeDistances.of(self.at(height))
-        return self.edges[height]
+        return MontessoriScene(board=self.board_in(scene))
+
+    def board_in(self, scene: SceneToSearch) -> Optional[MontessoriBoardDetection]:
+        """
+        The board as this look sees it, rectified onto the plane its lid stands in.
+
+        :param scene: The frame to find it in, and the surfaces it stands among.
+        :return: The board, or None if it was not in view.
+        """
+        return self.board_detector.detect(
+            scene.rectified.at(scene.lid.height), scene.reference_frame
+        )
+
+
+@dataclass(eq=False)
+class FindThePieces(SceneDetector):
+    """
+    Answers a look by searching every surface the request asks about for the loose
+    pieces standing on it.
+
+    The board is found first whatever was asked for, because how far each surface
+    reaches is read from the board as it was seen rather than from the world, and it is
+    reported along with the pieces since this look measured it.
+    """
+
+    find_the_board: FindTheBoard = field(default_factory=FindTheBoard)
+    """
+    Finds the board that says how far each surface reaches.
+    """
+
+    detector_rules: DetectorRules = field(
+        default_factory=lambda: DetectorRules(
+            edge_fit=EdgeFitDetector(), color_blob=ColorBlobDetector()
+        )
+    )
+    """
+    Says which detector looks for each piece on each of the scene's surfaces.
+
+    A look is answered by the detector the rules choose from what the world states about
+    the surface and the piece, so a scene the twin describes better is looked at better
+    without this way of looking changing.
+    """
+
+    def capability(self, request: SceneRequest) -> ConditionType:
+        """
+        Answers a request a loose piece can answer.
+
+        :param request: The request to state the condition over.
+        """
+        return request.pieces_are_asked_for
+
+    def detect(self, scene: SceneToSearch) -> MontessoriScene:
+        """
+        Search each surface the request asks about, on its own plane.
+
+        A piece standing on the board's lid is rectified from the lid rather than from
+        the table eighty millimetres below it, where parallax would have pushed its two
+        silhouettes past each other.
+
+        :param scene: What was asked for, and the frame to answer it from.
+        :raises NoDetectorAnswersTheLook: If no detector answers one of the looks.
+        """
+        board = self.find_the_board.board_in(scene)
+        pieces = []
+        for search in scene.searched_surfaces(board):
+            for detector, candidates in self.detector_rules.detectors_for(
+                search.surface, KNOWN_PIECES
+            ):
+                pieces.extend(self.pieces_on(scene, search, detector, candidates))
+        return MontessoriScene(shapes=pieces, board=board)
+
+    @staticmethod
+    def pieces_on(
+        scene: SceneToSearch,
+        search: SurfaceSearch,
+        detector: PieceDetector,
+        candidates: Sequence[KnownPiece],
+    ) -> List[MontessoriShapeDetection]:
+        """
+        The pieces one detector finds on one surface.
+
+        :param scene: The frame to read, rectified onto whichever planes are asked for.
+        :param search: The surface being searched, and the part of it it may claim.
+        :param detector: The detector chosen for these pieces on this surface.
+        :param candidates: The pieces it was chosen to look for.
+        """
+        top = search.surface.height + detector.piece_height
+        return detector.detect(
+            scene.rectified.at(search.surface.height),
+            scene.rectified.at(top),
+            scene.rectified.edges_at(top),
+            scene.frame,
+            scene.reference_frame,
+            search,
+            candidates,
+        )
+
+
+def default_look_rules() -> LookRules:
+    """
+    The rules a pipeline starts with, sharing the one board search between the two ways
+    of looking so a look that reports both runs it once.
+    """
+    find_the_board = FindTheBoard()
+    return LookRules(
+        find_the_board=find_the_board,
+        find_the_pieces=FindThePieces(find_the_board=find_the_board),
+    )
 
 
 # %% the pipeline
@@ -1075,22 +1170,13 @@ class MontessoriPerceptionPipeline:
     own pose was given in.
     """
 
-    board_detector: BoardDetector = field(default_factory=BoardDetector)
+    look_rules: LookRules = field(default_factory=default_look_rules)
     """
-    Finds the board and its holes.
-    """
+    Says how a look is answered: which detectors run over which surfaces, concluded from
+    what the request asks for rather than configured here.
 
-    detector_rules: DetectorRules = field(
-        default_factory=lambda: DetectorRules(
-            edge_fit=EdgeFitDetector(), color_blob=ColorBlobDetector()
-        )
-    )
-    """
-    Says which detector looks for each piece on each of the scene's surfaces.
-
-    A look is answered by the detector the rules choose from what the world states about
-    the surface and the piece, so a scene the twin describes better is looked at better
-    without the pipeline changing.
+    A kind of request nobody foresaw is given a rule while the rules are in use, so the
+    pipeline does not have to change for perception to answer something new.
     """
 
     headroom: float = 0.15
@@ -1152,75 +1238,38 @@ class MontessoriPerceptionPipeline:
         """
         return OrthophotoProjector(region=self.table.region).project(frame, height)
 
-    def searched_surfaces(
-        self,
-        board: Optional[MontessoriBoardDetection],
-        request: SceneRequest = SceneRequest(),
-    ) -> List[SurfaceSearch]:
-        """
-        The surfaces one look searches, each with the part of its plane it may claim.
-
-        The table is everything but where the board stands; the board's lid is the board
-        itself, and only where it was actually seen. A request naming one of them drops
-        the other, so a look asked about one surface rectifies and searches one plane.
-
-        :param board: The board, or None if it was not in view.
-        :param request: What the look was asked for.
-        :return: One entry per surface a piece can be found on and the request asked
-            about.
-        """
-        if board is None:
-            searches = [SurfaceSearch(surface=self.table)]
-        else:
-            searches = [
-                SurfaceSearch(surface=self.table, supported_surfaces=(board,)),
-                SurfaceSearch(surface=self.lid, boundary=board),
-            ]
-        return [search for search in searches if request.searches(search.surface.name)]
-
     def detect(
         self, frame: RgbdFrame, request: SceneRequest = SceneRequest()
     ) -> MontessoriScene:
         """
         Recognise what one frame was asked about.
 
-        Every surface the request asks about is searched on its own plane, so a piece
-        standing on the board's lid is rectified from the lid rather than from the table
-        eighty millimetres below it, where parallax would have pushed its two silhouettes
-        past each other.
-
-        The board is found whatever was asked for: it is the answer to a request about
-        the board itself or its holes, and it is what says how far each surface reaches
-        for a request about the pieces.
+        How the look is answered is concluded from the request rather than written here:
+        the rules say which way of looking answers it, and that way says which detectors
+        run over which surfaces.
 
         :param frame: The camera data to search.
         :param request: What the look was asked for, unnarrowed by default.
-        :return: The pieces, the board, and its holes, as far as the request asked for
-            them.
+        :raises NoDetectorAnswersTheRequest: If no rule says how to answer it.
+        :return: What the look found.
         """
-        rectified = RectifiedFrame(
-            frame=frame, projector=OrthophotoProjector(region=self.table.region)
+        scene = self.scene_to_search(frame, request)
+        return self.look_rules.detector_for(request).detect(scene)
+
+    def scene_to_search(
+        self, frame: RgbdFrame, request: SceneRequest = SceneRequest()
+    ) -> SceneToSearch:
+        """
+        The material one look works over: what was asked for, the surfaces the world
+        describes, and the frame to answer it from.
+
+        :param frame: The camera data to search.
+        :param request: What the look was asked for, unnarrowed by default.
+        """
+        return SceneToSearch(
+            frame=frame,
+            table=self.table,
+            lid=self.lid,
+            reference_frame=self.reference_frame,
+            request=request,
         )
-        board = self.board_detector.detect(
-            rectified.at(self.lid.height), self.reference_frame
-        )
-        pieces = []
-        if request.wants(MontessoriShapeDetection):
-            for search in self.searched_surfaces(board, request):
-                for detector, candidates in self.detector_rules.detectors_for(
-                    search.surface, KNOWN_PIECES
-                ):
-                    pieces.extend(
-                        detector.detect(
-                            rectified.at(search.surface.height),
-                            rectified.at(search.surface.height + detector.piece_height),
-                            rectified.edges_at(
-                                search.surface.height + detector.piece_height
-                            ),
-                            frame,
-                            self.reference_frame,
-                            search,
-                            candidates,
-                        )
-                    )
-        return MontessoriScene(shapes=pieces, board=board)
