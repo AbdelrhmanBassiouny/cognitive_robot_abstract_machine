@@ -435,7 +435,25 @@ items:
     range is narrow - below 0.075 the lead buys nothing and above it recall falls. detect costs 1.08x
     the parent, measured as a ratio to a same-run baseline. 442 passed, 1 skipped, 4 xfailed across
     test/experiments_test/ against 423/1/5 on the parent in the same container, with the collected
-    sets diffed by name rather than compared by count.'
+    sets diffed by name rather than compared by count.
+
+    Review round of 2026-09-05, one thread, answered as 8443f6959. The developer asked how
+    test_a_candidate_chosen_from_several_has_more_to_lead_than_one_a_belief_names tested the belief
+    input, and it did not: it named a belief in its title and fed none in, calling is_reported with
+    no rival and then with one, which is the rule''s own arity and was already covered four lines
+    above. Where a belief enters is PieceHypothesis.candidates - one fit per piece it allows, and
+    _piece_at adds the runner-up as a rival only where there is one - so two tests replace it, both
+    driving a real PieceMatcher over a drawn KnownPiece with two beliefs differing only in their
+    candidates: how many accounts of the place each leaves, and that the same fit, edges and stated
+    cost report the piece only where the belief named it. The second states a limit worth keeping:
+    on a clean drawing the winner is decisive, 0.760 against a 0.403 runner-up, so the belief changes
+    an outcome only where the runner-up is close as on tracy_pickup_demo, and rather than draw a
+    scene contrived to make it close the test derives its lead from what the fits themselves
+    measured. LoosePieceDetector._outline_of moved onto MatchedPiece.outline, since where a fitted
+    piece''s outline lies is a property of the fit, and the test then reads the production definition
+    instead of a second copy. 443 passed, 1 skipped, 4 xfailed against 442/1/4 - one removed, two
+    added - and both are mutation-checked: ignoring the belief''s candidates fails the first,
+    ignoring the rivals fails the second.'
 - id: montessori-classes-in-the-orm
   title: Map the Montessori package's own classes, which the ORM has never seen
   branch: claude/montessori-classes-orm-s7vxu1
