@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 from typing_extensions import List, Optional
 
+from experiments.montessori.perception.explanations import BoardOutlines, Explanation
 from experiments.montessori.perception.footprint import Footprint
 from experiments.montessori.perception.hypotheses import PieceHypothesis
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -126,14 +127,25 @@ class MontessoriShapeDetection(MontessoriDetection):
     :attr:`pose` places the piece's centre half this height above the resting surface.
     """
 
-    outline_agreement: float = field(kw_only=True)
+    explanation: Explanation = field(kw_only=True)
     """
-    How much of the recognised piece's own outline lay along an edge the camera saw.
+    How well this piece accounts for the edges seen where it was found.
 
-    One is a perfect fit. A low value says no placement of this piece follows what is in
-    the picture, which is how a piece is told apart from its own reflection in the
-    table. It is the evidence for :attr:`hypothesis`.
+    The evidence for :attr:`hypothesis`, and what a rival account of the same place is
+    compared against, which is how a piece is told apart from its own reflection in the
+    table and from an edge the board itself produces.
     """
+
+    @property
+    def outline_agreement(self) -> float:
+        """
+        How much of the recognised piece's own outline lay along an edge the camera saw.
+
+        One is a perfect fit. A low value says no placement of this piece follows what
+        is in the picture. On its own it says nothing about what put those edges there,
+        which is why it is one side of :attr:`explanation` rather than the whole of it.
+        """
+        return self.explanation.outline_followed
 
     hypothesis: PieceHypothesis = field(kw_only=True)
     """
@@ -203,6 +215,24 @@ class MontessoriBoardDetection(MontessoriDetection):
     @property
     def label(self) -> str:
         return "board"
+
+    def outlines_in(self, plane_height: float, seen_from: np.ndarray) -> BoardOutlines:
+        """
+        Where this board's own edges fall in a rectification onto one plane.
+
+        Its lid's border and every hole cut through it are in the picture whether or not
+        anything rests on it, so they are what a piece found there has to explain better
+        than.
+
+        :param plane_height: Height of the plane they are wanted in, in metres.
+        :param seen_from: Where the camera stands, as world-frame ``(x, y, z)``.
+        """
+        return BoardOutlines.cast_onto(
+            [self.outline, *(hole.outline for hole in self.holes)],
+            lying_at=self.lid_height,
+            plane_height=plane_height,
+            seen_from=seen_from,
+        )
 
 
 # %% one look at the scene

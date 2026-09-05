@@ -1,6 +1,6 @@
 """
 Recognise a loose piece by laying the pieces this set is known to contain over the edges
-the camera saw, and keeping the one that follows them best.
+the camera saw, and reporting how well each of them follows those edges.
 
 Rather than measuring proportions of an outline and deciding from thresholds what shape
 they suggest, each known piece is placed and turned until its own outline lies along the
@@ -15,15 +15,16 @@ Fitting to edges rather than to a segmented colour is what lets a piece be recog
 a mirror-finish table (see
 :mod:`~experiments.montessori.perception.edges`): the colour of a piece runs on into its
 own reflection, so a coloured region says roughly where a piece is but neither how large
-it is nor which one it is. The fit answers all of that at once, and refuses an outline no
-known piece follows instead of reporting whichever threshold it happened to fall between.
+it is nor which one it is. The fit answers all of that at once, and every
+candidate's answer is kept, so what is really standing there is settled by comparing the
+accounts of that place rather than by a level one outline happened to clear.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Optional
+from typing_extensions import List
 
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.hypotheses import PieceHypothesis
@@ -73,18 +74,8 @@ class MatchedPiece:
 @dataclass(frozen=True)
 class PieceMatcher:
     """
-    Recognises the piece standing at a believed place, by fitting each piece the belief
-    allows and keeping whichever followed the edges best.
-    """
-
-    minimum_agreement: float = 0.62
-    """
-    How much of a piece's outline must lie along a seen edge before it is reported at
-    all.
-
-    On the real table a correctly recognised piece reaches between 0.63 and 0.86, while
-    the best any *other* piece of the same colour reaches on the same spot is 0.62; this
-    sits at that boundary, so a piece is refused rather than reported as its neighbour.
+    Fits each piece a belief allows at the place it names, and says how well each of
+    them followed the edges there.
     """
 
     fitter: OutlineFitter = field(default_factory=OutlineFitter)
@@ -92,26 +83,27 @@ class PieceMatcher:
     Places and turns one piece over the edges.
     """
 
-    def match(
+    def fits(
         self, edges: EdgeDistances, hypothesis: PieceHypothesis
-    ) -> Optional[MatchedPiece]:
+    ) -> List[MatchedPiece]:
         """
-        Recognise the piece a hypothesis expects, where it expects it.
+        Fit every piece a hypothesis allows, best first.
+
+        Nothing is refused here. How well an outline follows some edge says nothing about
+        what put that edge there, so which fit -- if any -- is what is really standing
+        there is settled by comparing the accounts of that place against each other (see
+        :mod:`~experiments.montessori.perception.explanations`), and the fits this
+        returns are what that comparison is made between.
 
         :param edges: The edges seen in the plane the piece's top face stands on.
         :param hypothesis: What is expected, and where it is believed to be.
-        :return: The best fit, or None if no expected piece follows the edges well
-            enough.
+        :return: One fit per candidate the belief allows, best-fitted first.
         """
-        if not hypothesis.candidates:
-            return None
-        best = max(
+        return sorted(
             (self._fit(piece, edges, hypothesis) for piece in hypothesis.candidates),
             key=lambda fit: fit.outline_agreement,
+            reverse=True,
         )
-        if best.outline_agreement < self.minimum_agreement:
-            return None
-        return best
 
     def _fit(
         self, piece: KnownPiece, edges: EdgeDistances, hypothesis: PieceHypothesis
