@@ -132,7 +132,7 @@ items:
     pull_request_number: null
     track: plan-splits
     depends_on: [size-budget-and-report]
-    status: not_started
+    status: done
     notes: >
       Discovered over budget during refuse-oversized-save's kickoff, 2026-09-05: 29 items,
       1,724 manifest + 6,422 roadmap = 8,146 lines - the largest plan measured to date,
@@ -145,7 +145,11 @@ items:
       fold any depends_on edge that would cross a plan boundary into blockers, compress
       finished narrative to what binds future work, and verify with
       build_dashboard.validate_plan plus a set comparison against the source before
-      regenerating the branch index and publishing each successor's dashboard.
+      regenerating the branch index and publishing each successor's dashboard. Done
+      2026-09-05: split by wave into knowledge-directed-grounding (10 items),
+      knowledge-directed-requests (14) and knowledge-directed-expectation (5), all well
+      within budget; see roadmap.md's "Done" section for the seams, the cost and what
+      was verified.
 
   - id: split-icra-experiments
     title: "Split icra-experiments into plans under the budget"
