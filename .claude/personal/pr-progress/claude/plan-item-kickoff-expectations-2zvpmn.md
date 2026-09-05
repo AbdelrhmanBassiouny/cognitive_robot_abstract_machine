@@ -25,14 +25,22 @@ of the same name.
   against the world; `WorkspaceSurface` carries the entity it was measured of, which
   inverted `recorded_setup`; `HasPosition` replaces the `Placed` union; `colors` answers
   every colour.
+- The night round of 2026-09-05 (f7112120): `StatedRelation` is gone entirely, at the
+  developer's rejection of the subclass. A relation stated about the thing sought is an
+  ordinary `Match`; `Relation.subject_name()` / `Triple.object_name()`, `Match.stating`,
+  `Match.covers`, `Match.states_the_same` and the four reading functions beside the backend
+  are where its parts landed, and `Expectation.expects` is what a belief is asked in place
+  of comparing statements.
 
 ## Next
 
-- Nothing on the branch. CI on the new head unread.
-- Two threads open for the developer: whether an event's declared effect should fold onto
-  the statechart's own containment detectors (it should, once a hole's region is a
-  containment candidate and the relation is settled), and `HasPosition` versus his
-  `HasLocation`.
+- Nothing on the branch. CI on the new head (f7112120) unread.
+- One thread open for the developer: he proposed making `InsideOf` answer for regions to
+  fold the containment check onto the statechart's detectors. It already answers for them
+  -- 1.000 sunk, 0.500 standing over the hole, 0.000 clear, 23x cheaper than
+  `InsideRegion` -- but it counts vertices in a bounding box, so its own 0.5 default reads
+  the over-the-hole case as *in* while the detectors' 0.9 reads it right. His to settle,
+  with `InsideRegion` being a `PlacementRelation` the second thing to weigh.
 - The lid marks stay four; a history reaches two of them, and the rest is
   `competing-explanations`'.
 - A look cannot tell a sunk piece from one standing over the hole; the success case is
@@ -44,7 +52,9 @@ of the same name.
   `believed_from`, `placements_within` and the request seeding when the merge reaches them.
 - Every later merge of #246 into the #238 stack meets the same `predicates.py` conflict;
   take 2ea13b3c's resolution. `HasPose` now sits on `spatial_types.py` and
-  `world_entity.py` too.
+  `world_entity.py` too, and `HasPosition` above `HasPose`.
+- Nothing anywhere holds a `StatedRelation` any more; a branch that does states
+  `an(<Relation>)(<operand>=...)` instead.
 - Segmind's tests need the root `conftest.py` (apartment fixture); run them without
   `--noconftest`. The experiments modules run with `--noconftest`.
 - Fetch the notes branch immediately before every save, and fetch the *branch* too: the
