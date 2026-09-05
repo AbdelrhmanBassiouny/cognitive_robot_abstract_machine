@@ -17,7 +17,9 @@ no world), and the message said "more than 20 worlds" while the check was `> 30`
    name the current test in `pytest_runtest_setup`, module fixture renamed
    `check_for_leaked_worlds` calls `enforce_limit`. Dropped `objgraph`/`gc` use there.
 4. [done] Formatted with `scripts/format_docstrings.py`.
-5. [next] commit, push, open draft PR off main with the `bug` label.
+5. [done] committed, pushed, draft PR #267 opened off main with the `bug` label:
+   https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/267
+6. [next] nothing outstanding in this session - CI on #267 is the first full-suite run.
 
 **Verification notes**
 - The workspace packages are not installed in this container (no `semantic_digital_twin`,
