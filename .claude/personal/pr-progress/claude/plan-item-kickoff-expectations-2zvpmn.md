@@ -31,10 +31,20 @@ of the same name.
   `Match.covers`, `Match.states_the_same` and the four reading functions beside the backend
   are where its parts landed, and `Expectation.expects` is what a belief is asked in place
   of comparing statements.
+- The late round of 2026-09-05 (3d4b8457), two questions rather than asks:
+  `object_stated_by` names the read of what a stated relation relates the thing sought to,
+  beside the other readers, and answers `None` where the statement leaves that side open
+  rather than raising a bare `KeyError`; `Match.stating`'s docstring says what
+  distinguishes it from `where`, since only an attribute reaches `construct_instance`.
 
 ## Next
 
-- Nothing on the branch. CI on the new head (f7112120) unread.
+- Nothing on the branch. CI on the new head (3d4b8457) unread; f7112120's was unread too.
+- Two threads answered and left open for the developer, both krrood questions:
+  whether `Match.stating` earns its place (it has one production caller, and the fold into
+  that caller was offered), and whether subclassing `Match` was worth it (no -- the
+  equality override contradicted `Match`'s identity equality silently, which is the
+  argument, and the honest cost of dropping it is that reading an operand is now a call).
 - One thread open for the developer: he proposed making `InsideOf` answer for regions to
   fold the containment check onto the statechart's detectors. It already answers for them
   -- 1.000 sunk, 0.500 standing over the hole, 0.000 clear, 23x cheaper than
