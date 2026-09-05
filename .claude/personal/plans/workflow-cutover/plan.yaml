@@ -25,13 +25,13 @@ items:
   track: cutover
   depends_on: []
   blockers:
-  - 'The 2026-09-04 review round is answered and pushed as `d61619ac`; what is left is the
-    user''s own re-review of it. Two threads are answered differently from how they were
-    asked and are deliberately left open for them: the git-command-runner one, where the
-    runner adopted is this package''s own rather than `.claude/stack`''s (importing that
-    would take a dependency on another skill directory''s `sys.path` insertion), and the
-    error-base one, which covers only the errors this branch introduces rather than
-    `build_dashboard.py`''s three pre-existing ones.'
+  - 'Two review rounds are answered and pushed - the 26-thread round of 2026-09-04 as
+    `d61619ac`, and the single dataclass ask of 2026-09-05 as `8afbbe30`; what is left is
+    the user''s own re-review. One thread stays open because it was answered differently
+    from how it was asked: the git-command-runner one, where the runner adopted is this
+    package''s own rather than `.claude/stack`''s, since importing that would take a
+    dependency on another skill directory''s `sys.path` insertion. The user closed the
+    error-base and Artifact threads themselves.'
   notes: |-
     Re-scoped 2026-07-31 to the user's one-dashboard decision: no board index is built at all.
     GitHub's native stack map covers derived stack mechanics, so the plan dashboards are the single

@@ -145,3 +145,27 @@ being resolved:
   `MissingMergeTimestampError`, `MalformedPullRequestDataError` and `PlanValidationError` predate the
   branch and sit outside its diff; retrofitting them widens the pull request rather than answering
   the review.
+
+Of those two, the user closed the error-base thread himself; the git-command-runner one is still
+open, and is the only thread on the pull request that is.
+
+## The 2026-09-05 round: one ask, and what making it true exposed
+
+One comment - *always use dataclasses*, on the fake transport in `test_build_site.py` - answered in
+`8afbbe30`. It is worth recording because the fix was not the class it pointed at.
+
+That class had a hand-written `__init__` for one reason: to hold a builder function the conftest
+handed it. The builder was a closure returning a bare `dict`, and the two fixtures underneath it
+were closures over their configuration as well. So the review found one dataclass missing and the
+scaffolding behind it turned out to be three classes written as functions:
+
+- the pull request a fake listing serves is now a `PullRequestDetail` dataclass with `to_json()`,
+- the scratch repositories are a `ScratchNotesRemote` holding the remote, the seed checkout and the
+  clone as named paths, in a `tests/scratch_repositories.py` of their own,
+- and `scratch_git` is a `GitCommandRunner` pointed with the `in_directory()` the production class
+  already had, rather than a factory that built one.
+
+The move to a named module had a second effect the round did not set out to get. The `plan_files`
+fixture existed *only* because `conftest` is not a module name a test can safely import by - four
+test directories share one path under CI's single pytest run, and its docstring said so. With the
+type in a module with its own name, the fixture is gone and the tests import the class.
