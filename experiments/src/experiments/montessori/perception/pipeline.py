@@ -56,7 +56,7 @@ from experiments.montessori.perception.orthophoto import (
     OrthophotoProjector,
     WorkspaceBox,
 )
-from experiments.montessori.perception.piece_matcher import MatchedPiece, PieceMatcher
+from experiments.montessori.perception.piece_matcher import PieceMatcher
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import (
     HUE_RANGE,
@@ -944,17 +944,6 @@ class LoosePieceDetector(BeliefSource):
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return list(contours)
 
-    @staticmethod
-    def _outline_of(match: MatchedPiece) -> np.ndarray:
-        """
-        Where a fitted piece's own outline lies, in world-frame coordinates.
-
-        :param match: The fit to read.
-        """
-        return match.piece.turned_outline(match.yaw) + np.array(
-            [match.center.x, match.center.y]
-        )
-
     def _piece_at(
         self,
         hypothesis: PieceHypothesis,
@@ -997,7 +986,7 @@ class LoosePieceDetector(BeliefSource):
         if not fitted_pieces:
             return None
         match, *runners_up = fitted_pieces
-        outline = self._outline_of(match)
+        outline = match.outline
         place = PlaceInThePicture.around(
             outline,
             edges,
@@ -1008,7 +997,7 @@ class LoosePieceDetector(BeliefSource):
         account = place.explained_by(outline)
         rivals = [board_outlines.account_of(place)]
         if runners_up:
-            rivals.append(place.explained_by(self._outline_of(runners_up[0])))
+            rivals.append(place.explained_by(runners_up[0].outline))
         if not explanations.is_reported(account, *rivals):
             return None
         fitted = _to_rectified_contour(outline, orthophoto)

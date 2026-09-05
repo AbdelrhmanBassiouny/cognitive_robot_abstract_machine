@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
 from typing_extensions import List
 
 from experiments.montessori.perception.edges import EdgeDistances
@@ -66,6 +67,15 @@ class MatchedPiece:
     One is a perfect fit. A low value says no placement of this piece follows what is
     actually in the picture.
     """
+
+    @property
+    def outline(self) -> np.ndarray:
+        """
+        Where this piece's own outline lies, as ``(n, 2)`` world-frame points.
+        """
+        return self.piece.turned_outline(self.yaw) + np.array(
+            [self.center.x, self.center.y]
+        )
 
 
 # %% fitting them

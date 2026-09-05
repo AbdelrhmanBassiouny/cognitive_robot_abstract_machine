@@ -10,7 +10,7 @@ import math
 import cv2
 import numpy as np
 import pytest
-from typing_extensions import Tuple
+from typing_extensions import List, Tuple
 
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.explanations import (
@@ -20,7 +20,18 @@ from experiments.montessori.perception.explanations import (
     Explanation,
     PlaceInThePicture,
 )
+from experiments.montessori.perception.hypotheses import BelievedPlace, PieceHypothesis
 from experiments.montessori.perception.orthophoto import Orthophoto, WorkspaceRegion
+from experiments.montessori.perception.piece_matcher import MatchedPiece, PieceMatcher
+from experiments.montessori.pieces import (
+    KNOWN_PIECE_BY_CATEGORY,
+    KNOWN_PIECES,
+    KnownPiece,
+)
+from experiments.montessori.planar_geometry import PlanarPoint
+from experiments.montessori.semantics import MontessoriShapeCategory
+from krrood.patterns.belief_source import BeliefSource
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
 DRAWN_SURFACE_COLOR = (60, 60, 60)
 """
@@ -48,6 +59,19 @@ How far apart, in metres, the points an outline is read at stand here.
 SQUARE_WIDTH = 0.04
 """
 Edge length, in metres, of the square face these tests draw.
+"""
+
+BELIEF_REACH = 0.006
+"""
+How far, in metres, from the place it names a belief here allows the piece to be.
+
+Small, because these tests draw the piece at the place the belief names and are about
+which accounts of it are compared rather than about how widely to search.
+"""
+
+A_LITTLE = 0.001
+"""
+A margin, in metres of agreement, small beside any gap between two accounts of a place.
 """
 
 
@@ -232,21 +256,6 @@ def test_an_account_that_does_not_lead_a_rival_is_not_reported():
     assert rule.is_reported(candidate, behind_it)
 
 
-def test_a_candidate_chosen_from_several_has_more_to_lead_than_one_a_belief_names():
-    """
-    The plan's own claim as a rule rather than as a description: what a look must show
-    to report something rises with the number of accounts of that place it was the best
-    of, so a belief naming one piece makes the same evidence go further than an unguided
-    look over the whole set.
-    """
-    rule = CompetingExplanations(required_lead=0.1)
-    seen = Explanation(outline_followed=0.5, edges_accounted_for=0.5)
-    next_best = Explanation(outline_followed=0.45, edges_accounted_for=0.45)
-
-    assert rule.is_reported(seen)
-    assert not rule.is_reported(seen, next_best)
-
-
 def test_one_account_leads_another_only_by_more_than_the_stated_lead():
     rule = CompetingExplanations(required_lead=0.25)
     ahead = Explanation(outline_followed=0.8, edges_accounted_for=0.8)
@@ -293,3 +302,89 @@ def test_a_place_is_read_over_the_same_edges_whichever_account_is_asked():
 
     assert place.holds(place.seen_here).shape == place.seen_here.shape
     assert turned.edges_accounted_for < place.explained_by(square()).edges_accounted_for
+
+
+# %% what a belief changes about the comparison
+
+
+class Asker(BeliefSource):
+    """
+    Whoever asked for the look, as the source of the beliefs these tests state.
+    """
+
+
+def believing(candidates: Tuple[KnownPiece, ...]) -> PieceHypothesis:
+    """
+    A belief that one of some pieces stands at the middle of a drawn view.
+
+    :param candidates: The pieces the belief allows it to turn out to be.
+    """
+    return PieceHypothesis(
+        place=BelievedPlace(
+            surface=PrefixedName("lid"),
+            center=PlanarPoint(0.0, 0.0),
+            radius=BELIEF_REACH,
+        ),
+        source=Asker(),
+        candidates=candidates,
+    )
+
+
+def accounts_of_the_place(
+    fits: List[MatchedPiece], edges: EdgeDistances, matcher: PieceMatcher
+) -> List[Explanation]:
+    """
+    What each of some fits of one place says about the edges seen there.
+
+    :param fits: The fits, best first, as the matcher returned them.
+    :param edges: The edges they were fitted to.
+    :param matcher: The matcher that produced them, for the reach it read at.
+    """
+    place = PlaceInThePicture.around(
+        fits[0].outline,
+        edges,
+        edges.positions,
+        matcher.fitter.reach,
+        matcher.fitter.outline_spacing,
+    )
+    return [place.explained_by(fit.outline) for fit in fits]
+
+
+def test_a_belief_naming_one_piece_leaves_fewer_accounts_of_the_place_to_lead():
+    """
+    What a belief decides is how many rivals a fit has: one fit is made per piece it
+    allows, so naming the piece leaves the board and nothing-being-there as the only
+    other accounts of that place, where an unguided look adds the rest of the set.
+    """
+    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    edges = drawn(cube.outline)
+    matcher = PieceMatcher()
+
+    named = matcher.fits(edges, believing((cube,)))
+    unguided = matcher.fits(edges, believing(KNOWN_PIECES))
+
+    assert [fit.piece for fit in named] == [cube]
+    assert len(unguided) == len(KNOWN_PIECES)
+    assert unguided[0].piece is cube
+
+
+def test_the_runner_up_a_wider_belief_admits_is_what_the_same_fit_must_also_lead():
+    """
+    The plan's own claim as a rule rather than as a description, on the same picture
+    read twice: the fit, the edges and the cost stated are identical, and the piece is
+    reported only where the belief named it -- because the account the whole set adds is
+    one the same evidence then has to beat as well.
+    """
+    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    edges = drawn(cube.outline)
+    matcher = PieceMatcher()
+
+    account, next_best, *_ = accounts_of_the_place(
+        matcher.fits(edges, believing(KNOWN_PIECES)), edges, matcher
+    )
+    costlier_than_the_runner_up_is_behind = CompetingExplanations(
+        required_lead=account.strength - next_best.strength + A_LITTLE
+    )
+
+    assert costlier_than_the_runner_up_is_behind.is_reported(account)
+    assert not costlier_than_the_runner_up_is_behind.is_reported(account, next_best)
