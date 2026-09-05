@@ -231,8 +231,22 @@ class GenerativeBackend(QueryBackend, ABC):
     def _evaluate(self, expression: Match[T]) -> Iterable[T]: ...
 
 
+class Look(ABC):
+    """
+    One question put to perception: what is being sought, and the situation it is sought
+    in.
+
+    A detector states the looks it can answer as a condition over one of these, and a
+    rule tree binds one to decide which detector answers it, so a look is where
+    everything either of them may read is said -- what is sought, what the world states
+    about it, and what the sensor offers. Which of those a look carries differs with the
+    family of detectors asked, so each family states its own look and this declares
+    nothing beyond being one.
+    """
+
+
 @dataclass(frozen=True)
-class LookRequest(Generic[T]):
+class LookRequest(Generic[T], Look):
     """
     What a statement asks a look for.
 
@@ -279,7 +293,7 @@ class LookRequest(Generic[T]):
         return None
 
 
-LookT = TypeVar("LookT")
+LookT = TypeVar("LookT", bound=Look)
 
 
 @dataclass(eq=False)
@@ -343,14 +357,22 @@ class PerceptionDetector(Generic[LookT], SubClassSafeGeneric, ABC):
         """
         return an(entity(self.stated_look).where(self.capability(self.stated_look)))
 
-    def answers(self, look: LookT) -> bool:
+    def asked_about(self, look: LookT) -> Query:
         """
-        Whether this detector declares it can answer one look.
+        This detector's own capability, asked about one look.
+
+        Evaluating the query answers with the look where this detector declares it can
+        answer it and with nothing where it cannot, so whoever asks decides what to make
+        of it -- a verdict, the looks of a batch this detector takes, a drawing of the
+        condition, or a statement to narrow further.
+
+        .. note:: The query is the detector's own standing statement rather than a copy
+            of it, so changing it changes what the detector declares about itself.
 
         :param look: The look to put to it.
         """
         self.stated_look._update_domain_([look])
-        return bool(self.answerable_looks.tolist())
+        return self.answerable_looks
 
 
 def state_the_detectors_own_condition(

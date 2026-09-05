@@ -6,6 +6,7 @@ detectors by those statements.
 from __future__ import annotations
 
 from krrood.entity_query_language.backends import (
+    Look,
     PerceptionDetector,
     state_the_detectors_own_condition,
 )
@@ -14,6 +15,7 @@ from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.serialization import NullModelSaver
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
+from krrood.entity_query_language.query.query import Query
 
 from ..dataset.detectors_that_state_what_they_answer import (
     MeasureTheDepth,
@@ -28,20 +30,45 @@ def test_a_detector_states_the_kind_of_look_it_answers():
     assert MeasureTheDepth.look_type() is PlaceToLookAt
 
 
+def test_the_kind_a_detector_binds_is_a_look():
+    """
+    The type parameter is bound, so a detector cannot state its capability over
+    something that is not a question put to perception.
+    """
+    assert issubclass(MeasureTheDepth.look_type(), Look)
+
+
+def test_a_detector_asked_about_a_look_answers_with_its_own_statement():
+    """
+    What comes back is the query rather than a verdict, so whoever asked can evaluate
+    it, inspect it or narrow it further.
+    """
+    detector = MeasureTheDepth()
+    look = PlaceToLookAt(place="the table", depth_is_returned=True)
+
+    asked = detector.asked_about(look)
+
+    assert isinstance(asked, Query)
+    assert asked.tolist() == [look]
+    assert asked is detector.answerable_looks
+
+
 def test_a_detector_answers_the_looks_its_condition_holds_for():
     detector = MeasureTheDepth()
 
-    assert detector.answers(PlaceToLookAt(place="the table", depth_is_returned=True))
-    assert not detector.answers(
+    assert detector.asked_about(
+        PlaceToLookAt(place="the table", depth_is_returned=True)
+    ).tolist()
+    assert not detector.asked_about(
         PlaceToLookAt(place="the table", depth_is_returned=False)
-    )
+    ).tolist()
 
 
 def test_two_detectors_of_one_family_answer_disjoint_looks():
     with_depth = PlaceToLookAt(place="the table", depth_is_returned=True)
 
-    assert MeasureTheDepth().answers(with_depth)
-    assert not ReadTheColors().answers(with_depth)
+    assert MeasureTheDepth().asked_about(with_depth).tolist()
+    assert not ReadTheColors().asked_about(with_depth).tolist()
 
 
 # %% rules choosing among them

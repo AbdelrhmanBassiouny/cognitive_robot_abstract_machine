@@ -14,14 +14,14 @@ from dataclasses import dataclass
 
 from typing_extensions import Optional
 
-from krrood.entity_query_language.backends import PerceptionDetector
+from krrood.entity_query_language.backends import Look, PerceptionDetector
 from krrood.entity_query_language.factories import ConditionType, not_
 
 # %% the look a detector is put
 
 
 @dataclass(frozen=True)
-class PlaceToLookAt:
+class PlaceToLookAt(Look):
     """
     One place a look could be taken at, and what the sensor offers there.
     """

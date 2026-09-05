@@ -178,7 +178,7 @@ def test_the_hue_separation_wraps_around_the_colour_circle():
 def test_the_edge_fit_answers_a_look_for_a_piece_of_known_outline():
     look = TargetOnSurface.of(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
 
-    assert EdgeFitDetector().answers(look)
+    assert EdgeFitDetector().asked_about(look).tolist()
 
 
 def test_the_color_blob_answers_only_where_colour_separates_the_target():
@@ -188,17 +188,19 @@ def test_the_color_blob_answers_only_where_colour_separates_the_target():
     )
     detector = ColorBlobDetector()
 
-    assert detector.answers(separating)
-    assert not detector.answers(merging)
+    assert detector.asked_about(separating).tolist()
+    assert not detector.asked_about(merging).tolist()
 
 
 def test_a_detector_states_the_looks_it_answers_once_and_is_asked_per_look():
     detector = EdgeFitDetector()
     look = TargetOnSurface.of(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
 
-    assert detector.answers(look)
+    assert detector.asked_about(look).tolist()
     stated = detector.answerable_looks
-    assert not detector.answers(replace(look, target_outline_is_known=False))
+    assert not detector.asked_about(
+        replace(look, target_outline_is_known=False)
+    ).tolist()
 
     assert detector.answerable_looks is stated
 
@@ -275,7 +277,7 @@ def test_every_detector_the_rules_choose_declared_it_could_answer(rules):
     ]
 
     for look in looks:
-        assert rules.detector_for(look).answers(look)
+        assert rules.detector_for(look).asked_about(look).tolist()
 
 
 # %% growing the rules while they are in use

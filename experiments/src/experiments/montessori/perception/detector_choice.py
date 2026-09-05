@@ -30,7 +30,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from krrood.entity_query_language.backends import PerceptionDetector
+from krrood.entity_query_language.backends import Look, PerceptionDetector
 from krrood.entity_query_language.factories import (
     ConditionType,
     add,
@@ -70,7 +70,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class TargetOnSurface:
+class TargetOnSurface(Look):
     """
     One piece, the surface it is being looked for on, and what the world says about the
     two together.

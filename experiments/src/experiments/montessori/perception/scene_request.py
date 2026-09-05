@@ -18,14 +18,14 @@ from experiments.montessori.perception.detections import (
     MontessoriShapeDetection,
     ShapeSortingHoleDetection,
 )
-from krrood.entity_query_language.backends import PerceptionDetector
+from krrood.entity_query_language.backends import Look, PerceptionDetector
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
 # %% what to look for
 
 
 @dataclass(frozen=True)
-class SceneRequest:
+class SceneRequest(Look):
     """
     The kind of thing a look is asked for, and where it is asked to search.
 

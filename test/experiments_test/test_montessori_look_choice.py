@@ -198,8 +198,12 @@ def test_each_family_of_detectors_states_the_kind_of_look_it_answers():
 def test_a_detector_answers_only_the_looks_it_states_it_can():
     detector = FindTheBoard()
 
-    assert detector.answers(SceneRequest(detection_type=MontessoriBoardDetection))
-    assert not detector.answers(SceneRequest(detection_type=MontessoriShapeDetection))
+    assert detector.asked_about(
+        SceneRequest(detection_type=MontessoriBoardDetection)
+    ).tolist()
+    assert not detector.asked_about(
+        SceneRequest(detection_type=MontessoriShapeDetection)
+    ).tolist()
 
 
 # %% what a detector then does
