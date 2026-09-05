@@ -19,11 +19,11 @@ claude/eql-verbalization-operand-naming-n0gb95	eql-verbalization
 claude/eql-verbalization-p3-albw76	eql-verbalization
 eql-symbolic-function-sdt	eql-verbalization
 claude/eql-verbalization-aggregate-repeat-gdz9g2	eql-verbalization
-claude/icra-experiments-simulation-pipeline-w4ep7n	icra-experiments
-tracy_icra	icra-experiments
-claude/icra-experiments-scenario-domain-n7zwpr	icra-experiments
-claude/montessori-results-recording-jnrgfy	icra-experiments
-claude/icra-experiments-ormatic-episodes-ib9lr3	icra-experiments
+claude/icra-experiments-simulation-pipeline-w4ep7n	icra-foundation
+tracy_icra	icra-foundation
+claude/icra-experiments-scenario-domain-n7zwpr	icra-foundation
+claude/montessori-results-recording-jnrgfy	icra-foundation
+claude/icra-experiments-ormatic-episodes-ib9lr3	icra-foundation
 montessori_perception_on_main	knowledge-directed-perception
 perception_surfaces_from_world	knowledge-directed-perception
 perception_per_supporting_surface	knowledge-directed-perception
