@@ -889,3 +889,50 @@ that puts every unresolved piece standing on the plane it was found in.
 
 Recorded here rather than on that plan because the test belongs to the pipeline that can
 run a plan, and that pipeline is this plan's `integrated-simulation-pipeline`.
+
+## 2026-09-05: the scenario model is bound to the twin, and what that cost
+
+First review round on #261 (four threads, all four taken as asked). Recorded because two
+of them change the model's shape rather than its wording.
+
+**Deleted `ExecutionKind`.** `coraplex.datastructures.enums.ExecutionType` already spells
+`REAL` and `SIMULATED` (plus `SEMI_REAL` and `NO_EXECUTION`), `experiments` already
+depends on coraplex, and `real_stretch_apartment_demo` already uses it. The field is
+`execution_type` now, on `Scenario`, `TrialStarted` and `Trial` alike.
+
+**Bound both type parameters to the twin**: `WorldType` to
+`semantic_digital_twin.world.World`, `RobotType` to
+`semantic_digital_twin.robots.robot_parts.AbstractRobot`. They were left open so the model
+and its tests would import without the twin, which is what let them run in a session
+container - a container limitation rather than a design argument, since every real
+consumer imports the twin anyway.
+
+The cost is real and lands entirely on the control loop benchmark: `GiskardTester` is not
+a `World`, so `BenchmarkScenario` can no longer call its harness one. It builds the
+harness, holds it for as long as a trial runs in it, and hands the runner the `World` the
+harness manages (`GiskardTester.world`); its own hooks - `seed_joint_state`, `prepare`,
+`build_motion_statechart` - still take the `BenchmarkRobot`, because the scenario passes
+it to them rather than the runner.
+
+That in turn re-typed the runner. `ScenarioRunner` was `Generic[WorldType, RobotType]`,
+where the robot existed only to keep `ControlLoopMeasurement.perform_step` substitutable.
+It is `Generic[ScenarioType, WorldType]` now, which is what a measuring runner actually
+needs: `ControlLoopMeasurement(ScenarioRunner[BenchmarkScenario, World])` reads the
+harness off the scenario it was handed without narrowing what `perform_step` accepts, and
+the robot stays part of the scenario's type where it belongs.
+
+**The trial's clock moved onto its log.** `time.perf_counter` was spelled at every log
+entry, so the elapsed time was subtracted in four places. `TrialLog` holds `started_at`
+and answers `elapsed_seconds` off `time.monotonic`, which is both the abbreviation-free
+name and the right clock for a duration.
+
+### The container can run these tests after all
+
+Worth recording for every later item of this lane, because the earlier note here said the
+opposite. The tests now import `World` and `AbstractRobot`, neither of which imports in a
+session container - `semantic_digital_twin.world` wants `giskardpy_bullet_bindings` and
+`robots.robot_parts` wants ROS's `xacro`. Both are stubbable: two empty modules on
+`PYTHONPATH`, plus `giskardpy/src` on it, and `World()` constructs and the 46 tests run.
+So a scenario-model test is session-verifiable, not only CI-verifiable. What still is not
+is anything touching the generated ORM interface or `segmind`.
+
