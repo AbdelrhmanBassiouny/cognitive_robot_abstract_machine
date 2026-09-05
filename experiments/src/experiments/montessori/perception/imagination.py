@@ -103,6 +103,11 @@ class ImaginedWorld:
         """
         Stand a piece in this world where it was seen.
 
+        A finding is welded where the look measured it, with no degree of freedom of its
+        own: a look reports one placement, and nothing in this world moves what it found.
+        A piece is instead given a free (:class:`Connection6DoF`) joint in the world the
+        robot acts in, where gravity or a gripper can move it.
+
         :param piece: The piece that was recognised, whose own measured outline and
             height the body standing for it is built from.
         :param pose: Where it was seen, in :attr:`reference_frame`.
