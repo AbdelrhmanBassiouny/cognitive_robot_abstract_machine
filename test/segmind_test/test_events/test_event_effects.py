@@ -7,10 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-from krrood.entity_query_language.backends import StatedRelation
+from krrood.entity_query_language.factories import an
 from segmind.datastructures.events import (
     ComesToRestEvent,
-    Effect,
     EventWithEffect,
     INSIDE_ANY_REGION,
     InsertionEvent,
@@ -30,6 +29,7 @@ from ..dataset.plate_with_a_hole import (
     cube_in_the_hole,
     cube_lifted_clear_of_the_hole,
 )
+from ..dataset.stated_relations import says
 
 # %% the world these events are about
 
@@ -53,9 +53,9 @@ TABLE = body_named("table")
 LID = body_named("lid")
 SQUARE_HOLE = Region(name=PrefixedName("square_hole", SETUP))
 
-ON_THE_TABLE = StatedRelation.of(SupportedBy, TABLE)
-ON_THE_LID = StatedRelation.of(SupportedBy, LID)
-IN_THE_SQUARE_HOLE = StatedRelation.of(InsideRegion, SQUARE_HOLE)
+ON_THE_TABLE = an(SupportedBy)(supporting=TABLE)
+ON_THE_LID = an(SupportedBy)(supporting=LID)
+IN_THE_SQUARE_HOLE = an(InsideRegion)(region=SQUARE_HOLE)
 
 
 # %% what each kind of event says
@@ -68,8 +68,9 @@ def test_a_support_event_says_the_object_now_rests_on_what_it_names():
     """
     effect = SupportEvent(tracked_object=CUBE, with_object=TABLE).effect()
 
-    assert effect == Effect(begins=(ON_THE_TABLE,), ends=(SUPPORTED_BY_ANYTHING,))
-    assert effect.applied_to((ON_THE_LID,), CUBE) == (ON_THE_TABLE,)
+    assert says(effect.begins, ON_THE_TABLE)
+    assert says(effect.ends, SUPPORTED_BY_ANYTHING)
+    assert says(effect.applied_to((ON_THE_LID,), CUBE), ON_THE_TABLE)
 
 
 def test_ending_every_support_ends_only_what_was_held_before_the_event():
@@ -79,13 +80,13 @@ def test_ending_every_support_ends_only_what_was_held_before_the_event():
     """
     effect = SupportEvent(tracked_object=CUBE, with_object=TABLE).effect()
 
-    assert effect.applied_to((ON_THE_TABLE, ON_THE_LID), CUBE) == (ON_THE_TABLE,)
+    assert says(effect.applied_to((ON_THE_TABLE, ON_THE_LID), CUBE), ON_THE_TABLE)
 
 
 def test_a_placing_says_the_object_now_rests_on_what_it_was_placed_on():
     effect = PlacingEvent(tracked_object=CUBE, with_object=LID).effect()
 
-    assert effect.applied_to((ON_THE_TABLE,), CUBE) == (ON_THE_LID,)
+    assert says(effect.applied_to((ON_THE_TABLE,), CUBE), ON_THE_LID)
 
 
 def test_a_placing_and_a_support_event_state_one_effect():
@@ -104,7 +105,7 @@ def test_an_insertion_says_the_object_now_lies_in_the_region_it_went_into():
     """
     effect = InsertionEvent(tracked_object=CUBE, with_object=SQUARE_HOLE).effect()
 
-    assert effect.applied_to((ON_THE_LID,), CUBE) == (IN_THE_SQUARE_HOLE,)
+    assert says(effect.applied_to((ON_THE_LID,), CUBE), IN_THE_SQUARE_HOLE)
 
 
 def test_a_pick_up_says_the_object_rests_on_nothing():
@@ -129,7 +130,7 @@ def test_a_pick_up_is_a_reason_to_check_whether_the_object_still_lies_in_a_regio
 def test_a_pick_up_that_lifts_the_object_clear_of_a_hole_ends_its_being_in_it():
     scene = cube_lifted_clear_of_the_hole()
 
-    held = (StatedRelation.of(InsideRegion, scene.hole),)
+    held = (an(InsideRegion)(region=scene.hole),)
     after = PickUpEvent(tracked_object=scene.cube).effect().applied_to(held, scene.cube)
 
     assert after == ()
@@ -141,7 +142,7 @@ def test_a_pick_up_that_leaves_the_object_in_the_hole_keeps_its_being_in_it():
     """
     scene = cube_in_the_hole()
 
-    held = (StatedRelation.of(InsideRegion, scene.hole),)
+    held = (an(InsideRegion)(region=scene.hole),)
     after = PickUpEvent(tracked_object=scene.cube).effect().applied_to(held, scene.cube)
 
     assert after == held
@@ -155,7 +156,8 @@ def test_an_effect_that_checks_nothing_asks_nothing_of_the_object():
     effect = SupportEvent(tracked_object=CUBE, with_object=TABLE).effect()
 
     assert effect.checks == ()
-    assert effect.applied_to((IN_THE_SQUARE_HOLE,), CUBE) == (
+    assert says(
+        effect.applied_to((IN_THE_SQUARE_HOLE,), CUBE),
         IN_THE_SQUARE_HOLE,
         ON_THE_TABLE,
     )
@@ -173,7 +175,7 @@ def test_losing_support_from_something_else_leaves_what_it_rested_on_alone():
     """
     effect = LossOfSupportEvent(tracked_object=CUBE, with_object=TABLE).effect()
 
-    assert effect.applied_to((ON_THE_LID,), CUBE) == (ON_THE_LID,)
+    assert says(effect.applied_to((ON_THE_LID,), CUBE), ON_THE_LID)
 
 
 # %% how an effect is applied
@@ -182,7 +184,8 @@ def test_losing_support_from_something_else_leaves_what_it_rested_on_alone():
 def test_an_effect_leaves_what_it_says_nothing_about_as_it_was():
     effect = SupportEvent(tracked_object=CUBE, with_object=TABLE).effect()
 
-    assert effect.applied_to((IN_THE_SQUARE_HOLE,), CUBE) == (
+    assert says(
+        effect.applied_to((IN_THE_SQUARE_HOLE,), CUBE),
         IN_THE_SQUARE_HOLE,
         ON_THE_TABLE,
     )
@@ -191,7 +194,7 @@ def test_an_effect_leaves_what_it_says_nothing_about_as_it_was():
 def test_an_effect_does_not_state_twice_what_already_held():
     effect = SupportEvent(tracked_object=CUBE, with_object=TABLE).effect()
 
-    assert effect.applied_to((ON_THE_TABLE,), CUBE) == (ON_THE_TABLE,)
+    assert says(effect.applied_to((ON_THE_TABLE,), CUBE), ON_THE_TABLE)
 
 
 # %% events that state no effect

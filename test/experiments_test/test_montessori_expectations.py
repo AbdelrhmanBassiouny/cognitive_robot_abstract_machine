@@ -34,7 +34,9 @@ from experiments.montessori.semantics import (
     ShapeSortingHole,
     TriangularPrismShape,
 )
-from krrood.entity_query_language.backends import StatedRelation
+from krrood.entity_query_language.factories import a, an
+from krrood.entity_query_language.predicate import Relation
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.predicate import Relation
 from segmind.datastructures.events import (
     InsertionEvent,
@@ -321,7 +323,8 @@ def piece_seen_at(
 
 
 def expectation_of_the_cube(
-    *further: StatedRelation, source: Optional[SomethingThatAskedForALook] = None
+    *further: Match[Relation],
+    source: Optional[SomethingThatAskedForALook] = None,
 ) -> MontessoriExpectation:
     """
     The cube expected in the square hole, within the release's spread of it, and
@@ -333,8 +336,8 @@ def expectation_of_the_cube(
     return MontessoriExpectation.about(
         CUBE.root,
         (
-            StatedRelation.of(InsideRegion, SQUARE_HOLE.root),
-            StatedRelation.of(Near, SQUARE_HOLE.root, radius=RELEASE_SPREAD),
+            an(InsideRegion)(region=SQUARE_HOLE.root),
+            a(Near)(place=SQUARE_HOLE.root, radius=RELEASE_SPREAD),
             *further,
         ),
         SomethingThatAskedForALook() if source is None else source,
@@ -355,10 +358,9 @@ def test_a_piece_released_over_a_hole_is_expected_in_it_within_the_spread(
 
     expected = expectations.of_annotation(CUBE)
 
-    assert expected.holds == (
-        StatedRelation.of(InsideRegion, SQUARE_HOLE.root),
-        StatedRelation.of(Near, SQUARE_HOLE.root, radius=RELEASE_SPREAD),
-    )
+    assert expected.expects(an(InsideRegion)(region=SQUARE_HOLE.root))
+    assert expected.expects(a(Near)(place=SQUARE_HOLE.root, radius=RELEASE_SPREAD))
+    assert kinds_of(expected) == [InsideRegion, Near]
     assert expected.subject is CUBE.root
     assert expected.source is asker
 
@@ -423,9 +425,7 @@ def test_placing_a_piece_leaves_it_resting_on_what_it_was_placed_on(
 
     expectations.record(PlacingEvent(tracked_object=CUBE.root, with_object=TABLE))
 
-    assert StatedRelation.of(SupportedBy, TABLE) in (
-        expectations.of_annotation(CUBE).holds
-    )
+    assert expectations.of_annotation(CUBE).expects(an(SupportedBy)(supporting=TABLE))
 
 
 def test_an_insertion_confirms_the_hole_the_piece_went_through(
@@ -451,12 +451,8 @@ def test_support_by_a_surface_refutes_support_by_anything_else(
 
     expectations.record(SupportEvent(tracked_object=CUBE.root, with_object=TABLE))
 
-    assert StatedRelation.of(SupportedBy, TABLE) in (
-        expectations.of_annotation(CUBE).holds
-    )
-    assert StatedRelation.of(SupportedBy, LID) not in (
-        expectations.of_annotation(CUBE).holds
-    )
+    assert expectations.of_annotation(CUBE).expects(an(SupportedBy)(supporting=TABLE))
+    assert not expectations.of_annotation(CUBE).expects(an(SupportedBy)(supporting=LID))
 
 
 def test_losing_support_leaves_the_piece_expected_on_nothing(
@@ -486,9 +482,7 @@ def test_losing_support_from_something_else_leaves_the_belief_alone(
 
     expectations.record(LossOfSupportEvent(tracked_object=CUBE.root, with_object=TABLE))
 
-    assert StatedRelation.of(SupportedBy, LID) in (
-        expectations.of_annotation(CUBE).holds
-    )
+    assert expectations.of_annotation(CUBE).expects(an(SupportedBy)(supporting=LID))
 
 
 def test_a_belief_only_decays_when_something_acts_on_that_piece(
@@ -517,12 +511,10 @@ def test_an_event_leaves_what_it_says_nothing_about_exactly_as_it_was(
 
     expectations.record(SupportEvent(tracked_object=CUBE.root, with_object=TABLE))
 
-    assert StatedRelation.of(InsideRegion, SQUARE_HOLE.root) in (
-        expectations.of_annotation(CUBE).holds
-    )
-    assert StatedRelation.of(Near, SQUARE_HOLE.root, radius=RELEASE_SPREAD) in (
-        expectations.of_annotation(CUBE).holds
-    )
+    expected = expectations.of_annotation(CUBE)
+
+    assert expected.expects(an(InsideRegion)(region=SQUARE_HOLE.root))
+    assert expected.expects(a(Near)(place=SQUARE_HOLE.root, radius=RELEASE_SPREAD))
 
 
 def test_an_event_that_states_no_effect_leaves_the_belief_alone(
@@ -613,9 +605,7 @@ def test_a_look_asked_for_a_turn_lays_the_piece_that_way(
     An expectation about which way the piece is turned reaches the look as the turns
     worth trying.
     """
-    expectation = expectation_of_the_cube(
-        StatedRelation.of(Turned, 0.3, spread=0.1), source=asker
-    )
+    expectation = expectation_of_the_cube(a(Turned)(yaw=0.3, spread=0.1), source=asker)
 
     request = expectation.scene_request()
 
@@ -675,9 +665,7 @@ def test_a_piece_found_turned_out_of_the_expected_turn_violates_it():
     """
     In the hole, and thirty degrees from where it would have had to be to fit.
     """
-    expectation = expectation_of_the_cube(
-        StatedRelation.of(Turned, 0.0, spread=math.radians(5))
-    )
+    expectation = expectation_of_the_cube(a(Turned)(yaw=0.0, spread=math.radians(5)))
 
     report = expectation.check(piece_seen_at(0.8, 0.1, yaw=math.radians(30), sunk=True))
 
@@ -699,9 +687,7 @@ def test_every_relation_the_look_contradicts_is_named_at_once():
     """
     A report names each relation that fails, since a recovery acts on all of them.
     """
-    expectation = expectation_of_the_cube(
-        StatedRelation.of(Turned, 0.0, spread=math.radians(5))
-    )
+    expectation = expectation_of_the_cube(a(Turned)(yaw=0.0, spread=math.radians(5)))
 
     report = expectation.check(
         piece_seen_at(0.8 + RELEASE_SPREAD * 2, 0.1, yaw=math.radians(30))

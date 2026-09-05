@@ -7,7 +7,10 @@ from functools import cached_property
 
 from typing_extensions import Any, Optional, List, Tuple
 
-from krrood.entity_query_language.backends import StatedRelation
+from krrood.entity_query_language.backends import relation_asserted_about
+from krrood.entity_query_language.factories import an
+from krrood.entity_query_language.predicate import Relation
+from krrood.entity_query_language.query.match import Match
 from segmind.datastructures.object_tracker import (
     ObjectEventTracker,
     ObjectTrackerFactory,
@@ -140,19 +143,19 @@ class Effect:
     Everything an event says nothing about is left exactly as it was.
     """
 
-    begins: Tuple[StatedRelation, ...] = ()
+    begins: Tuple[Match[Relation], ...] = ()
     """
     The relations that hold of the object once the event has happened.
     """
 
-    ends: Tuple[StatedRelation, ...] = ()
+    ends: Tuple[Match[Relation], ...] = ()
     """
     The relations that stop holding of it, each read as covering every relation
     believed *before* the event that it states: one stating no operand ends every
     relation of its kind. What the event itself begins is never ended by it.
     """
 
-    checks: Tuple[StatedRelation, ...] = ()
+    checks: Tuple[Match[Relation], ...] = ()
     """
     The relations the event is a reason to look at again rather than to settle: every
     believed relation one of these covers is asked of the object as it now stands, and
@@ -160,8 +163,8 @@ class Effect:
     """
 
     def applied_to(
-        self, held: Tuple[StatedRelation, ...], subject: Any
-    ) -> Tuple[StatedRelation, ...]:
+        self, held: Tuple[Match[Relation], ...], subject: Any
+    ) -> Tuple[Match[Relation], ...]:
         """
         What holds of the object after this effect, given what was believed of it
         before.
@@ -175,15 +178,22 @@ class Effect:
             for relation in held
             if not self._ends(relation) and self._still_holds(relation, subject)
         ]
-        return (*kept, *(begun for begun in self.begins if begun not in kept))
+        return (
+            *kept,
+            *(
+                begun
+                for begun in self.begins
+                if not any(begun.states_the_same(relation) for relation in kept)
+            ),
+        )
 
-    def _ends(self, relation: StatedRelation) -> bool:
+    def _ends(self, relation: Match[Relation]) -> bool:
         """
         :param relation: One relation believed before the event.
         """
         return any(ended.covers(relation) for ended in self.ends)
 
-    def _still_holds(self, relation: StatedRelation, subject: Any) -> bool:
+    def _still_holds(self, relation: Match[Relation], subject: Any) -> bool:
         """
         :param relation: One relation believed before the event.
         :param subject: The object the event is about, as it stands now.
@@ -192,7 +202,7 @@ class Effect:
         """
         if not any(checked.covers(relation) for checked in self.checks):
             return True
-        return bool(relation.about(subject)())
+        return bool(relation_asserted_about(relation, subject)())
 
 
 @dataclass(kw_only=True)
@@ -235,14 +245,14 @@ class EventWithEffect(EventWithTrackedObjects, ABC):
         return self.with_object
 
 
-SUPPORTED_BY_ANYTHING = StatedRelation.of(SupportedBy)
+SUPPORTED_BY_ANYTHING = an(SupportedBy)()
 """
 Resting on anything at all: every support believed before the event, whatever it
 named, which an event that says what the object now rests on ends, and a pick-up ends
 without saying what it rests on instead.
 """
 
-INSIDE_ANY_REGION = StatedRelation.of(InsideRegion)
+INSIDE_ANY_REGION = an(InsideRegion)()
 """
 Lying in any region at all: every containment believed before the event, which a
 pick-up is a reason to check.
@@ -261,7 +271,7 @@ class ComesToRestEvent(EventWithEffect, ABC):
         before.
         """
         return Effect(
-            begins=(StatedRelation.of(SupportedBy, self._entity_it_names()),),
+            begins=(an(SupportedBy)(supporting=self._entity_it_names()),),
             ends=(SUPPORTED_BY_ANYTHING,),
         )
 
@@ -285,7 +295,7 @@ class LossOfSupportEvent(EventWithEffect):
         The object no longer rests on what this event names; what else it may rest on
         is left as it was.
         """
-        return Effect(ends=(StatedRelation.of(SupportedBy, self._entity_it_names()),))
+        return Effect(ends=(an(SupportedBy)(supporting=self._entity_it_names()),))
 
 
 @dataclass(unsafe_hash=True)
@@ -470,7 +480,7 @@ class InsertionEvent(EventWithEffect):
         rested on before it went in.
         """
         return Effect(
-            begins=(StatedRelation.of(InsideRegion, self._region_it_names()),),
+            begins=(an(InsideRegion)(region=self._region_it_names()),),
             ends=(SUPPORTED_BY_ANYTHING,),
         )
 

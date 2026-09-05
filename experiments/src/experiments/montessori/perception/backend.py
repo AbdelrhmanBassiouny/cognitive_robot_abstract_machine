@@ -64,9 +64,10 @@ from experiments.montessori.perception.scene_source import MontessoriSceneSource
 from krrood.entity_query_language.backends import (
     LookRequest,
     PerceptionBackend,
-    StatedRelation,
+    relation_asserted_about,
 )
 from krrood.entity_query_language.predicate import Relation
+from krrood.entity_query_language.query.match import Match
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -107,7 +108,7 @@ class SightingReading(Generic[Read], SubClassSafeGeneric, ABC):
 
     @classmethod
     @abstractmethod
-    def holds_for(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
+    def holds_for(cls, instance: MontessoriDetection, stated: Match[Relation]) -> bool:
         """
         Whether a sighting satisfies one relation of this kind.
 
@@ -124,8 +125,9 @@ class RestsOnTheSurfaceNamed(SightingReading[SupportedBy]):
     """
 
     @classmethod
-    def holds_for(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
-        return instance.supporting_surface == stated.related_thing.name
+    def holds_for(cls, instance: MontessoriDetection, stated: Match[Relation]) -> bool:
+        named = stated.kwargs[stated.type.object_name()]
+        return instance.supporting_surface == named.name
 
 
 @dataclass
@@ -136,8 +138,8 @@ class StandsWhereAllowed(SightingReading[PlacementRelation]):
     """
 
     @classmethod
-    def holds_for(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
-        return stated.constraint().allows(instance.pose.to_position())
+    def holds_for(cls, instance: MontessoriDetection, stated: Match[Relation]) -> bool:
+        return stated.construct_instance().allows(instance.pose.to_position())
 
 
 # %% the backend
@@ -228,7 +230,7 @@ class MontessoriPerceptionBackend(PerceptionBackend):
 
     @classmethod
     def contradicted_by(
-        cls, instance: MontessoriDetection, stated: Sequence[StatedRelation]
+        cls, instance: MontessoriDetection, stated: Sequence[Match[Relation]]
     ) -> Tuple[Relation, ...]:
         """
         Every stated relation a detection does not satisfy, each asserted about what the
@@ -247,13 +249,15 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         :return: The violated relations, in the order they were stated.
         """
         return tuple(
-            stated_relation.about(cls._subject_of(instance, stated_relation))
+            relation_asserted_about(
+                stated_relation, cls._subject_of(instance, stated_relation)
+            )
             for stated_relation in stated
             if not cls._holds_for(instance, stated_relation)
         )
 
     @classmethod
-    def _holds_for(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
+    def _holds_for(cls, instance: MontessoriDetection, stated: Match[Relation]) -> bool:
         """
         :param instance: One detection the look reported.
         :param stated: One relation, as stated about the thing sought.
@@ -261,10 +265,10 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         for reading in cls.readings:
             if issubclass(stated.type, reading.relation_type()):
                 return reading.holds_for(instance, stated)
-        return bool(stated.about(cls._body_of(instance, stated))())
+        return bool(relation_asserted_about(stated, cls._body_of(instance, stated))())
 
     @classmethod
-    def _subject_of(cls, instance: MontessoriDetection, stated: StatedRelation) -> Any:
+    def _subject_of(cls, instance: MontessoriDetection, stated: Match[Relation]) -> Any:
         """
         :param instance: One detection the look reported.
         :param stated: One relation, as stated about the thing sought.
@@ -276,7 +280,7 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         return instance
 
     @staticmethod
-    def _body_of(instance: MontessoriDetection, stated: StatedRelation) -> Any:
+    def _body_of(instance: MontessoriDetection, stated: Match[Relation]) -> Any:
         """
         :param instance: One detection the look reported.
         :param stated: The relation about to be asked of it.
@@ -300,7 +304,7 @@ class MontessoriPerceptionBackend(PerceptionBackend):
             none.
         """
         return tuple(
-            placement.constraint()
+            placement.construct_instance()
             for placement in request.stated_relations_of(PlacementRelation)
         )
 
@@ -336,7 +340,7 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         stated = request.stated_relations_of(Turned)
         if not stated:
             return None
-        return stated[0].constraint()
+        return stated[0].construct_instance()
 
     @classmethod
     def supporting_surface_asked_about(

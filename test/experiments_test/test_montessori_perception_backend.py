@@ -24,7 +24,7 @@ from experiments.montessori.perception.scene_source import FixedScene, RecordedF
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.montessori.perception.exceptions import SightingHasNoBody
-from krrood.entity_query_language.backends import StatedRelation
+from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from semantic_digital_twin.reasoning.predicates import (
@@ -197,7 +197,7 @@ def test_a_relation_the_look_cannot_establish_is_asked_of_the_sightings_body(
     stood in its world for that piece.
     """
     seen, another = scene.shapes[:2]
-    stated = StatedRelation.of(InContactWith, another.role_taker.root)
+    stated = an(InContactWith)(body2=another.role_taker.root)
 
     [contradicted] = MontessoriPerceptionBackend.contradicted_by(seen, [stated])
 
@@ -212,7 +212,7 @@ def test_a_relation_the_look_cannot_establish_needs_a_body_to_be_asked_of(
     The board is a sighting no body stands for, so a relation read off bodies cannot be
     asked of it, and says so rather than answering.
     """
-    stated = StatedRelation.of(InContactWith, Body(name=PrefixedName("table")))
+    stated = an(InContactWith)(body2=Body(name=PrefixedName("table")))
 
     with pytest.raises(SightingHasNoBody):
         MontessoriPerceptionBackend.contradicted_by(scene.board, [stated])

@@ -14,7 +14,8 @@ import pytest
 
 from krrood.entity_query_language.backends import (
     AttributeEqualityToLiteral,
-    StatedRelation,
+    relation_asserted_about,
+    relation_stated_by,
 )
 from krrood.entity_query_language.exceptions import (
     BackendCannotResolveCondition,
@@ -128,7 +129,7 @@ def test_a_relation_asserted_about_the_thing_sought_is_read_off_the_condition():
 
     [stated] = request.stated_relations
     assert stated.type is StandingOn
-    assert stated.related_thing is LID
+    assert stated.kwargs == {"place": LID}
 
 
 def test_the_thing_a_relation_relates_the_sought_thing_to_is_read_back_by_its_class():
@@ -169,7 +170,7 @@ def test_a_relation_read_off_a_statement_can_be_rebuilt_without_the_thing_sought
     statement = statement.where(StandingBetween(statement.variable, TABLE, LID))
 
     [stated] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
-    constraint = stated.constraint()
+    constraint = stated.construct_instance()
 
     assert isinstance(constraint, StandingBetween)
     assert constraint.subject is None
@@ -182,7 +183,7 @@ def test_a_relation_asserted_about_another_variable_is_not_read_as_the_sought_th
 
     [condition] = statement._where_conditions_
 
-    assert StatedRelation.read_from(condition, statement.variable) is None
+    assert relation_stated_by(condition, statement.variable) is None
 
 
 # %% what the look is told, and what is checked afterwards
@@ -528,10 +529,10 @@ def test_a_relation_stated_about_nothing_can_be_asked_of_one_thing():
     The form a search reads before anything was found is the form a check asks of what
     was found afterwards, with that thing standing where the thing sought would.
     """
-    stated = StatedRelation.of(StandingOn, TABLE)
+    stated = an(StandingOn)(place=TABLE)
     sighting = Sighting(label="cube", place=TABLE.name)
 
-    asked = stated.about(sighting)
+    asked = relation_asserted_about(stated, sighting)
 
     assert isinstance(asked, StandingOn)
     assert asked.subject is sighting
@@ -544,7 +545,7 @@ def test_a_relation_stated_without_a_statement_reads_as_one_read_off_a_statement
     statement = statement.where(StandingOn(statement.variable, TABLE))
     [read] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
 
-    assert StatedRelation.of(StandingOn, TABLE) == read
+    assert read.states_the_same(an(StandingOn)(place=TABLE))
 
 
 def test_a_stated_relation_is_a_statement_over_the_relations_own_class():
@@ -553,12 +554,13 @@ def test_a_stated_relation_is_a_statement_over_the_relations_own_class():
     class, holding whichever of its operands the statement already knows, and saying
     nothing about the thing being looked for.
     """
-    on_the_table = StatedRelation.of(StandingOn, TABLE)
+    on_the_table = an(StandingOn)(place=TABLE)
 
     assert isinstance(on_the_table, Match)
     assert on_the_table.type is StandingOn
     assert on_the_table.kwargs == {"place": TABLE}
-    assert on_the_table.subject_name == "thing"
+    assert StandingOn.subject_name() == "thing"
+    assert StandingOn.object_name() == "place"
 
 
 def test_stating_more_of_a_relation_leaves_the_one_it_grew_from_alone():
@@ -566,7 +568,7 @@ def test_stating_more_of_a_relation_leaves_the_one_it_grew_from_alone():
     A relation is stated once and asked about many things, so growing one answers a new
     statement rather than changing the one in hand.
     """
-    on_anything = StatedRelation.of(StandingOn)
+    on_anything = an(StandingOn)()
 
     on_the_table = on_anything.stating(place=TABLE)
 
@@ -575,15 +577,28 @@ def test_stating_more_of_a_relation_leaves_the_one_it_grew_from_alone():
 
 
 def test_a_relation_stating_a_thing_covers_only_relations_to_that_thing():
-    on_the_table = StatedRelation.of(StandingOn, TABLE)
+    on_the_table = an(StandingOn)(place=TABLE)
 
-    assert on_the_table.covers(StatedRelation.of(StandingOn, TABLE))
-    assert not on_the_table.covers(StatedRelation.of(StandingOn, LID))
+    assert on_the_table.covers(an(StandingOn)(place=TABLE))
+    assert not on_the_table.covers(an(StandingOn)(place=LID))
+
+
+def test_two_relations_stating_the_same_thing_are_read_as_one():
+    """
+    A relation stated about the thing sought is written down and passed around as a
+    value -- what a belief holds, what an event ends -- so two of them are compared by
+    what they say rather than by which one they are.
+    """
+    on_the_table = an(StandingOn)(place=TABLE)
+
+    assert on_the_table.states_the_same(an(StandingOn)(place=TABLE))
+    assert not on_the_table.states_the_same(an(StandingOn)(place=LID))
+    assert not on_the_table.states_the_same(an(StandingOn)())
 
 
 def test_a_relation_stating_nothing_covers_every_relation_of_its_kind():
-    standing_on_anything = StatedRelation.of(StandingOn)
+    standing_on_anything = an(StandingOn)()
 
-    assert standing_on_anything.covers(StatedRelation.of(StandingOn, TABLE))
-    assert standing_on_anything.covers(StatedRelation.of(StandingOn, LID))
-    assert not standing_on_anything.covers(StatedRelation.of(StandingBeside, LID))
+    assert standing_on_anything.covers(an(StandingOn)(place=TABLE))
+    assert standing_on_anything.covers(an(StandingOn)(place=LID))
+    assert not standing_on_anything.covers(an(StandingBeside)(place=LID))

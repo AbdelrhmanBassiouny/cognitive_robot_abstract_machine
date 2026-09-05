@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from krrood.entity_query_language.backends import StatedRelation
+from krrood.entity_query_language.factories import a, an
 from krrood.entity_query_language.query.match import Match
 from krrood.patterns.belief_source import BeliefSource
 from segmind.datastructures.events import (
@@ -38,6 +38,7 @@ from ..dataset.plate_with_a_hole import (
     cube_on_the_plate_over_the_hole,
     named,
 )
+from ..dataset.stated_relations import says
 
 RELEASE_SPREAD = 0.03
 """
@@ -95,9 +96,10 @@ def test_a_thing_released_over_a_hole_is_expected_in_it_within_the_spread(
 
     expected = release_the_cube(expectations, scene, declared)
 
-    assert expected.holds == (
-        StatedRelation.of(InsideRegion, scene.hole),
-        StatedRelation.of(Near, scene.hole, radius=RELEASE_SPREAD),
+    assert says(
+        expected.holds,
+        an(InsideRegion)(region=scene.hole),
+        a(Near)(place=scene.hole, radius=RELEASE_SPREAD),
     )
     assert expected.subject is scene.cube
     assert expected.source is declared
@@ -190,10 +192,8 @@ def test_an_event_moves_the_belief_by_what_it_says_holds(
 
     expectations.record(SupportEvent(tracked_object=scene.cube, with_object=table))
 
-    assert StatedRelation.of(SupportedBy, table) in expectations.of(scene.cube).holds
-    assert StatedRelation.of(InsideRegion, scene.hole) in (
-        expectations.of(scene.cube).holds
-    )
+    assert expectations.of(scene.cube).expects(an(SupportedBy)(supporting=table))
+    assert expectations.of(scene.cube).expects(an(InsideRegion)(region=scene.hole))
 
 
 def test_a_pick_up_that_lifts_the_thing_out_of_the_hole_ends_its_being_in_it(
@@ -257,10 +257,11 @@ def test_a_look_is_asked_for_the_expected_relations_and_the_colour_the_thing_is_
     [request] = expectations.look_requests(Body)
 
     assert request.type_ is Body
-    assert request.stated_relations == [
+    assert says(
+        request.stated_relations,
         *expected.holds,
-        StatedRelation.of(Colored, CUBE_COLOR),
-    ]
+        a(Colored)(color=CUBE_COLOR),
+    )
 
 
 def test_a_thing_drawn_in_several_colours_is_not_looked_for_by_colour(

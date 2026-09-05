@@ -38,7 +38,7 @@ from semantic_digital_twin.reasoning.predicates import (
     ViewDependentSpatialRelation,
     VisibleTo,
 )
-from krrood.entity_query_language.backends import StatedRelation
+from krrood.entity_query_language.backends import relation_stated_by
 from krrood.entity_query_language.factories import an, variable
 from krrood.entity_query_language.predicate import Predicate, Relation, Triple
 from krrood.entity_query_language.testing.result_verification import (
@@ -876,9 +876,9 @@ def test_support_asserted_of_a_variable_is_carried_as_a_symbolic_expression():
 
     relation = SupportedBy(supported=sought, supporting=supporting)
 
-    stated = StatedRelation.read_from(relation, sought)
+    stated = relation_stated_by(relation, sought)
     assert stated.type is SupportedBy
-    assert stated.related_thing is supporting
+    assert stated.kwargs == {"supporting": supporting}
 
 
 def test_support_holds_exactly_where_the_geometric_reading_says_it_does(
