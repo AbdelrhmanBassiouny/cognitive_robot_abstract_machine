@@ -956,4 +956,3 @@ session container - `semantic_digital_twin.world` wants `giskardpy_bullet_bindin
 `PYTHONPATH`, plus `giskardpy/src` on it, and `World()` constructs and the 46 tests run.
 So a scenario-model test is session-verifiable, not only CI-verifiable. What still is not
 is anything touching the generated ORM interface or `segmind`.
-

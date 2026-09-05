@@ -275,11 +275,12 @@ items:
 
   - id: episodes-recorded-through-ormatic
     title: "Every trial, event, query, answer and failure recorded through ORMatic into SQL"
-    branch: null
-    pull_request_number: null
+    branch: claude/icra-experiments-ormatic-episodes-ib9lr3
+    pull_request_number: 271
     track: long-term-memory
     depends_on: [scenario-domain-model, run-results-recorded-into-sql]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_012ouWhruGFvn9D5AvPmQNRa
     notes: >-
       One Episode model for simulation and the robot: the scenario and
       condition it ran under, its trials, the segmind events seen per tick,
