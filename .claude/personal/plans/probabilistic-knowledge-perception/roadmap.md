@@ -59,8 +59,8 @@ picture. Two consequences worth the work:
 
 Standard names, so the follow-up paper can cite rather than reinvent: Neyman-Pearson (a
 threshold on the likelihood ratio is *optimal* at a given error trade-off, which says
-#270's "a lead over rivals" structure is right and only its quantity is wrong); Bayes
-factors and Bayesian model comparison, where Jeffreys' evidence scale is `required_lead`'s
+that #270's "a lead over rivals" structure is right and only its quantity is wrong);
+Bayes factors and Bayesian model comparison, where Jeffreys' evidence scale is `required_lead`'s
 ancestor; Bayes risk for the threshold; recursive Bayesian estimation for carrying a
 belief across frames; MHT/JPDA data association for resolving competing claims on one
 place jointly rather than in sequence, which would subsume both this and
