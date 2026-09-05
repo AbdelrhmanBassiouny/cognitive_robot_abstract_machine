@@ -409,13 +409,14 @@ items:
     semantic_digital_twin, whose world tests'' failing set is unchanged by World''s new base.'
 - id: competing-explanations
   title: Decide a detection by comparing explanations, not against a fixed threshold
-  branch: perception_competing_explanations
-  pull_request_number: null
+  branch: claude/plan-item-kickoff-kdp-r8nttk
+  pull_request_number: 270
   track: surfaces
   depends_on:
   - pieces-looked-for-where-expected
   - holes-fitted-like-pieces
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_01BxhH7rCvhti967uCAmAaKr
   notes: 'PieceMatcher.minimum_agreement is one number, 0.62, standing for how much of an outline must
     lie along a seen edge before a piece is reported, and its recorded justification is that a correct
     piece reaches 0.63 to 0.86 while the best wrong piece of the same colour reaches 0.62. Measured on

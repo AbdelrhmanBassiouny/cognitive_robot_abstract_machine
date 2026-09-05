@@ -5967,3 +5967,160 @@ is why CI reported no reason at all; and `make_path_importable`, so a generated 
 loadable from wherever it was saved rather than only from inside a package whose root already
 happened to be on the search path. Neither is needed to clear this check - they are their own
 root cause, split out for that reason rather than folded into #251.
+
+## `competing-explanations`: what else could have produced these edges
+
+Kicked off 2026-09-05 in `auto` mode, as pull request #270 off
+`claude/plan-item-kickoff-ge8541` (#236, open and out of draft, so ready to stack on --
+`check_dependency_readiness.py` reports `open_ready` for both this item's parents, since
+#236 already carries #232). It is based on #236's current tip `ee4b242da`, not on the
+`172c10209` the item's note records. The session's branch arrived cut from `integration`
+rather than from #236 -- the hazard #199 exists to refuse, and the sixth time on this
+plan after #223, #225, #227, #232 and #236 -- and was re-cut onto #236's tip before the
+first commit.
+
+The mechanical scope check reports every path this touches absent from `main` and shared
+with #236, #232, #225 and everything before them, which every round on this plan has
+already recorded as expected: every file in this plan is introduced by #202, so path
+overlap alone would fold the whole plan into one item. What remains once those edits are
+removed is a decision rule that compares accounts of the same edges, which no earlier
+item states in any form -- both parents explicitly defer it here, #232 under *"What this
+item cannot do"* and #236 under *"What is deliberately not attempted"*.
+
+**The purpose check was run this time, and it is why.** The correction of 2026-09-05
+records that #268 duplicated #251 because the gathering never looked at the repository's
+other open pull requests for the same purpose. So the open pull requests were searched
+for anything already deciding a detection by comparison rather than by threshold, and
+nothing does.
+
+### Why no threshold can work, restated as what the score actually measures
+
+`EdgeDistances.agreement` scores one side of a fit: the share of a candidate's *own*
+outline that lies within reach of some seen edge. It asks nothing about the edges the
+picture holds that the candidate leaves unaccounted for, and nothing about what else
+could have put an edge where the candidate found one. Both omissions are what let a
+triangular prism reach 0.85 to 0.89 on the board's middle, above every genuine piece on
+the lid: the board is full of sharp edges, and a template that lands on some of them is
+rewarded exactly as a template lying along the boundary of a real piece is.
+
+So `minimum_agreement` is not an under-tuned number, it is a number set on a quantity
+that does not carry the distinction being asked for. Raising it drops real pieces at 0.64
+before it drops ghosts at 0.85.
+
+### What replaces it
+
+Three ideas, in the order they are built.
+
+- **The board's own account.** #236 settles the board's layout over the picture, so the
+  edges the board itself produces are predictable: its six hole boundaries at the fitted
+  placement, and the lid's own outline. That set of outlines is one *explanation* of the
+  edges seen in the lid's plane, standing before any piece is considered.
+- **An explanation is scored on both sides.** How much of its own outline the picture
+  bears out (what `agreement` already measures), *and* how much of the edge it stands
+  over is actually accounted for by it rather than left over. A triangle laid across a
+  round rim can follow part of that rim while leaving most of it unexplained and claiming
+  outline across the open hole where there is no edge at all; a circle sitting in the same
+  rim does neither. One-sided agreement cannot see that difference and a two-sided score
+  can.
+- **A report is a lead over the alternatives, not a level.** What decides is how much
+  better *the board plus this piece here* explains the picture than the alternatives do:
+  the board alone, and any other piece claiming the same place. The margin one account
+  must lead the next by is stated -- it is a statement about how costly a wrong report is,
+  which is a thing the robot can be told -- rather than tuned against the captures.
+
+The last of these is also where the plan's central claim becomes a quantity: the lead a
+piece has to show rises with the number of candidates it was the best of, because the best
+of six templates reaches a higher agreement on edges that are not there than the best of
+one does. A belief that names one piece therefore needs less picture evidence than an
+unguided pass over six, which is knowledge improving perception in a number rather than in
+a description.
+
+### One resolution, not two filters
+
+The item's note asks for this explicitly: `one-detection-per-thing`'s occupancy rule is
+the same idea applied to place, and the two should share their resolution rather than
+filtering one after the other. Today `PieceMatcher.match` refuses on a threshold and then
+`Occupancy.keep_one_detection_per_place` orders what survived by raw agreement. Both are
+the same question -- which account of these edges is kept -- asked twice on two different
+quantities, which is why `tracy_pickup_demo` loses a real cylinder to a prism leading it by
+nine parts in a thousand.
+
+So the threshold leaves `PieceMatcher`, which fits and scores without deciding, and the
+place rule reads the comparison rather than the bare agreement.
+
+### What is built
+
+- `perception/explanations.py` (new). An explanation -- the outlines one account lays over
+  a plane -- and how well the picture bears it out, as the two-sided reading above. The
+  board's account is built from #236's fitted layout; a piece's is its fitted outline.
+- `piece_matcher.py`. `minimum_agreement` goes. `PieceMatcher` returns what each candidate
+  a hypothesis allows fitted to, and how many it chose from, without refusing any of them.
+- `occupancy.py`. A place goes to the account that leads the others claiming it, rather
+  than to the highest raw agreement.
+- `pipeline.py`. The board's account is built once per frame from the board detection and
+  handed to the passes that search over it, and the resolution runs once over everything
+  the surfaces found.
+
+### The checkable outcome
+
+`test_every_piece_resting_on_the_lid_is_found` on `tracy_pickup_demo` is this item's mark
+to remove: `LID_PIECES_LOST_TO_A_STRONGER_GHOST` names it, and the module's own docstring
+makes removing it the contract rather than a test being changed to pass. The other four
+lid marks are `expectations-from-events`' and stay.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause:
+
+- The scoring on its own: an outline claimed where the picture holds no edge is not
+  rewarded for it; an account that leaves seen edges over scores below one that covers
+  them; the board's account predicts its own hole boundaries at the placement #236's fit
+  reports, asserted against `BoardHoleLayout.placed` rather than a retyped copy.
+- The comparison on its own: two accounts of one place within the stated margin of each
+  other settle to neither rather than to both; a candidate chosen from six must lead by
+  more than one named by a belief.
+- The captures, which is the measurement that matters: the mark above comes off, and
+  neither `test_only_the_pieces_resting_on_the_table_are_detected_there` nor
+  `test_every_piece_resting_on_the_table_is_found` nor `test_every_hole_in_the_board_is_found`
+  regresses in any of the six.
+
+The number of pieces reported that are not there is measured across all six captures and
+recorded with the result, since that is the side of the trade this item is meant to move.
+
+Cost is reported as a ratio to a same-run baseline, never in seconds against the 0.5 s
+period -- what #232 recorded about this container's speed moving between runs by more than
+the difference being measured. #236 already leaves `detect` at 1.5x the node's period, so
+what this item adds to that is stated rather than designed around.
+
+Run under the environment #236 recorded: `/usr/local/bin/uv` after `pip install -U uv`,
+since the `uv` first on this container's `PATH` cannot parse this repository's
+`pyproject.toml`.
+
+### What is deliberately not attempted
+
+- **Recovering the frame cost #236 spent.** The two ways named there -- #231's
+  `RectifiedFrame`, and a board believed at where it stood last frame -- are both on other
+  stacks or other items, and building either here would be a second copy.
+- **Tuning the reach or the step of any fit.** Separating a prism from a piece by
+  narrowing the reach is the tuning this plan has refused three times; the point of the
+  item is that the quantity changes, not the constant.
+- **Arming the board's holes as a source of piece hypotheses.** #232 measured that twice
+  and left it out at the developer's decision. #236 corrected the hole measurements it was
+  refused over, so the trade is worth re-measuring -- but by the item that owns the belief,
+  and after this one has changed what a false report costs.
+
+### Landing hazards
+
+#223's `Footprint` -> `RectifiedFootprint` rename conflicts with this branch's edits to
+`pipeline.py`, `detections.py`, `piece_matcher.py` and `occupancy.py`, the same mechanical
+way it does with #205, #221, #225, #232 and #236. #231 renames `LoosePieceDetector` to
+`EdgeFitDetector` and hands the detectors a frame's shared edges, so it meets this branch
+in the same `detect` #232 already flagged.
+
+### The bootstrap script's indentation fault is still unfixed
+
+`.claude/hooks/plan_item_bootstrap.py` writes newly-added item fields at four-space
+indentation (`ITEM_FIELD_INDENT`) while this plan's `plan.yaml` indents them by two, so
+`open` produces invalid YAML and `save-plan.sh` refuses it. Worked around again by editing
+`plan.yaml` directly -- the fourth round to do so, after #231, #236 and #239. It is the
+same family as #160 and still wants its own bug-fix pull request.
