@@ -5463,28 +5463,38 @@ Three facts place it:
 So it is not a test that was changed and not a failure any dependent introduced. It is
 `perception-backend`'s to root-cause, and is recorded as a blocker on that item.
 
-**What is known about the mechanism, for whoever picks it up.** The module passes when run
-alone on a branch carrying #222's krrood changes, so this is an order-dependent
-interaction with the rest of the krrood suite rather than a change to the test. Two
-properties of the test itself are what make that possible, and both are worth fixing
-whatever the cause turns out to be:
+**What is known about the mechanism, and what was wrongly reported first.** The module
+passes when run alone on a branch carrying #222's krrood changes, and the whole
+`test_ripple_down_rules` directory passes on a clean tree in this container, so the CI
+failure does not reproduce locally at all. It is an interaction with something the full CI
+run does that this container does not.
 
-- `test_draw_evaluated_tree_for_drawer_cabinet_rdr` loads a model from
-  `test_results/world_drawer_cabinet_rdr`, a **gitignored** directory written by
-  `test_save_and_load_drawer_cabinet_rdr` — a different test, earlier in the same module.
-  So the test depends on another test's side effect on disk, and on its own guess at the
-  name: the save test uses the name `save()` returned, while the draw test hardcodes
-  `model_name="world_rdr"`. `GeneralRDR.save` keeps an already-set `self.model_name`, so
-  the two only agree while nothing has named that object first.
-- `GeneralRDR.load` catches `FileNotFoundError`, `ValueError`, `SyntaxError` and
-  `ModuleNotFoundError` and raises `RDRLoadError` **without `from e`**, logging the real
-  cause only as a warning. That is why CI reports no reason at all, and it is why the
-  cheapest first step is the one-line diagnosability fix rather than a guess.
+An attempt to reproduce it by hand did produce exactly CI's error, and that reproduction
+was **invalid**: it came from deleting `test_results/`, whose contents are *tracked*
+despite the directory being named in `.gitignore` - a `.gitignore` entry does not untrack
+what is already tracked. Two claims made from that contaminated run are withdrawn. The
+save and draw tests do not disagree about the model name: the traceback shows
+`model_name = 'world_rdr'` on both sides. And `datasets.py` does not fail writing its zoo
+cache into a directory nothing created: `test_results/` is tracked, so a real checkout has
+it.
 
-A third, unrelated latent fault surfaced while reproducing: `datasets.py` writes the
-zoo-dataset cache into that same gitignored `test_results/` at **import time** without
-creating it, so collection of three modules fails outright on a checkout where nothing has
-created the directory first.
+What survives is one real fragility, demonstrated deterministically, and it is a latent
+one rather than this failure's established cause. `get_import_path_from_path` walks *up*
+while `__init__.py` exists, so a generated model's import root is its first ancestor
+without one, and `GeneralRDR.save` writes `__init__.py` only into the directory it is
+handed, never into that directory's parent. With `test_results/__init__.py` present - as
+it is on a real checkout, since it is tracked - the root is the repository root, which
+pytest has on `sys.path`, and the import resolves. Remove that single tracked file and
+every load fails with `ModuleNotFoundError: No module named 'world_drawer_cabinet_rdr'`,
+which is CI's error exactly. So a generated model's importability rests on one tracked
+`__init__.py` sitting inside a directory the repository otherwise treats as generated
+output, and anything that regenerates or cleans that directory breaks every RDR load.
+
+The one thing worth doing first either way is diagnosability. `GeneralRDR.load` catches
+`FileNotFoundError`, `ValueError`, `SyntaxError` and `ModuleNotFoundError` and raises
+`RDRLoadError` **without `from e`**, logging the real cause only as a warning. That is why
+CI reports no reason at all, and why the next red run would say more after a one-line
+change than any amount of guessing from outside can now.
 
 ### The semantic_digital_twin error is the module-scoped world count
 

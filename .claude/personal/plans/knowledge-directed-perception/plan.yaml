@@ -491,9 +491,13 @@ items:
       `test_rdr_world.py::test_draw_evaluated_tree_for_drawer_cabinet_rdr` with `RDRLoadError:
       Could not load the rdr model world_rdr`, is byte-identical to `main`, whose own latest CI is
       green. #222 is the first branch in this stack to touch krrood, so the failure is this item's
-      to root-cause rather than any dependent's. It does not reproduce with that module run alone
-      on a branch carrying #222's krrood changes, so it is an order-dependent interaction with the
-      rest of the krrood suite rather than a change to the test.
+      to root-cause rather than any dependent's. It does not reproduce in a container: that module
+      alone and the whole `test_ripple_down_rules` directory both pass on a clean tree carrying
+      #222's krrood changes, so it is an interaction with something the full CI run does. An
+      apparent local reproduction was invalid and is withdrawn in roadmap.md - it came from
+      deleting `test_results/`, whose contents are tracked despite the directory being named in
+      `.gitignore`. The one real finding is diagnosability: `GeneralRDR.load` raises `RDRLoadError`
+      without `from e`, so CI reports no cause at all.
     - >-
       The `needs-resolution` label the maintenance routine set on the 2026-09-02 conflict is still
       on the branch, so it stays withheld from promotion until the routine's own next pass clears
