@@ -126,20 +126,62 @@ items:
       sibling split. Its waves already separate the engine work from the Why &
       Montessori track and the expert framework, which is the likely seam.
 
+  - id: split-knowledge-directed-perception
+    title: "Split knowledge-directed-perception into plans under the budget"
+    branch: null
+    pull_request_number: null
+    track: plan-splits
+    depends_on: [size-budget-and-report]
+    status: not_started
+    notes: >
+      Discovered over budget during refuse-oversized-save's kickoff, 2026-09-05: 29 items,
+      1,724 manifest + 6,422 roadmap = 8,146 lines - the largest plan measured to date,
+      past even the scale of the original two outliers. #207's own live report on
+      2026-08-28 measured this plan at 15 items / 1,300 lines and read it as within
+      budget; it grew past both halves afterward, the same narrative-accretion pattern
+      already on record for workflow-unification. Same treatment as the sibling splits:
+      measure the real seams rather than assuming the existing tracks already are them,
+      preserve every item and its branch/pull_request_number/status/session verbatim,
+      fold any depends_on edge that would cross a plan boundary into blockers, compress
+      finished narrative to what binds future work, and verify with
+      build_dashboard.validate_plan plus a set comparison against the source before
+      regenerating the branch index and publishing each successor's dashboard.
+
+  - id: split-icra-experiments
+    title: "Split icra-experiments into plans under the budget"
+    branch: null
+    pull_request_number: null
+    track: plan-splits
+    depends_on: [size-budget-and-report]
+    status: not_started
+    notes: >
+      Discovered over budget alongside knowledge-directed-perception, 2026-09-05: 33
+      items, 772 manifest + 1,061 roadmap = 1,833 lines - over the item limit (15) while
+      still under the line limit (2,000), so it is a pure item-count outlier rather than
+      a narrative one. Same treatment as the sibling splits.
+
   - id: refuse-oversized-save
     title: "Refuse a save that leaves a plan over budget"
     branch: null
     pull_request_number: null
     track: gate-and-skills
-    depends_on: [split-workflow-unification, split-rdr-refactor]
+    depends_on: [split-workflow-unification, split-rdr-refactor, split-knowledge-directed-perception, split-icra-experiments, size-budget-and-report]
     status: not_started
     notes: >
       save-plan.sh gains the gate, with a typed error naming which half of the
       budget was blown and by how much. The natural seam is alongside the
       existing `plan_manifest_tools.py read-id` call the script already makes
-      before pushing. Depends on both splits: landing this while either plan is
+      before pushing. Depends on every split: landing this while any plan is
       still over would refuse every save of that plan, including the ones
-      recording this plan's own progress.
+      recording this plan's own progress. size-budget-and-report was added to
+      this list on 2026-09-05, at this item's own kickoff: the gate has to
+      import SizeBudget from plan_size_budget.py, which exists only on #207's
+      branch (open, non-draft - ready to stack on per plan-schema.md, just not
+      yet merged to main), so the omission in the item's original depends_on
+      was a gap between what it names and what it actually needs. The two new
+      split items were discovered over budget at the same kickoff and added
+      as siblings of the two done splits, for the same reason those two are
+      here: this item cannot safely land while any of them still is.
 
   - id: new-plan-when-full
     title: "Open a new plan instead of growing a full one"

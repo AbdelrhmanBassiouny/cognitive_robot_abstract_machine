@@ -421,3 +421,23 @@ mid-way through, so the source was re-read from the current tip before building.
 successors all keep `tracking_issue: 94`, reusing the existing mailbox rather than scattering
 the continuity across seven new issues. Personal-notes data only, so no branch and no pull
 request, per the item's own notes and the sibling split's precedent.
+
+## Kickoff 2026-09-05: `refuse-oversized-save` — two more plans found over budget
+
+Session: https://claude.ai/code/session_01XWy1uT1i7FozWdNhLEtcKk
+
+Both declared dependencies (`split-workflow-unification`, `split-rdr-refactor`) are `done`,
+but measuring the live notes branch rather than trusting the last report turned up two
+plans neither split touched: `knowledge-directed-perception` (29 items, 8,146 lines — within
+budget at 15/1,300 in #207's 2026-08-28 report, since grown past both halves) and
+`icra-experiments` (33 items, 1,833 lines — over the item limit alone). Added as
+`split-knowledge-directed-perception` and `split-icra-experiments`, siblings of the two done
+splits in the `plan-splits` track, and as new entries in `refuse-oversized-save`'s
+`depends_on` — the gate cannot land while any plan is still over, including these two.
+
+`size-budget-and-report` (#207) was also added to that `depends_on`, missing from the item's
+original list even though the gate's whole job is importing `SizeBudget` from the module #207
+introduces. That module does not exist on `main` yet; #207 is open and non-draft, which
+`plan-schema.md` already counts as ready to stack on, so this item's branch is cut from
+#207's own branch (`claude/plan-size-limits-budget-alp8p2`) rather than `main`, per this
+repository's stacked-PR convention of opening each PR with base = its parent branch.
