@@ -248,6 +248,17 @@ def relation_asserted_about(stated: Match[Relation], subject: Any) -> Relation:
     return stated.stating(**{stated.type.subject_name(): subject}).construct_instance()
 
 
+def object_stated_by(stated: Match[Triple]) -> Optional[Any]:
+    """
+    What a relation stated about the thing sought relates it to.
+
+    :param stated: The relation as stated, of the kind that relates two things.
+    :return: The thing on the other side of it, or ``None`` where the statement leaves
+        that side open -- *standing on something* rather than on anything named.
+    """
+    return stated.kwargs.get(stated.type.object_name())
+
+
 def relations_stated_in(
     statement: Match, described_things: Optional[Dict[Any, Any]] = None
 ) -> List[Match[Relation]]:
@@ -393,12 +404,13 @@ class LookRequest(Generic[T]):
         """
         :param relation_type: The relation to read.
         :return: What the statement says the thing sought stands in that relation to, or
-            ``None`` when it asserts no such relation.
+            ``None`` when it asserts no such relation, or asserts one that names nothing
+            on the other side.
         """
         stated = self.stated_relations_of(relation_type)
         if not stated:
             return None
-        return stated[0].kwargs[stated[0].type.object_name()]
+        return object_stated_by(stated[0])
 
     def stated_relations_of(
         self, relation_type: Type[Relation]

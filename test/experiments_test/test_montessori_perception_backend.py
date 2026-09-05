@@ -189,6 +189,18 @@ def test_a_stated_turn_is_checked_over_what_came_back(
     assert a_turn_away == []
 
 
+def test_a_relation_naming_nothing_to_rest_on_is_satisfied_by_resting_on_anything(
+    scene: MontessoriScene,
+):
+    """
+    *Supported by something* asks less than *supported by the lid*, so a look answering
+    it is contradicted by nothing it found.
+    """
+    seen = scene.shapes[0]
+
+    assert MontessoriPerceptionBackend.contradicted_by(seen, [an(SupportedBy)()]) == ()
+
+
 def test_a_relation_the_look_cannot_establish_is_asked_of_the_sightings_body(
     scene: MontessoriScene,
 ):

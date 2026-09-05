@@ -64,6 +64,7 @@ from experiments.montessori.perception.scene_source import MontessoriSceneSource
 from krrood.entity_query_language.backends import (
     LookRequest,
     PerceptionBackend,
+    object_stated_by,
     relation_asserted_about,
 )
 from krrood.entity_query_language.predicate import Relation
@@ -121,13 +122,14 @@ class SightingReading(Generic[Read], SubClassSafeGeneric, ABC):
 class RestsOnTheSurfaceNamed(SightingReading[SupportedBy]):
     """
     A detection says what it rests on by the name the world knows that surface by, so
-    what the statement names is read back the same way.
+    what the statement names is read back the same way. One naming no surface asks only
+    that it rest on something, which every detection does.
     """
 
     @classmethod
     def holds_for(cls, instance: MontessoriDetection, stated: Match[Relation]) -> bool:
-        named = stated.kwargs[stated.type.object_name()]
-        return instance.supporting_surface == named.name
+        named = object_stated_by(stated)
+        return named is None or instance.supporting_surface == named.name
 
 
 @dataclass

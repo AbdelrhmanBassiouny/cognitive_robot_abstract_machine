@@ -14,6 +14,8 @@ import pytest
 
 from krrood.entity_query_language.backends import (
     AttributeEqualityToLiteral,
+    LookRequest,
+    object_stated_by,
     relation_asserted_about,
     relation_stated_by,
 )
@@ -144,6 +146,17 @@ def test_a_statement_asserting_no_relation_relates_the_thing_sought_to_nothing()
     request = BackendThatLooksAtTheWorld.read_request(an(Sighting)())
 
     assert request.stated_relations == []
+    assert request.related_by(StandingOn) is None
+
+
+def test_a_relation_leaving_the_other_side_open_relates_the_thing_sought_to_nothing():
+    """
+    *Standing on something* narrows a look no further than *standing somewhere* does, so
+    a relation that names nothing on the other side is read as naming nothing.
+    """
+    request = LookRequest(type_=Sighting, stated_relations=[an(StandingOn)()])
+
+    assert object_stated_by(request.stated_relations[0]) is None
     assert request.related_by(StandingOn) is None
 
 

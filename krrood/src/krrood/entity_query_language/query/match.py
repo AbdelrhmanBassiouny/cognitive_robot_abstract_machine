@@ -508,6 +508,12 @@ class Match(
         """
         The same pattern with more of its attributes stated.
 
+        An attribute says what the thing is and is what
+        :meth:`~krrood.patterns.factory_and_kwargs.HasFactoryAndKwargs.construct_instance`
+        builds one from, where a ``where`` condition is a test over the things the
+        pattern already admits -- so a description is grown by stating, not by
+        conditioning.
+
         A pattern is partial information about a thing, so refining one leaves it alone
         and answers another: a match may only be called once, and the one it grew from
         is usually still held by whoever stated it.
