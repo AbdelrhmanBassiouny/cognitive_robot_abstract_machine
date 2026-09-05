@@ -441,3 +441,25 @@ introduces. That module does not exist on `main` yet; #207 is open and non-draft
 `plan-schema.md` already counts as ready to stack on, so this item's branch is cut from
 #207's own branch (`claude/plan-size-limits-budget-alp8p2`) rather than `main`, per this
 repository's stacked-PR convention of opening each PR with base = its parent branch.
+
+## Kickoff 2026-09-05: `refuse-oversized-save` — the gate, on top of #207
+
+Pull request: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/273
+
+Stacked on #207's branch (`claude/plan-size-limits-budget-alp8p2`), not `main`: this item
+imports `SizeBudget`/`PlanSize` from `plan_size_budget.py`, which exists only there. #207 is
+open and non-draft, which `plan-schema.md` counts as ready to stack on.
+
+`SizeBudget` gained `enforce(size)`, raising a new `PlanOverBudgetError` that names every
+blown half and by how much. `plan_size_gate.py` is a new small script wrapping it as a CLI;
+`save-plan.sh` calls it right after the existing `plan_manifest_tools.py read-id` check - the
+seam the item's own notes named - and before the scratch worktree is even created, so a
+refused save touches nothing. TDD throughout: `test_plan_size_budget.py`,
+`test_plan_size_gate.py` (new) and `test_save_plan_sh.py` were all red before the
+implementation. `test_plan_item_bootstrap.py`'s scratch fixture also needed the two new
+scripts installed, since its `record`/`open` operations call `save-plan.sh` internally and
+that call would otherwise fail with the new scripts missing from its scratch layout.
+
+Landing this PR (merging it, not just opening it) still has to wait on
+`split-knowledge-directed-perception` and `split-icra-experiments` alongside the two done
+splits - both entries in `depends_on` above the found-oversized note explains.
