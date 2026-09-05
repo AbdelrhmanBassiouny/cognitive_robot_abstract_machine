@@ -6124,3 +6124,93 @@ indentation (`ITEM_FIELD_INDENT`) while this plan's `plan.yaml` indents them by 
 `open` produces invalid YAML and `save-plan.sh` refuses it. Worked around again by editing
 `plan.yaml` directly -- the fourth round to do so, after #231, #236 and #239. It is the
 same family as #160 and still wants its own bug-fix pull request.
+
+### `how-to-look-concluded-from-the-request`: the second round of 2026-09-05, and a bound that was not a marker
+
+Four threads again, two of them new and about the concept in `krrood` rather than about
+this scene. Both are answered exactly and resolved; the other two are answered with
+measurements and left to the developer.
+
+#### A look is a kind of thing, and the query is what a capability answers with
+
+*"why not bound this type var to an abstract base class that represents Look."* Done:
+`Look` is the question put to perception, `LookT` is bound to it, and a detector cannot
+state a capability over something that is not one.
+
+**The bound turned out not to be an empty marker**, which is the half worth recording.
+`LookRequest` -- what a statement compiles to, and what `PerceptionBackend.look_for` is
+handed -- *is* a look, so it inherits `Look` too. That removes a confusable pair rather
+than adding one: `Look` is the concept, `LookRequest` the look read off a statement,
+`SceneRequest` the one this scene's backend derives from it, `TargetOnSurface` one piece
+on one surface, and krrood's own `PlaceToLookAt` a look with no demo behind it. `Look`
+declares no members deliberately, because what a look carries differs with the family of
+detectors asked.
+
+*"this should return the query, and users can convert it if they want to a list of
+answers."* `asked_about` replaces `answers`, handing back the detector's own standing
+statement bound to one look. **It is renamed rather than retyped, and that is not
+cosmetic**: a `Query` is always truthy, so `answers` returning one would have made every
+`if detector.answers(look)` silently true -- the same call, the same name, a wrong answer
+with no error. What comes back is the statement itself rather than a copy, so changing it
+changes what the detector declares, which is the same live-growth shape as `add_rule` and
+keeps `answerable_looks` stated once rather than rebuilt per look.
+
+#### The attribute name was already fixed, one stack over
+
+*"fix the 227 smell issue by adding a comment on 227."* Recorded there, and checking
+before writing turned a reminder into a landing note: **#227 has already removed it**,
+replacing `SUPPORTING_SURFACE_ATTRIBUTE_NAME` with `narrowing_relations = (SupportedBy,)`.
+The constant is introduced by #222 and survives only on the sibling stack -- #222 -> #231
+-> #239 -> #266 -- which is off #222 and does not carry #227, so it goes when the two
+stacks meet rather than by an edit on either; removing it here would name the same thing
+twice and hand #227 a conflict.
+
+Worth generalizing: **a smell visible from a branch is not always that branch's to fix**,
+and on a plan built by stacking, "where is this already fixed" is the first question
+rather than "how do I fix it here".
+
+#### What the twin-vocabulary conditions actually need, measured
+
+The previous round said the blocker was `MontessoriDetection` not being a twin entity,
+which #255 fixes. Reading the other stack again, it is three branches rather than one:
+**#227** gives the backend a statement's *relations* in place of an attribute name, and
+**#238** makes a relation answer the stretch of world it allows, which is what a
+`SceneDetector`'s capability would read to say which surfaces it can answer for. So the
+single move that supplies all of it is merging #255, whose tip carries all three.
+
+| | |
+| --- | --- |
+| commits it brings | 68 (#227, #229, #238, #255) |
+| diff | 62 files, +8,613 / -752 |
+| conflicts | `pipeline.py`, `scene_request.py`, `surfaces.py`, `piece_matcher.py`, `exceptions.py`, `geometry.py`, `test_montessori_perception.py` |
+
+**A re-base is not available here**, which is the one way this differs from #257: that
+item re-based onto #255 because its own base was replaceable, and this branch needs #231
+and #239 *beneath* it. So it is a merge joining the two stacks, the shape #257 paid for
+three of them. Recommended and not taken -- what a pull request carries through review is
+the developer's call, and it is the same trade #231 refused twice for #159 and #239 then
+accepted.
+
+#### Per-part wiring is planned, one level up
+
+The developer's own pointer, and it checks out. `icra-experiments`' `backend-routing`
+track has `backends-declare-their-capabilities` (*"QueryBackend gains capability(), the
+same shape #231 gave detectors"*) and `query-routed-per-predicate`, which splits a
+statement into predicates, assigns each to the backend whose capability admits it, and
+falls back to the next capable one when a backend refuses -- and whose own note already
+says *"#238 already does this implicitly for one statement."*
+
+That routes among *backends*; what this thread describes is the same mechanism one level
+down, among detectors *inside* the perception backend, where the constrained form one
+detector produces is what the next reads. `FindTheBoard` -> `FindThePieces` already does
+it implicitly here, since the board's extent is what says how far each surface reaches;
+what makes it implicit is that a request carries a kind of thing rather than its
+conditions, so there are no parts to assign. It therefore waits on the same merge, and
+whichever of the two items runs second should take the other's router rather than write a
+second one.
+
+#### Verification
+
+`test/krrood_test/test_eql` 1311 passed and 3 skipped, no failures, the two tests added
+here among them; `test/experiments_test` with the six ROS modules excluded 414 passed, 1
+skipped, 16 xfailed, unchanged from the previous head.

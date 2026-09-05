@@ -939,6 +939,35 @@ items:
     a detection a Role over a world entity; and this family conditioning on the sensor, whose
     look is the request and whose rules are stated before any frame exists, so the case would
     have to carry what the source offers rather than one frame.
+    Second round of 2026-09-05, answered as 0063f9824. Two of the four threads asked for
+    changes to the concept in krrood and both are done and resolved. The type parameter a
+    detector binds is bound to Look, the question put to perception, so a capability cannot
+    be stated over something that is not one - and the bound is not an empty marker, since
+    LookRequest is one too, which stops Look and LookRequest reading as two names for one
+    thing. And a capability asked about a look answers with the query rather than a verdict:
+    asked_about replaces answers, returning the detector''s own standing statement so it can
+    be evaluated, inspected, drawn or narrowed further. It is renamed rather than retyped
+    because a Query is always truthy, so answers returning one would have made every
+    if detector.answers(look) silently true.
+
+    The other two are put back to the developer with measurements rather than built.
+    SUPPORTING_SURFACE_ATTRIBUTE_NAME is recorded on #227 as he asked, and checking first
+    turned the reminder into a landing note: #227 already removed it (narrowing_relations =
+    (SupportedBy,)) and it survives only on this sibling stack, which is off #222 and does
+    not carry #227, so it goes when the two stacks meet rather than by an edit on either.
+    Conditions in the twin''s vocabulary want more than #255''s Role: #227 gives the backend
+    a statement''s relations in place of an attribute name and #238 makes a relation answer
+    the stretch of world it allows, so the one move that supplies all of it is merging #255,
+    measured at 68 commits, 62 files, +8613/-752 and seven conflicted files. A re-base is not
+    available as it was for #257, since this branch needs #231 and #239 beneath it. Recommended
+    and not taken, since it is his call on what this pull request carries through review.
+
+    Wiring a detector per part of a description is answered in icra-experiments''
+    backend-routing track, at a different granularity: query-routed-per-predicate routes among
+    backends, this would route among detectors inside the perception backend, and the two
+    should share the router. It waits on the same merge, since a request has to arrive as its
+    relations before a detector can declare which parts of it it answers. Proposed as an item
+    of that track and not added, being structural.
     '
 - id: surface-finish-annotation
   title: Say in the digital twin how a surface takes light
