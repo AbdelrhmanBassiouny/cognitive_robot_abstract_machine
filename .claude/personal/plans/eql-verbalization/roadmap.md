@@ -355,6 +355,12 @@ average), and the pre-scan itself. `test_eql/test_verbalization` 768 -> 774 pass
 and no existing expectation changed; `test_eql` 1291 passed (`test_typing` needs `mypy`, absent
 from this environment).
 
+**Tooling note, not this item's work.** `plan_item_bootstrap.py open` could not record this
+item: it writes `branch` / `pull_request_number` / `status` / `session` at a four-space indent
+into a two-space manifest, so `save-plan.sh` fails in `yaml.safe_load`. That is the bug PR
+#160 fixed, which was closed unmerged on 2026-08-30, so it is live on `main` again. This
+entry and the manifest fields beside it were written by hand instead.
+
 ## aggregate-repeat-reduction: review round 1 (2026-09-05)
 
 Three threads on #264, of which one changes what the plan holds.
@@ -392,12 +398,6 @@ It is a different rule in a different file — `_for_each_header` / `_group_labe
 is not being folded into #264. If the developer wants it, it is a new item in this track,
 alongside the separate question of whether a directly aggregated attribute should read
 *"the sum of its income"* rather than *"the sum of incomes of Statements"*.
-
-**Tooling note, not this item's work.** `plan_item_bootstrap.py open` could not record this
-item: it writes `branch` / `pull_request_number` / `status` / `session` at a four-space indent
-into a two-space manifest, so `save-plan.sh` fails in `yaml.safe_load`. That is the bug PR
-#160 fixed, which was closed unmerged on 2026-08-30, so it is live on `main` again. This
-entry and the manifest fields beside it were written by hand instead.
 
 ## The conflict is cleared; the rebase still waits on #229 (2026-09-04)
 
