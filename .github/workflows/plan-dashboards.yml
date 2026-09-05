@@ -1,0 +1,145 @@
+name: Plan dashboards
+
+# Publishes every plan's dashboard as a GitHub Pages site: one page per plan under
+# /plans/<plan-id>/, plus the master index at the site root.
+#
+# Why an Action rather than the /plan-dashboard skill: only a live session can call the
+# Artifact tool, so a published Artifact was as fresh as the last time somebody thought
+# to run the skill. The same scripts render the same pages here with nobody watching,
+# so the site is current within a minute of the events that change it. The skill still
+# works and still publishes Artifacts; both paths drive build_dashboard.py over the
+# same manifest, so neither can drift from the other.
+#
+# Why these triggers: a plan's dashboard is a view over its items' pull requests, so
+# what changes it is a pull request opening, leaving draft, or closing - and a manifest
+# edit somebody pushed to the notes branch, which no event here can see, hence the
+# dispatch. Dispatchable through the API exactly like integration-refresh.yml.
+#
+# Which branch carries this file decides which of those triggers actually reach it, and
+# the three answers differ:
+#   - workflow_dispatch is offered only for a workflow on the repository's default
+#     branch, which on this fork is the regenerated integration branch;
+#   - a pull_request run uses that pull request's merge ref, so it fires only for pull
+#     requests whose own base already carries this file - main, for the fork's ordinary
+#     pull requests;
+#   - push fires on whichever branch it names below.
+# So a copy on integration is dispatchable and a copy on main reacts to every pull
+# request, and neither substitutes for the other.
+#
+# Why the site is pushed to a branch rather than deployed with actions/deploy-pages:
+# the github-pages environment only accepts deployments from the default branch, so a
+# deploy from a pull request run is rejected before the job starts ("Branch
+# refs/pull/<n>/merge is not allowed to deploy to github-pages due to environment
+# protection rules") - and pull request events are most of what moves a dashboard.
+# Pushing a branch has no such gate, and pages_site.py points Pages at that branch, so
+# a fork publishes with no settings visit either way.
+#
+# The build also pushes the one manifest correction that needs no judgment - an item
+# whose pull request GitHub reports as merged becomes done - back to the notes branch,
+# same as a session-driven refresh. GITHUB_TOKEN starts no workflow run of its own, so
+# neither that push nor the site branch's can loop back into this workflow.
+#
+# Runs unchanged in any fork: the repository comes from the runner's own context, its
+# Pages URL from GitHub, and the notes branch from the same configuration every hook
+# resolves it through, so none is named here.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, converted_to_draft, closed]
+  push:
+    branches: [main]
+    # A change to the renderer or to this workflow changes every page, and nothing else
+    # would rebuild them until the next pull request event.
+    paths:
+      - .claude/skills/plan-dashboard/**
+      - .claude/hooks/resolve-personal-notes-config.sh
+      - .github/workflows/plan-dashboards.yml
+  workflow_dispatch:
+
+concurrency:
+  # Several pull requests moving at once would otherwise race for the site branch. The
+  # build reads live state at the moment it runs, so a superseded run has nothing to
+  # contribute and is cancelled rather than queued.
+  group: plan-dashboards
+  cancel-in-progress: true
+
+permissions:
+  # contents: write for the site branch and for the merged-to-done correction pushed
+  # back to the notes branch; pages: write to point Pages at the site branch.
+  contents: write
+  pages: write
+
+env:
+  # The branch the built site is pushed to and GitHub Pages serves from. It holds the
+  # site and nothing else.
+  SITE_BRANCH: plan-dashboards-site
+
+jobs:
+  publish:
+    name: Build every plan's dashboard and publish the site
+    # A pull request from a fork gets a read-only token, which can push neither branch -
+    # and its events say nothing about this repository's own plans anyway.
+    if: >-
+      github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # No ref: the renderer is taken from the tree this run started on, which is
+          # the tree this file was read from. They are versioned together, so naming
+          # another branch here can name one that carries no renderer at all - main
+          # does not, today. Same reason integration-refresh.yml pins none.
+          #
+          # Full history without the blobs: neither the notes-branch worktree the
+          # correction push commits in nor the site branch's own can be pushed from a
+          # shallow clone, and a partial clone gets there without paying for a full
+          # checkout of a robotics repository.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the rendering dependencies
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          pip install -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
+
+      - name: Point Pages at the site branch
+        id: site
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          echo "url=$(python3 "${PAGES_SITE_SCRIPT}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --branch "${SITE_BRANCH}")" >> "$GITHUB_OUTPUT"
+
+      - name: Build the site
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          # The identity both pushes below are committed under.
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          python3 "${BUILD_SITE_SCRIPT}" \
+            --output-directory "${RUNNER_TEMP}/site" \
+            --site-base-url "${{ steps.site.outputs.url }}"
+
+      - name: Publish the site
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          python3 "${PUBLISH_SITE_SCRIPT}" \
+            --source "${RUNNER_TEMP}/site" \
+            --branch "${SITE_BRANCH}" \
+            --remote origin \
+            --message "Publish the plan dashboards (${GITHUB_EVENT_NAME}, ${GITHUB_SHA})"
+
+      - name: Report where it is served
+        run: |
+          echo "[Plan dashboards](${{ steps.site.outputs.url }})" >> "$GITHUB_STEP_SUMMARY"

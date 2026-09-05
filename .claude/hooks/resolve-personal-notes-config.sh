@@ -315,6 +315,21 @@ REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
 # refresh_dashboard_support.py: the JSON-plumbing helpers
 # refresh_dashboard.sh calls between its two script calls.
 REFRESH_DASHBOARD_SUPPORT_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard_support.py"
+# build_site.py: renders every plan's dashboard plus the master index into a
+# static site directory, with no live session - the headless entrypoint
+# .github/workflows/plan-dashboards.yml publishes to GitHub Pages.
+BUILD_SITE_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_site.py"
+# personal_notes.py / github_api.py: the notes-branch reads and the live pull
+# request reads build_site.py needs, which a session does through its own bash
+# snippets and GitHub tools instead.
+PERSONAL_NOTES_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/personal_notes.py"
+GITHUB_API_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/github_api.py"
+# pages_site.py: points GitHub Pages at the branch the built site is pushed to
+# and prints the URL it is served from.
+PAGES_SITE_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/pages_site.py"
+# publish_site.py: replaces a branch's whole content with a built site directory,
+# which is what Pages then serves.
+PUBLISH_SITE_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/publish_site.py"
 # record_dashboard_url.py: writes one key's published Artifact URL into
 # DASHBOARD_URL_CACHE_PATH, resolving that URL from the account's live
 # Artifact listing so a URL nobody published cannot be recorded.
@@ -328,6 +343,10 @@ PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
 # hooks/tests/: the pytest suite covering plan_manifest_tools.py (the one
 # hook-directory script with non-trivial logic worth testing the same way).
 HOOKS_TESTS_DIRECTORY=".claude/hooks/tests"
+
+# PLAN_DASHBOARDS_WORKFLOW: the Action that publishes the dashboards as a Pages
+# site on every pull request event, on a change to the renderer, and on demand.
+PLAN_DASHBOARDS_WORKFLOW=".github/workflows/plan-dashboards.yml"
 
 # STACK_DIRECTORY / *_SCRIPT / *_CONFIG_FILE / *_TESTS_DIRECTORY: the
 # stacked-PR fork-staging/cram2-review tooling's canonical location, same

@@ -1,0 +1,25 @@
+schema_version: 1
+id: first-plan
+title: "Plan first-plan"
+description: "What first-plan is for."
+default_repository: owner/repository
+tracking_issue: 9
+waves:
+  - id: only-wave
+    name: "Only wave"
+tracks:
+  - id: only-track
+    name: "Only track"
+    wave: only-wave
+items:
+  - id: an-item
+    branch: a-branch
+    title: "An item"
+    track: only-track
+    status: in_progress
+    pull_request_number: 1
+  - id: an-item-nobody-has-opened-yet
+    branch: another-branch
+    title: "An item nobody has opened yet"
+    track: only-track
+    status: not_started

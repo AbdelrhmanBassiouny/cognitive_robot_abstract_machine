@@ -281,3 +281,25 @@ This skill is the second half of the refresh loop
 cannot call the `Artifact` tool itself (only a live Claude session can) — it
 prints a reminder to run `/plan-dashboard <plan-id>` afterward, which is
 this skill.
+
+## The Pages site publishes the same dashboards without a session
+
+`${PLAN_DASHBOARDS_WORKFLOW}` renders every plan's dashboard and the master
+index into a GitHub Pages site — one page per plan at `/plans/<plan-id>/`,
+the index at the site root — through `${BUILD_SITE_SCRIPT}`, the headless
+entrypoint for the same scripts this document drives. The site is pushed to
+a branch of its own (`${PUBLISH_SITE_SCRIPT}`) that Pages serves from
+(`${PAGES_SITE_SCRIPT}` points it there), rather than deployed through the
+`github-pages` environment, which only accepts deployments from the default
+branch and would reject every run a pull request triggered. It runs on every pull
+request that opens, reopens, leaves or enters draft, or closes, on a change
+to these scripts, and on demand (`workflow_dispatch`), so the site is
+current within a minute of whatever changed the data, with nobody watching.
+It pushes the same merged-to-done manifest correction back to the notes
+branch that step 2 does.
+
+That covers the events GitHub raises. It cannot see a manifest edit pushed
+to the notes branch — dispatch the workflow after one, the same moment
+`save-plan.sh` asks for a republish. Running this skill is still what
+publishes the Artifact, which the workflow cannot: only a live session can
+call the `Artifact` tool.
