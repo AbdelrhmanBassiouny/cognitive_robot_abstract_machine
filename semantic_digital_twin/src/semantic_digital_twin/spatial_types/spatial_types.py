@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
 from enum import Enum
@@ -190,9 +190,26 @@ class SpatialType:
         return result
 
 
+class HasPose(ABC):
+    """
+    Something that stands in a pose: a pose itself, or a thing of the world standing in
+    one.
+
+    A relation that reads where a thing is or which way it faces is written over this
+    rather than over each kind of thing it accepts, so a pose, a transformation and an
+    entity of the world are all read the one way.
+    """
+
+    @abstractmethod
+    def to_pose(self) -> Pose:
+        """
+        The pose this stands in.
+        """
+
+
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
-    sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, SelfNamingValue
+    HasPose, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, SelfNamingValue
 ):
     """
     Represents a 4x4 transformation matrix used in kinematics and transformations.
@@ -2031,7 +2048,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Pose(HasPose, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __init__(
         self,
@@ -2235,6 +2252,12 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def orientation(self) -> Quaternion:
         return self.to_quaternion()
 
+    def to_pose(self) -> Pose:
+        """
+        The pose this stands in, which is itself.
+        """
+        return self
+
     def to_position(self) -> Point3:
         result = Point3.from_iterable(
             self[:4, 3:], reference_frame=self.reference_frame
@@ -2289,7 +2312,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Pose2D(HasPose, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     """
     Represents a 2D pose consisting of an x coordinate, a y coordinate, and a yaw angle.
 

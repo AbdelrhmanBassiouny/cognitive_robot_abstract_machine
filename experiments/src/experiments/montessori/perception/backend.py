@@ -22,11 +22,14 @@ one thing, between two, near a place -- answers the stretch it allows, so the pi
 cut to it before anything is detected. A colour says which pieces are worth fitting at
 all, so a look asked for one marks that colour alone. And a turn says which way round to
 lay a piece over the edges. What none of them do is decide the answer: each is read
-again off what came back, the way the look itself established it.
+again off what came back.
 
-A relation no search covers is answered rather than refused: what a look found stands as
-a body in a copy of the world it was taken in, so the relation is evaluated there, and
-what it rejects leaves that world again.
+What a look found stands as a body in a copy of the world it was taken in, so a relation
+is evaluated there like any relation of the world -- the colour the body is drawn in,
+the way it is turned, whether it touches something -- and what the statement rejects
+leaves that world again. Only what the look establishes *differently* from a body is
+read off the sighting itself: which surface it searched, and where it reported the thing
+standing.
 """
 
 from __future__ import annotations
@@ -37,12 +40,14 @@ from dataclasses import dataclass, field
 from typing_extensions import (
     Any,
     ClassVar,
+    Generic,
     Iterable,
     List,
     Optional,
     Sequence,
     Tuple,
     Type,
+    TypeVar,
 )
 
 from experiments.montessori.perception.detections import (
@@ -62,6 +67,7 @@ from krrood.entity_query_language.backends import (
     StatedRelation,
 )
 from krrood.entity_query_language.predicate import Relation
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -74,26 +80,34 @@ from semantic_digital_twin.reasoning.predicates import (
 
 # %% what a look establishes about a sighting for itself
 
+Read = TypeVar("Read", bound=Relation)
+"""
+The kind of relation a reading answers.
+"""
 
-class SightingReading(ABC):
+
+@dataclass
+class SightingReading(Generic[Read], SubClassSafeGeneric, ABC):
     """
     How a look reads one kind of relation off a sighting, without a body to ask.
 
     A look establishes some things about what it found in the act of finding it: which
-    surface it searched, where it stands, what colour it marked, which way it laid the
-    outline. A relation of those kinds is answered from the sighting the way the look
-    established it, which is what lets the look narrow itself by the relation and still
-    check it afterwards.
-    """
-
-    relation_type: ClassVar[Type[Relation]]
-    """
-    The kind of relation this reading answers, by the class that means it.
+    surface it searched and where it reported the thing standing. A relation of those
+    kinds is answered from the sighting the way the look established it, which is what
+    lets the look narrow itself by the relation and still check it afterwards. Each
+    reading binds the kind of relation it answers as its type parameter.
     """
 
     @classmethod
+    def relation_type(cls) -> Type[Read]:
+        """
+        The kind of relation this reading answers, by the class that means it.
+        """
+        return cls.get_generic_type_parameters()[0]
+
+    @classmethod
     @abstractmethod
-    def holds_of(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
+    def holds_for(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
         """
         Whether a sighting satisfies one relation of this kind.
 
@@ -102,54 +116,28 @@ class SightingReading(ABC):
         """
 
 
-class RestsOnTheSurfaceNamed(SightingReading):
+@dataclass
+class RestsOnTheSurfaceNamed(SightingReading[SupportedBy]):
     """
     A detection says what it rests on by the name the world knows that surface by, so
     what the statement names is read back the same way.
     """
 
-    relation_type = SupportedBy
-
     @classmethod
-    def holds_of(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
+    def holds_for(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
         return instance.supporting_surface == stated.related_thing.name
 
 
-class StandsWhereAllowed(SightingReading):
+@dataclass
+class StandsWhereAllowed(SightingReading[PlacementRelation]):
     """
-    A detection is a sighting rather than a body, so where it stands is the position it
-    was reported at rather than a volume a containment can be measured against.
+    Where a detection stands is the position the look reported it at, which is what
+    a placement is read against rather than the volume of the body standing for it.
     """
-
-    relation_type = PlacementRelation
 
     @classmethod
-    def holds_of(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
+    def holds_for(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
         return stated.constraint().allows(instance.pose.to_position())
-
-
-class WearsTheColor(SightingReading):
-    """
-    The colour a detection wears is the colour this set gives what was recognised.
-    """
-
-    relation_type = Colored
-
-    @classmethod
-    def holds_of(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
-        return instance.color == stated.related_thing
-
-
-class IsTurnedSo(SightingReading):
-    """
-    Which way a detection is turned is the turn the fit settled on.
-    """
-
-    relation_type = Turned
-
-    @classmethod
-    def holds_of(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
-        return stated.constraint().allows_turn(instance.yaw)
 
 
 # %% the backend
@@ -174,15 +162,17 @@ class MontessoriPerceptionBackend(PerceptionBackend):
     readings: ClassVar[Tuple[Type[SightingReading], ...]] = (
         RestsOnTheSurfaceNamed,
         StandsWhereAllowed,
-        WearsTheColor,
-        IsTurnedSo,
     )
     """
-    How a look here reads each relation it can narrow itself by off what it found.
+    What a look here establishes about a sighting for itself, and so reads off the
+    sighting rather than asking of the body standing for it.
     """
 
-    narrowing_relations: ClassVar[Tuple[Type[Relation], ...]] = tuple(
-        reading.relation_type for reading in readings
+    narrowing_relations: ClassVar[Tuple[Type[Relation], ...]] = (
+        SupportedBy,
+        PlacementRelation,
+        Colored,
+        Turned,
     )
     """
     What a look here can be narrowed by: which surface to search, which part of it to
@@ -244,10 +234,11 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         Every stated relation a detection does not satisfy, each asserted about what the
         look found so it can be read as the claim that failed.
 
-        A relation this look can establish for itself is read off the sighting the way
+        A relation this look establishes for itself is read off the sighting the way
         the look established it; any other is asked of the body the look stood in its
-        world for the sighting, which is what lets whatever relation a statement can
-        state be checked here.
+        world for the sighting -- the colour it is drawn in, the way it is turned, what
+        it touches -- which is what lets whatever relation a statement can state be
+        checked here.
 
         :param instance: One detection the look reported.
         :param stated: The relations, each as stated about the thing sought.
@@ -258,18 +249,18 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         return tuple(
             stated_relation.about(cls._subject_of(instance, stated_relation))
             for stated_relation in stated
-            if not cls._holds_of(instance, stated_relation)
+            if not cls._holds_for(instance, stated_relation)
         )
 
     @classmethod
-    def _holds_of(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
+    def _holds_for(cls, instance: MontessoriDetection, stated: StatedRelation) -> bool:
         """
         :param instance: One detection the look reported.
         :param stated: One relation, as stated about the thing sought.
         """
         for reading in cls.readings:
-            if issubclass(stated.relation_type, reading.relation_type):
-                return reading.holds_of(instance, stated)
+            if issubclass(stated.relation_type, reading.relation_type()):
+                return reading.holds_for(instance, stated)
         return bool(stated.about(cls._body_of(instance, stated))())
 
     @classmethod

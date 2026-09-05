@@ -65,10 +65,10 @@ class SceneRequest:
 
     color: Optional[Color] = None
     """
-    The colour the thing sought wears, or ``None`` where the statement says none.
+    The colour the thing sought has, or ``None`` where the statement says none.
 
     A colour is a narrowing like the others: a look asked for one marks that colour
-    alone and fits only the pieces that wear it.
+    alone and fits only the pieces that have it.
     """
 
     turn: Optional[Turned] = None

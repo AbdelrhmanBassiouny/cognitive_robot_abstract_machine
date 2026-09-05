@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import cached_property
 
-from typing_extensions import Optional, List, Tuple
+from typing_extensions import Any, Optional, List, Tuple
 
 from krrood.entity_query_language.backends import StatedRelation
 from segmind.datastructures.object_tracker import (
@@ -132,8 +132,8 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
 class Effect:
     """
     What an event says about the object it is about once it has happened, in the
-    world's own vocabulary: the relations that hold of it from then on, and the ones
-    that stop holding.
+    world's own vocabulary: the relations that hold of it from then on, the ones that
+    stop holding, and the ones it is evidence about without settling.
 
     Each is stated about the object without the object standing in it, so what an
     event says can be applied to whatever was believed of the object before it.
@@ -147,25 +147,52 @@ class Effect:
 
     ends: Tuple[StatedRelation, ...] = ()
     """
-    The relations that stop holding of it, each read as covering every believed
-    relation it states: one stating no operand ends every relation of its kind.
+    The relations that stop holding of it, each read as covering every relation
+    believed *before* the event that it states: one stating no operand ends every
+    relation of its kind. What the event itself begins is never ended by it.
+    """
+
+    checks: Tuple[StatedRelation, ...] = ()
+    """
+    The relations the event is a reason to look at again rather than to settle: every
+    believed relation one of these covers is asked of the object as it now stands, and
+    kept only where it still holds.
     """
 
     def applied_to(
-        self, held: Tuple[StatedRelation, ...]
+        self, held: Tuple[StatedRelation, ...], subject: Any
     ) -> Tuple[StatedRelation, ...]:
         """
         What holds of the object after this effect, given what was believed of it
         before.
 
         :param held: The relations believed to hold before the event.
+        :param subject: The object the event is about, as it stands once the event has
+            happened, which is what a relation the effect checks is asked of.
         """
         kept = [
             relation
             for relation in held
-            if not any(ended.covers(relation) for ended in self.ends)
+            if not self._ends(relation) and self._still_holds(relation, subject)
         ]
         return (*kept, *(begun for begun in self.begins if begun not in kept))
+
+    def _ends(self, relation: StatedRelation) -> bool:
+        """
+        :param relation: One relation believed before the event.
+        """
+        return any(ended.covers(relation) for ended in self.ends)
+
+    def _still_holds(self, relation: StatedRelation, subject: Any) -> bool:
+        """
+        :param relation: One relation believed before the event.
+        :param subject: The object the event is about, as it stands now.
+        :return: Whether the belief survives being checked, which every belief this
+            effect does not check does.
+        """
+        if not any(checked.covers(relation) for checked in self.checks):
+            return True
+        return bool(relation.about(subject)())
 
 
 @dataclass(kw_only=True)
@@ -210,30 +237,40 @@ class EventWithEffect(EventWithTrackedObjects, ABC):
 
 SUPPORTED_BY_ANYTHING = StatedRelation(relation_type=SupportedBy)
 """
-Resting on anything at all, which is what an event that says what the object now rests
-on ends, and what a pick-up ends without saying what it rests on instead.
+Resting on anything at all: every support believed before the event, whatever it
+named, which an event that says what the object now rests on ends, and a pick-up ends
+without saying what it rests on instead.
 """
 
 INSIDE_ANY_REGION = StatedRelation(relation_type=InsideRegion)
 """
-Lying in any region at all, which a pick-up ends.
+Lying in any region at all: every containment believed before the event, which a
+pick-up is a reason to check.
 """
 
 
-@dataclass(unsafe_hash=True)
-class SupportEvent(EventWithEffect):
+@dataclass(kw_only=True)
+class ComesToRestEvent(EventWithEffect, ABC):
     """
-    The SupportEvent class is used to represent an event that involves an object that is supported by another object.
+    An event after which the object rests on what the event names, and on nothing else.
     """
 
     def effect(self) -> Effect:
         """
-        The object rests on what this event names, and on nothing else.
+        The object rests on what this event names, instead of whatever it rested on
+        before.
         """
         return Effect(
             begins=(StatedRelation.of(SupportedBy, self._entity_it_names()),),
             ends=(SUPPORTED_BY_ANYTHING,),
         )
+
+
+@dataclass(unsafe_hash=True)
+class SupportEvent(ComesToRestEvent):
+    """
+    The SupportEvent class is used to represent an event that involves an object that is supported by another object.
+    """
 
 
 @dataclass(unsafe_hash=True)
@@ -386,26 +423,19 @@ class PickUpEvent(EventWithEffect):
 
     def effect(self) -> Effect:
         """
-        Picked up, the object is held rather than supported: it rests on nothing and
-        lies in no region, whatever it rested on or lay in before.
+        Picked up, the object is held rather than supported, so it rests on nothing
+        whatever it rested on before. Whether it still lies in a region it was believed
+        in is not settled by the pick-up but checked against where the object now is: a
+        piece lifted clear of a hole is no longer in it, one nudged within it still is.
         """
-        return Effect(ends=(SUPPORTED_BY_ANYTHING, INSIDE_ANY_REGION))
+        return Effect(ends=(SUPPORTED_BY_ANYTHING,), checks=(INSIDE_ANY_REGION,))
 
 
 @dataclass(unsafe_hash=True)
-class PlacingEvent(EventWithEffect):
+class PlacingEvent(ComesToRestEvent):
     """
     Represents an event where an object is placed on another object.
     """
-
-    def effect(self) -> Effect:
-        """
-        The object rests on what it was set down on, and on nothing else.
-        """
-        return Effect(
-            begins=(StatedRelation.of(SupportedBy, self._entity_it_names()),),
-            ends=(SUPPORTED_BY_ANYTHING,),
-        )
 
 
 @dataclass(unsafe_hash=True)

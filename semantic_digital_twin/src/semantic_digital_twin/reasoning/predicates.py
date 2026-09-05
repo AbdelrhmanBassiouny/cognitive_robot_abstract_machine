@@ -49,8 +49,10 @@ from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 from semantic_digital_twin.spatial_types import Vector3, Point3, math
 from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.spatial_types.spatial_types import (
+    HasPose,
     HomogeneousTransformationMatrix,
     Pose,
+    Pose2D,
 )
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.exceptions import RelationStatedAboutNothing
@@ -588,9 +590,9 @@ The function spelling of
 
 # %% where a relation allows a thing to be
 
-Placed = Union[Point3, Pose, HomogeneousTransformationMatrix, KinematicStructureEntity]
+Placed = Union[Point3, HasPose]
 """
-Anything the world can say the place of: a point, a pose, or something standing in it.
+Anything the world can say the place of: a point, or something standing in a pose.
 """
 
 AXES: Tuple[SpatialVariables, ...] = VolumetricBoundingBox.axes()
@@ -621,9 +623,7 @@ def position_of(placed: Placed) -> Point3:
     """
     if isinstance(placed, Point3):
         return placed
-    if isinstance(placed, (Pose, HomogeneousTransformationMatrix)):
-        return placed.to_position()
-    return placed.global_pose.to_position()
+    return placed.to_pose().to_position()
 
 
 def space_between(
@@ -1276,21 +1276,14 @@ class Near(Triple, PlacementRelation):
 
 # %% which way a thing is turned
 
-Turnable = Union[Pose, HomogeneousTransformationMatrix, KinematicStructureEntity]
-"""
-Anything the world can say the turn of: a pose, or something standing in one.
-"""
 
-
-def yaw_of(turnable: Turnable) -> float:
+def yaw_of(posed: HasPose) -> float:
     """
     How far something is turned about the world's vertical, in radians.
 
-    :param turnable: The pose, or the thing standing in the world, to read.
+    :param posed: The pose, or the thing standing in one, to read.
     """
-    if isinstance(turnable, KinematicStructureEntity):
-        turnable = turnable.global_pose
-    return float(turnable.to_rotation_matrix().to_rpy()[2])
+    return float(Pose2D.from_pose(posed.to_pose()).yaw)
 
 
 @dataclass(eq=False)
@@ -1303,7 +1296,7 @@ class Turned(Triple):
     what a search reads before anything has been found.
     """
 
-    body: Optional[Turnable] = None
+    body: Optional[HasPose] = None
     """
     The thing that may be turned so, or None where the relation is stated about nothing.
     """
@@ -1319,7 +1312,7 @@ class Turned(Triple):
     """
 
     @property
-    def subject(self) -> Optional[Turnable]:
+    def subject(self) -> Optional[HasPose]:
         return self.body
 
     @property

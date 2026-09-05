@@ -1225,7 +1225,7 @@ class MontessoriPerceptionPipeline:
         A placement that confines the thing closely -- within a radius of a hole, inside
         a region -- is a place worth fitting a piece at whether or not any colour
         separates one there, so it is evaluated the way a place the world believes in
-        is. The pieces tried are the ones wearing the stated colour, or every piece
+        is. The pieces tried are the ones that have the stated colour, or every piece
         where none is stated, and the turns tried are the ones the statement allows.
 
         :param request: What the look was asked for.
