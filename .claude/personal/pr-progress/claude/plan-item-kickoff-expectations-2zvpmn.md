@@ -1,3 +1,4 @@
+
 # expectations-from-events (#257, draft) - knowledge-directed-perception
 
 Kicked off and built 2026-09-03 in `auto` mode; the review rounds of 2026-09-04 (two) and
@@ -31,6 +32,14 @@ of the same name.
   `Match.covers`, `Match.states_the_same` and the four reading functions beside the backend
   are where its parts landed, and `Expectation.expects` is what a belief is asked in place
   of comparing statements.
+- The red CI, read on 2026-09-05 for the first time on this branch and fixed as 1e93c138.
+  Nine of twenty-three checks, all one crash: every job that builds the ORM interfaces
+  died on `types.GenericAlias' object has no attribute '__memo__'`. #255 is green on all
+  23, so it was ours. make_specialized_dataclass was memoized onto its own argument -- a
+  type alias, and Variable's comes from AbstractContextManager rather than Generic, so it
+  holds no attributes; the segmind generator reaches Variable[Relation] through the
+  Match[Relation] fields. Cached against the alias now, with a context-manager generic in
+  krrood's shared dataset so its own conftest fails at collection without the fix.
 - The late round of 2026-09-05 (3d4b8457), two questions rather than asks:
   `object_stated_by` names the read of what a stated relation relates the thing sought to,
   beside the other readers, and answers `None` where the statement leaves that side open
@@ -39,7 +48,11 @@ of the same name.
 
 ## Next
 
-- Nothing on the branch. CI on the new head (3d4b8457) unread; f7112120's was unread too.
+- Nothing on the branch. CI on the new head (1e93c138) unread; what the previous heads'
+  unread CI was hiding is the crash above, so read it this time rather than assuming.
+- Put to the developer and not decided: segmind's interface now maps Match_RelationDAO and
+  Variable_RelationDAO. One ignored_classes entry in segmind/scripts/generate_orm.py is
+  where it goes if the query graph should stay out of the schema.
 - Two threads answered and left open for the developer, both krrood questions:
   whether `Match.stating` earns its place (it has one production caller, and the fold into
   that caller was offered), and whether subclassing `Match` was worth it (no -- the
@@ -57,6 +70,12 @@ of the same name.
   checked against a stated sighting only until the icra item runs it in simulation.
 
 ## Watch out
+
+- A red check on a job whose sources the diff does not touch is not automatically someone
+  else's: the ORM build runs in every job, so one broken generator fails nine of them.
+- The full ORM generation needs rclpy for giskardpy and everything after it, which this
+  container has not got; semantic_digital_twin then segmind do run, in that order, through
+  `python -P -m cognitive_robot_abstract_machine.orm_generation` with absolute paths.
 
 - #236 and #239 edit `pipeline.py` and `piece_matcher.py` on the other stack and meet
   `believed_from`, `placements_within` and the request seeding when the merge reaches them.
