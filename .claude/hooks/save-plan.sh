@@ -199,6 +199,11 @@ if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
   exit 1
 fi
 
+if ! python3 "${SCRIPT_DIR}/plan_size_gate.py" \
+    --manifest "${MANIFEST_FILE}" --roadmap "${ROADMAP_FILE}"; then
+  exit 1
+fi
+
 git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
 git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
 

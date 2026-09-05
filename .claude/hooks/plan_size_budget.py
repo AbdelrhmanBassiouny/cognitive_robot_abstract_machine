@@ -3,9 +3,10 @@
 The size budget a plan is held to, and the report measuring every plan against it.
 
 A plan's size is its ``plan.yaml`` and ``roadmap.md`` together: how many items it
-declares, and how many lines the two files hold. Nothing here refuses anything - it
-measures and reports, so a plan already over the budget can still be read about and
-saved.
+declares, and how many lines the two files hold. This command itself never refuses
+anything - it measures and reports, so a plan already over the budget can still be read
+about and saved. :meth:`SizeBudget.enforce` is the one thing here that does refuse;
+``plan_size_gate.py`` is what ``save-plan.sh`` calls it from.
 
 Usage:
     python3 plan_size_budget.py --plans-dir <dir> \\
@@ -173,6 +174,30 @@ class BudgetOverrun:
         return f"{self.excess} {self.limit} over {self.allowed}"
 
 
+@dataclass
+class PlanOverBudgetError(Exception):
+    """
+    Raised when a plan's size is over the budget it was judged against.
+    """
+
+    plan_size: PlanSize
+    """
+    The plan whose size was judged.
+    """
+
+    overruns: tuple[BudgetOverrun, ...]
+    """
+    Every half of the budget it blew, in :class:`BudgetLimit` order.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Compose the message from the plan and its overruns.
+        """
+        stated = ", ".join(str(overrun) for overrun in self.overruns)
+        super().__init__(f"plan '{self.plan_size.plan_id}' is over budget: {stated}")
+
+
 @dataclass(frozen=True)
 class SizeBudget:
     """
@@ -232,6 +257,17 @@ class SizeBudget:
             for limit in BudgetLimit
             if size.count(limit) > self.allowance(limit)
         )
+
+    def enforce(self, size: PlanSize) -> None:
+        """
+        Refuse one plan's size if it is over this budget.
+
+        :param size: The measured plan.
+        :raises PlanOverBudgetError: If it blows either half of the budget.
+        """
+        overruns = self.overruns(size)
+        if overruns:
+            raise PlanOverBudgetError(plan_size=size, overruns=overruns)
 
 
 # %% measuring the plans on disk
