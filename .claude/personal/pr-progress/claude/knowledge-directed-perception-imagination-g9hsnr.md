@@ -38,10 +38,32 @@ Two threads, both answered exactly as asked, replied to and resolved (32471b172)
 
 321 passed, 1 skipped, 11 xfailed across the Montessori modules - unchanged.
 
+## Review round of 2026-09-05
+
+One thread, *"why a fixed connection?"* on the connection `ImaginedWorld.spawn` builds.
+Answered and left open at ae70e39a5, since the answer is a design justification rather
+than a change he asked for.
+
+A look reports one placement and nothing in the imagined world moves what it found, so
+the measured pose is the connection rather than a state something could change.
+`MontessoriWorld` already makes the same split for the same pieces and names the case a
+free joint is for - `_spawn` welds, `_spawn_free_body` gives a `Connection6DoF` only
+where gravity or a gripper has to move the shape, and `shapes_are_movable` is off by
+default. A `Connection6DoF` would also register seven degrees of freedom per finding in a
+world deep-copied every frame, and carry its placement in those dofs rather than in
+`parent_T_connection_expression`, which `world.py:1012` already records as a hazard. None
+of that was written down anywhere, which is why the question exists, so `spawn`'s
+docstring says it now.
+
+The remote head had advanced while this ran: the stack maintenance routine merged `main`
+up through all seven branches into this one, three times over. Merged in cleanly (no
+conflicts) and re-verified before pushing - 478 passed, 1 skipped, 11 xfailed across
+`test/experiments_test/` with the six ROS-dependent modules excluded.
+
 ## Next
 
-- Nothing outstanding on the branch. It is a draft, as the convention asks. CI on the new
-  head was queued when this was written.
+- Nothing outstanding on the branch. It is a draft, as the convention asks. Head is
+  e339b2ef2; `mergeable_state: unstable` with checks running, none red when last read.
 - The dashboard republish is still owed: the live artifact has to be read back first
   (474KB of generated HTML), which is more than a working session's context affords.
   `/plan-dashboard knowledge-directed-perception` in a fresh session does it.
