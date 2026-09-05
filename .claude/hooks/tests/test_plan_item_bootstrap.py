@@ -155,6 +155,8 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
         HookScript.SAVE_PLAN.value,
         "plan_manifest_tools.py",
         HookScript.PLAN_ITEM_BOOTSTRAP.value,
+        "plan_size_budget.py",
+        "plan_size_gate.py",
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from plan_size_budget import SizeBudget
 from scratch_repository import NOTES_BRANCH, ScratchRepository
 
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
@@ -32,6 +33,9 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
         "resolve-personal-notes-config.sh",
         "save-plan.sh",
         "plan_manifest_tools.py",
+        "plan_item_bootstrap.py",
+        "plan_size_budget.py",
+        "plan_size_gate.py",
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -142,3 +146,98 @@ def test_missing_marker_pair_fails_with_a_clear_message(
     assert result.stderr.startswith(
         "CLAUDE.local.md has no plan-manifest/plan-roadmap section to extract.\n"
     )
+
+
+# %% the size budget gate
+
+
+def oversized_item_manifest(item_count: int) -> str:
+    """
+    A ``test-plan`` manifest declaring *item_count* items.
+
+    :param item_count: How many items to declare.
+    :return: The manifest text.
+    """
+    return "id: test-plan\nitems:\n" + "".join(
+        f"  - id: item-{number}\n" for number in range(item_count)
+    )
+
+
+def test_refuses_a_save_that_would_leave_the_plan_over_the_item_budget(
+    save_plan_repository: ScratchRepository,
+):
+    manifest_path = save_plan_repository.write(
+        "plan.yaml", oversized_item_manifest(SizeBudget().maximum_items + 1)
+    )
+    roadmap_path = save_plan_repository.write("roadmap.md", "roadmap\n")
+    result = run_save_plan(
+        save_plan_repository,
+        "test-plan",
+        "--manifest",
+        str(manifest_path),
+        "--roadmap",
+        str(roadmap_path),
+    )
+    assert result.returncode == 1
+    assert "1 items over" in result.stderr
+
+
+def test_refuses_a_save_that_would_leave_the_plan_over_the_line_budget(
+    save_plan_repository: ScratchRepository,
+):
+    manifest_path = save_plan_repository.write(
+        "plan.yaml", "id: test-plan\nitems: []\n"
+    )
+    roadmap_path = save_plan_repository.write(
+        "roadmap.md",
+        "".join(f"line {number}\n" for number in range(SizeBudget().maximum_lines)),
+    )
+    result = run_save_plan(
+        save_plan_repository,
+        "test-plan",
+        "--manifest",
+        str(manifest_path),
+        "--roadmap",
+        str(roadmap_path),
+    )
+    assert result.returncode == 1
+    assert "lines over" in result.stderr
+
+
+def test_a_refused_save_pushes_nothing(save_plan_repository: ScratchRepository):
+    manifest_path = save_plan_repository.write(
+        "plan.yaml", oversized_item_manifest(SizeBudget().maximum_items + 1)
+    )
+    roadmap_path = save_plan_repository.write("roadmap.md", "roadmap\n")
+    run_save_plan(
+        save_plan_repository,
+        "test-plan",
+        "--manifest",
+        str(manifest_path),
+        "--roadmap",
+        str(roadmap_path),
+    )
+
+    verify_checkout = save_plan_repository.clone_notes_branch(
+        save_plan_repository.project_root.parent / "verify-checkout"
+    )
+    assert not (
+        verify_checkout / ".claude" / "personal" / "plans" / "test-plan"
+    ).exists()
+
+
+def test_a_plan_within_budget_still_saves(save_plan_repository: ScratchRepository):
+    manifest_path = save_plan_repository.write(
+        "plan.yaml", oversized_item_manifest(SizeBudget().maximum_items)
+    )
+    roadmap_path = save_plan_repository.write("roadmap.md", "roadmap\n")
+    result = run_save_plan(
+        save_plan_repository,
+        "test-plan",
+        "--manifest",
+        str(manifest_path),
+        "--roadmap",
+        str(roadmap_path),
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Saved plan 'test-plan'" in result.stdout
