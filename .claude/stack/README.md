@@ -25,6 +25,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 | `merge` vs `rebase` | the **`rebase`** label; default `merge` | labelling on GitHub |
 | cram2 create-link built | the **`cram2-link-sent`** marker | nothing - a maintenance pass sets it when it puts a create-link in the PR description, and clears it once you promote (add `in-review`) |
 | conflict/CI-red reported | the **`needs-resolution`** label | nothing - a maintenance pass sets it when it reports a restack conflict to the branch's owning session, and clears it once the branch stops conflicting |
+| changes the tooling | the **`tooling`** label on the fork PR | nothing - the `Tooling label` workflow reads the PR's changed files on every push and writes the label both ways (see `maintenance.py label-tooling`) |
 
 ## Files
 
@@ -75,14 +76,20 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
 - **`maintenance.py`** - the executor: the half of a pass that moves commits, where `stack.py`
-  only derives and prints. `board --write`, `fast-forward`, `restack`, `promote` and
-  `run-report --json`; see [Running a maintenance pass](#running-a-maintenance-pass). It is the
+  only derives and prints. `board --write`, `fast-forward`, `restack`, `promote`,
+  `label-tooling` and `run-report --json`; see [Running a maintenance pass](#running-a-maintenance-pass). It is the
   command line onto modules named for what they do, so nothing has to be hunted for inside one
   long file: `maintenance_constants.py` (every value edited by hand),
   `maintenance_git_commands.py`, `maintenance_board.py`, `maintenance_github.py`,
   `maintenance_fast_forward.py`, `maintenance_restack_steps.py` and
   `maintenance_restack_procedure.py` (the steps, and the order that is the procedure),
-  `maintenance_promotion.py`, `maintenance_report.py` and `maintenance_commands.py`.
+  `maintenance_promotion.py`, `maintenance_tooling_label.py`, `maintenance_report.py` and
+  `maintenance_commands.py`.
+- **`changed_paths.py`** - what the files a pull request changes say the change is about. A pull
+  request is a *tooling* change when it changes something under `tooling_paths` and nothing
+  outside them; `shared_paths` (the repository-wide configuration and developer scripts both
+  sides change) settles neither way. `maintenance.py label-tooling` writes the verdict as the `tooling` label - both ways, so a
+  pull request that grows a change to the software loses it again.
 - **`.claude/skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
   as `/stacked-pr-maintenance` from any session and the whole of what a scheduled run executes.
   It takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with

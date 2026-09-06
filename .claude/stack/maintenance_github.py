@@ -18,6 +18,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from maintenance_board import PullRequestRecord
@@ -29,6 +30,20 @@ CheckRunRecord = Mapping[str, Any]
 """
 One check run as the REST API answers it, before any field is read.
 """
+
+ChangedFileRecord = Mapping[str, Any]
+"""
+One file a pull request changes, as the REST API answers it.
+"""
+
+
+class ChangedFileField(StrEnum):
+    """
+    The keys one changed file is answered under.
+    """
+
+    PATH = "filename"
+    """Where the file sits, from the repository root."""
 
 
 @dataclass
@@ -68,6 +83,22 @@ class PullRequestReader(ABC):
     def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
+
+
+@dataclass(frozen=True)
+class PullRequestFiles(ABC):
+    """
+    Which files one pull request changes.
+
+    Declared apart from the reads a pass makes because nothing that derives the stack
+    asks: a pull request's own record carries no file list, so this is a call of its own
+    per pull request rather than a field of one already fetched.
+    """
+
+    @abstractmethod
+    def changed_paths(self, number: int) -> list[str]:
+        """:param number: The pull request to read.
+        :return: Every path it changes, from the repository root."""
 
 
 @dataclass(frozen=True)
@@ -162,7 +193,7 @@ class GitHubRequestFailed(ExternalCallFailed):
 
 
 @dataclass(frozen=True)
-class GitHubRepository(ForkPullRequests, CandidatePullRequests):
+class GitHubRepository(ForkPullRequests, PullRequestFiles, CandidatePullRequests):
     """
     Every pull-request call this executor makes, against one repository.
 
@@ -218,6 +249,25 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests):
         """:param number: The pull request to read.
         :return: That pull request."""
         return self._call("GET", f"/pulls/{number}")
+
+    def changed_paths(self, number: int) -> list[str]:
+        """
+        Read every path one pull request changes.
+
+        :param number: The pull request to read.
+        :return: The paths, from the repository root, oldest page first.
+        """
+        collected: list[str] = []
+        page = 1
+        while True:
+            query = urllib.parse.urlencode({"per_page": self.page_size, "page": page})
+            fetched: list[ChangedFileRecord] = self._call(
+                "GET", f"/pulls/{number}/files?{query}"
+            )
+            collected.extend(str(file[ChangedFileField.PATH]) for file in fetched)
+            if len(fetched) < self.page_size:
+                return collected
+            page += 1
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
         """
