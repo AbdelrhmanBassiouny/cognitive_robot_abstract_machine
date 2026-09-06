@@ -1,0 +1,686 @@
+"""
+Tests for ``ResolutionMode`` (enum surface), AUTOMATIC-mode regression, and HINT-mode
+expert-call / suggestion-flow in
+:class:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`.
+
+Four test classes:
+
+  TestResolutionModeEnum     — enum surface (members, count, distinctness)
+  TestAutomaticModeDefault      — freshly constructed RDR is AUTOMATIC; resolver suppresses expert call
+  TestHintMode               — HINT calls expert with suggestion in default+context, accept/overwrite
+  TestPromptSectionHint      — prompt section applicable iff suggested_condition is set
+"""
+
+from __future__ import annotations
+
+from krrood.entity_query_language.rdr.answer_vocabulary import (
+    AnswerName,
+)
+import dataclasses
+from typing_extensions import Any, Dict, List, Optional, Tuple
+
+
+from .animal import Animal, Species, make_animal as _make_animal
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.rdr.condition_resolver import (
+    ChainConditionResolver,
+    ResolvedCondition,
+    ResolutionMode,
+    TargetSufficientConditionsBasedResolver,
+)
+from krrood.entity_query_language.rdr.expert import (
+    Expert,
+    ConditionsValidator,
+)
+from krrood.entity_query_language.rdr.interface import (
+    AnswerRequest,
+    CaseContext,
+    FunctionInterface,
+)
+from krrood.entity_query_language.rdr.interactive import Palette
+from krrood.entity_query_language.rdr.prompt_sections import (
+    PROMPT_SECTIONS,
+    PromptSection,
+    PromptSectionName,
+    RenderContext,
+)
+from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
+
+# %% Three-rule RDR scenario
+# Rule 1 (root):          milk == True      -> mammal
+# Rule 2 (alternative):   venomous == True  -> reptile
+# Rule 3 (alternative):   feathers == True  -> bird
+# bird2 has feathers=True AND venomous=True, so rule 2 fires first and
+# misclassifies it as reptile.  The backward-inference resolver finds
+# ``feathers==True`` from Species.bird knowledge — a discriminating condition
+# because bird2 has feathers=True but the reptile corner case has feathers=False.
+
+
+def _answer_with_discriminating_condition(context, requests):
+    """
+    Answer function that maps each target to a simple discriminating condition.
+
+    * mammal  -> milk == True
+    * reptile -> venomous == True
+    * bird    -> feathers == True
+    """
+    case_variable = context.case_variable
+    target = context.target_conclusion
+    if target is Species.mammal:
+        return {"conditions": case_variable.milk == True}
+    if target is Species.reptile:
+        return {"conditions": case_variable.venomous == True}
+    if target is Species.bird:
+        return {"conditions": case_variable.feathers == True}
+    raise ValueError(f"Unexpected target: {target!r}")
+
+
+def _three_rule_rdr(*, resolution_mode: ResolutionMode = ResolutionMode.AUTOMATIC):
+    """
+    Build a three-rule RDR (mammal / reptile / bird1) and return supporting objects.
+
+    Returns ``(rdr, bird2, reptile_case, interface, expert)`` where:
+    - ``rdr`` has ``condition_resolver`` set to the default backward-inference chain
+      and ``resolution_mode`` set to the provided value.
+    - ``bird2`` is a new bird that has venomous=True and is initially misclassified
+      as reptile (the refinement path is triggered on fit_case(bird2, bird, expert)).
+    - ``reptile_case`` is the corner case for the reptile rule.
+    - ``interface`` is the CountingFunctionInterface used for the fourth fit call.
+    - ``expert`` wraps ``interface``.
+    """
+    mammal = _make_animal("mammal", milk=True, hair=True)
+    reptile = _make_animal("reptile", venomous=True, eggs=True, toothed=True)
+    bird1 = _make_animal("bird1", feathers=True, eggs=True, airborne=True, legs=2)
+    bird2 = _make_animal("bird2", feathers=True, venomous=True, eggs=True, legs=2)
+
+    rdr = EQLSingleClassRDR(
+        Animal,
+        "species",
+        condition_resolver=ChainConditionResolver.backward_inference_default(),
+        resolution_mode=resolution_mode,
+    )
+
+    # Fit the first three cases with a plain FunctionInterface (not counting).
+    setup_expert = Expert(
+        interface=FunctionInterface(
+            answer_function=_answer_with_discriminating_condition
+        )
+    )
+    rdr.fit_case(mammal, Species.mammal, setup_expert)
+    rdr.fit_case(reptile, Species.reptile, setup_expert)
+    rdr.fit_case(bird1, Species.bird, setup_expert)
+
+    # Verify the pre-condition: bird2 is misclassified before we fit it.
+    assert (
+        rdr.classify(bird2) is Species.reptile
+    ), "Pre-condition: bird2 must be misclassified as reptile before the hint test."
+
+    interface = CountingFunctionInterface(
+        answer_function=_answer_with_discriminating_condition
+    )
+    expert = Expert(interface=interface)
+    return rdr, bird2, reptile, interface, expert
+
+
+# %% a spy counting how often the expert is asked
+
+
+@dataclasses.dataclass
+class CountingFunctionInterface(FunctionInterface):
+    """A :class:`FunctionInterface` that counts every ``interact`` call.
+
+    :attr:`interact_count` increments on every invocation so a test can assert
+    without any mocking framework whether the expert was (or was not) consulted.
+    """
+
+    interact_count: int = dataclasses.field(default=0, init=False)
+
+    def interact(
+        self,
+        context: CaseContext,
+        requests: List[AnswerRequest],
+        initial_errors: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Forward to the parent and record the call.
+        """
+        self.interact_count += 1
+        return super().interact(context, requests, initial_errors=initial_errors)
+
+
+# %% Prompt-section lookup helper
+
+_SECTIONS_BY_NAME = {section.name: section for section in PROMPT_SECTIONS}
+
+
+def _section(name: PromptSectionName) -> PromptSection:
+    """
+    :param name: The situation whose section to look up.
+    :return: The section registered for that situation.
+    :raises KeyError: If no section in :data:`PROMPT_SECTIONS` declares that name.
+    """
+    if name not in _SECTIONS_BY_NAME:
+        raise KeyError(
+            f"Section '{name}' not found. Available: {list(_SECTIONS_BY_NAME)}"
+        )
+    return _SECTIONS_BY_NAME[name]
+
+
+# %% the resolution modes themselves
+
+
+class TestResolutionModeEnum:
+    """
+    ResolutionMode exposes exactly the two expected members.
+    """
+
+    def test_automatic_member_exists(self):
+        """
+        ResolutionMode.AUTOMATIC must exist as a valid enum member.
+
+        Guarantee: the attribute resolves without AttributeError.
+        """
+        member = ResolutionMode.AUTOMATIC
+        assert isinstance(member, ResolutionMode)
+
+    def test_hint_member_exists(self):
+        """
+        ResolutionMode.HINT must exist as a valid enum member.
+
+        Guarantee: the attribute resolves without AttributeError.
+        """
+        member = ResolutionMode.HINT
+        assert isinstance(member, ResolutionMode)
+
+    def test_two_members_total(self):
+        """
+        Exactly two members exist in ResolutionMode.
+
+        Guarantee: no accidental extras; future additions require an explicit update.
+        """
+        assert len(list(ResolutionMode)) == 2
+
+    def test_members_are_distinct(self):
+        """
+        AUTOMATIC and HINT are not equal to each other.
+
+        Guarantee: mode-switching code can rely on identity / equality comparisons.
+        """
+        assert ResolutionMode.AUTOMATIC != ResolutionMode.HINT
+
+
+# %% automatic resolution as the default
+
+
+class TestAutomaticModeDefault:
+    """
+    A freshly constructed EQLSingleClassRDR defaults to AUTOMATIC resolution mode.
+    """
+
+    def test_default_mode_is_automatic(self):
+        """
+        EQLSingleClassRDR() with no arguments has resolution_mode == AUTOMATIC.
+
+        Guarantee: existing callers that do not set resolution_mode are unaffected
+        by the introduction of HINT mode.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        assert rdr.resolution_mode is ResolutionMode.AUTOMATIC
+
+    def test_automatic_mode_expert_not_called_when_resolver_succeeds(self):
+        """
+        In AUTOMATIC mode the expert is not consulted when the resolver finds a
+        condition.
+
+        Scenario: three-rule RDR (mammal, reptile, bird1). bird2 has feathers=True and
+        venomous=True, so it is initially misclassified as reptile. The backward-inference
+        resolver finds ``feathers==True`` as a discriminating condition for Species.bird.
+        In AUTOMATIC mode the condition is inserted directly without calling the expert.
+
+        Guarantee: CountingFunctionInterface.interact_count == 0 for the auto-resolved step.
+        """
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
+            resolution_mode=ResolutionMode.AUTOMATIC
+        )
+        count_before = interface.interact_count
+        rdr.fit_case(bird2, Species.bird, expert)
+        calls_made = interface.interact_count - count_before
+
+        assert calls_made == 0, (
+            f"Expert must not be called in AUTOMATIC mode when resolver succeeds, "
+            f"but interact() was called {calls_made} time(s)."
+        )
+
+
+# %% hint mode offers the resolved condition instead of inserting it
+
+
+class TestHintMode:
+    """
+    HINT mode passes the resolver suggestion to the expert.
+    """
+
+    def test_hint_mode_expert_called_when_resolver_succeeds(self):
+        """
+        In HINT mode the expert IS called even when the resolver finds a condition.
+
+        Scenario: same three-rule RDR as the AUTOMATIC regression test. The resolver
+        finds ``feathers==True`` for bird2. In HINT mode the condition is passed as a
+        suggestion to the expert, so interact() must be called exactly once.
+
+        Guarantee: CountingFunctionInterface.interact_count increments by 1 for the step.
+        """
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
+            resolution_mode=ResolutionMode.HINT
+        )
+        count_before = interface.interact_count
+        rdr.fit_case(bird2, Species.bird, expert)
+        calls_made = interface.interact_count - count_before
+
+        assert calls_made == 1, (
+            f"Expert must be called exactly once in HINT mode when resolver succeeds, "
+            f"but interact() was called {calls_made} time(s)."
+        )
+
+    def test_hint_mode_request_default_equals_suggestion(self):
+        """
+        In HINT mode, requests[0].default is the bare expression extracted from the
+        ResolvedCondition.
+
+        Guarantee: the AnswerRequest that the expert receives has its ``default`` field
+        pre-seeded with the expression (a SymbolicExpression), so the expert can
+        accept it by returning an empty dict or overwrite it.
+        """
+        captured_default: List[Any] = []
+
+        def _capture(context, requests):
+            """
+            Record the seeded default, then answer with it unchanged.
+            """
+            captured_default.append(requests[0].default)
+            return {"conditions": requests[0].default}
+
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
+            resolution_mode=ResolutionMode.HINT
+        )
+        interface.answer_function = _capture
+        rdr.fit_case(bird2, Species.bird, expert)
+
+        assert len(captured_default) == 1, "answer_function must be called exactly once"
+        default = captured_default[0]
+        assert isinstance(default, SymbolicExpression), (
+            f"requests[0].default must be a SymbolicExpression (the resolver's suggestion), "
+            f"got {type(default).__name__!r}."
+        )
+
+    def test_hint_mode_context_suggested_condition_is_set(self):
+        """
+        In HINT mode, context.suggested_condition is the full ResolvedCondition.
+
+        Guarantee: CaseContext.suggested_condition is populated before the expert is
+        called so the expert shell can display the hint (expression + resolver type) to the user.
+        """
+        captured_suggestion: List[Any] = []
+
+        def _capture(context, requests):
+            """
+            Record the suggestion the context carried, then answer with it.
+            """
+            captured_suggestion.append(context.suggested_condition)
+            return {"conditions": context.suggested_condition.expression}
+
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
+            resolution_mode=ResolutionMode.HINT
+        )
+        interface.answer_function = _capture
+        rdr.fit_case(bird2, Species.bird, expert)
+
+        assert len(captured_suggestion) == 1
+        suggestion = captured_suggestion[0]
+        assert isinstance(suggestion, ResolvedCondition), (
+            f"context.suggested_condition must be a ResolvedCondition in HINT mode, "
+            f"got {type(suggestion).__name__!r}."
+        )
+
+    def test_hint_mode_context_suggested_condition_carries_resolver_type(self):
+        """
+        context.suggested_condition.resolver_type identifies who produced the
+        suggestion.
+
+        Guarantee: when the default chain resolves via TargetSufficientConditionsBasedResolver,
+        the ResolvedCondition carries TargetSufficientConditionsBasedResolver as resolver_type —
+        not an enum value or string.
+        """
+        captured_suggestion: List[Any] = []
+
+        def _capture(context, requests):
+            """
+            Record the suggestion the context carried, then answer with it.
+            """
+            captured_suggestion.append(context.suggested_condition)
+            return {"conditions": context.suggested_condition.expression}
+
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
+            resolution_mode=ResolutionMode.HINT
+        )
+        interface.answer_function = _capture
+        rdr.fit_case(bird2, Species.bird, expert)
+
+        assert len(captured_suggestion) == 1
+        suggestion = captured_suggestion[0]
+        assert isinstance(suggestion, ResolvedCondition)
+        assert suggestion.resolver_type is TargetSufficientConditionsBasedResolver, (
+            f"Expected resolver_type to be TargetSufficientConditionsBasedResolver, "
+            f"got {suggestion.resolver_type!r}."
+        )
+
+    def test_hint_mode_context_suggested_condition_expression_is_request_default(self):
+        """
+        requests[0].default is the bare expression extracted from
+        context.suggested_condition.
+
+        Guarantee: no copy or extra transformation is applied — the expression stored on
+        the ResolvedCondition is exactly the object seeded as the AnswerRequest default.
+        """
+        captured: List[tuple] = []
+
+        def _capture(context, requests):
+            """
+            Record the suggestion beside the seeded default, to compare identity.
+            """
+            captured.append((context.suggested_condition, requests[0].default))
+            return {"conditions": requests[0].default}
+
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
+            resolution_mode=ResolutionMode.HINT
+        )
+        interface.answer_function = _capture
+        rdr.fit_case(bird2, Species.bird, expert)
+
+        assert len(captured) == 1
+        context_suggestion, request_default = captured[0]
+        assert isinstance(
+            context_suggestion, ResolvedCondition
+        ), "context.suggested_condition must be a ResolvedCondition in HINT mode."
+        assert isinstance(
+            request_default, SymbolicExpression
+        ), "requests[0].default must be the bare SymbolicExpression from the ResolvedCondition."
+        assert (
+            request_default is context_suggestion.expression
+        ), "requests[0].default must be the exact expression object from context.suggested_condition."
+
+    def test_hint_accept_uses_suggested_condition(self):
+        """
+        When the expert returns {} (no override), the seeded default condition is used.
+
+        The namespace is pre-seeded with the suggestion as ``conditions``; returning {}
+        leaves it in place so the validation loop picks it up. bird2 must be correctly
+        classified as Species.bird after fitting with the accepted suggestion.
+
+        Guarantee: an expert that does not overwrite the suggestion produces a correct rule.
+        """
+
+        def _accept_default(context, requests):
+            """
+            Answer nothing, leaving the seeded suggestion to stand.
+            """
+            # Return nothing — the namespace already has the suggestion seeded as default.
+            return {}
+
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
+            resolution_mode=ResolutionMode.HINT
+        )
+        interface.answer_function = _accept_default
+        rdr.fit_case(bird2, Species.bird, expert)
+
+        classification = rdr.classify(bird2)
+        assert classification is Species.bird, (
+            f"bird2 must be classified as Species.bird after accepting the hint, "
+            f"got {classification!r}."
+        )
+
+    def test_hint_overwrite_uses_expert_condition(self):
+        """
+        When the expert returns a different expression, that overwrite is used as the
+        rule.
+
+        The expert returns ``feathers == True`` (same truth value as the resolver's
+        suggestion for bird2). This verifies that the expert's returned condition
+        replaces the suggestion end-to-end and the case is still classified correctly.
+
+        Guarantee: the expert's returned condition replaces the suggestion end-to-end.
+        """
+
+        def _overwrite(context, requests):
+            """
+            Answer with a different condition, overriding the suggestion.
+            """
+            # Return an alternative condition that also holds for bird2 (feathers=True).
+            return {"conditions": context.case_variable.feathers == True}
+
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
+            resolution_mode=ResolutionMode.HINT
+        )
+        interface.answer_function = _overwrite
+        rdr.fit_case(bird2, Species.bird, expert)
+
+        classification = rdr.classify(bird2)
+        assert classification is Species.bird, (
+            f"bird2 must be classified as Species.bird after expert overwrites the hint, "
+            f"got {classification!r}."
+        )
+
+    def test_hint_mode_no_resolver_still_calls_expert(self):
+        """
+        In HINT mode with condition_resolver=None the expert is called once.
+
+        Guarantee: HINT mode never suppresses the expert call; with no resolver the call
+        happens unconditionally, and context.suggested_condition is None (no hint).
+        """
+        captured_suggestion: List[Any] = ["_not_called_"]
+
+        def _answer(context, requests):
+            """
+            Record whether any suggestion arrived, then answer regardless.
+            """
+            captured_suggestion[0] = context.suggested_condition
+            return {"conditions": context.case_variable.feathers == True}
+
+        mammal = _make_animal("mammal", milk=True, hair=True)
+        reptile = _make_animal("reptile", venomous=True, eggs=True, toothed=True)
+        bird1 = _make_animal("bird1", feathers=True, eggs=True, airborne=True, legs=2)
+        bird2 = _make_animal("bird2", feathers=True, venomous=True, eggs=True, legs=2)
+
+        rdr = EQLSingleClassRDR(
+            Animal,
+            "species",
+            condition_resolver=None,
+            resolution_mode=ResolutionMode.HINT,
+        )
+
+        setup_expert = Expert(
+            interface=FunctionInterface(
+                answer_function=_answer_with_discriminating_condition
+            )
+        )
+        rdr.fit_case(mammal, Species.mammal, setup_expert)
+        rdr.fit_case(reptile, Species.reptile, setup_expert)
+        rdr.fit_case(bird1, Species.bird, setup_expert)
+
+        assert (
+            rdr.classify(bird2) is Species.reptile
+        ), "Pre-condition: bird2 must be misclassified as reptile."
+
+        interface = CountingFunctionInterface(answer_function=_answer)
+        expert = Expert(interface=interface)
+        count_before = interface.interact_count
+        rdr.fit_case(bird2, Species.bird, expert)
+        calls_made = interface.interact_count - count_before
+
+        assert calls_made == 1, (
+            f"Expert must be called once when resolver=None in HINT mode, "
+            f"got {calls_made} call(s)."
+        )
+        assert (
+            captured_suggestion[0] is None
+        ), "context.suggested_condition must be None when no resolver is set."
+
+
+# %% the prompt section that shows the hint
+
+
+class TestPromptSectionHint:
+    """
+    The ``auto_resolution_hint`` prompt section fires iff suggested_condition is set.
+    """
+
+    def _palette(self) -> Palette:
+        """:return: A colourless palette, so assertions read text and not escapes."""
+        return Palette(use_color=False)
+
+    def _minimal_rdr(self) -> EQLSingleClassRDR:
+        """
+        Return an empty RDR for building a CaseContext (provides case_variable).
+        """
+        return EQLSingleClassRDR(Animal, "species")
+
+    def _three_rule_suggestion(
+        self,
+    ) -> Tuple[EQLSingleClassRDR, Animal, Animal, ResolvedCondition]:
+        """
+        Build a three-rule RDR and return ``(rdr, bird2, reptile, suggestion)``.
+
+        ``suggestion`` is the :class:`ResolvedCondition` for ``bird2`` (the condition
+        the backward-inference resolver would insert automatically in AUTOMATIC mode).
+        """
+        mammal = _make_animal("mammal", milk=True, hair=True)
+        reptile = _make_animal("reptile", venomous=True, eggs=True, toothed=True)
+        bird1 = _make_animal("bird1", feathers=True, eggs=True, airborne=True, legs=2)
+        bird2 = _make_animal("bird2", feathers=True, venomous=True, eggs=True, legs=2)
+
+        rdr = EQLSingleClassRDR(
+            Animal,
+            "species",
+            condition_resolver=ChainConditionResolver.backward_inference_default(),
+        )
+        setup_expert = Expert(
+            interface=FunctionInterface(
+                answer_function=_answer_with_discriminating_condition
+            )
+        )
+        rdr.fit_case(mammal, Species.mammal, setup_expert)
+        rdr.fit_case(reptile, Species.reptile, setup_expert)
+        rdr.fit_case(bird1, Species.bird, setup_expert)
+
+        suggestion = rdr._resolve_condition(
+            CaseContext(
+                case_instance=bird2,
+                case_variable=rdr.case_variable,
+                current_conclusion=Species.reptile,
+                target_conclusion=Species.bird,
+                corner_case=reptile,
+            )
+        )
+        assert suggestion is not None, "Pre-condition: resolver must find a suggestion"
+        return rdr, bird2, reptile, suggestion
+
+    def _render_context(
+        self,
+        suggested_condition: Optional[ResolvedCondition],
+        rdr: Optional[EQLSingleClassRDR] = None,
+        case: Optional[Animal] = None,
+    ) -> RenderContext:
+        """
+        Build a minimal RenderContext with the given suggested_condition.
+        """
+        if rdr is None:
+            rdr = self._minimal_rdr()
+        if case is None:
+            case = _make_animal("hint_test_bird", feathers=True)
+        case_context = CaseContext(
+            case_instance=case,
+            case_variable=rdr.case_variable,
+            current_conclusion=...,
+            target_conclusion=Species.bird,
+            suggested_condition=suggested_condition,
+        )
+        answer_request = AnswerRequest(
+            name=AnswerName.CONDITIONS,
+            validate=ConditionsValidator(),
+            example=f"{AnswerName.CONDITIONS} = case_variable.some_attr == True",
+        )
+        return RenderContext(
+            case=case_context, requests=[answer_request], palette=self._palette()
+        )
+
+    def test_auto_resolution_hint_section_exists(self):
+        """
+        PROMPT_SECTIONS contains a section named 'auto_resolution_hint'.
+
+        Guarantee: the section was registered and can be looked up by name.
+        """
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
+        assert section.name == PromptSectionName.AUTO_RESOLUTION_HINT
+
+    def test_auto_resolution_hint_applicable_when_suggested_condition_set(self):
+        """
+        auto_resolution_hint.applicable returns True when
+        CaseContext.suggested_condition is set.
+
+        Guarantee: the section fires whenever a hint is available for the expert.
+        """
+        rdr, bird2, _reptile, suggestion = self._three_rule_suggestion()
+        render_ctx = self._render_context(
+            suggested_condition=suggestion, rdr=rdr, case=bird2
+        )
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
+        assert section.applicable(render_ctx) is True
+
+    def test_auto_resolution_hint_not_applicable_when_no_suggestion(self):
+        """
+        auto_resolution_hint.applicable returns False when suggested_condition is None.
+
+        Guarantee: the section is suppressed when no auto-resolution hint is available
+        (AUTOMATIC mode, no resolver, or resolver returned nothing).
+        """
+        render_ctx = self._render_context(suggested_condition=None)
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
+        assert section.applicable(render_ctx) is False
+
+    def test_auto_resolution_hint_lines_contain_formatted_condition(self):
+        """
+        auto_resolution_hint.lines returns non-empty text that includes the condition.
+
+        Guarantee: when applicable, the section emits at least one line with a
+        non-empty string so the expert shell displays the hint.
+        """
+        rdr, bird2, _reptile, suggestion = self._three_rule_suggestion()
+        render_ctx = self._render_context(
+            suggested_condition=suggestion, rdr=rdr, case=bird2
+        )
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
+        lines = section.lines(render_ctx)
+
+        assert isinstance(lines, list), "lines() must return a list"
+        assert len(lines) >= 1, "lines() must return at least one line"
+        joined = "".join(lines)
+        assert joined.strip(), "The joined hint text must be non-empty"
+
+    def test_auto_resolution_hint_lines_contain_resolver_name(self):
+        """
+        auto_resolution_hint.lines includes the resolver class name.
+
+        Guarantee: the rendered hint identifies which resolver produced the suggestion
+        so the expert knows the source of the auto-resolved condition.
+        """
+        rdr, bird2, _reptile, suggestion = self._three_rule_suggestion()
+        render_ctx = self._render_context(
+            suggested_condition=suggestion, rdr=rdr, case=bird2
+        )
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
+        joined = "".join(section.lines(render_ctx))
+
+        assert suggestion.resolver_type.__name__ in joined, (
+            f"Expected resolver class name {suggestion.resolver_type.__name__!r} "
+            f"to appear in hint text, got: {joined!r}."
+        )
