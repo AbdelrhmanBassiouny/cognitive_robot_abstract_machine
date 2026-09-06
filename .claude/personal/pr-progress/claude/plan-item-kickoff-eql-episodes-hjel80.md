@@ -31,11 +31,20 @@ Design decisions and their reasoning are in the plan's `roadmap.md` section
 - Branch cut and pushed; draft PR #278 opened.
 - Manifest recorded (branch/PR/session/`in_progress`) and roadmap section
   appended, both on `claude/personal-notes`.
+- All four steps implemented and pushed as `b63c5930c`: the test module, the
+  `LongTermMemory` module, the `MeasuredTrial` protocol, and the generator's
+  ignore list.
+- Dropped a planned `render_figure`-equality test after writing it:
+  `render_figure` is a pure function of the metric summaries the neighbouring
+  test already compares, and `test_scenarios.py` already pins the rendering, so
+  it could only ever fail alongside a test that had already failed. Recorded in
+  `roadmap.md` too.
 
 ## Next
 
-- Write the tests, then the module, then the protocol, then the ignore list.
-- Update the PR description if what it does changes.
+- CI is the only verification available; read it when it reports and fix what
+  it finds.
+- Keep the PR description matching the work if it changes.
 
 ## Known hazards
 
