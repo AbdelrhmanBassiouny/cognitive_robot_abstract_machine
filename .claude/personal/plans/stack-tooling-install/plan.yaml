@@ -141,7 +141,7 @@ items:
   branch: claude/setup-personal-notes-script
   pull_request_number: 107
   status: in_progress
-  session: https://claude.ai/code/session_01MyxyUN3bsvPsJnb5QuNzxd
+  session: https://claude.ai/code/session_01U7PnqKcjgBbmFfwouGPMeN
   track: install
   depends_on:
   - setup-personal-notes-pr101
@@ -322,6 +322,38 @@ items:
     the same break: one conflict, in `tooling_files.py`, where #110's own `HookScript` additions sit
     next to the new `SETUP_STEPS` member — resolved by keeping both. 668 tests pass there afterward;
     see that item's own notes.
+
+    **Merge conflicts and integration-conflict resolved 2026-09-06** (session
+    https://claude.ai/code/session_01U7PnqKcjgBbmFfwouGPMeN, via `/plan-item-resolve`).
+
+    The reported "merge conflicts when rebasing on main" were real under `git rebase` (this branch
+    had fallen 103 commits behind `main`): rebase replays the branch's original commits one at a
+    time and re-hits the add/add conflict on `.claude/hooks/tests/stubs/{curl,gh}.sh`, plus a real
+    conflict in `scratch_repository.py`, that the earlier "two stub files united" merge had already
+    resolved once - a linear rebase discards that merge commit's resolution and starts over. A plain
+    `git merge` of `main`, which is this repo's actual convention throughout this stack, does not
+    reopen it. Merged clean and pushed as `053de8eb`; the `integration_test_command` scope is green
+    (598 passed).
+
+    Separately, this branch had carried `integration-conflict` since 2026-08-31, from an automated
+    integration build finding it "merges cleanly with `D-deco` and the suite fails on the result."
+    No reproduction test was ever pushed for that finding (the block-branch pass only commented and
+    labelled), so nothing had re-checked it since. Verified by hand: merging `main` + `D-deco`'s
+    current tip + this branch is clean with no conflicts and the exact `integration_test_command`
+    suite passes (598/0). `D-deco` touches nothing outside `test/krrood_test/` and `AGENTS.md` - no
+    overlap with this branch's `.claude/`-only diff -and its own pull request records it was rebuilt
+    as a branch reset on 2026-08-31, the same day, to drop a since-forbidden symbol carried from a
+    dead base. The likely explanation is that the original build tested against `D-deco`'s
+    pre-rebuild tip. Label removed from #107.
+
+    `setup-stacked-prs-skill` (#110) merges cleanly onto this branch's new head and was updated to
+    match (`9a192041`, 659 passed). Its own `integration-conflict` (against `D-store`, same shape -
+    rebuilt the same day for the same reason) was cleared the same way and removed.
+
+    Both pull requests were open as ready-for-review (not draft) going into this session; both were
+    converted back to draft after the push, per the standing convention, since it could not be
+    established from here that the ready flip was the user's own rather than left over from an
+    earlier round.
 - id: setup-stacked-prs-skill
   title: 'PR 2: /setup-stacked-prs guided one-command setup skill'
   branch: claude/setup-stacked-prs-skill
