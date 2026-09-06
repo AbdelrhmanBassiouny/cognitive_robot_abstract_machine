@@ -11,12 +11,16 @@ plan, so every plan-filtered integration build reported them
 `stack-maintenance`'s `integration` track is the obvious home: these four are
 all changes to the integration build, and all four stack on that track's own
 items (#281 and #284 on #154, #282 and #285 on #211). It was not chosen
-because that plan is already at 16 items and 1,493 lines against
-`plan-size-limits`' budget of 15 items and 2,000 combined lines. Four more
-would have taken it to 20, deepening a breach that `refuse-oversized-save`
-(#273) will eventually have to refuse — and refusing a save of
-`stack-maintenance` would block the manifest updates that keep the same four
-items current.
+because of size: that plan holds 12 items and 1,493 lines against
+`plan-size-limits`' budget of 15 items and 2,000 combined lines, so four more
+would have taken it to 16 — one over the item half, which is precisely the
+case `new-plan-when-full` (#277) exists to divert, and which
+`refuse-oversized-save` (#273) will eventually refuse outright.
+
+The first version of this section said 16 items becoming 20, from a count that
+read each plan's `waves` and `tracks` entries as items too. The corrected
+figures still route the work here, by one item rather than by five; recorded
+because the overstated version is what the routing decision was taken on.
 
 The seam is real rather than administrative: `stack-maintenance`'s integration
 track is about a build existing at all — assembling it, giving it a CI verdict,
