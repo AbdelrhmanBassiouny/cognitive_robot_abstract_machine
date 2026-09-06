@@ -1,0 +1,42 @@
+# Stacked-PR config - the fork-staging / cram2-review workflow.
+#
+# This file carries the committed defaults only. A `.claude/personal/stack.toml` on the
+# personal-notes branch, if present, layers per-user overrides on top of these values (see
+# `stack.py`'s `load_configuration`) - so a contributor whose fork/remotes differ never has to hand-edit
+# this checked-in file.
+#
+# The stack itself (which branches exist, how they depend on each other, and their review state) is
+# read live from GitHub, not declared here:
+#
+#   * the dependency TREE  = each fork PR's BASE branch (base = parent). Set it on GitHub.
+#   * draft <-> ready      = the fork PR's draft toggle. Un-draft to approve for review.
+#   * in-review            = the `in_review_label` on the fork PR (set at promote time; cram2 itself
+#                            is not readable from the cloud, so the label carries that fact).
+#   * merged               = branch is an ancestor of `<upstream_remote>/<upstream_base>` (pure git).
+#   * needs-resolution     = the `needs_resolution_label` on the fork PR (set by the routine when it
+#                            delegates a restack conflict to the branch's owning session; withholds
+#                            the branch from promotion until cleared).
+#   * integration-conflict = the `integration_conflict_label` on the fork PR (set when a branch is
+#                            found to break a sibling it merges cleanly with; withholds the branch
+#                            the same way, and is never cleared automatically).
+
+in_review_label = "in-review"  # fork-PR label marking "promoted to cram2, under review"
+rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
+needs_resolution_label = "needs-resolution"  # set by the routine on a delegated restack conflict
+# integration_conflict_label: a break between two branches never makes either PR conflicted, so the
+# mergeable state that clears `needs_resolution_label` says nothing about it. A separate label keeps
+# the automatic clearing keyed to the case it actually describes; both labels block through one path.
+integration_conflict_label = "integration-conflict"
+# fork_repository: deliberately unset - the fork is derived from `fork_remote`'s URL, so this file
+# names nobody's fork. Set it (here or in a personal override) only for a checkout whose fork remote
+# is not the fork. `ROUTINE.md` reads the resolved value rather than naming an owner.
+fork_remote = "origin"
+upstream_repository = "cram2/cognitive_robot_abstract_machine"  # constant for every contributor; the fork is whichever remote is not this
+upstream_remote = "cram2"        # name to give the upstream remote when one has to be added
+upstream_base = "main"
+# integration_test_command: run by `integration.py build` on the finished integration branch.
+# The integration branch merges every in-flight stack tip, so it is the only place a semantic
+# conflict between two branches that each pass their own checks can show up. Which suite is
+# worth running is a property of the repository rather than of the tool, so it is configurable;
+# this default is the tooling suite CI's own `test_claude_dev_tooling` job runs.
+integration_test_command = "python3 -m pytest .claude/skills/plan-dashboard/tests .claude/hooks/tests .claude/stack/tests"

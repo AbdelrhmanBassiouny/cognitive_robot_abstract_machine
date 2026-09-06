@@ -44,7 +44,7 @@ already exists**, which is where the cause of a stall almost always is:
   exists to surface. A failing check or a requested-changes review is
   usually the actual blocker; state exactly which one and why, don't just
   say "CI is failing."
-- If the fork PR carries the `in_review_label` from `.claude/stack/stack.toml`
+- If the fork PR carries the `in_review_label` from `bastler/stack.toml`
   (`in-review` by default, the recorded signal for "promoted upstream, under
   review"), the branch also has a pull request on the upstream, whose review
   threads none of the calls above can see — a fork PR can look entirely clean
@@ -112,6 +112,35 @@ resolution — an item stuck behind its own parent is sometimes stuck because it
 was never really a separate item. The same goes when two items turn out to have
 built the same thing, which that document's purpose comparison is there to
 catch.
+
+### Record what you found, before drafting
+
+Everything gathered above is exactly what the item's own `blockers` and `notes`
+should already have said and did not — that is why this skill was needed. Write
+it down now rather than after the resolution, following
+`${MANIFEST_STALENESS_DOCUMENT}`:
+
+```bash
+source .claude/hooks/resolve-personal-notes-config.sh
+python3 "${PLAN_ITEM_BOOTSTRAP_SCRIPT}" update \
+    --plan <plan-id> --item <item-id> \
+    [--status <status>] [--blockers <file> ...] \
+    [--notes <file> | --append-notes <file>]
+```
+
+Set `status` when what you found contradicts it — `blocked` when something outside
+the item has to move first, `deferred` when it was parked deliberately. Record the
+real blocker in `blockers`: the failing check by name, the unanswered review
+thread, the dependency that regressed. Leave `notes` for a conclusion that changes
+what the item *means*, not a summary of this run — and add to an existing note with
+`--append-notes` rather than rewriting it.
+
+Then republish: `/plan-dashboard <plan-id>`. An item that has been stalled for days
+while the manifest calls it healthy is the failure this step exists to end, and it
+is not fixed by resolving the item — only by recording what was true before the
+resolution starts.
+
+### Draft the resolution
 
 Draft a concrete plan to resolve the item: what's actually wrong (cite the
 specific failing check, review comment, unresolved upstream review thread,

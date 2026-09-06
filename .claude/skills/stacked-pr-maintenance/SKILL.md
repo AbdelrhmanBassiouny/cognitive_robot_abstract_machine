@@ -1,7 +1,7 @@
 ---
 name: stacked-pr-maintenance
 description: Run one maintenance pass over a stacked-PR fork-staging workflow - reparent any pull request whose base has landed, restack branches whose parent moved, and promote every approved unblocked branch to the upstream review queue. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>] [--non-interactive]". Use when asked to run a stack maintenance pass, restack the stack, promote ready branches, or clean up after a branch has landed upstream, and when a scheduled routine hands this document its values.
-allowed-tools: Bash, Read, Grep, AskUserQuestion, mcp__github__pull_request_read, mcp__github__list_pull_requests, mcp__github__update_pull_request, mcp__github__issue_write, mcp__github__add_issue_comment
+allowed-tools: Bash, Read, Grep, Skill, AskUserQuestion, mcp__github__pull_request_read, mcp__github__list_pull_requests, mcp__github__update_pull_request, mcp__github__issue_write, mcp__github__add_issue_comment
 ---
 
 # Stacked-PR maintenance
@@ -52,12 +52,12 @@ whole run. Do not inspect, guess at, or rename remotes yourself - a remote's nam
 and a wrong guess points every push at the wrong repository.
 
 **a. Make the tooling present rather than assuming it.** Every step shells out to
-`.claude/stack/`, and a failure in a later step lands after an earlier one has already changed pull
-requests. If `ls .claude/stack/maintenance.py` fails, `git fetch` the ref you were told to resolve
+`bastler/`, and a failure in a later step lands after an earlier one has already changed pull
+requests. If `ls bastler/maintenance.py` fails, `git fetch` the ref you were told to resolve
 this document from and restore it **into the working tree only**:
 
 ```bash
-git restore --source=<ref> --worktree -- .claude/stack/
+git restore --source=<ref> --worktree -- bastler/
 ```
 
 Never reach for `git checkout` with a ref and a path here. That form writes the index as well, so on
@@ -66,7 +66,7 @@ branch during a pass is a restack merge, which would commit the tooling into som
 branch and from there into the upstream. `git restore --worktree` leaves them untracked, where
 nothing can pick them up.
 
-Once `.claude/stack/` is on the default branch this is a no-op on a fresh clone. The pass itself no
+Once `bastler/` is on the default branch this is a no-op on a fresh clone. The pass itself no
 longer takes the tooling away: `restack` switches branches in a worktree of its own, so the checkout
 you invoked it from keeps its branch and its files.
 
@@ -75,7 +75,7 @@ you invoked it from keeps its branch and its files.
 1. **What you were given.** `fork=<owner/repo>` and `upstream=<owner/repo>` in this skill's arguments
    are authoritative. Pass them straight through as `--fork` / `--upstream` and never second-guess
    them.
-2. **What the checkout knows.** Run `python .claude/stack/stack.py configuration` (adding `--fork` /
+2. **What the checkout knows.** Run `python -m bastler.stack configuration` (adding `--fork` /
    `--upstream` for anything you were given). It prints one `field<TAB>value` line per setting -
    `fork_remote`, `fork_repository`, `upstream_remote`, `upstream_repository`, `upstream_base`, the
    label names - deciding which remote is which by the repository each URL names. Exit 0 means use
@@ -122,7 +122,7 @@ below are the mirror image: they have no MCP tool, so they do need curl.
 Export the board first - every step below derives from it, and this one is no exception:
 
 ```bash
-python .claude/stack/maintenance.py board --write
+python -m bastler.maintenance board --write
 ```
 
 Never assemble that file by hand - a fetch that drops a field produces a board that is wrong rather
@@ -131,7 +131,7 @@ than obviously incomplete.
 Then run:
 
 ```bash
-python .claude/stack/stack.py reparents
+python -m bastler.stack reparents
 ```
 
 It prints one `branch<TAB>pr<TAB>current base<TAB>target base` line per open pull request whose base
@@ -170,7 +170,7 @@ leave the rest untouched, and report it: this is a preview API, so never improvi
 The rest of the pass is one command:
 
 ```bash
-python .claude/stack/maintenance.py run-report --json
+python -m bastler.maintenance run-report --json
 ```
 
 It performs the fast-forward, the restack and the promotion, and emits the whole run as one
@@ -224,6 +224,49 @@ yourself.
   react then; do not sit idle waiting on a long run.
 - **It never adds `in-review`.** That is the developer's, once they have clicked Create.
 
+## Account for the plan items this pass moved
+
+Reparenting a pull request, promoting a branch and moving a label all change what a
+tracked item's manifest should say. Follow `${MANIFEST_STALENESS_DOCUMENT}`'s section
+for a pass that changes state without owning it, which is where the commands live.
+
+For every branch you moved, resolve it to its items and name them in the finish
+summary, with what changed about them:
+
+```bash
+python3 "${PLAN_ITEM_BOOTSTRAP_SCRIPT}" resolve --branch <branch>
+```
+
+An exit of `branch_tracks_no_item` means no plan claims that branch; say that too,
+since every fork pull request is supposed to belong to one.
+
+For each branch the report leaves for its owner, block the items it carries - in the
+same step rather than at the end of the pass, since the item is blocked from the moment
+the pass concludes it and everything downstream reads the manifest as truth meanwhile.
+Give the same conflicting files or failing check the comment names:
+
+```bash
+python3 "${PLAN_ITEM_BOOTSTRAP_SCRIPT}" block --branch <branch> \
+  --owner "${MAINTENANCE_BLOCKER_OWNER}" --reason <file>
+```
+
+For each branch the report rejoins - one whose `needs-resolution` was cleared because it
+merges cleanly again - withdraw the blocker the same way:
+
+```bash
+python3 "${PLAN_ITEM_BOOTSTRAP_SCRIPT}" unblock --branch <branch> \
+  --owner "${MAINTENANCE_BLOCKER_OWNER}"
+```
+
+Then republish each affected plan's dashboard, once per plan, before moving on:
+`/plan-dashboard <plan-id>`.
+
+**You write only the blockers you decided yourself**, under
+`${MAINTENANCE_BLOCKER_OWNER}` - which is what lets the same pass withdraw its own and
+never a person's. A reparent, a promotion or a landed branch is reported and not
+written: which status those imply is a reading rather than a mechanical fact, and a
+landed branch is corrected to `done` by the dashboard refresh on its own.
+
 ## Finish
 
 Record every branch reported on this run - the summary must list it, since a comment is not
@@ -244,16 +287,21 @@ sequence stopped you - a stack left dissolved or half-rebuilt needs attention im
 nothing else surfaces it. Then summarise what landed, what was restacked, and what was promoted,
 plus anything you stopped on.
 
+Then the plan side: every item this pass moved, which of them you **wrote** and to what, which
+plans you **republished**, and every branch that belongs to no plan at all. A written item is
+already true in the manifest by the time this summary is read - what the summary adds is that
+somebody can tell which writes were the pass's own.
+
 ## Command reference - resuming a partial run
 
 Step 2 performs all of these in order. Reach for one directly only when a run stopped partway, or
 when a single step has to be re-run:
 
 ```bash
-python .claude/stack/maintenance.py board --write   # export the fork's open pull requests
-python .claude/stack/maintenance.py fast-forward    # move the fork's base onto the upstream
-python .claude/stack/maintenance.py restack         # integrate every moved parent, publish, report
-python .claude/stack/maintenance.py promote         # build and record every upstream link
+python -m bastler.maintenance board --write   # export the fork's open pull requests
+python -m bastler.maintenance fast-forward    # move the fork's base onto the upstream
+python -m bastler.maintenance restack         # integrate every moved parent, publish, report
+python -m bastler.maintenance promote         # build and record every upstream link
 ```
 
 Each prints what it did and exits with the same statuses as the whole pass. Run `--help` for a
@@ -267,7 +315,7 @@ Never move commits from memory, and never judge the move yourself. The executor 
 it makes; you invoke this only for a push you are making yourself:
 
 ```bash
-python .claude/stack/stack.py check-move \
+python -m bastler.stack check-move \
   --action push --source <branch> --destination <branch> --destination-remote <fork-remote>
 ```
 

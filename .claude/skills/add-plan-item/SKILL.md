@@ -64,7 +64,7 @@ The rule is in `${SCOPE_DECISION_DOCUMENT}` — read it rather than re-deriving
 it here. Gather its evidence in one call:
 
 ```bash
-python3 "${CHECK_SCOPE_OVERLAP_SCRIPT}" \
+python3 -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
     --base <base-branch> \
     --path <path> [--path <path> ...] \
     --candidate '<item-id-or-title>=<branch>' [--candidate ... ]
@@ -118,8 +118,9 @@ it" leaves the session to improvise the part most likely to lose work.
 `plan.yaml` directly if this session stewards that plan, otherwise propose it on
 the plan's `tracking_issue` — `${PLANS_DIR}/README.md`'s "Proposing structural
 changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}`
-and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
-so no published dashboard is older than the manifest behind it.
+and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn:
+follow `${MANIFEST_STALENESS_DOCUMENT}`, which is where that rule and the reason
+for it live rather than being restated once per skill.
 
 **If the outcome is a new item**, `${PLAN_ITEM_BOOTSTRAP_SCRIPT}`'s `record`
 operation writes its `plan.yaml` entry and `roadmap.md` section and runs the save

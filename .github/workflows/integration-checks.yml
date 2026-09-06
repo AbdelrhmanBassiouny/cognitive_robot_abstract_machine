@@ -1,0 +1,75 @@
+name: Integration checks
+
+# Runs the reproduction tests that record a break between two branches that merge
+# cleanly, and lifts the block on every branch whose reproductions now pass.
+#
+# Such a break never makes either pull request conflicted, so nothing GitHub reports
+# can clear the label that blocks the breaking branch. A passing reproduction is the
+# only evidence that can, and this is where it is read.
+#
+# Kept out of ci.yml because it needs a workflow_dispatch trigger of its own and runs
+# on the tooling dependencies alone rather than the docker matrix. It is not a build's
+# verdict: on a healthy tree no reproduction is recorded at all, so this job has
+# nothing to say about whether the tree is good. The candidate's full ci.yml run is
+# what judges a build.
+#
+# Runs unchanged in any fork - the labels come from the package's own stack.toml and
+# the repository from the runner's own context, so no repository is named here.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  reproductions:
+    name: Run the recorded breaks and clear the fixed ones
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the tooling dependencies
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          pip install pytest "./${BASTLER_PACKAGE_DIRECTORY}"
+
+      # Collected over the package's test directory rather than the repository root:
+      # the root loads every conftest, the robotics stack's included, and that one
+      # imports numpy - so a runner carrying the tooling dependencies alone dies during
+      # collection before it reaches a reproduction at all. This is the same directory
+      # ci.yml's tooling job names, because it installs the same dependencies. A
+      # reproduction that has to live inside a robotics package is therefore not
+      # collected here and its branch stays blocked, which is the safe direction and
+      # the limit this job was scoped with.
+      - name: Run every recorded reproduction
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          set +e
+          python -m pytest \
+            -p bastler.integration_reproduction \
+            --reproduction-report="${RUNNER_TEMP}/reproductions.json" \
+            -m integration_conflict \
+            "${BASTLER_TESTS_DIRECTORY}" --confcutdir="${BASTLER_TESTS_DIRECTORY}"
+          status=$?
+          set -e
+          # 0: every recorded break is fixed. 1: at least one still reproduces, which
+          # is what its branch is already blocked for. 5: nothing marked, which is
+          # what a tree with no recorded break looks like. None of the three is this
+          # job failing; anything else is.
+          case $status in 0 | 1 | 5) ;; *) exit $status ;; esac
+
+      - name: Lift the block on every branch whose break is fixed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          python -m "${INTEGRATION_MODULE}" clear-fixed-breaks \
+            --report "${RUNNER_TEMP}/reproductions.json" --json

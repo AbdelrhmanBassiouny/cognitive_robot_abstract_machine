@@ -115,12 +115,12 @@ git commit --allow-empty -m "Bootstrap <item-id>"
 git push -u origin <branch>
 # then create the draft pull request with your GitHub tool, and:
 source .claude/hooks/resolve-personal-notes-config.sh
-python3 "${PLAN_ITEM_BOOTSTRAP_SCRIPT}" open \
+python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open \
     --plan <plan-id> --item <item-id> \
     --branch <branch> --base <base-branch> \
     --session <this session's url> \
     --pull-request-number <number>
-python3 "${PLAN_ITEM_BOOTSTRAP_SCRIPT}" record \
+python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record \
     --plan <plan-id> --item <item-id> \
     --status in_progress --roadmap-section <file>
 ```
@@ -170,6 +170,15 @@ can call the `Artifact` tool — the script's report hands the command back
 rather than pretending it ran. Do not skip it: a published dashboard that is
 older than the manifest behind it is the exact staleness this step exists to
 close.
+
+### Keep it current for the rest of the work
+
+This step is one instance of a rule that holds for every later transition too —
+a pull request number arriving, a blocker appearing, a status changing, a
+description that stops matching. Follow `${MANIFEST_STALENESS_DOCUMENT}`: write
+the manifest and republish before carrying on, not at the end. `update` is the
+operation for a field that changes without deserving a roadmap section, and
+`check` reports what local git already contradicts.
 
 In `plan` mode the skill ends here. Whether to implement the approved plan
 in this session or a fresh one is the user's call, made after they see it.
