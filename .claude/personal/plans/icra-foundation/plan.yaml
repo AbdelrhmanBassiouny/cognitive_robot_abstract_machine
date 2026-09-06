@@ -58,9 +58,22 @@ items:
       which is right: #236's hole centres land on the six real openings and the pre-#236 centres
       land on bare wood. So the code is right and the docstrings' measurements are stale - but
       against the corrected layout the cube stands 50.3 mm from the square hole and the cylinder
-      51.6 mm, so no radius separates them, and the cylinder is 5 mm to that hole's left rather
-      than its right. Two of the four have no reach and no two sides left to ask about, so they
-      need a different hole or a different pair, which is a design call about the perception story.
+      51.6 mm, so no radius separates them, and the cylinder is 5 mm to that hole's left rather than
+      its right.
+
+      Measured again on e6c665cec 2026-09-06, over all six holes rather than the square one: the
+      left-right axis separates the two pieces from no hole on this board, read from the camera or
+      from the world, because no hole's y lies between them (cube y=0.0634, cylinder y=0.0231, holes
+      at 0.0182, 0.0189, 0.1053, 0.1060, 0.1960 and 0.1968). Only front-back in the world and
+      up-down in the picture do, and every hole affords both, since the cube stands in front of all
+      six and above all six on screen while the cylinder stands behind and below all six. So three
+      of the four need a different hole or a different pair, not two:
+      test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen reads right-of the
+      square hole as well and cannot be re-measured either. The fourth,
+      test_the_demonstration_states_its_way_down_to_the_cube_alone, is not a test change at all -
+      what the corrected layout leaves both pieces on is
+      watch_narrowing.look_for_the_cube_on_the_lid's own left-of the square hole, and the sequence
+      the test asserts is still the right one.
     - >-
       The experiments job is red on a name collision the convergence created, and clearing it is a
       call about vocabulary rather than a merge resolution. Two dataclasses are called RecordedLook:
