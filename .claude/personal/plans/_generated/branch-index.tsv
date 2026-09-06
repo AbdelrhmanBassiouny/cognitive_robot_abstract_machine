@@ -25,6 +25,10 @@ claude/icra-experiments-scenario-domain-n7zwpr	icra-foundation
 claude/montessori-results-recording-jnrgfy	icra-foundation
 claude/icra-experiments-ormatic-episodes-ib9lr3	icra-foundation
 claude/plan-item-kickoff-eql-episodes-hjel80	icra-foundation
+claude/integration-priority-labels	integration-tip-selection
+claude/ready-tooling-integration-fkd5b5	integration-tip-selection
+claude/pipeline-relocation-collision-6gehio	integration-tip-selection
+claude/fork-pr-integration-conflicts-7oeulp	integration-tip-selection
 claude/episode-replayed-world-kickoff-6ye5bb	knowledge-directed-expectation
 claude/plan-item-kickoff-expectations-2zvpmn	knowledge-directed-expectation
 perception_robokudo_detector	knowledge-directed-expectation

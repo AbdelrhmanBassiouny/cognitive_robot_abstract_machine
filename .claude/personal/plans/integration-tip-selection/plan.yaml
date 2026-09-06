@@ -1,0 +1,98 @@
+schema_version: 1
+id: integration-tip-selection
+title: Which tips the integration build takes, and what it says about the rest
+description: >
+  The integration build's selection step, split out of stack-maintenance once that plan reached its
+  size budget. Which of two colliding tips a build keeps, decided by what a branch is rather than by
+  which pull request happened to number lower; a tip refused outright when merging it would take the
+  build's own pipeline out of the tree; and a comment on every branch a build left out, so the reason
+  is readable instead of being rediscovered days later.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 102
+
+waves:
+  - id: selection
+    name: The selection step
+    description: >
+      One phase. All four items are already in flight on top of the integration branch itself, so
+      nothing here waits on a wave boundary - the ordering that exists is stacking, in depends_on.
+
+tracks:
+  - id: tips
+    name: Which tips a build takes
+    wave: selection
+    description: The order they are tried in, what decides that order, and the one a build declines to merge at all.
+  - id: reports
+    name: What a build says about the rest
+    wave: selection
+    description: What a branch's owner is told when a build leaves that branch out.
+
+items:
+  - id: order-tips-by-priority
+    title: Order tips by what a branch is, not by its pull request number
+    branch: claude/integration-priority-labels
+    pull_request_number: 281
+    track: tips
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01JXqGieiBr1kGogq8KKKrmP
+    notes: >
+      `tips_of()` merged strictly by ascending pull request number, so a collision between two
+      in-flight branches was decided by nothing connected to importance. Adds a `BranchPriority` tier
+      read from the `bug` and `tooling` labels and sorts by `(priority, pull_request_number)`.
+      Stacked on stack-maintenance's `integration-branch` (#154), which introduces every file it
+      touches - the cross-plan base cannot be expressed in `depends_on`.
+      Flagged at intake 2026-09-06 and kept as a real item on the user's call: its whole 179-line
+      diff edits only #154's files, which is the shape of a fold, but it adds a mechanism rather than
+      correcting #154, #154 is coherent without it, and #284 already stacks on it.
+      The label `tooling` that #281's own description asks the repo owner to create by hand now
+      exists - all four items in this plan carry it.
+
+  - id: derive-tooling-label
+    title: Read a pull request's tooling label off the files it changes
+    branch: claude/ready-tooling-integration-fkd5b5
+    pull_request_number: 284
+    track: tips
+    depends_on: [order-tips-by-priority]
+    status: in_progress
+    session: https://claude.ai/code/session_013L7NYMym2QDk2Z7U66PB3z
+    notes: >
+      The priority tier above is only as good as the label feeding it, and the label is applied by
+      hand - so a branch nobody labelled loses a collision it should have won. `changed_paths.py`
+      classifies each changed path as tooling, shared or software, and a pull request is a tooling
+      change when it changes tooling paths and nothing outside them; `maintenance.py label-tooling`
+      and a workflow write the verdict in both directions on every push. Measured against the fork's
+      100 open pull requests: 27 labelled, none dropped.
+
+  - id: refuse-pipeline-losing-tip
+    title: Refuse a tip whose merge would take the pipeline out of the tree
+    branch: claude/pipeline-relocation-collision-6gehio
+    pull_request_number: 285
+    track: tips
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01Q7bjPFbn4b4p8zJ3n4rVrt
+    notes: >
+      A live failure, not a hypothetical: the scheduled refresh failed six runs in a row on
+      `can't open file .claude/stack/integration.py`, because a tip carrying #185's relocation was
+      merged first and the pipeline then re-invoked itself from a tree that no longer held it. Every
+      tip that would have restored the pipeline was skipped against that one in the same build.
+      `IntegrationBuild.merge()` now discards a merge that costs a pipeline path and reports the tip
+      SKIPPED. Carries the `bug` label; stacked on stack-maintenance's `integration-branch-ci-verdict`
+      (#211), a cross-plan base `depends_on` cannot express.
+
+  - id: report-left-out-branches
+    title: Comment on the branches a build leaves out, and link the ones it names
+    branch: claude/fork-pr-integration-conflicts-7oeulp
+    pull_request_number: 282
+    track: reports
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_019xM1h7GZkD9fFcJaqdTjKd
+    notes: >
+      Every reason a build left a branch out other than a named integration conflict was silent, and
+      the conflict comment named the branch it breaks by bare name only. New `integration_left_out.py`
+      comments once per branch per reason behind a purely informational `integration-left-out` label
+      that clears on rejoin, wired through `build --report-left-out` and passed only by the scheduled
+      rebuild. It judges nothing; that stays `/integration-conflict-triage`'s job. Needs the
+      `integration-left-out` label created on the fork by hand. Stacked on #211, as above.
