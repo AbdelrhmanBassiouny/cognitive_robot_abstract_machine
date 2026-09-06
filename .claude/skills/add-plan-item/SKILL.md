@@ -136,3 +136,10 @@ Flag explicitly, never silently paper over:
 
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
+
+## 7. Once the outcome is carried out, the manifest leads
+
+Adding an item, folding one into another and changing a plan's shape are each a
+transition, so `${MANIFEST_STALENESS_DOCUMENT}` governs when they get written:
+the manifest first and the dashboard republished in the same turn, not once the
+work the outcome describes is finished.
