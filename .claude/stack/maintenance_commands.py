@@ -17,6 +17,7 @@ from maintenance_fast_forward import fast_forward
 from maintenance_git_commands import GitCommandRunner
 from maintenance_github import GitHubRepository
 from maintenance_promotion import clear_spent_promotion_labels, promote
+from maintenance_reparent_notice import notify_reparents
 from maintenance_report import (
     MaintenanceExitCode,
     MaintenanceReport,
@@ -297,6 +298,7 @@ class RunReportCommand(MaintenanceCommand):
             promote(stack, fork),
             clear_spent_promotion_labels(stack, fork),
         )
+        notify_reparents(report.reparents, stack, fork)
         BOARD_PATH.unlink(missing_ok=True)
         if arguments.json:
             print(report.as_json())

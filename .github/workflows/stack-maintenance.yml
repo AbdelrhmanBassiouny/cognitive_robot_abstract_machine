@@ -1,0 +1,97 @@
+name: Stack maintenance
+
+# Deterministic replacement for the scheduled LLM Routine "PR Stack Monitor and Update"
+# (trig_01N79jHmLo3bSbg8pLM6MNTB, retired once this has run one green cycle): performs
+# `.claude/stack/maintenance.py run-report`'s happy path with nobody watching -
+# fast-forwarding the fork's base onto the upstream, restacking every branch whose
+# parent moved, and promoting every approved unblocked branch. A restack conflict
+# already reports itself (a comment plus `needs-resolution`, via
+# `maintenance_restack_steps.conflict_report`); the one write this credential is
+# refused - retargeting a pull request's base once its own base has landed - is
+# reported the same way by `maintenance_reparent_notice.notify_reparents`, for an
+# on-demand session to finish. See `maintenance.py`'s own module docstring: `run-report
+# --json` exists precisely so a scheduled job with no model in the loop can emit it
+# directly.
+#
+# Why these triggers: `pull_request: closed` fires whether a pull request merges or
+# closes unmerged, and either way can drop a branch from the open set - the #40/#41
+# orphan pattern traced in `routine-cutover`'s own notes - so a full re-sweep runs on
+# that one event, not only the closed pull request's own branch. `schedule` keeps the
+# fork's base fresh between pull request events. `workflow_dispatch` is for a manual
+# run, including the one green cycle this item's own gate is waiting on.
+#
+# Which branch carries this file decides which of those triggers actually reach it,
+# the same as `plan-dashboards.yml`: `workflow_dispatch` is offered only from the
+# repository's default branch, a `pull_request` run fires only for a pull request whose
+# base already carries this file, and `schedule` runs from wherever it is declared.
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # A pass moves commits (fast-forward, restack); two overlapping runs could push past
+  # each other, so a superseded run waits rather than being cancelled mid-push.
+  group: stack-maintenance
+  cancel-in-progress: false
+
+permissions:
+  # contents: write for the fast-forward and every restack push; pull-requests: write
+  # for the label and comment writes (promotion, conflict and reparent notices).
+  contents: write
+  pull-requests: write
+
+jobs:
+  maintain:
+    name: Run the maintenance pass
+    # A pull request from a fork gets a read-only token, which can write neither the
+    # branches nor the labels this pass changes.
+    if: >-
+      github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: fast-forward and restack both push, and the personal-notes
+          # fetch `stack.py`'s configuration resolution makes on every call cannot run
+          # from a shallow clone either - the same reasoning `plan-dashboards.yml`
+          # already documents for its own pushes.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve the upstream remote
+        # A plain checkout carries only this repository's own remote. stack.py decides
+        # which remote is which by the repository each URL names rather than by name,
+        # and hands back the exact command to add whichever one is missing - see
+        # stack.py's RemoteResolution.upstream_setup_command and the SKILL.md step this
+        # mirrors, rather than hardcoding a remote name or URL here.
+        run: |
+          set -euo pipefail
+          SETUP_COMMAND="$(python3 .claude/stack/stack.py configuration \
+            | awk -F'\t' '$1 == "upstream_setup_command" { print $2 }')"
+          if [ -n "${SETUP_COMMAND}" ]; then
+            eval "${SETUP_COMMAND}"
+          fi
+
+      - name: Run the maintenance pass
+        env:
+          # gh is preinstalled on the runner, and this is the only credential either it
+          # or the executor's own GitHub client needs - see maintenance_constants.py's
+          # CREDENTIAL_VARIABLES.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The identity every push this pass makes is committed under.
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          python3 .claude/stack/maintenance.py run-report --json

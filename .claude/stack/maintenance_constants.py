@@ -29,10 +29,10 @@ Matches the session link a pull request description carries, which is the only c
 for telling a branch's owner that their branch needs them.
 """
 
-CONFLICT_COMMENT_PREFIX = "🔴 ROUTINE - NEEDS RESOLUTION:"
+NEEDS_RESOLUTION_COMMENT_PREFIX = "🔴 ROUTINE - NEEDS RESOLUTION:"
 """
-Opens the comment a conflict is reported in, so the branch's owner can find every one of
-them at a glance.
+Opens a comment reporting anything a branch's owner alone can resolve - a restack
+conflict or a pending reparent - so every one of them can be found at a glance.
 """
 
 MERGEABLE_STATE_WITH_CONFLICTS = "dirty"

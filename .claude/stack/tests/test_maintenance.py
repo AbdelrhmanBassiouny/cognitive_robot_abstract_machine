@@ -37,6 +37,7 @@ from stack import (
     Stack,
     build_stack,
     load_board,
+    reparents,
 )
 
 import maintenance_commands
@@ -74,6 +75,7 @@ from maintenance_promotion import (
     description_with_promotion_link,
     promote,
 )
+from maintenance_reparent_notice import notify_reparents, reparent_notice
 from maintenance_report import (
     MaintenanceExitCode,
     MaintenanceReport,
@@ -1216,6 +1218,111 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
     assert fork.label_writes == [RecordedLabelWrite(41, ())]
 
 
+# %% reparent notification
+
+
+def a_landed_parent_and_unreparented_child(fork_checkout: ForkCheckout) -> None:
+    """
+    Publish ``a-parent`` and, on top of it, ``a-child`` - then land ``a-parent`` on the
+    upstream base directly, so the derived stack reads it as landed while ``a-child``'s
+    pull request still names it as the base.
+
+    :param fork_checkout: The checkout to build the branches in and land the parent on.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.run_git("push", "--quiet", "cram2", f"a-parent:{UPSTREAM_BASE}")
+    fork_checkout.run_git("fetch", "--quiet", "cram2")
+
+
+def the_board_with_only_the_child(
+    labels: list[str] | None = None,
+) -> list[PullRequest]:
+    """
+    :param labels: The labels the child's pull request carries.
+    :return: A board naming only the child - its parent's own pull request closed
+        rather than merged, which leaves the board with no entry for it at all.
+    """
+    return [
+        PullRequest(
+            number=41, head="a-child", base="a-parent", draft=False, labels=labels or []
+        )
+    ]
+
+
+def test_a_reparent_is_labelled_and_reported(fork_checkout: ForkCheckout):
+    """
+    Retargeting a base is the one write this pass cannot perform itself; the branch's
+    owner has to be told, the same treatment a restack conflict already gets.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    board = the_board_with_only_the_child()
+    board[0].session = "https://claude.ai/code/session_01ABCdef"
+    stack = a_stack(fork_checkout, board)
+    fork = RecordingPullRequests()
+
+    notified = notify_reparents(reparents(stack), stack, fork)
+
+    assert [reparent.branch for reparent in notified] == ["a-child"]
+    assert fork.label_writes == [
+        RecordedLabelWrite(41, (make_configuration().needs_resolution_label,))
+    ]
+    comment = fork.comments[0]
+    assert comment.pull_request_number == 41
+    assert "a-child" in comment.body
+    assert f"`{UPSTREAM_BASE}`" in comment.body
+    assert "https://claude.ai/code/session_01ABCdef" in comment.body
+
+
+def test_a_reparent_notice_keeps_every_label_the_branch_already_carried(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The write replaces the whole set, so a label this pass knows nothing about has to be
+    sent back with it - the same rule a restack conflict's label write already follows.
+
+    Seeded on the fork stand-in's own current-label channel, not the board: the label
+    read has to survive a write another step made since the board was exported, which is
+    exactly what that channel stands for.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    stack = a_stack(fork_checkout, the_board_with_only_the_child())
+    fork = RecordingPullRequests(labels={41: [A_LABEL_THIS_TOOL_NEVER_WRITES]})
+
+    notify_reparents(reparents(stack), stack, fork)
+
+    assert fork.label_writes == [
+        RecordedLabelWrite(
+            41,
+            (
+                A_LABEL_THIS_TOOL_NEVER_WRITES,
+                make_configuration().needs_resolution_label,
+            ),
+        )
+    ]
+
+
+def test_no_reparents_writes_nothing(fork_checkout: ForkCheckout):
+    a_parent_and_child(fork_checkout)
+    stack = a_stack(fork_checkout, the_board())
+    fork = RecordingPullRequests()
+
+    assert notify_reparents(reparents(stack), stack, fork) == ()
+    assert fork.label_writes == []
+    assert fork.comments == []
+
+
+def test_a_reparent_notice_names_no_session_when_the_description_has_none(
+    fork_checkout: ForkCheckout,
+):
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    stack = a_stack(fork_checkout, the_board_with_only_the_child())
+    branch = next(branch for branch in stack.branches if branch.name == "a-child")
+
+    body = reparent_notice(branch, reparents(stack)[0])
+
+    assert "names no session to address" in body
+
+
 # %% promotion
 
 
@@ -1392,6 +1499,29 @@ def test_a_whole_pass_leaves_no_board_behind(
     )
 
     assert not board_path.exists()
+
+
+def test_a_whole_pass_reports_a_pending_reparent(
+    fork_checkout: ForkCheckout, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    ``run-report`` is what a scheduled Action calls with nobody watching, so a pending
+    reparent has to reach the branch's owner from inside the pass itself - a run summary
+    nobody without a session reads is not a notice.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    monkeypatch.setattr(maintenance_commands, "BOARD_PATH", tmp_path / "board.json")
+    maintenance_pass = AlreadyResolvedPass.over(
+        fork_checkout, the_board_with_only_the_child()
+    )
+
+    RunReportCommand().run(maintenance_pass, argparse.Namespace(json=True))
+
+    reparent_write = maintenance_pass.recorded_fork.label_writes[-1]
+    assert reparent_write == RecordedLabelWrite(
+        41, (make_configuration().needs_resolution_label,)
+    )
+    assert "a-child" in maintenance_pass.recorded_fork.comments[0].body
 
 
 # %% the exit status every command derives from what it left behind
