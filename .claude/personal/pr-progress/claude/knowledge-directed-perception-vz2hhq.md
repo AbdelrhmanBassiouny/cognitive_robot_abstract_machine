@@ -73,12 +73,42 @@ Both were put to the developer and both took the recommended option:
   rules: a one-pixel `RgbdFrame` that does or does not carry depth, which is everything
   a rule reads of a picture.
 
+## Review round of 2026-09-06 (`0098923a1`, pushed)
+
+Two threads, one change, plus a mid-turn question that changed the tests.
+
+- r3942253246 asked for the RDR to take a pre-fitted tree instead of a family inventing
+  example cases. `EQLSingleClassRDR.state_rules` + `StatedRule`; alternatives in stated
+  order, first-holding-condition wins; same tree `fit_case` grows. Every invented
+  example deleted, the one-pixel `RgbdFrame` included. Left **open** on purpose: I asked
+  a question in it (see the hazard below).
+- r3942264406 named the duplication between `surface_finding` and `detector_choice`; it
+  was three files, `look_choice` too. All three now subclass krrood's `DetectorChoice`,
+  which subsumes `state_the_detectors_own_condition`. **Resolved.**
+- The chat question ("can't we do the corner cases by fitting on the captures?") is
+  answered by checking rather than authoring: `SurfaceRules` is put to all six shipped
+  captures, `DetectorRules` to the two surfaces the modelled scene states, each fitted
+  with the detector it should get and each leaving the tree the size it was. Authoring
+  from a run's own data was rejected because the pipeline builds its rules before any
+  frame exists and the surfaces differ per setup — the colour-blob rule would not exist
+  at all on `recorded_setup`.
+
+468 passed, 1 skipped, 16 xfailed (experiments, was 461); 1569 passed, 3 skipped
+(`test_eql` + `test_eql_rdr`, was 1563). PR body updated; still a draft.
+
 ## Next
 
-Nothing outstanding on the branch. It is a draft; CI has not been read for this push.
+Nothing outstanding on the branch. CI has not been read for this push.
 
 ## Blocked / to report
 
+- A bare shared attribute node used as one rule's *whole* condition, together with a
+  second rule wrapping that same node, splices into a structure `classify` never returns
+  from. Sharing an attribute as a *subexpression* is fine and is now pinned by a test.
+  Fitting escapes it only by building each condition at insertion time, so it is the
+  expression machinery rather than `state_rules`. Worked around in the krrood mimic
+  (`look.depth_is_returned == True`); whether `insert_at`'s cleaning should cover the
+  bare case is put back to the developer on r3942253246.
 - `subscribe_pr_activity` on tracking issue #201 was refused by the permission
   classifier, so this session will not see structural changes announced there.
 - `.claude/hooks/plan_item_bootstrap.py`'s `apply_item_fields` writes a rewritten
@@ -86,3 +116,6 @@ Nothing outstanding on the branch. It is a draft; CI has not been read for this 
   invalid YAML and failing both `open` and `record`. Pre-existing (reproduces on
   untouched items). Worked around by hand-patching; wants its own bug-fix PR off `main`.
 - `test_each_lib` is red across the whole stack from #222 onward, waiting on #251.
+- `test_real_stretch_demo_process_boundary` errors in this container
+  (`stretch_standalone.py` cannot start here); it fails the same way on an untouched
+  tree.
