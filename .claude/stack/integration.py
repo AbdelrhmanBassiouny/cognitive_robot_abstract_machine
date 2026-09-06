@@ -9,6 +9,7 @@ that holds all of them at once::
 
     python .claude/stack/integration.py build            # build, then run the suite on it
     python .claude/stack/integration.py build --restack  # bring stale tips forward first
+    python .claude/stack/integration.py build --tooling  # only the tips that change this tooling
     python .claude/stack/integration.py build --json     # the build as one document
 
 The branch exists to be built *from*, not to be history. It is regenerated from scratch

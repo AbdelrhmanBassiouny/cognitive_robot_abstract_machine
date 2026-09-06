@@ -21,6 +21,7 @@ from integration_run import IntegrationCommand, IntegrationRun
 from integration_selection import build_branch_name, stack_to_build
 from integration_suite import TestCommandNotConfiguredError
 from integration_tips import ResolutionProvenance
+from integration_tooling import ToolingFilter
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,15 @@ class BuildCommand(IntegrationCommand):
             help="skip the suite that would otherwise be run on the finished branch",
         )
         parser.add_argument(
+            "--tooling",
+            action="store_true",
+            help=(
+                "carry only the tips whose pull request is labelled a change to this "
+                "workflow's own tooling; everything else is reported rather than "
+                "dropped"
+            ),
+        )
+        parser.add_argument(
             "--json",
             action="store_true",
             help="emit the machine-readable document rather than a summary",
@@ -71,6 +81,9 @@ class BuildCommand(IntegrationCommand):
         """:param run: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
+        tooling = ToolingFilter.over(
+            run.configuration, only_the_tooling=arguments.tooling
+        )
         test_command = self._test_command(run.configuration, arguments.run_tests)
         fork = run.fork()
         run.refresh_remotes()
@@ -81,6 +94,7 @@ class BuildCommand(IntegrationCommand):
             build_branch=build_branch_name(datetime.now(timezone.utc)),
             provenance=ResolutionProvenance.read(run.provenance_path()),
             test_command=test_command,
+            tooling=tooling,
         )
         if arguments.json:
             print(report.as_json())

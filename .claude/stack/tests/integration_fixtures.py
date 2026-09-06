@@ -27,6 +27,7 @@ from integration_tips import (
     ResolutionProvenance,
     TipStatus,
 )
+from integration_tooling import ToolingFilter
 
 from test_maintenance import (
     ForkCheckout,
@@ -164,6 +165,7 @@ def build(
     provenance: ResolutionProvenance | None = None,
     test_command: str | None = None,
     build_branch: str = A_BUILD_BRANCH,
+    tooling: ToolingFilter | None = None,
 ) -> IntegrationReport:
     """
     Run one build against the scratch fork.
@@ -173,6 +175,8 @@ def build(
     :param provenance: Who authored each recorded resolution.
     :param test_command: The suite to run on the finished branch, or ``None`` to skip.
     :param build_branch: The branch to build onto.
+    :param tooling: Whether the build was asked for the tooling alone, or ``None`` for a
+        build carrying everything.
     :return: The build report.
     """
     return build_integration(
@@ -181,6 +185,7 @@ def build(
         build_branch=build_branch,
         provenance=provenance or ResolutionProvenance({}),
         test_command=test_command,
+        tooling=tooling,
     )
 
 
