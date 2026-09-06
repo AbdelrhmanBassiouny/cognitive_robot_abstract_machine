@@ -169,3 +169,52 @@ The move to a named module had a second effect the round did not set out to get.
 fixture existed *only* because `conftest` is not a module name a test can safely import by - four
 test directories share one path under CI's single pytest run, and its docstring said so. With the
 type in a module with its own name, the fixture is gone and the tests import the class.
+
+## `routine-cutover` resumed 2026-09-06, and what building it turned out to need
+
+Resolved from `in_progress` with no branch: the recorded gate ("stack tooling on
+cram2/main and fork main fast-forwards") had cleared unnoticed - `cram2/main` and this
+fork's `main` are the identical commit (`f6a53cf9`), both carrying `.claude/stack/`. The
+deterministic executor the endgame calls for (`maintenance.py`) was already built and
+merged via #139, whose own notes had already answered the base-change-credential
+question this item's notes had left open for the Action to verify: label writes,
+conflict comments and description writes are all available to the executor's own
+token; only a base-branch retarget needs a session, and the executor already reports it
+as `reparents` rather than attempting it.
+
+The one gap: nothing called that executor, and nothing notified when it found a
+pending reparent - every other kind of residue (a restack conflict) already self-reports
+via `conflict_report()`/`needs-resolution`, but `reparents` only ever reached a run
+summary. Opened as PR [#280](https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/280),
+branch `claude/stack-maintenance-action`:
+
+- `maintenance_reparent_notice.py`: `reparent_notice()`/`notify_reparents()`, mirroring
+  `conflict_report()`. Its label write reads the fork's *current* labels
+  (`fork.pull_request(number)`), not the stack's own snapshot - promotion and restack
+  both run first in `run-report` and can have written a label since the snapshot was
+  taken, the same staleness class `promote()` already reads around (and the one the
+  executor's own #139 notes recorded fixing twice already).
+- `.github/workflows/stack-maintenance.yml`: runs `maintenance.py run-report --json` on
+  `pull_request: closed` (the widened, event-triggered re-sweep this item's notes
+  already specified), `schedule`, and `workflow_dispatch`. Resolves the upstream remote
+  via `stack.py configuration`'s own `upstream_setup_command` rather than hardcoding a
+  remote name, and needs no new secret - `GH_TOKEN`/`GITHUB_TOKEN` from
+  `secrets.GITHUB_TOKEN` is what the executor already reads.
+- Renamed `CONFLICT_COMMENT_PREFIX` to `NEEDS_RESOLUTION_COMMENT_PREFIX` (one rename,
+  one new caller) rather than defining a second, identical prefix constant.
+
+**Still gated, per this item's own recorded gate ("one green Action cycle flips this
+done") - not done in this PR:** deleting the live Routine
+(`trig_01N79jHmLo3bSbg8pLM6MNTB`), and flipping this item to `done`. Both wait for a
+verified run of the new Action once it is on the default branch - `workflow_dispatch`
+is only offered there, the same constraint `stack-board-single-site`'s notes already
+recorded for the Pages site.
+
+**A live coordination point, not a blocker, for whoever next works `stack-maintenance`'s
+`promotion-summaries-and-table` (#162):** that item is still adding session-facing
+features to the pass an LLM session runs, and `.claude/skills/stacked-pr-maintenance/routine-prompt.md`
+(merged 2026-08-13) documents registering exactly the scheduled Routine this item
+retires. Its own open question - "an already-registered scheduled run's notification
+setting has no field on the update API" - resolves itself once this item deletes that
+registration; `routine-prompt.md`'s own guidance becomes dead weight at the same time,
+worth a look once this lands.
