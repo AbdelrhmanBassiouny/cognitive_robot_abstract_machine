@@ -193,11 +193,12 @@ items:
 
   - id: new-plan-when-full
     title: "Open a new plan instead of growing a full one"
-    branch: null
-    pull_request_number: null
+    branch: claude/plan-size-limits-newplan-ukbbri
+    pull_request_number: 277
     track: gate-and-skills
     depends_on: [size-budget-and-report]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01GhTbjxmunfCd5vuXRid6m9
     notes: >
       /plan-create and /add-plan-item read the budget and route new work to a new
       plan when the plan they would otherwise grow is at it. Only needs the
