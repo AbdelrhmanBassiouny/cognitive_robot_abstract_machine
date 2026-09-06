@@ -11,7 +11,7 @@ or branch. Takes a description of something to build and decides where it
 belongs, before any branch exists to regret. **This skill never writes code,
 creates a branch, or pushes anything** — its only output is a proposed plan.
 
-There are exactly four outcomes, and step 5 picks one:
+There are exactly four outcomes, and step 6 picks one:
 
 1. **Fold** it into an unlanded item or branch that already owns this work.
 2. **New item** in a plan that already exists.
@@ -83,17 +83,48 @@ compare what those branches are *for* against what is being described. A
 match here outranks the path check: same purpose is the same work, whatever
 the files are called.
 
-## 5. Choose exactly one outcome
+## 5. Check whether a covering plan still has room
+
+A plan's `description` covering the work is not enough by itself — it also has
+to have room left. For every plan found in step 2 whose `description` covers
+the work, measure its *current* manifest and roadmap (already fetched off
+`FETCH_HEAD`) against the size budget:
+
+```bash
+git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/plan.yaml" > /tmp/plan.yaml
+git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/roadmap.md" > /tmp/roadmap.md 2>/dev/null || : > /tmp/roadmap.md
+python3 -m "${PLAN_SIZE_CHECK_MODULE}" --manifest /tmp/plan.yaml --roadmap /tmp/roadmap.md
+```
+
+`is_full: true` disqualifies that plan for growth, whatever its `description`
+says — cramming one more item into a full plan is exactly the state the
+plan's size budget exists to keep it out of, whether or not the save path is
+already enforcing that, so proposing it here only moves the problem to
+whoever next edits that plan. This reads the plan's size as it stands today,
+not a projection that also counts the item being added — the not-yet-written
+item's own size isn't known yet, and a plan already at the limit has no room
+regardless of how small the addition would be.
+
+Check every covering plan this way before ruling out **New item in an
+existing plan** entirely — a plan qualifies only if it fits both ways, topic
+*and* room; a full plan is disqualified even if its `description` fits, and a
+plan with room is never a candidate if its `description` doesn't cover the
+work in the first place. Only when no plan satisfies both does the outcome
+fall through to **New plan**.
+
+## 6. Choose exactly one outcome
 
 - **Fold** — the work has nothing substantial left once the overlapping edits
   are removed, or a candidate is already building the same thing. Name the
   branch it goes on.
-- **New item in an existing plan** — it stands on its own and a plan's
-  `description` covers it. Name the plan, the track, the wave, and any real
-  `depends_on`.
-- **New plan** — it stands on its own, spans several pull requests or sessions,
-  and no existing plan covers it. Hand off to `/plan-create` via the `Skill`
-  tool rather than drafting a manifest here.
+- **New item in an existing plan** — it stands on its own, a plan's
+  `description` covers it, and step 5 found that plan not full. Name the plan,
+  the track, the wave, and any real `depends_on`.
+- **New plan** — it stands on its own, spans several pull requests or
+  sessions, and either no existing plan covers it or every plan that does is
+  already full (step 5). Hand off to `/plan-create` via the `Skill` tool
+  rather than drafting a manifest here — if the reason is a full plan rather
+  than no coverage at all, say so, citing the overrun step 5 found.
 - **No item at all** — one self-contained change, done in this session, that
   nothing else depends on. `plan-create`'s own guidance against over-modelling
   applies: a plan that tracks everything is a plan nobody reads.
@@ -102,7 +133,7 @@ If two outcomes remain genuinely open after steps 3 and 4, put the choice to
 the user with `AskUserQuestion`, giving the evidence for each rather than
 asking them to re-derive it.
 
-## 6. Propose the plan — plan mode, no code
+## 7. Propose the plan — plan mode, no code
 
 Enter plan mode and present, via `ExitPlanMode`, the chosen outcome and what
 follows from it. Cite where each part came from — the script's output, a
@@ -133,6 +164,8 @@ Flag explicitly, never silently paper over:
 - Paths that had to be guessed rather than derived in step 1.
 - A duplicate-intent match you are unsure about — say what looks the same and
   let the user settle it.
+- A covering plan step 5 ruled out for being full — name it and the overrun,
+  so the user can see why the work landed in a new plan instead.
 
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
