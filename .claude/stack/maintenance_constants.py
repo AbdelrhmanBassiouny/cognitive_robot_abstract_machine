@@ -12,6 +12,7 @@ Values a program derives for itself belong beside the code that derives them, no
 from __future__ import annotations
 
 import re
+from enum import IntEnum
 
 GITHUB_API_ROOT = "https://api.github.com"
 """
@@ -23,14 +24,27 @@ CREDENTIAL_VARIABLES = ("GH_TOKEN", "GITHUB_TOKEN")
 Environment variables read, in order, for the token the API calls authenticate with.
 """
 
-BASE_RETARGET_REFUSAL_STATUSES = frozenset({403, 422})
-"""
-The two status codes a base-branch retarget can come back with that a caller cannot act
-on but must fall back from: ``403`` (this credential is refused the write) and ``422``
-(the pull request is a member of a GitHub Stack, which must be moved through native
-Stack mechanics instead of a plain base change).
 
-Any other status is a genuine failure.
+class RetargetRefusal(IntEnum):
+    """
+    The two ways GitHub can refuse a base-branch retarget that a caller cannot act on
+    but must fall back from. Any other status is a genuine failure.
+    """
+
+    CREDENTIAL_REFUSED = 403
+    """This credential is refused the write."""
+
+    STACK_MEMBER = 422
+    """
+    The pull request is a member of a GitHub Stack, which must be moved through native
+    Stack mechanics instead of a plain base change.
+    """
+
+
+BASE_RETARGET_REFUSAL_STATUSES = frozenset(RetargetRefusal)
+"""
+Every status :class:`RetargetRefusal` names, as the set a caller checks a refused
+retarget's status against.
 """
 
 SESSION_LINK_PATTERN = re.compile(r"https://claude\.ai/code/session_[A-Za-z0-9_-]+")

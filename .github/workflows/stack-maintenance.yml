@@ -29,6 +29,20 @@ name: Stack maintenance
 # the same as `plan-dashboards.yml`: `workflow_dispatch` is offered only from the
 # repository's default branch, a `pull_request` run fires only for a pull request whose
 # base already carries this file, and `schedule` runs from wherever it is declared.
+#
+# Interaction with the regenerated integration branch (`integration-branch`/
+# `integration-branch-ci-verdict`, not yet on `main`): that pipeline opens its own,
+# non-draft pull requests to judge a build - candidates this pass must never restack or
+# promote as though they were ordinary stack members. The two ship as one landing: the
+# exclusion (`BoardExport.is_a_candidate`) lives in the same board export both a build
+# and this pass derive their work from, in the same pull request that starts opening
+# candidates - see that item's own notes ("the maintenance pass was adopting
+# candidates... the exclusion moved to the one place both readers derive their work
+# from"). So this workflow needs no change when that lands; it inherits the exclusion
+# through the shared module. The two can still fire on the same pull request event and
+# write concurrently, but to disjoint refs - a feature branch or the fork's own base
+# here, a separate build/pointer branch there - and a rebuild is regenerated from
+# scratch and self-limiting, so a race is benign rather than an interruption.
 
 on:
   pull_request:
