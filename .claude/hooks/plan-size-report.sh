@@ -43,7 +43,7 @@ fi
 # Every requirement is reported, and none is named here: the hooks'
 # requirements file is where a dependency is written down, so adding one there
 # is enough for this check to start covering it.
-MISSING_REQUIREMENTS="$(python3 "${PROJECT_ROOT}/${MISSING_REQUIREMENTS_SCRIPT}" \
+MISSING_REQUIREMENTS="$(python3 -m "${MISSING_REQUIREMENTS_MODULE}" \
   "${PROJECT_ROOT}/${HOOKS_REQUIREMENTS_FILE}")"
 if [ -n "${MISSING_REQUIREMENTS}" ]; then
   echo "Not installed: ${MISSING_REQUIREMENTS}" >&2
@@ -77,7 +77,7 @@ while IFS= read -r file_path; do
 done < <(git ls-tree -r --name-only FETCH_HEAD -- "${PLANS_DIR}")
 
 echo "=== Plan sizes on '${NOTES_BRANCH}' (remote '${ACTIVE_NOTES_REMOTE}') ==="
-python3 "${PROJECT_ROOT}/${PLAN_SIZE_BUDGET_SCRIPT}" \
+python3 -m "${PLAN_SIZE_BUDGET_MODULE}" \
   --plans-dir "${SCRATCH_DIR}" \
   --manifest-filename "${PLAN_MANIFEST_FILENAME}" \
   --roadmap-filename "${PLAN_ROADMAP_FILENAME}"
