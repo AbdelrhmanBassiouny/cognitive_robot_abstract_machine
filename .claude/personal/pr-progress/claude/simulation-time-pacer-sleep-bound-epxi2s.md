@@ -1,43 +1,48 @@
 # SimulationTimePacer.sleep() is unbounded
 
-**Status:** investigated; stopped for the developer's policy decision. No code
-written yet, no branch re-cut, no PR.
+**Status:** done and pushed. Folded into **#256** (`montessori_monitor_and_recording`,
+commit `9f3686d68`) rather than opened as its own PR - #256 is what introduces
+`SimulationTimePacer`, and removing these edits leaves nothing that stands alone. No new
+PR; #256's description was updated to match.
 
-## What the hazard actually is
+## What the hazard was
 
-`SimulationTimePacer.sleep()` (`giskardpy/src/giskardpy/executor.py`) polls
-`simulation_clock()` every 0.2 ms until simulated time reaches the next cycle,
-with no bound. `Executor.tick_until_end` calls it inside its tick loop, so the
-loop's only bound - a tick count - is never reached while `sleep()` blocks, and
-its `finally` cleanup never runs.
+`SimulationTimePacer.sleep()` polled `simulation_clock()` until simulated time reached
+the next cycle, with no bound. `Executor.tick_until_end` calls it inside its tick loop,
+so the loop's only bound - a tick count - was never reached while `sleep()` blocked, and
+its `finally` cleanup never ran.
 
-Introduced by **#256** (`montessori_monitor_and_recording`, open draft, based on
-#244 `sdt_segmind_krrood_from_fast_monitor`), not by #169 - #169 inherited it and
-lists it under Outstanding. It is not on `main`.
+## The policy the developer chose
 
-## Facts that decide the policy
+Option D: distinguish a held simulation from a dead one, rather than any wall-clock
+deadline. A deadline cannot tell them apart - `SortingRunControl._pause` freezes the same
+clock mid-motion and blocking there is correct - so the pacer now takes a
+`SimulationClock` reporting both the time and whether the simulation has stopped. A pause
+is waited out; a stop raises `SimulationStoppedError`.
 
-- The clock is `MultiSim.simulator.current_simulation_time`, advanced by the
-  simulator's own thread only while `SimulatorState.RUNNING`.
-- `SortingRunControl._pause()` calls `pause_simulation()` immediately when the
-  console asks, not at a checkpoint, so **the clock freezes mid-motion** while
-  the sorting thread is inside `tick_until_end`. A paused run is supposed to
-  block here.
-- `STOPPED` is terminal: `stop()`, viewer close (`VIEWER_IS_CLOSED`), a
-  constraint (`MAX_REAL_TIME` / `MAX_SIMULATION_TIME` / `MAX_NUMBER_OF_STEPS`),
-  or an exception on the sim thread. After it the clock never advances again.
-- So a wall-clock deadline alone **cannot tell a deliberate pause from a dead
-  simulation**; both look like "time stopped".
+## What landed
 
-## Next
+- `giskardpy/src/giskardpy/simulation_clock.py` (new): the `SimulationClock` ABC.
+- `giskardpy/data_types/exceptions.py`: `SimulationStoppedError`.
+- `giskardpy/executor.py`: the pacer binds to `SimulationClock`; `_wait_for_the_next_cycle`
+  reads `has_stopped` before `time`, so a cycle completed just before the stop still counts.
+- `coraplex/datastructures/dataclasses.py`: `Context.simulation_clock` carries the type.
+- `test/giskardpy_test/test_executor/test_pacer.py`: 5 new tests, 12 passed.
 
-1. Developer picks the policy (raise / wall-clock fallback / warn-and-continue,
-   or the clock-state option that distinguishes pause from death).
-2. Developer picks the base branch to cut
-   `claude/simulation-time-pacer-sleep-bound-epxi2s` from - it currently
-   descends from `integration`, which is not a legal PR base.
-3. Failing test first in `test/giskardpy_test/test_executor/test_pacer.py`
-   (no `SimulationTimePacer` test exists today), then the fix.
+## Verification actually run
 
-Explicitly out of scope: `_execute_real` having no budget at all, and the
-0.2 ms poll interval's busy-wait.
+A partial workspace was assembled from PyPI under Python 3.12. The pacer tests run with
+`--noconftest`, since without `rclpy` the ORM pre-flight in `giskardpy_test/conftest.py`
+cannot walk `Ros2Executor`. The hang was reproduced first against the old pacer (`sleep()`
+on a frozen clock still running when killed at 20 s); the same scenario now raises.
+
+## Outstanding for whoever takes it further
+
+- **Branches above #256 need a one-line change.** `franka_montessori_demo.py` and the two
+  smoke tests set `context.simulation_clock = lambda: multi_sim.simulator.current_simulation_time`;
+  that lambda has no `.time`. It becomes a `SimulationClock` over the simulator, whose
+  `state` already tells `PAUSED` from `STOPPED`. Nothing on #256 sets the field, so #256
+  itself is unaffected.
+- **#169's description still lists this under Outstanding.** Its base now fixes it.
+- Explicitly out of scope, unchanged: `_execute_real` has no budget at all, and the
+  0.2 ms poll interval is still a busy-wait.
