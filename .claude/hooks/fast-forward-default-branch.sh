@@ -30,9 +30,9 @@ set -euo pipefail
 # session's call, not a hook's - but how far behind it now is gets reported, so
 # the choice is made rather than missed.
 #
-# Where the upstream comes from: `<STACK_SCRIPT> configuration`, the same
-# resolution the stacked-PR tooling runs on (see ../stack/stack.toml for the
-# committed defaults and the personal-notes override it layers on top). No
+# Where the upstream comes from: `<STACK_MODULE> configuration`, the same
+# resolution the stacked-PR tooling runs on (see the package's stack.toml for
+# the committed defaults and the personal-notes override it layers on top). No
 # repository is named here, so this works unchanged on any fork of any
 # repository - and there is only one place to correct if the upstream ever
 # moves.
@@ -80,7 +80,7 @@ fi
 # here would be a second, vaguer copy of it.
 RESOLUTION_REFUSAL="$(mktemp)"
 trap 'rm -f "${RESOLUTION_REFUSAL}"' EXIT
-if ! CONFIGURATION="$(python3 "${PROJECT_ROOT}/${STACK_SCRIPT}" configuration \
+if ! CONFIGURATION="$(python3 -m "${STACK_MODULE}" configuration \
     2>"${RESOLUTION_REFUSAL}")"; then
   report "$(default_branch_line_upstream_unresolved "$(cat "${RESOLUTION_REFUSAL}")")"
   exit 0

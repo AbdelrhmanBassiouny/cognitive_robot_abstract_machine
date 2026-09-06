@@ -127,6 +127,13 @@ set -euo pipefail
 # branch only, and never fatal. See that script and ./README.md's "Starting from
 # a fresh base".
 #
+# Dependencies: the package's own are installed on every start, for anyone
+# whose notes branch resolved - the same audience everything else here serves.
+# Only what is missing gets installed, so the usual run costs an import check
+# and nothing more, and a failure is reported rather than allowed to end the
+# run. See install_dependencies in ./resolve-personal-notes-config.sh, and
+# bastler/README.md, which tells a reader this happens.
+#
 # Setup: the summary also carries ./check-setup.sh's verdict, naming any
 # check that still needs setup. It is reported rather than left to be run on
 # purpose because remembering to run it is the step that gets skipped - after
@@ -202,10 +209,10 @@ WROTE_ANYTHING=0
 # session to describe secondhand, in its own prose, what the hook did.
 SUMMARY_NOTES="not found"
 SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
-# SUMMARY_PLAN, SUMMARY_GIT_IDENTITY and SUMMARY_SETUP get no default on
-# purpose: every path below
-# assigns one, so `set -u` turns a path that forgets into a loud failure rather
-# than the silently uninformative report this hook used to print.
+# SUMMARY_PLAN, SUMMARY_GIT_IDENTITY, SUMMARY_DEPENDENCIES and SUMMARY_SETUP
+# get no default on purpose: every path below assigns one, so `set -u` turns a
+# path that forgets into a loud failure rather than the silently uninformative
+# report this hook used to print.
 
 if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
   cat <<HEADER >> "${OUTPUT_FILE}"
@@ -415,6 +422,37 @@ if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
   fi
 fi
 
+# Dependencies: install whatever of the package's own this clone is missing,
+# so nothing downstream has to run without them. Reached only after the notes
+# branch resolved above, which is the signal that this is somebody who has run
+# the setup - a clone that never did installs nothing.
+#
+# Run before the setup check below, so check-setup.sh's dashboard_dependencies
+# row reports on what this run has just installed rather than on the absence it
+# was about to fix - the same ordering, for the same reason, as CLAUDE.local.md
+# and the git identity.
+#
+# Only when something is actually missing: the common case then costs one
+# import check and no installer at all, which is what makes doing this on
+# every session start affordable.
+#
+# Never fatal. An installer that is absent, offline or refused by an
+# externally managed environment reports here and the run carries on: a hook
+# that dies at this point takes the notes, the plan and the setup verdict with
+# it, and says nothing about why.
+if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
+  SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
+elif [ -z "${MISSING_DEPENDENCIES}" ]; then
+  SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed "${BASTLER_PYPROJECT_FILE}")"
+elif install_dependencies "${MISSING_DEPENDENCIES}"; then
+  SUMMARY_DEPENDENCIES="$(dependencies_line_installed \
+    "${MISSING_DEPENDENCIES}" "${BASTLER_PYPROJECT_FILE}")"
+else
+  SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
+    "${MISSING_DEPENDENCIES}" \
+    "$(printf '%s' "${DEPENDENCY_INSTALL_OUTPUT}" | tail -1)")"
+fi
+
 # Setup verdict, from ./check-setup.sh - the single read-only source of truth
 # for whether this clone is set up. Reported here because remembering to run it
 # is exactly what does not happen: a session that skips it discovers the same
@@ -475,6 +513,7 @@ session-start.sh summary:
   plan:            ${SUMMARY_PLAN}
   default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
+  dependencies:    ${SUMMARY_DEPENDENCIES}
   setup:           ${SUMMARY_SETUP}
   plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY
