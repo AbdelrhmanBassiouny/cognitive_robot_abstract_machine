@@ -9,5 +9,5 @@ import json
 import sys
 from pathlib import Path
 
-Path("build_dashboard_invocation.json").write_text(json.dumps(sys.argv[1:]))
+Path(f"{Path(__file__).stem}_invocation.json").write_text(json.dumps(sys.argv[1:]))
 print(json.dumps({"drift_count": 0}))

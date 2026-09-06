@@ -169,6 +169,8 @@
     color: var(--text-muted);
   }
   .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .refresh-button { margin-left: 0.6rem; vertical-align: middle; }
+  .refresh-hint { margin-left: 0.5rem; font-size: 0.76rem; font-style: italic; }
   .tracking-link {
     margin-left: 0.6rem;
     padding: 0.1rem 0.55rem;
@@ -609,8 +611,17 @@
   }
 </style>
 
+{# A chip naming an item in another plan links to that plan's own dashboard,
+   which is the only place its state is shown in full - the rest of the chip
+   is identical either way. #}
 {% macro dependency_chip(chip) %}
-<span class="chip{{ '' if chip.is_ready else ' chip-unmet' }}" title="{{ chip.tooltip }}{{ '' if chip.is_ready else ' (not ready yet — this item is blocked on it)' }}">{{ chip.identifier }}</span>
+{%- set chip_class = 'chip' if chip.is_ready else 'chip chip-unmet' %}
+{%- set chip_title = chip.tooltip if chip.is_ready else chip.tooltip ~ ' (not ready yet — this item is blocked on it)' %}
+{% if chip.dashboard_url %}<a class="{{ chip_class }}" href="{{ chip.dashboard_url }}" target="_blank" rel="noopener" title="{{ chip_title }}">{{ chip.identifier }}</a>{% else %}<span class="{{ chip_class }}" title="{{ chip_title }}">{{ chip.identifier }}</span>{% endif %}
+{% endmacro %}
+
+{% macro copy_command_button(action, glyph="▸", extra_class="") %}
+<button type="button" class="action-button{{ " " ~ extra_class if extra_class }}" data-action-command="{{ action.command }}" onclick="planDashboardCopyActionCommand(this)">{{ glyph }} {{ action.label }}</button>
 {% endmacro %}
 
 {% macro action_button(item) %}
@@ -624,7 +635,7 @@
       {% endfor %}
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="{{ item.action.command }}" onclick="planDashboardCopyActionCommand(this)">▸ {{ item.action.label }}</button>
+  {{ copy_command_button(item.action) }}
 </span>
 {% endif %}
 {% endmacro %}
@@ -701,6 +712,8 @@
     <p class="repo-line">
       {{ total_items }} tracked items · <a href="{{ repository_url }}" target="_blank" rel="noopener">{{ repository }}</a>
       {% if tracking_url %}<a class="tracking-link" href="{{ tracking_url }}" target="_blank" rel="noopener">Propose a structural change →</a>{% endif %}
+      {{ copy_command_button(refresh_action, glyph="⟳", extra_class="refresh-button") }}
+      <span class="refresh-hint">copies the command that rebuilds this page — paste it into a session</span>
     </p>
     <details class="roadmap-details">
       <summary>Background &amp; history (roadmap.md)</summary>

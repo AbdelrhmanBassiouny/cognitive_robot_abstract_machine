@@ -201,6 +201,10 @@ prepended so the pasted session starts on that model.
   `retry-config-flag` both have open, still-draft pull requests, so each
   gets a "Review" button instead. Unlike the other two, this one isn't a
   skill invocation — it's a plain link straight to the PR on GitHub.
+- **Rebuild the page itself** — the masthead's "Refresh" button copies
+  `/plan-dashboard notification-retry-overhaul`. A published page is a
+  snapshot of the moment it was rendered, so this is how you get from a
+  stale page to a current one without remembering the plan's id.
 
 ## Where to go from here
 
