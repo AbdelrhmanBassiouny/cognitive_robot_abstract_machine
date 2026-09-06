@@ -312,19 +312,6 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01Vc9tayconnyqgvN3r5g6pi
   track: pass
-  blockers:
-    - >-
-      Conflicted against its own base since #158 was rebased onto the bastler package move. GitHub
-      reports #162 `mergeable_state: dirty`; merging `origin/claude/stack-tooling-pinning-qf5r2m`
-      reproduces content conflicts in nine files - `.claude/skills/stacked-pr-maintenance/SKILL.md`
-      (8 hunks), `bastler/maintenance.py`, `bastler/maintenance_commands.py`,
-      `bastler/maintenance_promotion.py`, `bastler/maintenance_report.py`, `bastler/stack.py`,
-      `test/bastler_test/test_maintenance.py`, `test/bastler_test/test_maintenance_skill.py` and
-      `test/bastler_test/test_stack.py`. Every hunk is the same shape: this branch still holds
-      `.claude/stack/*.py` with bare imports while the base holds `bastler/*.py` with absolute
-      `bastler.` ones, so the merge is decision 13's re-apply-your-delta-inside-the-package, not a
-      semantic disagreement. CI is green (23 of 23 on `be6e1c19`) and both dependencies read ready,
-      so the conflict is the only thing stopping this branch.
   depends_on:
   - stack-maintenance-executor
   - pinned-stack-tooling
@@ -419,6 +406,14 @@ items:
     thread still open (`maintenance_promotion.py:375`, the shared dataclass exception) is a deferral
     the user was asked to close, not work owed; the three others the description calls open were
     resolved on 2026-08-13. What is actually outstanding is the base merge above.
+
+    Resolved on 2026-09-06. The base #158 had been rebased onto the bastler package move, so
+    this branch's own delta still sat at `.claude/stack/` and the two conflicted on nine files.
+    Merged and re-applied inside `bastler/` in `50b8752e`; the two files only this branch
+    introduces - `github_links.py` and the promotion-summaries fixture - had no counterpart for
+    git to rename them onto and were moved by hand. 692 tests pass in `test/bastler_test`, the
+    suite CI's `test_bastler` job runs, and GitHub reports the pull request mergeable again.
+
 - id: integration-branch
   title: 'Regenerated personal integration branch: build, check, resolve, report'
   branch: claude/plan-item-kickoff-workflow-ixbvxl

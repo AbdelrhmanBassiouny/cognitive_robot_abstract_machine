@@ -199,6 +199,16 @@ and re-applies its delta.
   pattern this stack has already paid for. The inconsistency is real and self-clearing - once #151
   lands, every command is a plain property and the converted one is the consistent one.
 
+- **A package move renames the files both branches carry, and abandons the ones only one of them
+  has.** #158 was rebased onto the bastler move while #162 was still written against
+  `.claude/stack/`, and git's rename detection carried every module both branches hold across to
+  `bastler/` by itself. The two files #162 alone introduces - `github_links.py` and its
+  promotion-summaries fixture - had no counterpart on the other side to be renamed onto, so they
+  landed at the old paths with the imports still pointing at them. Nothing failed: the suite is
+  collected from `test/bastler_test`, which the stranded fixture is not in, and the stranded module
+  is imported by a name that still resolved. The check that finds them is looking at what is left
+  under the old directory after the merge, not at whether the tests pass.
+
 ## The integration branch's design, stated once
 
 - **It gates nothing.** Promotion asks whether a branch is ready for upstream review; integration asks
@@ -398,3 +408,27 @@ block was lifted. And `publish-recorded-pass` now needs a credential, because re
 fork's open pull requests; it only ever runs inside the pipeline, which provisions one.
 
 1032 tests pass across the four directories CI runs, from 1015 on the base; eight mutations checked.
+
+## `promotion-summaries-and-table`: the base-rebase merge of 2026-09-06
+
+Resolved from `/plan-item-resolve` in `auto` mode. The manifest called the item healthy and
+`in_progress` with no blocker; GitHub called #162 `dirty`. The cause was neither a review thread
+nor a check: **#158 had been rebased onto the bastler package move**, so the base this branch is
+stacked on stopped being the base it had merged. Both dependencies read ready, and all 23 checks
+were green on the commit before the merge.
+
+The merge is decision 13 doing what it says - each open branch merges across the move and
+re-applies its delta inside the package - rather than anything specific to this item. Nine files
+conflicted and every hunk was the same two shapes: a bare import against an absolute `bastler.*`
+one, and an in-tree invocation against a pinned one. `SKILL.md` is where the two actually had to be
+reconciled rather than chosen between: it keeps this branch's step 2, its `--summaries` flag and
+its `pending-promotions` table, written in #158's pinned form, so every `maintenance.py` line now
+carries `PYTHONPATH` set to the pinned directory's parent.
+
+A maintenance pass reported the same nine files on #162 at 18:08, ten minutes before the push that
+fixed them, and labelled the branch `needs-resolution`. That label clears itself once GitHub stops
+reporting the conflict, so nothing here removes it.
+
+The item's remaining work is untouched by any of this: the notification question in **Open** above
+is still open, and the one review thread left unresolved is the deferral the user was asked to
+close.
