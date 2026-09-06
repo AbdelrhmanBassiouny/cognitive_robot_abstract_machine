@@ -178,13 +178,17 @@ CLAUDE.local.md
 .claude/.plan-state-sync-sha
 
 # The stacked-PR board snapshot, re-exported from GitHub by
-# `.claude/stack/maintenance.py board --write` at the start of every maintenance pass.
+# `python3 -m bastler.maintenance board --write` at the start of every maintenance pass.
 # Scratch state, never committed: a stale copy read as current is a pass acting on a
 # stack that has since moved.
-.claude/stack/board.json
+bastler/board.json
 
 # ORMatic generates every package's ormatic_interface.py from its dataclasses, so the
 # repository builds them (scripts/regenerate_all_orm.py) instead of tracking them.
 # Tracking a generated file made every branch switch fail while a checkout held its own
 # copy, which is what git refuses to overwrite.
 **/ormatic_interface.py
+
+# The hooks' own Python dependencies, the one place they are written down and
+# the file plan-size-report.sh reports missing ones from.
+!.claude/hooks/requirements.txt
