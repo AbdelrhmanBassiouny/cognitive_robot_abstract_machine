@@ -180,6 +180,10 @@ the failure-prediction metric, the determinism runs.
   `montessori_sorting_results` in review (2026-09-05, developer override);
   until #256 takes the same rename, its Franka demo and the Tracy demo
   record to different databases on the same host.
+- **A domain class named like a typing alias breaks ORM generation.** Fixed in krrood
+  (see the generator's name collision below), but the shape recurs: a class diagram
+  resolves annotations with the classes it holds, so a class whose name a module also
+  imports from `typing_extensions` is worth noticing before the generator meets it.
 - **Nothing on these branches runs in a session container.** `random_events`
   needs a C++ library that will not build there, and
   `scripts/regenerate_all_orm.py`/`test/experiments_test`/`test/segmind_test`
@@ -315,6 +319,35 @@ tree misses 6 and invents 1, and finds the board on all six. No capture got wors
 the outline is fitted — a radius and a turn — which is a parameter rather than a
 subclass. Collapsing them into one detector the rules configure two ways is a design
 call, not a merge resolution, so it was not taken here.
+
+#### The generator's name collision, 2026-09-06
+
+CI had never been green on #265, and the whole of it was one root cause: ten of the
+twenty-three checks -- every job that builds the workspace ORM interfaces -- died in
+generation with `CouldNotResolveType` on `SurfacePass`, "type 'Sequence' is not
+subscriptable", before a single test ran. `main` was green at the same base, so none of
+it was inherited. The jobs that passed are the ones whose conftest never builds an
+interface, which is why the failure read as scattered rather than as one thing.
+
+Resolving a field, `ClassDiagram` offers every class it holds by bare name -- the
+workaround that lets an annotation reach a type its module imports only for type
+checking. It offered them as a *local* scope, and a local scope beats the module the
+annotation was written in, so giskardpy's `Sequence` goal (the generator walks
+giskardpy) replaced the typing alias `detector_choice.py` had imported. The fix is in
+`krrood.class_diagrams.utils.get_type_hints_of_object`: those classes now fill only the
+gaps the defining modules leave.
+
+The convergence's own `SurfacePass` was simply the first mapped class in the workspace
+to annotate a field `Sequence[...]`, and three more classes already answer to a typing
+name -- `Union` in the entity query language, `Type` in robokudo, `Set` in
+`random_events` -- so this was one annotation away from happening again, in any plan.
+
+What it cost is that nothing the convergence merged has been exercised by CI at all:
+the generation aborts before collection. The measurements the convergence recorded
+stand -- they were taken by a script, not by the suites -- but every suite number in
+#265's description was taken in a session container with the ORM-dependent modules
+excluded, which is the container hazard above. A branch whose one untested path is the
+one only CI can run needs CI to have run before it is called verified.
 
 ### `scenario-domain-model` (#261)
 
