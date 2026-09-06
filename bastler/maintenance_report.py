@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 from bastler.maintenance_board import BoardExport
 from bastler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
-from bastler.maintenance_promotion import Promotion
+from bastler.maintenance_promotion import BranchPromotion, PendingPromotion
 from bastler.maintenance_restack_steps import BranchOutcome, RestackOutcome
 from bastler.stack import Reparent, Stack, landed_branches, promotion_order, reparents
 
@@ -47,12 +47,12 @@ class MaintenanceReport:
     What became of each branch in the restack plan.
     """
 
-    promoted: tuple[Promotion, ...] = ()
+    promoted: tuple[BranchPromotion, ...] = ()
     """
-    The branches whose upstream link was built and recorded this pass.
+    What became of each branch the promotion considered.
     """
 
-    promotion_labels_cleared: tuple[str, ...] = ()
+    promotion_labels_cleared: tuple[BranchPromotion, ...] = ()
     """
     The branches whose spent link label was removed this pass.
     """
@@ -105,8 +105,8 @@ def build_report(
     stack: Stack,
     fast_forward_report: FastForwardReport | None,
     restacked: Sequence[BranchOutcome],
-    promoted: Sequence[Promotion] = (),
-    promotion_labels_cleared: Sequence[str] = (),
+    promoted: Sequence[BranchPromotion] = (),
+    promotion_labels_cleared: Sequence[BranchPromotion] = (),
 ) -> MaintenanceReport:
     """
     Assemble one pass's outcomes and its leftovers into a single report.
@@ -114,7 +114,7 @@ def build_report(
     :param stack: The derived stack, read for what the caller still has to do.
     :param fast_forward_report: What became of the fork's base branch, if attempted.
     :param restacked: What became of each branch in the restack plan.
-    :param promoted: The branches whose upstream link was built this pass.
+    :param promoted: What became of each branch the promotion considered.
     :param promotion_labels_cleared: The branches whose spent link label was removed.
     :return: The report.
     """
@@ -165,19 +165,87 @@ def print_restack(outcomes: Sequence[BranchOutcome]) -> None:
         print(f"{outcome.branch}\t{outcome.outcome}\t{detail}")
 
 
-def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> None:
-    """:param promoted: The branches whose link was built this pass.
+def print_promotions(
+    promoted: Sequence[BranchPromotion], cleared: Sequence[BranchPromotion]
+) -> None:
+    """:param promoted: What became of each branch the promotion considered.
     :param cleared: The branches whose spent link label was removed."""
-    for promotion in promoted:
-        print(f"{promotion.branch}\t#{promotion.pull_request_number}\t{promotion.url}")
+    for promotion in [*promoted, *cleared]:
+        print(
+            f"{promotion.branch}\t{promotion.outcome}\t"
+            f"#{promotion.pull_request_number}\t{promotion.url or ''}"
+        )
         if promotion.body_was_truncated:
             print(
                 f"{promotion.branch}: the prefilled description was shortened to fit "
                 f"the URL limit",
                 file=sys.stderr,
             )
-    for branch in cleared:
-        print(f"{branch}\tlink-label-cleared\t")
+
+
+class PendingPromotionColumn(StrEnum):
+    """
+    The columns of the table of links still waiting to be opened, in order.
+
+    Header and row are rendered from the same members, so a column cannot be added to
+    one and forgotten in the other.
+    """
+
+    PULL_REQUEST = "Pull request"
+    """
+    The fork pull request the link was built from.
+    """
+
+    TITLE = "Title"
+    """
+    Its title.
+    """
+
+    BRANCH = "Branch"
+    """
+    Its branch.
+    """
+
+    LINK = "Link"
+    """
+    The recorded link, ready to open.
+    """
+
+    def read(self, pending: PendingPromotion) -> str:
+        """
+        :param pending: The promotion to render this column of.
+        :return: The cell's text.
+        """
+        match self:
+            case PendingPromotionColumn.PULL_REQUEST:
+                return f"#{pending.pull_request_number}"
+            case PendingPromotionColumn.TITLE:
+                return pending.title
+            case PendingPromotionColumn.BRANCH:
+                return f"`{pending.branch}`"
+            case _:
+                return f"[open]({pending.url})"
+
+
+def print_pending_promotions(pending: Sequence[PendingPromotion]) -> None:
+    """
+    Print the links still waiting to be opened, as a table to paste as it stands.
+
+    :param pending: The pending promotions.
+    """
+    if not pending:
+        print("no upstream links are waiting to be opened")
+        return
+    print(_table_row(column for column in PendingPromotionColumn))
+    print(_table_row("---" for _ in PendingPromotionColumn))
+    for entry in pending:
+        print(_table_row(column.read(entry) for column in PendingPromotionColumn))
+
+
+def _table_row(cells: Iterable[str]) -> str:
+    """:param cells: The row's cells, in column order.
+    :return: The row, as markdown."""
+    return f"| {' | '.join(cells)} |"
 
 
 # %% the exit status
