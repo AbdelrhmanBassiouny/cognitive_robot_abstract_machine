@@ -289,13 +289,22 @@ making `Match._is_own_name_` refuse the retired spellings temporarily, running t
 suites, and migrating every hit; the guard was then removed, since #192 deliberately
 leaves every public name to the matched class.
 
-The second was not predicted: #257 fixed the grid a sweep walks — laid out from the
-centre outwards, so widening a belief's reach only *adds* placements — while the
-#225/#232/#236 lineage extracted the whole sweep into `OutlineFitter`, carrying the
-old edge-anchored grid with it. Merged textually, `offsets_within` would have
-arrived unused beside the phase bug it was written to fix, with #257's four tests
-still passing against the wrong code. It now lives in `outline_fit.py` where the
-sweep does.
+The second was not predicted, and the first answer to it was wrong. #257 fixed the
+grid a sweep walks — laid out from the centre outwards, so widening a belief's reach
+only *adds* placements — while the #225/#232/#236 lineage extracted the whole sweep
+into `OutlineFitter`, carrying its own edge-anchored grid with it. Merged textually,
+`offsets_within` would have arrived unused beside the phase bug it was written to fix,
+with #257's four tests still passing against code no longer reached. So the pass
+unified them on the centred grid — **and the captures said no.** A believed reach is a
+bound, so its grid is centred on the claim and stops inside it; the board's seed search
+is pointed at the middle of whatever the lighting made dark and has to reach the whole
+radius it was given. Walking the centred grid for that seed shortened its forty
+millimetre search to thirty-six and left three of the board's six holes over wood on
+`tracy_pickup_demo`. The two grids are two, named for what each means: `offsets_within`
+and `OutlineFitter.placements_within` for a belief, the fitter's own lattice for a
+search. This is the general lesson of the pass — two things that look like one
+operation are not one when their contracts differ, and the ground truth is what says
+which.
 
 **What was measured.** The six real captures, run through the pipeline before and
 after with the same script: #265's tip missed 7 pieces and invented 3; the converged
