@@ -56,3 +56,26 @@ this programme sees every CI job fail identically.
   place by a small margin - which is `competing-explanations`'s claim
   (`knowledge-directed-grounding`, `surfaces` track) to settle, not a threshold to tune
   here.
+
+## The ICRA convergence pass, 2026-09-06
+
+Both in-flight items of this plan are now carried by one branch: `episode-replayed-into-the-world` (#246) and `expectations-from-events` (#257).
+
+The pass merged every one of them into the ICRA integration branch (#265,
+`claude/icra-experiments-simulation-pipeline-w4ep7n`) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.
+
+Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in `icra-foundation`'s `roadmap.md` under *The
+convergence pass, 2026-09-06*. Read it there rather than re-deriving it here.
+
+The #257 merge is where the second silent collision of the pass showed up, and it
+was this plan's fix that would have been lost: #257 replaced the grid a sweep walks
+with one laid out from the centre outwards, so that widening a belief's reach only
+*adds* placements, while the `knowledge-directed-grounding` lineage extracted the
+whole sweep into `OutlineFitter` and carried the old edge-anchored grid with it.
+Merged textually, `offsets_within` would have arrived unused beside the phase bug it
+was written to fix, with #257's four tests still passing against code no longer
+reached. It now lives in `outline_fit.py`, where the sweep does.
