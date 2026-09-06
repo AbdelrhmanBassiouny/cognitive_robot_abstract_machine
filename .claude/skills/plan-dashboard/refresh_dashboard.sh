@@ -1,13 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-# Orchestrates one plan's refresh: sync_manifest_status.py's auto-correction,
+# Orchestrates one plan's refresh: sync_manifest_status's auto-correction,
 # pushing that correction back to the personal-notes branch if it changed
-# anything, then build_dashboard.py's render - the exact sequence
+# anything, then build_dashboard's render - the exact sequence
 # .claude/skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
 # embedded bash snippet for a session to improvise from. Extracted so that
 # sequence is real, tested-by-construction code (it just calls the two
-# scripts .claude/skills/plan-dashboard/tests/ already covers) rather than
+# modules test/bastler_test/ already covers) rather than
 # prose a session re-derives - and re-risks getting subtly wrong - on every
 # run.
 #
@@ -25,16 +25,16 @@ set -euo pipefail
 # and a depends_on entry naming <plan-id>/<item-id> resolves against that
 # directory.
 #
-# Prints one JSON summary to stdout, merging sync_manifest_status.py's own
-# {"corrected": [...]} with build_dashboard.py's status/drift/ready summary,
+# Prints one JSON summary to stdout, merging sync_manifest_status's own
+# {"corrected": [...]} with build_dashboard's status/drift/ready summary,
 # so the calling skill has everything step 4's report needs from one place.
 #
-# Requires PyYAML, Jinja2, and the markdown package - see requirements.txt
-# next to this script.
+# Requires PyYAML, Jinja2, and the markdown package - see the package's own
+# pyproject.toml, which declares them next to the modules that need them.
 
 # Locating resolve-personal-notes-config.sh is the one irreducible hardcoded
 # path here: it's the file that defines every other shared path constant
-# used below (BUILD_DASHBOARD_SCRIPT, WRITE_PERSONAL_NOTES_FILE_SCRIPT, ...),
+# used below (BUILD_DASHBOARD_MODULE, WRITE_PERSONAL_NOTES_FILE_SCRIPT, ...),
 # so it can't itself be referenced through one of them. Sourcing it also
 # `cd`s to the project root, so every one of its path constants below can be
 # used exactly as written - no further path arithmetic needed.
@@ -96,12 +96,12 @@ if [ -n "${PLANS_DIRECTORY}" ]; then
   PLANS_DIRECTORY_ARGUMENTS=(--plans-dir "${PLANS_DIRECTORY}")
 fi
 
-SYNC_SUMMARY="$(python3 "${SYNC_MANIFEST_STATUS_SCRIPT}" \
+SYNC_SUMMARY="$(python3 -m "${SYNC_MANIFEST_STATUS_MODULE}" \
   --plan "${PLAN_FILE}" \
   --pr-data "${PULL_REQUEST_DATA_FILE}" \
   "${PLANS_DIRECTORY_ARGUMENTS[@]+"${PLANS_DIRECTORY_ARGUMENTS[@]}"}")"
 
-CORRECTED_COUNT="$(python3 "${REFRESH_DASHBOARD_SUPPORT_SCRIPT}" count-corrected "${SYNC_SUMMARY}")"
+CORRECTED_COUNT="$(python3 -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" count-corrected "${SYNC_SUMMARY}")"
 
 if [ "${CORRECTED_COUNT}" != "0" ]; then
   DESTINATION_PATH="$(plan_manifest_path "${PLAN_ID}")"
@@ -123,6 +123,6 @@ fi
 if [ -n "${PLANS_DIRECTORY}" ]; then
   BUILD_ARGUMENTS+=(--plans-dir "${PLANS_DIRECTORY}")
 fi
-BUILD_SUMMARY="$(python3 "${BUILD_DASHBOARD_SCRIPT}" "${BUILD_ARGUMENTS[@]}")"
+BUILD_SUMMARY="$(python3 -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
 
-python3 "${REFRESH_DASHBOARD_SUPPORT_SCRIPT}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"
+python3 -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"
