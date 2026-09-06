@@ -173,3 +173,34 @@ Both were cleared the same day. What the pass added to what this plan already kn
 - **The review's rule reached production, where the duplication was worse than in the tests it was
   raised against**: the GitHub host was written out in two places in `stack.py`. A comment about test
   literals is worth carrying into the code the tests are about.
+
+### `setup-personal-notes-script` (#107) and `setup-stacked-prs-skill` (#110): stale integration-conflict labels cleared, 2026-09-06
+
+Both pull requests had fallen behind `main` (107 by 103 commits) and both carried an
+`integration-conflict` label from an automated integration build on 2026-08-31, blocking
+promotion. Resolved via `/plan-item-resolve`, not by guessing:
+
+- **The reported rebase conflict was real, but only under `git rebase`.** This branch's
+  history already contains one merge commit that resolved an add/add conflict on
+  `.claude/hooks/tests/stubs/{curl,gh}.sh` against `main` (documented on #107 as "the two
+  stub files united"). A linear `git rebase` replays the original commits and discards
+  that resolution, so it re-hits the same conflict against a `main` that has since moved
+  further. A plain `git merge` - the convention this whole stack otherwise uses - does not
+  reopen it. `main` merged into #107 clean (`053de8eb`), #110 merged onto the new #107
+  head clean (`9a192041`), both green on the `integration_test_command` scope.
+- **The integration-conflict finding no longer reproduces.** #107 was blocked against
+  `D-deco`, #110 against `D-store` - both unrelated `krrood`/RDR feature branches whose
+  diffs touch nothing outside `test/krrood_test/` and `AGENTS.md`. Neither pull request
+  ever had a reproduction test pushed (`@pytest.mark.integration_conflict`), so nothing
+  had re-verified either finding since the day it was recorded. Reconstructing each pair
+  by hand (merging `main` + the D-branch + the fork branch in a scratch worktree and
+  running the exact suite `integration.py build` runs) found both merges clean and both
+  suites green. Both `D-deco` and `D-store` record being rebuilt as a branch reset on
+  2026-08-31 - the same day - to drop a symbol forbidden by a later `main` change; the
+  likely explanation is the original build tested their pre-rebuild tips. Labels removed
+  from both pull requests with the evidence posted as a PR comment on each.
+- **Process note for later reads of this history:** `block-branch`'s own step 5 (push a
+  reproduction test, record on the item, republish) was never completed for either
+  finding - only the automated comment-and-label half ran. A finding with no reproduction
+  test is one nothing will ever re-check on its own; it has to be revisited by hand, which
+  is what happened here five days later.
