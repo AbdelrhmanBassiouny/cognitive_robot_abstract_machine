@@ -71,6 +71,7 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
         rebase_label=DefaultLabel.REBASE,
         needs_resolution_label=DefaultLabel.NEEDS_RESOLUTION,
         integration_conflict_label=DefaultLabel.INTEGRATION_CONFLICT,
+        integration_left_out_label=DefaultLabel.INTEGRATION_LEFT_OUT,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
@@ -580,6 +581,7 @@ def test_every_default_label_is_spelled_the_way_a_fork_creates_it():
         "IN_REVIEW": "in-review",
         "REBASE": "rebase",
         "NEEDS_RESOLUTION": "needs-resolution",
+        "INTEGRATION_LEFT_OUT": "integration-left-out",
         "INTEGRATION_CONFLICT": "integration-conflict",
     }
 
@@ -598,6 +600,7 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
         "rebase_label": DefaultLabel.REBASE,
         "needs_resolution_label": DefaultLabel.NEEDS_RESOLUTION,
         "integration_conflict_label": DefaultLabel.INTEGRATION_CONFLICT,
+        "integration_left_out_label": DefaultLabel.INTEGRATION_LEFT_OUT,
         "fork_repository": "a-fork-owner/a-fork",
         "fork_remote": "origin",
         "upstream_repository": "an-upstream-owner/a-project",

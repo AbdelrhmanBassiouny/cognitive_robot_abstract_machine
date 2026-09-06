@@ -14,11 +14,14 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from integration_constants import CANDIDATE_TITLE_PREFIX, POINTER_BRANCH
 from maintenance_constants import SESSION_LINK_PATTERN
-from stack import BOARD_PATH, PullRequest
+from stack import BOARD_PATH, PullRequest, Repository
+
+if TYPE_CHECKING:
+    from maintenance_github import PullRequestReader
 
 PullRequestRecord = Mapping[str, Any]
 """
@@ -263,6 +266,37 @@ def get_session_link_in(body: str | None) -> str | None:
         return None
     found = SESSION_LINK_PATTERN.search(body)
     return found.group(0) if found else None
+
+
+def pull_request_numbers_by_branch(fork: PullRequestReader) -> dict[str, int]:
+    """
+    Map every open pull request's head branch to its number.
+
+    :param fork: The fork to read the open pull requests from.
+    :return: The pull request number publishing each open branch.
+    """
+    numbers: dict[str, int] = {}
+    for record in fork.open_pull_requests():
+        number = int(PullRequestField.NUMBER.read(record))
+        numbers[PullRequestField.HEAD.read(record, number)] = number
+    return numbers
+
+
+def branch_reference(
+    repository: Repository, branch: str, pull_request_number: int | None
+) -> str:
+    """
+    Name a branch the way a reader can click through to its pull request.
+
+    :param repository: The fork the branch's pull request would live in.
+    :param branch: The branch to name.
+    :param pull_request_number: Its open pull request's number, when one is known.
+    :return: A markdown link naming the branch's pull request, or the bare branch name
+        when no open pull request publishes it any more.
+    """
+    if pull_request_number is None:
+        return f"`{branch}`"
+    return f"`{branch}` ({repository.pull_request_reference(pull_request_number)})"
 
 
 # %% the export itself

@@ -125,6 +125,11 @@ class CommandLineFlag(StrEnum):
     Bring every stale tip forward before assembling.
     """
 
+    REPORT_LEFT_OUT = "--report-left-out"
+    """
+    Comment on every branch a build leaves out, saying why.
+    """
+
     BUILD = "--build"
     """
     Name the assembled branch a command is about.

@@ -18,6 +18,7 @@ from maintenance_github import GitHubRepository
 
 from integration_assembly import build_integration
 from integration_block_record import BlockRecords, lift_readmitted
+from integration_left_out import report_left_out
 from integration_plans import PlanFilter
 from integration_exit_codes import IntegrationExitCode
 from integration_failure import FailureLocation, print_failure_location
@@ -80,6 +81,14 @@ class BuildCommand(IntegrationCommand):
             action="store_true",
             help="emit the machine-readable document rather than a summary",
         )
+        parser.add_argument(
+            "--report-left-out",
+            action="store_true",
+            help=(
+                "comment on every branch this build left out, saying why; only a "
+                "scheduled run passes this, so an ad-hoc or triage build stays silent"
+            ),
+        )
 
     def run(
         self, run: IntegrationRun, arguments: argparse.Namespace
@@ -114,7 +123,25 @@ class BuildCommand(IntegrationCommand):
         else:
             print_build(report)
         self._lift_what_the_suite_cleared(run, fork, report)
+        if arguments.report_left_out:
+            self._report_left_out(run, fork, report)
         return exit_code_for(report)
+
+    @staticmethod
+    def _report_left_out(
+        run: IntegrationRun, fork: GitHubRepository, report: IntegrationReport
+    ) -> None:
+        """
+        Tell every newly left-out branch's owner why this build left it out.
+
+        Said on standard error, so the document on standard output stays one document.
+
+        :param run: What this run has resolved.
+        :param fork: The fork to label and comment on.
+        :param report: What the build did.
+        """
+        for told in report_left_out(report, run.configuration, fork):
+            print(f"{told.branch}\tleft-out\t{told.label}", file=sys.stderr)
 
     @staticmethod
     def _lift_what_the_suite_cleared(
