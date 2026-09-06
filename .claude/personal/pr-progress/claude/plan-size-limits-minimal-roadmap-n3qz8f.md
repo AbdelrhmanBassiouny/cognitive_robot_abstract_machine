@@ -19,6 +19,14 @@ of each file before cutting the branch.
   a plan-writing script constant).
 - Pushed, PR #279 opened as draft, manifest updated (`open`+`record`),
   roadmap section appended, dashboard republished. 405 tests pass.
+- Review round (2026-09-06): 3 comments, all on `test_roadmap_writing_document.py`
+  hardcoding literals that already have a shared home in `plan_item_bootstrap.py`.
+  Fixed 2 (`HookScript.CONFIGURATION.path` for the config script path,
+  `PlanDocument.ROADMAP` for `"roadmap.md"`), pushed as `0d105181ec`, replied and
+  resolved both threads. Third (`"SKILL.md"` glob) has no existing shared constant
+  anywhere in the codebase — replied with the precedent, left the thread open for
+  a decision rather than resolving. PR description updated to match.
 
-**Not done / outstanding:** nothing outstanding. CI not yet checked on the
-pushed commit — watch for it if asked to follow up.
+**Not done / outstanding:** the `"SKILL.md"` thread is open pending the reviewer's
+call on whether a codebase-wide constant is worth a follow-up. CI not yet checked
+on the pushed commits.
