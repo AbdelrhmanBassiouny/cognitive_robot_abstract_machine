@@ -1,0 +1,1508 @@
+<title>Knowledge-directed perception: scene grounding</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>Knowledge-directed perception: scene grounding</h1>
+    <p class="description">The scene grounding wave of knowledge-directed-perception (split out on 2026-09-05 to get every successor under the plan-size budget): the three faults visible on the running demo - a clip that shows the floor, pieces on the board&#39;s lid that are never found, and duplicate detections on the board&#39;s borders - are one fault, the scene being described by constants instead of read from the world the node already fetches. This plan removes the constants, lands the Montessori perception package on `main`, and carries the demo item that says the wave is finished when the three faults are gone on the real robot. See this plan&#39;s roadmap.md for the programme-wide why, the three waves, the deadline budget and the sequencing decisions shared with `knowledge-directed-requests` and `knowledge-directed-expectation`.</p>
+    <p class="repo-line">
+      10 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/201" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>Knowledge-directed perception: scene grounding</h4>
+<p>This plan is one of three successors to <code>knowledge-directed-perception</code>, split on
+2026-09-05 because the source plan grew to 29 items and 8,146 combined lines - past the
+<code>plan-size-limits</code> budget (15 items / 2,000 combined lines per plan) by a wide margin. The
+split is recorded in full on <code>plan-size-limits</code>'s roadmap and on tracking issue #200. The
+three successors are <code>knowledge-directed-grounding</code> (this plan), <code>knowledge-directed-
+requests</code> and <code>knowledge-directed-expectation</code>, one per wave of the source plan; all three
+keep <code>tracking_issue: 201</code>, reusing the source plan's mailbox. The full predecessor
+roadmap (6,492 lines) is not reproduced here - it stays reachable in the personal-notes
+branch's history immediately before the split commit. What follows is compressed to what
+still binds future work; per-round implementation narrative about already-built items is
+compressed into each item's own <code>notes</code> in <code>plan.yaml</code>.</p>
+<h5>Why this plan exists: the claim, and where grounding starts</h5>
+<p>The claim the whole programme supports: a robot that knows what it is looking at, what
+supports it, what it just did to it and what it is about to do perceives better than one
+that does not - and the cognitive architecture is what makes that knowledge reach
+perception at all. The demo is the Montessori shape-sorting board on Tracy's brushed steel
+table.</p>
+<p>Three faults observed on the running node on 2026-08-28 are one fault: the scene is
+described to perception by constants instead of read from the world the node already
+fetches.</p>
+<ol>
+<li><strong>The workspace clip shows the floor.</strong> <code>TRACY_WORKSPACE</code> is a hand-written rectangle
+   that reaches past the table; <code>table_top_z()</code> already reads the tabletop's collision
+   shape for its height and discards the scale and origin that are exactly the bounds
+   being guessed.</li>
+<li><strong>A piece resting on the board's lid is never found</strong>, because the pipeline rectifies
+   loose pieces onto exactly one plane and codes the board as an obstacle to exclude
+   rather than a supporting surface.</li>
+<li><strong>Duplicate detections ride the board's borders</strong>, because nothing checks whether a
+   contour's centre falls <em>on</em> the board's edge, and nothing forbids two detections
+   occupying one place.</li>
+</ol>
+<p>This plan fixes all three by removing the constants rather than patching each symptom.</p>
+<h5>Why not build this inside RoboKudo</h5>
+<p>Decided 2026-08-28 with the developer: own reasoning layer, detectors behind an
+interface, a RoboKudo analysis engine as one of those detectors later (<code>robokudo-
+detector</code>, in <code>knowledge-directed-expectation</code>, deliberately last and droppable).
+RoboKudo's knowledge coupling is one-way (pushes hypotheses into the twin, nothing reads
+the twin to decide what the tree does) and its request interface is a flat designator
+over a ROS action - replacing it with the entity query language is replacing its front
+door, not extending it. Our side already has the typed data structures and krrood's
+<code>Query</code>, an inspectable expression tree with an extensible backend protocol.</p>
+<h5>Why perception is a backend, not a parser</h5>
+<p>Revised 2026-08-28 at the developer's suggestion: <code>krrood.entity_query_language.
+backends.QueryBackend</code> is an established ABC (<code>SelectiveBackend</code>/<code>GenerativeBackend</code>,
+four implementations), and <code>SQLAlchemyBackend</code> already does "translate the query into
+another engine's plan and execute it there" - a perception backend is the same move
+against a camera. Conditions are split, never ignored: pushed-down conditions shape the
+search, everything else is a residual filter over what came back, and a condition that
+fits neither raises. The backend declares how it reads (<code>Directive.LOOK_FOR</code>), so a query
+answered by looking verbalizes as "Look for ..." rather than "Find ...". Built in
+<code>perception-backend</code>, <code>knowledge-directed-requests</code>.</p>
+<h5>The three waves, and what each successor plan is</h5>
+<ul>
+<li><strong>Grounding</strong> (this plan) removes the constants: the workspace and every plane height
+  come from the world; every supporting surface gets its own detection pass; a detection
+  may not sit inside a body already known, nor on top of another detection.</li>
+<li><strong>Requests</strong> (<code>knowledge-directed-requests</code>) makes asking and looking the same act: the
+  perception backend, the surface-finish annotation, and the rule tree that chooses a
+  detector and its parameters. <code>choose-detection-method</code> is the item the paper's central
+  claim rests on.</li>
+<li><strong>Expectation</strong> (<code>knowledge-directed-expectation</code>) closes the loop: Segmind's support
+  events and an action's declared effects arm what perception expects, and a look that
+  finds nothing (or something else) there is a detectable, reportable failure.</li>
+</ul>
+<h5>The deliverable is the demo, not the pull requests</h5>
+<p><strong>Standing rule, shared by all three successors:</strong> an item's branch merges into
+<code>tracy_icra</code> as soon as it works, without waiting for its own pull request to land on
+<code>main</code>. The pull request is the review record; <code>tracy_icra</code> is the running truth.
+Coupling them would let review latency starve the demo. Each wave carries its own demo
+item (<code>demo-runs-on-grounded-perception</code> here, <code>demo-asks-by-query</code> and <code>demo-detects-
+and-recovers-a-failed-insert</code> in the other two) saying what has to be true on the real
+robot before that wave counts as finished, in its own track so it runs alongside the
+engineering rather than queuing behind it.</p>
+<p><code>demo-catches-up-with-main</code> (done, this plan) merged <code>main</code> into <code>tracy_icra</code> first,
+while it was still cheap - every later item across all three plans is developed off
+<code>main</code> and has to reach that branch.</p>
+<p><strong><code>depends_on</code> means stacked on, never waiting for a merge</strong>, across all three
+successors: every item of <code>montessori-eql-stack</code> is based on an unmerged parent, and this
+works the same way, so a pull request awaiting review costs the demo nothing.</p>
+<h5>The budget: 2026-09-15</h5>
+<p>Thirteen working days from 2026-08-28. <strong>The cut comes from depth, not from pillars</strong>:
+every item across all three successors is load-bearing for the claim, so nothing is
+dropped; each is built in the narrowest form that demonstrates its own claim. If the
+deadline forces a further cut, protect <code>demo-detects-and-recovers-a-failed-insert</code>
+(<code>knowledge-directed-expectation</code>) - the end-to-end story the paper is written around -
+and drop <code>robokudo-detector</code> (<code>knowledge-directed-expectation</code>), which nothing else
+depends on and no demo item needs.</p>
+<h5>Sequencing decisions</h5>
+<ul>
+<li>The perception package lands on <code>main</code> first (<code>montessori-perception-on-main</code>), since
+  every item across all three successors edits files that exist on no branch but
+  <code>tracy_icra</code>.</li>
+<li>The <code>surfaces</code> track (this plan) is sequential: each item edits the same pipeline the
+  previous one left behind, so branches stack rather than run in parallel.</li>
+<li><code>surface-finish-annotation</code> (<code>knowledge-directed-requests</code>) depends on nothing and can
+  start immediately, off <code>main</code> - it touches only <code>semantic_digital_twin</code>.</li>
+</ul>
+<h5>Relationship to <code>montessori-eql-stack</code></h5>
+<p>Different initiative, same demo. That plan is about <em>asking</em> (the console, autocomplete,
+replay); this one is about <em>answering by looking</em>. They meet at the backend: once
+perception is a query backend, a question typed into that console can be answered by the
+robot going and looking rather than only recalling what it already recorded.</p>
+<h5>Landing hazard shared by every item in the <code>surfaces</code> track</h5>
+<p><code>surfaces-from-world</code> (#205), <code>detect-per-supporting-surface</code> (#221) and <code>montessori-
+classes-in-the-orm</code> (#223) all edit <code>pipeline.py</code> and <code>footprint.py</code>; #223 renames
+<code>experiments.montessori.perception.footprint.Footprint</code> to <code>RectifiedFootprint</code> to resolve
+an ORM name collision with <code>semantic_digital_twin</code>'s own <code>Footprint</code>. Every branch
+stacked past #223 in the <code>surfaces</code> track conflicts on that rename; the resolution is
+mechanical (take the incoming edit, spell the class <code>RectifiedFootprint</code>) and is recorded
+here once rather than re-derived on each branch.</p>
+<h5>Environment note, shared across all three successors</h5>
+<p>The repository's own conftest regenerates ORM interfaces on collection, which imports
+<code>giskardpy</code> and needs a ROS 2 installation most containers lack - this reproduces on
+unmodified <code>main</code> and is not any item's fault. <code>uv sync --extra dev --python 3.12</code> builds
+the whole workspace, including <code>giskardpy</code> and <code>coraplex</code>, and is the environment every
+item from <code>surface-finish-annotation</code> onward verified against; earlier items used a
+hand-built recipe (a virtual environment, <code>random_events</code> built from source, <code>urdf_parser_py</code>
+copied in) that <code>uv sync</code> supersedes.</p>
+<h5>The ICRA convergence pass, 2026-09-06</h5>
+<p>Every in-flight item of this plan is now carried by one branch: <code>montessori-perception-on-main</code> (#202), <code>surfaces-from-world</code> (#205), <code>detect-per-supporting-surface</code> (#221), <code>one-detection-per-thing</code> (#225), <code>holes-fitted-like-pieces</code> (#236), <code>pieces-looked-for-where-expected</code> (#232), <code>competing-explanations</code> (#270) and <code>montessori-classes-in-the-orm</code> (#223).</p>
+<p>The pass merged every one of them into the ICRA integration branch (#265,
+<code>claude/icra-experiments-simulation-pipeline-w4ep7n</code>) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.</p>
+<p>Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in <code>icra-foundation</code>'s <code>roadmap.md</code> under <em>The
+convergence pass, 2026-09-06</em>. Read it there rather than re-deriving it here.</p>
+<p>The landing hazard this plan records for the <code>surfaces</code> track - every branch
+stacked past #223 conflicting on the <code>RectifiedFootprint</code> rename - was paid once
+here, in the #223 and #270 merges, with the mechanical resolution this roadmap
+already states: take the incoming edit, spell the class <code>RectifiedFootprint</code>.</p>
+<h4>223 turned out to add one thing the branch did not already have:</h4>
+<p><code>test_montessori_orm.py</code>. Its rename and its <code>montessori/__init__.py</code> were
+already there, so the merge is otherwise a record of ancestry.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-grounding">
+        <div class="wave-eyebrow">Perception reads the scene from the world</div>
+        <p class="wave-description">The three faults visible in the running demo - a clip that shows the floor, pieces on the board lid that are never found, and duplicate detections on the board&#39;s borders - are one fault: the scene is described by constants instead of read from the world the node already fetches. Removing the constants is what this wave does, and each fault is the test that its item worked.</p>
+        <section class="track">
+          <h3 class="track-title">The perception package reaches main</h3>
+          <div class="item-list">
+                <article id="item-montessori-perception-on-main" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Land the Montessori perception package on main</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="11243 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+11243 −0</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">montessori-perception-on-main</span>
+            <span class="mono branch">montessori_perception_on_main</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/202" target="_blank" rel="noopener">#202</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Pk12hDbP8k2C16ZQWvcroA" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-grounding montessori-perception-on-main" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Cuts a branch off `main` carrying the Montessori perception package alone - sorinar329&#39;s
+original node commit 75258debd plus the seven that follow it - so the rest of the plan
+stacks on reviewable ground instead of a branch whose upstream points at a colleague&#39;s
+fork (`tracy_icra` itself is left alone). `depends_on: []`, and nothing in this plan waits
+for it to merge, per the plan&#39;s standing rule that `depends_on` means stacked on, never
+waiting for a merge.
+
+Built 2026-08-28 as PR #202 (12 commits, 34 files, +9,664/-0). Two symbols dragged onto
+`main` for the package to import-close - `BOARD_SCALE` (`montessori/world.py`) and
+`table_top_z` (`tracy_experiments/equipment.py`) - are exactly what `surfaces-from-world`
+replaces with values read from the world; `table_top_z` is fully removed by that item,
+`BOARD_SCALE` partly (kept for `board_footprint`&#39;s tolerance, removed later by
+`detect-per-supporting-surface`). Opened out of draft deliberately: the dashboard only
+lets a dependent stack on a still-open pull request when it is out of draft, and a draft
+here would have shown `surfaces-from-world` and `perception-backend` as blocked.
+
+`test/experiments_test/test_montessori_perception.py` (1,262 lines) was split here at the
+developer&#39;s own placement (&#34;it should be done on 202&#34;), since the file exists on no branch
+but this one: six subject modules (`00721be7`), shared fixtures moved to
+`dataset/montessori_scene_fixtures.py`. Two review rounds on 2026-08-29 resolved all
+thirteen threads: an exception module, named hole-footprint parts (`PolygonMeasurement`),
+an empty `__init__.py`, the node&#39;s poll-interval field, then `hole_geometry.py:185`&#39;s
+remaining tuple and simulated-piece colouring taken from the real pieces&#39; measured hues
+(cyan cube/cylinder, amber prisms). 147 passed, 1 skipped, up from 140.
+
+Nine of the thirteen threads were one ask from the developer - move the detector&#39;s
+numbers onto the twin as knowledge, and build an interactive tuner - and became the new
+items `detector-parameters-from-knowledge` and `tune-detection-rules-against-the-camera`.
+
+Gained the capture set 2026-08-30 (`7f053db0b`): six real-camera looks (the camera&#39;s own
+compressed colour payload, a millimetre depth PNG, an intrinsics/pose JSON), 3.0 MB,
+committed at the base of the stack so every branch cut from it inherits them; the 4.7 GB
+source rosbags are gitignored. The colour file is the raw subscribed payload rather than a
+re-encoding, so a capture and the live stream see the same pixels.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-montessori-classes-in-the-orm" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Map the Montessori package&#39;s own classes, which the ORM has never seen</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="130 lines changed versus the base - within the short-change threshold of 400">+112 −18</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">montessori-classes-in-the-orm</span>
+            <span class="mono branch">claude/montessori-classes-orm-s7vxu1</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/223" target="_blank" rel="noopener">#223</a>
+            <a class="session-link" href="https://claude.ai/code/session_01PWzamoTtp8TNZyqhWornUs" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-grounding montessori-classes-in-the-orm" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">experiments/src/experiments/montessori/ has no __init__.py, and never has on any branch, so pkgutil does not report it as a subpackage of experiments and the ORM generator&#39;s package walk skips the whole thing. Nothing under experiments.montessori is in experiments/orm/ormatic_interface.py - not MontessoriShape, not CubeShape, not ShapeSortingBoard. That is the whole cause of the five NoDAOFoundError failures in test_montessori_insert_shape_action.py that this branch has carried as &#34;the documented empty-ORM state&#34;: regenerating the interfaces cannot fix them, because the classes are not being offered to the generator in the first place.
+Adding the file was tried on 2026-08-30 and is not a one-liner. Two things follow it, and there may be more behind them: NoSceneAvailable.missing_inputs was typed Sequence[str], which the generator cannot resolve (already changed to List[str], the shape every other field in that module uses); and experiments.montessori.perception.footprint.Footprint collides by name with semantic_digital_twin...graph_of_convex_sets.plotting.Footprint, so the generator emits two FootprintDAO classes and SQLAlchemy refuses the mapping. That collision needs one of the two renamed, which is an API change across the perception package, so it is its own piece of work rather than a fix folded into a capture commit.
+Built 2026-08-30 as #223. Two of the three claims above did not reproduce, and the note is left standing with this correction beneath it rather than rewritten, so a reader can see what was assumed. NoSceneAvailable.missing_inputs is still Sequence[str] on this branch and the generator resolves it, normalizing it to List[str] and mapping it as JSON; nothing was behind the two known faults. The collision is exactly as recorded, reproduced before anything was changed, and perception.footprint.Footprint became RectifiedFootprint. #205 and #221 edit the same files and will both conflict on that rename.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Land the Montessori perception package on main">montessori-perception-on-main</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Surfaces, not constants</h3>
+          <div class="item-list">
+                <article id="item-surfaces-from-world" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Take the workspace from the table the robot knows about, not from a constant</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="453 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+431 −22</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">surfaces-from-world</span>
+            <span class="mono branch">perception_surfaces_from_world</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/205" target="_blank" rel="noopener">#205</a>
+            <a class="session-link" href="https://claude.ai/code/session_01ScJk8zKUuToafxg38Bcag5" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-grounding surfaces-from-world" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Fixes the first fault: the clip shows the floor because TRACY_WORKSPACE (node.py:102) is a hand-written 1.0 x 1.2 m rectangle. table_top_z() already pulls the tabletop&#39;s collision shape out of the fetched world for its height and discards scale.x, scale.y and the origin, which are exactly the bounds being guessed. Derives the region and every plane height from the world, and from HasSupportingSurface.supporting_surface where one exists.
+The review round of 2026-08-29 is answered in full. The test-file split it asked for was the developer&#39;s call to place on #202, and it landed there as 00721be7, merged into this branch by d6673b48; the widest-face question this branch raised is the one thing still open.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Land the Montessori perception package on main">montessori-perception-on-main</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Unanswered question to the developer, raised on #205 at review time and still open: WorkspaceSurface.of_body picks the body&#39;s widest horizontal face, following table_top_z&#39;s existing rule, where the highest face is arguably the truer reading of &#34;the surface things rest on&#34;. The two disagree only for a body whose widest shape is not its top. Not settleable from a container, since the rule was chosen against the real URDF.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-detect-per-supporting-surface" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Look at every supporting surface, not only the table</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="2293 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+2101 −192</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">detect-per-supporting-surface</span>
+            <span class="mono branch">perception_per_supporting_surface</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/221" target="_blank" rel="noopener">#221</a>
+            <a class="session-link" href="https://claude.ai/code/session_01T8CPPnj2uqZB7bACWBFJhb" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-grounding detect-per-supporting-surface" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Fixes the second fault: a piece resting on the board&#39;s lid is invisible twice over. The pipeline rectifies loose pieces onto exactly one plane (table_height), so a piece eighty millimetres higher is parallax-shifted out of both silhouettes; and pipeline.py:626 drops any contour the board encloses, coding the board as an obstacle when it is physically a supporting surface like the table. One detection pass per surface, each at its own plane height, with detections attributed to the surface supporting them. Built 2026-08-30 as #221, 2744c23d. The pass-per-surface restructure landed as planned, but a piece on the lid was invisible four times over rather than the two this note recorded, and the restructure alone fixes two. The lid&#39;s wood reads within two hues of the amber prisms, so marking every piece colour at once merged a piece standing on it into the lid; and the edge fit ran Canny over brightness, where a cyan piece is one grey level from the lid against 34 from the bare table. Each colour is now segmented on its own and each colour channel read for edges of its own; both stay inside the one detector, so choose-detection-method still owns choosing between detectors - but its &#34;the lid selects the colour blob&#34; rule now needs a different justification, since the edge fit fits a cube on the lid at 0.93 agreement. 153 tests pass across the montessori modules where 144 did. This item does not populate supporting_surface, against surface-finish-annotation&#39;s prediction, so the finish question that raised does not arise yet. detect costs 0.35 s per frame against 0.23 s, inside the node&#39;s 0.5 s period.
+Measured against the real camera on 2026-08-30 (8da0e84e9), on the six captures #202 now carries. Every loose piece lying on the bare table is found with the right category in all six - the thing this branch was built for. Three faults show, each with a strict expected-to-fail test naming the item that owns it, so the day that item lands the mark reports itself stale: a piece standing on the lid is reported a second time on the table (one-detection-per-thing), pieces on the lid are lost where they wear its colour or touch one another (detector-parameters-from-knowledge), and five of the board&#39;s six holes are found with most called triangular prisms (holes-fitted-like-pieces, new).
+The branch also gained watch_bag, which is the node with a recording in place of the camera and the robot, and SceneWindows, so a replay and a live run draw the same three windows rather than two copies of the drawing. The test that plays the pick-up demo through it is skipped wherever the recordings are not on disk, which is every run but a developer&#39;s own.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Take the workspace from the table the robot knows about, not from a constant">surfaces-from-world</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-one-detection-per-thing" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">One physical thing, one detection, and none inside a body already known</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="633 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+624 −9</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">one-detection-per-thing</span>
+            <span class="mono branch">claude/plan-item-kickoff-kdp-z4pv7l</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/225" target="_blank" rel="noopener">#225</a>
+            <a class="session-link" href="https://claude.ai/code/session_01RRu7SutvRcNWHYNVUDCUFr" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-grounding one-detection-per-thing" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Fixes the third fault: the duplicate boxes on the board&#39;s borders are the lid&#39;s own edges, which a rectangular or triangular prism template fits at about 0.7 - above the 0.62 threshold. board.encloses only rejects a contour whose centre falls inside the board, and a contour riding the border has its centre outside; nothing anywhere forbids two detections occupying one place. Rejects a detection intersecting a known body&#39;s volume, and resolves overlapping detections against each other. semantic_digital_twin.reasoning.predicates.is_place_occupied already exists for the first half.
+It now has a failing test rather than a description: measured on 2026-08-30, every one of the six captures reports a piece that is standing on the board&#39;s lid a second time on the table, about 50 mm from the first, because the table pass rectifies it onto the table&#39;s plane and claims it there. That is a second shape of the same fault as the border boxes, and the wider one - it fires whenever anything rests on the lid, not only at its edges. test_only_the_pieces_resting_on_the_table_are_detected_there in test_montessori_detection_on_captures.py is the test; it is marked strict expected-to-fail against this item.
+Built 2026-08-31 as cf155f4a1. The note above describes the duplicate as a detection standing inside the board&#39;s own volume, and it is not: measured on the six captures, every duplicate lies 14 to 63 mm *outside* the board&#39;s detected outline and shares no ground with it, so the planned occupancy rule over the board&#39;s volume rejects none of them. What they are is the table seen past the board - a piece on the lid stands between the camera and the table behind it, so the table&#39;s rectification places it there, outside the board along the ray from the camera. The rule is therefore line of sight rather than volume: the board&#39;s outline projected away from the camera onto the table&#39;s plane, cast from the top of a piece standing on the lid, is the stretch of table nothing may be reported resting on. Real table pieces stand 115 to 186 mm clear of it. The height half of the rule stands unchanged, and is what keeps a piece resting on the lid apart from a reading taken off the table below it.
+No threshold was needed: two solid things cannot stand in one another, so any shared ground at meeting heights is one thing read twice, and the captures show duplicates sharing their whole outline while no two separate detections share any. is_place_occupied was measured and not used - 0.035 s per call against a fifteen-body world, so six detections cost 0.21 s of a 0.5 s period detect already spends 0.35 s of; reading every body&#39;s bounding box costs the same. A general per-frame walk of the world&#39;s bodies does not fit the frame budget, which is a finding for detector-parameters-from-knowledge rather than something dropped. detect costs 0.279 s per frame against the parent&#39;s 0.289 s.
+The strict expected-to-fail mark came off five captures of six. non_inserted_objects keeps it, now naming holes-fitted-like-pieces: the board is reported at -29.7 degrees there against -7.6 degrees in the other five about the same centre, because its orientation comes from minAreaRect over the hole centres and only five of six holes are found, so the ground it is taken to hide is turned with it.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Look at every supporting surface, not only the table">detect-per-supporting-surface</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-pieces-looked-for-where-expected" class="item status-in_progress" style="--indent-level: 3; --indent-level-hidden-done: 3;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Look for a piece where it is expected, not only where a colour blob appears</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1343 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1133 −210</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">pieces-looked-for-where-expected</span>
+            <span class="mono branch">claude/plan-item-kickoff-kdp-o4l189</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/232" target="_blank" rel="noopener">#232</a>
+            <a class="session-link" href="https://claude.ai/code/session_0158YvLwWkcdv4Hqz9i4926W" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-grounding pieces-looked-for-where-expected" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The structural change the rest of the plan&#39;s perception work needs. Today a piece is only
+found where colour segmentation isolated a blob, so one wearing the lid&#39;s own hue, or
+touching another piece, is never fitted however plainly its edges show. Detection becomes
+the evaluation of hypotheses instead: a hypothesis is a belief about where a piece might be
+- a region of a named surface and an interval of yaw, with the source of the belief carried
+alongside it - and its evaluator is the same seeded sweep `PieceMatcher` already performs,
+narrowed by the belief instead of run open over the whole surface. Colour becomes one source
+of hypotheses and one piece of evidence, never a gate that can suppress one. Seeding by hand
+at the board&#39;s own detected holes reached 0.62-0.89 agreement where the bottom-up pass found
+nothing at all, at a fifth of the cost of a full pass.
+
+Built 2026-08-31 as `d8b654433`; every one of the six captures reports exactly what the
+parent reported at exactly its cost, so the restructure is behaviour-preserving on real
+data (397/1/11 against 376/1/11). The board&#39;s holes as a third source of hypotheses were
+built, measured and left out at the developer&#39;s decision: arming them turns 3 false lid
+reports into 20 for 3 of the item&#39;s 4 lid marks, and narrowing them only recovers 2 of the
+4 at a lower but still real cost, because the openings they read are the same measurements
+`holes-fitted-like-pieces` says are wrong. The four lid marks stay, now naming
+`expectations-from-events`, which can say which piece is expected at which hole and so
+makes a seeded fit cheap and precise.
+
+The *believed place* type (a region of a named surface plus a yaw interval) is defined
+once, here, and reused by `perception-predicates-guide-the-search` (added the same day and
+not visible to this item when written) rather than each building its own - both items reach
+the same shape from opposite ends: this item says what the searcher does with the belief,
+that item says where the constraint comes from. Whichever lands second takes the type from
+whichever lands first; this item lands first, being in `surfaces` and depending only on
+`one-detection-per-thing`.
+
+Review round of 2026-08-31, resolved as `571042923`: the believed place&#39;s centre is now a
+`PlanarPoint` (moved with `PlanarSize` into `montessori/planar_geometry.py`), since
+`spatial_types.Point2` is identity-equal and cannot be a value-object field; and
+`BeliefSource` became an abstract mixin in `krrood/patterns/belief_source.py` rather than a
+`StrEnum`, which `World` (semantic_digital_twin) and `LoosePieceDetector` (here) both
+inherit, so a belief keeps its source object rather than a label for it. krrood&#39;s
+ripple-down-rules `Expert` was deliberately not reused. 400 passed, 1 skipped, 11 xfailed.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="One physical thing, one detection, and none inside a body already known">one-detection-per-thing</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-holes-fitted-like-pieces" class="item status-in_progress" style="--indent-level: 4; --indent-level-hidden-done: 4;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Find the board&#39;s holes by fitting its whole known layout, not one contour at a time</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1529 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1191 −338</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">holes-fitted-like-pieces</span>
+            <span class="mono branch">claude/plan-item-kickoff-ge8541</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/236" target="_blank" rel="noopener">#236</a>
+            <a class="session-link" href="https://claude.ai/code/session_01TSK8GxG8qC6udSB7sjwzXf" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-grounding holes-fitted-like-pieces" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The board&#39;s holes are found by fitting the mesh&#39;s own rigid six-hole layout over the lid
+in one shot - three degrees of freedom for all six holes together, seeded from the board
+detection&#39;s own pose - rather than classifying each contour on its own. A free per-contour
+fit was tried first and is what put the fault there: a triangular prism template laid
+anywhere near the board&#39;s middle reaches 0.85-0.89 agreement in every capture, higher than
+any genuine piece on the lid, and converges on the same spot each time. A layout fit cannot
+invent a hole, cannot double one up, and cannot land on the drawer fronts below the lid, and
+it settles the board&#39;s own pose better than the board detector does (six outlines
+constraining it instead of one).
+
+Built 2026-09-01 as `172c10209`. The capture benchmark turned up a root cause the item did
+not know about: the board mesh is not cut to the size of the real board. `BoardDetector.
+measure_scale` answers the scale at which the layout lands on the openings actually seen -
+0.82 to 0.92 across the six captures, middle 0.865, persisted as `recorded_setup.
+BOARD_SCALE_AGAINST_THE_MESH`, a fact about this particular board rather than a fit
+parameter. With it the board is found within a degree and a half of straight in all six
+captures (against the parent&#39;s -5.6 to -29.7 degrees), all six holes land over openings
+rather than five over the drawer fronts, and detect costs 0.560 s/frame against 0.370 s
+(within the node&#39;s 0.5 s period with #231&#39;s `RectifiedFrame` and a carried-forward believed
+place as the two ways to recover it). 423 passed, 1 skipped, 5 xfailed against 400/1/11.
+
+One new mark: in `tracy_pickup_demo` a prism laid over the round hole&#39;s rim beats the
+cylinder actually sitting in that hole by nine parts in a thousand, which is
+`competing-explanations`&#39; to settle. `CrossSectionClassifier` and `FootprintClassifier` are
+now used by nothing but their own tests and are left standing, asked on the pull request.
+
+Depends on `pieces-looked-for-where-expected` rather than running beside it: fitting a
+known model at a believed pose is exactly the evaluator that item builds, and two branches
+independently writing it is duplication already paid for twice on this plan.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Look for a piece where it is expected, not only where a colour blob appears">pieces-looked-for-where-expected</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-competing-explanations" class="item status-in_progress" style="--indent-level: 4; --indent-level-hidden-done: 4;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Decide a detection by comparing explanations, not against a fixed threshold</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1217 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1100 −117</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">competing-explanations</span>
+            <span class="mono branch">claude/plan-item-kickoff-kdp-r8nttk</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/270" target="_blank" rel="noopener">#270</a>
+            <a class="session-link" href="https://claude.ai/code/session_01BxhH7rCvhti967uCAmAaKr" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-grounding competing-explanations" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">PieceMatcher.minimum_agreement is one number, 0.62, standing for how much of an outline must lie along a seen edge before a piece is reported, and its recorded justification is that a correct piece reaches 0.63 to 0.86 while the best wrong piece of the same colour reaches 0.62. Measured on 2026-08-31, that boundary does not hold anywhere near the board: a triangular prism template reaches 0.85 to 0.89 on the board&#39;s own middle in every capture, above every genuine piece detection on the lid in the same captures, which run 0.64 to 0.71 for the most part. No single threshold separates them, because agreement measures how well an outline follows *some* edge and says nothing about what put that edge there.
+A two-plane test was tried first and does not work: scoring the same outline in the lid&#39;s own rectification as well as in the plane a piece&#39;s top stands on separates neither, since both differences fall between +0.30 and +0.62 for holes and pieces alike. Recorded so it is not tried again.
+What does separate them is asking what else could have produced the edges. The board&#39;s geometry is known exactly and, once holes-fitted-like-pieces has settled its layout over the picture, every edge the board itself produces can be predicted. A piece is then reported where it explains edges the board alone does not, and two hypotheses claiming one set of edges are settled against each other rather than both passing a threshold. The decision is a comparison of explanations, so it states how much better one explanation must be than the next, which is a statement about how costly a wrong report is - a thing the robot can be told - rather than a tuned constant.
+This is also what makes the plan&#39;s central claim measurable: with one candidate and a strong belief, less picture evidence is needed to accept a detection than with six candidates and none, and that is knowledge improving perception in a quantity that can be plotted. one-detection-per-thing&#39;s occupancy rule is the same idea applied to place, and the two should share their resolution rather than filtering one after the other.
+Built 2026-09-05 as pull request #270, ee52352e0, off #236. The two-sided reading is what carries it: an account is scored on how much of its own outline the picture holds an edge along *and* how much of the edge seen there it covers, so a template laid across part of a rim loses to the thing that made the rim however well its own points sit. On tracy_pickup_demo the ghost prism&#39;s nine-parts-in-a-thousand lead over the cylinder sitting in the round hole becomes the cylinder leading by 0.115 (0.582 against 0.467), and that mark comes off.
+The board is one of the accounts, as the item asked: its lid border and its six holes, cast from where the camera stands into the plane the fits are read in, are edges the picture holds whether or not anything rests on it. And a report is a lead over the alternatives rather than a level - over the board, over the next candidate the belief allowed, and over nothing being there, which explains nothing and so is the floor without one being set separately. A belief naming one piece has no runner-up to lead where an unguided look over six has, which is the plan&#39;s central claim as a rule rather than as a description. Occupancy reads the same comparison, so the threshold and the place rule stopped being two filters run in sequence on two different quantities.
+required_lead states a cost rather than a level: a wrong report and a missed piece cost about the same here, and 0.075 is what follows from saying so, measured over the six captures. Missed falls from the parent&#39;s 7 to 5 and reported-but-not-there from 4 to 2, and a different cost statement gives a different number off the same table, which a test keeps answerable. Two things are flagged on the pull request rather than smoothed over: the cube on tracy_pickup_demo clears its runner-up by 0.076 against the stated 0.075, four parts in a thousand, and the operating range is narrow - below 0.075 the lead buys nothing and above it recall falls. detect costs 1.08x the parent, measured as a ratio to a same-run baseline. 442 passed, 1 skipped, 4 xfailed across test/experiments_test/ against 423/1/5 on the parent in the same container, with the collected sets diffed by name rather than compared by count.
+Review round of 2026-09-05, one thread, answered as 8443f6959. The developer asked how test_a_candidate_chosen_from_several_has_more_to_lead_than_one_a_belief_names tested the belief input, and it did not: it named a belief in its title and fed none in, calling is_reported with no rival and then with one, which is the rule&#39;s own arity and was already covered four lines above. Where a belief enters is PieceHypothesis.candidates - one fit per piece it allows, and _piece_at adds the runner-up as a rival only where there is one - so two tests replace it, both driving a real PieceMatcher over a drawn KnownPiece with two beliefs differing only in their candidates: how many accounts of the place each leaves, and that the same fit, edges and stated cost report the piece only where the belief named it. The second states a limit worth keeping: on a clean drawing the winner is decisive, 0.760 against a 0.403 runner-up, so the belief changes an outcome only where the runner-up is close as on tracy_pickup_demo, and rather than draw a scene contrived to make it close the test derives its lead from what the fits themselves measured. LoosePieceDetector._outline_of moved onto MatchedPiece.outline, since where a fitted piece&#39;s outline lies is a property of the fit, and the test then reads the production definition instead of a second copy. 443 passed, 1 skipped, 4 xfailed against 442/1/4 - one removed, two added - and both are mutation-checked: ignoring the belief&#39;s candidates fails the first, ignoring the rivals fails the second.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Look for a piece where it is expected, not only where a colour blob appears">pieces-looked-for-where-expected</span>
+
+            <span class="chip" title="Find the board&#39;s holes by fitting its whole known layout, not one contour at a time">holes-fitted-like-pieces</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">The demo runs on perception that reads the world</h3>
+          <div class="item-list">
+                <article id="item-demo-catches-up-with-main" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Bring the demo branch up to date with main while it is still cheap</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">demo-catches-up-with-main</span>
+            <span class="mono branch">tracy_icra</span>
+            <span class="muted">no pull request yet</span>
+            <a class="session-link" href="https://claude.ai/code/session_01FMKabzWhaJpTERyAaSc7Kh" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Done 2026-08-28, pushed to `origin/tracy_icra` as `fb0d0e41` (the merge) plus `ece5eb74`
+(three branch-only call sites `main` had broken without conflicting). `main` was 277
+commits ahead by the time it ran (234 when the plan was written), merge base `1646dd355`.
+The one conflict, `semantic_digital_twin/adapters/multi_sim.py`, was a colleague&#39;s MuJoCo
+work resolved as a union taking `main`&#39;s structure; `main`&#39;s tracked `ormatic_interface.py`
+files were dropped, per `AGENTS.md`. No pull request: this merges into `tracy_icra`
+directly, which is never proposed for review.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-demo-runs-on-grounded-perception" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The demo sees only the table, finds pieces on the lid, and reports each once</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">demo-runs-on-grounded-perception</span>
+            <span class="mono branch">tracy_icra</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff knowledge-directed-grounding demo-runs-on-grounded-perception" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Wave one is finished when the three faults are gone on the real robot, not when their pull requests are approved: the clipped windows show the table and nothing beyond it, a cube resting on the board&#39;s lid is detected there, and no detection rides the board&#39;s borders. Verified against the live camera, with a captured frame kept for the tests.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="One physical thing, one detection, and none inside a body already known">one-detection-per-thing</span>
+
+            <span class="chip" title="Bring the demo branch up to date with main while it is still cheap">demo-catches-up-with-main</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">8</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-demo-runs-on-grounded-perception" data-item-identifier="demo-runs-on-grounded-perception" onclick="planDashboardHighlightItem(event, this)"><strong>The demo sees only the table, finds pieces on the lid, and reports each once</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

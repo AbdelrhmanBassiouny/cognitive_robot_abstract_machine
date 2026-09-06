@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -744,6 +749,9 @@ explanation machinery to answer <em>why can this expert handle this situation</e
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="616 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+601 −15</span>
+              <span class="badge board-chip chip-negative" title="GitHub reports this pull request does not merge cleanly onto its base">conflicts</span>
             </div>
           </div>
           <div class="item-meta">
@@ -787,12 +795,16 @@ explanation machinery to answer <em>why can this expert handle this situation</e
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1090 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+985 −105</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">eql-causal-verbalization</span>
             <span class="mono branch">eql/causal-verbalization</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/82" target="_blank" rel="noopener">#82</a>
+            <a class="session-link" href="https://claude.ai/code/session_018TDLJcTEz7RN1tBbTcYV4V" target="_blank" rel="noopener">session ↗</a>
             <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/82" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
@@ -831,6 +843,9 @@ explanation machinery to answer <em>why can this expert handle this situation</e
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="885 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+871 −14</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -876,6 +891,9 @@ explanation machinery to answer <em>why can this expert handle this situation</e
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1097 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+981 −116</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -921,6 +939,8 @@ explanation machinery to answer <em>why can this expert handle this situation</e
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="796 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+740 −56</span>
             </div>
           </div>
           <div class="item-meta">

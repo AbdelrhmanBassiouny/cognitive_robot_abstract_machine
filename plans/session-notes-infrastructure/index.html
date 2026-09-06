@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -806,6 +811,8 @@ content to main, still needs deleting the same way.</div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="431 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+428 −3</span>
             </div>
           </div>
           <div class="item-meta">
@@ -850,6 +857,8 @@ one pending review per user. The resolution was explained in a pull-request-leve
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1064 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1062 −2</span>
             </div>
           </div>
           <div class="item-meta">
@@ -892,6 +901,8 @@ to end.</div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="795 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+758 −37</span>
             </div>
           </div>
           <div class="item-meta">
@@ -957,6 +968,8 @@ on a fresh checkout would not have.</div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1142 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+983 −159</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1018,6 +1031,9 @@ auto-filled title and body; it was closed as a duplicate.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1241 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1239 −2</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1088,6 +1104,9 @@ guarantees the base of the session about to run, and is live now.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="204 lines changed versus the base - within the short-change threshold of 400">+164 −40</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1153,6 +1172,8 @@ built, but no upstream pull request has this head, so Create was never clicked.<
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="27 lines changed versus the base - within the short-change threshold of 400">+14 −13</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1196,6 +1217,9 @@ behaviour by the old rule rather than stating it.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="138 lines changed versus the base - within the short-change threshold of 400">+113 −25</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">

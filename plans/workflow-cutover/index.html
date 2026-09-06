@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -766,7 +771,100 @@ scaffolding behind it turned out to be three classes written as functions:</p>
 <p>The move to a named module had a second effect the round did not set out to get. The <code>plan_files</code>
 fixture existed <em>only</em> because <code>conftest</code> is not a module name a test can safely import by - four
 test directories share one path under CI's single pytest run, and its docstring said so. With the
-type in a module with its own name, the fixture is gone and the tests import the class.</p></div>
+type in a module with its own name, the fixture is gone and the tests import the class.</p>
+<h5><code>routine-cutover</code> resumed 2026-09-06, and what building it turned out to need</h5>
+<p>Resolved from <code>in_progress</code> with no branch: the recorded gate ("stack tooling on
+cram2/main and fork main fast-forwards") had cleared unnoticed - <code>cram2/main</code> and this
+fork's <code>main</code> are the identical commit (<code>f6a53cf9</code>), both carrying <code>.claude/stack/</code>. The
+deterministic executor the endgame calls for (<code>maintenance.py</code>) was already built and
+merged via #139, whose own notes had already answered the base-change-credential
+question this item's notes had left open for the Action to verify: label writes,
+conflict comments and description writes are all available to the executor's own
+token; only a base-branch retarget needs a session, and the executor already reports it
+as <code>reparents</code> rather than attempting it.</p>
+<p>The one gap: nothing called that executor, and nothing notified when it found a
+pending reparent - every other kind of residue (a restack conflict) already self-reports
+via <code>conflict_report()</code>/<code>needs-resolution</code>, but <code>reparents</code> only ever reached a run
+summary. Opened as PR <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/280">#280</a>,
+branch <code>claude/stack-maintenance-action</code>:</p>
+<ul>
+<li><code>maintenance_reparent_notice.py</code>: <code>reparent_notice()</code>/<code>notify_reparents()</code>, mirroring
+  <code>conflict_report()</code>. Its label write reads the fork's <em>current</em> labels
+  (<code>fork.pull_request(number)</code>), not the stack's own snapshot - promotion and restack
+  both run first in <code>run-report</code> and can have written a label since the snapshot was
+  taken, the same staleness class <code>promote()</code> already reads around (and the one the
+  executor's own #139 notes recorded fixing twice already).</li>
+<li><code>.github/workflows/stack-maintenance.yml</code>: runs <code>maintenance.py run-report --json</code> on
+  <code>pull_request: closed</code> (the widened, event-triggered re-sweep this item's notes
+  already specified), <code>schedule</code>, and <code>workflow_dispatch</code>. Resolves the upstream remote
+  via <code>stack.py configuration</code>'s own <code>upstream_setup_command</code> rather than hardcoding a
+  remote name, and needs no new secret - <code>GH_TOKEN</code>/<code>GITHUB_TOKEN</code> from
+  <code>secrets.GITHUB_TOKEN</code> is what the executor already reads.</li>
+<li>Renamed <code>CONFLICT_COMMENT_PREFIX</code> to <code>NEEDS_RESOLUTION_COMMENT_PREFIX</code> (one rename,
+  one new caller) rather than defining a second, identical prefix constant.</li>
+</ul>
+<p><strong>Still gated, per this item's own recorded gate ("one green Action cycle flips this
+done") - not done in this PR:</strong> deleting the live Routine
+(<code>trig_01N79jHmLo3bSbg8pLM6MNTB</code>), and flipping this item to <code>done</code>. Both wait for a
+verified run of the new Action once it is on the default branch - <code>workflow_dispatch</code>
+is only offered there, the same constraint <code>stack-board-single-site</code>'s notes already
+recorded for the Pages site.</p>
+<p><strong>A live coordination point, not a blocker, for whoever next works <code>stack-maintenance</code>'s
+<code>promotion-summaries-and-table</code> (#162):</strong> that item is still adding session-facing
+features to the pass an LLM session runs, and <code>.claude/skills/stacked-pr-maintenance/routine-prompt.md</code>
+(merged 2026-08-13) documents registering exactly the scheduled Routine this item
+retires. Its own open question - "an already-registered scheduled run's notification
+setting has no field on the update API" - resolves itself once this item deletes that
+registration; <code>routine-prompt.md</code>'s own guidance becomes dead weight at the same time,
+worth a look once this lands.</p>
+<h5><code>routine-cutover</code>'s #280 review round, 2026-09-06: the retarget was never actually refused</h5>
+<p>Two comments on #280, both from the credential-assumption angle. The first asked directly whether
+retargeting a base is actually doable from a GitHub Action - it is, for the write itself; what was
+never true was the inherited assumption that it wasn't.</p>
+<p><strong>The 403 <code>stack-maintenance-executor</code> (#139) recorded was through a Claude session's own proxied
+credential, not through a plain GitHub Actions token.</strong> That probe never ran from an Actions runner
+at all. <code>maintenance_github.GitHubRepository</code> authenticates its own requests directly with
+<code>GH_TOKEN</code>/<code>GITHUB_TOKEN</code>, never through a session's proxy, so there was no basis for assuming it
+would hit the same wall - only for testing it, which this round's fix now does.</p>
+<p><code>resolve_reparents</code> (renamed from <code>notify_reparents</code>) attempts the retarget itself first via a new
+<code>ForkPullRequests.retarget_base</code> (<code>PATCH /pulls/{number}</code> with <code>{"base": ...}</code>, the same shape
+<code>set_description</code> already uses), and only falls back to the label + comment notice on a genuine
+refusal - <code>403</code> (this credential specifically refused) or <code>422</code> (the pull request is a GitHub Stack
+member, which has to move through native Stack mechanics instead of a plain base change - a real,
+separate restriction traced in an earlier addendum). <code>MaintenanceReport</code> gained
+<code>reparents_retargeted</code> alongside the existing <code>reparents</code>, so <code>run-report --json</code> says which of the
+found reparents this pass resolved itself rather than only that they existed. Reparenting now also
+runs before restack in <code>run-report</code>, matching the session-driven doctrine's own step ordering - a
+restack integrates onto a branch's <em>current</em> parent, so a child left on a landed one has to be
+retargeted first or it restacks onto a dead end.</p>
+<p>The second comment widened the workflow's own triggers: <code>opened</code> and <code>ready_for_review</code> alongside
+<code>closed</code>, so a fresh pull request or one leaving draft (the self-review sign-off that makes it
+promotable) is picked up the same run rather than waiting up to six hours for the next schedule tick.</p>
+<p>Still unverified, and still this item's own recorded gate: whether GitHub actually allows this
+credential to retarget a base on this fork, rather than refusing with <code>403</code>/<code>422</code> for a reason not
+yet seen. That answer only comes from a real dispatched run once this is on the default branch.</p>
+<h5><code>routine-cutover</code>'s #280 review round, 2026-09-06 (continued): a naming ask and a real coexistence question</h5>
+<p>Two more comments, one mechanical and one worth the research it took to answer honestly rather
+than reassure.</p>
+<p><strong>The two retarget-refusal statuses are now <code>RetargetRefusal(IntEnum)</code></strong> (<code>CREDENTIAL_REFUSED = 403</code>,
+<code>STACK_MEMBER = 422</code>), replacing the bare <code>frozenset({403, 422})</code> literal <code>maintenance_github.py</code>'s
+<code>retarget_base</code> checks against - the one magic-number lapse in the previous round's own fix.</p>
+<p><strong>Whether this Action conflicts with the regenerated integration branch pipeline
+(<code>integration-branch</code>/<code>integration-branch-ci-verdict</code>, <code>stack-maintenance</code> plan, not yet on <code>main</code>)
+turned out to have already been answered, by that item's own history.</strong> Its notes record a defect
+found during its own development - "the maintenance pass was adopting candidates" - where the
+executor's board read treated the pipeline's own judging pull requests as ordinary stack members.
+The fix, <code>BoardExport.is_a_candidate</code>, was placed deliberately "at the one place both readers derive
+their work from" - the shared board-export module both a build and any maintenance pass, this
+Action included, read through - and ships in the same pull request that starts opening candidate
+pull requests in the first place. So there is no landing-order gap where candidates exist without
+the exclusion protecting them: this Action inherits <code>is_a_candidate</code> automatically once
+<code>integration-branch</code> lands, with no change of its own needed. The one thing that still can happen -
+both workflows firing on the same <code>pull_request</code> event - is a benign race rather than an
+interruption, since they write to disjoint refs and a build is regenerated from scratch and
+self-limiting by design. Recorded as a comment in <code>stack-maintenance.yml</code> itself so a future reader
+does not have to re-derive it from <code>stack-maintenance</code>'s roadmap.</p>
+<p>Both threads replied to and resolved. Pushed as <code>a1409d71</code>.</p></div>
     </details>
   </header>
 
@@ -786,7 +884,10 @@ type in a module with its own name, the fixture is gone and the tests import the
             <h4 class="item-title">PR 4: plans-only Pages site (stack board retired for the native stack map)</h4>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
-              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-pending" title="Latest checks on the head commit: pending">checks pending</span>
+              <span class="badge board-chip chip-negative" title="1757 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1757 −0</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -794,6 +895,7 @@ type in a module with its own name, the fixture is gone and the tests import the
             <span class="mono branch">claude/dashboard-publish-automation-hnfi5a</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/218" target="_blank" rel="noopener">#218</a>
             <a class="session-link" href="https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk" target="_blank" rel="noopener">session ↗</a>
+            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/218" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
@@ -871,20 +973,7 @@ the repo/branch/upstream repository variables, and three inconsistent poll-inter
             <span class="mono id">artifact-path-retirement</span>
             <span class="mono branch">None</span>
             <span class="muted">no pull request yet</span>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Start now">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-kickoff workflow-cutover artifact-path-retirement" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
-</span>
-
+            
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
@@ -910,7 +999,7 @@ Gate: one green site-Action cycle, the same bar `tooling-branch-retirement` alre
           </details>
           <div class="deps">
             <span class="deps-label">needs</span>
-            <span class="chip" title="PR 4: plans-only Pages site (stack board retired for the native stack map)">stack-board-single-site</span>
+            <span class="chip chip-unmet" title="PR 4: plans-only Pages site (stack board retired for the native stack map) (not ready yet — this item is blocked on it)">stack-board-single-site</span>
 
           </div>
         </div>
@@ -925,14 +1014,17 @@ Gate: one green site-Action cycle, the same bar `tooling-branch-retirement` alre
             <h4 class="item-title">Retire the scheduled LLM Routine: deterministic Action + on-demand sessions</h4>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="644 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+624 −20</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">routine-cutover</span>
-            <span class="mono branch">None</span>
-            <span class="muted">no pull request yet</span>
-            <a class="session-link" href="https://claude.ai/code/session_017JMftn3ujp7xsyhwcMaF75" target="_blank" rel="noopener">session ↗</a>
+            <span class="mono branch">claude/stack-maintenance-action</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/280" target="_blank" rel="noopener">#280</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Q8JfYcge9pLWPxGSE9d9d1" target="_blank" rel="noopener">session ↗</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
@@ -959,7 +1051,6 @@ conflicts, red CI after a restack - runs in on-demand sessions surfaced by the d
 by a timer. The gate is unchanged: only after the stack tooling is on cram2/main and fork main
 fast-forwards; one green Action cycle flips this done. The live Routine is trigger
 `trig_01N79jHmLo3bSbg8pLM6MNTB` (&#34;PR Stack Monitor and Update&#34;), which the final cutover deletes.
-
 **The base-change 403 is one credential, not the platform** (corrected 2026-08-02 by
 `session-safe-pr-reparent`&#39;s probe). The MCP `update_pull_request` tool changes a base fine, verified
 on throwaway pull request #129, so the &#34;no session can ever reparent&#34; reading was wrong and there is
@@ -967,7 +1058,6 @@ no close-and-recreate fallback to inherit. The Action&#39;s own credential is a 
 verify it with a real base change from the Action before relying on it, and if it does 403, call the
 same REST endpoint under a token that does not carry the restriction rather than degrade to
 renumbering pull requests.
-
 **Detection must be event-triggered, and one event type wider than first designed.** Tracing #40/#41
 on 2026-08-02 showed the human action was correct maintenance, not a mistake automation should
 prevent: the user closed #40 after rebuilding its branch, and its successor #53 merged normally nine
@@ -976,22 +1066,30 @@ days later. The real defect is that *any* pull request leaving the open set drop
 fires for both, so the Action re-sweeps git ancestry for every remaining open fork pull request&#39;s
 base on that one event - not only the closed pull request&#39;s own branch. In the real case that would
 have caught #41&#39;s orphaning at #53&#39;s merge, days before a review round noticed it by accident.
-
 **The interim pointer prompt is adopted and live** (2026-08-02). The user replaced the Routine&#39;s
 ~17.5k-token inline prompt with the short pointer this item specified: HARD RULES inline, because
 they must bind before any file is read, plus &#34;read `.claude/stack/ROUTINE.md` and execute&#34;. It
 resolves `origin/main` first and falls back to the landed-parent-detection branch while
 `.claude/stack/` is still in review, so that branch is live production input and an edit to
 `ROUTINE.md` ships on push with no deploy step. That is what stops doctrine corrections needing a
-manual paste. Adoption immediately exposed a latent ordering bug, fixed in #117: SETUP step 0 
+manual paste. Adoption immediately exposed a latent ordering bug, fixed in #117: SETUP step 0
 asserted that `stack.py` and `stack.toml` were already on the checkout, written in anticipation of a
 landing that had not happened. Under the pointer the Routine would have resolved its doctrine,
 believed the tooling present, and failed on the first `stack.py` call in phase 2 - after phase 1 had
 already mutated pull requests. Step 0 now fetches `.claude/stack/` from the same ref instead of
 asserting it. Two deletions fall due when `.claude/stack/` reaches main: the pointer prompt&#39;s
 second source line, which needs a manual paste, and step 0&#39;s fetch fallback. Neither breaks anything
-if forgotten; both are dead weight.</div>
+if forgotten; both are dead weight.
+Re-checked 2026-09-06 after finding the item in_progress with no branch and no PR - the same &#34;recorded state said nothing was wrong&#34; gap #218 and #211 hit. What actually happened: the prerequisite work landed on a sibling plan and nobody came back to close the loop here.
+**The gate is clear.** cram2/main and this fork&#39;s main are the identical commit (f6a53cf9), both carrying .claude/stack/. Both halves of &#34;stack tooling on cram2/main, fork main fast-forwards&#34; are satisfied.
+**The 2026-08-02 open question is already answered, in code.** stack-maintenance-executor (#139, done) probed the Action&#39;s own credential directly and recorded the result in its own notes: &#34;label writes, conflict comments and description writes are all available to deterministic code; only the base change needs the MCP client. That table is what the cutover&#39;s Action needs for its own credential.&#34; maintenance.py&#39;s module docstring independently confirms it and adds: run-report --json exists &#34;so a scheduled job with no model in the loop can emit it directly.&#34; The deterministic executor this item&#39;s endgame calls for is already built (board/fast-forward/restack/promote/run-report); restack conflicts already self-report (comment + needs-resolution, via conflict_report()/DefaultLabel.NEEDS_RESOLUTION); the only un-surfaced residue is reparents (base retargets), which nothing today posts a notice for.
+**The interim pointer prompt is superseded twice over.** ROUTINE.md no longer exists anywhere (renamed away in the bastler-package rename); the live Routine&#39;s own registered prompt (trig_01N79jHmLo3bSbg8pLM6MNTB, per .claude/skills/stacked-pr-maintenance/routine-prompt.md merged 2026-08-13) already invokes `/stacked-pr-maintenance --non-interactive` directly rather than pointing at a doctrine file. The two dead-weight deletions the old note flagged (the pointer&#39;s second source line, SETUP step 0&#39;s fetch fallback) are themselves now moot in a different way - there is no pointer prompt left to carry them.
+**A live coordination gap, not a blocker:** stack-maintenance is still investing in the session/Routine-invoked path - promotion-summaries-and-table (#162, in_progress) is adding features to the pass an LLM session runs, and routine-prompt.md documents registering exactly the scheduled Routine this item retires. Not a scope overlap (different deliverables: skill enrichment vs. this item&#39;s Action wrapper), but #162&#39;s open &#34;an already-registered scheduled run&#39;s notification setting has no field on the update API&#34; question resolves itself once this item deletes the registration - worth flagging to whoever picks up #162 next.
+Plan: add reparent notification (comment + needs-resolution) to the executor, since nothing posts one today, then a stack-maintenance.yml Action calling run-report --json on pull_request:closed / schedule / workflow_dispatch, using the same GH_TOKEN/GITHUB_TOKEN the executor already reads (no new secret). Routine deletion and flipping this item done still wait on this item&#39;s own recorded gate: one green cycle of that Action, which needs the PR on the default branch first.</div>
           </details>
+          <div class="blockers">
+            <div class="blocker">▸ None left outside this item&#39;s own next step. The gate this item was waiting on (&#34;stack tooling on cram2/main and fork main fast-forwards&#34;) is now clear: verified 2026-09-06, cram2/main and this fork&#39;s main are the identical commit f6a53cf9, both carrying .claude/stack/ including maintenance.py. What remains is this item&#39;s own deliverable: no .github/workflows/*.yml calls the deterministic executor yet (confirmed absent on main, on integration, and on #218&#39;s branch).</div>
+          </div>
         </div>
       </div>
     </article>
@@ -1025,9 +1123,9 @@ through a session&#39;s git proxy, so those two steps run outside the harness - 
           </details>
           <div class="deps">
             <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="Retire the scheduled LLM Routine: deterministic Action + on-demand sessions (not ready yet — this item is blocked on it)">routine-cutover</span>
+            <span class="chip" title="Retire the scheduled LLM Routine: deterministic Action + on-demand sessions">routine-cutover</span>
 
-            <span class="chip" title="PR 4: plans-only Pages site (stack board retired for the native stack map)">stack-board-single-site</span>
+            <span class="chip chip-unmet" title="PR 4: plans-only Pages site (stack board retired for the native stack map) (not ready yet — this item is blocked on it)">stack-board-single-site</span>
 
           </div>
         </div>
@@ -1057,11 +1155,11 @@ through a session&#39;s git proxy, so those two steps run outside the harness - 
       </div>
       <div class="sidebar-card" id="next-steps-card">
         <h3>What to do next</h3>
-          <div class="next-group next-ready">
-            <h4>Ready to start <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+          <div class="next-group next-review">
+            <h4>Ready to review <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
             <ul>
               <li class="next-entry">
-                <a class="next-item-link" href="#item-artifact-path-retirement" data-item-identifier="artifact-path-retirement" onclick="planDashboardHighlightItem(event, this)"><strong>Retire the Artifact publishing path once the Pages site has run one green cycle</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+                <a class="next-item-link" href="#item-stack-board-single-site" data-item-identifier="stack-board-single-site" onclick="planDashboardHighlightItem(event, this)"><strong>PR 4: plans-only Pages site (stack board retired for the native stack map)</strong><br><span class="next-reason">open draft pull request, ready for your review</span></a>                <a class="next-review-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/218" target="_blank" rel="noopener">Review ↗</a>              </li>
             </ul>
           </div>
       </div>

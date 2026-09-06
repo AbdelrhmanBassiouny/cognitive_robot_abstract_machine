@@ -1,4 +1,4 @@
-<title>Feature layer, multi-tree engines, concept trees, OO integration and TMS</title>
+<title>Knowledge-directed perception: expectation and failure detection</title>
 <style>
   :root {
     --bg: #F4F6F7;
@@ -620,150 +620,114 @@
 <div class="page hide-done" id="plan-dashboard-page">
   <header class="masthead">
     <p class="eyebrow">Plan Dashboard</p>
-    <h1>Feature layer, multi-tree engines, concept trees, OO integration and TMS</h1>
-    <p class="description">Everything the forward architecture puts on top of the single-class engine: named memoized features computed once per case, the MCRDR and GRDR multi-tree engines, concept trees declared as vocabulary with a stratified dependency graph, per-class definition RDRs with candidate generators, JTMS justification recording, and the architecture brief that documents the finished whole.</p>
+    <h1>Knowledge-directed perception: expectation and failure detection</h1>
+    <p class="description">The expectation wave of knowledge-directed-perception (split out on 2026-09-05 to get every successor under the plan-size budget): what the robot did, and what Segmind saw it do, say where a thing should now be. Perception looks there, and reports a violated expectation as a failure rather than as an absence - the end-to-end story the paper is written around. Depends on items of `knowledge-directed-requests` and `knowledge-directed-grounding` that could not be preserved as `depends_on` across the plan split - see the affected items&#39; own `blockers`. See `knowledge-directed-grounding`&#39;s roadmap.md for the programme-wide why, the three waves, the deadline budget and the sequencing decisions this plan inherits.</p>
     <p class="repo-line">
-      10 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
-<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/94" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+      5 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/201" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
     <details class="roadmap-details">
       <summary>Background &amp; history (roadmap.md)</summary>
-      <div class="roadmap-body"><h4>Feature layer, multi-tree engines, concept trees, OO integration and TMS — Roadmap</h4>
-<p>Narrative half of <code>rdr-engine-extensions</code>. One of seven plans the oversized
-<code>rdr-refactor</code> was split into on 2026-08-30; the predecessor's full 3,259-line
-roadmap remains in the personal-notes branch's history immediately before that
-split commit.</p>
-<h5>What is being built</h5>
-<p>Everything the forward architecture puts on top of the single-class engine. The
-design lives in <code>rdr_architecture_plan.md</code>, which has never landed — it was
-carried by a pull request closed unmerged, and re-landing it is this plan's last
-item.</p>
+      <div class="roadmap-body"><h4>Knowledge-directed perception: expectation and failure detection</h4>
+<p>One of three successors to <code>knowledge-directed-perception</code>, split on 2026-09-05 for
+<code>plan-size-limits</code> (tracking issue #200). <strong>See <code>knowledge-directed-grounding</code>'s
+roadmap.md for the programme-wide why, the three waves, the deadline budget, the shared
+"stacked on, never waiting for a merge" and "demo merges into <code>tracy_icra</code> as soon as it
+works" rules, and the sequencing decisions this plan inherits.</strong> Per-round implementation
+narrative about already-built items is compressed into each item's own <code>notes</code> in
+<code>plan.yaml</code>; the full predecessor roadmap stays reachable in the personal-notes branch's
+history immediately before the split commit.</p>
+<h5>The recording constraint that shapes what this wave can ask for</h5>
+<p>Measured on <code>episode-replayed-into-the-world</code>: of the six rosbags recorded on 2026-08-28,
+only <code>tracy_pickup_demo</code> carries the robot itself (<code>/tf</code>, <code>/tf_static</code>, <code>/joint_states</code>).
+The other five hold camera topics only. So a replayed episode gives an event history for
+the pick-up demo and for anything recorded from now on, but not for the five scene
+captures - those get their expectations from the board and the action model directly,
+which is why <code>pieces-looked-for-where-expected</code> (<code>knowledge-directed-grounding</code>) does not
+depend on this track. Recording <code>/tf</code> and <code>/joint_states</code> alongside the camera in future
+recordings would remove the split entirely; worth doing before the next capture session.</p>
+<h5>Standing decision: a belief decays only when something acts on it</h5>
+<p><code>expectations-from-events</code>'s central rule: an object's believed pose does not decay on its
+own between frames. Released over a hole, it is believed to be at that hole, turned any
+way within the release's spread; still grasped, its pose is the gripper's; acted on by
+nothing, its pose is exactly where it was last seen. This is what makes a history
+tractable where a single frame is not, and it is the rule any future extension of belief
+tracking in this programme should preserve rather than re-derive.</p>
+<h5>Standing hazard: a generic that is also a context manager broke ORM generation workspace-wide</h5>
+<p>Fixed as <code>1e93c138</code> on <code>expectations-from-events</code>. <code>make_specialized_dataclass</code>'s
+memoization cached on the type alias object itself rather than on the class it names,
+which is fine for an ordinary <code>Generic</code> subscript but raises <code>AttributeError:
+'types.GenericAlias' object has no attribute '__memo__'</code> for a class whose
+<code>__class_getitem__</code> returns a bare <code>types.GenericAlias</code> - which krrood's own <code>Variable</code> is,
+being a context manager. Every ORM-building CI job failed identically regardless of which
+package it was building for, because the failure is in the shared code path. A generic
+that is also a context manager is now in krrood's shared test dataset, so its own conftest
+would fail at collection if this regressed. Worth checking first if any future item in
+this programme sees every CI job fail identically.</p>
+<h5>Open, at the developer's own discretion (not this plan's to resolve)</h5>
 <ul>
-<li><strong>Feature layer, the "poor man's Rete"</strong> (<code>rdr-feature-registry</code> →
-  <code>rdr-feature-capture</code>). Named, memoized, registry-backed derived features that
-  rules reference by name, with one <code>CaseView</code> per case per run — so each
-  feature is computed once regardless of how many rules mention it. Then
-  knowledge-acquisition-time capture: a <code>%feature</code> magic, hash-based
-  deduplication of equivalent expressions, and registry autocomplete.</li>
-<li><strong>Multi-tree engines</strong> (<code>rdr-multi-class</code> → <code>rdr-general-fixpoint</code>). MCRDR
-  first: multi-valued and iterable conclusion attributes, which lifts the
-  single-valued guard the underspecified adapter enforces. Then GRDR: the naive
-  fixpoint loop, the monotonic-conclusions contract, and recorded dependency
-  edges.</li>
-<li><strong>Concept trees, NRDR</strong> (<code>rdr-concept-trees</code>). Trees declared as <em>vocabulary</em>
-  — named boolean or typed conclusions other trees may reference — with an
-  explicit declared dependency graph between trees, stratified evaluation order,
-  semi-naive re-firing under Datalog semantics, cornerstone-regression checks
-  when a shared concept is edited, and upstream-fix routing in the acquisition
-  interface.</li>
-<li><strong>OO integration</strong> (<code>rdr-oo-definitions</code>). Per-class <code>definition</code> RDRs
-  colocated with the class as a Specification pattern, candidate generators in a
-  hypothesize-and-test shape, the case as a <code>(candidate, scoped view)</code> pair
-  respecting the Law of Demeter, and taxonomy-level discriminators for exclusive
-  siblings. The engine supplies upstream conclusions bottom-up over the
-  dependency graph between class definitions, so definitions never call
-  definitions — inversion of control is the point.</li>
-<li><strong>TMS justifications</strong> (<code>rdr-justifications</code>). A <code>Justification</code> value object
-  plus a <code>JustificationRecorder(EvaluationObserver)</code>, and retraction propagation
-  over the dependency graph, giving incremental recompute on world change and
-  explanations for free.</li>
-<li><strong>The architecture brief</strong> (<code>rdr-architecture-brief</code>).</li>
+<li><code>expectations-from-events</code>: whether <code>InsideOf</code> (which already answers the sunk/over/
+  clear cases at 23x less cost than <code>InsideRegion</code>, but reads a bounding box rather than a
+  shape's volume) may absorb <code>InsideRegion</code>'s statechart role at a 0.9 threshold, and
+  whether <code>InsideRegion</code> should carry <code>PlacementRelation</code>'s <code>allowed_space</code>.</li>
+<li><code>expectations-from-events</code>: <code>HasPosition</code> versus <code>HasLocation</code> as the field's name -
+  resolved without a rename being asked for, recorded only because the name is still his
+  to change.</li>
+<li><code>expectations-from-events</code>: the four lid expected-to-fail marks do not come off yet. Two
+  of the four now get a history-seeded fit, but it loses to a ghost cylinder at the same
+  place by a small margin - which is <code>competing-explanations</code>'s claim
+  (<code>knowledge-directed-grounding</code>, <code>surfaces</code> track) to settle, not a threshold to tune
+  here.</li>
 </ul>
-<h5>Decisions that still bind</h5>
-<p><strong>1. The brief is deliberately last, not an early trivial doc PR.</strong> It was
-originally framed as a small independent Wave-0 change. The plan owner's call
-was that it reads as a description of a <em>finished</em> system, so landing it
-mid-refactor is the wrong sequencing. Its <code>depends_on</code> names the two integration
-tips as a best-guess proxy for "the engine is stable"; revisit the exact edge
-when the item is picked up.</p>
-<p><strong>2. The closed brief branch is kept rather than deleted.</strong> Its content was
-already refreshed once — the post-split repository mapping table, the
-auto-serialization claim, the de-prefixed module names — so re-landing it is a
-re-verify against whatever the engine looks like by then, not a rewrite.</p>
-<p><strong>3. The OO prototypes are input to harvest, not branches to merge.</strong>
-<code>rdr-oo-recognition</code> (#21) carries an <code>rdr/recognition/</code> package — definition,
-engine, registry, candidate generators, predicates and their tests — and
-<code>rdr-backend-unification</code> (#22) unifies recognition with the query and
-underspecified backend frontend. Both are drafts on bases that were closed
-without merging, so their commits are in neither the upstream base nor any open
-fork branch. A maintenance pass cannot invent a target for them and reports them
-to their owner instead. <code>rdr-oo-recognition</code> keeps <code>deferred</code> rather than
-<code>blocked</code>: both are true of it, and the deferral is the developer's own
-decision, so the dead base is recorded beside it rather than overwriting it.</p>
-<p><strong>4. Truth unification is a prerequisite of the justifications, and it has
-landed.</strong> <code>eql-truth-unification</code> (#99) is in the
-<code>eql-core-and-code-generation</code> plan and has merged, so nothing is waiting on it;
-its <code>depends_on</code> edge is dropped rather than kept as a cross-plan reference the
-schema cannot express.</p>
-<p><strong>5. The multi-tree track has an existing engine to port from, not to invent.</strong>
-The current <code>entity_query_language/rdr</code> has single-class only; MCRDR and the
-general fixpoint loop are ported from the legacy <code>ripple_down_rules</code> package,
-with the dependency graph and the monotonic-conclusions contract designed in
-rather than inherited.</p>
-<h5>Cross-plan dependencies, and what they cost</h5>
-<p><code>rdr-feature-registry</code> and <code>rdr-multi-class</code> both stack on <code>d-core-backend</code>
-(#210) in <code>rdr-core-engine</code>. <code>depends_on</code> cannot name an item in another plan,
-so both edges are recorded as <code>blockers</code> and those two items carry no dependency
-chip and no automatic readiness computation. Everything downstream of them —
-concept trees, and through them OO integration, justifications and the brief —
-keeps its edges, since the whole chain lives here.</p>
-<h5>Open</h5>
-<ul>
-<li><strong>How this track relates to the explanation track.</strong> The
-  EQL-as-formal-derivation versus natural-language-gloss distinction that
-  <code>rdr-explanation</code>'s audience rendering rests on is the same one the TMS
-  justifications produce. Neither has been designed with the other in view yet,
-  and they should be.</li>
-<li><strong>Whether the feature layer and MCRDR can genuinely run in parallel.</strong> They
-  are recorded as independent tracks on the same base, but MCRDR lifts a guard
-  in <code>underspecified.py</code> that the feature layer does not touch, so the claim has
-  not been tested against real diffs.</li>
-<li><strong>Nothing here has a branch.</strong> Every item is <code>blocked</code>, <code>not_started</code> or
-  <code>deferred</code>, gated on the core engine's stack landing.</li>
-</ul>
-<h5>Standing conventions</h5>
-<ul>
-<li>Follow <code>.claude/personal/cram-notes.md</code> and this repository's <code>AGENTS.md</code>.</li>
-<li>SOLID is a review gate: a new capability enters as an abstraction plus small
-  dataclass implementations, and strategies stay substitutable without touching
-  the engine.</li>
-<li>TDD: failing test first, and no test is modified to make something pass.</li>
-<li><code>krrood</code> stays self-contained; world-like scenarios are mimicked in
-  <code>test/krrood_test/dataset</code>.</li>
-<li>Sessions may run in parallel only if their pull requests touch disjoint files
-  <em>and</em> neither needs the other's branch as a base. Everything below <code>main</code> here
-  is stacked, so "parallel" means parallel tracks, each internally sequential.</li>
-<li>The programme's working method — run the probe rather than reasoning, compare
-  sorted collected test ids rather than counts, stage by explicit path — is
-  recorded in <code>rdr-core-engine</code>'s roadmap and applies here unchanged.</li>
-</ul></div>
+<h5>The ICRA convergence pass, 2026-09-06</h5>
+<p>Both in-flight items of this plan are now carried by one branch: <code>episode-replayed-into-the-world</code> (#246) and <code>expectations-from-events</code> (#257).</p>
+<p>The pass merged every one of them into the ICRA integration branch (#265,
+<code>claude/icra-experiments-simulation-pipeline-w4ep7n</code>) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.</p>
+<p>Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in <code>icra-foundation</code>'s <code>roadmap.md</code> under <em>The
+convergence pass, 2026-09-06</em>. Read it there rather than re-deriving it here.</p>
+<p>The #257 merge is where the second silent collision of the pass showed up, and it
+was this plan's fix that would have been lost: #257 replaced the grid a sweep walks
+with one laid out from the centre outwards, so that widening a belief's reach only
+<em>adds</em> placements, while the <code>knowledge-directed-grounding</code> lineage extracted the
+whole sweep into <code>OutlineFitter</code> and carried the old edge-anchored grid with it.
+Merged textually, <code>offsets_within</code> would have arrived unused beside the phase bug it
+was written to fix, with #257's four tests still passing against code no longer
+reached. It now lives in <code>outline_fit.py</code>, where the sweep does.</p></div>
     </details>
   </header>
 
   <div class="layout">
     <main>
-      <section class="wave" id="wave-foundations">
-        <div class="wave-eyebrow">Independent foundations</div>
-        <p class="wave-description">Three tracks that need only the core engine and can run in parallel.</p>
+      <section class="wave" id="wave-expectation">
+        <div class="wave-eyebrow">Perception knows what should be true</div>
+        <p class="wave-description">What the robot did, and what Segmind saw it do, say where a thing should now be. Perception looks there, and reports a violated expectation as a failure rather than as an absence.</p>
         <section class="track">
-          <h3 class="track-title">Feature layer</h3>
+          <h3 class="track-title">Expectation and failure</h3>
           <div class="item-list">
-                <article id="item-rdr-feature-registry" class="item status-blocked" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+                <article id="item-episode-replayed-into-the-world" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
-            <h4 class="item-title">Feature layer core, the &#34;poor man&#39;s Rete&#34;</h4>
+            <h4 class="item-title">Replay a recorded episode into the world so Segmind can say what happened</h4>
             <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1520 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1488 −32</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
-            <span class="mono id">rdr-feature-registry</span>
-            <span class="mono branch">rdr/feature-registry</span>
-            <span class="muted">no pull request yet</span>
+            <span class="mono id">episode-replayed-into-the-world</span>
+            <span class="mono branch">claude/episode-replayed-world-kickoff-6ye5bb</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/246" target="_blank" rel="noopener">#246</a>
+            <a class="session-link" href="https://claude.ai/code/session_01UdpwcAQGVFCKEy8VA2iFwv" target="_blank" rel="noopener">session ↗</a>
             <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
     <ul class="model-picker-list" role="listbox">
       <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
@@ -773,74 +737,160 @@ keeps its edges, since the whole chain lives here.</p>
       <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-engine-extensions rdr-feature-registry" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-expectation episode-replayed-into-the-world" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
 </span>
 
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
-            <div class="notes">Registry + CaseView memoization + EQL name resolution.</div>
+            <div class="notes">An expectation about where a thing now is comes from what was done to it, and on a
+recording nothing has been done to anything until the recording is replayed. Segmind
+already has the extension point - `EpisodePlayer` -&gt; `DataPlayer` -&gt; `FilePlayer` - so a
+player reading a rosbag&#39;s transform tree and joint states is the same kind of member over
+a different file, and `EpisodeSegmenterExecutor` produces support/pick-up/placing/
+insertion events over it unchanged. Touches only segmind, so it started immediately, off
+`main`.
+
+A measured constraint that decides what this can be asked for: only one of the six
+recorded bags (`tracy_pickup_demo`) carries the robot at all (`/tf`, `/tf_static`,
+`/joint_states`, 150 s, 253,000 messages); the other five hold only camera topics. So a
+replayed episode gives event history for the pick-up demo and anything recorded from now
+on, but not for the five scene captures - those get their expectations from the board and
+the action model directly, which is why `pieces-looked-for-where-expected` does not
+depend on this item. Recording `/tf` and `/joint_states` alongside the camera in future
+would remove the split entirely.
+
+Resolved 2026-09-03 in `auto` mode; green on all 23 checks throughout, `mergeable_state`
+clean. Answered as `3b3e3f53`/`f9a961fc`: the sampling generator became three named classes
+(`RecordedMessage`, `RecordedState`, `RecordingSampler`) each with one subject; ROS
+message-type strings became `RosbagMessageType`/`RosbagTopic` members with a test pinning
+every one against the type store. 53 passed, 1 skipped, against 48/1. One review thread
+(docstrings on two pre-existing, undocumented methods) is left open at the developer&#39;s
+discretion.</div>
           </details>
           <div class="blockers">
-            <div class="blocker">▸ Blocked until the Wave-0 stack lands on main.</div>
-            <div class="blocker">▸ Stacked on d-core-backend (#210) in the rdr-core-engine plan. Cross-plan, so no dependency chip.</div>
+            <div class="blocker">▸ One of the four review threads of 2026-09-03 is left open deliberately, and it is the developer&#39;s to close rather than work for this item. r3927219116 asked for docstrings everywhere they are missing in the pull request; every file it touches was swept with an AST walk and two places are left bare on purpose - the two new exceptions&#39; error_message / suggest_correction overrides, whose contracts DataclassException states on its own abstract methods and which no DataclassException subclass anywhere in this workspace documents, and DataPlayer.__post_init__ / FilePlayer.__post_init__, which this branch neither adds nor changes. Both are stated on the thread with an offer to add them either way. The other three threads are answered exactly as asked and resolved.</div>
           </div>
         </div>
       </div>
     </article>
 
-                <article id="item-rdr-feature-capture" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+                <article id="item-expectations-from-events" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
-            <h4 class="item-title">KA-time feature capture</h4>
+            <h4 class="item-title">Expect what the action promised, and report the difference as a failure</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="10158 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+9403 −755</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">expectations-from-events</span>
+            <span class="mono branch">claude/plan-item-kickoff-expectations-2zvpmn</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/257" target="_blank" rel="noopener">#257</a>
+            <a class="session-link" href="https://claude.ai/code/session_0124wGjWgkgfuDHX1xTJh6St" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-expectation expectations-from-events" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Segmind already emits support/loss-of-support/pick-up/placing/insertion events over
+`is_supported_by`. Perception keeps a set of expectations from them - after
+`LossOfSupport(piece, table)` stop searching the table; after `Placing(piece, lid)` search
+the lid - and the action model gets there first, since an action declares its effect before
+the event confirms it. The same mechanism is free failure detection: perception looked
+exactly where the action promised, found nothing (or something else), and says so.
+
+Widened 2026-08-31 from an expectation naming a surface to one carrying a pose: an
+expectation is a belief about where an object is - a region, a yaw interval, and the
+surface it should rest on - propagated by the action&#39;s declared effect and confirmed or
+refuted by events; the rule that carries the weight is that a belief only decays when
+something acts on the object, which is what makes a history tractable where a single frame
+is not. This is exactly the hypothesis `pieces-looked-for-where-expected` evaluates, which
+is why the two are linked.
+
+Built 2026-09-03 as PR #257, over the merge of three dependency stacks
+(`pieces-looked-for-where-expected`, `perception-backend`, `episode-replayed-into-the-
+world`) - the first item on the plan whose dependencies span that many. 482 passed against
+453 on the merge. The item&#39;s own reach exposed a fault worth more than the feature:
+`PieceMatcher`&#39;s search grid was not monotonic in radius (a lattice-phase bug, fixed). The
+four lid expected-to-fail marks still do not come off: two of the four captures now do get
+a history-seeded fit, but it reaches a lower agreement than a ghost cylinder at the same
+place, which is exactly `competing-explanations`&#39; claim to settle - stating a reach that
+happens to work is the tuning this plan has refused three times over.
+
+The design went through many review rounds (2026-09-03 through 2026-09-05) that
+progressively moved the mechanism into general Segmind/krrood vocabulary rather than a
+Montessori-specific hierarchy: `Expectation`/`Expectations` are now general Segmind
+concepts; an event&#39;s support effect is declared on the event class itself
+(`SupportEffect`, `EventWithSupportEffect`) rather than inferred; a stated relation is an
+ordinary entity-query-language `Match` over the relation&#39;s own class (an earlier
+`StatedRelation` subclass of `Match` was tried and reverted - &#34;I don&#39;t think inheriting
+from match is the right approach ... use match instead of stated relation altogether&#34;);
+`HasPosition` replaced the `Placed` union; and `Expectation.holds_now()` answers what is
+expected against the world the robot already has. A red CI (nine of twenty-three checks,
+an `AttributeError` in `make_specialized_dataclass`&#39;s memoization meeting a `GenericAlias`)
+was root-caused and fixed as `1e93c138` - not this branch&#39;s design fault, but its first
+exposure, since it is the first branch to reach a generic that is also a context manager.
+By the last measured head: krrood 1,337 passed/3 skipped, segmind 88 passed/1 skipped,
+experiments 521 passed/1 skipped/11 xfailed.
+
+Two threads remain open at the developer&#39;s own discretion (see blockers): whether `InsideOf`
+(which already answers 1.000/0.500/0.000 sunk/over/clear at 23x less cost than
+`InsideRegion`, but reads a bounding box rather than a shape&#39;s volume) may absorb
+`InsideRegion`&#39;s statechart role at a 0.9 threshold; and a naming question, `HasPosition`
+versus `HasLocation`.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Replay a recorded episode into the world so Segmind can say what happened">episode-replayed-into-the-world</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ One thread is open on #257 and it is the developer&#39;s to settle. r3940953108 asked whether an event&#39;s declared effect duplicates Segmind&#39;s statechart, and on 2026-09-05 he proposed making InsideOf answer for regions as the fix. Measured on the plate scene: it already does - Region is a KinematicStructureEntity and every attribute the reading touches is on that base - answering 1.000 sunk in the hole, 0.500 standing on the plate over it and 0.000 lifted clear, at 23x less cost than InsideRegion. But it counts vertices inside a bounding box rather than volume inside a shape, so its own default of 0.5 reads the over-the-hole case as in the hole, while the detectors&#39; 0.9 reads it correctly. So the fold works at 0.9, and what is his to decide is whether the threshold may carry that correctness and whether InsideOf gains the allowed_space InsideRegion has as a PlacementRelation.</div>
+            <div class="blocker">▸ r3940991795, HasPosition versus his HasLocation, was resolved by the developer without a rename being asked for; recorded here only because the name is still his to change.</div>
+            <div class="blocker">▸ Two threads opened on #257 on the evening of 2026-09-05 are answered as 3d4b8457 and left open, both being questions rather than asks. r3941751684 asked why Match.stating is needed when a where statement is extendable: because the two extend different halves of a match, and only an attribute reaches construct_instance, so a condition cannot supply the subject that makes the relation exist - said honestly, with the one production caller named and the fold offered. r3941771838 asked for a helper and for whether subclassing Match was worth it: object_stated_by is the helper and it turned up a latent KeyError for a relation stating nothing on the other side, and the answer on the subclass is no, chiefly because its equality override contradicted Match&#39;s identity equality silently.</div>
+            <div class="blocker">▸ Depends on `knowledge-directed-requests`&#39;s `imagination-world-rejects-what-a-predicate-refuses` (in_progress) - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no automatic readiness or dependency chip.</div>
+            <div class="blocker">▸ Depends on `knowledge-directed-grounding`&#39;s `pieces-looked-for-where-expected` (in_progress) - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no automatic readiness or dependency chip.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-predicted-state-from-declared-effects" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Predict the twin&#39;s current state from what the actions and the events declared, and ask perception from it</h4>
             <div class="item-badges">
               <span class="badge status-badge status-not_started">Not started</span>
               <span class="badge live-badge live-none">No pull request yet</span>
             </div>
           </div>
           <div class="item-meta">
-            <span class="mono id">rdr-feature-capture</span>
-            <span class="mono branch">rdr/feature-capture</span>
-            <span class="muted">no pull request yet</span>
-            
-          </div>
-          <details class="notes-details">
-            <summary>Notes</summary>
-            <div class="notes">%feature magic, AST-hash dedup, registry autocomplete.</div>
-          </details>
-          <div class="deps">
-            <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="Feature layer core, the &#34;poor man&#39;s Rete&#34; (not ready yet — this item is blocked on it)">rdr-feature-registry</span>
-
-          </div>
-        </div>
-      </div>
-    </article>
-
-          </div>
-        </section>
-        <section class="track">
-          <h3 class="track-title">MCRDR and GRDR</h3>
-          <div class="item-list">
-                <article id="item-rdr-multi-class" class="item status-blocked" style="--indent-level: 0; --indent-level-hidden-done: 0;">
-      <div class="item-row">
-        <div class="item-spine"></div>
-        <div class="item-body">
-          <div class="item-head">
-            <h4 class="item-title">MCRDR port: multi-valued attributes</h4>
-            <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
-            </div>
-          </div>
-          <div class="item-meta">
-            <span class="mono id">rdr-multi-class</span>
-            <span class="mono branch">rdr/multi-class</span>
+            <span class="mono id">predicted-state-from-declared-effects</span>
+            <span class="mono branch">None</span>
             <span class="muted">no pull request yet</span>
             <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
     <ul class="model-picker-list" role="listbox">
       <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
@@ -850,78 +900,92 @@ keeps its edges, since the whole chain lives here.</p>
       <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-engine-extensions rdr-multi-class" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff knowledge-directed-expectation predicted-state-from-declared-effects" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
 </span>
 
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
-            <div class="notes">Lifts the single-valued guard in underspecified.py.</div>
+            <div class="notes">Added 2026-09-04 at the developer&#39;s ask on #257 (r3934932647 and r3937639689). expectations-from-events keeps what holds of one piece the robot acted on, from the action&#39;s declared effect and each event&#39;s declared Effect, both stated as the twin&#39;s own relations. This is the general form of that: a predicted current state of the digital twin, built by applying every declared effect of the actions performed and the events seen to the world the robot has - explicit effect and occurrence rules, each event and each action saying queryably what now holds and what no longer does, kept inside what the domain model can express so the frame problem of situation calculus does not arise - from which perception is asked richer questions: the gripper no longer holding the piece, the piece resting where it was left, supported by the surface it was left on. Where an effect cannot be enumerated in advance it is concluded by the EQL-native ripple-down rules on the #77 stack, so knowledge is added as rules rather than as code. An action&#39;s pre- and post-conditions in coraplex are the same statements for actions, and where the two meet is worked out here. The prediction is what the simulation and the twin&#39;s own state should already agree with when the plan was executed there; the case it exists for is another agent acting, or the world disagreeing, which is what a look is then asked about. It meets icra-experiments&#39; snapshot-working-memory and failure-taxonomy-and-typing, which are the state and the failure side of the same thing; which of the three owns which half is the developer&#39;s to settle when it starts. Probabilistic fusion (a Kalman or particle filter) is not part of it: the relations are true or false and a belief is confirmed or refuted, and the accurate pose is a different question the paper&#39;s claim does not need.</div>
           </details>
-          <div class="blockers">
-            <div class="blocker">▸ Blocked until the Wave-0 stack lands on main.</div>
-            <div class="blocker">▸ Stacked on d-core-backend (#210) in the rdr-core-engine plan; it lifts the single-valued guard that backend enforces. Cross-plan, so no dependency chip.</div>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Expect what the action promised, and report the difference as a failure">expectations-from-events</span>
+
           </div>
         </div>
       </div>
     </article>
 
-                <article id="item-rdr-general-fixpoint" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">A second detector behind the interface</h3>
+          <div class="item-list">
+                <article id="item-robokudo-detector" class="item status-deferred" style="--indent-level: 0; --indent-level-hidden-done: 0;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
-            <h4 class="item-title">GRDR naive fixpoint engine</h4>
+            <h4 class="item-title">Answer a request with a RoboKudo analysis engine</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-deferred">Deferred</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">robokudo-detector</span>
+            <span class="mono branch">perception_robokudo_detector</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Reconsider">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-expectation robokudo-detector" onclick="planDashboardCopyActionCommand(this)">▸ Reconsider</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">One adapter implementing the detector interface over a RoboKudo analysis engine, so the rule tree can choose a learned detector (RoboKudo ships CLIP and YOLO annotators) for a target with no geometric model. Proves the reasoning layer is executor-agnostic and is the route by which this work moves into RoboKudo after the deadline. Deliberately last and expected to fall after it: nothing else depends on it, no demo item needs it, and it is the first thing to drop if the deadline tightens.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Deferred past the 2026-09-15 deadline: nothing depends on it and no demo item needs it.</div>
+            <div class="blocker">▸ Depends on `knowledge-directed-requests`&#39;s `choose-detection-method` (in_progress) - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no automatic readiness or dependency chip.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">The demo detects and recovers from a failure</h3>
+          <div class="item-list">
+                <article id="item-demo-detects-and-recovers-a-failed-insert" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A failed insertion is noticed because perception looked where the action promised</h4>
             <div class="item-badges">
               <span class="badge status-badge status-not_started">Not started</span>
               <span class="badge live-badge live-none">No pull request yet</span>
             </div>
           </div>
           <div class="item-meta">
-            <span class="mono id">rdr-general-fixpoint</span>
-            <span class="mono branch">rdr/general-fixpoint</span>
-            <span class="muted">no pull request yet</span>
-            
-          </div>
-          <details class="notes-details">
-            <summary>Notes</summary>
-            <div class="notes">Monotonic-conclusions contract + recorded dependency edges.</div>
-          </details>
-          <div class="deps">
-            <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="MCRDR port: multi-valued attributes (not ready yet — this item is blocked on it)">rdr-multi-class</span>
-
-          </div>
-        </div>
-      </div>
-    </article>
-
-          </div>
-        </section>
-      </section>
-      <section class="wave" id="wave-concepts">
-        <div class="wave-eyebrow">Concept trees</div>
-        <p class="wave-description">Needs both the feature layer and the multi-tree engines.</p>
-        <section class="track">
-          <h3 class="track-title">Concept trees</h3>
-          <div class="item-list">
-                <article id="item-rdr-concept-trees" class="item status-blocked" style="--indent-level: 0; --indent-level-hidden-done: 0;">
-      <div class="item-row">
-        <div class="item-spine"></div>
-        <div class="item-body">
-          <div class="item-head">
-            <h4 class="item-title">NRDR concept layer</h4>
-            <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
-            </div>
-          </div>
-          <div class="item-meta">
-            <span class="mono id">rdr-concept-trees</span>
-            <span class="mono branch">rdr/concept-trees</span>
+            <span class="mono id">demo-detects-and-recovers-a-failed-insert</span>
+            <span class="mono branch">tracy_icra</span>
             <span class="muted">no pull request yet</span>
             <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
     <ul class="model-picker-list" role="listbox">
       <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
@@ -931,283 +995,21 @@ keeps its edges, since the whole chain lives here.</p>
       <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-engine-extensions rdr-concept-trees" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff knowledge-directed-expectation demo-detects-and-recovers-a-failed-insert" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
 </span>
 
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
-            <div class="notes">Concept declaration, explicit DependencyGraph, stratified order, semi-naive firing, cornerstone-regression gate on shared-feature/ concept edits. Likely splits into 2-3 stacked PRs at execution time; this item is the umbrella placeholder.</div>
+            <div class="notes">The end-to-end story the paper is written around: the robot picks a piece, Segmind&#39;s LossOfSupportEvent takes the table out of the search, the insertion&#39;s declared effect points perception at the board&#39;s lid, and when the insertion fails perception finds the piece somewhere the plan did not expect and says so. Recovery follows from that report. Narrowed for the deadline: report the violated expectation, and let recovery be the plan re-asking rather than a policy of its own. If the deadline forces a cut, this is the item to protect and robokudo-detector is the one to drop.</div>
           </details>
           <div class="deps">
             <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="Feature layer core, the &#34;poor man&#39;s Rete&#34; (not ready yet — this item is blocked on it)">rdr-feature-registry</span>
-
-            <span class="chip chip-unmet" title="GRDR naive fixpoint engine (not ready yet — this item is blocked on it)">rdr-general-fixpoint</span>
+            <span class="chip" title="Expect what the action promised, and report the difference as a failure">expectations-from-events</span>
 
           </div>
           <div class="blockers">
-            <div class="blocker">▸ Blocked on Track F (rdr/feature-registry) and Track G (rdr/general-fixpoint).</div>
-          </div>
-        </div>
-      </div>
-    </article>
-
-          </div>
-        </section>
-      </section>
-      <section class="wave" id="wave-integration">
-        <div class="wave-eyebrow">OO integration and TMS</div>
-        <p class="wave-description">Two parallel tracks on top of the concept layer.</p>
-        <section class="track">
-          <h3 class="track-title">OO integration</h3>
-          <div class="item-list">
-                <article id="item-rdr-oo-definitions" class="item status-blocked" style="--indent-level: 0; --indent-level-hidden-done: 0;">
-      <div class="item-row">
-        <div class="item-spine"></div>
-        <div class="item-body">
-          <div class="item-head">
-            <h4 class="item-title">OO integration: definitions, candidate generators, taxonomy discriminators</h4>
-            <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
-            </div>
-          </div>
-          <div class="item-meta">
-            <span class="mono id">rdr-oo-definitions</span>
-            <span class="mono branch">rdr/oo-definitions</span>
-            <span class="muted">no pull request yet</span>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-engine-extensions rdr-oo-definitions" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
-</span>
-
-          </div>
-          <details class="notes-details">
-            <summary>Notes</summary>
-            <div class="notes">Harvests prototypes #21/#22 (rdr-oo-recognition, rdr-backend-unification), then closes both.</div>
-          </details>
-          <div class="deps">
-            <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="NRDR concept layer (not ready yet — this item is blocked on it)">rdr-concept-trees</span>
-
-          </div>
-          <div class="blockers">
-            <div class="blocker">▸ Blocked on rdr/concept-trees.</div>
-          </div>
-        </div>
-      </div>
-    </article>
-
-          </div>
-        </section>
-        <section class="track">
-          <h3 class="track-title">TMS justifications</h3>
-          <div class="item-list">
-                <article id="item-rdr-justifications" class="item status-blocked" style="--indent-level: 0; --indent-level-hidden-done: 0;">
-      <div class="item-row">
-        <div class="item-spine"></div>
-        <div class="item-body">
-          <div class="item-head">
-            <h4 class="item-title">TMS (JTMS) justification recording</h4>
-            <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
-            </div>
-          </div>
-          <div class="item-meta">
-            <span class="mono id">rdr-justifications</span>
-            <span class="mono branch">rdr/justifications</span>
-            <span class="muted">no pull request yet</span>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-engine-extensions rdr-justifications" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
-</span>
-
-          </div>
-          <details class="notes-details">
-            <summary>Notes</summary>
-            <div class="notes">Justification value object + JustificationRecorder(EvaluationObserver) + retraction propagation over the dependency graph.
-
-Also needs eql-truth-unification (#99), now in the eql-core-and-code-generation plan; it has merged, so nothing is waiting on it.</div>
-          </details>
-          <div class="deps">
-            <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="NRDR concept layer (not ready yet — this item is blocked on it)">rdr-concept-trees</span>
-
-          </div>
-          <div class="blockers">
-            <div class="blocker">▸ Blocked on eql/truth-unification (single truth source) and rdr/general-fixpoint (dependency graph + blackboard).</div>
-          </div>
-        </div>
-      </div>
-    </article>
-
-          </div>
-        </section>
-        <section class="track">
-          <h3 class="track-title">OO prototypes on dead bases</h3>
-          <div class="item-list">
-                <article id="item-rdr-oo-recognition" class="item status-deferred" style="--indent-level: 0; --indent-level-hidden-done: 0;">
-      <div class="item-row">
-        <div class="item-spine"></div>
-        <div class="item-body">
-          <div class="item-head">
-            <h4 class="item-title">OO recognition layer: candidate generators + definitions</h4>
-            <div class="item-badges">
-              <span class="badge status-badge status-deferred">Deferred</span>
-              <span class="badge live-badge live-open_draft">Open · Draft</span>
-              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
-              <span class="badge board-chip chip-negative" title="642 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+629 −13</span>
-              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
-            </div>
-          </div>
-          <div class="item-meta">
-            <span class="mono id">rdr-oo-recognition</span>
-            <span class="mono branch">rdr/oo-recognition</span>
-            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/21" target="_blank" rel="noopener">#21</a>
-            <a class="session-link" href="https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo" target="_blank" rel="noopener">session ↗</a>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Reconsider">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-engine-extensions rdr-oo-recognition" onclick="planDashboardCopyActionCommand(this)">▸ Reconsider</button>
-</span>
-
-          </div>
-          <details class="notes-details">
-            <summary>Notes</summary>
-            <div class="notes">Prototype input for Wave 3&#39;s rdr/oo-definitions, then close. Base is stale (rdr/oo-plan), do not merge as-is.</div>
-          </details>
-          <div class="blockers">
-            <div class="blocker">▸ stacked-pr-maintenance: Fork PR #21 (branch `rdr/oo-recognition`) is based on `rdr/oo-plan`, whose commits are in neither the upstream base nor any other open fork branch, so the 2026-08-30 stacked-pr-maintenance pass could derive no base to restack onto and handed the branch back to its owner: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/21#issuecomment-5467705500
-First pass that could see the case, which needed the parent-placement rule from the unlanded PR #198 (`unfetched-parent-branches`). The item is deferred, so choosing a new base can wait, but the PR cannot reach main on the base it names.</div>
-          </div>
-        </div>
-      </div>
-    </article>
-
-                <article id="item-rdr-backend-unification" class="item status-deferred" style="--indent-level: 1; --indent-level-hidden-done: 1;">
-      <div class="item-row">
-        <div class="item-spine"></div>
-        <div class="item-body">
-          <div class="item-head">
-            <h4 class="item-title">Unify recognition with the query/reasoning backend frontend</h4>
-            <div class="item-badges">
-              <span class="badge status-badge status-deferred">Deferred</span>
-              <span class="badge live-badge live-open_draft">Open · Draft</span>
-              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
-              <span class="badge board-chip chip-positive" title="348 lines changed versus the base - within the short-change threshold of 400">+279 −69</span>
-              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
-            </div>
-          </div>
-          <div class="item-meta">
-            <span class="mono id">rdr-backend-unification</span>
-            <span class="mono branch">rdr/backend-unification</span>
-            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/22" target="_blank" rel="noopener">#22</a>
-            <a class="session-link" href="https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo" target="_blank" rel="noopener">session ↗</a>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Reconsider">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-engine-extensions rdr-backend-unification" onclick="planDashboardCopyActionCommand(this)">▸ Reconsider</button>
-</span>
-
-          </div>
-          <details class="notes-details">
-            <summary>Notes</summary>
-            <div class="notes">Same disposition as #21: harvested by Wave 3, then closed.</div>
-          </details>
-          <div class="deps">
-            <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="OO recognition layer: candidate generators + definitions (not ready yet — this item is blocked on it)">rdr-oo-recognition</span>
-
-          </div>
-        </div>
-      </div>
-    </article>
-
-          </div>
-        </section>
-      </section>
-      <section class="wave" id="wave-brief">
-        <div class="wave-eyebrow">The architecture brief</div>
-        <p class="wave-description">Deliberately last: the brief describes the architecture as a finished whole.</p>
-        <section class="track">
-          <h3 class="track-title">The architecture brief</h3>
-          <div class="item-list">
-                <article id="item-rdr-architecture-brief" class="item status-deferred" style="--indent-level: 0; --indent-level-hidden-done: 0;">
-      <div class="item-row">
-        <div class="item-spine"></div>
-        <div class="item-body">
-          <div class="item-head">
-            <h4 class="item-title">Re-land RDR architecture brief and its bibliography as a docs-only page</h4>
-            <div class="item-badges">
-              <span class="badge status-badge status-deferred">Deferred</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
-            </div>
-          </div>
-          <div class="item-meta">
-            <span class="mono id">rdr-architecture-brief</span>
-            <span class="mono branch">rdr/architecture-brief</span>
-            <span class="muted">no pull request yet</span>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Reconsider">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-engine-extensions rdr-architecture-brief" onclick="planDashboardCopyActionCommand(this)">▸ Reconsider</button>
-</span>
-
-          </div>
-          <details class="notes-details">
-            <summary>Notes</summary>
-            <div class="notes">Repositioned 2026-07-24 from S3-docs/wave-0 to the final wave: the doc describes the architecture as a finished whole, so it reads better landed once the engine is actually stable (Wave 3 done) rather than mid-refactor. PR #75 (which re-landed closed PR #20&#39;s content; CI was green, mergeable clean) was closed for now; branch rdr/architecture-brief is kept so the content can be re-landed without redoing the work. depends_on is a best-guess placeholder for &#34;engine stable&#34; (Wave 3&#39;s two tips) — revisit the exact edge when this item is picked up.</div>
-          </details>
-          <div class="deps">
-            <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="OO integration: definitions, candidate generators, taxonomy discriminators (not ready yet — this item is blocked on it)">rdr-oo-definitions</span>
-
-            <span class="chip chip-unmet" title="TMS (JTMS) justification recording (not ready yet — this item is blocked on it)">rdr-justifications</span>
-
+            <div class="blocker">▸ Depends on `knowledge-directed-requests`&#39;s `demo-asks-by-query` (not_started) - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no automatic readiness or dependency chip.</div>
           </div>
         </div>
       </div>
@@ -1223,9 +1025,9 @@ First pass that could see the case, which needed the parent-placement rule from 
         <h3>Status</h3>
         <div class="summary-strip">
           <div class="stat"><span class="stat-num">2</span><span class="stat-label">Not started</span></div>
-          <div class="stat"><span class="stat-num">0</span><span class="stat-label">In progress</span></div>
-          <div class="stat"><span class="stat-num">5</span><span class="stat-label">Blocked</span></div>
-          <div class="stat"><span class="stat-num">3</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">2</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Deferred</span></div>
           <div class="stat"><span class="stat-num">0</span><span class="stat-label">Done</span></div>
         </div>
         <label class="done-toggle">
@@ -1236,7 +1038,15 @@ First pass that could see the case, which needed the parent-placement rule from 
       </div>
       <div class="sidebar-card" id="next-steps-card">
         <h3>What to do next</h3>
-        <p class="next-empty">Nothing actionable right now — every item is either in progress, fully blocked, or done.</p>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(2)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-predicted-state-from-declared-effects" data-item-identifier="predicted-state-from-declared-effects" onclick="planDashboardHighlightItem(event, this)"><strong>Predict the twin&#39;s current state from what the actions and the events declared, and ask perception from it</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-demo-detects-and-recovers-a-failed-insert" data-item-identifier="demo-detects-and-recovers-a-failed-insert" onclick="planDashboardHighlightItem(event, this)"><strong>A failed insertion is noticed because perception looked where the action promised</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
       </div>
     </aside>
   </div>

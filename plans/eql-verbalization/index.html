@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -976,6 +981,47 @@ cardinality. Recommended the first, with the third once declarable.</p>
 is not being folded into #264. If the developer wants it, it is a new item in this track,
 alongside the separate question of whether a directly aggregated attribute should read
 <em>"the sum of its income"</em> rather than <em>"the sum of incomes of Statements"</em>.</p>
+<h5>aggregate-repeat-reduction: review round 2 — the ranked frame named the wrong row (2026-09-05)</h5>
+<p>Three threads on #264, one per ranked expectation, all asking for the same sentence: <em>"For the
+month with the highest …, report the month, the sum of incomes of statements, and the sum of
+expenses of statements."</em></p>
+<p><strong>Measured before changing anything, and it was a defect rather than a wording preference.</strong> The
+ranked query with <code>limit(1)</code> returns one row, and that row is a month group — over three
+statements, two of them in March, the row is March with income sum <code>30.0</code>. The frame said <em>"For
+the Statement with the highest sum"</em>, which names something else: the top statement by income is
+the <code>20.0</code> one, whose own sums are <code>20.0</code> / <code>2.0</code>. The sentence described a query nobody wrote.</p>
+<p><strong>This is the mirror of round 1's r3941192834, and it settles the opposite way for the same
+reason.</strong> There the proposal was to name an <em>unranked</em> grouping frame after the entity, which is
+wrong because a row is a group; here the <em>ranked</em> frame was already naming the entity, which is
+wrong for exactly that reason. One principle — the frame names whatever a row is — reaching
+opposite verdicts because the two frames started from opposite defaults.</p>
+<p><strong>What shipped (<code>ccb7a780a</code>).</strong> <code>RankedRow</code> in <code>grammar/query/assembler.py</code> says what one row of
+a ranked report is, and each kind names itself: <code>GroupRow</code> when the report groups, <code>EntityRow</code>
+when it does not. <code>_ranked_columns_prose</code> then names a run of group-key columns as the group
+(<em>"the month"</em>, <em>"the year and month"</em> for a composite key) rather than a member's navigation to
+it (<em>"the month of the begin of its period"</em>), which after the frame change had no subject left
+to hang <em>"its"</em> on. The ungrouped ranked report is unchanged — its rows really are entities.
+<code>group_label</code> moved to module level and is now the only place deciding how a group key is named,
+shared by the ranked frame, <code>_for_each_header</code> and <code>_distinct_keys</code>.</p>
+<p><strong>Two consequences the plan should carry.</strong></p>
+<ul>
+<li>Seven expectations in <code>test_set_of_ranking.py</code> moved, every one a grouped ranked report that
+  asserted the entity frame. Inside them <code>its revenue</code> became <code>the revenue of a
+  ProfitAndLossStatement</code>: the frame no longer introduces the entity, so an aggregate's first
+  mention names its own root. Later mentions still pronominalise. The sentences are longer, and
+  <em>"its"</em> without an antecedent would be worse — but if the developer wants the pronoun back,
+  reintroducing the entity somewhere is a separate design question.</li>
+<li><strong>The scope-overlap finding recorded in "the settled plan" is superseded.</strong> That section chose
+  a new test module specifically to keep this branch off <code>test_set_of_ranking.py</code>, which #196 is
+  appending to. The ranked-frame fix puts it back on that file — unavoidably, since the file is
+  where the wrong expectations live. #196's added
+  <code>test_ranking_names_the_ordered_by_aggregate_not_the_first_selected</code> is a grouped ranked report
+  too, so its <em>"For the Invoice with the highest sum of the amount of its tax, …"</em> becomes <em>"For
+  the month with the highest …"</em> once both land: one string for whichever merges second, a
+  wording collision rather than a logic one. The separate-module decision still stands on its own
+  merits (it avoided both branches defining the same <code>Invoice</code> fixture); what is no longer true is
+  the PR description's claim of no shared path, which has been corrected there.</li>
+</ul>
 <h5>The conflict is cleared; the rebase still waits on #229 (2026-09-04)</h5>
 <p>Merged current <code>main</code> into <code>eql-symbolic-function-sdt</code> (<code>f97e7a99</code>), resolving the one
 conflicting file — <code>reasoning/predicates.py</code> — by keeping this branch's migrated classes and
@@ -1018,12 +1064,15 @@ blockers for a month without a single place to answer them.</p></div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="545 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+366 −179</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">p1-surface-verification</span>
             <span class="mono branch">claude/eql-verbalization-p1-surface-verification-eqltzc</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/86" target="_blank" rel="noopener">#86</a>
+            <a class="session-link" href="https://claude.ai/code/session_016YKmDi7FkjUCciXpE1dTNe" target="_blank" rel="noopener">session ↗</a>
             
           </div>
           <details class="notes-details">
@@ -1043,6 +1092,9 @@ blockers for a month without a single place to answer them.</p></div>
             <div class="item-badges">
               <span class="badge status-badge status-blocked">Blocked</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1967 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1492 −475</span>
+              <span class="badge board-chip chip-negative" title="GitHub reports this pull request does not merge cleanly onto its base">conflicts</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1099,12 +1151,15 @@ blockers for a month without a single place to answer them.</p></div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1672 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1208 −464</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">p2-operand-naming</span>
             <span class="mono branch">claude/eql-verbalization-operand-naming-n0gb95</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/87" target="_blank" rel="noopener">#87</a>
+            <a class="session-link" href="https://claude.ai/code/session_01PmF469kTk8cxuneu2nqxjm" target="_blank" rel="noopener">session ↗</a>
             
           </div>
           <details class="notes-details">
@@ -1124,12 +1179,15 @@ blockers for a month without a single place to answer them.</p></div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1325 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1099 −226</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">p3-concrete-subclass-expansion</span>
             <span class="mono branch">claude/eql-verbalization-p3-albw76</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/88" target="_blank" rel="noopener">#88</a>
+            <a class="session-link" href="https://claude.ai/code/session_013vWowa4wCGUA893PZbjev7" target="_blank" rel="noopener">session ↗</a>
             
           </div>
           <details class="notes-details">
@@ -1196,7 +1254,10 @@ blockers for a month without a single place to answer them.</p></div>
             <h4 class="item-title">Bug: reducing a repeated aggregate mention to &#34;the sum&#34; is ambiguous when another aggregate of the same kind is also selected</h4>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
-              <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="498 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+436 −62</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1204,7 +1265,6 @@ blockers for a month without a single place to answer them.</p></div>
             <span class="mono branch">claude/eql-verbalization-aggregate-repeat-gdz9g2</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/264" target="_blank" rel="noopener">#264</a>
             <a class="session-link" href="https://claude.ai/code/session_01Hwf7n1eUMVXD4vLdQwMYvP" target="_blank" rel="noopener">session ↗</a>
-            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/264" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
@@ -1256,10 +1316,6 @@ blockers for a month without a single place to answer them.</p></div>
       </div>
       <div class="sidebar-card" id="next-steps-card">
         <h3>What to do next</h3>
-        <label class="bug-filter-toggle">
-          <input type="checkbox" id="bug-fixes-only-toggle" onchange="document.getElementById('next-steps-card').classList.toggle('bug-fixes-only', this.checked)">
-          Bug fixes only
-        </label>
           <div class="next-group next-ready">
             <h4>Ready to start <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
             <ul>
@@ -1272,13 +1328,6 @@ blockers for a month without a single place to answer them.</p></div>
             <ul>
               <li class="next-entry">
                 <a class="next-item-link" href="#item-p4-sdt-migration" data-item-identifier="p4-sdt-migration" onclick="planDashboardHighlightItem(event, this)"><strong>P4: migrate semantic_digital_twin predicates off the framework</strong><br><span class="next-reason">at least one dependency is now ready for review — worth resolving the blocker</span></a>              </li>
-            </ul>
-          </div>
-          <div class="next-group next-review next-group-has-bugs">
-            <h4>Ready to review <span class="next-count-all">(1)</span><span class="next-count-bug">(1)</span></h4>
-            <ul>
-              <li class="next-entry next-entry-bug">
-                <a class="next-item-link" href="#item-aggregate-repeat-reduction-ignores-same-kind-siblings" data-item-identifier="aggregate-repeat-reduction-ignores-same-kind-siblings" onclick="planDashboardHighlightItem(event, this)"><strong>Bug: reducing a repeated aggregate mention to &#34;the sum&#34; is ambiguous when another aggregate of the same kind is also selected</strong> <span class="next-bug-chip">bug</span><br><span class="next-reason">open draft pull request, ready for your review</span></a>                <a class="next-review-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/264" target="_blank" rel="noopener">Review ↗</a>              </li>
             </ul>
           </div>
       </div>

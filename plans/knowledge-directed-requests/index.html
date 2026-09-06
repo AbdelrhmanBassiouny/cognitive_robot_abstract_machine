@@ -1,0 +1,1926 @@
+<title>Knowledge-directed perception: query language and method selection</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>Knowledge-directed perception: query language and method selection</h1>
+    <p class="description">The requests wave of knowledge-directed-perception (split out on 2026-09-05 to get every successor under the plan-size budget): perception as an entity query language backend beside the native and SQLAlchemy ones, so asking is evaluating rather than calling a pipeline by hand. The backend pushes what it can of a query&#39;s conditions into the search and filters the rest over the detections that come back; a rule tree over the target and the surface says which detector runs and how its parameters are set. Depends on two items of `knowledge-directed-grounding` that could not be preserved as `depends_on` across the plan split - see the affected items&#39; own `blockers`. See `knowledge-directed-grounding`&#39;s roadmap.md for the programme-wide why, the three waves, the deadline budget and the sequencing decisions this plan inherits.</p>
+    <p class="repo-line">
+      14 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/201" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>Knowledge-directed perception: query language and method selection</h4>
+<p>One of three successors to <code>knowledge-directed-perception</code>, split on 2026-09-05 for
+<code>plan-size-limits</code> (tracking issue #200). <strong>See <code>knowledge-directed-grounding</code>'s
+roadmap.md for the programme-wide why, the three waves, the deadline budget, the shared
+"stacked on, never waiting for a merge" and "demo merges into <code>tracy_icra</code> as soon as it
+works" rules, and the sequencing decisions this plan inherits.</strong> Per-round implementation
+narrative about already-built items is compressed into each item's own <code>notes</code> in
+<code>plan.yaml</code>; the full predecessor roadmap stays reachable in the personal-notes branch's
+history immediately before the split commit.</p>
+<h5>Standing correction: "unmerged" is not "unusable"</h5>
+<p>Recorded independently on <code>choose-detection-method</code> and <code>detector-parameters-from-
+knowledge</code>, both corrected 2026-08-31: an earlier note on each read krrood's RDR/EQL
+refactor stack's <em>merge</em> state as its <em>usability</em>, which contradicts this plan's own rule
+that <code>depends_on</code> means stacked on, never waiting for a merge. The EQL-native rule trees
+are usable on <code>main</code> today; <code>EQLSingleClassRDR</code> and the rest of that stack (<code>#159 -&gt; #210
+-&gt; #79 -&gt; #76 -&gt; #80 -&gt; #77</code>) are open, out of draft and reviewed, so an item stacks on
+them directly rather than waiting for them to land. Only the classic
+<code>krrood.ripple_down_rules</code> machinery (source-string conditions, an <code>Expert</code> required for
+every mutation) is genuinely unusable. Worth checking again before assuming any item in
+this plan is blocked on that stack.</p>
+<h5>Standing convention: measure cost as a ratio to a same-run baseline</h5>
+<p>First recorded on <code>pieces-looked-for-where-expected</code>: an absolute-seconds reading of
+<code>detect</code>'s per-frame cost is not reproducible, because this container's own speed moves
+between runs by more than the difference being measured. Every cost comparison in this
+plan from that item onward is stated as a ratio against a baseline measured in the same
+run (e.g. "1.08x the parent", "0.25x an unnarrowed look"), never as a bare number of
+seconds.</p>
+<h5>The krrood CI bisection: <code>test_each_lib</code> red from <code>perception-backend</code> onward</h5>
+<p><code>perception-backend</code> (#222) is the first branch in this plan's stack that adds krrood
+tests, and every branch stacked on it inherited a red <code>test_each_lib</code> check -
+<code>test_draw_evaluated_tree_for_drawer_cabinet_rdr</code> is an order-dependent test on <code>main</code>
+itself (it depends on file output an earlier test in the same file writes, which lines up
+by luck outside <code>pytest -n auto</code>'s worker distribution but not inside it); <code>#222</code> changed
+the count <code>xdist</code> distributes by and is what first exposed it. Root-caused and recorded as
+a blocker on <code>perception-backend</code> rather than fixed here: the fix is <code>main</code>-branch #251
+(open since 2026-09-03), which every branch in this stack needs merged before the check
+clears. A second, duplicate fix (#269) was closed in favour of #251; #269's other two
+changes are not needed for this check.</p>
+<h5>Standing design: <code>PlacementRelation</code> and <code>Relation</code>, and where each narrowing decision lives</h5>
+<p><code>search-clipped-to-a-predicates-region</code> introduced <code>semantic_digital_twin.
+PlacementRelation</code> (a relation that answers the stretch of world it leaves, and whether
+one place satisfies it, exactly rather than from a box) and krrood's <code>Relation</code> (a
+predicate asserted about one subject, of which <code>Triple</code> is the two-operand case) to widen
+spatial-predicate clipping from the two relations <code>perception-predicates-guide-the-search</code>
+could read to every placement relation. A direction (<code>left of</code>, <code>above</code>, ...) is read from
+where the <em>camera</em> stands, via <code>RgbdFrame.point_of_view</code>, not from the world's own axes -
+without this a camera-relative direction narrows nothing, since no axis-aligned box holds
+a half space across the world's axes.</p>
+<p><code>expectations-from-events</code> tried subclassing <code>Match</code> as <code>StatedRelation</code> to carry a
+relation's own equality, and the developer reversed that decision explicitly ("I don't
+think inheriting from match is the right approach here ... use match instead of stated
+relation altogether"): a relation asserted about the thing sought is now an ordinary
+entity-query-language <code>Match</code> over the relation's own class, with value comparison stated
+explicitly at the two call sites that need it rather than an overridden equality on the
+type itself. Worth knowing before reusing the <code>StatedRelation</code> shape anywhere else in this
+plan.</p>
+<h5>Open, at the developer's own discretion (not this plan's to resolve)</h5>
+<ul>
+<li><code>predicates-answer-whether-they-hold</code>: whether <code>Reachable</code>'s subject reads as <em>"a
+  HomogeneousTransformationMatrix is reachable by a Body"</em> or as <code>montessori-eql-stack</code>'s
+  own wording, once that stack rebases here (review thread r3896606294).</li>
+<li><code>choose-detection-method</code>: whether an unmet look should ask krrood's <code>Expert</code> for a new
+  rule, which needs the expert interface still on the unmerged RDR stack rather than on
+  <code>main</code>.</li>
+<li><code>search-clipped-to-a-predicates-region</code>: the demonstration's own call shape
+  (<code>show_step_by_step(query)</code> versus the statement-first shape it actually took), accepted
+  by the developer on 2026-09-02 and left open only because resolving it is his call to
+  make, not this plan's.</li>
+<li><code>how-to-look-concluded-from-the-request</code>: three mechanisms put back to the developer
+  rather than built - wiring one detector per <em>part</em> of a description; conditions stated
+  in the twin's own vocabulary for this detector family (waits on
+  <code>imagination-world-rejects-what-a-predicate-refuses</code>); and this family conditioning on
+  the sensor itself, since a request's rules are stated before any frame exists.</li>
+</ul>
+<h5><code>a-look-is-described-by-a-match</code>: one mechanism for all three families, and why it is not folded</h5>
+<p>Kicked off 2026-09-05. The item's own <code>notes</code> had already been corrected twice, and the
+plan settled after that correction reads: what is left here is <em>the vocabulary the
+conditions are stated in</em>, not the shape the engine demands. <code>EQLSingleClassRDR</code>
+takes one case object of one class and infers one attribute on it
+(<code>UnderspecifiedMatch.case_type</code> is <code>match.type</code>, <code>target_attribute_name</code> an attribute of
+it), so <code>a(Body)(detector=...)</code> is not a thing the engine can be handed - a twin entity
+carries no detector slot. The achievable and already-validated reading is #266's: a
+family states its own <code>Look</code> subclass, that subclass <em>holds</em> the world's entities instead
+of copying values out of them, and conditions traverse into them. That is not a
+flattening, because nothing is copied that could drift.</p>
+<p>So the work is to apply #266's shape to the two families that still predate it:</p>
+<ul>
+<li><code>TargetOnSurface</code> (#231) copies three values out of <code>WorkspaceSurface</code> and <code>KnownPiece</code>
+  at construction. It becomes a <code>Look</code> holding the surface and the target, with the
+  readings restated as properties over them, plus the open <code>detector</code> slot.</li>
+<li><code>SoughtSurface</code> (#259) already holds the world's own things - that half was fixed on
+  #259's own review round - but <code>SurfaceRules</code> still builds its tree by hand with
+  <code>entity().where()</code> and <code>Alternative.insert_at</code>. It moves onto
+  <code>EQLSingleClassRDR.from_underspecified</code> and <code>SurfaceFinder</code> onto
+  <code>PerceptionDetector[SoughtSurface]</code>, which also deletes the <code>capability</code>/<code>stated_surface</code>
+  /<code>answerable_surfaces</code>/<code>answers</code> quartet each family was re-declaring.</li>
+</ul>
+<h6>The scope check, and why it still gets its own branch</h6>
+<p><code>check_scope_overlap.py --base origin/main</code> reports <strong>every</strong> path this item touches as
+absent from <code>main</code>: <code>detector_choice.py</code> and its test are introduced by #231,
+<code>surface_finding.py</code> and its test by #259, <code>look_choice.py</code> by #266. Read mechanically
+that is the fold signal, and the item's originally recorded reason for staying separate
+(that it needed #77, the tip of the RDR stack) no longer holds - <code>from_underspecified</code> is</p>
+<h4>159's, and #239 already merged it into this stack.</h4>
+<p>It stays its own branch for a different reason than the one recorded: the work modifies
+files introduced by <em>three</em> different unlanded branches, so there is no single parent to
+fold into, and folding one mechanism into three in-flight pull requests would be worse
+than the one coherent story. It is where those branches converge.</p>
+<h6>Base, and the sibling merged in</h6>
+<p>Base is <code>claude/plan-item-kickoff-perception-idzwsk</code> (#266): the only tip carrying all of
+<code>Look</code>, <code>PerceptionDetector</code> and <code>from_underspecified</code>. <code>claude/plan-item-kickoff-kdp-
+34snn0</code> (#259) is merged in rather than based on, because it carries none of them - it
+sits on #231, before the RDR stack entered at #239. The merge conflicts on three files
+(<code>exceptions.py</code>, <code>pipeline.py</code>, <code>test_montessori_perception_backend.py</code>) and all three
+are additive: both siblings appended to the same region, so both sides are kept.</p>
+<p>The cost, recorded rather than hidden: this pull request's diff against its base carries</p>
+<h4>259's own 1,235 lines. That is the diamond the two <code>method-selection</code> tips make, not</h4>
+<p>scope creep.</p>
+<h6>Not resolved here</h6>
+<p>The plan's tracking issue (#201) could not be subscribed to - the session's permission
+classifier refused the call - so this branch will not see structural changes announced
+there. Also inherited, not this item's: <code>test_each_lib</code> is red across the whole stack
+from #222 onward, waiting on <code>main</code>-branch #251 (see <code>perception-backend</code>'s blockers).</p>
+<h6>The two design calls the item actually turned on, and how they were answered</h6>
+<p>Both were put to the developer on 2026-09-05 and both took the recommended option; the
+second only surfaced once the first was being built.</p>
+<p><strong>A rule's condition is not a capability.</strong> <code>LookRules</code> authors its tree with
+<code>state_the_detectors_own_condition</code>, which answers the engine with the detector's own
+capability, and that works there because each of its detectors declares a condition no
+other satisfies. Neither family here is like that: both piece detectors answer a look at
+a piece colour separates from a matte surface, and both finders answer any surface the
+world bounds in a picture with depth. What tells them apart is <code>surface.finish</code> --
+<code>MATTE</code> for the colour blob, <code>MIRROR</code> for the measurement -- and that is the <em>rules'</em>
+knowledge about when a detector is worth its cost (89 ms against 126 ms), not part of
+what either says it can answer. #231's own module docstring is explicit that neither part
+subsumes the other, so moving the finish onto a capability was rejected. Each rules class
+supplies its own expert instead, answering with the capability and'ed with the situation
+the rules choose that detector in. <code>ConditionResolver</code> cannot stand in for this: it
+reuses conditions already in the tree rather than inventing one.</p>
+<p><strong>The situation is read off the case, not hardcoded.</strong> The first build wrote
+<code>finish == MIRROR</code> into <code>SurfaceRules</code> directly, and
+<code>test_a_rule_added_while_the_rules_are_in_use_changes_the_next_answer</code> caught it at once:
+a rule added for a glossy surface got the mirror condition and never fired. The rules'
+knowledge is that <em>the finish</em> decides; <em>which</em> finish is a property of the look the rule
+is being stated from, which <code>CaseContext.case_instance</code> supplies. That is what makes
+<code>add_rule</code> work for a finish nobody foresaw, and it is why the general answer (the edge
+fit, the model) is the one that carries no situation at all rather than one guarded by a
+name.</p>
+<p><strong>Fitting cases need a picture.</strong> <code>MeasuredSurfaceFinder</code> asks whether the camera
+returned any depth, so a case the rules are fitted from needs an <code>RgbdFrame</code>, which
+<code>SceneRequest</code> never did. <code>SurfaceRules</code> builds one-pixel pictures for it: only whether
+there is any depth at all separates the kinds of look these rules tell apart, so a single
+pixel says everything a rule reads of a picture and nothing is claimed about a scene that
+was never photographed.</p>
+<p>Behaviour is unchanged by any of it, which is the point: a mirror-finished surface is
+still searched by fitting edges, a matte one by colour where colour separates the piece,
+and a surface whose finish nothing states is still taken from the model.</p>
+<h6>Left standing, and why</h6>
+<p><code>TargetOnSurface.target_outline_is_known</code> reads <code>target.outline is not None</code> over a
+<code>KnownPiece</code> whose <code>outline</code> is typed non-optional, so it holds for every piece the set
+contains -- the same shape of defect the item's notes record for <code>SoughtSurface</code>.
+Removing the flattening does not fix it; it only moves the reading from a copied field to
+a property. Whether a <code>KnownPiece</code> may have no outline is a question about that type
+rather than about these rules, so the guard the edge fit's capability was written around
+is kept and the question is left for the developer.</p>
+<h6>The review round: stated rules, and one base for three copies of one class</h6>
+<p>Two threads on 2026-09-06, which turned out to be one change, plus a question in chat that
+changed what the tests do.</p>
+<p><code>EQLSingleClassRDR.state_rules</code> is the capability the developer asked for: an RDR takes rules
+already worked out - a <code>StatedRule</code> is a condition and what it concludes - spliced in as
+alternatives in the order given, first-holding-condition wins. It grows the same tree fitting
+grows, so seeding and correcting are one mechanism. That deletes every invented example these
+families had, the one-pixel <code>RgbdFrame</code> included.</p>
+<p>The duplication thread named two files; it was three. <code>LookRules</code> was the same class again, and
+<code>state_the_detectors_own_condition</code> existed only to serve this shape. All of it is now krrood's
+<code>DetectorChoice</code>, beside <code>Look</code> and <code>PerceptionDetector</code>, generic over the kind of look a family
+answers. A family keeps <code>underspecified_look</code>, <code>rules_stated_at_the_start</code>, <code>nothing_answers</code>,
+and <code>situation_answered_by</code> where a capability does not tell its detectors apart.</p>
+<p><strong>Why the trees are stated and only checked against real data.</strong> Asked whether the corner cases
+could come from fitting on the captures, the answer is: not for authoring. A pipeline builds its
+rules before any frame exists, and the surfaces it holds differ per setup - <code>recorded_setup</code>
+states <code>MIRROR</code> on the table and nothing on the lid, the rendered-scene fixture states neither,
+and only <code>of_world</code> carries <code>TABLE_FINISH</code>/<code>BOARD_FINISH</code>. Fitting from whatever a run happens to
+hold would give each setup a different tree, and the colour-blob rule would not exist at all on
+the recorded setup, when "the colour blob is worth its lower cost on a matte surface where colour
+separates the piece" is true whether or not this run's world says so. So the rules are stated
+once and the real data checks them: all six shipped captures for <code>SurfaceRules</code>, the two surfaces
+the modelled scene states for <code>DetectorRules</code>, each fitted with the detector it should get and
+each leaving the tree the size it was. Corner cases themselves are read by nothing here today
+(<code>NullModelSaver</code>, no <code>ConditionResolver</code>); when <code>tune-detection-rules-against-the-camera</code> brings
+the interactive expert, a capture is the right one to show.</p>
+<p><strong>A hazard found while building <code>state_rules</code>, left for the developer.</strong> Conditions are stated
+before any is in the tree, and <code>look.attribute</code> returns the same shared node every time, so a rule
+whose <em>whole</em> condition is a bare attribute together with a second rule wrapping that same node
+splice into a structure <code>classify</code> never returns from. Sharing an attribute as a <em>subexpression</em>
+of two conditions is the intended sharing and is fine - there is now a test pinning it. Fitting
+escapes the bare case only by building each condition at insertion time, so this is a property of
+the expression machinery rather than of <code>state_rules</code>. The krrood mimic detector was the only
+thing in the workspace writing a bare attribute as a condition; it now states
+<code>look.depth_is_returned == True</code>, the way every real detector here writes a boolean.</p>
+<h5>The ICRA convergence pass, 2026-09-06</h5>
+<p>Every in-flight item of this plan is now carried by one branch: <code>perception-backend</code> (#222), <code>perception-predicates-guide-the-search</code> (#227), <code>predicates-answer-whether-they-hold</code> (#229), <code>search-clipped-to-a-predicates-region</code> (#238), <code>imagination-world-rejects-what-a-predicate-refuses</code> (#255), <code>how-to-look-concluded-from-the-request</code> (#266), <code>surface-finish-annotation</code> (#216), <code>surfaces-found-by-looking</code> (#259), <code>choose-detection-method</code> (#231), <code>detector-parameters-from-knowledge</code> (#239) and <code>a-look-is-described-by-a-match</code> (#275).</p>
+<p>The pass merged every one of them into the ICRA integration branch (#265,
+<code>claude/icra-experiments-simulation-pipeline-w4ep7n</code>) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.</p>
+<p>Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in <code>icra-foundation</code>'s <code>roadmap.md</code> under <em>The
+convergence pass, 2026-09-06</em>. Read it there rather than re-deriving it here.</p>
+<p>What this plan gained beyond the merge itself: #275's <code>SurfaceFinder</code> and
+<code>SurfaceRules</code> arrive over the newer, hypothesis-driven detectors rather than the
+colour-blob ones they were written against, and #231's two detectors now differ
+only in how tightly a blob's place is believed - a radius and a turn - which is a
+parameter rather than a subclass. Collapsing them into one detector the rules
+configure two ways is a design call and was left for the developer.</p>
+<p><code>camera-pose-fitted-to-the-model</code> was startable from this pass onward: it depends
+on <code>surfaces-found-by-looking</code> (#259) and is blocked on
+<code>knowledge-directed-grounding</code>'s <code>holes-fitted-like-pieces</code> (#236), and the
+converged branch carries both.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-requests">
+        <div class="wave-eyebrow">A query is answered by looking</div>
+        <p class="wave-description">Perception becomes an entity query language backend beside the native and SQLAlchemy ones, so asking is evaluating rather than calling a pipeline by hand: the backend pushes what it can of a query&#39;s conditions into the search, filters the rest over the detections that come back, and a rule tree over the target and the surface says which detector runs.</p>
+        <section class="track">
+          <h3 class="track-title">Perception as a query backend</h3>
+          <div class="item-list">
+                <article id="item-perception-backend" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Answer a query by looking, as a backend of the entity query language</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1331 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1140 −191</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">perception-backend</span>
+            <span class="mono branch">perception_eql_backend</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/222" target="_blank" rel="noopener">#222</a>
+            <a class="session-link" href="https://claude.ai/code/session_01MotUMLrQxbZKQWs4BADwkj" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests perception-backend" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Answers a query by looking, as a `PerceptionBackend` beside `EntityQueryLanguageBackend`
+and `SQLAlchemyBackend` - `SQLAlchemyBackend` already sets the shape (translate the query
+into another engine&#39;s plan, run it there), and the compiler from a query to a detection
+pipeline is the same move against a camera. It subclasses `SelectiveBackend`: a camera
+reports what is really there and cannot invent an attribute nobody can see (the plan&#39;s own
+open question, answered here). Conditions are split the way a query planner splits them:
+those that can be pushed down shape the search (the selected type, `is_supported_by`,
+narrowed for the deadline to exactly the forms the demo writes); everything else is a
+residual filter over what came back, never silently dropped; a condition that fits neither
+raises `BackendCannotResolveCondition`. `PerceivedObjects` (the domain that ran the whole
+pipeline on iteration) is retired - a query then runs only what it asked for.
+
+Resolved 2026-08-31 in `auto` mode, reversing the plan&#39;s own first sketch at the
+developer&#39;s direction: the backend is *generative*, not selective, because with no belief
+yet the look is what brings the instance into existence rather than selecting from a given
+domain (`an(MontessoriShapeDetection)(supporting_surface=lid, pose=...)`, where `...`
+narrows nothing because it is the statement asking the look to supply it). The general half
+- `PerceptionBackend`, `LookRequest`, the `Directive.LOOK_FOR` member - now lives in
+krrood beside the other backends, gaining krrood no dependency on `experiments`;
+`MontessoriPerceptionBackend` carries only that a look is taken by this pipeline and
+narrows by supporting surface. The predicate/semantic-annotation redesign five of the
+review&#39;s threads asked for is not here - it is `perception-predicates-guide-the-search`,
+stacked on this branch at the developer&#39;s own placement.
+
+Restacked 2026-09-02 to sit under `main`&#39;s entity query language work; the merge meets
+`Directive` on every branch stacked past this one, and the resolution (keep `main`&#39;s
+`DISTRIBUTION_OVER` framing, add `LOOK_FOR` beside it) is recorded once here rather than
+re-derived by each descendant.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ `test_each_lib (krrood)` is red on #222, and every branch stacked on it inherits it - #227, #231, #238, #239, #259 and everything past them. The failure is not this item&#39;s diff at all, and it was already fixed before this item looked at it: **#251**, open off `main` since 2026-09-03, is the fix. It is an order-dependent test on `main` - `test_draw_evaluated_tree_for_drawer_cabinet_rdr` loads a model directory that only `test_save_and_load_drawer_cabinet_rdr`, earlier in the same file, writes, and which `git ls-files` reports as untracked generated output. Sequentially the two line up by luck; CI runs `pytest -n auto`, where they can land on different xdist workers. #222 flipped it because it is the first branch in the stack to add krrood tests, which changes the count xdist distributes by. #222&#39;s check clears once it takes #251 in - that merge is not done. A second pull request off `main` re-derived the same fix on 2026-09-05 and was closed as a duplicate; the two changes it carried that #251 does not - `GeneralRDR.load` chaining its cause, and a generated model&#39;s import root reaching the search path - are **#269**, and neither is needed for this check.</div>
+            <div class="blocker">▸ The `needs-resolution` label the maintenance routine set on the 2026-09-02 conflict is still on the branch, so it stays withheld from promotion until the routine&#39;s own next pass clears it, which it can now that the branch merges cleanly.</div>
+            <div class="blocker">▸ Depends on `knowledge-directed-grounding`&#39;s `surfaces-from-world` (in_progress) - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no automatic readiness or dependency chip.</div>
+            <div class="blocker">▸ Depends on `knowledge-directed-grounding`&#39;s `detect-per-supporting-surface` (in_progress) - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no automatic readiness or dependency chip.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-perception-predicates-guide-the-search" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Guide the search by predicates and annotations, not by attribute names</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1305 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1034 −271</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">perception-predicates-guide-the-search</span>
+            <span class="mono branch">claude/plan-item-kickoff-perception-ogf2g9</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/227" target="_blank" rel="noopener">#227</a>
+            <a class="session-link" href="https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests perception-predicates-guide-the-search" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Raised by the developer across five review threads on #222, which are one ask: a look should be narrowed by what the world means, not by an attribute spelled as a string. SUPPORTING_SURFACE_ATTRIBUTE_NAME = &#34;supporting_surface&#34; and the mimic&#39;s PLACE_ATTRIBUTE_NAME are the smell; AGENTS.md&#39;s own rule against a literal duplicating a value with its own source of truth condemns them independently of the redesign, and #222 leaves them standing with a test asserting the name is a real field.
+What replaces them, in the developer&#39;s words: predicates for support and for spatial relations - LeftOf, RightOf and the rest - inheriting from Predicate rather than Symbol, and then used to devise the search rather than merely evaluated. &#34;So I need to look on top of a bright shiny surface that has this size and look for an object supported by it and is left of another object that has a cyan colour, all these are clues that help us devise a pipeline and find the object we are looking for.&#34;
+Two mechanisms come with it, both the developer&#39;s. A spatial predicate can be read as a Region with extents, so the image and the depth are clipped to where the thing can be before anything is detected - which is the same economy #222&#39;s supporting-surface narrowing already buys, stated in the world&#39;s vocabulary instead of an attribute&#39;s. And a predicate no algorithm covers becomes a rejection sampler: detect what the other conditions do reach, spawn the instances found into a copy of the world - an imagination world - evaluate the predicate there with real Body and SemanticAnnotations, and delete what it rejects.
+Stacked on #222 rather than folded into it, which is the developer&#39;s own placement on r3893312001 (&#34;you can make this a separate PR that this one here is stacked under&#34;). The threads are r3893160382, r3893312001, r3893499716, r3893602153 and r3893576773; the sixth, r3893463818, is close to choose-detection-method&#39;s existing claim and is recorded there rather than here.
+Overlaps pieces-looked-for-where-expected, added the same day and not visible to the session that wrote this. Both items end at the same thing - a stretch of the world a sought object is expected to lie in, used to narrow the search before detecting - reached from opposite ends: this item says where the constraint *comes from* (a predicate in the world&#39;s own vocabulary, read as a Region), that one says what the searcher *does* with it (a believed pose and yaw interval, swept by the piece matcher). They must share the one type rather than each build it. Whichever starts second takes the other&#39;s, and the sequencing follows from the tracks they already sit in: that item is in `surfaces` and depends only on one-detection-per-thing, so it lands first and defines the belief; this one supplies it from a predicate. The imagination-world rejection sampler is this item&#39;s alone and duplicates nothing.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Answer a query by looking, as a backend of the entity query language">perception-backend</span>
+
+            <span class="chip" title="Let a predicate answer whether it holds, with the measurement behind it">predicates-answer-whether-they-hold</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-search-clipped-to-a-predicates-region" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Clip the search to the region a spatial predicate allows</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="7360 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+6853 −507</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">search-clipped-to-a-predicates-region</span>
+            <span class="mono branch">claude/kdp-search-constraints-pfaph7</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/238" target="_blank" rel="noopener">#238</a>
+            <a class="session-link" href="https://claude.ai/code/session_013HJ4gSb7tjesc6vB1GAtwu" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests search-clipped-to-a-predicates-region" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Clips the search to the region a spatial predicate allows - the same economy the
+supporting-surface pushdown already buys, stated in the world&#39;s vocabulary instead of an
+attribute&#39;s, so narrowing stops being a filter over what a detector returned and becomes
+less picture to search in the first place. Depends on `perception-predicates-guide-the-
+search` (where a statement&#39;s predicates are read at all) and `pieces-looked-for-where-
+expected` (which owns the *believed place* type this item&#39;s clip is built from) - building
+either half twice is the duplication this plan has already paid for.
+
+Widened 2026-09-01 at the developer&#39;s ask, from the two relations the parent item could
+read to every relation that says where a thing may be: `semantic_digital_twin` gains
+`PlacementRelation` (a relation answers the stretch of world it leaves, and whether one
+place satisfies it, exactly rather than from a box) and the six view-dependent relations
+lose their six near-identical `__call__`s; krrood gains `Relation` (a predicate asserted
+about one subject, of which `Triple` is the two-operand case). `Between`, `Near` and
+`Colored` are new.
+
+Third round (2026-09-01): a direction is read from where the *camera* stands, not the
+world&#39;s own axes, so left/right/above mean what they mean on screen
+(`RgbdFrame.point_of_view`), which needed `PlacementRelation.allowed_part_of` since a
+camera-relative direction runs across the world&#39;s own axes. Measured on
+`tracy_pickup_demo` with the camera as the point of view: *right of* the square hole
+leaves the cylinder, *above* leaves the cube, and the demonstration states *above* with a
+test pinning both answers. Cost over the six captures: 0.25x for the surface alone, 0.40x
+for a direction, 0.30x for a 50 mm radius, 0.25x for all of them with colour.
+
+The demonstration became one call: a whole statement, read one condition at a time by
+`Match.one_condition_at_a_time`, with `PerceptionBackend` answering descriptions (the lid,
+the hole) out of the domain the statement itself gave them rather than fetching them
+beforehand; a description no single thing answers stays a refused condition. Review round
+of 2026-09-02 resolved three of six threads (docstring wording, a renamed predicate, moved
+module-level constants); 467 passed, 1 skipped, 11 xfailed. One thread stays open at the
+developer&#39;s discretion (see blockers) - the demonstration&#39;s own call shape, which he
+accepted on 2026-09-02.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Guide the search by predicates and annotations, not by attribute names">perception-predicates-guide-the-search</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ One of the six review threads of 2026-09-02 is still open, and it is the developer&#39;s to close rather than work for this item. r3915277277 asked the demonstration to read `show_step_by_step(query)`; it reads `show_step_by_step(look_for_the_cube_on_the_lid, WatchedCapture.from_command_line())`, whose first argument is how to state the query about a look rather than a Match already stated, because the statement is written over bodies of a world and over where the camera stood and neither exists before the look is taken. He accepted that shape on 2026-09-02 and the thread is left open only because resolving a thread answered differently is his call. The other two open threads stopped being this item&#39;s on the same day: r3915356623 became the item how-to-look-concluded-from-the-request, and r3915631447 was folded into imagination-world-rejects-what-a-predicate-refuses.</div>
+            <div class="blocker">▸ Depends on `knowledge-directed-grounding`&#39;s `pieces-looked-for-where-expected` (in_progress) - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no automatic readiness or dependency chip.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-imagination-world-rejects-what-a-predicate-refuses" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Reject what a predicate refuses, by testing it in a copy of the world</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="950 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+851 −99</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">imagination-world-rejects-what-a-predicate-refuses</span>
+            <span class="mono branch">claude/knowledge-directed-perception-imagination-g9hsnr</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/255" target="_blank" rel="noopener">#255</a>
+            <a class="session-link" href="https://claude.ai/code/session_01WDteX4z7jQUBG4FZqMKG5m" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests imagination-world-rejects-what-a-predicate-refuses" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The developer&#39;s third mechanism on r3893499716, deferred out of #227 as a second pull request&#39;s worth of work: a predicate no search algorithm covers is still answerable, by detecting what the other conditions do reach, spawning what was found into a copy of the world, evaluating the predicate there against real Body and SemanticAnnotations, and deleting what it rejects.
+It is what closes the gap #227 leaves open. A look reports sightings rather than the things a relation is written over - a MontessoriShapeDetection is a dataclass, not a Body - so #227 has a backend promise to check its own narrowing relations, and refuses any other relation outright. Spawning the sightings into an imagination world is what gives every other predicate something real to be evaluated against, so nothing has to be refused for want of a subject.
+Duplicates nothing: the roadmap&#39;s &#34;Two items that meet at one type&#34; records this mechanism as this item&#39;s alone.
+
+Widened 2026-09-02 at the developer&#39;s decision, taking r3915631447 from #238: MontessoriShapeDetection is renamed DetectedMontessoriShape and made a Role for MontessoriShape, and both halves belong here rather than on #238. Role[T] is pure composition and takes its role taker explicitly, so every detection needs a MontessoriShape - a HasRootBody annotation over a body in a world - and a look reports what it saw before anything of the sort is in the world. Spawning what was found into a copy of the world is exactly what this item builds, so this is where the role taker first exists. It also makes the gap above close by construction: a detection that is a role of a world entity gives every predicate a real subject, so nothing has to be refused for want of one.
+
+The rename waits here rather than landing on #238 for a second reason the developer weighed: it is 51 references across 10 files, and #232, #236 and #239 would each inherit it as a conflict. Naming the type once, when it is what it will finally be, costs those three branches nothing.
+
+Built 2026-09-03 as #255, off #238 rather than off #227: the rename is 53 references across 11 files on #238&#39;s tree and six of those files exist on no earlier branch, so renaming on #227 would have named the type on half its readers and handed #238 the rest as a conflict. search-clipped-to-a-predicates-region is therefore recorded as a dependency. The round found a second shape of the same fault the item was raised about: a relation stated about the thing sought alone was never refused at all, only evaluated natively where it raised AttributeError on a dataclass. Both are closed by the detection having a body behind it.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Guide the search by predicates and annotations, not by attribute names">perception-predicates-guide-the-search</span>
+
+            <span class="chip" title="Clip the search to the region a spatial predicate allows">search-clipped-to-a-predicates-region</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-predicates-answer-whether-they-hold" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Let a predicate answer whether it holds, with the measurement behind it</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="917 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+717 −200</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">predicates-answer-whether-they-hold</span>
+            <span class="mono branch">sdt_predicates_answer_whether_they_hold</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/229" target="_blank" rel="noopener">#229</a>
+            <a class="session-link" href="https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests predicates-answer-whether-they-hold" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The developer&#39;s direction on 2026-08-31, correcting a call `perception-predicates-guide-
+the-search` made: a relation that computes a ratio should still be a `Predicate`, with
+`__call__` answering a truth value, the ratio read from a method of its own, and a
+threshold field with a default turning the one into the other - rather than the
+`SymbolicFunction` that item had made `InsideOf` into. Applies to every relation of that
+shape in `reasoning/predicates.py`: `is_body_in_region`, and the truth-valued relations
+that are only `@symbolic_function`s today (support, contact, visibility, reachability,
+occupancy). krrood&#39;s own `symbolic_callable_to_function` keeps the function spelling
+working off one implementation, so no caller in coraplex, segmind or giskardpy has to
+change.
+
+Its own pull request off `main`, since it is a change to `semantic_digital_twin`&#39;s
+vocabulary rather than to perception (the same placement `surface-finish-annotation`
+has); the knowledge-directed items that need it merge it in rather than waiting for it to
+land.
+
+Resolved 2026-08-31. Verified and settled at the developer&#39;s direction: this branch&#39;s
+predicate classes are the ones to keep, and `montessori-eql-stack`&#39;s `eql-verbalization`
+(#33, 166 commits behind `main` and dirty in `predicates.py`) rebases onto this branch and
+ports its 34 reviewed wordings across, rather than each side keeping its own copy. Two
+faults the resolve found and fixed: a keyword rename broke `semantic_annotations/mixins.py`
+in a ROS-only module local verification could not see, and four `Triple`-based relations
+rendered ungrammatically because `Triple` reads a verb off a class name that is not
+verb-first - both fixed. Review thread r3896606294 (`Reachable`&#39;s subject wording) is left
+open at the developer&#39;s own request; only he can settle it once #33 rebases here.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Review thread r3896606294 on `predicates.py:348` is answered and deliberately left
+open: `Reachable` now reads *&#34;a HomogeneousTransformationMatrix is reachable by a
+Body&#34;*, as the thread asked, but eql-verbalization decision 11 words the same relation
+*&#34;a Pose is reachable for the kinematic chain rooted at &lt;root&gt; and ending at &lt;tip&gt;&#34;*.
+Both make the pose the subject; they differ in whether root and tip are both named, and
+only the developer can say which of the two stands once #33 rebases onto this branch.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-how-to-look-concluded-from-the-request" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Work out how to answer a look from the request, instead of being handed a pipeline</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1339 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1170 −169</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">how-to-look-concluded-from-the-request</span>
+            <span class="mono branch">claude/plan-item-kickoff-perception-idzwsk</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/266" target="_blank" rel="noopener">#266</a>
+            <a class="session-link" href="https://claude.ai/code/session_0139rDK7uNEvtjEVZ5krjS4h" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests how-to-look-concluded-from-the-request" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Raised by the developer on `search-clipped-to-a-predicates-region`&#39;s review (r3915356623),
+2026-09-02: the pipeline&#39;s own six fields are not one kind of thing - the world already
+supplies the table, lid, world and reference frame (`of_world`); `detector-parameters-
+from-knowledge` concludes `headroom`; only the two detectors are genuinely hand-wired. So
+the pipeline is the residue of everything not yet knowledge-directed, and this item builds
+the last piece: a rule tree that concludes *how to answer a look* - which detectors run
+over which surfaces - from the request itself, grown by an expert as new kinds of request
+turn up rather than configured in advance.
+
+Stacks on the RDR stack&#39;s tip (`EQLSingleClassRDR`, model store, `@rdr` decorator) through
+`detector-parameters-from-knowledge` rather than being merged onto this item&#39;s own branch
+directly, for the reason `choose-detection-method` already gave: merging the stack
+directly would add nine to twenty-thousand lines of another plan&#39;s work to a pull request
+whose own change is a few hundred.
+
+Review round of 2026-09-05, resolved as `0063f9824` then `0063f9824`+ (second pass): the
+hand-written case class and the attribute name spelled as a string are both gone - the
+tree is built from the statement *a request whose detector is to be worked out*, so what a
+rule reads is a property of the request itself. The detector concept moved to krrood as
+`PerceptionDetector`, generic over the kind of look it answers (via
+`SubClassSafeGeneric`), which `PieceDetector` (`choose-detection-method`) now inherits
+instead of duplicating (losing 40 lines); a detector&#39;s capability is asked with
+`asked_about`, not `answers`, since a `Query` is always truthy. 61 passed, 1 skipped then
+53 passed, 1 skipped across the two rounds; 443 passed, 1 skipped, 11 xfailed overall.
+
+Three things put back to the developer rather than built, each with a reply on its own
+thread: wiring one detector per *part* of a description; conditions stated in the twin&#39;s
+own vocabulary for this family (waits on `imagination-world-rejects-what-a-predicate-
+refuses` making a detection a `Role` over a world entity); and this family conditioning on
+the sensor itself. `SUPPORTING_SURFACE_ATTRIBUTE_NAME` is a landing note rather than a
+fix: it is already removed on `perception-predicates-guide-the-search` and survives only
+on this sibling stack until the two stacks meet.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Choose the detector by rule from the target and the surface">choose-detection-method</span>
+
+            <span class="chip" title="Take the detectors&#39; numbers from the objects and the surfaces they look at">detector-parameters-from-knowledge</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Choosing how to look</h3>
+          <div class="item-list">
+                <article id="item-surface-finish-annotation" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Say in the digital twin how a surface takes light</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="138 lines changed versus the base - within the short-change threshold of 400">+122 −16</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">surface-finish-annotation</span>
+            <span class="mono branch">sdt_surface_finish_annotation</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/216" target="_blank" rel="noopener">#216</a>
+            <a class="session-link" href="https://claude.ai/code/session_019FYgjdCK7BStm7KdSDyrwY" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests surface-finish-annotation" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The digital twin models a surface&#39;s colour but not its finish, which is the property that decides whether colour segmentation works at all: the brushed steel table throws a diffuse, piece-coloured reflection with no sharp boundary anywhere, which is why the edge fit had to be written. A matte / glossy / mirror finish annotation is what turns &#34;the steel table and the wooden lid need different pipelines&#34; into something the robot knows rather than a branch somebody wrote. Touches only semantic_digital_twin, so it can start off main immediately.
+Built 2026-08-29 as 80100bd4 on #216: SurfaceFinish (matte / glossy / mirror) beside Color and Texture, and Shape.finish carrying it, optional so that None means the finish has not been stated rather than that it is matte. Adding it forced Shape&#39;s own constructor arguments to be read once by Shape.arguments_from_json instead of a fourth time in each of Sphere, Cylinder and Box, and Mesh.from_trimesh to carry a finish, which is the only appearance property a mesh has no other carrier for. 45 tests pass in test_shape.py against 25 on the parent, the whole semantic_digital_twin suite&#39;s failing and erroring set is unchanged, and the regenerated ORM maps the field as Mapped[Optional[SurfaceFinish]] on PolymorphicEnumType.
+The developer took #216 out of draft on 2026-08-29, which ends the building session&#39;s work on it: CI was green on 21 of 23 checks with the other two still running and none red, and the pull request now waits on review rather than on this plan. Two decisions are recorded rather than left implicit, both in roadmap.md: no adapter infers a finish from MuJoCo specular/shininess/reflectance, and a derived supporting-surface Region does not inherit its body&#39;s finish - detect-per-supporting-surface has to declare it on the region it builds.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-surfaces-found-by-looking" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Find a surface in the image from what the world says it is like</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1269 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1235 −34</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">surfaces-found-by-looking</span>
+            <span class="mono branch">claude/plan-item-kickoff-kdp-34snn0</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/259" target="_blank" rel="noopener">#259</a>
+            <a class="session-link" href="https://claude.ai/code/session_01DnVSdcxop561xKAGeg61MG" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests surfaces-found-by-looking" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Finds a surface in the picture from what the twin already says it is like - a large
+horizontal plane, mirror-finished, colourless, of about the modelled size - stated as an
+entity query language expression rather than read off a constant or a body&#39;s collision
+shape, since neither is a measurement of where the table really is and the demo has
+already drifted from its own model once. `SurfaceFinder`/`SurfaceRules` is
+`choose-detection-method`&#39;s claim turned on the surface itself. Deliberately after the
+deadline&#39;s critical path - the demo runs on a tuned workspace (`tune_workspace`), and this
+replaces the tuning rather than unblocking anything.
+
+Built and reviewed 2026-09-05, five threads answered the same day (430 passed against
+429). `SoughtSurface` was a flattening of what the world already states and two of its
+three fields were pure duplication (`AGENTS.md`&#39;s own rule against a value spelled twice);
+it now holds the surface the world models and the frame it is sought in, and conditions
+read directly into them - EQL traverses nested attributes and properties, so the case
+class was never needed for the engine&#39;s sake.
+
+Four threads left open, each answered differently and folded into new items: the
+finish-on-the-twin duplication folds into `imagination-world-rejects-what-a-predicate-
+refuses`&#39;s recorded world; the case-class flattening this item, `choose-detection-method`
+and `how-to-look-concluded-from-the-request` all share becomes `a-look-is-described-by-a-
+match`; calibrating the camera against the twin and combining the two finders becomes
+`camera-pose-fitted-to-the-model`. A red `test_each_lib` check traced (see
+`perception-backend`&#39;s blockers) to krrood entering the stack at #222, not to this
+branch&#39;s own diff.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Answer a query by looking, as a backend of the entity query language">perception-backend</span>
+
+            <span class="chip" title="Say in the digital twin how a surface takes light">surface-finish-annotation</span>
+
+            <span class="chip" title="Choose the detector by rule from the target and the surface">choose-detection-method</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-camera-pose-fitted-to-the-model" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Correct where the camera stands by fitting what is seen to what the twin models</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">camera-pose-fitted-to-the-model</span>
+            <span class="mono branch">claude/camera-pose-fitted-p2mk7d</span>
+            <span class="muted">no pull request yet</span>
+            <a class="session-link" href="https://claude.ai/code/session_01ViZEJchUqcVcsFMbYHeVR6" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests camera-pose-fitted-to-the-model" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Added 2026-09-05 at the developer&#39;s direction on #259, folding the two threads he asked to keep together (r3940349876 and r3940351882): &#34;since we have a 3d model of the world, we can use this information to maybe even calibrate the camera ... and find the best matching transformation that would make fit our expectation from the 3d modeled digital twin&#34;, and &#34;so basically we can combine ModelledSurface with MeasuredSurface as well to get the best estimate and update our belief about the camera transformation accordingly and get the best fitting surface?&#34;
+It arrives as a third SurfaceFinder rather than as a change to either of the two #259 ships. SurfaceFinder is the interface and SurfaceRules already chooses among whatever declares it can answer, so a finder that takes the world&#39;s statement and the depth together, solves for the transform that best explains both, and answers the surface plus a corrected camera pose slots in with one add_rule and no edit to what is there.
+Three measurements bear on it, and two of them cut against the obvious version.
+The camera transform is already good in z on this setup. #259&#39;s first build fitted the table&#39;s height as well as its extent and answered 0.8804 to 0.8811 m against the modelled 0.88 on all six captures - about a millimetre - and moving the plane by it moved every detection on every capture, up to 3.4 mm and 0.19 agreement, which is why that branch ships measuring the extent alone. So there is not much transform error left to recover from the table.
+Where the model and the world really disagree is not the transform. #236 measured the board mesh at 0.865 of the real board, a similarity fit with a 2.1-2.6 mm residual, and no rectification plane closes it, since doing so puts the holes below the table the board stands on. That is a wrong model rather than a wrong pose, and a solve with only a transform to move would absorb it into one. #236&#39;s own framing is the right one here too: a law that must hold, and then a hypothesis about which of the things it is written over is the one that is wrong.
+What genuinely is there to fit is over-constrained. The table plane holds about 34% of 693k points on the bare steel, 69% with a mat, and the board&#39;s own outline is measured every frame with its layout known exactly - two independent observations of one rigid transform, in a scene where a wrong one has visible consequences. So the fit is well posed; what it needs is to be told which side is trusted, per capture, since the recorded layout has already drifted in x and y while the height agreed exactly, and an unconstrained solve will happily explain a wrong board pose as a camera error.
+Two things it needs that #259 does not have. A camera pose is a value on one RgbdFrame, so a correction has nowhere to live between frames - the same gap #232 filled for pieces with BelievedPlace and a BeliefSource - and until it does, &#34;update our belief accordingly&#34; is a returned number nobody keeps rather than an operation. And the two finders are today layered rather than independent: the measurement never grows past what the model allows, only cuts it down, which is deliberate and is what keeps a run searching only ground the world described. Combining properly means letting the measurement move the model, which is a different contract and is why this is a new finder under a new rule rather than a tweak to MeasuredSurfaceFinder.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Find a surface in the image from what the world says it is like">surfaces-found-by-looking</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Depends on `knowledge-directed-grounding`&#39;s `holes-fitted-like-pieces` (in_progress) - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no automatic readiness or dependency chip.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-choose-detection-method" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Choose the detector by rule from the target and the surface</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1587 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1532 −55</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">choose-detection-method</span>
+            <span class="mono branch">claude/choose-detection-method-gf64yp</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/231" target="_blank" rel="noopener">#231</a>
+            <a class="session-link" href="https://claude.ai/code/session_01JzpfVmddAPa4ZTJYSEEqAF" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests choose-detection-method" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The detector interface the backend dispatches to, chosen by a rule tree over properties of
+the surface and the target - this is where perception measurably gets better as the robot
+knows more, and the item the paper&#39;s central claim rests on. Two shapes for the same claim
+were both built and layered at the developer&#39;s direction: each detector declares the looks
+it can answer as an entity query language condition (his own suggestion, r3893463818), and
+a ripple-down tree chooses among the ones that can (the item&#39;s own original design).
+
+Built 2026-08-31 as PR #231, `69f30348a`. The planned third rule - a target wearing the
+surface&#39;s own hue falls back to the edge fit - turned out not to be a rule but the colour
+blob&#39;s own capability going false, so the tree ships the two rules the deadline&#39;s budget
+asks for: mirror-finish and known geometry selects the edge fit, matte and no finish
+selects the colour blob, at 89 ms against 126 ms on the same work (speed being the honest
+justification once `detect-per-supporting-surface` made the edge fit work on the lid too).
+
+Corrected 2026-08-31: earlier notes recorded this item as blocked on krrood&#39;s ripple-down
+rules becoming usable, which read the D-core-* stack&#39;s *merge* state as its *usability* -
+contradicting the plan&#39;s own rule that `depends_on` means stacked on, never waiting for a
+merge. The EQL-native rule trees (`EQLSingleClassRDR` and its stack, all open, out of
+draft and reviewed) are usable today; only the classic `krrood.ripple_down_rules` machinery
+is not. This item keeps its own stated tree anyway, at the developer&#39;s decision, since
+`EQLSingleClassRDR.query` is authored by fitting cases rather than taking one already
+built, and merging that stack in would add 9,236 lines to a 600-line pull request; the
+engine&#39;s `fit`/`render_tree`/model-store machinery is what the next two items are written
+around instead.
+
+Review round of 2026-08-31, resolved as `92afdcd82`: the tree is stated once, in
+`DetectorRules.__post_init__`, rather than rebuilt inside the evaluating method - the
+whole point of an EQL rule tree is that a new situation can be added to it, which
+`add_rule` now does live. Choosing for one surface costs 1.0 ms against 4.4 ms. 233 tests
+pass against 230. One thread stays open at the developer&#39;s own discretion: nothing yet
+asks an expert when no rule fires, since the expert interface lives on the unmerged
+RDR stack rather than on `main`.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Answer a query by looking, as a backend of the entity query language">perception-backend</span>
+
+            <span class="chip" title="Say in the digital twin how a surface takes light">surface-finish-annotation</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-detector-parameters-from-knowledge" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Take the detectors&#39; numbers from the objects and the surfaces they look at</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="9600 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+9397 −203</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">detector-parameters-from-knowledge</span>
+            <span class="mono branch">claude/knowledge-directed-perception-detector-zrm57t</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/239" target="_blank" rel="noopener">#239</a>
+            <a class="session-link" href="https://claude.ai/code/session_014LgGAmWL8JZM3qW7pwwnbp" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests detector-parameters-from-knowledge" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The detectors&#39; numbers - hue windows, size ranges, edge-agreement thresholds, mesh
+classification thresholds, and (widened 2026-08-31) the numbers that say *how to search*
+(seed radius, step, candidate set, required lead) - are knowledge about the pieces, the
+surfaces and the lighting, not properties of the detector reading them. They move onto the
+twin&#39;s objects and surfaces, concluded for a run by a ripple-down rule tree the same way
+`choose-detection-method`&#39;s tree concludes which detector runs; the contour accept/reject
+chain (`pipeline.py:619`) becomes rules the same way. This is where a situation the robot
+knows more about (which piece it released over which hole) warrants a measurably different
+parametrization than one it does not - the plan&#39;s central claim in a quantity that can be
+plotted.
+
+Ownership of `test_every_piece_resting_on_the_lid_is_found` moved to
+`pieces-looked-for-where-expected` on 2026-08-31: those failures are a seeding fault, not a
+parameter fault, and that item is not behind the same blocker this one was.
+
+Corrected 2026-08-31, the same correction `choose-detection-method` made: this item was
+recorded as blocked on krrood&#39;s ripple-down rules, which are usable today on `main`
+(EQL-native) and on the open, out-of-draft `EQLSingleClassRDR` stack (#159) - `depends_on`
+means stacked on, never waiting for a merge. Stacks on #159 rather than on
+`choose-detection-method`&#39;s own hand-written tree, since `render_tree` is what this item&#39;s
+own ask for &#34;an inspectable rule tree&#34; actually names.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Choose the detector by rule from the target and the surface">choose-detection-method</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-tune-detection-rules-against-the-camera" class="item status-not_started" style="--indent-level: 3; --indent-level-hidden-done: 3;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Conclude a detection rule while watching the camera, with its numbers on sliders</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">tune-detection-rules-against-the-camera</span>
+            <span class="mono branch">perception_interactive_rule_tuning</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff knowledge-directed-requests tune-detection-rules-against-the-camera" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The developer&#39;s own suggestion on #202: an interactive presenter for the ripple-down
+rules&#39; `ConclusionHelper`, showing the live camera feed beside the parameters it would
+conclude, so an expert sees what a value does before committing it as a rule. Needs
+`detector-parameters-from-knowledge`&#39;s rule-concluded parameters to present.
+
+Un-deferred 2026-08-31 at the developer&#39;s direction: what the deferral was mostly paying
+for - the interactive expert interface, the model-file store, the `@rdr` decorator - is
+already written, open, out of draft and reviewed on the RDR stack. What remains is only
+the perception-side presenter that puts the camera beside the parameters; it stacks on the
+tip of that stack, with `detector-parameters-from-knowledge` (which supplies the
+parameters to present) beneath it in the same stack.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Take the detectors&#39; numbers from the objects and the surfaces they look at">detector-parameters-from-knowledge</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-a-look-is-described-by-a-match" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Describe a look by an underspecified match over the twin&#39;s own entities, not by a case class</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="2514 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+2165 −349</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">a-look-is-described-by-a-match</span>
+            <span class="mono branch">claude/knowledge-directed-perception-vz2hhq</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/275" target="_blank" rel="noopener">#275</a>
+            <a class="session-link" href="https://claude.ai/code/session_01SK2tbXUzLSPebeVcKif92s" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve knowledge-directed-requests a-look-is-described-by-a-match" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Added 2026-09-05 at the developer&#39;s direction on #259 (r3940339984 and r3940357436): &#34;why not replace this with an EQL match statement of semdt semantic annotation or kinematic structure entities?&#34;, and &#34;eql based rdrs (pr 77 for example) can take an underspecified match statement and get needed information from it to evaluate the rule tree of the rdr.&#34;
+Every rule tree on this plan states its conditions over a hand-written case class that flattens what the world already states, because the tree needs one variable to bind: TargetOnSurface on #231, RequestedLook on #266, and SoughtSurface on #259. The last of the three is what raised it, and reading it is what showed how bad the shape is - two of its three fields were a copy of WorkspaceSurface.finish and a constant that of set True unconditionally, so the base rule&#39;s condition could never be false. AGENTS.md&#39;s own rule against a value spelled in two places condemns each of them independently of any redesign.
+What replaces them is one mechanism rather than three separate corrections: the description a rule tree is stated over is an underspecified Match over the twin&#39;s own entities - a Body, a Region, a HasSupportingSurface - read by an EQL-based ripple-down rule tree that takes what it needs from the match. A rule then states a condition in the world&#39;s own vocabulary and nothing has to be flattened for it first.
+Stacks on #77, the tip of the RDR stack (#159 -&gt; #210 -&gt; #79 -&gt; #76 -&gt; #80 -&gt; #77), which is why it is not folded into any of the three branches carrying a case class: #231 refused merging #159 twice over for the same reason, that it adds 9,236 lines over 50 files to a pull request whose own change is a few hundred, and #77 adds 22,745. depends_on names the three items whose case classes it removes, since none of them can be removed before it exists.
+One measurement to carry into it, taken on #259 while answering the same thread: EQL conditions traverse nested attributes and property reads - sought.surface.region.area &gt; 0.0 and sought.frame.carries_depth both bind and evaluate. So a case class was never needed for the engine&#39;s sake even without the RDR stack, which is why the duplicated half of SoughtSurface could be removed on #259 and only the Match itself waits for this item.
+Corrected 2026-09-05 by #266&#39;s own review round: EQLSingleClassRDR.from_underspecified is on #159, not on #77, so the Match-reading half of this item does not need the tip of the RDR stack and #266 used it - the same shape of correction as the 2026-08-31 &#34;unmerged is not unusable&#34; one. What remains for this item is the other half, which is what actually needs the stack: a Match over the twin&#39;s own entities rather than over a plain description. RequestedLook no longer exists to be removed; TargetOnSurface and SoughtSurface still do. Measured while answering the same round: a case class was never needed for the engine&#39;s sake, since EQL traverses nested attributes and property reads, so what is left here is the vocabulary the conditions are stated in rather than the shape the engine demands.
+Review round of 2026-09-06, resolved as `0098923a1`. Two threads, one change. The developer asked that an RDR be able to take a pre-fitted tree rather than have a family invent example cases to fit from, and noticed that surface_finding&#39;s fitting machinery was a copy of detector_choice&#39;s. EQLSingleClassRDR.state_rules now takes StatedRule (a condition and what it concludes), splicing each in as an alternative in the order given - the same tree fitting grows, so a case a stated rule gets wrong is still corrected by fit_case. Every invented example is gone, the one-pixel picture included. The duplication was three-fold rather than two: LookRules was the same class again, and all three now share krrood&#39;s DetectorChoice, beside PerceptionDetector, which subsumes state_the_detectors_own_condition; the three files lose about 580 lines.
+The developer then asked whether the corner cases could come from fitting on the captures. Nothing reads them on these three today (NullModelSaver, no ConditionResolver), and a stated rule has none by construction, so what the captures buy is the check rather than the authoring: the surface rules are put to all six shipped captures and the detector rules to the two surfaces the modelled scene states, each fitted with the detector it should get and each leaving the tree the size it was. Authoring the trees from a run&#39;s own data was rejected with a reason worth keeping: the pipeline builds its rules before any frame exists, and the surfaces it holds differ per setup - recorded_setup states MIRROR on the table and nothing on the lid, the rendered-scene fixture states neither, and only of_world carries TABLE_FINISH and BOARD_FINISH - so fitting from whatever a run happens to hold would give each setup a different tree, and the colour-blob rule would simply not exist on the recorded setup.
+468 passed, 1 skipped, 16 xfailed across test/experiments_test against 461; 1569 passed, 3 skipped across test_eql and test_eql_rdr against 1563.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Choose the detector by rule from the target and the surface">choose-detection-method</span>
+
+            <span class="chip" title="Find a surface in the image from what the world says it is like">surfaces-found-by-looking</span>
+
+            <span class="chip" title="Work out how to answer a look from the request, instead of being handed a pipeline">how-to-look-concluded-from-the-request</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">The demo asks by query</h3>
+          <div class="item-list">
+                <article id="item-demo-asks-by-query" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The demo&#39;s perception runs because a query was evaluated</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">demo-asks-by-query</span>
+            <span class="mono branch">tracy_icra</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff knowledge-directed-requests demo-asks-by-query" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Every perception call in montessori_demo.py goes through the backend rather than calling the pipeline by hand, and the detector that answers is the one the rule tree chose from the surface and the target - visibly a different one for the steel table than for the board&#39;s lid. This is the wave&#39;s claim made demonstrable: the same question, answered differently because the robot knows what it is looking at.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Choose the detector by rule from the target and the surface">choose-detection-method</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Depends on `knowledge-directed-grounding`&#39;s `demo-runs-on-grounded-perception` (not_started) - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot cross a plan). Dropped from `depends_on` here; tracked only as this free-text blocker, with no automatic readiness or dependency chip.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">2</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">12</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(2)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-tune-detection-rules-against-the-camera" data-item-identifier="tune-detection-rules-against-the-camera" onclick="planDashboardHighlightItem(event, this)"><strong>Conclude a detection rule while watching the camera, with its numbers on sliders</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-demo-asks-by-query" data-item-identifier="demo-asks-by-query" onclick="planDashboardHighlightItem(event, this)"><strong>The demo&#39;s perception runs because a query was evaluated</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

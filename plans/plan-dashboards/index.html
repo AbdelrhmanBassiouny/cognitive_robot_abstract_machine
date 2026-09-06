@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -886,6 +891,8 @@ to read.</p></div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="21 lines changed versus the base - within the short-change threshold of 400">+18 −3</span>
             </div>
           </div>
           <div class="item-meta">
@@ -919,12 +926,15 @@ blocked so each test keeps isolating only the behaviour it names, with no assert
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-positive" title="96 lines changed versus the base - within the short-change threshold of 400">+93 −3</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">dependency-chips-blocked-fix</span>
             <span class="mono branch">claude/plan-dashboard-dependencies-1am49n</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/105" target="_blank" rel="noopener">#105</a>
+            <a class="session-link" href="https://claude.ai/code/session_01VucrpkX99N9RPLwQp78S4q" target="_blank" rel="noopener">session ↗</a>
             
           </div>
           <details class="notes-details">
@@ -945,6 +955,8 @@ pre-existing bug-fix pull request, adopted under the every-fork-pull-request-bel
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="90 lines changed versus the base - within the short-change threshold of 400">+83 −7</span>
             </div>
           </div>
           <div class="item-meta">
@@ -977,6 +989,8 @@ the fetch document names the minimum field set.</div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="123 lines changed versus the base - within the short-change threshold of 400">+114 −9</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1021,6 +1035,9 @@ The screenshot regeneration recipe, since no script exists: render `example/` wi
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1606 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1323 −283</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1093,6 +1110,9 @@ State: draft, 267 plan-dashboard tests. Live, the check flags exactly one item a
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="2947 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+2490 −457</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1145,6 +1165,8 @@ Done when the recorded cross-plan blockers become references and render as chips
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="366 lines changed versus the base - within the short-change threshold of 400">+312 −54</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1186,6 +1208,8 @@ It carries no `bug` label of its own: it surfaces bug fixes, it does not fix one
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="17 lines changed versus the base - within the short-change threshold of 400">+16 −1</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1217,6 +1241,8 @@ cards are unaffected since they render short fixed one-liners.</div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="956 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+944 −12</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1264,6 +1290,9 @@ corrections have used.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="622 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+488 −134</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1315,6 +1344,9 @@ than another pair of fields and another template branch.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="105 lines changed versus the base - within the short-change threshold of 400">+87 −18</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1379,6 +1411,9 @@ visually inconsistent with the two beside it.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="3588 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+3509 −79</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">

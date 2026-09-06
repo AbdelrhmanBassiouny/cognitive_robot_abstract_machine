@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -1018,6 +1023,8 @@ fork's open pull requests; it only ever runs inside the pipeline, which provisio
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="4791 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+4616 −175</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1093,6 +1100,9 @@ omission; the repository&#39;s own formatter had silently declined it.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="5184 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+4522 −662</span>
+              <span class="badge board-chip chip-negative" title="GitHub reports this pull request does not merge cleanly onto its base">conflicts</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1218,6 +1228,9 @@ this entry moved it to the session continuing the work.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1152 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1051 −101</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1292,6 +1305,8 @@ The rebase onto #151 the review thread asks about is answered and declined: #151
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="889 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+786 −103</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1338,6 +1353,8 @@ never made the ref that decision reads present.</div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="889 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+786 −103</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1388,6 +1405,8 @@ the parent would sit in review carrying an instruction already known to 403.</di
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="2173 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+2166 −7</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1430,6 +1449,9 @@ This is also the shape the integration pipeline&#39;s own verdict read later reu
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="675 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+650 −25</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1513,6 +1535,9 @@ committed at install time now and the step is nothing but a branch switch.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="12496 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+11855 −641</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1637,6 +1662,9 @@ after the chain became linear; the executor stays a dependency transitively.</di
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="12224 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+11665 −559</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1842,6 +1870,9 @@ it is left out entire.
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="12224 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+11665 −559</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2022,6 +2053,9 @@ tips through the ordinary build and candidate, which answers &#34;does this plan
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1041 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1041 −0</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">

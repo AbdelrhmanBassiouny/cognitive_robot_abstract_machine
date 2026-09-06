@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -877,7 +882,24 @@ passing suite:</p>
 <li>The programme's working method — run the probe rather than reasoning, compare
   sorted collected test ids rather than counts, stage by explicit path — is
   recorded in <code>rdr-core-engine</code>'s roadmap and applies here unchanged.</li>
-</ul></div>
+</ul>
+<h5>The ICRA convergence pass, 2026-09-06</h5>
+<p>The whole stack is now carried by one branch, taken at its tip <code>D-deco</code> (#77): <code>D-ui-rendering</code> (#79), <code>D-ui</code> (#76), <code>D-store</code> (#80) and <code>D-deco</code> (#77) itself.</p>
+<p>The pass merged every one of them into the ICRA integration branch (#265,
+<code>claude/icra-experiments-simulation-pipeline-w4ep7n</code>) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.</p>
+<p>Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in <code>icra-foundation</code>'s <code>roadmap.md</code> under <em>The
+convergence pass, 2026-09-06</em>. Read it there rather than re-deriving it here.</p>
+<p>A clean text merge over the perception tips: 47 files added, nothing on the
+receiving branch edited. What it brings over the #159-era engine the perception work
+already carried is the <code>@rdr</code> decorator, the model store a fitted tree is written to
+and read back from, and the expert interface a rule is stated through. The
+perception package's own three rule trees still build and the pipeline still
+answers, so the engine underneath them is the newer one without any of them
+changing.</p></div>
     </details>
   </header>
 
@@ -898,6 +920,9 @@ passing suite:</p>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="2290 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+2290 −0</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -944,6 +969,9 @@ Three interfaces had moved under the branch in the six weeks it spent on a dead 
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="8645 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+8645 −0</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1002,6 +1030,9 @@ Both dependencies read ready and the head is current: #76&#39;s base sha is #79&
             <div class="item-badges">
               <span class="badge status-badge status-deferred">Deferred</span>
               <span class="badge live-badge live-closed_unmerged">Closed (unmerged)</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="91 lines changed versus the base - within the short-change threshold of 400">+89 −2</span>
+              <span class="badge board-chip chip-negative" title="GitHub reports this pull request does not merge cleanly onto its base">conflicts</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1049,6 +1080,9 @@ Both dependencies read ready and the head is current: #76&#39;s base sha is #79&
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="419 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+417 −2</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1105,6 +1139,9 @@ Two defects outside this slice had to be fixed for a saved model to load at all 
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1529 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1529 −0</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">

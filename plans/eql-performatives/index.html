@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -768,6 +773,9 @@ rather than left in PR descriptions where they would be rediscovered by accident
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="474 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+356 −118</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -808,12 +816,16 @@ rather than left in PR descriptions where they would be rediscovered by accident
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-positive" title="189 lines changed versus the base - within the short-change threshold of 400">+182 −7</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">cardinality</span>
             <span class="mono branch">claude/split-performatives-prs-xbluus</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/54" target="_blank" rel="noopener">#54</a>
+            <a class="session-link" href="https://claude.ai/code/session_01XqcJKbqDoptTKDYVQ3AHyB" target="_blank" rel="noopener">session ↗</a>
             <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/54" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
@@ -862,12 +874,16 @@ rather than left in PR descriptions where they would be rediscovered by accident
             <div class="item-badges">
               <span class="badge status-badge status-blocked">Blocked</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1039 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1009 −30</span>
+              <span class="badge board-chip chip-negative" title="GitHub reports this pull request does not merge cleanly onto its base">conflicts</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">performatives-core</span>
             <span class="mono branch">claude/performatives-clean</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/14" target="_blank" rel="noopener">#14</a>
+            <a class="session-link" href="https://claude.ai/code/session_01XqcJKbqDoptTKDYVQ3AHyB" target="_blank" rel="noopener">session ↗</a>
             <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/14" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resolve">
@@ -909,12 +925,16 @@ rather than left in PR descriptions where they would be rediscovered by accident
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="321 lines changed versus the base - within the short-change threshold of 400">+224 −97</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">plannode-performable</span>
             <span class="mono branch">claude/eql-performatives-unify</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/15" target="_blank" rel="noopener">#15</a>
+            <a class="session-link" href="https://claude.ai/code/session_01XqcJKbqDoptTKDYVQ3AHyB" target="_blank" rel="noopener">session ↗</a>
             <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/15" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">

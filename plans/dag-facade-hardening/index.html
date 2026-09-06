@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -1091,6 +1096,8 @@ the neighbouring <code>_root_query_</code>'s phrasing. Phase C collapses the two
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="205 lines changed versus the base - within the short-change threshold of 400">+182 −23</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1117,6 +1124,8 @@ the neighbouring <code>_root_query_</code>'s phrasing. Phase C collapses the two
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-positive" title="185 lines changed versus the base - within the short-change threshold of 400">+160 −25</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1148,12 +1157,15 @@ the neighbouring <code>_root_query_</code>'s phrasing. Phase C collapses the two
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="466 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+325 −141</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">pr-89-drop-dead-parent-recovery</span>
             <span class="mono branch">conditions-root-drop-dead-parent-recovery</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/89" target="_blank" rel="noopener">#89</a>
+            <a class="session-link" href="https://claude.ai/code/session_01RSGX4auPKxNkRqP6s4kSSm" target="_blank" rel="noopener">session ↗</a>
             
           </div>
           <details class="notes-details">
@@ -1230,6 +1242,8 @@ the neighbouring <code>_root_query_</code>'s phrasing. Phase C collapses the two
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="179 lines changed versus the base - within the short-change threshold of 400">+168 −11</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1329,6 +1343,9 @@ the neighbouring <code>_root_query_</code>'s phrasing. Phase C collapses the two
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="526 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+424 −102</span>
+              <span class="badge board-chip chip-negative" title="GitHub reports this pull request does not merge cleanly onto its base">conflicts</span>
             </div>
           </div>
           <div class="item-meta">

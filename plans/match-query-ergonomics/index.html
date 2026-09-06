@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -2070,7 +2075,27 @@ rule, so it is now written once as <code>query.variable_rooted</code> and both <
 and the translator call it.</p>
 <p>Verification: <code>test/krrood_test</code> 1903 passed, 5 skipped on #254 alone, 1930 passed on</p>
 <h4>192 with it merged and the six bindings removed; the two <code>test_object_diagram</code> failures</h4>
-<p>are this container having no Graphviz <code>dot</code> binary.</p></div>
+<p>are this container having no Graphviz <code>dot</code> binary.</p>
+<h5>The ICRA convergence pass, 2026-09-06</h5>
+<p>The whole set is now carried by one branch: #192 (both <code>match-underscore-rename-and-forwarding</code> and <code>factories-unwrap-match-and-migrate</code>), #196, #248 and #254, which arrived with #192. #186 and #182 were already on <code>main</code>.</p>
+<p>The pass merged every one of them into the ICRA integration branch (#265,
+<code>claude/icra-experiments-simulation-pipeline-w4ep7n</code>) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.</p>
+<p>Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in <code>icra-foundation</code>'s <code>roadmap.md</code> under <em>The
+convergence pass, 2026-09-06</em>. Read it there rather than re-deriving it here.</p>
+<p>The exclusion that kept #192 off the ICRA branch is reversed: it removes
+<code>Match.variable</code>, which #159 and therefore #239, #266 and #275 read, and the
+developer had asked for it to stay out until that was dealt with. It is dealt with
+now, in a commit of its own after the merge.</p>
+<p>Worth recording for anyone migrating past this rename: because #192 also gives
+<code>Match</code> symbolic attribute delegation, a stale read of a retired name does <strong>not</strong>
+raise - it quietly builds an <code>Attribute</code> expression for a field of that name. The
+reads were found by making <code>Match._is_own_name_</code> refuse the retired spellings
+temporarily, running the suites, and migrating every hit; the guard was then removed,
+since #192 deliberately leaves every public name to the matched class.</p></div>
     </details>
   </header>
 
@@ -2092,6 +2117,8 @@ and the translator call it.</p>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="542 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+533 −9</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2123,6 +2150,8 @@ and the translator call it.</p>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="508 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+443 −65</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2149,6 +2178,9 @@ and the translator call it.</p>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="67 lines changed versus the base - within the short-change threshold of 400">+65 −2</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2188,6 +2220,9 @@ and the translator call it.</p>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="258 lines changed versus the base - within the short-change threshold of 400">+251 −7</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2237,6 +2272,9 @@ The CI red recorded on this item was diagnosed as a second root cause in the RDR
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="124 lines changed versus the base - within the short-change threshold of 400">+117 −7</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2289,6 +2327,9 @@ The CI red recorded on this item was diagnosed as a second root cause in the RDR
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="2050 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1515 −535</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2338,6 +2379,9 @@ Resolved 2026-09-03, third round (roadmap section 31): the developer took the Qu
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="2050 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1515 −535</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">

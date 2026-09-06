@@ -1,4 +1,4 @@
-<title>Capability-guarded experts and their collaboration</title>
+<title>Probabilistic knowledge-guided perception</title>
 <style>
   :root {
     --bg: #F4F6F7;
@@ -620,125 +620,172 @@
 <div class="page hide-done" id="plan-dashboard-page">
   <header class="masthead">
     <p class="eyebrow">Plan Dashboard</p>
-    <h1>Capability-guarded experts and their collaboration</h1>
-    <p class="description">Promote an expert&#39;s applicability to a first-class, evaluable EQL guard, so the engine gates delegation on the guard rather than on the expert&#39;s type; then let experts cooperate, and let them say why they can or cannot handle a situation.</p>
+    <h1>Probabilistic knowledge-guided perception</h1>
+    <p class="description">A follow-up to the knowledge-directed-perception programme, deliberately outside the ICRA deadline. That programme shows that a robot which knows what it is looking at perceives better; this plan asks by how much, on a scale where the answer means something. Today a belief can only delete a rival candidate, so knowledge is permission to consider a piece rather than evidence for it - a believed piece that fits slightly worse than a ghost still loses. Stated as posterior odds, the belief becomes an additive term with a known exchange rate against picture evidence, and the report threshold becomes a genuine cost ratio rather than a number measured off six captures. The plan starts with the measurement that says whether any of this is worth building.</p>
     <p class="repo-line">
-      3 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
-<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/94" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+      1 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/276" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
     <details class="roadmap-details">
       <summary>Background &amp; history (roadmap.md)</summary>
-      <div class="roadmap-body"><h4>Capability-guarded experts — Roadmap</h4>
-<p>Narrative half of <code>rdr-expert-framework</code>. One of seven plans the oversized
-<code>rdr-refactor</code> was split into on 2026-08-30; the predecessor's full 3,259-line
-roadmap remains in the personal-notes branch's history immediately before that
-split commit.</p>
-<h5>What is being built</h5>
-<p>Today the engine decides whether to delegate to an expert by that expert's
-<em>type</em>. This track promotes an expert's applicability to a first-class,
-evaluable EQL <strong>capability guard</strong>, so the engine gates delegation on the guard
-instead — which is both the interface-segregation and the Liskov-substitution
-fix for the same code.</p>
+      <div class="roadmap-body"><h4>Probabilistic knowledge-guided perception</h4>
+<p>A follow-up to the <code>knowledge-directed-*</code> programme (tracking issue #201), created
+2026-09-05 out of a discussion on #270. <strong>Deliberately outside the ICRA budget</strong>: nothing
+here is needed for the 2026-09-15 deadline, and the demo items in the three grounding
+plans do not depend on it. It is written down now because the question came up while the
+evidence for it was in front of us, and because the answer is a different paper.</p>
+<h5>The question</h5>
+<p>The programme's claim is that a robot which knows what it is looking at perceives better.
+It is demonstrated, but the demonstration is qualitative: a belief either lets a piece be
+found or it does not. The natural next question is <em>by how much</em> - and that needs the
+belief and the picture to be on one scale.</p>
+<h5>What the code actually does today, and why it cannot answer</h5>
+<p><code>competing-explanations</code> (#270) settled the decision rule: what is reported must lead
+every other account of its place - the board's own geometry, the next candidate the
+belief allowed, and nothing being there. Knowledge reaches that rule through exactly one
+channel, <code>PieceHypothesis.candidates</code>: a belief naming one piece leaves no runner-up to
+lead, an unguided look over six does. A second channel, <code>BelievedPlace</code>, narrows where the
+search runs.</p>
+<p>Both are <strong>admissibility</strong>. A belief can delete a rival; it cannot make a candidate worth
+more. <code>expectations-from-events</code> (#257) already hit the wall this leaves, in its own note:
+two of its four lid captures do get a history-seeded fit, and it <em>loses to a ghost cylinder
+at the same place</em>. The belief said "this piece, here", the picture scored the ghost
+higher, and the rule gave the belief nothing to spend.</p>
+<p>The obvious patch - add a bonus to <code>strength</code> when a piece is expected - is the tuning
+this programme has refused three times. <code>strength</code> is the harmonic mean of two coverage
+fractions: a fit score, not a probability of anything, and not even uniform along its own
+range (a 0.075 lead near 0.5 is a large relative change; near 0.9 it is noise). There is
+no defensible size for a bonus on it.</p>
+<h5>The frame that does take a prior</h5>
+<p>For one place, with hypotheses <code>H_c</code> (known piece <em>c</em> at a pose), <code>H_board</code> (the board's
+own geometry) and <code>H_0</code> (nothing there), report <em>c</em> when, against every rival <em>r</em>:</p>
+<pre><code>[ log p(E|H_c) - log p(E|H_r) ]      evidence  - what the picture says
++ [ log P(H_c|K) - log P(H_r|K) ]    prior     - what the robot knows
+&gt;= log lambda                        cost      - C(wrong report) / C(missed piece)
+</code></pre>
+<p>Three terms, three owners, and the property the current rule lacks: knowledge enters
+<strong>additively</strong>, at a stated exchange rate. One nat of prior buys exactly one nat of missing
+picture. Two consequences worth the work:</p>
 <ul>
-<li><strong><code>expert-capability-guards</code></strong> — the guard itself, and the retirement of
-  <code>resolution_mode</code>. The seed already exists: the automatic condition resolver
-  becomes one such expert, whose guard is exactly its <code>_try_auto_resolve</code>
-  eligibility clauses. Those clauses were kept and minimally tidied in the core
-  engine's stack specifically so this item has something concrete to generalize
-  rather than a blank page.</li>
-<li><strong><code>expert-ensembles</code></strong> — cooperating experts, with the existing Hint mode
-  re-expressed as composition rather than as a mode, and multi-expert
-  arbitration.</li>
-<li><strong><code>expert-capability-verbalization</code></strong> — <em>why can</em> and <em>why cannot</em> this expert
-  handle this situation, reusing the rule-tree explanation machinery rather than
-  building a second one.</li>
+<li><code>required_lead</code>'s docstring currently <em>says</em> it states a cost. In log-odds that becomes
+  literally true. Today 0.075 had to be measured off six captures, which makes it a
+  detector parameter wearing a cost's clothes - and it shows: the cube on
+  <code>tracy_pickup_demo</code> clears its runner-up by 0.076 against a required 0.075, four parts
+  in a thousand.</li>
+<li>The claim becomes a curve. Detection rate against log prior odds at fixed cost. Today
+  the only x-axis available is candidate-set size, 1 against 6.</li>
 </ul>
-<h5>Why this is its own plan</h5>
-<p>The idea came out of the <code>D-core-engine</code> review on 2026-07-23, which surfaced
-three larger designs the split slices could not absorb; this is one of them, and
-the review deliberately made it a new wave rather than widening a slice. It sits
-between the core engine and the explanation track — it needs the condition
-resolver from one and the explanation machinery from the other — which is
-exactly why it belongs to neither.</p>
-<h5>Decisions that still bind</h5>
-<p><strong>1. The guard is an evaluable EQL expression, not a predicate method.</strong> That is
-what makes it inspectable, which is what makes the third item possible at all: a
-guard you can only <em>call</em> can answer "no", but cannot say why. The engine reads
-the guard; it does not ask the expert whether it wants the question.</p>
-<p><strong>2. <code>resolution_mode</code> retires rather than being extended.</strong> It conflates <em>"was
-this auto-resolved"</em> with <em>"is anyone watching to answer differently"</em>, and the
-core engine's stack already recorded the consequence: with no resolver set at
-all, an expert who authored a condition still gets no second chance in automatic
-mode. That is one of the seven design threads still open on
-<code>d-core-single-class</code>, and whichever way it is settled, the gate belongs on a
-capability rather than on a mode.</p>
-<p><strong>3. Literature recorded for a design-time review</strong>, so the first session on
-this does not start from scratch: blackboard knowledge-source activation
-conditions, Contract-Net eligibility, and Chain-of-Responsibility's <code>canHandle</code>
-for the guard; mixed-initiative and critiquing systems for the ensembles.</p>
-<h5>Cross-plan dependencies, and what they cost</h5>
-<p>Both edges this track needs leave the plan, so <code>depends_on</code> cannot express
-either and both are recorded as <code>blockers</code> instead — which means these items
-carry no dependency chip and no automatic readiness computation:</p>
+<p>Standard names, so the follow-up paper can cite rather than reinvent: Neyman-Pearson (a
+threshold on the likelihood ratio is <em>optimal</em> at a given error trade-off, which says
+that #270's "a lead over rivals" structure is right and only its quantity is wrong);
+Bayes factors and Bayesian model comparison, where Jeffreys' evidence scale is <code>required_lead</code>'s
+ancestor; Bayes risk for the threshold; recursive Bayesian estimation for carrying a
+belief across frames; MHT/JPDA data association for resolving competing claims on one
+place jointly rather than in sequence, which would subsume both this and
+<code>one-detection-per-thing</code>'s occupancy rule; MDL and pattern theory for the generative
+version below. Dempster-Shafer, subjective logic and fuzzy scores are the alternatives and
+are not recommended: no clean cost semantics, and the cost semantics is the whole gain.</p>
+<h5>Where each term comes from here</h5>
+<p><strong>Prior.</strong> <code>BelievedPlace</code> is already a uniform prior on a box (a radius and a yaw
+interval) plus a 0/1 prior on category. <code>random_events</code>' <code>SimpleEvent</code> is a product of
+variable domains - which is what a believed place <em>is</em>, in disguise - so the type has a
+natural home. The propagation rule is <code>expectations-from-events</code>' own and is worth
+defending in the paper as a modelling choice, not a shortcut: a belief decays when
+something <em>acts</em> on the object, not with elapsed time, which makes it a jump process
+rather than a diffusion.</p>
+<p><strong>Likelihood.</strong> The hard half, and the reason the item starts with a measurement.</p>
 <ul>
-<li><code>expert-capability-guards</code> needs <code>d-core-single-class</code> (#159) in
-  <code>rdr-core-engine</code>, whose condition resolver holds the <code>_try_auto_resolve</code>
-  clauses being generalized.</li>
-<li><code>expert-capability-verbalization</code> needs <code>rdr-why-answer</code> (#81) in
-  <code>rdr-explanation</code>, whose rule-tree explanation machinery it reuses. It also
-  needs <code>expert-capability-guards</code>, which is in this plan and keeps its edge.</li>
+<li><em>Calibrate the score we have.</em> A monotone map (Platt, or isotonic) from <code>strength</code> to a
+  log-likelihood ratio, fitted on labelled place-account pairs. Cheap and entirely
+  standard. <code>test_montessori_detection_on_captures.py</code> already computes the confusion
+  table it would be fitted on. The honest risk: six captures is not a calibration set, so
+  it must be held out or it is only <code>required_lead</code> re-tuned.</li>
+<li><em>Model the edges generatively.</em> The two-sided score is already a shadow of a coding
+  argument - <code>outline_followed</code> is model support, <code>edges_accounted_for</code> is residual left
+  unexplained. Give each edge pixel an explaining model or a background process at some
+  rate, and <code>log p(E|H)</code> becomes a sum over pixels: report the account that shortest
+  encodes the picture. Stronger, and "the board is one of the accounts" stops being a
+  special case and falls out. Much more work, and not this item.</li>
 </ul>
-<p>The internal ordering is otherwise simple: the guard first, then the ensembles
-and the verbalization in parallel.</p>
-<h5>Open</h5>
+<h5>What is already in the workspace</h5>
+<p>Verified 2026-09-05 by reading the source, not assumed:</p>
 <ul>
-<li><strong>Nothing here has a branch.</strong> All three items are <code>blocked</code> on the core
-  engine's stack landing.</li>
-<li><strong>Whether an ensemble arbitrates or composes</strong> is undecided. "Hint mode as
-  composition" states the shape for one case; what happens when two guards both
-  pass and the experts disagree has not been designed.</li>
+<li><code>random_events</code> - <code>Event</code>/<code>SimpleEvent</code> product algebra over intervals and sets.</li>
+<li><code>probabilistic_model</code> - probabilistic circuits, JPT,
+  <code>RelationalProbabilisticCircuit.ground(statement)</code>, causal circuits.</li>
+<li><code>krrood.parametrization</code> - <code>Match</code> -&gt; <code>UnderspecifiedParameters</code> -&gt; <code>ModelRegistry</code> -&gt;
+  <code>ProbabilisticModel</code>, surfaced in the entity query language as <code>probability_of(...)</code>,
+  <code>distribution_of(...)</code> and <code>average(...)</code>.</li>
 </ul>
-<h5>Standing conventions</h5>
+<p>So "P(a cube is in this region | what the twin knows)" is expressible as a query against a
+registered model rather than as a new probability layer inside the perception package. And
+since <code>perception-backend</code> (#222) already makes looking a query backend, the prior and the
+look end up in one language. That is the design that makes this coherent rather than a
+bolt-on - and it is why this is a follow-up rather than a rewrite.</p>
+<h5>Risks, to design against rather than discover</h5>
 <ul>
-<li>Follow <code>.claude/personal/cram-notes.md</code> and this repository's <code>AGENTS.md</code>.</li>
-<li>SOLID is a review gate: a new capability enters as an abstraction plus small
-  dataclass implementations, and strategies stay substitutable without touching
-  the engine. This track is unusually exposed to that rule, since its whole
-  subject is making a dispatch decision substitutable.</li>
-<li>TDD: failing test first, and no test is modified to make something pass.</li>
-<li><code>krrood</code> stays self-contained; world-like scenarios are mimicked in
-  <code>test/krrood_test/dataset</code>.</li>
-<li>The programme's working method — run the probe rather than reasoning, compare
-  sorted collected test ids rather than counts, stage by explicit path — is
-  recorded in <code>rdr-core-engine</code>'s roadmap and applies here unchanged.</li>
-</ul></div>
+<li><strong>A prior can hurt.</strong> A wrong belief - someone moved the piece - produces a <em>confident</em>
+  wrong report. That is <code>expectations-from-events</code>' failure-detection story from the other
+  side, so one experiment yields both the gain curve and the failure mode. Good material,
+  if it is measured rather than avoided.</li>
+<li><strong>The exchange rate cuts both ways.</strong> A strong enough prior reports a piece that is not
+  visible at all. Either cap the prior term or keep the "nothing is there" account honest
+  enough to win on an empty picture. This is a design decision the item must make
+  explicitly, not a bug to find later.</li>
+<li><strong>Six captures.</strong> Stated once more because it is the thing most likely to be waved
+  through: the prototype's whole job is to say whether the data supports a calibrated
+  likelihood. "It looked better on the six" is not that answer.</li>
+</ul>
+<h5>Relationship to the plans it follows</h5>
+<ul>
+<li><code>knowledge-directed-grounding</code> #270 <code>competing-explanations</code> - the structure this
+  replaces the quantity inside. It survives: the comparison, the board as an account, the
+  rival list. Only what is compared changes.</li>
+<li><code>knowledge-directed-expectation</code> #257 <code>expectations-from-events</code> - supplies the belief,
+  and is the item currently blocked by not being able to spend it.</li>
+<li><code>knowledge-directed-requests</code> #239 <code>detector-parameters-from-knowledge</code> - the nearest
+  neighbour, and <strong>not the same mechanism</strong>. It makes the threshold situation-dependent by
+  rule: knowledge moving the bar. This plan has knowledge moving the score. A rule tree
+  can mimic a prior, but non-additively and with no exchange rate - it relearns per
+  situation what this computes once.</li>
+<li><code>icra-mechanism</code> <code>knowledge-ablations</code> - switches each knowledge source off entirely.
+  That is the binary version of this plan's curve, and the two would read well together.</li>
+</ul>
+<h5>Why it is not folded into #270</h5>
+<p>Run 2026-09-05, per the scope check in <code>.claude/skills/add-plan-item/scope-decision.md</code>.
+<code>explanations.py</code> exists on no branch but #270's, which flags it. The fold test then
+settles it: strip the edits to #270's files and there is still a calibration study, a
+prior type over <code>random_events</code>, a log-odds decision rule and a gain curve - substantial
+work standing on its own. #270 is complete, reviewed, and was taken out of draft by the
+developer on 2026-09-05, so folding would mean reopening a finished branch to change the
+quantity it was reviewed on. This builds on it instead.</p></div>
     </details>
   </header>
 
   <div class="layout">
     <main>
-      <section class="wave" id="wave-capabilities">
-        <div class="wave-eyebrow">Capability guards and collaboration</div>
-        <p class="wave-description">Sequential from the guard: the ensembles and the verbalization both build on it.</p>
+      <section class="wave" id="wave-evidence">
+        <div class="wave-eyebrow">A belief on the same scale as the picture</div>
+        <p class="wave-description">One question, asked in the order that can answer it: measure first, on the captures the grounding wave already ships, and only build the mechanism the measurement supports.</p>
         <section class="track">
-          <h3 class="track-title">Guards, ensembles and their verbalization</h3>
+          <h3 class="track-title">What decides a detection</h3>
           <div class="item-list">
-                <article id="item-expert-capability-guards" class="item status-blocked" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+                <article id="item-belief-counts-as-evidence" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
-            <h4 class="item-title">Capability-guarded Expert: EQL eligibility guards, resolver-as-expert</h4>
+            <h4 class="item-title">Let a belief count as evidence for a candidate, not only as permission to consider it</h4>
             <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
+              <span class="badge status-badge status-not_started">Not started</span>
               <span class="badge live-badge live-none">No pull request yet</span>
             </div>
           </div>
           <div class="item-meta">
-            <span class="mono id">expert-capability-guards</span>
+            <span class="mono id">belief-counts-as-evidence</span>
             <span class="mono branch">None</span>
             <span class="muted">no pull request yet</span>
             <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
     <ul class="model-picker-list" role="listbox">
       <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
@@ -748,111 +795,24 @@ and the verbalization in parallel.</p>
       <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-expert-framework expert-capability-guards" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff probabilistic-knowledge-perception belief-counts-as-evidence" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
 </span>
 
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
-            <div class="notes">Abstract Expert declares full question vocabulary; each impl carries an evaluable EQL capability guard. Lit: blackboard activation conditions, Contract-Net, Chain-of-Responsibility.</div>
+            <div class="notes">Two halves, in order, with a decision between them.
+
+The prototype comes first and is a measurement, not a feature: on the six captures `montessori-perception-on-main` ships, label every place-and-account pair the pipeline already forms, and ask whether `Explanation.strength` can be mapped monotonically onto a log-likelihood ratio that separates real pieces from ghosts better than a level on the raw score does. Held out, since six captures fitted and evaluated on themselves would only be `required_lead` re-tuned with more steps. If the separation is not there, the answer is that a calibrated likelihood needs more data than this scene has, and that is the item&#39;s result - recorded in roadmap.md, no mechanism built.
+
+If it holds, the second half replaces the compared quantity while keeping #270&#39;s structure intact: a report stays a lead over the board&#39;s own account, over the next candidate the belief allowed, and over nothing being there. What changes is that the lead is measured in log posterior odds, so a prior from the twin adds to it and `required_lead` becomes log(cost of a wrong report / cost of a missed piece) - a number that does not move when the lens, the lighting or the detector changes.
+
+Scope boundary, stated so a later session does not quietly widen it: the prior is *stated* here (from the action&#39;s declared effect and the gripper&#39;s release uncertainty), not learned. Only the likelihood map is fitted. Learning the prior from the twin through `probabilistic_model` and `krrood.parametrization`, the generative/description-length likelihood, and joint assignment over a whole scene are all named in roadmap.md as where this goes next, and none of them is this item.
+
+Deliverable either way is the figure the programme has been promising and cannot currently draw: detection rate against the strength of the belief, at a fixed stated cost. Today the only available x-axis is candidate-set size, one against six - two points, no curve.
+
+No branch yet, on purpose. The prototype is a study; what it needs from a branch depends on what it finds. Whoever starts it will most likely cut off #270 (`claude/plan-item-kickoff-kdp-r8nttk`), which has both `explanations.py` and the captures, and inherits that stack&#39;s known-red CI from #222.</div>
           </details>
-          <div class="blockers">
-            <div class="blocker">▸ Blocked until the Wave-0 engine stack lands on main.</div>
-            <div class="blocker">▸ Needs d-core-single-class (#159) in the rdr-core-engine plan, whose condition resolver carries the _try_auto_resolve clauses this guard generalizes. Cross-plan, so no dependency chip.</div>
-          </div>
-        </div>
-      </div>
-    </article>
-
-                <article id="item-expert-ensembles" class="item status-blocked" style="--indent-level: 1; --indent-level-hidden-done: 1;">
-      <div class="item-row">
-        <div class="item-spine"></div>
-        <div class="item-body">
-          <div class="item-head">
-            <h4 class="item-title">Cooperating experts: Hint mode as composition, multi-expert ensembles</h4>
-            <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
-            </div>
-          </div>
-          <div class="item-meta">
-            <span class="mono id">expert-ensembles</span>
-            <span class="mono branch">None</span>
-            <span class="muted">no pull request yet</span>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-expert-framework expert-ensembles" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
-</span>
-
-          </div>
-          <details class="notes-details">
-            <summary>Notes</summary>
-            <div class="notes">Multiple experts assisting each other. Lit: mixed-initiative / critiquing systems.</div>
-          </details>
-          <div class="deps">
-            <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="Capability-guarded Expert: EQL eligibility guards, resolver-as-expert (not ready yet — this item is blocked on it)">expert-capability-guards</span>
-
-          </div>
-          <div class="blockers">
-            <div class="blocker">▸ Blocked on expert-capability-guards.</div>
-          </div>
-        </div>
-      </div>
-    </article>
-
-                <article id="item-expert-capability-verbalization" class="item status-blocked" style="--indent-level: 1; --indent-level-hidden-done: 1;">
-      <div class="item-row">
-        <div class="item-spine"></div>
-        <div class="item-body">
-          <div class="item-head">
-            <h4 class="item-title">Verbalize expert capabilities: why-can / why-cannot handle a situation</h4>
-            <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
-            </div>
-          </div>
-          <div class="item-meta">
-            <span class="mono id">expert-capability-verbalization</span>
-            <span class="mono branch">None</span>
-            <span class="muted">no pull request yet</span>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-expert-framework expert-capability-verbalization" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
-</span>
-
-          </div>
-          <details class="notes-details">
-            <summary>Notes</summary>
-            <div class="notes">The guard is EQL, so it is inspectable and verbalizable. Ties to the Why track.</div>
-          </details>
-          <div class="deps">
-            <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="Capability-guarded Expert: EQL eligibility guards, resolver-as-expert (not ready yet — this item is blocked on it)">expert-capability-guards</span>
-
-          </div>
-          <div class="blockers">
-            <div class="blocker">▸ Blocked on expert-capability-guards and W1 (rdr-why-answer).</div>
-            <div class="blocker">▸ Also needs rdr-why-answer (#81) in the rdr-explanation plan, whose rule-tree explanation machinery this reuses. Cross-plan, so no dependency chip.</div>
-          </div>
         </div>
       </div>
     </article>
@@ -866,9 +826,9 @@ and the verbalization in parallel.</p>
       <div class="sidebar-card">
         <h3>Status</h3>
         <div class="summary-strip">
-          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Not started</span></div>
           <div class="stat"><span class="stat-num">0</span><span class="stat-label">In progress</span></div>
-          <div class="stat"><span class="stat-num">3</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
           <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
           <div class="stat"><span class="stat-num">0</span><span class="stat-label">Done</span></div>
         </div>
@@ -880,7 +840,13 @@ and the verbalization in parallel.</p>
       </div>
       <div class="sidebar-card" id="next-steps-card">
         <h3>What to do next</h3>
-        <p class="next-empty">Nothing actionable right now — every item is either in progress, fully blocked, or done.</p>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-belief-counts-as-evidence" data-item-identifier="belief-counts-as-evidence" onclick="planDashboardHighlightItem(event, this)"><strong>Let a belief count as evidence for a candidate, not only as permission to consider it</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
       </div>
     </aside>
   </div>

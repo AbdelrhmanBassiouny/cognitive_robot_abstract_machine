@@ -1,0 +1,1374 @@
+<title>ICRA experiments: what the paper measures</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>ICRA experiments: what the paper measures</h1>
+    <p class="description">The mechanism wave of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits&#39; roadmap.md for why): per-predicate backend routing, physics verification, snapshot working memory, typed and predicted failure, and the verbalised-memory/VLM baselines. Everything here stacks on icra-foundation&#39;s integrated pipeline, scenario model and episode recording, and one item stacks on icra-evidence&#39;s question set; those depends_on edges could not cross the plan boundary and are recorded as blockers instead (see roadmap.md).</p>
+    <p class="repo-line">
+      12 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/252" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>icra-mechanism: roadmap</h4>
+<p>One of three successors of <code>icra-experiments</code>, split 2026-09-05 for the plan
+size budget (<code>plan-size-limits</code>, tracking issue #200) — the item limit alone
+(33 &gt; 15), not the line budget. The split is by wave, the plan's own
+existing organizational seam: <code>icra-foundation</code> is the <code>foundation</code> wave,
+<code>icra-mechanism</code> (this plan) is <code>mechanism</code>, <code>icra-evidence</code> is <code>evidence</code>.
+All three keep <code>tracking_issue: 252</code>, the original mailbox. Full split
+rationale and what it cost lives in <code>plan-size-limits/roadmap.md</code>'s "Done
+2026-09-05: <code>split-icra-experiments</code>" section; the predecessor's full
+roadmap is reachable in the personal-notes branch's history immediately
+before the split commit.</p>
+<p><strong>Every item in this plan depends on at least one item in <code>icra-foundation</code>
+or <code>icra-evidence</code></strong> (nine of this plan's twelve items carry a cross-plan
+<code>blockers</code> entry instead of a <code>depends_on</code> edge, since <code>depends_on</code> cannot
+cross a plan boundary — see plan.yaml). Read <code>icra-foundation</code>'s roadmap
+first for the programme's overall "why"; this file states only what is
+specific to what this wave measures.</p>
+<h5>Why this wave exists</h5>
+<p>The memo's thesis is one mechanism: the same EQL query selects which backend
+answers each predicate, drives what the robot perceives, and verifies the
+result in the digital twin; removing knowledge produces failures the query
+predicts. This wave builds that mechanism and its supporting pieces:
+per-predicate backend routing (<code>backend-routing</code>), physics verification
+(<code>backend-routing</code>), snapshot working memory (<code>backend-routing</code>), typed and
+predicted failure with the ablations/perturbations that produce it on
+purpose (<code>failure</code>), and the verbalised-memory/VLM baselines the experiments
+compare against (<code>baselines</code>).</p>
+<h5>Structural decisions taken at creation (2026-09-03)</h5>
+<ul>
+<li>The two core mechanisms (per-predicate routing by declared capability, and
+  the physics verification backend) live here, not in
+  <code>knowledge-directed-perception</code>. That plan's
+  <code>imagination-world-rejects-what-a-predicate-refuses</code> item is covered by
+  <code>physics-verification-backend</code> in its narrow form and should be marked so
+  there rather than built twice.</li>
+<li>Three lanes, one per person (see below); items in different lanes run in
+  parallel, an item waits only on what <code>depends_on</code>/<code>blockers</code> names.</li>
+</ul>
+<h5>Lane assignment (unchanged from the predecessor)</h5>
+<p>This wave's tracks split across all three of the original lanes:
+<code>backend-routing</code> is lane 1 (robot, perception and mechanisms — the same
+lane as <code>icra-foundation</code>'s <code>integration</code> track and <code>icra-evidence</code>'s
+<code>experiment-b</code>); <code>failure</code> is lane 2 (experiment infrastructure and
+long-term memory — with <code>icra-foundation</code>'s <code>scenario-model</code>/<code>long-term-memory</code>
+and <code>icra-evidence</code>'s <code>experiment-c</code>/<code>experiment-d</code>); <code>baselines</code> is lane 3
+(baselines, question set, figures and writing — with <code>icra-evidence</code>'s
+<code>experiment-a</code>/<code>release</code>). The lane order for this wave's items:</p>
+<p><strong>Lane 1</strong> (from <code>icra-foundation</code>'s <code>integrated-simulation-pipeline</code> and
+<code>simulated-camera-feeds-perception</code>): <code>backends-declare-their-capabilities</code>
+→ <code>query-routed-per-predicate</code> → <code>physics-verification-backend</code> →
+<code>snapshot-working-memory</code> → (<code>icra-foundation</code>'s
+<code>tracy-demo-takes-the-integrated-branch</code>) → <code>icra-evidence</code>'s
+<code>experiment-b-in-simulation</code>.</p>
+<p><strong>Lane 2</strong> (from <code>icra-foundation</code>'s <code>scenario-domain-model</code> and
+<code>montessori-scenarios</code>): <code>failure-taxonomy-and-typing</code> →
+<code>knowledge-ablations</code> → <code>perturbations</code> → <code>icra-foundation</code>'s
+<code>episodes-queried-by-eql</code> → <code>failure-predicted-from-the-query</code> →
+<code>icra-evidence</code>'s <code>experiment-c-in-simulation</code>. <code>expectation-checked-under-perturbation-in-simulation</code>
+was added to this lane 2026-09-05 (see below).</p>
+<p><strong>Lane 3</strong> (from <code>icra-evidence</code>'s <code>question-set-and-ground-truth</code>):
+<code>working-memory-verbalised</code> → <code>vlm-baseline-harness</code> → <code>icra-evidence</code>'s
+<code>paper-figures-from-episodes</code>/<code>experiment-a-in-simulation</code>.</p>
+<h5>The budget: 2026-09-15</h5>
+<p>Twelve days from 2026-09-03; the full table lives in <code>icra-foundation</code>'s
+roadmap. This wave's state-reached milestone: <strong>go/no-go Sunday evening
+(Sat 5/Sun 6) — <code>query-routed-per-predicate</code> and <code>physics-verification-backend</code>
+answer a mixed query in simulation.</strong> If it fails, the memo's fallback
+holds: submit with Experiments A and C and drop B's injection half. <strong>Never
+cut:</strong> the temporal scenarios, the perturbation conditions, the hybrid VLM
+baseline, the failure-prediction metric, the determinism runs.</p>
+<h5>Cross-plan prerequisites relevant to this wave</h5>
+<ul>
+<li><strong>knowledge-directed-perception</strong>'s <code>expectations-from-events</code> is not
+  started there and is the failure-detection story: it blocks
+  <code>failure-taxonomy-and-typing</code>'s expectation-derived type (blocker already
+  on that item, unchanged by this split) and <code>icra-evidence</code>'s
+  <code>experiment-c-in-simulation</code>.</li>
+<li><strong>eql-verbalization</strong>'s #33 carries the reviewed scene wordings
+  <code>working-memory-verbalised</code> renders with; the item does not wait for #33
+  to rebase or land onto #229. Two wording decisions on #33 are the
+  developer's own.</li>
+</ul>
+<h5>Open questions for the developer</h5>
+<ul>
+<li>Which vision-language model and provider <code>vlm-baseline-harness</code> calls, and
+  whether the credentials can be in CI (they need not be — the live test is
+  skipped without them). <code>icra-evidence</code>'s Experiment D reuses this harness
+  and adds a second part to the same question: how many episodes fit one
+  context once video frames are sampled.</li>
+<li>Whether <code>knowledge-directed-perception</code>'s <code>expectations-from-events</code> is
+  still needed for the paper once <code>snapshot-working-memory</code> and
+  <code>failure-taxonomy-and-typing</code> exist, or whether the violated-expectation
+  report folds into the failure typing here.</li>
+</ul>
+<h5>2026-09-05: the expectation mechanism gets its own simulated test</h5>
+<p>Raised by the developer on <code>knowledge-directed-perception</code>'s #257
+(r3940274577): <em>"I want to test that with an actual robot plan execution in
+simulation with perturbations, check if that is already in the
+icra-experiments plan such that it tests this whole expectation process or
+not, if not then we need to add it there."</em></p>
+<p>It was not. <code>perturbations</code> builds the perturbations and <code>icra-evidence</code>'s
+<code>experiment-c-in-simulation</code> runs the insertion trial under every condition
+and types every failure, but nothing between them asserted that the
+<em>expectation</em> an insertion arms is contradicted in the relation the
+perturbation actually breaks — a wrong expectation report would be typed and
+counted rather than caught.</p>
+<p>So <code>expectation-checked-under-perturbation-in-simulation</code> was added to the
+<code>failure</code> track, depending on <code>perturbations</code> (this plan) and
+<code>icra-foundation</code>'s <code>integrated-simulation-pipeline</code> (blocker). Its four
+cases are the four outcomes the report can have: a piece pushed off the lid
+after release contradicts <code>Near</code>/<code>InsideRegion</code>, a release that stops short
+contradicts <code>InsideRegion</code> alone, a piece the gripper never released is
+reported as nothing found, and an unperturbed run contradicts nothing. It is
+also the first place the success case is checked against a look rather than
+a stated sighting — on #257 that case is checked only against a stated
+sighting, because a look reports a piece's height from the depth image with
+a fallback that puts every unresolved piece standing on the plane it was
+found in. Recorded here rather than on <code>knowledge-directed-perception</code>
+because the test needs a pipeline that can run a plan, and that pipeline is
+<code>icra-foundation</code>'s.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-mechanism">
+        <div class="wave-eyebrow">What the paper measures</div>
+        <p class="wave-description">The two mechanisms the thesis sentence names (per-predicate backend routing, perceive-commit-verify in physics), the snapshot working memory, failure typing and prediction, and the baselines the experiments compare against.</p>
+        <section class="track">
+          <h3 class="track-title">Routing, verification and working memory</h3>
+          <div class="item-list">
+                <article id="item-backends-declare-their-capabilities" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">backends-declare-their-capabilities</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff icra-mechanism backends-declare-their-capabilities" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The capability table the memo publishes, as code rather than a table written by hand: QueryBackend gains capability(), the same shape #231 gave detectors, stating the predicate and statement forms the backend answers and the precondition on the knowledge state under which it answers them (the native twin backend for a body already believed in, perception for a pose stated as ..., the SQL backend for anything about a past episode, physics for a derived physical fact). Rendering the declarations of all four backends is what prints the paper&#39;s table. Tests pin one declaration per backend against a statement it accepts and one it refuses.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: depends on icra-foundation&#39;s `integrated-simulation-pipeline` (in_progress, PR #265), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-query-routed-per-predicate" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A statement is routed per predicate by capability and knowledge state, and the routing is reported</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">query-routed-per-predicate</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The mechanism the thesis sentence names. A planner splits a statement into its predicates, assigns each to the backend whose capability admits it under the current twin state, orders them twin first, then perception for what the twin cannot answer, then physics for derived facts, and falls back to the next capable backend when one refuses. It returns a QueryPlan beside the answer: per-predicate assignment, detector calls, region searched and latency, which is exactly what Experiment B tabulates. #238 already does this implicitly for one statement (the lid and the hole are answered from the twin before the look); this item makes it general and visible. The mixed statement &#34;the cyan piece left of the triangle on the table&#34;, with the triangle believed in versus not, is the test.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin (not ready yet — this item is blocked on it)">backends-declare-their-capabilities</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-physics-verification-backend" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Perceive, commit, verify: detections spawned into a physics copy of the world and derived facts re-evaluated there</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">physics-verification-backend</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A backend that spawns what perception reported into a copy of the world, steps MuJoCo, and evaluates the derived predicates there: Stable, contact and penetration, InsideOf, the directional relations and Reachable, all of which #229 already made predicates. It reports agreement or disagreement with the perception backend per fact, never re-checking the committed pose itself. This is the narrow form of knowledge-directed-perception&#39;s imagination-world item, built here because the paper measures it; that plan&#39;s item is noted as covered by this one. Tests inject a floating piece, a penetrating piece and a wrongly classified piece and assert each disagreement fires.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin (not ready yet — this item is blocked on it)">backends-declare-their-capabilities</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-snapshot-working-memory" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Working memory as a snapshot: the twin follows kinematics while acting and re-perceives only when idle and changed</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">snapshot-working-memory</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff icra-mechanism snapshot-working-memory" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">During manipulation the grasped piece moves with the gripper through the attachment #169 restored, and perception is not consulted. When idle, a look is taken at a low rate and a piece&#39;s pose is committed only when it differs from the believed pose by more than a threshold measured as three standard deviations over a static scene. The threshold is measured in simulation first and again on the robot, both numbers recorded. Fits the frame budget the continuous node cannot: #236&#39;s layout fit costs 0.56 s per frame against the node&#39;s 0.5 s period, which is fine at idle rate.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: depends on icra-foundation&#39;s `simulated-camera-feeds-perception` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Typed and predicted failures</h3>
+          <div class="item-list">
+                <article id="item-failure-taxonomy-and-typing" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Every failed trial typed as semantic, geometric, perceptual or execution from the evidence</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">failure-taxonomy-and-typing</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff icra-mechanism failure-taxonomy-and-typing" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A FailureType enum with the four members, and the rule that assigns one to a finished trial from the plan&#39;s own failure, the segmind events and the violated expectation. Extends insertion_diagnosis.InsertionDiagnosis and InsertionFailureReason, which already diagnose an attempt from events, rather than a second diagnosis; each existing reason maps to one type. Recorded on the Trial and so in the episode. Tests cover one trial per type.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: the violated-expectation input comes from knowledge-directed-perception&#39;s expectations-from-events (not started there), which that plan owns. Typing from the plan&#39;s failure and the segmind events can be built first; the expectation-derived type waits on it.</div>
+            <div class="blocker">▸ Cross-plan: depends on icra-foundation&#39;s `scenario-domain-model` (in_progress, PR #261), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-failure-predicted-from-the-query" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The failure type predicted from the query result before execution, and scored against what happened</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">failure-predicted-from-the-query</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">H4. Before an insertion executes, the QueryPlan and its answer predict the type: several candidate holes answer the target description, so semantic; Reachable is false for the grasp or the release pose, so geometric; the physics backend disagrees with perception or nothing was detected, so perceptual; otherwise none predicted. Precision and recall of prediction against the observed type are Metrics on the Report. Tests build one query result per predicted type.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Every failed trial typed as semantic, geometric, perceptual or execution from the evidence (not ready yet — this item is blocked on it)">failure-taxonomy-and-typing</span>
+
+            <span class="chip chip-unmet" title="A statement is routed per predicate by capability and knowledge state, and the routing is reported (not ready yet — this item is blocked on it)">query-routed-per-predicate</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-knowledge-ablations" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Each knowledge source switched off through a Condition, never through a code branch</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">knowledge-ablations</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff icra-mechanism knowledge-ablations" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The memo&#39;s conditions as Condition instances: full; no working memory; no hole-shape knowledge (the board&#39;s holes unknown to the twin, which also needs the mesh scale 0.865 #236 measured to be in the twin first, so the full condition is honest); no degree-of-freedom limits; no pickup detection; no predicate-narrowed perception. Each condition removes one thing the action reads from the twin or the backends, so the action&#39;s code has no ablation flags of its own. A test per condition asserts the knowledge really is absent (the query that would read it fails or returns nothing).</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: depends on icra-foundation&#39;s `montessori-scenarios` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-perturbations" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">perturbations</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff icra-mechanism perturbations" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Perturbation instances the runner applies at a named step: the target hole moved 10 cm, a fixed offset added to a reported pose, a detection relabelled as another piece, an external body pushing a piece while the robot is idle. In simulation they act on the MuJoCo world or on the perception result; on the robot the same Perturbation renders a one-line instruction to the person at the table, so the protocol is the same object. Experiment B&#39;s ~30 injected events and Experiment C&#39;s perturbation conditions are drawn from these.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: depends on icra-foundation&#39;s `montessori-scenarios` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-expectation-checked-under-perturbation-in-simulation" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A robot plan run in simulation under a perturbation, and the violated expectation reported as the failure</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">expectation-checked-under-perturbation-in-simulation</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Added 2026-09-05 at the developer&#39;s ask on knowledge-directed-perception&#39;s #257 (r3940274577). The expectation process - an action&#39;s declared effect armed as relations of the twin&#39;s vocabulary, Segmind&#39;s events moving the belief by what each declares, a look asked for the same relations, and the violated ones reported as the failure - is tested there over a rendered scene and a hand-built world, never over a plan the robot actually executes. This item runs the insertion plan in the integrated simulation and applies one perturbation from `perturbations` at a named step, asserting that the expectation the release armed is contradicted in exactly the relation the perturbation breaks: a piece pushed off the lid after the release contradicts Near and InsideRegion, a release that stops short so the piece rests on the lid contradicts InsideRegion alone, a piece the gripper never let go of is reported as nothing found, and an unperturbed run contradicts nothing. It is also the first place the success case is checked against a look rather than a stated sighting, which is where a piece sunk in its hole has to be told from one standing over it. A test of the mechanism end to end rather than an experiment, so it sits in the failure track beside the perturbations it draws on; experiment-c-in-simulation reads its result rather than re-establishing it. Cross-plan: the mechanism is knowledge-directed-perception&#39;s expectations-from-events (#257) and its general half lives in segmind.expectations; this item does not start before that branch is merged into the integrated branch.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push (not ready yet — this item is blocked on it)">perturbations</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: depends on icra-foundation&#39;s `integrated-simulation-pipeline` (in_progress, PR #265), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Verbalised memory and the VLM baselines</h3>
+          <div class="item-list">
+                <article id="item-working-memory-verbalised" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Working memory rendered as deterministic English: objects, poses, relations, events, gripper contents</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">working-memory-verbalised</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff icra-mechanism working-memory-verbalised" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A fixed set of EQL queries over the twin whose answers are rendered through the verbalization framework on main, concatenated in a fixed order with rounded numbers, so the same state always produces the same text. The scene wordings #33 carries (support, the directional relations, visibility, reachability) are the ones to use; where #33 is not yet rebased onto #229, take its reviewed wordings rather than inventing new ones. A snapshot test pins the text for one simulated scene.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: depends on icra-foundation&#39;s `integrated-simulation-pipeline` (in_progress, PR #265), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-vlm-baseline-harness" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The same questions asked of a vision-language model, image only and image plus verbalised memory</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">vlm-baseline-harness</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">A harness that sends each question with the camera image, and again with the verbalised working memory prepended, parses the answer into the question&#39;s answer type and scores it against ground truth. The model sits behind an interface so the provider is one class; CI runs against a recorded-answer mock, and the live test is skipped without credentials. Each question is also run five times on the same scene to report answer variance, for the VLM systems and for EQL alike. Which provider and model to use is the developer&#39;s call and is not taken here. What it sends is an assembled context rather than an image and a prepended string, so the episode corpus of Experiment D is a third system on the same harness rather than a second one.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Working memory rendered as deterministic English: objects, poses, relations, events, gripper contents (not ready yet — this item is blocked on it)">working-memory-verbalised</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: depends on icra-evidence&#39;s `question-set-and-ground-truth` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-episode-corpus-given-whole-to-the-vlm" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The vision-language model is given the whole episode corpus: every episode&#39;s video, files and transcript in one context</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">episode-corpus-given-whole-to-the-vlm</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">What makes Experiment D&#39;s comparison fair, and the reason a loss there reads as reasoning rather than lookup: every episode a question may reach over goes into one context - sampled video frames, the run&#39;s files, the question-and-answer transcript - so the model is given everything the SQL backend can see over the same episodes. That is only possible with a cap, and the cap is derived rather than chosen: how many episodes fit once the frames are sampled to the model&#39;s context budget. It is the baseline&#39;s stated limit in the paper, and it bounds how far back a question can reach. Assembled from what episode-artifacts-recorded wrote. A retrieval step over an unbounded corpus was considered and rejected on 2026-09-04; roadmap.md carries why.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="The same questions asked of a vision-language model, image only and image plus verbalised memory (not ready yet — this item is blocked on it)">vlm-baseline-harness</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: depends on icra-foundation&#39;s `episode-artifacts-recorded` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">12</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(6)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-backends-declare-their-capabilities" data-item-identifier="backends-declare-their-capabilities" onclick="planDashboardHighlightItem(event, this)"><strong>Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-snapshot-working-memory" data-item-identifier="snapshot-working-memory" onclick="planDashboardHighlightItem(event, this)"><strong>Working memory as a snapshot: the twin follows kinematics while acting and re-perceives only when idle and changed</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-failure-taxonomy-and-typing" data-item-identifier="failure-taxonomy-and-typing" onclick="planDashboardHighlightItem(event, this)"><strong>Every failed trial typed as semantic, geometric, perceptual or execution from the evidence</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-knowledge-ablations" data-item-identifier="knowledge-ablations" onclick="planDashboardHighlightItem(event, this)"><strong>Each knowledge source switched off through a Condition, never through a code branch</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-perturbations" data-item-identifier="perturbations" onclick="planDashboardHighlightItem(event, this)"><strong>Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-working-memory-verbalised" data-item-identifier="working-memory-verbalised" onclick="planDashboardHighlightItem(event, this)"><strong>Working memory rendered as deterministic English: objects, poses, relations, events, gripper contents</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>

@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -619,7 +624,7 @@
     <p class="description">Make plan size a property the tooling holds rather than one sessions have to remember. A hard budget covers a plan&#39;s plan.yaml and roadmap.md together; save-plan.sh refuses a save that breaks it; /plan-create and /add-plan-item read the budget and open a new plan instead of growing a full one; and the roadmap-writing guidance across the plan skills stops asking for detail the budget cannot afford. Because the budget is enforced by refusal, the two plans already over it are split first.
 </p>
     <p class="repo-line">
-      6 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+      8 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
 <a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/200" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
     <details class="roadmap-details">
       <summary>Background &amp; history (roadmap.md)</summary>
@@ -1167,7 +1172,331 @@ was narrative about merged pull requests, against the sibling's 94%.</p>
 mid-way through, so the source was re-read from the current tip before building. The seven
 successors all keep <code>tracking_issue: 94</code>, reusing the existing mailbox rather than scattering
 the continuity across seven new issues. Personal-notes data only, so no branch and no pull
-request, per the item's own notes and the sibling split's precedent.</p></div>
+request, per the item's own notes and the sibling split's precedent.</p>
+<h5>Kickoff 2026-09-05: <code>refuse-oversized-save</code> — two more plans found over budget</h5>
+<p>Session: https://claude.ai/code/session_01XWy1uT1i7FozWdNhLEtcKk</p>
+<p>Both declared dependencies (<code>split-workflow-unification</code>, <code>split-rdr-refactor</code>) are <code>done</code>,
+but measuring the live notes branch rather than trusting the last report turned up two
+plans neither split touched: <code>knowledge-directed-perception</code> (29 items, 8,146 lines — within
+budget at 15/1,300 in #207's 2026-08-28 report, since grown past both halves) and
+<code>icra-experiments</code> (33 items, 1,833 lines — over the item limit alone). Added as
+<code>split-knowledge-directed-perception</code> and <code>split-icra-experiments</code>, siblings of the two done
+splits in the <code>plan-splits</code> track, and as new entries in <code>refuse-oversized-save</code>'s
+<code>depends_on</code> — the gate cannot land while any plan is still over, including these two.</p>
+<p><code>size-budget-and-report</code> (#207) was also added to that <code>depends_on</code>, missing from the item's
+original list even though the gate's whole job is importing <code>SizeBudget</code> from the module #207
+introduces. That module does not exist on <code>main</code> yet; #207 is open and non-draft, which
+<code>plan-schema.md</code> already counts as ready to stack on, so this item's branch is cut from</p>
+<h4>207's own branch (<code>claude/plan-size-limits-budget-alp8p2</code>) rather than <code>main</code>, per this</h4>
+<p>repository's stacked-PR convention of opening each PR with base = its parent branch.</p>
+<h5>Kickoff 2026-09-05: <code>refuse-oversized-save</code> — the gate, on top of #207</h5>
+<p>Pull request: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/273</p>
+<p>Stacked on #207's branch (<code>claude/plan-size-limits-budget-alp8p2</code>), not <code>main</code>: this item
+imports <code>SizeBudget</code>/<code>PlanSize</code> from <code>plan_size_budget.py</code>, which exists only there. #207 is
+open and non-draft, which <code>plan-schema.md</code> counts as ready to stack on.</p>
+<p><code>SizeBudget</code> gained <code>enforce(size)</code>, raising a new <code>PlanOverBudgetError</code> that names every
+blown half and by how much. <code>plan_size_gate.py</code> is a new small script wrapping it as a CLI;
+<code>save-plan.sh</code> calls it right after the existing <code>plan_manifest_tools.py read-id</code> check - the
+seam the item's own notes named - and before the scratch worktree is even created, so a
+refused save touches nothing. TDD throughout: <code>test_plan_size_budget.py</code>,
+<code>test_plan_size_gate.py</code> (new) and <code>test_save_plan_sh.py</code> were all red before the
+implementation. <code>test_plan_item_bootstrap.py</code>'s scratch fixture also needed the two new
+scripts installed, since its <code>record</code>/<code>open</code> operations call <code>save-plan.sh</code> internally and
+that call would otherwise fail with the new scripts missing from its scratch layout.</p>
+<p>Landing this PR (merging it, not just opening it) still has to wait on
+<code>split-knowledge-directed-perception</code> and <code>split-icra-experiments</code> alongside the two done
+splits - both entries in <code>depends_on</code> above the found-oversized note explains.</p>
+<h5>Done 2026-09-05: <code>split-icra-experiments</code> - three plans, 1,833 lines to 1,126</h5>
+<p>Session: https://claude.ai/code/session_01XWy1uT1i7FozWdNhLEtcKk</p>
+<p>Pushed to the notes branch as <code>68da2fd2c</code>, <code>55f80a611</code> and <code>0ad970a0f</code> (one commit per
+successor); the old plan directory and its <code>_generated/dashboard-urls.yaml</code> key removed in
+<code>c6dc76240</code>.</p>
+<table>
+<thead>
+<tr>
+<th>new plan</th>
+<th>items</th>
+<th>manifest</th>
+<th>roadmap</th>
+<th>total</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>icra-foundation</code></td>
+<td>10</td>
+<td>150</td>
+<td>324</td>
+<td>474</td>
+</tr>
+<tr>
+<td><code>icra-mechanism</code></td>
+<td>12</td>
+<td>186</td>
+<td>135</td>
+<td>321</td>
+</tr>
+<tr>
+<td><code>icra-evidence</code></td>
+<td>11</td>
+<td>205</td>
+<td>126</td>
+<td>331</td>
+</tr>
+</tbody>
+</table>
+<h6>The seam: by wave, and it held on both halves without cutting inside one</h6>
+<p>Unlike <code>split-rdr-refactor</code>'s wave 0 (92% of that roadmap, forcing a cut on subject
+instead), <code>icra-experiments</code>' three waves - <code>foundation</code>, <code>mechanism</code>, <code>evidence</code> - were
+already close to even in items (10/12/11) and the roadmap's per-round narrative turned out
+to concentrate almost entirely (about 790 of 1,061 lines) on <code>foundation</code>'s four items with
+open pull requests (#261, #262, #265, #271); <code>mechanism</code> and <code>evidence</code> carried almost none,
+since every item there is <code>not_started</code>. Measured rather than assumed, exactly as the
+sibling splits insist: a by-lane alternative (the plan's three person-assignment lanes, cut
+across all three waves) was checked too and rejected - it crosses roughly as many
+dependency edges as by-wave (19 against 29) while producing a lane holding exactly 15 items
+with no headroom, and it breaks the wave framing the budget table's own milestones
+("go/no-go Sunday evening", "every experiment has run once in simulation") are already
+organized around. By-wave keeps that framing and is the plan's own existing seam.</p>
+<h6>The cost is real, and larger than either sibling split's: 29 edges, not 3 or 7</h6>
+<p><code>icra-experiments</code> is a single pipeline by design - foundation feeds mechanism feeds
+evidence, item by item - so a wave-based cut crosses far more of its own <code>depends_on</code>
+graph than the sibling splits' subject-based tracks did: 29 edges out of 33 items' worth of
+graph, against the sibling splits' 3 and 7. None of the 29 crossing edges name an
+already-<code>done</code> target (only one item plan-wide is <code>done</code>, and nothing depends on it), so
+none could be dropped the way the sibling splits dropped their satisfied edges - all 29
+became <code>blockers</code> naming the other plan and item, verbatim by script rather than retyped
+(<code>icra-mechanism</code> carries 9, <code>icra-evidence</code> 20). Every not-yet-started item in
+<code>icra-mechanism</code> and <code>icra-evidence</code> that depends on upstream work now reads its dependency
+as free text rather than a dashboard chip with automatic readiness. This is the strongest
+case yet for the <code>&lt;plan-id&gt;:&lt;item-id&gt;</code> cross-plan reference already flagged as a
+<code>plan-dashboards</code> candidate by both prior splits - three programmes in a row have now paid
+this same cost.</p>
+<h6>Verified rather than trusted</h6>
+<p>All 33 items are present exactly once and none is invented, checked by a script-driven set
+comparison against the source manifest (not eyeballed); every successor passes
+<code>build_dashboard.validate_plan</code>; every item's <code>branch</code>, <code>pull_request_number</code>, <code>status</code>,
+<code>session</code>, <code>repository</code>, <code>title</code> and <code>notes</code> are byte-identical to the source, checked by
+direct field comparison via a load/transform/dump script rather than hand-retyped (a script
+also built every <code>depends_on</code>/<code>blockers</code> edit, so the 29 blocker strings are generated, not
+typed 29 times by hand). The branch index went from 148 branches to 148, with <strong>none
+unmapped</strong> - the only remappings are the five <code>icra-*</code> branches now pointing at
+<code>icra-foundation</code> instead of the deleted <code>icra-experiments</code>, plus a handful the sibling
+<code>split-knowledge-directed-perception</code> push remapped in the same window (this session's
+push and that one interleaved on the notes branch - see below - and neither broke the
+other's mapping).</p>
+<h6>The compression rule, on a plan too small to need it for budget</h6>
+<p>Unlike both prior splits, none of <code>icra-experiments</code>' three successors needed compression
+to clear the line budget - even keeping every line of the source roadmap in <code>icra-foundation</code>
+alone would have landed at about 1,300 lines, well under 2,000. The rule was applied anyway,
+on its own terms rather than skipped: <code>icra-foundation</code>'s roadmap (324 lines, down from the
+source's 1,061) keeps every standing hazard, every decision with a lasting consequence (the
+<code>Footprint</code> rename precedent, the unbounded <code>SimulationTimePacer.sleep()</code>, the database
+rename cost, the #231/#223 rebase left for a deliberate pass) and compresses the blow-by-blow
+merge-conflict narrative - which hunk, which commit, which of six silent-conflict sweeps - to
+its outcome, since the pull requests themselves carry that record. <code>icra-mechanism</code> and
+<code>icra-evidence</code>'s roadmaps needed no compression at all: their items are all <code>not_started</code>,
+so the source carried almost no per-round narrative to compress, only design decisions
+(Experiment D's three-part rationale, the expectation-mechanism test) that were kept in
+full under whichever successor owns the items they explain.</p>
+<h6>Concurrency, as the mechanics note anticipated</h6>
+<p><code>split-knowledge-directed-perception</code> ran on the notes branch at the same time as this item,
+exactly the scenario <code>refuse-oversized-save</code>'s kickoff flagged when it added both items
+together. Every push here re-fetched immediately before writing: two of this session's own
+pushes landed cleanly back to back, and the final cleanup push (<code>c6dc76240</code>, deleting
+<code>icra-experiments</code>) was itself followed by the sibling's <code>Update plan manifest for
+knowledge-directed-grounding</code> fast-forwarding on top with no conflict - confirming the
+fast-forward-only push is what the mechanics notes said it would be: a clean rejection on a
+race, never silent data loss, and safe to just re-fetch and retry.</p>
+<h6>What this leaves for <code>refuse-oversized-save</code></h6>
+<p>Both plans <code>refuse-oversized-save</code>'s <code>depends_on</code> was waiting on are now split;
+<code>split-knowledge-directed-perception</code> still shows <code>not_started</code> in this plan's own manifest
+as of this write - its session had not yet flipped that item's status when this one was
+written, so <code>refuse-oversized-save</code>'s own session should re-check <code>plan-size-limits</code> live
+rather than trust this note once both are believed done.</p>
+<h5>Done 2026-09-05: <code>split-knowledge-directed-perception</code> - three plans, 8,146 lines to 1,892</h5>
+<p>Session: https://claude.ai/code/session_01XWy1uT1i7FozWdNhLEtcKk</p>
+<p>Pushed to the notes branch as <code>cb0c450e8</code>, <code>51c2a08d2</code> and <code>df6ef412c</code> (one commit per
+successor); the old plan directory removed in <code>170d57424</code>; dashboard URLs recorded in
+<code>45e13b747</code>.</p>
+<table>
+<thead>
+<tr>
+<th>new plan</th>
+<th>items</th>
+<th>manifest</th>
+<th>roadmap</th>
+<th>total</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>knowledge-directed-grounding</code></td>
+<td>10</td>
+<td>505</td>
+<td>140</td>
+<td>645</td>
+</tr>
+<tr>
+<td><code>knowledge-directed-requests</code></td>
+<td>14</td>
+<td>815</td>
+<td>84</td>
+<td>899</td>
+</tr>
+<tr>
+<td><code>knowledge-directed-expectation</code></td>
+<td>5</td>
+<td>293</td>
+<td>58</td>
+<td>351</td>
+</tr>
+</tbody>
+</table>
+<h6>The seam: by wave, and it held without cutting inside one</h6>
+<p><code>knowledge-directed-perception</code>'s three waves - <code>grounding</code>, <code>requests</code>, <code>expectation</code> -
+were the item's own guessed seam, and measuring confirmed rather than overturned it:
+10/14/5 items, all under the 15-item cap on their own. The item's own notes flagged a real
+risk before measuring - <code>request-language</code> and <code>method-selection</code> together already carried
+875 of the 1,661 manifest lines, so the <code>requests</code> wave's roadmap share might have forced a
+cut <em>inside</em> the wave the way <code>split-rdr-refactor</code>'s wave 0 did. Attributing the roadmap's
+40 <code>##</code>-level sections by their header's own item id (falling back to the item ids and pull
+request numbers a section's body mentions, for the nine sections with no item in the
+header) put about 3,470 of the 6,492 roadmap lines on <code>requests</code> alone against <code>grounding</code>'s
+2,240 and <code>expectation</code>'s 494, plus 276 lines of plan-wide "why" attributable to none of
+them - confirming the risk was real. What settled it without cutting inside <code>requests</code> was
+the compression rule (below): once applied, <code>requests</code>' own roadmap fell to 84 lines
+against an 815-line manifest, nowhere near its 2,000-line ceiling, so the by-wave seam held
+on both the item-count and the line-count halves of the budget without needing the
+subject-level cut <code>split-rdr-refactor</code> needed.</p>
+<h6>The cost: 9 edges, between the sibling splits' 3 and <code>split-icra-experiments</code>' 29</h6>
+<p><code>depends_on</code> cannot cross a plan, and this plan's own three waves are pipelined - a scene
+grounded in wave 1 is what wave 2 asks about, and what wave 2 finds is what wave 3 expects
+- so cutting by wave crosses real edges: 9 out of the graph's edges, more than
+<code>split-workflow-unification</code>'s 3 but far fewer than <code>split-icra-experiments</code>' 29, since only
+a handful of items reach across a wave boundary rather than every item in a pipelined
+stage. All 9 name items still <code>in_progress</code> or <code>not_started</code> (nothing plan-wide is <code>done</code>
+except one demo item nothing here depends on), so none could be dropped as satisfied the
+way the first two splits dropped some of theirs - all 9 became <code>blockers</code> naming the other
+plan and item, generated by the same build script that wrote the manifests rather than
+retyped by hand. One of the 9 was not in the item's own risk assessment at all:
+<code>robokudo-detector</code> (wave <code>expectation</code>) depends on <code>choose-detection-method</code> (wave
+<code>requests</code>), caught only by a systematic depends_on-crosses-a-plan check run over every
+item rather than by the by-hand review that found the other 8 - worth noting as a reason to
+always run that check mechanically rather than trust a manual pass, on any future split.</p>
+<h6>Verified rather than trusted</h6>
+<p>All 29 items are present exactly once and none is invented, checked by a script-driven set
+comparison against the source manifest; every successor passes
+<code>build_dashboard.validate_plan</code>; every item's <code>branch</code>, <code>pull_request_number</code>, <code>status</code> and
+<code>session</code> are byte-identical to the source, checked by direct field comparison in the build
+script rather than eyeballed; and a second, independent script assertion confirmed no
+<code>depends_on</code> in any successor names an item outside that successor (the mechanism that
+caught the <code>robokudo-detector</code> edge above). The branch index went from 148 branches to 148,
+with <strong>none unmapped</strong>: the only remappings are the 22 branches this split's items carry,
+now pointing at whichever of the three successors owns them, plus 5 unrelated <code>icra-*</code>
+remappings from <code>split-icra-experiments</code> running on the notes branch at the same time (see
+Concurrency, below).</p>
+<h6>The compression rule paid for the <code>requests</code> wave's own headroom</h6>
+<p>The source roadmap's 6,492 lines were, on inspection, mostly elaboration on decisions
+already recorded more concisely in each item's own manifest <code>notes</code> - extended
+reasoning-traces, superseded intermediate measurements, and per-round "Built as
+commit X, N tests pass" narrative for pull requests still open rather than merged. Each
+successor's roadmap keeps only what binds future work: the plan-wide why, the three waves
+and the deadline budget (kept once, in <code>knowledge-directed-grounding</code>, referenced by a
+one-line pointer from the other two, following <code>rdr-core-engine</code>'s precedent of recording a
+shared programme convention once rather than copying it into every successor); standing
+design decisions with lasting consequence (the <code>RectifiedFootprint</code> rename hazard across
+three branches, the "unmerged is not unusable" correction, the cost-measured-as-a-ratio
+convention, the <code>PlacementRelation</code>/<code>Relation</code> design, a fixed ORM-generation bug that
+looked plan-wide); and every question still open at the developer's own discretion. Item
+<code>notes</code> were compressed the same way, hardest on the few long ones accreted over many
+review rounds (<code>expectations-from-events</code> alone ran 211 manifest lines before compression).
+Nothing is destroyed: the full 8,146-line predecessor is in the notes branch's history
+immediately before <code>170d57424</code>.</p>
+<h6>Concurrency, as the mechanics note anticipated</h6>
+<p><code>split-icra-experiments</code> ran on the notes branch over the same window, exactly the scenario
+<code>refuse-oversized-save</code>'s kickoff flagged when it added both items together. Every push here
+re-fetched immediately beforehand; one push (recording the dashboard-URL cache) landed on
+top of a base the sibling split had itself just advanced (<code>453021fff</code>, not this session's
+own prior tip), and it fast-forwarded cleanly with no conflict - the same confirmation the
+sibling's own roadmap section already recorded from its side.</p>
+<h6>Left alone deliberately</h6>
+<p>The old <code>knowledge-directed-perception</code> artifact (the plan-wide dashboard, not the three new
+per-wave ones) is left published and unlisted from the dashboard-URL cache, exactly as
+<code>workflow-unification</code>'s and <code>rdr-refactor</code>'s own dashboards were left after their splits -
+deleting a published Artifact is not something a session does unprompted. The
+<code>&lt;plan-id&gt;:&lt;item-id&gt;</code> cross-plan reference both prior splits flagged as a <code>plan-dashboards</code>
+candidate would have restored all 9 edges dropped here; three programmes in a row (7, then
+29, now 9 more) have paid this same cost, which is a stronger case for building it than any
+one of the three was alone.</p>
+<h5>Kickoff 2026-09-06: <code>new-plan-when-full</code> — measure before writing, not after</h5>
+<p>Pull request: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/277</p>
+<p>Stacked on #207's branch (<code>claude/plan-size-limits-budget-alp8p2</code>), not <code>main</code>: this item
+imports <code>PlanSize</code>/<code>SizeBudget</code> from <code>plan_size_budget.py</code>, which exists only there. #207
+is open and non-draft, which <code>plan-schema.md</code> counts as ready to stack on. Independent of
+<code>refuse-oversized-save</code> (#273): this item only needs the budget's measurement to exist
+(<code>SizeBudget().overruns(size)</code>), not <code>enforce</code>/<code>PlanOverBudgetError</code>, which #273 adds — so
+it does not stack on or depend on that branch.</p>
+<h6>The mechanism: <code>plan_size_check.py</code>, a third small script beside the budget and the gate</h6>
+<p><code>plan_size_budget.py</code> reports on every plan; <code>plan_size_gate.py</code> (#273) refuses a save
+already written. Neither answers the question <code>/add-plan-item</code> and <code>/plan-create</code> actually
+need to ask <strong>before</strong> writing anything: is the plan this work would land in already full?
+<code>.claude/hooks/plan_size_check.py</code> is that check — <code>--manifest &lt;path&gt; --roadmap &lt;path&gt;</code> in,
+one-line JSON out (<code>is_full</code>, <code>item_count</code>, <code>line_count</code>, <code>overruns</code>), always exits 0. It
+reuses <code>PlanSize.measure</code> and <code>SizeBudget().overruns</code> directly rather than re-deriving the
+measurement, and never imports <code>enforce</code>/<code>PlanOverBudgetError</code> — those name a refusal this
+script does not perform.</p>
+<h6>Where each skill wires it in — checked, not re-derived</h6>
+<ul>
+<li><strong><code>/add-plan-item</code> step 5</strong> — before choosing <strong>New item in an existing plan</strong>, the
+  candidate plan's <em>current</em> manifest+roadmap (already fetched off <code>FETCH_HEAD</code> in step 2)
+  is measured. <code>is_full: true</code> disqualifies that plan for growth regardless of what its
+  <code>description</code> says, and the check runs against every other candidate plan whose
+  description also covers the work before falling back to <strong>New plan</strong>. This is exactly
+  "the plan they would otherwise grow is at it" from the item's own notes — the plan's
+  <em>current</em> state decides it, not a projection of the plan plus the not-yet-written item.</li>
+<li><strong><code>/plan-create</code> step 6b (new)</strong> — after drafting and validating a brand-new plan and
+  before handing it to <code>save-plan.sh</code>, the draft itself is measured the same way. A
+  freshly-drafted plan that is already full is exactly the failure <code>split-workflow-unification</code>,
+  <code>split-rdr-refactor</code>, <code>split-knowledge-directed-perception</code> and <code>split-icra-experiments</code>
+  each had to undo after the fact — this catches it before the first save. On <code>is_full: true</code>
+  the skill does not call <code>save-plan.sh</code>; it reports which half is blown and points at this
+  plan's own four split sections for the measured-seam methodology (by track/wave first,
+  verified by measuring, cut on subject only when a track/wave alone is still over), then
+  asks via <code>AskUserQuestion</code> whether to re-draft along that seam or trim scope — the same
+  judgment call those four items made by hand, not one this skill re-derives automatically.
+  This item does not reimplement that methodology; wave 2 already did, by hand, four times.</li>
+</ul>
+<h6>Why this reads the plan's current size, not a projected one</h6>
+<p><code>/add-plan-item</code> never has the not-yet-written item's exact line count in hand at the point
+it is choosing an outcome, and a projection would be a guess dressed as a measurement. The
+plan's own current size is both the number <code>refuse-oversized-save</code>'s future gate will judge
+the <em>next</em> save against and the number this check can read right now — so it is what
+<code>is_full</code> measures.</p>
+<h6>Left for later, deliberately</h6>
+<p>Nothing here changes <code>plan-item-kickoff</code>/<code>plan-item-resolve</code>'s own <code>record</code> writes, which
+grow an already-tracked item's plan by roadmap narrative rather than by a whole new item —
+that accretion path is <code>minimal-roadmap-writing</code>'s job, a sibling item in this same track,
+not this one's.</p>
+<h5>Done 2026-09-06: <code>minimal-roadmap-writing</code> — a shared compression rule, cited where roadmap text gets written</h5>
+<p>Pull request: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/279</p>
+<p>Guidance only, no enforcement (that's <code>refuse-oversized-save</code>), so it needed nothing from
+<code>plan_size_budget.py</code> and is based on <code>main</code> rather than stacked on #207 — the item's own
+edits apply unchanged to <code>main</code>'s versions of every file it touches, checked before cutting
+the branch.</p>
+<p><code>.claude/skills/plan-dashboard/roadmap-writing.md</code> states what to <strong>keep</strong> (the plan's "why",
+lasting design decisions, standing risks, open questions, conclusions a later item depends on)
+and what to <strong>compress</strong> (per-round implementation narrative on work already merged, to a line
+naming the outcome — the pull request already carries the detail). Deliberately does not restate
+<code>SizeBudget</code>'s own numbers, so it can't drift from them; a test enforces that.</p>
+<p>Cited from the four places that write roadmap text: <code>plan-create</code>'s migration guidance (which
+said "preserve its detail rather than compressing it away" until now), and one line each in
+<code>plan-item-kickoff</code>, <code>plan-item-resolve</code> and <code>add-plan-item</code> at the point each writes a section.
+<code>add-plan-item</code> had no content guidance at all before this, despite writing through the same
+<code>record</code> mechanism as kickoff.</p>
+<p>This item's own evidence is the three splits already on this roadmap: <code>split-workflow-unification</code>
+found 94% of its source roadmap was merged-PR narrative, <code>split-rdr-refactor</code> 92%, and
+<code>split-knowledge-directed-perception</code> most of a third — the direct measurement behind the rule.</p></div>
     </details>
   </header>
 
@@ -1189,6 +1518,9 @@ request, per the item's own notes and the sibling split's precedent.</p></div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1462 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1440 −22</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1294,6 +1626,66 @@ The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZ
       </div>
     </article>
 
+                <article id="item-split-knowledge-directed-perception" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Split knowledge-directed-perception into plans under the budget</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">split-knowledge-directed-perception</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Discovered over budget during refuse-oversized-save&#39;s kickoff, 2026-09-05: 29 items, 1,724 manifest + 6,422 roadmap = 8,146 lines - the largest plan measured to date, past even the scale of the original two outliers. #207&#39;s own live report on 2026-08-28 measured this plan at 15 items / 1,300 lines and read it as within budget; it grew past both halves afterward, the same narrative-accretion pattern already on record for workflow-unification. Same treatment as the sibling splits: measure the real seams rather than assuming the existing tracks already are them, preserve every item and its branch/pull_request_number/status/session verbatim, fold any depends_on edge that would cross a plan boundary into blockers, compress finished narrative to what binds future work, and verify with build_dashboard.validate_plan plus a set comparison against the source before regenerating the branch index and publishing each successor&#39;s dashboard. Done 2026-09-05: split by wave into knowledge-directed-grounding (10 items), knowledge-directed-requests (14) and knowledge-directed-expectation (5), all well within budget; see roadmap.md&#39;s &#34;Done&#34; section for the seams, the cost and what was verified.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="A named size budget, and a report of every plan against it">size-budget-and-report</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-split-icra-experiments" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Split icra-experiments into plans under the budget</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">split-icra-experiments</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Discovered over budget alongside knowledge-directed-perception, 2026-09-05: 33 items, 772 manifest + 1,061 roadmap = 1,833 lines - over the item limit (15) while still under the line limit (2,000), so it is a pure item-count outlier rather than a narrative one. Same treatment as the sibling splits. Done 2026-09-05: split by wave into icra-foundation (10 items), icra-mechanism (12) and icra-evidence (11), all within budget; see roadmap.md&#39;s &#34;Done&#34; section for the seams, the cost and what was verified.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="A named size budget, and a report of every plan against it">size-budget-and-report</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
           </div>
         </section>
       </section>
@@ -1304,23 +1696,27 @@ The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZ
         <section class="track">
           <h3 class="track-title">The save gate and the writing skills</h3>
           <div class="item-list">
-                <article id="item-refuse-oversized-save" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+                <article id="item-refuse-oversized-save" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
             <h4 class="item-title">Refuse a save that leaves a plan over budget</h4>
             <div class="item-badges">
-              <span class="badge status-badge status-not_started">Not started</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-positive" title="349 lines changed versus the base - within the short-change threshold of 400">+346 −3</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">refuse-oversized-save</span>
-            <span class="mono branch">None</span>
-            <span class="muted">no pull request yet</span>
+            <span class="mono branch">claude/plan-size-limits-oversized-u24xk7</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/273" target="_blank" rel="noopener">#273</a>
+            <a class="session-link" href="https://claude.ai/code/session_01XWy1uT1i7FozWdNhLEtcKk" target="_blank" rel="noopener">session ↗</a>
             <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Start now">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
     <ul class="model-picker-list" role="listbox">
       <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
@@ -1330,13 +1726,13 @@ The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZ
       <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-kickoff plan-size-limits refuse-oversized-save" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve plan-size-limits refuse-oversized-save" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
 </span>
 
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
-            <div class="notes">save-plan.sh gains the gate, with a typed error naming which half of the budget was blown and by how much. The natural seam is alongside the existing `plan_manifest_tools.py read-id` call the script already makes before pushing. Depends on both splits: landing this while either plan is still over would refuse every save of that plan, including the ones recording this plan&#39;s own progress.</div>
+            <div class="notes">save-plan.sh gains the gate, with a typed error naming which half of the budget was blown and by how much. The natural seam is alongside the existing `plan_manifest_tools.py read-id` call the script already makes before pushing. Depends on every split: landing this while any plan is still over would refuse every save of that plan, including the ones recording this plan&#39;s own progress. size-budget-and-report was added to this list on 2026-09-05, at this item&#39;s own kickoff: the gate has to import SizeBudget from plan_size_budget.py, which exists only on #207&#39;s branch (open, non-draft - ready to stack on per plan-schema.md, just not yet merged to main), so the omission in the item&#39;s original depends_on was a gap between what it names and what it actually needs. The two new split items were discovered over budget at the same kickoff and added as siblings of the two done splits, for the same reason those two are here: this item cannot safely land while any of them still is.</div>
           </details>
           <div class="deps">
             <span class="deps-label">needs</span>
@@ -1344,28 +1740,38 @@ The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZ
 
             <span class="chip" title="Split rdr-refactor into plans under the budget">split-rdr-refactor</span>
 
+            <span class="chip" title="Split knowledge-directed-perception into plans under the budget">split-knowledge-directed-perception</span>
+
+            <span class="chip" title="Split icra-experiments into plans under the budget">split-icra-experiments</span>
+
+            <span class="chip" title="A named size budget, and a report of every plan against it">size-budget-and-report</span>
+
           </div>
         </div>
       </div>
     </article>
 
-                <article id="item-new-plan-when-full" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+                <article id="item-new-plan-when-full" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
             <h4 class="item-title">Open a new plan instead of growing a full one</h4>
             <div class="item-badges">
-              <span class="badge status-badge status-not_started">Not started</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="364 lines changed versus the base - within the short-change threshold of 400">+351 −13</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">new-plan-when-full</span>
-            <span class="mono branch">None</span>
-            <span class="muted">no pull request yet</span>
+            <span class="mono branch">claude/plan-size-limits-newplan-ukbbri</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/277" target="_blank" rel="noopener">#277</a>
+            <a class="session-link" href="https://claude.ai/code/session_01GhTbjxmunfCd5vuXRid6m9" target="_blank" rel="noopener">session ↗</a>
             <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Start now">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
     <ul class="model-picker-list" role="listbox">
       <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
@@ -1375,7 +1781,7 @@ The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZ
       <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-kickoff plan-size-limits new-plan-when-full" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve plan-size-limits new-plan-when-full" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
 </span>
 
           </div>
@@ -1392,23 +1798,27 @@ The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZ
       </div>
     </article>
 
-                <article id="item-minimal-roadmap-writing" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+                <article id="item-minimal-roadmap-writing" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
             <h4 class="item-title">Write roadmap sections against the budget, not against completeness</h4>
             <div class="item-badges">
-              <span class="badge status-badge status-not_started">Not started</span>
-              <span class="badge live-badge live-none">No pull request yet</span>
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-positive" title="252 lines changed versus the base - within the short-change threshold of 400">+235 −17</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">minimal-roadmap-writing</span>
-            <span class="mono branch">None</span>
-            <span class="muted">no pull request yet</span>
+            <span class="mono branch">claude/plan-size-limits-minimal-roadmap-n3qz8f</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/279" target="_blank" rel="noopener">#279</a>
+            <a class="session-link" href="https://claude.ai/code/session_01CqcnoLDrWd3RHWepDqDsWz" target="_blank" rel="noopener">session ↗</a>
             <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Start now">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
     <ul class="model-picker-list" role="listbox">
       <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
@@ -1418,7 +1828,7 @@ The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZ
       <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-kickoff plan-size-limits minimal-roadmap-writing" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve plan-size-limits minimal-roadmap-writing" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
 </span>
 
           </div>
@@ -1444,11 +1854,11 @@ The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZ
       <div class="sidebar-card">
         <h3>Status</h3>
         <div class="summary-strip">
-          <div class="stat"><span class="stat-num">3</span><span class="stat-label">Not started</span></div>
-          <div class="stat"><span class="stat-num">1</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">4</span><span class="stat-label">In progress</span></div>
           <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
           <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
-          <div class="stat"><span class="stat-num">2</span><span class="stat-label">Done</span></div>
+          <div class="stat"><span class="stat-num">4</span><span class="stat-label">Done</span></div>
         </div>
         <label class="done-toggle">
           <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
@@ -1458,17 +1868,7 @@ The 2026-08-30 review round settled the module&#39;s shape. There is no PLAN_SIZ
       </div>
       <div class="sidebar-card" id="next-steps-card">
         <h3>What to do next</h3>
-          <div class="next-group next-ready">
-            <h4>Ready to start <span class="next-count-all">(3)</span><span class="next-count-bug">(0)</span></h4>
-            <ul>
-              <li class="next-entry">
-                <a class="next-item-link" href="#item-refuse-oversized-save" data-item-identifier="refuse-oversized-save" onclick="planDashboardHighlightItem(event, this)"><strong>Refuse a save that leaves a plan over budget</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
-              <li class="next-entry">
-                <a class="next-item-link" href="#item-new-plan-when-full" data-item-identifier="new-plan-when-full" onclick="planDashboardHighlightItem(event, this)"><strong>Open a new plan instead of growing a full one</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
-              <li class="next-entry">
-                <a class="next-item-link" href="#item-minimal-roadmap-writing" data-item-identifier="minimal-roadmap-writing" onclick="planDashboardHighlightItem(event, this)"><strong>Write roadmap sections against the budget, not against completeness</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
-            </ul>
-          </div>
+        <p class="next-empty">Nothing actionable right now — every item is either in progress, fully blocked, or done.</p>
       </div>
     </aside>
   </div>

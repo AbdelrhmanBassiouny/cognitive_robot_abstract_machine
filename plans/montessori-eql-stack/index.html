@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -2193,6 +2198,9 @@ both branches keep the same text.</p></div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="4706 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+4362 −344</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2232,6 +2240,9 @@ both branches keep the same text.</p></div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="7176 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+7124 −52</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2280,6 +2291,9 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="49382 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+49376 −6</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2333,6 +2347,9 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="3037 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+2671 −366</span>
+              <span class="badge board-chip chip-negative" title="GitHub reports this pull request does not merge cleanly onto its base">conflicts</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2378,12 +2395,16 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="966 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+882 −84</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">montessori_eql_where_is_highlighting</span>
             <span class="mono branch">montessori_eql_where_is_highlighting</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/164" target="_blank" rel="noopener">#164</a>
+            <a class="session-link" href="https://claude.ai/code/session_011UwBTi92xWDXwZaDAGP6A3" target="_blank" rel="noopener">session ↗</a>
             <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/164" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
@@ -2424,12 +2445,16 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="3292 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+3054 −238</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">montessori_event_replay</span>
             <span class="mono branch">montessori_event_replay</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/165" target="_blank" rel="noopener">#165</a>
+            <a class="session-link" href="https://claude.ai/code/session_011UwBTi92xWDXwZaDAGP6A3" target="_blank" rel="noopener">session ↗</a>
             <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/165" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
@@ -2469,12 +2494,16 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1358 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1285 −73</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">cramera-question-readback</span>
             <span class="mono branch">claude/cramera-verbalization-voice-ttwcza</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/167" target="_blank" rel="noopener">#167</a>
+            <a class="session-link" href="https://claude.ai/code/session_0126FgZYakyREjS4Y9Z1gZ6D" target="_blank" rel="noopener">session ↗</a>
             <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/167" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
@@ -2514,12 +2543,16 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="2289 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+2203 −86</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">cramera-voice-questions</span>
             <span class="mono branch">claude/cramera-voice-questions-ttwcza</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/168" target="_blank" rel="noopener">#168</a>
+            <a class="session-link" href="https://claude.ai/code/session_0126FgZYakyREjS4Y9Z1gZ6D" target="_blank" rel="noopener">session ↗</a>
             <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/168" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
@@ -2567,6 +2600,9 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-blocked">Blocked</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1449 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1431 −18</span>
+              <span class="badge board-chip chip-negative" title="GitHub reports this pull request does not merge cleanly onto its base">conflicts</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2650,6 +2686,9 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="785 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+691 −94</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2700,6 +2739,9 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="566 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+531 −35</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2750,6 +2792,8 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="3104 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+3081 −23</span>
             </div>
           </div>
           <div class="item-meta">
@@ -2781,6 +2825,9 @@ Left in #169 deliberately: `franka_montessori_demo.py` and the three cramera ada
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="1849 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1399 −450</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">

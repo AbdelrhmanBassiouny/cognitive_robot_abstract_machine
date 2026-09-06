@@ -87,6 +87,14 @@
       <p class="plan-desc">Close the design smell where EQL&#39;s SymbolicExpression - a genuine rooted DAG (shared subexpressions; _parents_ is a list) - exposes tree-shaped _parent_/_root_ accessors (a single first-attached &#34;primary&#34; parent and a walk up that chain). The in-flight stack (#89/#90/#92) already fixed the individual leaks via evaluation-scoped context; this plan does the root-cause hardening they deferred: make the structural accessors hard to misuse, fix the remaining QuantifiedConditional cache-staleness bug, and add a systematic audit plus a guard test.</p>
       <div class="bar"><div class="bar-fill" style="width: 50.0%"></div></div>
     </a>
+    <a class="plan-card" href="/plans/design-overlap/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Catching two branches building the same thing, early enough to act</h2>
+        <span class="plan-progress mono">0 / 5 done</span>
+      </div>
+      <p class="plan-desc">Parallel branches converge on the same design independently, and it surfaces only at review or at an integration build, by which point extracting the shared abstraction and restacking both branches is expensive enough to be deferred. This derives a catalogue of what each unlanded branch defines, compares it across branches, draws both the pull request graph and the definition graph from it, and gives the reconcile verdict the automation the other integration verdicts already have.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
+    </a>
     <a class="plan-card complete" href="/plans/eql-core-and-code-generation/" target="_blank" rel="noopener">
       <div class="plan-head">
         <h2 class="plan-title">EQL core semantics and the code-generation extraction</h2>
@@ -119,23 +127,53 @@
       <p class="plan-desc">Programme following up PR #33&#39;s review: extract a reusable verbalization surface-verification framework onto main, redesign operand naming and same-noun disambiguation to live in the coreference/referring machinery, add abstract-to-concrete-subclass expansion plus first-order (value-agnostic) rendering, then apply all of it to migrate semantic_digital_twin&#39;s predicates off the framework PR #33 currently carries a duplicate of.</p>
       <div class="bar"><div class="bar-fill" style="width: 50.0%"></div></div>
     </a>
-    <a class="plan-card" href="/plans/icra-experiments/" target="_blank" rel="noopener">
+    <a class="plan-card" href="/plans/icra-evidence/" target="_blank" rel="noopener">
       <div class="plan-head">
-        <h2 class="plan-title">ICRA experiments: one simulated pipeline, episodes in SQL, and the four experiments</h2>
-        <span class="plan-progress mono">1 / 33 done</span>
+        <h2 class="plan-title">ICRA experiments: experiments in simulation, then on the robot, then released</h2>
+        <span class="plan-progress mono">0 / 11 done</span>
       </div>
-      <p class="plan-desc">Everything the ICRA paper (deadline 2026-09-15) needs that no other plan owns: one integrated pipeline that every scenario runs on in simulation before the robot, a dataclass domain model for scenarios, goals, conditions, perturbations and metrics, episodes recorded through ORMatic into an SQL database and queried by EQL as long-term memory, the per-predicate backend routing and physics verification mechanisms the paper measures, failure typing and prediction, the verbalised-memory and VLM baselines, Experiments A, B and C run in simulation and then on the UR10, Experiment D questioning the episode history in simulation, and the released artifact. Three lanes run in parallel; roadmap.md carries the lane order and the day-by-day budget.</p>
-      <div class="bar"><div class="bar-fill" style="width: 3.0%"></div></div>
+      <p class="plan-desc">The evidence wave of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits&#39; roadmap.md for why): Experiments A, B, C and D, each run end to end in simulation before the robot, and the released artifact. Every experiment stacks on icra-foundation&#39;s scenario model and episode recording, and most stack on icra-mechanism&#39;s routing, verification and baselines too; those depends_on edges could not cross the plan boundary and are recorded as blockers instead (see roadmap.md).</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
     </a>
-    <a class="plan-card" href="/plans/knowledge-directed-perception/" target="_blank" rel="noopener">
+    <a class="plan-card" href="/plans/icra-foundation/" target="_blank" rel="noopener">
       <div class="plan-head">
-        <h2 class="plan-title">Knowledge-directed Montessori perception</h2>
-        <span class="plan-progress mono">1 / 29 done</span>
+        <h2 class="plan-title">ICRA experiments: one pipeline every scenario runs on</h2>
+        <span class="plan-progress mono">1 / 10 done</span>
       </div>
-      <p class="plan-desc">Perception that decides where to look and how to look from what the robot knows, rather than from constants written into the pipeline. The supporting surfaces, their extent and their finish come from the semantic digital twin; a query is answered by looking, through a perception backend of the entity query language that pushes what it can into the search and filters the rest afterwards; which detector answers it is a rule decision over the target and the surface; and Segmind&#39;s support events plus an action&#39;s declared effects arm what perception expects to find, which is what makes a failure detectable. Detectors sit behind an interface, so a RoboKudo analysis engine can be one of them without the reasoning layer knowing.
-The deliverable is the running demo on tracy_icra, not the pull requests: every item merges into that branch as soon as it works, without waiting for its own pull request to land on main, and each wave has a demo item that says what has to be true on the real robot before the wave counts as finished.
-The deadline is 2026-09-15, thirteen working days from 2026-08-28. That is less than the full scope needs, so every item is to be built in the narrowest form that demonstrates its claim - see roadmap.md&#39;s budget section for what narrows and what must not be dropped.</p>
-      <div class="bar"><div class="bar-fill" style="width: 3.4%"></div></div>
+      <p class="plan-desc">The foot of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits&#39; roadmap.md for why). The integrated simulation pipeline every scenario, demo and experiment stacks on, the dataclass scenario/goal/condition/perturbation/metric domain model with its runner, and every trial, event, query, answer and failure recorded through ORMatic into SQL and read back as long-term memory. icra-mechanism and icra-evidence both depend on items here; those edges could not cross the plan boundary and are recorded as blockers on their side instead (see their roadmap.md).</p>
+      <div class="bar"><div class="bar-fill" style="width: 10.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/icra-mechanism/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">ICRA experiments: what the paper measures</h2>
+        <span class="plan-progress mono">0 / 12 done</span>
+      </div>
+      <p class="plan-desc">The mechanism wave of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits&#39; roadmap.md for why): per-predicate backend routing, physics verification, snapshot working memory, typed and predicted failure, and the verbalised-memory/VLM baselines. Everything here stacks on icra-foundation&#39;s integrated pipeline, scenario model and episode recording, and one item stacks on icra-evidence&#39;s question set; those depends_on edges could not cross the plan boundary and are recorded as blockers instead (see roadmap.md).</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/knowledge-directed-expectation/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Knowledge-directed perception: expectation and failure detection</h2>
+        <span class="plan-progress mono">0 / 5 done</span>
+      </div>
+      <p class="plan-desc">The expectation wave of knowledge-directed-perception (split out on 2026-09-05 to get every successor under the plan-size budget): what the robot did, and what Segmind saw it do, say where a thing should now be. Perception looks there, and reports a violated expectation as a failure rather than as an absence - the end-to-end story the paper is written around. Depends on items of `knowledge-directed-requests` and `knowledge-directed-grounding` that could not be preserved as `depends_on` across the plan split - see the affected items&#39; own `blockers`. See `knowledge-directed-grounding`&#39;s roadmap.md for the programme-wide why, the three waves, the deadline budget and the sequencing decisions this plan inherits.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/knowledge-directed-grounding/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Knowledge-directed perception: scene grounding</h2>
+        <span class="plan-progress mono">1 / 10 done</span>
+      </div>
+      <p class="plan-desc">The scene grounding wave of knowledge-directed-perception (split out on 2026-09-05 to get every successor under the plan-size budget): the three faults visible on the running demo - a clip that shows the floor, pieces on the board&#39;s lid that are never found, and duplicate detections on the board&#39;s borders - are one fault, the scene being described by constants instead of read from the world the node already fetches. This plan removes the constants, lands the Montessori perception package on `main`, and carries the demo item that says the wave is finished when the three faults are gone on the real robot. See this plan&#39;s roadmap.md for the programme-wide why, the three waves, the deadline budget and the sequencing decisions shared with `knowledge-directed-requests` and `knowledge-directed-expectation`.</p>
+      <div class="bar"><div class="bar-fill" style="width: 10.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/knowledge-directed-requests/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Knowledge-directed perception: query language and method selection</h2>
+        <span class="plan-progress mono">0 / 14 done</span>
+      </div>
+      <p class="plan-desc">The requests wave of knowledge-directed-perception (split out on 2026-09-05 to get every successor under the plan-size budget): perception as an entity query language backend beside the native and SQLAlchemy ones, so asking is evaluating rather than calling a pipeline by hand. The backend pushes what it can of a query&#39;s conditions into the search and filters the rest over the detections that come back; a rule tree over the target and the surface says which detector runs and how its parameters are set. Depends on two items of `knowledge-directed-grounding` that could not be preserved as `depends_on` across the plan split - see the affected items&#39; own `blockers`. See `knowledge-directed-grounding`&#39;s roadmap.md for the programme-wide why, the three waves, the deadline budget and the sequencing decisions this plan inherits.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
     </a>
     <a class="plan-card" href="/plans/match-query-ergonomics/" target="_blank" rel="noopener">
       <div class="plan-head">
@@ -164,10 +202,10 @@ The deadline is 2026-09-15, thirteen working days from 2026-08-28. That is less 
     <a class="plan-card" href="/plans/plan-size-limits/" target="_blank" rel="noopener">
       <div class="plan-head">
         <h2 class="plan-title">Plans and roadmaps stay small, enforced by tooling</h2>
-        <span class="plan-progress mono">2 / 6 done</span>
+        <span class="plan-progress mono">4 / 8 done</span>
       </div>
       <p class="plan-desc">Make plan size a property the tooling holds rather than one sessions have to remember. A hard budget covers a plan&#39;s plan.yaml and roadmap.md together; save-plan.sh refuses a save that breaks it; /plan-create and /add-plan-item read the budget and open a new plan instead of growing a full one; and the roadmap-writing guidance across the plan skills stops asking for detail the budget cannot afford. Because the budget is enforced by refusal, the two plans already over it are split first.</p>
-      <div class="bar"><div class="bar-fill" style="width: 33.3%"></div></div>
+      <div class="bar"><div class="bar-fill" style="width: 50.0%"></div></div>
     </a>
     <a class="plan-card" href="/plans/plan-tracking-skills/" target="_blank" rel="noopener">
       <div class="plan-head">
@@ -176,6 +214,14 @@ The deadline is 2026-09-15, thirteen working days from 2026-08-28. That is less 
       </div>
       <p class="plan-desc">The skills a session uses to place a piece of work and to keep the manifest honest about it - deciding whether something is new work or a change to work in flight, opening an item&#39;s branch and draft pull request before implementation rather than after, and choosing whether a kickoff asks for approval or proceeds.</p>
       <div class="bar"><div class="bar-fill" style="width: 50.0%"></div></div>
+    </a>
+    <a class="plan-card" href="/plans/probabilistic-knowledge-perception/" target="_blank" rel="noopener">
+      <div class="plan-head">
+        <h2 class="plan-title">Probabilistic knowledge-guided perception</h2>
+        <span class="plan-progress mono">0 / 1 done</span>
+      </div>
+      <p class="plan-desc">A follow-up to the knowledge-directed-perception programme, deliberately outside the ICRA deadline. That programme shows that a robot which knows what it is looking at perceives better; this plan asks by how much, on a scale where the answer means something. Today a belief can only delete a rival candidate, so knowledge is permission to consider a piece rather than evidence for it - a believed piece that fits slightly worse than a ghost still loses. Stated as posterior odds, the belief becomes an additive term with a known exchange rate against picture evidence, and the report threshold becomes a genuine cost ratio rather than a number measured off six captures. The plan starts with the measurement that says whether any of this is worth building.</p>
+      <div class="bar"><div class="bar-fill" style="width: 0.0%"></div></div>
     </a>
     <a class="plan-card" href="/plans/rdr-core-engine/" target="_blank" rel="noopener">
       <div class="plan-head">

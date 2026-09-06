@@ -1,4 +1,4 @@
-<title>Capability-guarded experts and their collaboration</title>
+<title>Catching two branches building the same thing, early enough to act</title>
 <style>
   :root {
     --bg: #F4F6F7;
@@ -620,125 +620,190 @@
 <div class="page hide-done" id="plan-dashboard-page">
   <header class="masthead">
     <p class="eyebrow">Plan Dashboard</p>
-    <h1>Capability-guarded experts and their collaboration</h1>
-    <p class="description">Promote an expert&#39;s applicability to a first-class, evaluable EQL guard, so the engine gates delegation on the guard rather than on the expert&#39;s type; then let experts cooperate, and let them say why they can or cannot handle a situation.</p>
+    <h1>Catching two branches building the same thing, early enough to act</h1>
+    <p class="description">Parallel branches converge on the same design independently, and it surfaces only at review or at an integration build, by which point extracting the shared abstraction and restacking both branches is expensive enough to be deferred. This derives a catalogue of what each unlanded branch defines, compares it across branches, draws both the pull request graph and the definition graph from it, and gives the reconcile verdict the automation the other integration verdicts already have.
+</p>
     <p class="repo-line">
-      3 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
-<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/94" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+      5 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/102" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
     <details class="roadmap-details">
       <summary>Background &amp; history (roadmap.md)</summary>
-      <div class="roadmap-body"><h4>Capability-guarded experts — Roadmap</h4>
-<p>Narrative half of <code>rdr-expert-framework</code>. One of seven plans the oversized
-<code>rdr-refactor</code> was split into on 2026-08-30; the predecessor's full 3,259-line
-roadmap remains in the personal-notes branch's history immediately before that
-split commit.</p>
-<h5>What is being built</h5>
-<p>Today the engine decides whether to delegate to an expert by that expert's
-<em>type</em>. This track promotes an expert's applicability to a first-class,
-evaluable EQL <strong>capability guard</strong>, so the engine gates delegation on the guard
-instead — which is both the interface-segregation and the Liskov-substitution
-fix for the same code.</p>
+      <div class="roadmap-body"><h4>Catching two branches building the same thing</h4>
+<h5>Why this exists</h5>
+<p>Parallel branches in a plan - ones not stacked on each other - keep converging on the
+same design independently. It surfaces late, often only when the user reviews what a
+session built, and by then extracting the shared abstraction and restacking both
+branches is expensive enough to be deferred. Deferring it is what makes it unfixable:
+afterwards a duplicate is a merge conflict rather than a choice.</p>
+<p>This is not a hypothesis about the workflow. It is written into the workflow's own
+documents. <code>add-plan-item/scope-decision.md</code> records three branches folded back into
+their parents after the fact and two sessions independently building the same artifact
+under two filenames. <code>integration-conflict-triage/SKILL.md</code> says the reconcile case
+"has happened on this repository more than once and cost a duplicated artifact each
+time."</p>
+<h5>The diagnosis: detection at both ends, nothing in the middle</h5>
+<p>The pipeline has two detectors, and the gap between them is exactly where design
+duplication lives.</p>
+<table>
+<thead>
+<tr>
+<th>when</th>
+<th>what runs</th>
+<th>what it can see</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>item creation</td>
+<td><code>check_scope_overlap.py</code></td>
+<td>paths named by hand, before any code exists</td>
+</tr>
+<tr>
+<td><em>(the gap)</em></td>
+<td>nothing</td>
+<td></td>
+</tr>
+<tr>
+<td>integration build</td>
+<td><code>integration.py build</code></td>
+<td>a merge conflict, or a suite that breaks</td>
+</tr>
+</tbody>
+</table>
+<p>Two branches defining the same abstraction in differently named files are structurally
+invisible to both. The first runs before either has written anything. The second sees no
+conflict, because there is none - the files differ, so the merge is clean and the suite
+passes. That middle window - both branches have code, neither has landed, no textual
+collision - is unmonitored.</p>
+<p><code>scope-decision.md</code> already names the fix in prose: "compare by purpose, not only by
+path." But it is a manual instruction to read every candidate branch's changed-file list
+and judge intent, run once at item-creation time. The step most often skipped, by its own
+admission. Making it mechanical and continuous is this plan's first half.</p>
+<h5>The second diagnosis: reconcile is the only verdict without machinery</h5>
+<p><code>/integration-conflict-triage</code> produces five verdicts. Four have somewhere to go:
+<code>defer</code> records a resolution into the replay cache; <code>stack</code> is a base change the
+maintenance pass already makes; <code>adapt</code> is fixed outright; <code>sequence</code> is recorded and
+waits. <code>reconcile</code> - the verdict that means two branches are building the same thing -
+is "propose, do not apply", and there it stops.</p>
+<p>That is not an oversight in the skill. It is correct that a design call is not a script's
+to make. But the <em>consequence</em> of the call - cut a shared parent, move the abstraction
+onto it, retarget both bases, restack both branches, delete the loser's copy - is
+entirely mechanical, and leaving it manual is what makes the verdict too expensive to
+act on. The fix is not more judgement. It is giving reconcile the automation the other
+verdicts got.</p>
+<h5>Why the two graphs are not a third feature</h5>
+<p>The user asked for a graph of where each pull request lies and a graph of the classes and
+what each does. These are one index viewed twice. Nothing can be compared across branches
+without a machine-read record of what each branch introduces; once that record exists,
+both graphs fall out of it. Building the graphs first would mean hand-maintaining their
+data, which is the drift this system exists to avoid.</p>
+<h5>Decisions</h5>
+<ol>
+<li>
+<p><strong>The catalogue is derived, not written.</strong> <code>ast</code> over each branch's diff. A
+   hand-written or model-summarized record drifts the moment a session forgets to update
+   it, and the whole system's philosophy - visible in <code>plan-schema.md</code>'s "why status is
+   deliberately thin" - is to derive what can be derived and never store it. <code>AGENTS.md</code>
+   mandates docstrings and dataclasses, so the derived catalogue is rich for free.</p>
+</li>
+<li>
+<p><strong>No model call in the detector.</strong> Scoring is deterministic: name equality, path
+   equality, normalized name similarity, docstring-summary token overlap. It runs in CI,
+   costs nothing, and is reproducible. It reports ranked pairs and no verdict, keeping the
+   existing split where a script gathers evidence and a skill judges it.</p>
+</li>
+<li>
+<p><strong>Non-Python files are catalogued too.</strong> The #110/#106 collision was two sessions
+   building the same markdown artifact under two names. A Python-only catalogue would have
+   missed the very case that motivates this plan.</p>
+</li>
+<li>
+<p><strong>Extraction and direction-change are one command.</strong> Both are "give these branches a
+   new common parent"; the only difference is whether files move onto the parent first.
+   Modelling them separately would duplicate the restack logic - which would be this
+   plan's own failure mode.</p>
+</li>
+<li>
+<p><strong>Probe before apply, always.</strong> <code>git merge-tree --write-tree</code> costs nothing and mutates
+   nothing, so the cost of a direction change is knowable before committing to it. The
+   user asked specifically to be able to decide against it; that is only possible if the
+   cost is cheap to compute.</p>
+</li>
+<li>
+<p><strong>Writing to feature branches is a deliberate exception, approved 2026-09-06.</strong>
+   <code>integration-conflict-triage</code> never writes a fix to a feature branch, and that rule
+   stands for the integration build. <code>common-parent</code> breaks it knowingly, bounded by an
+   always-available non-mutating probe and by requiring <code>--include-reviewed</code> before it
+   touches a branch whose pull request has left draft - resetting an approval is a real
+   cost and should never be silent.</p>
+</li>
+<li>
+<p><strong>Freshness is tied to the dashboard publish, not to the scheduled Action.</strong> The Action
+   would be better, but <code>integration-refresh.yml</code> is unlanded on <code>integration</code>; taking a
+   dependency on it would block this plan on that one. Rebuilding on publish means the
+   index is current whenever anyone looks at it, which is the case that matters. Wiring it
+   into the Action is a later item, not a prerequisite.</p>
+</li>
+<li>
+<p><strong>Reusing tracking issue #102</strong> rather than minting a new mailbox. Seven workflow
+   tooling plans already share it; a new one would fragment the channel sessions subscribe
+   to.</p>
+</li>
+</ol>
+<h5>Known collision hazards, from the scope check at creation</h5>
+<p>Recorded because this plan is about exactly this, and running the check on its own
+creation is the honest thing to do.</p>
 <ul>
-<li><strong><code>expert-capability-guards</code></strong> — the guard itself, and the retirement of
-  <code>resolution_mode</code>. The seed already exists: the automatic condition resolver
-  becomes one such expert, whose guard is exactly its <code>_try_auto_resolve</code>
-  eligibility clauses. Those clauses were kept and minimally tidied in the core
-  engine's stack specifically so this item has something concrete to generalize
-  rather than a blank page.</li>
-<li><strong><code>expert-ensembles</code></strong> — cooperating experts, with the existing Hint mode
-  re-expressed as composition rather than as a mode, and multi-expert
-  arbitration.</li>
-<li><strong><code>expert-capability-verbalization</code></strong> — <em>why can</em> and <em>why cannot</em> this expert
-  handle this situation, reusing the rule-tree explanation machinery rather than
-  building a second one.</li>
+<li><strong>#185</strong> moves every <code>.claude/</code> Python module into the <code>bastler</code> package. Every Python
+  item here lands in files it moves. Whichever lands second re-applies its delta in the new
+  location - the pattern #111 already exercised. Check #185's state before starting
+  <code>definition-catalogue</code>, not after.</li>
+<li><strong><code>templates/dashboard.html</code> has four open editors</strong>: #218 (Pages site), #206 (refresh
+  button), #157 (hide deferred items), #111 (state chips). <code>plan-graphs</code> should be cut
+  after as many have landed as possible, and its scope check re-run at kickoff. #253
+  (cross-plan <code>depends_on</code>) changes the edge data it reads.</li>
+<li><strong>#282</strong> already comments on branches an integration build leaves out. The post-review
+  re-check in <code>skill-wiring</code> may belong there rather than as a third surface; decide at
+  kickoff.</li>
 </ul>
-<h5>Why this is its own plan</h5>
-<p>The idea came out of the <code>D-core-engine</code> review on 2026-07-23, which surfaced
-three larger designs the split slices could not absorb; this is one of them, and
-the review deliberately made it a new wave rather than widening a slice. It sits
-between the core engine and the explanation track — it needs the condition
-resolver from one and the explanation machinery from the other — which is
-exactly why it belongs to neither.</p>
-<h5>Decisions that still bind</h5>
-<p><strong>1. The guard is an evaluable EQL expression, not a predicate method.</strong> That is
-what makes it inspectable, which is what makes the third item possible at all: a
-guard you can only <em>call</em> can answer "no", but cannot say why. The engine reads
-the guard; it does not ask the expert whether it wants the question.</p>
-<p><strong>2. <code>resolution_mode</code> retires rather than being extended.</strong> It conflates <em>"was
-this auto-resolved"</em> with <em>"is anyone watching to answer differently"</em>, and the
-core engine's stack already recorded the consequence: with no resolver set at
-all, an expert who authored a condition still gets no second chance in automatic
-mode. That is one of the seven design threads still open on
-<code>d-core-single-class</code>, and whichever way it is settled, the gate belongs on a
-capability rather than on a mode.</p>
-<p><strong>3. Literature recorded for a design-time review</strong>, so the first session on
-this does not start from scratch: blackboard knowledge-source activation
-conditions, Contract-Net eligibility, and Chain-of-Responsibility's <code>canHandle</code>
-for the guard; mixed-initiative and critiquing systems for the ensembles.</p>
-<h5>Cross-plan dependencies, and what they cost</h5>
-<p>Both edges this track needs leave the plan, so <code>depends_on</code> cannot express
-either and both are recorded as <code>blockers</code> instead — which means these items
-carry no dependency chip and no automatic readiness computation:</p>
-<ul>
-<li><code>expert-capability-guards</code> needs <code>d-core-single-class</code> (#159) in
-  <code>rdr-core-engine</code>, whose condition resolver holds the <code>_try_auto_resolve</code>
-  clauses being generalized.</li>
-<li><code>expert-capability-verbalization</code> needs <code>rdr-why-answer</code> (#81) in
-  <code>rdr-explanation</code>, whose rule-tree explanation machinery it reuses. It also
-  needs <code>expert-capability-guards</code>, which is in this plan and keeps its edge.</li>
-</ul>
-<p>The internal ordering is otherwise simple: the guard first, then the ensembles
-and the verbalization in parallel.</p>
-<h5>Open</h5>
-<ul>
-<li><strong>Nothing here has a branch.</strong> All three items are <code>blocked</code> on the core
-  engine's stack landing.</li>
-<li><strong>Whether an ensemble arbitrates or composes</strong> is undecided. "Hint mode as
-  composition" states the shape for one case; what happens when two guards both
-  pass and the experts disagree has not been designed.</li>
-</ul>
-<h5>Standing conventions</h5>
-<ul>
-<li>Follow <code>.claude/personal/cram-notes.md</code> and this repository's <code>AGENTS.md</code>.</li>
-<li>SOLID is a review gate: a new capability enters as an abstraction plus small
-  dataclass implementations, and strategies stay substitutable without touching
-  the engine. This track is unusually exposed to that rule, since its whole
-  subject is making a dispatch decision substitutable.</li>
-<li>TDD: failing test first, and no test is modified to make something pass.</li>
-<li><code>krrood</code> stays self-contained; world-like scenarios are mimicked in
-  <code>test/krrood_test/dataset</code>.</li>
-<li>The programme's working method — run the probe rather than reasoning, compare
-  sorted collected test ids rather than counts, stage by explicit path — is
-  recorded in <code>rdr-core-engine</code>'s roadmap and applies here unchanged.</li>
-</ul></div>
+<h5>Sequencing</h5>
+<p><code>definition-catalogue</code> first: it establishes both the catalogue and the git plumbing for
+reading revisions across branches. <code>overlap-detector</code> builds on it. <code>common-parent</code>
+depends on the catalogue only for that plumbing - it is otherwise independent, and could
+run in parallel with the detector. <code>plan-graphs</code> needs the detector's output.
+<code>skill-wiring</code> is last because it wires both halves together.</p>
+<p>The one deliberate serialization is <code>common-parent</code> after <code>definition-catalogue</code>. It
+needs nothing from the catalogue functionally, but both read revisions across branches,
+and letting them build that separately would duplicate a git-command runner - which is
+the thing this plan exists to prevent.</p></div>
     </details>
   </header>
 
   <div class="layout">
     <main>
-      <section class="wave" id="wave-capabilities">
-        <div class="wave-eyebrow">Capability guards and collaboration</div>
-        <p class="wave-description">Sequential from the guard: the ensembles and the verbalization both build on it.</p>
+      <section class="wave" id="wave-detection">
+        <div class="wave-eyebrow">What each branch defines, and where two collide</div>
+        <p class="wave-description">The catalogue, and the comparison over it. Everything downstream reads these.</p>
         <section class="track">
-          <h3 class="track-title">Guards, ensembles and their verbalization</h3>
+          <h3 class="track-title">The catalogue and the detector</h3>
           <div class="item-list">
-                <article id="item-expert-capability-guards" class="item status-blocked" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+                <article id="item-definition-catalogue" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
-            <h4 class="item-title">Capability-guarded Expert: EQL eligibility guards, resolver-as-expert</h4>
+            <h4 class="item-title">Record what each unlanded branch defines, derived rather than written</h4>
             <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
+              <span class="badge status-badge status-not_started">Not started</span>
               <span class="badge live-badge live-none">No pull request yet</span>
             </div>
           </div>
           <div class="item-meta">
-            <span class="mono id">expert-capability-guards</span>
+            <span class="mono id">definition-catalogue</span>
             <span class="mono branch">None</span>
             <span class="muted">no pull request yet</span>
             <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
     <ul class="model-picker-list" role="listbox">
       <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
@@ -748,110 +813,214 @@ and the verbalization in parallel.</p>
       <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-expert-framework expert-capability-guards" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff design-overlap definition-catalogue" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
 </span>
 
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
-            <div class="notes">Abstract Expert declares full question vocabulary; each impl carries an evaluable EQL capability guard. Lit: blackboard activation conditions, Contract-Net, Chain-of-Responsibility.</div>
+            <div class="notes">`.claude/stack/definitions.py`. Per branch, relative to its merge base with `main`: parse
+every changed `.py` file at both revisions with `ast` and record each top-level class and
+module-level function as a `Definition` - name, kind, file, base classes, public method
+names, signature, docstring summary, and whether the branch added or modified it. Added
+non-Python files are recorded too, by path and first heading: the #110/#106 collision was
+two sessions building the same markdown artifact under two names, which a Python-only
+catalogue would miss.
+
+Derived, never hand-written, so it cannot drift - the same rule `_generated/branch-index.tsv`
+already follows. `AGENTS.md` mandates docstrings and dataclasses, so the catalogue is rich
+by construction. Pure `ast` plus git: no network, no model call, runs in CI.
+
+This item also establishes the git plumbing for reading revisions across branches, which
+`common-parent` then reuses rather than writing a second time.</div>
           </details>
           <div class="blockers">
-            <div class="blocker">▸ Blocked until the Wave-0 engine stack lands on main.</div>
-            <div class="blocker">▸ Needs d-core-single-class (#159) in the rdr-core-engine plan, whose condition resolver carries the _try_auto_resolve clauses this guard generalizes. Cross-plan, so no dependency chip.</div>
+            <div class="blocker">▸ #185 moves every `.claude/` Python module into the `bastler` package. Whichever lands second re-applies its delta in the new location - the pattern #111 already exercised. Worth checking #185&#39;s state before starting rather than after.</div>
           </div>
         </div>
       </div>
     </article>
 
-                <article id="item-expert-ensembles" class="item status-blocked" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+                <article id="item-overlap-detector" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
-            <h4 class="item-title">Cooperating experts: Hint mode as composition, multi-expert ensembles</h4>
+            <h4 class="item-title">Report the branch pairs that define the same thing under different names</h4>
             <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
+              <span class="badge status-badge status-not_started">Not started</span>
               <span class="badge live-badge live-none">No pull request yet</span>
             </div>
           </div>
           <div class="item-meta">
-            <span class="mono id">expert-ensembles</span>
+            <span class="mono id">overlap-detector</span>
             <span class="mono branch">None</span>
             <span class="muted">no pull request yet</span>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-expert-framework expert-ensembles" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
-</span>
-
+            
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
-            <div class="notes">Multiple experts assisting each other. Lit: mixed-initiative / critiquing systems.</div>
+            <div class="notes">`.claude/stack/overlaps.py`. Compares catalogues pairwise, skipping pairs already in an
+ancestor relationship, since a stacked pair shares definitions by construction. Signals,
+strongest first: the same definition name in different files; the same path added by both;
+normalized name similarity; docstring-summary token overlap, which is the signal that
+catches a rename.
+
+Deterministic scoring, ranked pairs, and no verdict. It gathers evidence and the judgement
+stays with `/integration-conflict-triage`, exactly as `check_scope_overlap.py`&#39;s own
+docstring establishes for the path-overlap case.
+
+Writes `.claude/personal/plans/_generated/definitions.json`, under the same never-hand-edit
+rule as its sibling index. Regenerated on every `/plan-dashboard` publish plus an on-demand
+command; wiring it into `integration-refresh.yml` is deliberately left out, since that
+workflow is still unlanded on `integration`.</div>
           </details>
           <div class="deps">
             <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="Capability-guarded Expert: EQL eligibility guards, resolver-as-expert (not ready yet — this item is blocked on it)">expert-capability-guards</span>
+            <span class="chip chip-unmet" title="Record what each unlanded branch defines, derived rather than written (not ready yet — this item is blocked on it)">definition-catalogue</span>
 
-          </div>
-          <div class="blockers">
-            <div class="blocker">▸ Blocked on expert-capability-guards.</div>
           </div>
         </div>
       </div>
     </article>
 
-                <article id="item-expert-capability-verbalization" class="item status-blocked" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+          </div>
+        </section>
+      </section>
+      <section class="wave" id="wave-acting">
+        <div class="wave-eyebrow">Seeing it, and doing something about it</div>
+        <p class="wave-description">The graphs that make an overlap visible, and the command that resolves one.</p>
+        <section class="track">
+          <h3 class="track-title">Graphs on the dashboard</h3>
+          <div class="item-list">
+                <article id="item-plan-graphs" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
       <div class="item-row">
         <div class="item-spine"></div>
         <div class="item-body">
           <div class="item-head">
-            <h4 class="item-title">Verbalize expert capabilities: why-can / why-cannot handle a situation</h4>
+            <h4 class="item-title">Draw the pull request graph and the definition graph on the dashboard</h4>
             <div class="item-badges">
-              <span class="badge status-badge status-blocked">Blocked</span>
+              <span class="badge status-badge status-not_started">Not started</span>
               <span class="badge live-badge live-none">No pull request yet</span>
             </div>
           </div>
           <div class="item-meta">
-            <span class="mono id">expert-capability-verbalization</span>
+            <span class="mono id">plan-graphs</span>
             <span class="mono branch">None</span>
             <span class="muted">no pull request yet</span>
-            <span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for Resolve">
-    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
-    <ul class="model-picker-list" role="listbox">
-      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
-      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
-      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
-      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
-      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
-    </ul>
-  </span>
-  <button type="button" class="action-button" data-action-command="/plan-item-resolve rdr-expert-framework expert-capability-verbalization" onclick="planDashboardCopyActionCommand(this)">▸ Resolve</button>
-</span>
-
+            
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
-            <div class="notes">The guard is EQL, so it is inspectable and verbalizable. Ties to the Why track.</div>
+            <div class="notes">Both in `plan-dashboard`&#39;s `templates/dashboard.html`, Cytoscape from cdnjs at a pinned
+version, rendering into the Artifact and the Pages site alike.
+
+The pull request graph draws items as nodes, with edges from both `depends_on` and the real
+pull request base, highlighting where the two disagree. Overlap pairs are drawn as dashed
+edges across parallel paths - that overlay is the point, since a dependency graph alone
+cannot show where two parallel branches are about to collide. The definition graph groups
+definitions by owning branch, draws inheritance, and links overlap pairs.</div>
           </details>
           <div class="deps">
             <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="Capability-guarded Expert: EQL eligibility guards, resolver-as-expert (not ready yet — this item is blocked on it)">expert-capability-guards</span>
+            <span class="chip chip-unmet" title="Report the branch pairs that define the same thing under different names (not ready yet — this item is blocked on it)">overlap-detector</span>
 
           </div>
           <div class="blockers">
-            <div class="blocker">▸ Blocked on expert-capability-guards and W1 (rdr-why-answer).</div>
-            <div class="blocker">▸ Also needs rdr-why-answer (#81) in the rdr-explanation plan, whose rule-tree explanation machinery this reuses. Cross-plan, so no dependency chip.</div>
+            <div class="blocker">▸ Four open pull requests already edit `templates/dashboard.html`: #218 (Pages site), #206 (refresh button), #157 (hide deferred items) and #111 (state chips). This item should be cut after as many of them as possible have landed, and its own scope check re-run at kickoff. #253 (cross-plan `depends_on`) changes the edge data this graph reads.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Regrouping branches onto a common parent</h3>
+          <div class="item-list">
+                <article id="item-common-parent" class="item status-not_started" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Give a set of branches a new common parent, after costing the move</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">common-parent</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">`.claude/stack/common_parent.py`. Extracting a shared parent and changing direction
+mid-plan are the same operation - give a set of branches a new common parent - so it is one
+command in two phases rather than two commands.
+
+`probe` runs `git merge-tree --write-tree` per branch against the proposed base, reusing the
+non-mutating probe already in `stack.py`, and reports how many branches move, which
+conflict, and which files. It mutates nothing, so it is the cost report a direction change
+can be decided against.
+
+`apply` cuts the new parent off `main`, optionally moves the shared files onto it with
+`--extract`, opens its draft pull request, then per branch retargets the pull request base
+and runs the existing `maintenance_restack_procedure.restack`, finally dropping the
+duplicate copy from the branch that did not own it. Most of this is already built: the
+expensive steps are the `RestackStep` pipeline that exists.
+
+This writes to feature branches, a deliberate exception to
+`integration-conflict-triage`&#39;s &#34;never writes a fix to a feature branch&#34;, approved by the
+user on 2026-09-06. Bounded by: probe is always available and mutates nothing, and a
+non-draft branch is flagged in the probe and needs an explicit `--include-reviewed`, since
+resetting an approval is a real cost.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Record what each unlanded branch defines, derived rather than written (not ready yet — this item is blocked on it)">definition-catalogue</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-skill-wiring" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Query the catalogue before implementing, and give reconcile a command to run</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">skill-wiring</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Three edits. `plan-item-kickoff` queries the catalogue for what the item describes and
+reports near-matches before implementation begins - the early gate. `integration-conflict-triage`&#39;s
+`reconcile` verdict stops being a dead end and names `common-parent` as what carries it out.
+A post-review re-check covers the case the user named specifically: duplication that only
+becomes visible after they have read what a session built.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="Report the branch pairs that define the same thing under different names (not ready yet — this item is blocked on it)">overlap-detector</span>
+
+            <span class="chip chip-unmet" title="Give a set of branches a new common parent, after costing the move (not ready yet — this item is blocked on it)">common-parent</span>
+
+          </div>
+          <div class="blockers">
+            <div class="blocker">▸ #282 already comments on branches an integration build leaves out. Check at kickoff whether the post-review re-check belongs there instead of as a third surface.</div>
           </div>
         </div>
       </div>
@@ -866,9 +1035,9 @@ and the verbalization in parallel.</p>
       <div class="sidebar-card">
         <h3>Status</h3>
         <div class="summary-strip">
-          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">5</span><span class="stat-label">Not started</span></div>
           <div class="stat"><span class="stat-num">0</span><span class="stat-label">In progress</span></div>
-          <div class="stat"><span class="stat-num">3</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
           <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
           <div class="stat"><span class="stat-num">0</span><span class="stat-label">Done</span></div>
         </div>
@@ -880,7 +1049,13 @@ and the verbalization in parallel.</p>
       </div>
       <div class="sidebar-card" id="next-steps-card">
         <h3>What to do next</h3>
-        <p class="next-empty">Nothing actionable right now — every item is either in progress, fully blocked, or done.</p>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-definition-catalogue" data-item-identifier="definition-catalogue" onclick="planDashboardHighlightItem(event, this)"><strong>Record what each unlanded branch defines, derived rather than written</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+            </ul>
+          </div>
       </div>
     </aside>
   </div>

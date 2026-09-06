@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -777,6 +782,36 @@ exactly the thing the reviewer was asking not to have two of.</p>
 <li><strong>The review's rule reached production, where the duplication was worse than in the tests it was
   raised against</strong>: the GitHub host was written out in two places in <code>stack.py</code>. A comment about test
   literals is worth carrying into the code the tests are about.</li>
+</ul>
+<h6><code>setup-personal-notes-script</code> (#107) and <code>setup-stacked-prs-skill</code> (#110): stale integration-conflict labels cleared, 2026-09-06</h6>
+<p>Both pull requests had fallen behind <code>main</code> (107 by 103 commits) and both carried an
+<code>integration-conflict</code> label from an automated integration build on 2026-08-31, blocking
+promotion. Resolved via <code>/plan-item-resolve</code>, not by guessing:</p>
+<ul>
+<li><strong>The reported rebase conflict was real, but only under <code>git rebase</code>.</strong> This branch's
+  history already contains one merge commit that resolved an add/add conflict on
+  <code>.claude/hooks/tests/stubs/{curl,gh}.sh</code> against <code>main</code> (documented on #107 as "the two
+  stub files united"). A linear <code>git rebase</code> replays the original commits and discards
+  that resolution, so it re-hits the same conflict against a <code>main</code> that has since moved
+  further. A plain <code>git merge</code> - the convention this whole stack otherwise uses - does not
+  reopen it. <code>main</code> merged into #107 clean (<code>053de8eb</code>), #110 merged onto the new #107
+  head clean (<code>9a192041</code>), both green on the <code>integration_test_command</code> scope.</li>
+<li><strong>The integration-conflict finding no longer reproduces.</strong> #107 was blocked against
+  <code>D-deco</code>, #110 against <code>D-store</code> - both unrelated <code>krrood</code>/RDR feature branches whose
+  diffs touch nothing outside <code>test/krrood_test/</code> and <code>AGENTS.md</code>. Neither pull request
+  ever had a reproduction test pushed (<code>@pytest.mark.integration_conflict</code>), so nothing
+  had re-verified either finding since the day it was recorded. Reconstructing each pair
+  by hand (merging <code>main</code> + the D-branch + the fork branch in a scratch worktree and
+  running the exact suite <code>integration.py build</code> runs) found both merges clean and both
+  suites green. Both <code>D-deco</code> and <code>D-store</code> record being rebuilt as a branch reset on
+  2026-08-31 - the same day - to drop a symbol forbidden by a later <code>main</code> change; the
+  likely explanation is the original build tested their pre-rebuild tips. Labels removed
+  from both pull requests with the evidence posted as a PR comment on each.</li>
+<li><strong>Process note for later reads of this history:</strong> <code>block-branch</code>'s own step 5 (push a
+  reproduction test, record on the item, republish) was never completed for either
+  finding - only the automated comment-and-label half ran. A finding with no reproduction
+  test is one nothing will ever re-check on its own; it has to be revisited by hand, which
+  is what happened here five days later.</li>
 </ul></div>
     </details>
   </header>
@@ -798,6 +833,8 @@ exactly the thing the reviewer was asking not to have two of.</p>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="2032 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1598 −434</span>
             </div>
           </div>
           <div class="item-meta">
@@ -838,6 +875,8 @@ for unrelated robotics noise on tooling pull requests.</div>
             <div class="item-badges">
               <span class="badge status-badge status-done">Done</span>
               <span class="badge live-badge live-merged">Merged</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="3448 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+3447 −1</span>
             </div>
           </div>
           <div class="item-meta">
@@ -966,14 +1005,18 @@ a branch.</div>
             <h4 class="item-title">Extract a deterministic setup script from /setup-personal-notes</h4>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
-              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="3419 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+2906 −513</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
             <span class="mono id">setup-personal-notes-script</span>
             <span class="mono branch">claude/setup-personal-notes-script</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/107" target="_blank" rel="noopener">#107</a>
-            <a class="session-link" href="https://claude.ai/code/session_01MyxyUN3bsvPsJnb5QuNzxd" target="_blank" rel="noopener">session ↗</a>
+            <a class="session-link" href="https://claude.ai/code/session_01U7PnqKcjgBbmFfwouGPMeN" target="_blank" rel="noopener">session ↗</a>
+            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/107" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
@@ -1055,7 +1098,12 @@ else&#39;s message. The same class recurred in the second round, where a descrip
 whitespace read only each sentence&#39;s first word, which happened to be distinct.
 **CI red found and fixed 2026-09-01** (session resolving this item via `/plan-item-resolve`). `test_claude_dev_tooling` was failing on the pushed head with a collection error, not a genuine test failure: `test_setup_steps.py` still imported `SCRUBBED_ENVIRONMENT_PREFIXES` from `scratch_repository`, the name the 2026-08-30 review round renamed to `SCRUBBED_VARIABLE_PREFIXES` when it moved the constant onto `stub_executables.py`&#39;s enum — missed because that round never touched this test module. Separately, `setup_steps.py` had no `HookScript` member of its own, so the one test that installs it through `install_hook_scripts` (which derives a script&#39;s dependencies from `HookScript` members) was passed a bare string where an enum member was required.
 Both fixed in `bc53ec33`, pushed. 607 tests pass on the exact CI scope, up from a hard collection failure. PR converted back to draft after the push, per the standing convention.
-Then merged into `setup-stacked-prs-skill` (#110), which is based on this branch and inherited the same break: one conflict, in `tooling_files.py`, where #110&#39;s own `HookScript` additions sit next to the new `SETUP_STEPS` member — resolved by keeping both. 668 tests pass there afterward; see that item&#39;s own notes.</div>
+Then merged into `setup-stacked-prs-skill` (#110), which is based on this branch and inherited the same break: one conflict, in `tooling_files.py`, where #110&#39;s own `HookScript` additions sit next to the new `SETUP_STEPS` member — resolved by keeping both. 668 tests pass there afterward; see that item&#39;s own notes.
+**Merge conflicts and integration-conflict resolved 2026-09-06** (session https://claude.ai/code/session_01U7PnqKcjgBbmFfwouGPMeN, via `/plan-item-resolve`).
+The reported &#34;merge conflicts when rebasing on main&#34; were real under `git rebase` (this branch had fallen 103 commits behind `main`): rebase replays the branch&#39;s original commits one at a time and re-hits the add/add conflict on `.claude/hooks/tests/stubs/{curl,gh}.sh`, plus a real conflict in `scratch_repository.py`, that the earlier &#34;two stub files united&#34; merge had already resolved once - a linear rebase discards that merge commit&#39;s resolution and starts over. A plain `git merge` of `main`, which is this repo&#39;s actual convention throughout this stack, does not reopen it. Merged clean and pushed as `053de8eb`; the `integration_test_command` scope is green (598 passed).
+Separately, this branch had carried `integration-conflict` since 2026-08-31, from an automated integration build finding it &#34;merges cleanly with `D-deco` and the suite fails on the result.&#34; No reproduction test was ever pushed for that finding (the block-branch pass only commented and labelled), so nothing had re-checked it since. Verified by hand: merging `main` + `D-deco`&#39;s current tip + this branch is clean with no conflicts and the exact `integration_test_command` suite passes (598/0). `D-deco` touches nothing outside `test/krrood_test/` and `AGENTS.md` - no overlap with this branch&#39;s `.claude/`-only diff -and its own pull request records it was rebuilt as a branch reset on 2026-08-31, the same day, to drop a since-forbidden symbol carried from a dead base. The likely explanation is that the original build tested against `D-deco`&#39;s pre-rebuild tip. Label removed from #107.
+`setup-stacked-prs-skill` (#110) merges cleanly onto this branch&#39;s new head and was updated to match (`9a192041`, 659 passed). Its own `integration-conflict` (against `D-store`, same shape - rebuilt the same day for the same reason) was cleared the same way and removed.
+Both pull requests were open as ready-for-review (not draft) going into this session; both were converted back to draft after the push, per the standing convention, since it could not be established from here that the ready flip was the user&#39;s own rather than left over from an earlier round.</div>
           </details>
           <div class="deps">
             <span class="deps-label">needs</span>
@@ -1076,7 +1124,10 @@ Then merged into `setup-stacked-prs-skill` (#110), which is based on this branch
             <h4 class="item-title">PR 2: /setup-stacked-prs guided one-command setup skill</h4>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
-              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="3637 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+3355 −282</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1084,6 +1135,7 @@ Then merged into `setup-stacked-prs-skill` (#110), which is based on this branch
             <span class="mono branch">claude/setup-stacked-prs-skill</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/110" target="_blank" rel="noopener">#110</a>
             <a class="session-link" href="https://claude.ai/code/session_015HBn7bNMj6Ao5inyStmrMN" target="_blank" rel="noopener">session ↗</a>
+            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/110" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
@@ -1211,6 +1263,9 @@ Fixed on #107 (`bc53ec33`) and merged into this branch (`c08cde6e`). One conflic
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="906 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+854 −52</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1274,6 +1329,9 @@ addresses the sweep computing the wrong answer whenever it does.</div>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
               <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="489 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+481 −8</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
             </div>
           </div>
           <div class="item-meta">
@@ -1356,7 +1414,15 @@ behind main, so the process was serving unlanded work on a stale base - a rebuil
       </div>
       <div class="sidebar-card" id="next-steps-card">
         <h3>What to do next</h3>
-        <p class="next-empty">Nothing actionable right now — every item is either in progress, fully blocked, or done.</p>
+          <div class="next-group next-review">
+            <h4>Ready to review <span class="next-count-all">(2)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-setup-personal-notes-script" data-item-identifier="setup-personal-notes-script" onclick="planDashboardHighlightItem(event, this)"><strong>Extract a deterministic setup script from /setup-personal-notes</strong><br><span class="next-reason">open draft pull request, ready for your review</span></a>                <a class="next-review-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/107" target="_blank" rel="noopener">Review ↗</a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-setup-stacked-prs-skill" data-item-identifier="setup-stacked-prs-skill" onclick="planDashboardHighlightItem(event, this)"><strong>PR 2: /setup-stacked-prs guided one-command setup skill</strong><br><span class="next-reason">open draft pull request, ready for your review</span></a>                <a class="next-review-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/110" target="_blank" rel="noopener">Review ↗</a>              </li>
+            </ul>
+          </div>
       </div>
     </aside>
   </div>

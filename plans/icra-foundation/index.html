@@ -1,0 +1,1604 @@
+<title>ICRA experiments: one pipeline every scenario runs on</title>
+<style>
+  :root {
+    --bg: #F4F6F7;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF1;
+    --text: #16212B;
+    --text-muted: #55636E;
+    --border: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-strong: #075E66;
+    --accent-tint: #E1F1F1;
+
+    --status-done: #2F9E44;
+    --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8;
+    --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A;
+    --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8;
+    --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93;
+    --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F;
+    --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161B;
+      --surface: #171F25;
+      --surface-alt: #1E272E;
+      --text: #E6ECEF;
+      --text-muted: #94A4AC;
+      --border: #2B3841;
+      --accent: #37B4BC;
+      --accent-strong: #57CBD1;
+      --accent-tint: #133136;
+
+      --status-done: #4FCB6C;
+      --status-done-tint: #123420;
+      --status-progress: #6AA6EC;
+      --status-progress-tint: #142A42;
+      --status-blocked: #E6A93F;
+      --status-blocked-tint: #3A2D0F;
+      --status-deferred: #B69BD6;
+      --status-deferred-tint: #2A2038;
+      --status-notstarted: #92A0A8;
+      --status-notstarted-tint: #22292D;
+      --drift: #F1717E;
+      --drift-tint: #3A1418;
+      --bug: #F1707C;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161B; --surface: #171F25; --surface-alt: #1E272E;
+    --text: #E6ECEF; --text-muted: #94A4AC; --border: #2B3841;
+    --accent: #37B4BC; --accent-strong: #57CBD1; --accent-tint: #133136;
+    --status-done: #4FCB6C; --status-done-tint: #123420;
+    --status-progress: #6AA6EC; --status-progress-tint: #142A42;
+    --status-blocked: #E6A93F; --status-blocked-tint: #3A2D0F;
+    --status-deferred: #B69BD6; --status-deferred-tint: #2A2038;
+    --status-notstarted: #92A0A8; --status-notstarted-tint: #22292D;
+    --drift: #F1717E; --drift-tint: #3A1418;
+    --bug: #F1707C;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6F7; --surface: #FFFFFF; --surface-alt: #EAEFF1;
+    --text: #16212B; --text-muted: #55636E; --border: #D8E0E3;
+    --accent: #0E7C86; --accent-strong: #075E66; --accent-tint: #E1F1F1;
+    --status-done: #2F9E44; --status-done-tint: #E4F6E8;
+    --status-progress: #2B6CB8; --status-progress-tint: #E5EEFA;
+    --status-blocked: #C1780A; --status-blocked-tint: #FBEEDB;
+    --status-deferred: #8A6FA8; --status-deferred-tint: #EEE7F5;
+    --status-notstarted: #7C8A93; --status-notstarted-tint: #ECEFF0;
+    --drift: #C43D4F; --drift-tint: #FBE7E9;
+    --bug: #D73A4A;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, .item .id, .item .branch, .pr-link, .chip, .stat-num, .wave-eyebrow,
+  .track-title, code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 2.25rem;
+    align-items: start;
+  }
+  aside.sidebar {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+  .sidebar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .sidebar-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: static; max-height: none; overflow-y: visible; }
+  }
+
+  header.masthead {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .description {
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 0 1.25rem;
+  }
+  .repo-line {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .repo-line a { color: var(--text-muted); text-decoration-color: var(--border); }
+  .tracking-link {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    color: var(--accent-strong) !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .roadmap-details {
+    margin-top: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .roadmap-details summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .roadmap-details summary::-webkit-details-marker { display: none; }
+  .roadmap-details summary::before { content: "▸ "; }
+  .roadmap-details[open] summary::before { content: "▾ "; }
+  .roadmap-details[open] summary { border-bottom: 1px solid var(--border); }
+  .roadmap-body {
+    padding: 1rem 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .roadmap-body h4, .roadmap-body h5, .roadmap-body h6 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    margin: 1.4rem 0 0.5rem;
+    color: var(--text);
+  }
+  .roadmap-body h4:first-child { margin-top: 0; }
+  .roadmap-body p { margin: 0 0 0.85rem; color: var(--text-muted); }
+  .roadmap-body ul { margin: 0 0 0.85rem; padding-left: 1.3rem; color: var(--text-muted); }
+  .roadmap-body li { margin-bottom: 0.3rem; }
+  .roadmap-body code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    background: var(--surface-alt);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+  }
+  .roadmap-body pre {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+  }
+  .roadmap-table-wrap { overflow-x: auto; margin: 0 0 0.85rem; }
+  .roadmap-body table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  }
+  .roadmap-body th, .roadmap-body td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .roadmap-body th { background: var(--surface-alt); color: var(--text); }
+  .roadmap-body a { color: var(--accent-strong); }
+  .roadmap-body strong { color: var(--text); }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+  }
+  .stat-num { font-weight: 700; font-size: 1.05rem; }
+  .stat-label { font-size: 0.74rem; color: var(--text-muted); }
+
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .alert-banner {
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    margin-top: 0.85rem;
+    font-size: 0.84rem;
+  }
+  .alert-banner ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .clean-banner { background: var(--status-done-tint); color: var(--status-done); border: 1px solid color-mix(in srgb, var(--status-done) 35%, transparent); }
+  .drift-banner { background: var(--drift-tint); color: var(--drift); border: 1px solid color-mix(in srgb, var(--drift) 35%, transparent); }
+
+  .next-group { margin-bottom: 0.9rem; }
+  .next-group:last-child { margin-bottom: 0; }
+  .next-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
+  .next-ready h4 { color: var(--status-done); }
+  .next-recheck h4 { color: var(--status-blocked); }
+  .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
+  .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+  .next-ready li { border-color: var(--status-done); }
+  .next-recheck li { border-color: var(--status-blocked); }
+  .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
+  .next-bug-chip {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.32rem;
+    border-radius: 0.6rem;
+    background: var(--bug);
+    color: var(--bg);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: 0.06rem;
+  }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
+  .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
+
+  .wave { margin-top: 2.5rem; }
+  .wave-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.3rem 0.65rem;
+    border-radius: 5px;
+    margin-bottom: 1.1rem;
+  }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+  .track { margin-top: 1.4rem; }
+  .track-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
+  }
+  .track-empty {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 0 0 0.5rem;
+  }
+
+  .item-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .item {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
+  }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
+  .wrap-arrow {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--accent-tint);
+    padding: 0.3rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
+  .wrap-parent-title { color: var(--text-muted); }
+  .item-row { display: flex; }
+  .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
+  .item.status-done .item-spine { background: var(--status-done); }
+  .item.status-in_progress .item-spine { background: var(--status-progress); }
+  .item.status-blocked .item-spine { background: var(--status-blocked); }
+  .item.status-deferred .item-spine { background: var(--status-deferred); }
+  .item.status-not_started .item-spine { background: var(--status-notstarted); }
+  .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
+
+  .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .item-title { margin: 0; font-size: 0.96rem; font-weight: 600; text-wrap: balance; }
+  .item-badges { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .status-badge.status-done { background: var(--status-done-tint); color: var(--status-done); }
+  .status-badge.status-in_progress { background: var(--status-progress-tint); color: var(--status-progress); }
+  .status-badge.status-blocked { background: var(--status-blocked-tint); color: var(--status-blocked); }
+  .status-badge.status-deferred { background: var(--status-deferred-tint); color: var(--status-deferred); }
+  .status-badge.status-not_started { background: var(--status-notstarted-tint); color: var(--status-notstarted); }
+
+  .live-badge { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+  .live-badge.live-merged { color: var(--status-done); }
+  .live-badge.live-open_draft { color: var(--text-muted); }
+  .live-badge.live-open_ready { color: var(--status-progress); }
+  .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
+  .live-badge.live-not_found { color: var(--drift); }
+
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
+  .item-meta {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .item-meta .id { color: var(--text); }
+  .item-meta .branch::before { content: "⎇ "; }
+  .pr-link, .session-link { font-weight: 600; }
+  .muted { color: var(--text-muted); font-style: italic; }
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+  }
+  .action-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .action-button.action-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
+
+  .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
+  .notes-details { margin-top: 0.5rem; }
+  .notes-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    list-style: none;
+  }
+  .notes-details summary::-webkit-details-marker { display: none; }
+  .notes-details summary::before { content: "▸ "; }
+  .notes-details[open] summary::before { content: "▾ "; }
+  .notes-details .notes { margin-top: 0.4rem; }
+  .drift {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--drift);
+    background: var(--drift-tint);
+    border-radius: 5px;
+    padding: 0.35rem 0.6rem;
+    display: inline-block;
+  }
+  .deps { margin-top: 0.5rem; font-size: 0.78rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .deps-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; }
+  .chip {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .chip.chip-unmet {
+    background: var(--status-blocked-tint);
+    border-color: color-mix(in srgb, var(--status-blocked) 45%, transparent);
+    color: var(--status-blocked);
+    font-weight: 700;
+  }
+  .chip.chip-unmet::before { content: "⏳ "; }
+  .blockers { margin-top: 0.5rem; }
+  .blocker { font-size: 0.82rem; color: var(--status-blocked); }
+
+  footer.page-footer {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .item-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+
+
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>ICRA experiments: one pipeline every scenario runs on</h1>
+    <p class="description">The foot of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits&#39; roadmap.md for why). The integrated simulation pipeline every scenario, demo and experiment stacks on, the dataclass scenario/goal/condition/perturbation/metric domain model with its runner, and every trial, event, query, answer and failure recorded through ORMatic into SQL and read back as long-term memory. icra-mechanism and icra-evidence both depend on items here; those edges could not cross the plan boundary and are recorded as blockers on their side instead (see their roadmap.md).</p>
+    <p class="repo-line">
+      10 tracked items · <a href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine" target="_blank" rel="noopener">AbdelrhmanBassiouny/cognitive_robot_abstract_machine</a>
+<a class="tracking-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/issues/252" target="_blank" rel="noopener">Propose a structural change →</a>    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body"><h4>icra-foundation: roadmap</h4>
+<p>One of three successors of <code>icra-experiments</code>, split 2026-09-05 for the plan
+size budget (<code>plan-size-limits</code>, tracking issue #200) — the item limit alone
+(33 &gt; 15), not the line budget. The split is by wave, the plan's own
+existing organizational seam: <code>icra-foundation</code> is the <code>foundation</code> wave,
+<code>icra-mechanism</code> is <code>mechanism</code>, <code>icra-evidence</code> is <code>evidence</code>. All three
+keep <code>tracking_issue: 252</code>, the original mailbox. Full split rationale and
+what it cost lives in <code>plan-size-limits/roadmap.md</code>'s "Done 2026-09-05:
+<code>split-icra-experiments</code>" section; the predecessor's full roadmap is
+reachable in the personal-notes branch's history immediately before the
+split commit.</p>
+<p>This roadmap keeps what binds future work: the plan's why, the standing
+design decisions, the hazards and open questions, and — since every item
+here already has an open pull request or is <code>done</code> — what each branch
+actually merged and what it cost, compressed to what a later branch touching
+the same files needs to know. Per-round conflict-resolution narrative (which
+hunk, which commit) is compressed to its outcome; the pull requests
+themselves are that record and are linked.</p>
+<h5>Why this plan exists</h5>
+<p>The memo's thesis is one mechanism: the same EQL query answers a question,
+selects which backend answers each predicate, drives what the robot
+perceives, and verifies the result in the digital twin; removing knowledge
+produces failures the query predicts. Nothing before this plan owned the
+experiments, the scenario definitions, the episode recording, the capability
+routing, the physics verification, the failure taxonomy, the VLM baselines
+or the artifact — see the predecessor's history for the full survey of what
+<code>knowledge-directed-perception</code> already owned instead.</p>
+<p><strong>This wave is the foot of the whole programme.</strong> <code>integrated-simulation-pipeline</code>,
+<code>scenario-domain-model</code> and <code>run-results-recorded-into-sql</code> can all start in
+parallel with no dependencies, and every mechanism/experiment item in
+<code>icra-mechanism</code>/<code>icra-evidence</code> stacks on one of the ten items here.</p>
+<h5>What the code already had, and what this wave builds on</h5>
+<ul>
+<li><strong>Narrowing is measured</strong> (#238, 0.25–0.43 of an unnarrowed look on six real
+  captures) and <strong>decomposition exists implicitly</strong> (#238's lid/hole answered
+  from the twin before a look; #231 gives each detector a <code>capability</code>) —
+  <code>icra-mechanism</code>'s <code>backend-routing</code> track raises both one level.</li>
+<li><strong>The verification predicates exist</strong> (#229: support, contact, visibility,
+  reachability, stability, occupancy, inside-of, six directional relations),
+  consumed by <code>icra-mechanism</code>'s <code>physics-verification-backend</code>.</li>
+<li><strong>Episode recording existed in three shapes</strong> — <code>ShapeInsertionExperience</code>,
+  <code>SortingIterationResult</code>, and the console stack's <code>SegmindEventRecord</code>/
+  <code>InsertionAttemptRecord</code> — all through ORMatic already.
+  <code>episodes-recorded-through-ormatic</code> replaces the first two with one
+  <code>Episode</code> model.</li>
+<li><strong>A scenario abstraction and a result model exist</strong>:
+  <code>control_loop_experiments.scenarios</code> (<code>BenchmarkScenario</code>,
+  <code>ScenarioRunner</code>) and <code>experiment_definitions</code> (<code>ExperimentResult</code>,
+  <code>ExperimentsTable</code>, <code>TypstRenderer</code>). <code>scenario-domain-model</code> generalises
+  both.</li>
+<li><strong>Failure diagnosis exists</strong> (<code>insertion_diagnosis.InsertionDiagnosis</code>,
+  <code>InsertionFailureReason</code>), extended by <code>icra-mechanism</code>'s
+  <code>failure-taxonomy-and-typing</code>.</li>
+<li>Segmind emits temporal/embodiment events via <strong>EQL rules, not ripple-down
+  rules</strong> (developer correction, 2026-09-03); the twin answers gripper
+  contents through <code>bodies_in_gripper</code>; #169 already restored attach-on-grasp
+  behind <code>Context.update_world_model_attachment</code>, which
+  <code>snapshot-working-memory</code> (in <code>icra-mechanism</code>) relies on.</li>
+<li>Verbalisation is deterministic by construction; the scene wordings are on
+  #33 (owes a rebase onto #229, two wording decisions open — developer's
+  call), reused by <code>icra-mechanism</code>'s <code>working-memory-verbalised</code>.</li>
+</ul>
+<h5>Structural decisions taken at creation (2026-09-03)</h5>
+<ul>
+<li>The two core mechanisms (per-predicate routing, physics verification) live
+  in <code>icra-mechanism</code>, not <code>knowledge-directed-perception</code>; that plan's
+  <code>imagination-world-rejects-what-a-predicate-refuses</code> item is covered by
+  <code>physics-verification-backend</code> in narrow form.</li>
+<li><code>integrated-simulation-pipeline</code> is the whole programme's foot item.
+  <code>tracy_icra</code> stays the real-robot integration point;
+  <code>knowledge-directed-perception</code>'s three demo items are satisfied by
+  <code>tracy-demo-takes-the-integrated-branch</code> (here) and the robot experiments
+  in <code>icra-evidence</code>.</li>
+<li>SQL is a backend and long-term memory is a deliverable (developer
+  correction, 2026-09-03): EQL over an SQL database returning domain objects
+  is the long-term-memory feature; every scenario's episodes, real and
+  simulated, are recorded into it through ORMatic and are to be queried —
+  this wave's <code>long-term-memory</code> track.</li>
+<li>Simulation first: every scenario, demo and perturbation runs through the
+  full integrated pipeline in simulation before the robot, which is why
+  every experiment in <code>icra-evidence</code> has an in-simulation item its robot
+  item depends on.</li>
+<li>Scenarios are data: a dataclass domain model (<code>scenario-domain-model</code>)
+  describes scenarios/goals/conditions/perturbations/metrics at a meta
+  level; concrete scenarios subclass or instantiate it.</li>
+<li>
+<h4>192 is the developer's own and stays out of the integration branch until</h4>
+  he says it is in (it removes <code>Match.variable</code>, which #159 and so #239
+  still read).</li>
+</ul>
+<h5>Cross-plan prerequisites relevant to this wave</h5>
+<p>Decided 2026-09-03: work another plan already owns stays there; the item
+here that needs it carries a blocker naming it.</p>
+<ul>
+<li><strong>knowledge-directed-perception.</strong> Everything built in its <code>surfaces</code>,
+  <code>request-language</code> and <code>method-selection</code> tracks (#202, #205, #216, #221,
+  #222, #225, #227, #229, #231, #232, #236, #238, #239's knowledge-half
+  commit) is consumed by <code>integrated-simulation-pipeline</code>; this wave does not
+  wait for those pull requests to land. Its three demo items are satisfied
+  by <code>tracy-demo-takes-the-integrated-branch</code> and the robot experiments in
+  <code>icra-evidence</code>.</li>
+<li><strong>montessori-eql-stack.</strong> #244 and #256 are merged into the integrated
+  pipeline; #169 is not (#256 was split out of it so this programme need not
+  take the cramera console). What is left of #169's debt here is the
+  unbounded <code>SimulationTimePacer.sleep()</code> (see Standing hazards below), and
+  that plan owns it. The console stack above #169 is not needed for any
+  number in the paper.</li>
+<li><strong>eql-verbalization.</strong> #33's reviewed scene wordings are what
+  <code>working-memory-verbalised</code> (in <code>icra-mechanism</code>) renders with; that item
+  does not wait for #33 to land.</li>
+<li><strong>Not on the deadline path:</strong> eql-performatives, eql-existential-semantics,
+  match-query-ergonomics (#192 is the developer's own), the rdr-* plans, and
+  every tooling plan.</li>
+</ul>
+<h5>The budget: 2026-09-15</h5>
+<p>Twelve days from 2026-09-03, across all three successor plans' work (the
+original three-lane budget table is unchanged by the split — see
+<code>icra-mechanism</code>/<code>icra-evidence</code> roadmaps for the lane assignments that use
+it). This wave's state-reached milestones: <strong>Thu 3/Fri 4 — the simulated
+demo runs the whole pipeline and records episodes</strong>; <strong>Sat 5/Sun 6 —
+go/no-go Sunday evening: routing and physics verification (in
+<code>icra-mechanism</code>) answer a mixed query in simulation</strong>, which needs this
+wave's pipeline and episode recording in place first.</p>
+<p>If the go/no-go fails, the memo's fallback holds: submit with Experiments A
+and C and drop B's injection half, keeping the decomposition numbers from</p>
+<h4>238. <strong>Cut order:</strong> lighting → the optional no-narrowing ablation → a</h4>
+<p>second setup → fewer random scenes → B's injection half. <strong>Never cut:</strong> the
+temporal scenarios, the perturbation conditions, the hybrid VLM baseline,
+the failure-prediction metric, the determinism runs.</p>
+<h5>Memo corrections this wave carries</h5>
+<ul>
+<li>There is no in-hand event and no Flanagan model. In-hand is a twin
+  predicate; the pick-up detector is an EQL-rule detector over contact and
+  support.</li>
+<li>The board mesh is 0.865 times the real board (#236). Ground truth from the
+  twin and the no-hole-shape-knowledge condition (<code>icra-mechanism</code>) both
+  need the scale in the twin first.</li>
+<li>Only one of the six recordings carries robot state. Every future take
+  records the transform tree and joint states with the camera —
+  <code>tracy-demo-takes-the-integrated-branch</code>'s standing instruction.</li>
+<li>The continuous perception node cannot hold the frame budget once the hole
+  layout fit runs (0.56 s against 0.5 s); <code>snapshot-working-memory</code> (in
+  <code>icra-mechanism</code>) is what makes that irrelevant.</li>
+</ul>
+<h5>Standing hazards</h5>
+<ul>
+<li><strong><code>SimulationTimePacer.sleep()</code> is unbounded.</strong> A stalled simulation blocks
+  a tick forever; no test reaches it, only the demo scripts set
+  <code>context.simulation_clock</code>. What a stalled simulation should do is the
+  developer's call, not decided here. Inherited by
+  <code>integrated-simulation-pipeline</code> from the #169/montessori-eql-stack
+  lineage.</li>
+<li><strong>The <code>Footprint</code> collision.</strong> <code>experiments/montessori/perception/footprint.py</code>
+  and <code>semantic_digital_twin...graph_of_convex_sets.plotting.py</code> both declare
+  a <code>Footprint</code>; the moment ORMatic walks a package holding both,
+  it emits two <code>FootprintDAO</code> classes and SQLAlchemy refuses the mapping.
+  <code>knowledge-directed-perception</code>'s <code>montessori-classes-in-the-orm</code> (#223)
+  renamed the perception one to <code>RectifiedFootprint</code>; <code>integrated-simulation-pipeline</code>
+  merges #223 rather than writing a second rename, and did so after the
+  perception tips so the rename lands over them.</li>
+<li><strong>#231 and #223 both fork before #236 rewrote <code>BoardDetector</code>.</strong> Neither is
+  a text merge onto <code>integrated-simulation-pipeline</code> — each has to be
+  re-applied onto a detector rewritten since. #231 in particular is a design
+  synthesis (<code>EdgeFitDetector</code>, <code>ColorBlobDetector</code>, <code>detector_rules.detectors_for</code>)
+  against the perception tip's own expectation-driven, colour-narrowed
+  search — ~200 conflicted lines over 10 hunks, left for a deliberate pass
+  rather than resolved under the deadline. The #239 cherry-pick (<code>3a493be9</code>)
+  waits on it.</li>
+<li><strong>Two databases, one host, until a rename catches up.</strong> <code>run-results-recorded-into-sql</code>
+  renamed its database from <code>franka_montessori_sorting_results</code> to
+  <code>montessori_sorting_results</code> in review (2026-09-05, developer override);
+  until #256 takes the same rename, its Franka demo and the Tracy demo
+  record to different databases on the same host.</li>
+<li><strong>Nothing on these branches runs in a session container.</strong> <code>random_events</code>
+  needs a C++ library that will not build there, and
+  <code>scripts/regenerate_all_orm.py</code>/<code>test/experiments_test</code>/<code>test/segmind_test</code>
+  need ROS (<code>geometry_msgs</code>, <code>rclpy</code>, giskardpy's <code>DebugExpressionPublisher</code>).
+  CI runs both inside the ROS image (<code>ghcr.io/&lt;repo&gt;:jazzy</code>), so every item
+  touching the generated ORM interface or segmind is CI-verified, not
+  session-verified — true for every item in every successor plan that
+  touches those modules.</li>
+</ul>
+<h5>Open questions for the developer</h5>
+<ul>
+<li>Whether <code>knowledge-directed-perception</code>'s <code>expectations-from-events</code> is
+  still needed once <code>snapshot-working-memory</code> and <code>failure-taxonomy-and-typing</code>
+  (both <code>icra-mechanism</code>) exist, or whether the violated-expectation report
+  folds into failure typing there.</li>
+</ul>
+<h5>What each branch merged, and what it cost</h5>
+<h6><code>integrated-simulation-pipeline</code> (#265) and <code>segmind-detectors-on-the-demo-branch</code></h6>
+<p>The foot item's merge order is nine branches deep: #244, #256, #262
+(3 add/add conflicts on the recording trio), #229 (<code>reasoning/predicates.py</code>),</p>
+<h4>238 (<code>world.py</code>/<code>semantics.py</code>/<code>hole_geometry.py</code>), #236</h4>
+<p>(<code>perception/pipeline.py</code>, <code>perception/recorded_setup.py</code>), #231 (four
+perception modules, <code>geometry.py</code>), #223 (the <code>RectifiedFootprint</code> rename),
+and #239's one measured-colours commit (<code>3a493be9</code>) cherry-picked.</p>
+<p>Two meetings the item's notes did not predict, both settled: the perception
+lineage and #256 each build their own <code>experiments/src/experiments/montessori/</code>
+(#202's 43 files vs #256's 10) — the perception copies survive, and the cost
+is one module, <code>sorting_progress.py</code>, which reads four members only #256's
+losing copy defined and was removed rather than kept alive. And
+<code>reasoning/predicates.py</code> is rewritten by three branches, not two (#244,</p>
+<h4>229, and the perception lineage's own +1107/-257) — #238's copy took the</h4>
+<p>structure, #244's numeric readings were re-applied over it, and #244's fast-path
+tests (which assert no symbolic construction) still pass.</p>
+<p>The done-criterion moved: neither demo entry point (<code>franka_montessori_demo</code>
+on #169, <code>montessori_demo.py</code> on <code>tracy_icra</code>) lands on this branch, so it
+writes its own headless integration test over the merged world, event
+monitor and predicates; the demo proof belongs to
+<code>tracy-demo-takes-the-integrated-branch</code>.</p>
+<p><code>segmind-detectors-on-the-demo-branch</code> (<code>done</code>) merged <code>tracy_icra_segmind</code>
+into <code>tracy_icra</code> as <code>a80e86926</code> (a real merge, not a fast-forward — 472
+commits apart at merge base <code>e034fa791</code>): three conflicts, all predicted and
+resolved (<code>requirements.txt</code> stayed deleted, <code>flask</code> moved to
+<code>pyproject.toml</code>; <code>segmind/datastructures/events.py</code> took the incoming
+content over <code>tracy_icra</code>'s <code>BoundingBox</code>→<code>VolumetricBoundingBox</code> rename;
+<code>pickup_demo_real.py</code> kept both sides). One hardware-tuned constant
+(<code>GRASP_HEIGHT_OFFSET</code>, 0.04) was kept over the incoming 0.032 — flagged as
+the one number in the merge that came from a run rather than either
+branch's text, worth revisiting if 0.04 was tuned against the old
+spawn-hovering geometry specifically.</p>
+<h6>The convergence pass, 2026-09-06</h6>
+<p>Every in-flight branch of the two knowledge-directed plans, the ripple-down rules
+stack and match-query-ergonomics was merged onto #265 in one pass, so the ICRA
+experiments run on one tree. Seven merges, each at its own tip and each into #265 —
+never sideways into each other, which would have paid the same conflict set twice:</p>
+<ol>
+<li><strong>#223</strong> <code>montessori-classes-in-the-orm</code>. Its substance was already here
+   (<code>montessori/__init__.py</code>, the <code>RectifiedFootprint</code> rename); what it adds is
+   <code>test_montessori_orm.py</code>. Both conflicts resolved to this branch's newer
+   detector code.</li>
+<li><strong>#270</strong> <code>competing-explanations</code>, carrying #225, #232 and #236. <code>detect()</code> keeps
+   the colour it is narrowed by and gains the board outlines and the comparison
+   thresholds.</li>
+<li><strong>#257</strong> <code>expectations-from-events</code>, carrying #227, #238, #255 and #246.
+   <code>reasoning/predicates.py</code> took #257's already-settled resolution.</li>
+<li><strong>#229</strong> <code>predicates-answer-whether-they-hold</code>. A pure ancestry merge: it changed
+   no file, because this branch already carried the predicate classes at an older
+   tip and #229's only newer commits are merges of <code>main</code>.</li>
+<li><strong>#275</strong> <code>a-look-is-described-by-a-match</code>, carrying #231, #239, #266 and #259.</li>
+<li><strong><code>D-deco</code> (#77)</strong>, the whole ripple-down rules stack. A clean text merge.</li>
+<li><strong>#192, #196, #248</strong>, the whole match-query-ergonomics set (#254 arriving with
+   #192).</li>
+</ol>
+<p>Both standing exclusions this item's notes carried are reversed at the developer's
+direction: the whole RDR stack is in rather than #239's one knowledge-half commit,
+and #192 is in.</p>
+<p><strong>What the merge cost, and what it removed.</strong> #275 and the #227/#236/#238/#257
+lineage are two rewrites of the same pipeline, so most of the work was putting each
+capability where the other design says it belongs. The look's own knowledge —
+the request narrowing, the expectations, the imagined world, the table the board
+hides — moved onto <code>SceneToSearch</code>, and <code>FindThePieces</code> reads it there instead of
+the pipeline doing it inline. A detector is handed one <code>SurfacePass</code> rather than
+nine positional arguments, which is what let the two designs' parameter lists meet.</p>
+<p>Duplication the text merge would have left standing, all of it removed here:
+<code>SUPPORTING_SURFACE_ATTRIBUTE_NAME</code> (superseded by #227's <code>narrowing_relations</code>);
+<code>VIEW_DIRECTION_EPS</code> defined twice in <code>predicates.py</code>, and
+<code>_supported_stands_below_supporting</code> re-deriving what <code>unit_axis_of</code> computes;
+<code>_outlines_wearing</code> identical on both piece detectors, now <code>SurfaceColors</code>'s;
+<code>piece_height = 0.03</code> on each detector, now <code>LOOSE_PIECE_HEIGHT</code> on <code>PieceDetector</code>;
+<code>workspace_over</code> with two definitions under one name, the second silently shadowing
+the first; and <code>CanBehaveLikeAVariable</code> declared twice in <code>mapped_variable.py</code> after</p>
+<h4>248 — a conflict resolved wrong on the first pass and amended.</h4>
+<p><strong>The collision git could not flag, twice.</strong> The known one was #192 removing
+<code>Match.variable</code>, which #159 and therefore #239, #266 and #275 read. Because #192
+also gives <code>Match</code> symbolic attribute delegation, a stale read does not raise — it
+builds an <code>Attribute</code> expression for a field called "variable". They were found by
+making <code>Match._is_own_name_</code> refuse the retired spellings temporarily, running the
+suites, and migrating every hit; the guard was then removed, since #192 deliberately
+leaves every public name to the matched class.</p>
+<p>The second was not predicted: #257 fixed the grid a sweep walks — laid out from the
+centre outwards, so widening a belief's reach only <em>adds</em> placements — while the</p>
+<h4>225/#232/#236 lineage extracted the whole sweep into <code>OutlineFitter</code>, carrying the</h4>
+<p>old edge-anchored grid with it. Merged textually, <code>offsets_within</code> would have
+arrived unused beside the phase bug it was written to fix, with #257's four tests
+still passing against the wrong code. It now lives in <code>outline_fit.py</code> where the
+sweep does.</p>
+<p><strong>What was measured.</strong> The six real captures, run through the pipeline before and
+after with the same script: #265's tip missed 7 pieces and invented 3; the converged
+tree misses 6 and invents 1, and finds the board on all six. No capture got worse.</p>
+<p><strong>Left for the developer.</strong> After the merge, <code>EdgeFitDetector</code> and
+<code>ColorBlobDetector</code> differ only in how tightly a blob's place is believed before
+the outline is fitted — a radius and a turn — which is a parameter rather than a
+subclass. Collapsing them into one detector the rules configure two ways is a design
+call, not a merge resolution, so it was not taken here.</p>
+<h6><code>scenario-domain-model</code> (#261)</h6>
+<p>Generalises <code>BenchmarkScenario</code>/<code>ScenarioRunner</code> and
+<code>ExperimentResult</code>/<code>ExperimentsTable</code>/<code>TypstRenderer</code> into one dataclass
+model (<code>Scenario</code>, <code>Goal</code>, <code>Condition</code>, <code>Perturbation</code>, <code>Metric</code>, <code>Report</code>,
+<code>ScenarioRunner</code>) in <code>experiments/src/experiments/scenarios/</code>. Conditions and
+perturbations belong to a run, not a scenario, so <code>icra-mechanism</code>'s
+<code>knowledge-ablations</code>/<code>perturbations</code> add members rather than a second
+scenario each. The trial log is structured objects, mapped later by
+<code>episodes-recorded-through-ormatic</code>, never parsed back out of text.</p>
+<p>First review round (2026-09-05, four threads, all four taken): deleted the
+bespoke <code>ExecutionKind</code> for coraplex's existing <code>ExecutionType</code>; bound both
+generic type parameters to the twin (<code>World</code>, <code>AbstractRobot</code>), which cost
+<code>control_loop_experiments</code>' <code>BenchmarkScenario</code> a re-typed relationship to
+<code>GiskardTester</code> and re-typed <code>ScenarioRunner</code> from
+<code>Generic[WorldType, RobotType]</code> to <code>Generic[ScenarioType, WorldType]</code>; moved
+the trial's clock onto <code>TrialLog.elapsed_seconds</code>. The container can run
+these tests after stubbing <code>giskardpy_bullet_bindings</code> and ROS's <code>xacro</code> as
+two empty modules on <code>PYTHONPATH</code> — worth knowing for every later item of
+this track, since an earlier note here said the opposite.</p>
+<p>Caveat for review: the migrated control-loop tests are <code>@pytest.mark.slow</code>
+and excluded from default CI, so CI proves the migration imports and
+aggregates, not that it still measures a motion — wants one manual run.</p>
+<h6><code>run-results-recorded-into-sql</code> (#262)</h6>
+<p>Extracted ~700 of #256's 7,124 lines: the recording trio
+(<code>results_database.py</code>, <code>results_recording.py</code>, <code>sorting_results.py</code>) and
+the three declarations that let ORMatic hold a segmind event at all. Cut off
+<code>main</code>, additive only — <code>experiments/src/experiments/montessori/</code> exists on
+neither <code>main</code> nor #244. Dangling docstring references (a nonexistent
+<code>README.md</code>, a nonexistent demo script path) were repointed at what actually
+exists on <code>main</code>. The database name was renamed
+<code>franka_montessori_sorting_results</code> → <code>montessori_sorting_results</code> in review
+(see Standing hazards above for the cost). Verified: <code>test_dependency_declarations.py</code>
+and the three new test modules, all CI-only per the standing ROS limitation.</p>
+<h6><code>episodes-recorded-through-ormatic</code> (#271)</h6>
+<p>Based on #262 (replaces its <code>sorting_results.py</code>, keeps <code>ResultsDatabase</code>),
+merging #261 (records the trials its runner produces — #261's own
+<code>generate_orm.py</code> comment names this as the deferred decision). New package
+<code>experiments/src/experiments/episodes/</code> (<code>episode.py</code>, <code>recording.py</code>),
+beside <code>experiments/scenarios/</code> rather than inside <code>experiments/montessori/</code>,
+since an episode is recorded by every scenario, not one demo's.</p>
+<p>One <code>Episode</code>, one <code>RecordedTrial</code> per commit (memoised through one
+<code>ToDataAccessObjectState</code> per episode, converting trials one at a time —
+re-converting the whole <code>Episode</code> after each append does not work, since
+<code>to_dao</code> returns a memoised DAO without re-reading collections). <code>FailureType</code>
+is an empty <code>StrEnum</code> base for <code>icra-mechanism</code>'s <code>failure-taxonomy-and-typing</code>
+to fill in — naming the four types here would be inventing that item's
+taxonomy. <code>FailureResolution</code> does get its three members (retried, changed,
+abandoned) because Experiment D's "how was this resolved last time" question
+is answered from nothing else. Backends and conditions/perturbations are
+recorded by name, not by enum member, since <code>backends-declare-their-capabilities</code>
+(<code>icra-mechanism</code>) makes backends a class family rather than a fixed
+enumeration.</p>
+<p>Replaces <code>sorting_results.py</code> and its test; <code>ShapeInsertionExperience</code> exists
+on no ancestor of this branch, so there is nothing here to replace for it.</p>
+<h6>Why <code>episode-artifacts-recorded</code> is its own item, and why Experiment D exists</h6>
+<p>Added 2026-09-04, when the developer noticed the plan tracked no
+long-term-memory <em>experiment</em> — the machinery
+(<code>episodes-recorded-through-ormatic</code>/<code>episodes-queried-by-eql</code>) existed but
+produced no number, since Experiments A–C only ask about the current scene.
+<code>episode-artifacts-recorded</code> stayed separate from
+<code>episodes-recorded-through-ormatic</code> rather than folding in, because the
+artifacts need <code>simulated-camera-feeds-perception</code> and folding would put
+this track's foot item — four other items wait on it — behind a later one. A
+scope check found no in-flight branch sharing this work's paths, and a
+duplicate-intent scan cleared #165's <code>DemoRecording</code>/<code>RecordedFrame</code> (a
+<code>cramera</code> console replay buffer, not a per-episode video on disk).</p>
+<p>Experiment D itself (its own experiment, simulation-only, questioning the
+whole recorded corpus rather than retrieval) is <code>icra-evidence</code>'s decision;
+the reasoning is recorded in that plan's roadmap since the items it produced
+(<code>cross-episode-question-set-and-ground-truth</code>, <code>experiment-d-in-simulation</code>)
+live there. This wave's contribution is only that <code>episode-artifacts-recorded</code>
+exists and what it must supply: video (from <code>simulated-camera-feeds-perception</code>'s
+<code>MujocoCamera</code> frames), the run's simulation data and world, and a
+question-and-answer transcript, addressed by the episode's identifier rather
+than held in its row.</p>
+<h6><code>episodes-queried-by-eql</code> (#278), as planned 2026-09-06</h6>
+<p>Cut off #271 rather than off <code>main</code>: <code>Episode</code>/<code>RecordedTrial</code> are what there is
+to query, and they exist on no other ancestor. Three deep, then — #278 on #271
+on #262 on <code>main</code> — which is what the readiness rule allows (#271 is open and
+not a draft) rather than what it prefers.</p>
+<p>New module <code>experiments/episodes/long_term_memory.py</code>, holding a
+<code>LongTermMemory</code> over the <code>ResultsDatabase</code> #262 introduced:</p>
+<ul>
+<li><code>answer(query)</code> runs an EQL query through
+  <code>krrood.ormatic.eql_interface.eql_to_sql</code> and converts every row it returns
+  into its domain object. Returning DAOs would make the SQL backend answer in a
+  vocabulary no other backend uses, and it is the returning of domain objects
+  that makes SQL one of the paper's four backends rather than a store the
+  experiments happen to read.</li>
+<li><code>recall_trials(episode_identifier)</code> is the one question a report asks.</li>
+<li><code>report_on(episode_identifier, metrics)</code> rebuilds a <code>Report</code> from those
+  trials.</li>
+</ul>
+<p>Four decisions taken while planning it:</p>
+<ul>
+<li><strong>One <code>FromDataAccessObjectState</code> per answer</strong>, so the trials of one episode
+  come back pointing at one <code>Episode</code> object rather than a copy each. The
+  read-side counterpart of the single <code>ToDataAccessObjectState</code> <code>RecordsTrialsToADatabase</code>
+  already shares across a run's trials, and for the same reason.</li>
+<li><strong>A session per question, opened from the <code>ResultsDatabase</code> object it was
+  given.</strong> <code>open_recording</code> already records through the object it is handed so
+  that a reader sees the rows a run is writing — only true of a shared
+  connection for an in-memory database, which is what a run falls back to.
+  Reading is held to the same rule, and <code>ResultsDatabase</code> caches its
+  sessionmaker, so the per-question cost is one session rather than one schema
+  build.</li>
+<li><strong>A <code>MeasuredTrial</code> protocol in <code>scenarios/report.py</code></strong>, declaring what a
+  metric actually reads off a trial (<code>outcome</code>, <code>duration</code>), so <code>Metric</code>
+  measures a live <code>Trial</code> and a <code>RecordedTrial</code> read back out of the database
+  alike. <code>RecordedTrial</code> is deliberately kept apart from <code>Trial</code> — one is what a
+  run holds while it runs, carrying live conditions and perturbations; the other
+  is what goes into the database — so what they share is a protocol rather than
+  a base class. Without it, every metric written from here on is trusted to have
+  been given one of two unrelated classes.</li>
+<li><strong>The report is rebuilt by long-term memory, not by <code>Report</code> itself.</strong>
+  <code>experiments/scenarios/</code> describes how an experiment runs and knows nothing
+  about a database; <code>generate_orm.py</code> ignores that package wholesale on exactly
+  those grounds. <code>long_term_memory</code> joins <code>recording</code> in that ignore list for
+  the same reason <code>recording</code> is there: it holds a database, which is not a
+  record.</li>
+</ul>
+<p>Tests record episodes through #271's own recorder into a SQLite file, then ask
+for them back — the same objects, one shared episode, and a report whose metric
+summaries and scenario name equal the ones the run's own report carried. The
+rendered figure is deliberately not compared as well: <code>render_figure</code> is a pure
+function of exactly those summaries and <code>test_scenarios.py</code> already pins it, so
+a second assertion would fail only when the first already had. Queries are
+kept to the shapes <code>test/krrood_test/test_ormatic/test_eql.py</code> already proves:
+single-table column filters and many-to-one joins (<code>trial.episode.identifier</code>).
+The to-many collections an episode holds — ticks, queries, insertion attempts —
+are reached through association tables, and no test in this repository proves
+EQL translates a join across one; nothing here depends on that, and finding out
+belongs to whichever item first needs it. CI-only, per the standing ROS/<code>random_events</code>
+limitation.</p></div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="wave" id="wave-foundation">
+        <div class="wave-eyebrow">One pipeline every scenario runs on</div>
+        <p class="wave-description">The integrated simulation pipeline, the scenario domain model and the episode recording. Everything later stacks on these three, and all three can start today in parallel.</p>
+        <section class="track">
+          <h3 class="track-title">The integrated pipeline</h3>
+          <div class="item-list">
+                <article id="item-integrated-simulation-pipeline" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">One branch on which the simulated demo runs perception, monitor, predicates and events together</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge board-chip chip-negative" title="Latest checks on the head commit: failing">checks failing</span>
+              <span class="badge board-chip chip-negative" title="67664 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+66170 −1494</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">integrated-simulation-pipeline</span>
+            <span class="mono branch">claude/icra-experiments-simulation-pipeline-w4ep7n</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/265" target="_blank" rel="noopener">#265</a>
+            <a class="session-link" href="https://claude.ai/code/session_01G5fPjf58191jHuL1dvrKNv" target="_blank" rel="noopener">session ↗</a>
+            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/265" target="_blank" rel="noopener">↗ Review</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve icra-foundation integrated-simulation-pipeline" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a grasped shape behind Context.update_world_model_attachment, and the montessori world and semantics it monitors - #256 imports no cramera at all), the recording half of #256 as its own branch off main (run-results-recorded-into-sql), the predicate classes (#229), the perception stack tip (#238, which carries #221, #222 and #227) and the hole layout fit (#236, which carries #225 and #232), the detector choice by rule (#231, 13 commits, no rule-engine dependency) and #239 whole. Both standing exclusions this item&#39;s notes used to carry are reversed at the developer&#39;s direction (2026-09-06): the whole ripple-down rules stack is in, taken at its tip D-deco (#77), not the one knowledge-half commit of #239; and the whole match-query-ergonomics set is in, #192 included. Resolve the known meetings once and record them in roadmap.md: #223&#39;s RectifiedFootprint rename, #231&#39;s EdgeFitDetector rename, #244 and #229 both editing reasoning/predicates.py and geometry.py. Inherits one piece of open debt from that stack, which is prerequisite work: SimulationTimePacer.sleep has no bound. The demo entry point stays in #169, since franka_montessori_demo.py is bound to cramera through SortingRunControl, so the headless demo this item is done by is tracy_icra&#39;s own montessori_demo.py rather than that one. Done when franka_montessori_demo and the Tracy simulated demo both sort the board headless with the event monitor ticking and every test module of the merged packages collected and green in CI. #192 removes Match.variable, which #159 and therefore #239, #266 and #275 read; the branches merge textually clean and the reads are migrated to the underscore-sandwich API in a commit of their own, so the migration reads separately from the merge.</div>
+          </details>
+          <div class="blockers">
+            <div class="blocker">▸ Cross-plan: this item merges montessori-eql-stack&#39;s montessori_monitor_and_recording (#256) rather than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was split out of #169 so this plan need not take the cramera console with the monitor. As of 2026-09-03 it takes only the monitor half of #256: the recording half is being cut off main as its own item, run-results-recorded-into-sql, which this item merges instead. What is left of that debt here is one item: SimulationTimePacer.sleep() waits on the simulation clock with no bound, so a stalled simulation blocks a tick forever. No test reaches it - only the demo scripts set context.simulation_clock - but it is a real hang, and what a stalled simulation should do is the developer&#39;s call. The three coraplex failures and the hanging Tracy demo this blocker used to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on #169&#39;s c8bf6f05.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-simulated-camera-feeds-perception" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">A MuJoCo camera feeds the perception pipeline the same frames the real camera does</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">simulated-camera-feeds-perception</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">What makes simulation-first testing honest for perception. MujocoCamera renders colour and depth; wrap them as the RgbdFrame the pipeline reads, with intrinsics and camera pose taken from the twin, so MontessoriPerceptionBackend answers a look in simulation exactly as it does off a capture. The six real captures remain the regression set for detection; this item&#39;s tests assert that a simulated scene with the board and four pieces reports every piece once with the right category. Stated colours and finishes on the simulated objects come from the values #239 measured off the real ones.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="One branch on which the simulated demo runs perception, monitor, predicates and events together (not ready yet — this item is blocked on it)">integrated-simulation-pipeline</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-tracy-demo-takes-the-integrated-branch" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">tracy_icra takes the integrated branch and the real robot runs it</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">tracy-demo-takes-the-integrated-branch</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The bridge to the robot, and the one item on this plan that needs the robot before any experiment does. Merge the integrated branch into tracy_icra, run the demo on the UR10 with the live camera, and keep a capture of the run. This is knowledge-directed-perception&#39;s demo-runs-on-grounded-perception in that plan&#39;s words; it is tracked here because the branch it runs is this plan&#39;s. From then on every later merge into tracy_icra is a merge of the integrated branch, never of individual stacks. Record the transform tree and joint states with the camera in every take from now on; five of the six existing recordings hold no robot state and cannot supply a history.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip chip-unmet" title="One branch on which the simulated demo runs perception, monitor, predicates and events together (not ready yet — this item is blocked on it)">integrated-simulation-pipeline</span>
+
+            <span class="chip chip-unmet" title="A MuJoCo camera feeds the perception pipeline the same frames the real camera does (not ready yet — this item is blocked on it)">simulated-camera-feeds-perception</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-segmind-detectors-on-the-demo-branch" class="item status-done" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The demo branch takes its own segmind detectors, grasp events and gripper feedback</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-done">Done</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">segmind-detectors-on-the-demo-branch</span>
+            <span class="mono branch">tracy_icra</span>
+            <span class="muted">no pull request yet</span>
+            <a class="session-link" href="https://claude.ai/code/session_016LPo74ksuCPpkqgpvpz7eY" target="_blank" rel="noopener">session ↗</a>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Merge tracy_icra_segmind into tracy_icra. Not a fast-forward: tracy_icra has moved 20-odd commits past their merge base e034fa791, taking the knowledge-directed-perception work with it, so this is a real merge. Three conflicts, all identified 2026-09-03. experiments/requirements.txt was deleted on tracy_icra (main&#39;s convention is inline pyproject dependencies, and test_dependency_declarations tests it) and gained flask on tracy_icra_segmind, so the resolution is to keep the file deleted and declare flask in experiments/pyproject.toml. segmind/datastructures/events.py was changed on both sides (+44/-21 arriving through tracy_icra&#39;s perception merges, +104/-24 here). And tracy_experiments/pickup/pickup_demo_real.py was changed on both sides. What the branch brings: grasp_detector_nodes.py, the gripper-feedback and event- dashboard modules, its own background threaded event_monitoring.py for TracyMontessoriWorld, and a much larger detector test suite.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Scenarios as data</h3>
+          <div class="item-list">
+                <article id="item-scenario-domain-model" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1444 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1398 −46</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">scenario-domain-model</span>
+            <span class="mono branch">claude/icra-experiments-scenario-domain-n7zwpr</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/261" target="_blank" rel="noopener">#261</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Y2R5PzHHiVS7EvnAZ1J2yc" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve icra-foundation scenario-domain-model" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The meta level the developer asked for: a Scenario names how to build its world and which robot and execution kind (simulated or real) it runs on; a Goal names what counts as success; a Condition names one knowledge source switched on or off; a Perturbation names a change applied to the world at a step; a Metric names one number read off a finished Trial; a Report gathers metrics over trials with confidence intervals. A ScenarioRunner executes trials, writes structured logs and renders the report. Generalise what exists rather than adding a third shape: control_loop_experiments.scenarios already has BenchmarkScenario and ScenarioRunner, and experiment_definitions has ExperimentResult, ExperimentsTable and TypstRenderer; the new model subsumes both and the old ones migrate onto it. Concrete scenarios subclass or instantiate these, never re-describe them. Fully unit-tested against a trivial scenario that needs no simulator, so the model&#39;s tests run everywhere.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-montessori-scenarios" class="item status-not_started" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">The memo&#39;s scenes and scripted scenarios as Scenario instances that run in simulation</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">montessori-scenarios</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Random layouts with all four pieces, partial scenes with two or three, near-ambiguous layouts with the cube and cylinder aligned in camera depth, a lighting change (a MujocoLight edit in simulation), and the four scripted temporal scenarios: static, robot pick-and-place, an external body pushing a piece while the robot is idle, and a piece in the gripper at query time. Each is a Scenario with a seeded layout so a run is reproducible, and each has a test that builds it headless and asserts its own precondition (the ambiguous layout really is aligned in depth, the in-gripper scenario really holds the piece).</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports">scenario-domain-model</span>
+
+            <span class="chip chip-unmet" title="One branch on which the simulated demo runs perception, monitor, predicates and events together (not ready yet — this item is blocked on it)">integrated-simulation-pipeline</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+        <section class="track">
+          <h3 class="track-title">Episodes recorded and queried</h3>
+          <div class="item-list">
+                <article id="item-run-results-recorded-into-sql" class="item status-in_progress" style="--indent-level: 0; --indent-level-hidden-done: 0;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Where a run records its results, and the plan-and-events schema it records</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="1266 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1264 −2</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">run-results-recorded-into-sql</span>
+            <span class="mono branch">claude/montessori-results-recording-jnrgfy</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/262" target="_blank" rel="noopener">#262</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Hye1f4d5KoNGxtFtWF3XV7" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve icra-foundation run-results-recorded-into-sql" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">Cut the recording half of montessori-eql-stack&#39;s montessori_monitor_and_recording (#256) as a pull request of its own, off main. Three modules and about 700 lines: results_database.py resolves where a run records and reports whether that database can be reached and written to, results_recording.py records best effort so a database problem cannot lose a finished run, and sorting_results.py is the schema itself - a realized coraplex Plan plus the segmind DetectionEvents detected inside it. With them, the three lines that make the recording possible at all: the experiments ORM interface declares segmind, generate_orm imports segmind.orm.ormatic_interface, and experiments/pyproject declares the dependency. Plus experiments/montessori/__init__.py, without which pkgutil skips the directory and the generator is never offered SortingIterationResult. Off main rather than off tracy_icra or #256, and this is what makes it small: experiments/montessori does not exist on main at all, so the branch creates the directory holding only these modules, and nothing it needs is newer than main. The rest of #256 stays where it is - the simulated world, semantics, hole geometry, sorting progress and insertion diagnosis are another demo&#39;s, and its event monitor is one tracy_icra_segmind already has its own of. The Footprint collision is deferred, not avoided: experiments/montessori/perception/footprint.py and semantic_digital_twin...graph_of_convex_sets/plotting.py both declare a Footprint, so the moment this branch&#39;s __init__.py sits over tracy_icra&#39;s perception package the generator emits two FootprintDAO classes and SQLAlchemy refuses the mapping. knowledge-directed-perception&#39;s montessori-classes-in-the-orm (#223) already renames the perception one to RectifiedFootprint; whichever branch first puts the two together takes that rename.</div>
+          </details>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-episodes-recorded-through-ormatic" class="item status-in_progress" style="--indent-level: 1; --indent-level-hidden-done: 1;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Every trial, event, query, answer and failure recorded through ORMatic into SQL</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="2863 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+2385 −478</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">episodes-recorded-through-ormatic</span>
+            <span class="mono branch">claude/icra-experiments-ormatic-episodes-ib9lr3</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/271" target="_blank" rel="noopener">#271</a>
+            <a class="session-link" href="https://claude.ai/code/session_012ouWhruGFvn9D5AvPmQNRa" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve icra-foundation episodes-recorded-through-ormatic" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">One Episode model for simulation and the robot: the scenario and condition it ran under, its trials, the segmind events seen per tick, every query asked with its per-predicate backend assignment, answer and latency, every insertion attempt with its outcome, the failure type observed and predicted, and what was done after a failure - retried, changed or abandoned. That last is what answers &#34;how did you resolve this the last time it happened&#34;; nothing else in the record carries it, and it was added on 2026-09-04 when Experiment D was planned. Recorded through ORMatic the way ShapeInsertionExperience and SortingIterationResult already are, and replacing both with the one model rather than standing beside them; ResultsDatabase and results_recording keep deciding where and whether a run records. The runner records as it goes, so a run that dies keeps its finished trials, following batch_runner&#39;s reasoning. Tests record a trivial episode into SQLite and read it back through the generated interface.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports">scenario-domain-model</span>
+
+            <span class="chip" title="Where a run records its results, and the plan-and-events schema it records">run-results-recorded-into-sql</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-episodes-queried-by-eql" class="item status-in_progress" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">Long-term memory answered by EQL through the SQL backend, and reports read from it</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-in_progress">In progress</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
+              <span class="badge board-chip chip-positive" title="Latest checks on the head commit: passing">checks passing</span>
+              <span class="badge board-chip chip-negative" title="435 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+426 −9</span>
+              <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">episodes-queried-by-eql</span>
+            <span class="mono branch">claude/plan-item-kickoff-eql-episodes-hjel80</span>
+            <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/278" target="_blank" rel="noopener">#278</a>
+            <a class="session-link" href="https://claude.ai/code/session_01Kh8FEgYc4B7d1x3LXDZRvZ" target="_blank" rel="noopener">session ↗</a>
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Resume">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-resolve icra-foundation episodes-queried-by-eql" onclick="planDashboardCopyActionCommand(this)">▸ Resume</button>
+</span>
+
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The SQL backend is one of the paper&#39;s four: the same query language over recorded episodes returns domain objects, so the temporal bucket can be answered from long-term memory (&#34;which pieces did you pick up in the last run&#34;, &#34;how often did the square hole fail&#34;) and the Report of every experiment is computed from the database rather than from in-process results. Tests assert that a query over a recorded episode returns the same objects the runner wrote, and that a report regenerated from the database equals the one the runner rendered.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Every trial, event, query, answer and failure recorded through ORMatic into SQL">episodes-recorded-through-ormatic</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+                <article id="item-episode-artifacts-recorded" class="item status-not_started" style="--indent-level: 2; --indent-level-hidden-done: 2;">
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">An episode keeps its video, its simulation data and its question-and-answer transcript beside the database</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-not_started">Not started</span>
+              <span class="badge live-badge live-none">No pull request yet</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">episode-artifacts-recorded</span>
+            <span class="mono branch">None</span>
+            <span class="muted">no pull request yet</span>
+            
+          </div>
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">The rows say what happened; these are what a reader - or a vision-language model - can look at, and without them Experiment D has no baseline to compare against. The video is the frames MujocoCamera already renders for MontessoriPerceptionBackend, written per episode rather than discarded; the simulation data is the run&#39;s own files, the world it built and the plan it realized; the transcript is every question with its answer, which the episode rows already carry per query, rendered as one readable document. Artifacts sit beside the database addressed by the episode&#39;s identifier, so a row references one rather than holding it - the separation ResultsDatabase already draws between where a run records and what it records. Its own item rather than folded into episodes-recorded-through-ormatic because it needs the simulated camera, and folding it would put lane 2&#39;s foot item behind lane 1&#39;s second. Tests record a two-trial episode and read its video, its files and its transcript back from the episode.</div>
+          </details>
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            <span class="chip" title="Every trial, event, query, answer and failure recorded through ORMatic into SQL">episodes-recorded-through-ormatic</span>
+
+            <span class="chip chip-unmet" title="A MuJoCo camera feeds the perception pipeline the same frames the real camera does (not ready yet — this item is blocked on it)">simulated-camera-feeds-perception</span>
+
+          </div>
+        </div>
+      </div>
+    </article>
+
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          <div class="stat"><span class="stat-num">4</span><span class="stat-label">Not started</span></div>
+          <div class="stat"><span class="stat-num">5</span><span class="stat-label">In progress</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Blocked</span></div>
+          <div class="stat"><span class="stat-num">0</span><span class="stat-label">Deferred</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">Done</span></div>
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+      </div>
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+          <div class="next-group next-review">
+            <h4>Ready to review <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+            <ul>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-integrated-simulation-pipeline" data-item-identifier="integrated-simulation-pipeline" onclick="planDashboardHighlightItem(event, this)"><strong>One branch on which the simulated demo runs perception, monitor, predicates and events together</strong><br><span class="next-reason">open draft pull request, ready for your review</span></a>                <a class="next-review-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/265" target="_blank" rel="noopener">Review ↗</a>              </li>
+            </ul>
+          </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
+
+<script>
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("action-button-copied", "action-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("action-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("action-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
+  }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
+</script>
