@@ -61,14 +61,14 @@ class BagReplay:
 
     scenes: List[MontessoriScene] = field(default_factory=list, init=False)
     """
-    What each look found, in the order the looks were taken.
+    What each frame found, in the order the frames were recorded.
     """
 
     def play(self, limit: Optional[int] = None) -> None:
         """
         Read the recording through, detecting on every :attr:`every_nth_frame` frame.
 
-        :param limit: Stop after this many looks, or None to play to the end.
+        :param limit: Stop after this many frames, or None to play to the end.
         """
         windows = (
             None
@@ -77,10 +77,10 @@ class BagReplay:
         )
         intrinsics = self.camera.intrinsics
         reference_frame_T_camera = self.camera.reference_frame_T_camera
-        for index, look in enumerate(self.camera.looks()):
+        for index, images in enumerate(self.camera.images()):
             if index % self.every_nth_frame:
                 continue
-            frame = look.to_frame(intrinsics, reference_frame_T_camera)
+            frame = images.to_frame(intrinsics, reference_frame_T_camera)
             scene = self.pipeline.detect(frame)
             self.scenes.append(scene)
             logger.info(
