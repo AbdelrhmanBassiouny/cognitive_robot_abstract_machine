@@ -51,14 +51,14 @@ Nothing below names a repository or a remote. Resolve both here, once, and use w
 whole run. Do not inspect, guess at, or rename remotes yourself - a remote's name carries no meaning,
 and a wrong guess points every push at the wrong repository.
 
-**a. Make the tooling present rather than assuming it.** The whole pass shells out to the tooling in
-`.claude/stack/` - directly here, and through the copy (c) takes from it afterwards - and a failure
-in a later step lands after an earlier one has already changed pull requests. If
-`ls .claude/stack/maintenance.py` fails, `git fetch` the ref you were told to resolve this document
-from and restore it **into the working tree only**:
+**a. Make the tooling present rather than assuming it.** Every step shells out to
+`bastler/` - directly here, and through the copy (c) takes from it afterwards - and a failure in a
+later step lands after an earlier one has already changed pull requests. If `ls bastler/maintenance.py`
+fails, `git fetch` the ref you were told to resolve this document from and restore it **into the
+working tree only**:
 
 ```bash
-git restore --source=<ref> --worktree -- .claude/stack/
+git restore --source=<ref> --worktree -- bastler/
 ```
 
 Never reach for `git checkout` with a ref and a path here. That form writes the index as well, so on
@@ -67,7 +67,7 @@ branch during a pass is a restack merge, which would commit the tooling into som
 branch and from there into the upstream. `git restore --worktree` leaves them untracked, where
 nothing can pick them up.
 
-Once `.claude/stack/` is on the default branch this is a no-op on a fresh clone. The pass itself no
+Once `bastler/` is on the default branch this is a no-op on a fresh clone. The pass itself no
 longer takes the tooling away: `restack` switches branches in a worktree of its own, so the checkout
 you invoked it from keeps its branch and its files.
 
@@ -76,7 +76,7 @@ you invoked it from keeps its branch and its files.
 1. **What you were given.** `fork=<owner/repo>` and `upstream=<owner/repo>` in this skill's arguments
    are authoritative. Pass them straight through as `--fork` / `--upstream` and never second-guess
    them.
-2. **What the checkout knows.** Run `python .claude/stack/stack.py configuration` (adding `--fork` /
+2. **What the checkout knows.** Run `python -m bastler.stack configuration` (adding `--fork` /
    `--upstream` for anything you were given). It prints one `field<TAB>value` line per setting -
    `fork_remote`, `fork_repository`, `upstream_remote`, `upstream_repository`, `upstream_base`, the
    label names - deciding which remote is which by the repository each URL names. Exit 0 means use
@@ -108,16 +108,23 @@ Any other non-zero exit is a stop-and-report, not something to work around.
 from a copy of the tooling that no branch carries:
 
 ```bash
-python .claude/stack/stack.py pin-tooling
+python -m bastler.stack pin-tooling
 ```
 
 It prints one path: the copy's `stack.py`, in a directory outside this checkout, with
 `maintenance.py` and every module beside it - and, where the tool imports from a sibling
 directory, that sibling copied alongside so the same import resolves inside the copy. **Every command below written as `<pinned>/…` means
 that directory** - substitute the real path in each time you run one, since a shell variable does
-not survive from one command to the next.
+not survive from one command to the next. `stack.py` imports nothing of its own siblings, so
+invoking it there by path is enough on its own; `maintenance.py` imports `bastler.*` absolutely, so
+a command naming it also carries `PYTHONPATH` set to the pinned directory's own parent - the same
+directory that makes `bastler` importable for the checkout's own copy:
 
-Pin rather than keep calling `.claude/stack/`, because that path is tracked content: the copy in the
+```bash
+PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py …
+```
+
+Pin rather than keep calling `bastler/`, because that directory is tracked content: the copy in the
 working tree is whichever version the checked-out branch carries, and the branches of a stack differ
 - several of them are rewriting this very directory. So any branch switch made here, by a step of
 this document or by you resolving something by hand, can put a different tool behind the same path
@@ -144,7 +151,7 @@ below are the mirror image: they have no MCP tool, so they do need curl.
 Export the board first - every step below derives from it, and this one is no exception:
 
 ```bash
-python <pinned>/maintenance.py board --write
+PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py board --write
 ```
 
 Never assemble that file by hand - a fetch that drops a field produces a board that is wrong rather
@@ -238,7 +245,7 @@ should ever carry it.
 Everything mechanical is one command:
 
 ```bash
-python <pinned>/maintenance.py run-report --json --summaries <the document you wrote>
+PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py run-report --json --summaries <the document you wrote>
 ```
 
 It performs the fast-forward, the restack and the promotion, and emits the whole run as one
@@ -303,7 +310,7 @@ The **top** of the finish summary is the table of every upstream create-link sti
 opened - built this run or on an earlier one, since nothing opens one but a person clicking Create:
 
 ```bash
-python <pinned>/maintenance.py pending-promotions
+PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py pending-promotions
 ```
 
 Paste that table as it stands. It is rendered rather than assembled by you, and each row's link is
@@ -331,11 +338,11 @@ when a single step has to be re-run. `<pinned>` is still step 0c's copy; a sessi
 else's run pins its own first, since the path the other run printed is not in front of you:
 
 ```bash
-python <pinned>/maintenance.py board --write   # export the fork's open pull requests
-python <pinned>/maintenance.py fast-forward    # move the fork's base onto the upstream
-python <pinned>/maintenance.py restack         # integrate every moved parent, publish, report
-python <pinned>/maintenance.py promote --summaries <file>  # build and record every upstream link
-python <pinned>/maintenance.py pending-promotions          # the links waiting to be opened, as a table
+PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py board --write   # export the fork's open pull requests
+PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py fast-forward    # move the fork's base onto the upstream
+PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py restack         # integrate every moved parent, publish, report
+PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py promote --summaries <file>  # build and record every upstream link
+PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py pending-promotions          # the links waiting to be opened, as a table
 ```
 
 Each prints what it did and exits with the same statuses as the whole pass. Run `--help` for a
