@@ -34,6 +34,19 @@ constraint #218 already documented).
 - 7 new/updated tests in `test_maintenance.py`; full stack suite green
   (161 passed). PR description updated to match.
 - Manifest/roadmap updated on `claude/personal-notes`; dashboard republished.
+- **Review round 2 (2026-09-06), both threads resolved:**
+  - `RetargetRefusal(IntEnum)` (`CREDENTIAL_REFUSED = 403`,
+    `STACK_MEMBER = 422`) replaces the bare `frozenset({403, 422})` literal
+    the previous round's own fix left as a magic-number lapse.
+  - Researched (not assumed) whether this conflicts with the unlanded
+    `integration-branch` pipeline: no - its candidate exclusion
+    (`BoardExport.is_a_candidate`) lives in the same board-export module
+    this Action's `maintenance.py` already reads through, and ships in the
+    same pull request that starts opening candidates, so there's no
+    landing-order gap. Documented as a comment in `stack-maintenance.yml`.
+  - Replied on both threads (`3943501919`, `3943502121`) and resolved them.
+  - PR description, roadmap and this note updated to match; pushed as
+    `a1409d71`.
 
 **Next:** the developer's own re-review of #280 (still draft, per
 convention) - specifically whether the retarget-attempt design answers the
