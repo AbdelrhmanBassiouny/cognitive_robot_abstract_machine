@@ -372,8 +372,11 @@ Four decisions taken while planning it:
   record.
 
 Tests record episodes through #271's own recorder into a SQLite file, then ask
-for them back — the same objects, one shared episode, and a report whose
-summaries and rendered figure equal the ones the runner produced. Queries are
+for them back — the same objects, one shared episode, and a report whose metric
+summaries and scenario name equal the ones the run's own report carried. The
+rendered figure is deliberately not compared as well: `render_figure` is a pure
+function of exactly those summaries and `test_scenarios.py` already pins it, so
+a second assertion would fail only when the first already had. Queries are
 kept to the shapes `test/krrood_test/test_ormatic/test_eql.py` already proves:
 single-table column filters and many-to-one joins (`trial.episode.identifier`).
 The to-many collections an episode holds — ticks, queries, insertion attempts —
