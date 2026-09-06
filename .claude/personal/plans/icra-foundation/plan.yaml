@@ -127,12 +127,13 @@ items:
 - id: episodes-queried-by-eql
   title: >-
     Long-term memory answered by EQL through the SQL backend, and reports read from it
-  branch: null
-  pull_request_number: null
+  branch: claude/plan-item-kickoff-eql-episodes-hjel80
+  pull_request_number: 278
   track: long-term-memory
   depends_on:
   - episodes-recorded-through-ormatic
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_01Kh8FEgYc4B7d1x3LXDZRvZ
   notes: >-
     The SQL backend is one of the paper's four: the same query language over recorded episodes returns domain objects, so the temporal bucket can be answered from long-term memory ("which pieces did you pick up in the last run", "how often did the square hole fail") and the Report of every experiment is computed from the database rather than from in-process results. Tests assert that a query over a recorded episode returns the same objects the runner wrote, and that a report regenerated from the database equals the one the runner rendered.
 - id: episode-artifacts-recorded

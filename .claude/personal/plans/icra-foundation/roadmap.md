@@ -322,3 +322,63 @@ exists and what it must supply: video (from `simulated-camera-feeds-perception`'
 `MujocoCamera` frames), the run's simulation data and world, and a
 question-and-answer transcript, addressed by the episode's identifier rather
 than held in its row.
+
+### `episodes-queried-by-eql` (#278), as planned 2026-09-06
+
+Cut off #271 rather than off `main`: `Episode`/`RecordedTrial` are what there is
+to query, and they exist on no other ancestor. Three deep, then — #278 on #271
+on #262 on `main` — which is what the readiness rule allows (#271 is open and
+not a draft) rather than what it prefers.
+
+New module `experiments/episodes/long_term_memory.py`, holding a
+`LongTermMemory` over the `ResultsDatabase` #262 introduced:
+
+- `answer(query)` runs an EQL query through
+  `krrood.ormatic.eql_interface.eql_to_sql` and converts every row it returns
+  into its domain object. Returning DAOs would make the SQL backend answer in a
+  vocabulary no other backend uses, and it is the returning of domain objects
+  that makes SQL one of the paper's four backends rather than a store the
+  experiments happen to read.
+- `recall_trials(episode_identifier)` is the one question a report asks.
+- `report_on(episode_identifier, metrics)` rebuilds a `Report` from those
+  trials.
+
+Four decisions taken while planning it:
+
+- **One `FromDataAccessObjectState` per answer**, so the trials of one episode
+  come back pointing at one `Episode` object rather than a copy each. The
+  read-side counterpart of the single `ToDataAccessObjectState` `RecordsTrialsToADatabase`
+  already shares across a run's trials, and for the same reason.
+- **A session per question, opened from the `ResultsDatabase` object it was
+  given.** `open_recording` already records through the object it is handed so
+  that a reader sees the rows a run is writing — only true of a shared
+  connection for an in-memory database, which is what a run falls back to.
+  Reading is held to the same rule, and `ResultsDatabase` caches its
+  sessionmaker, so the per-question cost is one session rather than one schema
+  build.
+- **A `MeasuredTrial` protocol in `scenarios/report.py`**, declaring what a
+  metric actually reads off a trial (`outcome`, `duration`), so `Metric`
+  measures a live `Trial` and a `RecordedTrial` read back out of the database
+  alike. `RecordedTrial` is deliberately kept apart from `Trial` — one is what a
+  run holds while it runs, carrying live conditions and perturbations; the other
+  is what goes into the database — so what they share is a protocol rather than
+  a base class. Without it, every metric written from here on is trusted to have
+  been given one of two unrelated classes.
+- **The report is rebuilt by long-term memory, not by `Report` itself.**
+  `experiments/scenarios/` describes how an experiment runs and knows nothing
+  about a database; `generate_orm.py` ignores that package wholesale on exactly
+  those grounds. `long_term_memory` joins `recording` in that ignore list for
+  the same reason `recording` is there: it holds a database, which is not a
+  record.
+
+Tests record episodes through #271's own recorder into a SQLite file, then ask
+for them back — the same objects, one shared episode, and a report whose
+summaries and rendered figure equal the ones the runner produced. Queries are
+kept to the shapes `test/krrood_test/test_ormatic/test_eql.py` already proves:
+single-table column filters and many-to-one joins (`trial.episode.identifier`).
+The to-many collections an episode holds — ticks, queries, insertion attempts —
+are reached through association tables, and no test in this repository proves
+EQL translates a join across one; nothing here depends on that, and finding out
+belongs to whichever item first needs it. CI-only, per the standing ROS/`random_events`
+limitation.
+
