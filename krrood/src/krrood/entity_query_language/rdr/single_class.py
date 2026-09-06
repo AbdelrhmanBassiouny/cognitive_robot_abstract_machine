@@ -34,7 +34,7 @@ from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVari
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
 from krrood.entity_query_language.factories import add, entity, variable
-from krrood.entity_query_language.query.query import Query
+from krrood.entity_query_language.query.query import Entity, Query
 from krrood.entity_query_language.rdr.backward_inference import (
     BackwardInferenceIndex,
     ConclusionSufficientConditionSets,
@@ -53,6 +53,8 @@ from krrood.entity_query_language.rdr.exceptions import (
     ConditionsNotInsertable,
     ExpertRequired,
     RDRDidNotConvergeError,
+    RulesAlreadyPresent,
+    RulesOverAnotherCase,
 )
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import CaseContext
@@ -259,9 +261,10 @@ class EQLSingleClassRDR:
     # %% fitting one case
 
     @contextmanager
-    def _saved_when_the_fit_ends(self) -> Iterator[None]:
+    def _saved_when_the_rules_change(self) -> Iterator[None]:
         """
-        Persist the RDR once the enclosing fit finishes, whether it returned or raised.
+        Persist the RDR once the enclosing change finishes, whether it returned or
+        raised.
 
         A fit that dies partway has still authored real rules, and this is what keeps
         them: the save runs on the way out either way, and an exception carries on
@@ -295,7 +298,7 @@ class EQLSingleClassRDR:
         :return: The conclusion now associated with ``case``.
         :raises ExpertRequired: When a rule must be inserted but no expert was supplied.
         """
-        with self._saved_when_the_fit_ends():
+        with self._saved_when_the_rules_change():
             return self._fit_case(case, target, expert)
 
     def _fit_case(
@@ -467,6 +470,36 @@ class EQLSingleClassRDR:
         self.corner_cases.record(new_node, context.case_instance)
         self._backward_index.invalidate()
 
+    # %% rules stated outright
+
+    def state_rules(self, rules: Entity) -> Self:
+        """
+        Take a rule tree written outright as this RDR's own.
+
+        Fitting derives a rule from a case, which is what an expert correcting a wrong
+        answer has to offer; an author who already knows the rules would otherwise have
+        to invent a case each one could be derived from. So the tree is written the way
+        any rule tree is -- a condition, its ``add``, and the alternatives and
+        exceptions hanging off it -- and the RDR adopts it. It is the same tree fitting
+        grows: a case a stated rule gets wrong is still corrected by fitting it.
+
+        :param rules: A query over :attr:`case_variable` whose rules conclude on
+            :attr:`conclusion_variable`.
+        :return: This RDR, for chaining.
+        :raises RulesAlreadyPresent: When the RDR already has rules.
+        :raises RulesOverAnotherCase: When the rules range over another variable.
+        """
+        if self.query is not None:
+            raise RulesAlreadyPresent(case_type=self.case_type)
+        if rules.selected_variable is not self.case_variable:
+            raise RulesOverAnotherCase(
+                case_variable=self.case_variable, stated_over=rules.selected_variable
+            )
+        with self._saved_when_the_rules_change():
+            self.query = rules.build()
+            self._backward_index.invalidate()
+        return self
+
     # %% fitting a dataset
 
     def fit(
@@ -494,7 +527,7 @@ class EQLSingleClassRDR:
         """
         paired_targets = targets if targets is not None else [...] * len(cases)
         self.progress_reporter.start(len(cases), ProgressDescription.FITTING)
-        with self._saved_when_the_fit_ends():
+        with self._saved_when_the_rules_change():
             try:
                 if targets is None:
                     for case, target in zip(cases, paired_targets):
