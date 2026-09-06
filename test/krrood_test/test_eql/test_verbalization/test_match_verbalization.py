@@ -65,7 +65,7 @@ def _hierarchical(expression) -> str:
     )
 
 
-# ── Generate vs Find ─────────────────────────────────────────────────────────
+# %% Generate vs Find
 
 
 def test_match_opens_with_generate():
@@ -89,7 +89,7 @@ def test_domain_carrying_match_also_opens_with_generate():
     assert verbalize_expression(search).startswith("Generate")
 
 
-# ── given that: grouped equality conditions ──────────────────────────────────
+# %% given that: grouped equality conditions
 
 
 def test_grouped_attributes_say_respectively():
@@ -143,7 +143,7 @@ def test_over_cap_singles_pronominalise_and_coordinate_with_and():
     )
 
 
-# ── predict: Ellipsis values folded into the header ──────────────────────────
+# %% predict: Ellipsis values folded into the header
 
 
 def test_all_ellipsis_predicts_in_header():
@@ -171,7 +171,7 @@ def test_mixed_concrete_and_ellipsis():
     assert text == ("Generate a Position and predict its y value given that its x is 1")
 
 
-# ── where: free conditions as points ─────────────────────────────────────────
+# %% where: free conditions as points
 
 
 def test_where_conditions_are_their_own_block():
@@ -180,8 +180,7 @@ def test_where_conditions_are_their_own_block():
     *"given that"*.
     """
     match = a(Position)(x=1)
-    match.resolve()
-    match.where(match.variable.y > 2)
+    match.where(match.y > 2)
     text = _hierarchical(match)
     assert text == (
         "Generate a Position\n"
@@ -196,9 +195,8 @@ def test_where_only_match_has_no_given_that_block():
     """
     A match with only ``where`` conditions renders just the *"where"* block.
     """
-    match = a(Position)()
-    match.resolve()
-    match.where(match.variable.x > 0)
+    match = a(Position)
+    match.where(match.x > 0)
     text = _hierarchical(match)
     assert text == "Generate a Position\n  where\n    - its x is greater than 0"
 
@@ -209,14 +207,13 @@ def test_where_folds_a_range_pair_into_one_between_point():
     same conjunction reduction the ``AND`` / restriction assemblers apply, invoked over
     the flat ``where`` list.
     """
-    match = a(Position)()
-    match.resolve()
-    match.where(match.variable.x > 0.0, match.variable.x < 5.0)
+    match = a(Position)
+    match.where(match.x > 0.0, match.x < 5.0)
     text = _hierarchical(match)
     assert text == "Generate a Position\n  where\n    - its x is between 0.0 and 5.0"
 
 
-# ── nested matches: per-sub-object grouping ──────────────────────────────────
+# %% nested matches: per-sub-object grouping
 
 
 def _nested_pose():
@@ -249,8 +246,7 @@ def test_nested_predict_with_where_range_on_sub_object():
     range.
     """
     pose = a(Pose)(position=a(Position)(x=..., y=..., z=...))
-    pose.expression
-    pose.where(pose.variable.position.x > 0.0, pose.variable.position.x < 5.0)
+    pose.where(pose.position.x > 0.0, pose.position.x < 5.0)
     text = _hierarchical(pose)
     assert text == (
         "Generate a Pose\n"
@@ -261,7 +257,7 @@ def test_nested_predict_with_where_range_on_sub_object():
     )
 
 
-# ── leaf-value rendering: None, domains, concrete objects ────────────────────
+# %% leaf-value rendering: None, domains, concrete objects
 
 
 class _Color(enum.Enum):
@@ -315,7 +311,7 @@ def test_concrete_object_reads_as_a_specific_type():
     assert "Position(" not in text  # no repr leak
 
 
-# ── object identity: identifying field qualifies "a specific <Type>" ──────────
+# %% object identity: identifying field qualifies "a specific <Type>"
 
 
 @dataclass
@@ -352,7 +348,7 @@ def test_concrete_object_uses_declared_identifying_attributes():
     )  # declared field wins over 'name'
 
 
-# ── "respectively" grouping: atomic scalars only, capped ─────────────────────
+# %% "respectively" grouping: atomic scalars only, capped
 
 
 @dataclass
