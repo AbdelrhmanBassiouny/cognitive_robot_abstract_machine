@@ -33,6 +33,8 @@ tracks:
 items:
 - id: definition-catalogue
   title: Record what each unlanded branch defines, derived rather than written
+  branch: null
+  pull_request_number: null
   track: catalogue
   depends_on: []
   status: not_started
@@ -57,6 +59,8 @@ items:
     checking #185''s state before starting rather than after.'
 - id: overlap-detector
   title: Report the branch pairs that define the same thing under different names
+  branch: null
+  pull_request_number: null
   track: catalogue
   depends_on:
   - definition-catalogue
@@ -78,6 +82,8 @@ items:
     workflow is still unlanded on `integration`.
 - id: plan-graphs
   title: Draw the pull request graph and the definition graph on the dashboard
+  branch: null
+  pull_request_number: null
   track: visibility
   depends_on:
   - overlap-detector
@@ -98,6 +104,8 @@ items:
     #253 (cross-plan `depends_on`) changes the edge data this graph reads.'
 - id: common-parent
   title: Give a set of branches a new common parent, after costing the move
+  branch: null
+  pull_request_number: null
   track: regrouping
   depends_on:
   - definition-catalogue
@@ -125,6 +133,8 @@ items:
     resetting an approval is a real cost.
 - id: skill-wiring
   title: Query the catalogue before implementing, and give reconcile a command to run
+  branch: null
+  pull_request_number: null
   track: regrouping
   depends_on:
   - overlap-detector
