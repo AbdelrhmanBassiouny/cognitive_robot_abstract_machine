@@ -17,7 +17,7 @@ from maintenance_fast_forward import fast_forward
 from maintenance_git_commands import GitCommandRunner
 from maintenance_github import GitHubRepository
 from maintenance_promotion import clear_spent_promotion_labels, promote
-from maintenance_reparent_notice import notify_reparents
+from maintenance_reparent_notice import resolve_reparents
 from maintenance_report import (
     MaintenanceExitCode,
     MaintenanceReport,
@@ -26,10 +26,11 @@ from maintenance_report import (
     print_board_export,
     print_fast_forward,
     print_promotions,
+    print_reparents,
     print_restack,
 )
 from maintenance_restack_procedure import restack
-from stack import BOARD_PATH, Configuration, Stack, load_stack
+from stack import BOARD_PATH, Configuration, Stack, load_stack, reparents
 
 
 @dataclass(frozen=True)
@@ -290,6 +291,11 @@ class RunReportCommand(MaintenanceCommand):
         """
         stack = maintenance.stack()
         fork = maintenance.fork()
+        # Reparenting runs before anything else moves, the same precedence the
+        # session-driven pass this replaces always gave it: a restack integrates a
+        # branch onto its *current* parent, so a child left on a landed one is
+        # restacked onto a dead end until it is retargeted first.
+        reparent_outcomes = resolve_reparents(reparents(stack), stack, fork)
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
         report = build_report(
             stack,
@@ -297,13 +303,14 @@ class RunReportCommand(MaintenanceCommand):
             restack(stack, maintenance.git, fork),
             promote(stack, fork),
             clear_spent_promotion_labels(stack, fork),
+            reparent_outcomes,
         )
-        notify_reparents(report.reparents, stack, fork)
         BOARD_PATH.unlink(missing_ok=True)
         if arguments.json:
             print(report.as_json())
         else:
             print_fast_forward(fast_forward_report)
+            print_reparents(reparent_outcomes)
             print_restack(report.restacked)
             print_promotions(report.promoted, report.promotion_labels_cleared)
         return exit_code_for(report)

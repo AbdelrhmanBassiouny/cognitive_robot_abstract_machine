@@ -75,7 +75,11 @@ from maintenance_promotion import (
     description_with_promotion_link,
     promote,
 )
-from maintenance_reparent_notice import notify_reparents, reparent_notice
+from maintenance_reparent_notice import (
+    RetargetOutcome,
+    reparent_notice,
+    resolve_reparents,
+)
 from maintenance_report import (
     MaintenanceExitCode,
     MaintenanceReport,
@@ -956,6 +960,23 @@ class RecordedDescription:
 
 
 @dataclass(frozen=True)
+class RecordedRetarget:
+    """
+    One base-branch retarget attempted on a pull request.
+    """
+
+    pull_request_number: int
+    """
+    The pull request retargeted.
+    """
+
+    base: str
+    """
+    The branch it was pointed at.
+    """
+
+
+@dataclass(frozen=True)
 class RecordingPullRequests(ForkPullRequests):
     """
     Stands in for the fork, recording every write instead of making it.
@@ -1002,6 +1023,18 @@ class RecordingPullRequests(ForkPullRequests):
     )
     """
     Every description written, in order.
+    """
+
+    retarget_refusals: frozenset[int] = dataclasses_field(default_factory=frozenset)
+    """
+    Pull request numbers whose retarget this stand-in refuses, as the live API refuses
+    one whose base change is not permitted or whose pull request is a Stack member.
+    Every other number's retarget succeeds.
+    """
+
+    retargets: list[RecordedRetarget] = dataclasses_field(default_factory=list)
+    """
+    Every retarget attempted, in order, whether or not it was refused.
     """
 
     def open_pull_requests(self) -> list[dict]:
@@ -1051,6 +1084,15 @@ class RecordingPullRequests(ForkPullRequests):
         """
         self.description_writes.append(RecordedDescription(number, body))
         self.descriptions[number] = body
+
+    def retarget_base(self, number: int, base: str) -> bool:
+        """
+        :param number: The pull request to retarget.
+        :param base: The branch it must target instead.
+        :return: Whether *number* is not in :attr:`retarget_refusals`.
+        """
+        self.retargets.append(RecordedRetarget(number, base))
+        return number not in self.retarget_refusals
 
 
 @dataclass(frozen=True)
@@ -1249,20 +1291,42 @@ def the_board_with_only_the_child(
     ]
 
 
-def test_a_reparent_is_labelled_and_reported(fork_checkout: ForkCheckout):
+def test_a_reparent_this_credential_may_retarget_is_retargeted_without_notifying(
+    fork_checkout: ForkCheckout,
+):
     """
-    Retargeting a base is the one write this pass cannot perform itself; the branch's
-    owner has to be told, the same treatment a restack conflict already gets.
+    A Claude session's own proxied credential was refused this write, but this pass's
+    is not that credential - it authenticates its own requests directly - so the
+    retarget is attempted rather than assumed refused, and nobody needs telling when
+    GitHub allows it.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    stack = a_stack(fork_checkout, the_board_with_only_the_child())
+    fork = RecordingPullRequests()
+
+    outcomes = resolve_reparents(reparents(stack), stack, fork)
+
+    assert outcomes == (RetargetOutcome(reparents(stack)[0], retargeted=True),)
+    assert fork.retargets == [RecordedRetarget(41, UPSTREAM_BASE)]
+    assert fork.label_writes == []
+    assert fork.comments == []
+
+
+def test_a_refused_reparent_is_labelled_and_reported(fork_checkout: ForkCheckout):
+    """
+    When GitHub does refuse the retarget - a genuinely stricter credential, or a pull
+    request that is a Stack member - the branch's owner has to be told, the same
+    treatment a restack conflict already gets.
     """
     a_landed_parent_and_unreparented_child(fork_checkout)
     board = the_board_with_only_the_child()
     board[0].session = "https://claude.ai/code/session_01ABCdef"
     stack = a_stack(fork_checkout, board)
-    fork = RecordingPullRequests()
+    fork = RecordingPullRequests(retarget_refusals=frozenset({41}))
 
-    notified = notify_reparents(reparents(stack), stack, fork)
+    outcomes = resolve_reparents(reparents(stack), stack, fork)
 
-    assert [reparent.branch for reparent in notified] == ["a-child"]
+    assert outcomes == (RetargetOutcome(reparents(stack)[0], retargeted=False),)
     assert fork.label_writes == [
         RecordedLabelWrite(41, (make_configuration().needs_resolution_label,))
     ]
@@ -1273,7 +1337,7 @@ def test_a_reparent_is_labelled_and_reported(fork_checkout: ForkCheckout):
     assert "https://claude.ai/code/session_01ABCdef" in comment.body
 
 
-def test_a_reparent_notice_keeps_every_label_the_branch_already_carried(
+def test_a_refused_reparent_notice_keeps_every_label_the_branch_already_carried(
     fork_checkout: ForkCheckout,
 ):
     """
@@ -1286,9 +1350,12 @@ def test_a_reparent_notice_keeps_every_label_the_branch_already_carried(
     """
     a_landed_parent_and_unreparented_child(fork_checkout)
     stack = a_stack(fork_checkout, the_board_with_only_the_child())
-    fork = RecordingPullRequests(labels={41: [A_LABEL_THIS_TOOL_NEVER_WRITES]})
+    fork = RecordingPullRequests(
+        labels={41: [A_LABEL_THIS_TOOL_NEVER_WRITES]},
+        retarget_refusals=frozenset({41}),
+    )
 
-    notify_reparents(reparents(stack), stack, fork)
+    resolve_reparents(reparents(stack), stack, fork)
 
     assert fork.label_writes == [
         RecordedLabelWrite(
@@ -1306,7 +1373,8 @@ def test_no_reparents_writes_nothing(fork_checkout: ForkCheckout):
     stack = a_stack(fork_checkout, the_board())
     fork = RecordingPullRequests()
 
-    assert notify_reparents(reparents(stack), stack, fork) == ()
+    assert resolve_reparents(reparents(stack), stack, fork) == ()
+    assert fork.retargets == []
     assert fork.label_writes == []
     assert fork.comments == []
 
@@ -1501,13 +1569,12 @@ def test_a_whole_pass_leaves_no_board_behind(
     assert not board_path.exists()
 
 
-def test_a_whole_pass_reports_a_pending_reparent(
+def test_a_whole_pass_retargets_a_pending_reparent(
     fork_checkout: ForkCheckout, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     """
     ``run-report`` is what a scheduled Action calls with nobody watching, so a pending
-    reparent has to reach the branch's owner from inside the pass itself - a run summary
-    nobody without a session reads is not a notice.
+    reparent has to be resolved from inside the pass itself when GitHub allows it.
     """
     a_landed_parent_and_unreparented_child(fork_checkout)
     monkeypatch.setattr(maintenance_commands, "BOARD_PATH", tmp_path / "board.json")
@@ -1517,10 +1584,42 @@ def test_a_whole_pass_reports_a_pending_reparent(
 
     RunReportCommand().run(maintenance_pass, argparse.Namespace(json=True))
 
-    reparent_write = maintenance_pass.recorded_fork.label_writes[-1]
-    assert reparent_write == RecordedLabelWrite(
-        41, (make_configuration().needs_resolution_label,)
+    assert maintenance_pass.recorded_fork.retargets == [
+        RecordedRetarget(41, UPSTREAM_BASE)
+    ]
+    needs_resolution = make_configuration().needs_resolution_label
+    assert all(
+        needs_resolution not in write.labels
+        for write in maintenance_pass.recorded_fork.label_writes
     )
+    assert maintenance_pass.recorded_fork.comments == []
+
+
+def test_a_whole_pass_reports_a_reparent_github_refuses(
+    fork_checkout: ForkCheckout, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    When GitHub refuses the retarget, the notice has to reach the branch's owner from
+    inside the pass itself - a run summary nobody without a session reads is not one.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    monkeypatch.setattr(maintenance_commands, "BOARD_PATH", tmp_path / "board.json")
+    maintenance_pass = AlreadyResolvedPass(
+        configuration=make_configuration(),
+        git=fork_checkout.git,
+        resolved_stack=a_stack(fork_checkout, the_board_with_only_the_child()),
+        recorded_fork=RecordingPullRequests(retarget_refusals=frozenset({41})),
+    )
+
+    RunReportCommand().run(maintenance_pass, argparse.Namespace(json=True))
+
+    needs_resolution = make_configuration().needs_resolution_label
+    reparent_write = next(
+        write
+        for write in maintenance_pass.recorded_fork.label_writes
+        if needs_resolution in write.labels
+    )
+    assert reparent_write == RecordedLabelWrite(41, (needs_resolution,))
     assert "a-child" in maintenance_pass.recorded_fork.comments[0].body
 
 

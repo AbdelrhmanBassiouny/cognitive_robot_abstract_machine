@@ -3,22 +3,27 @@ name: Stack maintenance
 # Deterministic replacement for the scheduled LLM Routine "PR Stack Monitor and Update"
 # (trig_01N79jHmLo3bSbg8pLM6MNTB, retired once this has run one green cycle): performs
 # `.claude/stack/maintenance.py run-report`'s happy path with nobody watching -
-# fast-forwarding the fork's base onto the upstream, restacking every branch whose
-# parent moved, and promoting every approved unblocked branch. A restack conflict
-# already reports itself (a comment plus `needs-resolution`, via
-# `maintenance_restack_steps.conflict_report`); the one write this credential is
-# refused - retargeting a pull request's base once its own base has landed - is
-# reported the same way by `maintenance_reparent_notice.notify_reparents`, for an
-# on-demand session to finish. See `maintenance.py`'s own module docstring: `run-report
-# --json` exists precisely so a scheduled job with no model in the loop can emit it
-# directly.
+# reparenting every child whose base has landed, fast-forwarding the fork's base onto
+# the upstream, restacking every branch whose parent moved, and promoting every
+# approved unblocked branch. A restack conflict already reports itself (a comment plus
+# `needs-resolution`, via `maintenance_restack_steps.conflict_report`); a reparent
+# GitHub refuses this credential is reported the same way, by
+# `maintenance_reparent_notice.resolve_reparents`, for an on-demand session to finish -
+# but the refusal a Claude session's own proxied credential hit is not assumed here,
+# since this credential is never proxied through a session, so the retarget is
+# attempted first. See `maintenance.py`'s own module docstring: `run-report --json`
+# exists precisely so a scheduled job with no model in the loop can emit it directly.
 #
-# Why these triggers: `pull_request: closed` fires whether a pull request merges or
-# closes unmerged, and either way can drop a branch from the open set - the #40/#41
-# orphan pattern traced in `routine-cutover`'s own notes - so a full re-sweep runs on
-# that one event, not only the closed pull request's own branch. `schedule` keeps the
-# fork's base fresh between pull request events. `workflow_dispatch` is for a manual
-# run, including the one green cycle this item's own gate is waiting on.
+# Why these triggers: `closed` fires whether a pull request merges or closes unmerged,
+# and either way can drop a branch from the open set - the #40/#41 orphan pattern
+# traced in `routine-cutover`'s own notes - so a full re-sweep runs on that one event,
+# not only the closed pull request's own branch. `opened` and `ready_for_review` run
+# the same full pass promptly on the two events that most often need it acted on right
+# away: a freshly opened pull request wants fast-forwarding and labelling, and a branch
+# leaving draft is the self-review sign-off that makes it promotable - both otherwise
+# wait for the next `schedule` tick. `schedule` keeps the fork's base fresh regardless.
+# `workflow_dispatch` is for a manual run, including the one green cycle this item's
+# own gate is waiting on.
 #
 # Which branch carries this file decides which of those triggers actually reach it,
 # the same as `plan-dashboards.yml`: `workflow_dispatch` is offered only from the
@@ -27,7 +32,7 @@ name: Stack maintenance
 
 on:
   pull_request:
-    types: [closed]
+    types: [opened, ready_for_review, closed]
   schedule:
     - cron: "0 */6 * * *"
   workflow_dispatch:
