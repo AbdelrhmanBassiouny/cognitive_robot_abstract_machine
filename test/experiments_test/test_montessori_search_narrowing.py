@@ -22,7 +22,7 @@ from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriScene,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
 )
 from experiments.montessori.perception.exceptions import LookHasNoReferenceFrame
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
@@ -34,7 +34,6 @@ from experiments.montessori.perception.recorded_setup import (
     camera_in,
     CAMERA_NAME,
     SETUP_NAME,
-    lid_surface,
     perception_pipeline,
     recorded_world,
     region_over,
@@ -54,7 +53,7 @@ from experiments.montessori.perception.step_by_step import (
 from experiments.montessori.perception.watch_narrowing import (
     look_for_the_cube_on_the_lid,
 )
-from krrood.entity_query_language.factories import an
+from krrood.entity_query_language.factories import a
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
@@ -188,6 +187,14 @@ def square_hole(recorded_scene_world: World, capture_board) -> Body:
     ]
 
 
+@pytest.fixture
+def lid(capture_pipeline: MontessoriPerceptionPipeline) -> Body:
+    """
+    The board's lid, as the body of the world the pipeline measured its surface of.
+    """
+    return capture_pipeline.lid.entity
+
+
 StatedCondition = Callable[[Any], Any]
 """
 Something a statement can say about the piece it is looking for.
@@ -207,22 +214,22 @@ def seen_from(world: World) -> HomogeneousTransformationMatrix:
     return HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=world.root)
 
 
-def resting_on(name: PrefixedName) -> StatedCondition:
+def resting_on(surface: Body) -> StatedCondition:
     """
-    The condition that the thing sought rests on a named surface.
+    The condition that the thing sought rests on a surface of the world.
 
-    :param name: What the world calls the surface.
+    :param surface: The body of the world the piece rests on.
     """
-    return lambda sought: SupportedBy(sought, Body(name=name))
+    return lambda sought: SupportedBy(sought, surface)
 
 
-def stating(*conditions: StatedCondition) -> Match[MontessoriShapeDetection]:
+def stating(*conditions: StatedCondition) -> Match[DetectedMontessoriShape]:
     """
     A statement asking a look for a piece that satisfies every given condition.
 
     :param conditions: What it says about the piece, in the order it says them.
     """
-    statement = an(MontessoriShapeDetection)()
+    statement = a(DetectedMontessoriShape)()
     if not conditions:
         return statement
     return statement.where(*(condition(statement.variable) for condition in conditions))
@@ -270,7 +277,7 @@ def test_each_condition_saying_where_the_thing_is_leaves_less_of_the_table_to_re
     bare, on_the_lid, in_front = narrowing.steps(
         capture_frame,
         stating(
-            resting_on(lid_surface().name),
+            resting_on(capture_pipeline.lid.entity),
             lambda sought: InFrontOf(
                 sought, square_hole, seen_from(recorded_scene_world)
             ),
@@ -309,7 +316,7 @@ def test_a_look_supported_by_the_lid_reads_only_where_the_board_was_seen(
     narrowing = SearchNarrowing(pipeline=capture_pipeline)
 
     bare, on_the_lid = narrowing.steps(
-        capture_frame, stating(resting_on(lid_surface().name))
+        capture_frame, stating(resting_on(capture_pipeline.lid.entity))
     )
 
     seen = WorkspaceRegion.of_outline(board.outline)
@@ -358,17 +365,17 @@ def test_a_narrowed_look_reports_what_the_same_look_unnarrowed_reports_there(
     """
     whole = capture_pipeline.detect(capture_frame)
     narrowed = capture_pipeline.detect(
-        capture_frame, SceneRequest(supporting_surface=lid_surface().name)
+        capture_frame, SceneRequest(supporting_surface=capture_pipeline.lid.entity)
     )
 
     assert [_as_read(piece) for piece in narrowed.shapes] == [
         _as_read(piece)
         for piece in whole.shapes
-        if piece.supporting_surface == lid_surface().name
+        if piece.supporting_surface == capture_pipeline.lid.name
     ]
 
 
-def _as_read(piece: MontessoriShapeDetection) -> Tuple[str, float, float, float]:
+def _as_read(piece: DetectedMontessoriShape) -> Tuple[str, float, float, float]:
     """
     What a look made of one piece, to the millimetre it was measured to.
 
@@ -399,7 +406,7 @@ def test_a_placement_a_look_cannot_read_is_refused_rather_than_ignored(
     backend = MontessoriPerceptionBackend(
         source=FixedScene(captured=MontessoriScene(shapes=[seen]))
     )
-    statement = an(MontessoriShapeDetection)()
+    statement = a(DetectedMontessoriShape)()
     statement = statement.where(InsideRegion(statement.variable, region))
 
     with pytest.raises(LookHasNoReferenceFrame):
@@ -624,15 +631,16 @@ def looking_at_the_capture(
     )
 
 
-def looking_on_the_lid(condition: StatedCondition):
+def looking_on_the_lid(lid: Body, condition: StatedCondition):
     """
     A statement asking a look for a piece resting on the board's lid that also satisfies
     one further condition.
 
+    :param lid: The body of the world the piece rests on.
     :param condition: The condition to add.
     """
-    statement = an(MontessoriShapeDetection)()
-    statement = statement.where(resting_on(lid_surface().name)(statement.variable))
+    statement = a(DetectedMontessoriShape)()
+    statement = statement.where(resting_on(lid)(statement.variable))
     return statement.where(condition(statement.variable))
 
 
@@ -649,6 +657,7 @@ def test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen(
     square_hole: Body,
     capture_frame,
     recorded_scene_world: World,
+    lid: Body,
 ):
     """
     Read from where the camera stands, a direction means what it means on screen.
@@ -661,14 +670,14 @@ def test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen(
     seen = capture_frame.point_of_view(recorded_scene_world.root)
 
     assert categories_reported(
-        looking_on_the_lid(lambda sought: Above(sought, square_hole, seen)).evaluate(
-            backend=looking_at_the_capture
-        )
+        looking_on_the_lid(
+            lid, lambda sought: Above(sought, square_hole, seen)
+        ).evaluate(backend=looking_at_the_capture)
     ) == [MontessoriShapeCategory.CUBE]
     assert categories_reported(
-        looking_on_the_lid(lambda sought: RightOf(sought, square_hole, seen)).evaluate(
-            backend=looking_at_the_capture
-        )
+        looking_on_the_lid(
+            lid, lambda sought: RightOf(sought, square_hole, seen)
+        ).evaluate(backend=looking_at_the_capture)
     ) == [MontessoriShapeCategory.CYLINDER]
 
 
@@ -676,6 +685,7 @@ def test_the_two_sides_of_a_hole_hold_different_pieces(
     looking_at_the_capture: MontessoriPerceptionBackend,
     square_hole: Body,
     recorded_scene_world: World,
+    lid: Body,
 ):
     """
     Measured on this capture rather than assumed: the cube stands in front of the square
@@ -686,13 +696,13 @@ def test_the_two_sides_of_a_hole_hold_different_pieces(
 
     assert categories_reported(
         looking_on_the_lid(
-            lambda sought: InFrontOf(sought, square_hole, seen)
+            lid, lambda sought: InFrontOf(sought, square_hole, seen)
         ).evaluate(backend=looking_at_the_capture)
     ) == [MontessoriShapeCategory.CUBE]
     assert categories_reported(
-        looking_on_the_lid(lambda sought: RightOf(sought, square_hole, seen)).evaluate(
-            backend=looking_at_the_capture
-        )
+        looking_on_the_lid(
+            lid, lambda sought: RightOf(sought, square_hole, seen)
+        ).evaluate(backend=looking_at_the_capture)
     ) == [MontessoriShapeCategory.CYLINDER]
 
 
@@ -700,32 +710,36 @@ def test_a_look_between_two_holes_reports_what_stands_between_them(
     looking_at_the_capture: MontessoriPerceptionBackend,
     recorded_scene_world: World,
     capture_board,
+    lid: Body,
 ):
     holes = board_holes_in(recorded_scene_world, capture_board)
 
     found = looking_on_the_lid(
+        lid,
         lambda sought: Between(
             sought,
             holes[HOLE_NAME_BY_CATEGORY[MontessoriShapeCategory.CUBE]],
             holes[HOLE_NAME_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]],
-        )
+        ),
     ).evaluate(backend=looking_at_the_capture)
 
     assert categories_reported(found) == [MontessoriShapeCategory.CUBE]
 
 
 def test_a_look_near_a_hole_reaches_as_far_as_the_radius_it_was_asked_for(
-    looking_at_the_capture: MontessoriPerceptionBackend, square_hole: Body
+    looking_at_the_capture: MontessoriPerceptionBackend,
+    square_hole: Body,
+    lid: Body,
 ):
     """
     The two pieces on this lid stand 35 mm and 75 mm from the square hole, so a reach
     between the two tells them apart and one past both reports them both.
     """
     close = looking_on_the_lid(
-        lambda sought: Near(sought, square_hole, radius=0.05)
+        lid, lambda sought: Near(sought, square_hole, radius=0.05)
     ).evaluate(backend=looking_at_the_capture)
     wider = looking_on_the_lid(
-        lambda sought: Near(sought, square_hole, radius=0.10)
+        lid, lambda sought: Near(sought, square_hole, radius=0.10)
     ).evaluate(backend=looking_at_the_capture)
 
     assert categories_reported(close) == [MontessoriShapeCategory.CUBE]
@@ -740,7 +754,7 @@ def test_a_look_asked_for_a_color_reports_only_the_pieces_that_wear_it(
 ):
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     prism = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
-    statement = an(MontessoriShapeDetection)()
+    statement = a(DetectedMontessoriShape)()
 
     found = statement.where(Colored(statement.variable, prism.color)).evaluate(
         backend=looking_at_the_capture
@@ -755,6 +769,7 @@ def test_a_piece_is_found_in_a_stretch_smaller_than_the_piece_itself(
     looking_at_the_capture: MontessoriPerceptionBackend,
     capture_pipeline: MontessoriPerceptionPipeline,
     capture_frame,
+    lid: Body,
 ):
     """
     A statement says where the thing is, not which pixels may be read, so a stretch
@@ -770,7 +785,7 @@ def test_a_piece_is_found_in_a_stretch_smaller_than_the_piece_itself(
     reach = cube.radius / 2
 
     [narrowed] = looking_on_the_lid(
-        lambda sought: Near(sought, unnarrowed.pose, radius=reach)
+        lid, lambda sought: Near(sought, unnarrowed.pose, radius=reach)
     ).evaluate(backend=looking_at_the_capture)
 
     assert reach < cube.radius

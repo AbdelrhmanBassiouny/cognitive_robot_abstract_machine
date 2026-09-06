@@ -18,8 +18,8 @@ from __future__ import annotations
 import logging
 
 from experiments.montessori.hole_geometry import HOLE_NAME_BY_CATEGORY
-from experiments.montessori.perception.detections import MontessoriShapeDetection
-from experiments.montessori.perception.recorded_setup import board_holes_in, lid_surface
+from experiments.montessori.perception.detections import DetectedMontessoriShape
+from experiments.montessori.perception.recorded_setup import LID_NAME, board_holes_in
 from experiments.montessori.perception.step_by_step import (
     RecordedLook,
     WatchedCapture,
@@ -40,7 +40,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 def look_for_the_cube_on_the_lid(
     look: RecordedLook,
-) -> Match[MontessoriShapeDetection]:
+) -> Match[DetectedMontessoriShape]:
     """
     The statement the demonstration watches, written whole: the piece it is looking for,
     the things it says that piece stands in relation to, and every one of those
@@ -82,9 +82,9 @@ def look_for_the_cube_on_the_lid(
     triangle_hole.where(
         triangle_hole.variable.name.name == HOLE_NAME_BY_CATEGORY[triangle.category]
     )
-    sought = a(MontessoriShapeDetection)()
+    sought = a(DetectedMontessoriShape)()
     return sought.where(
-        lid.name == lid_surface().name,
+        lid.name == LID_NAME,
         SupportedBy(sought.variable, lid),
         LeftOf(sought.variable, square_hole.expression, look.seen_from),
         Above(sought.variable, triangle_hole.expression, look.seen_from),

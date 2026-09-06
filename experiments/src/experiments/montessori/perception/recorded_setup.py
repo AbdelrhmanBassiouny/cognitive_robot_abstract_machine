@@ -124,25 +124,46 @@ def searched_workspace(path: Path = TUNED_WORKSPACE_FILE) -> WorkspaceRegion:
     return WorkspaceRegion.load(path)
 
 
-def table_surface() -> WorkspaceSurface:
+TABLE_NAME = PrefixedName("table", SETUP_NAME)
+"""
+What this setup calls the bare steel table the scene is set up on.
+"""
+
+LID_NAME = PrefixedName("board_lid", SETUP_NAME)
+"""
+What this setup calls the board's lid, the second surface pieces rest on.
+"""
+
+LID_HEIGHT = TABLE_HEIGHT + float(BOARD_SCALE.z)
+"""
+How high the board's lid stands above the world frame's origin, in metres.
+"""
+
+
+def table_surface(world: Optional[World] = None) -> WorkspaceSurface:
     """
-    :return: The bare steel table the scene is set up on.
+    :param world: The world the recordings are read against, from
+        :func:`recorded_world`, or None for a run that only reads the pictures.
+    :return: The bare steel table the scene is set up on, measured of that world's own
+        body for it.
     """
     return WorkspaceSurface(
-        name=PrefixedName("table", SETUP_NAME),
+        entity=_slab_in(world, TABLE_NAME, TABLE_HEIGHT),
         region=searched_workspace(),
         height=TABLE_HEIGHT,
     )
 
 
-def lid_surface() -> WorkspaceSurface:
+def lid_surface(world: Optional[World] = None) -> WorkspaceSurface:
     """
+    :param world: The world the recordings are read against, from
+        :func:`recorded_world`, or None for a run that only reads the pictures.
     :return: The board's lid, the second surface pieces rest on.
     """
     return WorkspaceSurface(
-        name=PrefixedName("board_lid", SETUP_NAME),
+        entity=_slab_in(world, LID_NAME, LID_HEIGHT),
         region=searched_workspace(),
-        height=TABLE_HEIGHT + float(BOARD_SCALE.z),
+        height=LID_HEIGHT,
     )
 
 
@@ -162,8 +183,8 @@ def recorded_world() -> World:
 
     A relation is stated between entities, and a recording carries no world to name any,
     so a statement about a capture has nothing to be written over. These are the same
-    two surfaces :func:`table_surface` and :func:`lid_surface` describe, by the very
-    names those record, as bodies a statement can relate a detection to.
+    two surfaces :func:`table_surface` and :func:`lid_surface` are measured of, as
+    bodies a statement can relate a detection to.
 
     It holds no pieces: what a look finds on this table is what the picture says, not
     what a world places there.
@@ -172,11 +193,11 @@ def recorded_world() -> World:
     root = Body(name=PrefixedName("root", SETUP_NAME))
     with world.modify_world():
         world.add_kinematic_structure_entity(root)
-        for surface in (table_surface(), lid_surface()):
+        for name, height in ((TABLE_NAME, TABLE_HEIGHT), (LID_NAME, LID_HEIGHT)):
             world.add_connection(
                 FixedConnection(
                     parent=root,
-                    child=_body_of(surface),
+                    child=_slab(name, height),
                     parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(),
                 )
             )
@@ -184,25 +205,42 @@ def recorded_world() -> World:
     return world
 
 
-def _body_of(surface: WorkspaceSurface) -> Body:
+def _slab_in(world: Optional[World], name: PrefixedName, height: float) -> Body:
     """
-    The body a measured surface stands for, as a slab filling its own extent.
+    The body a surface of this setup is measured of.
 
-    :param surface: The surface to describe.
+    :param world: The world holding it, or None where there is no world to hold one, so
+        that a surface still has a body to answer for it.
+    :param name: What this setup calls the surface.
+    :param height: How high its top face stands, in metres.
     """
+    if world is None:
+        return _slab(name, height)
+    return world.get_body_by_name(name)
+
+
+def _slab(name: PrefixedName, height: float) -> Body:
+    """
+    A surface of this setup as a body: a slab filling the stretch of table searched,
+    with its top face at the surface's own height.
+
+    :param name: What this setup calls the surface.
+    :param height: How high its top face stands, in metres.
+    """
+    region = searched_workspace()
     return Body(
-        name=surface.name,
+        name=name,
         collision=ShapeCollection(
             [
                 Box(
                     origin=HomogeneousTransformationMatrix.from_xyz_rpy(
-                        x=(surface.region.minimum_x + surface.region.maximum_x) / 2,
-                        y=(surface.region.minimum_y + surface.region.maximum_y) / 2,
-                        z=surface.height - SURFACE_THICKNESS / 2,
+                        x=(region.minimum_x + region.maximum_x) / 2,
+                        y=(region.minimum_y + region.maximum_y) / 2,
+                        z=height - SURFACE_THICKNESS / 2,
                     ),
                     scale=Scale(
-                        surface.region.maximum_x - surface.region.minimum_x,
-                        surface.region.maximum_y - surface.region.minimum_y,
+                        region.maximum_x - region.minimum_x,
+                        region.maximum_y - region.minimum_y,
                         SURFACE_THICKNESS,
                     ),
                 )
@@ -338,8 +376,8 @@ def perception_pipeline(world: Optional[World] = None) -> MontessoriPerceptionPi
     :return: The pipeline that reads a recording of this setup.
     """
     return MontessoriPerceptionPipeline(
-        table=table_surface(),
-        lid=lid_surface(),
+        table=table_surface(world),
+        lid=lid_surface(world),
         board_detector=board_detector(),
         reference_frame=None if world is None else world.root,
         world=world,

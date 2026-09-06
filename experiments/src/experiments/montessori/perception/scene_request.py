@@ -10,12 +10,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 from typing_extensions import Optional, Tuple, Type
 
 from experiments.montessori.perception.detections import MontessoriDetection
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.reasoning.predicates import PlacementRelation
-from semantic_digital_twin.world_description.geometry import Color
+from experiments.montessori.perception.surfaces import WorkspaceSurface
+from krrood.patterns.belief_source import BeliefSource
+from semantic_digital_twin.reasoning.predicates import PlacementRelation, Turned
+from semantic_digital_twin.world_description.geometry import (
+    Color,
+    VolumetricBoundingBox,
+)
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
 
 # %% what to look for
 
@@ -39,10 +47,10 @@ class SceneRequest:
     answer and does not run.
     """
 
-    supporting_surface: Optional[PrefixedName] = None
+    supporting_surface: Optional[KinematicStructureEntity] = None
     """
-    The surface to search, by the name the world knows it by, or ``None`` to search
-    every surface of the scene.
+    The surface to search, as the world holds it, or ``None`` to search every surface of
+    the scene.
     """
 
     placements: Tuple[PlacementRelation, ...] = ()
@@ -57,10 +65,27 @@ class SceneRequest:
 
     color: Optional[Color] = None
     """
-    The colour the thing sought wears, or ``None`` where the statement says none.
+    The colour the thing sought has, or ``None`` where the statement says none.
 
     A colour is a narrowing like the others: a look asked for one marks that colour
-    alone and fits only the pieces that wear it.
+    alone and fits only the pieces that have it.
+    """
+
+    turn: Optional[Turned] = None
+    """
+    Which way the thing sought is turned, as the relation that says it with nothing
+    standing in the place of that thing, or ``None`` where the statement says nothing
+    about its turn.
+    """
+
+    believed_by: Optional[BeliefSource] = None
+    """
+    Who vouches for the stated placements as a belief about where the thing is, or
+    ``None`` where they only say where to read.
+
+    A placement that confines the thing closely enough is a place worth fitting a piece
+    at whether or not any colour separates one there, and a look does that only on
+    someone's say-so: a statement narrows what is read, a belief seeds a fit.
     """
 
     def wants(self, detection_type: Type[MontessoriDetection]) -> bool:
@@ -72,12 +97,39 @@ class SceneRequest:
         """
         return issubclass(detection_type, self.detection_type)
 
-    def searches(self, surface_name: PrefixedName) -> bool:
+    def searches(self, surface: WorkspaceSurface) -> bool:
         """
         Whether a surface is one this look was asked to search.
 
-        :param surface_name: What the world calls the surface.
+        :param surface: The surface measured, which carries the thing of the world it
+            was measured of -- the same thing a statement names.
         """
         return (
-            self.supporting_surface is None or self.supporting_surface == surface_name
+            self.supporting_surface is None or self.supporting_surface is surface.entity
         )
+
+    def believed_stretch(self) -> Optional[VolumetricBoundingBox]:
+        """
+        The stretch of the world the stated placements together confine the thing sought
+        to, along the plane it rests on.
+
+        :return: That stretch, or ``None`` where the placements leave it unbounded along
+            the plane -- a direction alone confines nothing a fit could sweep -- or
+            leave nothing at all.
+        """
+        if not self.placements:
+            return None
+        allowed = self.placements[0].allowed_space
+        for placement in self.placements[1:]:
+            allowed = allowed.intersection_with(placement.allowed_space)
+            if allowed is None:
+                return None
+        bounds = [
+            allowed.x_interval.lower,
+            allowed.x_interval.upper,
+            allowed.y_interval.lower,
+            allowed.y_interval.upper,
+        ]
+        if not np.all(np.isfinite(bounds)):
+            return None
+        return allowed

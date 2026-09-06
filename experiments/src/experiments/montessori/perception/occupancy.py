@@ -24,7 +24,7 @@ from typing_extensions import List, Self
 
 from experiments.montessori.perception.detections import (
     MontessoriDetection,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
 )
 from experiments.montessori.perception.exceptions import NothingIsHiddenFromBelow
 from experiments.montessori.perception.explanations import CompetingExplanations
@@ -170,8 +170,8 @@ class Occupancy:
         return True
 
     def keep_one_detection_per_place(
-        self, detections: List[MontessoriShapeDetection]
-    ) -> List[MontessoriShapeDetection]:
+        self, detections: List[DetectedMontessoriShape]
+    ) -> List[DetectedMontessoriShape]:
         """
         The detections that each stand somewhere nothing else does.
 
@@ -185,7 +185,7 @@ class Occupancy:
         :param detections: Everything the look found, in the order it found it.
         :return: Those of them left, in the order they were offered.
         """
-        kept: List[MontessoriShapeDetection] = []
+        kept: List[DetectedMontessoriShape] = []
         volumes: List[OccupiedVolume] = []
         for detection in sorted(
             detections,
@@ -207,9 +207,9 @@ class Occupancy:
 
     def _drop_whichever_does_not_lead(
         self,
-        detection: MontessoriShapeDetection,
+        detection: DetectedMontessoriShape,
         claimants: List[int],
-        kept: List[MontessoriShapeDetection],
+        kept: List[DetectedMontessoriShape],
         volumes: List[OccupiedVolume],
     ) -> None:
         """

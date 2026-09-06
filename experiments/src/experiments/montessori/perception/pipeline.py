@@ -33,7 +33,7 @@ from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriDetection,
     MontessoriScene,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
     ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.edges import EdgeDistances
@@ -51,7 +51,9 @@ from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
     PieceHypothesis,
+    YawInterval,
 )
+from experiments.montessori.perception.imagination import ImaginedWorld
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.perception.outline_fit import OutlineFitter, Placement
 from experiments.montessori.perception.orthophoto import (
@@ -833,13 +835,13 @@ class LoosePieceDetector(BeliefSource):
         orthophoto: Orthophoto,
         top_orthophoto: Orthophoto,
         frame: RgbdFrame,
-        reference_frame: Optional[KinematicStructureEntity],
+        imagined: ImaginedWorld,
         search: SurfaceSearch,
         expected: Sequence[PieceHypothesis] = (),
         color: Optional[Color] = None,
         board_outlines: BoardOutlines = BoardOutlines(),
         explanations: CompetingExplanations = CompetingExplanations(),
-    ) -> List[MontessoriShapeDetection]:
+    ) -> List[DetectedMontessoriShape]:
         """
         Find the pieces resting on one surface, by evaluating what is expected there.
 
@@ -858,7 +860,8 @@ class LoosePieceDetector(BeliefSource):
         :param orthophoto: The rectified view of the surface's own plane.
         :param top_orthophoto: The rectified view of the plane a piece's top stands on.
         :param frame: The camera data, for measuring how tall each piece stands.
-        :param reference_frame: Frame the resulting poses are expressed in.
+        :param imagined: Where what is found comes to stand, and the frame the resulting
+            poses are expressed in.
         :param search: The surface being searched, which settles what rests on it.
         :param expected: What is believed to be on this surface already, from anything
             other than this picture.
@@ -888,7 +891,7 @@ class LoosePieceDetector(BeliefSource):
                 board_outlines,
                 explanations,
                 frame,
-                reference_frame,
+                imagined,
                 search,
             )
             if piece is not None:
@@ -991,9 +994,9 @@ class LoosePieceDetector(BeliefSource):
         board_outlines: BoardOutlines,
         explanations: CompetingExplanations,
         frame: RgbdFrame,
-        reference_frame: Optional[KinematicStructureEntity],
+        imagined: ImaginedWorld,
         search: SurfaceSearch,
-    ) -> Optional[MontessoriShapeDetection]:
+    ) -> Optional[DetectedMontessoriShape]:
         """
         Recognise the piece a hypothesis expects, if the picture bears it out better
         than anything else could have.
@@ -1015,7 +1018,8 @@ class LoosePieceDetector(BeliefSource):
         :param board_outlines: Where the board's own edges fall in that view.
         :param explanations: How much better one account must be than the next.
         :param frame: The camera data, for measuring how tall the piece stands.
-        :param reference_frame: Frame the resulting pose is expressed in.
+        :param imagined: Where the piece comes to stand once it is recognised, and the
+            frame its pose is expressed in.
         :param search: The surface being searched.
         :return: The piece, or None where nothing expected explains the edges there
             better than the alternatives.
@@ -1040,14 +1044,16 @@ class LoosePieceDetector(BeliefSource):
             return None
         fitted = _to_rectified_contour(outline, orthophoto)
         height = _measure_height(fitted, orthophoto, frame, self.piece_height)
-        return MontessoriShapeDetection(
-            pose=Pose.from_xyz_rpy(
-                match.center.x,
-                match.center.y,
-                orthophoto.plane_height + height / 2,
-                yaw=match.yaw,
-                reference_frame=reference_frame,
-            ),
+        pose = Pose.from_xyz_rpy(
+            match.center.x,
+            match.center.y,
+            orthophoto.plane_height + height / 2,
+            yaw=match.yaw,
+            reference_frame=imagined.reference_frame,
+        )
+        return DetectedMontessoriShape(
+            role_taker=imagined.spawn(match.piece, pose),
+            pose=pose,
             footprint=RectifiedFootprint.from_contour(
                 fitted, orthophoto.region.resolution
             ),
@@ -1383,7 +1389,7 @@ class MontessoriPerceptionPipeline:
                 SurfaceSearch(surface=self.lid, boundary=board),
             ]
         asked_about = [
-            search for search in searches if request.searches(search.surface.name)
+            search for search in searches if request.searches(search.surface)
         ]
         narrowed = [self._narrowed(search, request) for search in asked_about]
         return [search for search in narrowed if search is not None]
@@ -1462,6 +1468,50 @@ class MontessoriPerceptionPipeline:
             )
         return placed
 
+    def believed_from(
+        self, request: SceneRequest, search: SurfaceSearch
+    ) -> List[PieceHypothesis]:
+        """
+        What whoever asked for the look believes is on one surface, read from where the
+        statement says the thing sought lies.
+
+        A placement that confines the thing closely -- within a radius of a hole, inside
+        a region -- is a place worth fitting a piece at whether or not any colour
+        separates one there, so it is evaluated the way a place the world believes in
+        is. The pieces tried are the ones that have the stated colour, or every piece
+        where none is stated, and the turns tried are the ones the statement allows.
+
+        :param request: What the look was asked for.
+        :param search: The surface being searched.
+        :return: One hypothesis where the request confines the thing sought and someone
+            vouches for it, and none otherwise.
+        """
+        stretch = request.believed_stretch()
+        if request.believed_by is None or stretch is None:
+            return []
+        across = stretch.x_interval.upper - stretch.x_interval.lower
+        along = stretch.y_interval.upper - stretch.y_interval.lower
+        turn = request.turn
+        return [
+            PieceHypothesis(
+                place=BelievedPlace(
+                    surface=search.surface.name,
+                    center=PlanarPoint(
+                        x=stretch.x_interval.lower + across / 2,
+                        y=stretch.y_interval.lower + along / 2,
+                    ),
+                    radius=max(across, along) / 2,
+                    yaw=(
+                        None
+                        if turn is None
+                        else YawInterval(center=turn.yaw, spread=turn.spread)
+                    ),
+                ),
+                source=request.believed_by,
+                candidates=pieces_colored(request.color),
+            )
+        ]
+
     def board_in(self, frame: RgbdFrame) -> Optional[MontessoriBoardDetection]:
         """
         The board as one frame shows it, which is what says how far its lid reaches and
@@ -1508,8 +1558,9 @@ class MontessoriPerceptionPipeline:
         """
         board = self.board_in(frame)
         expected = self.expected_pieces()
+        imagined = self.imagine()
         pieces = []
-        if request.wants(MontessoriShapeDetection):
+        if request.wants(DetectedMontessoriShape):
             for search in self.searched_surfaces(board, request):
                 plane_of_the_tops = (
                     search.surface.height + self.piece_detector.piece_height
@@ -1519,9 +1570,9 @@ class MontessoriPerceptionPipeline:
                         self.rectify(frame, search.surface.height, search.region),
                         self.rectify(frame, plane_of_the_tops, search.region),
                         frame,
-                        self.reference_frame,
+                        imagined,
                         search,
-                        expected,
+                        [*expected, *self.believed_from(request, search)],
                         request.color,
                         self._board_outlines_in(board, plane_of_the_tops, frame),
                         self.explanations,
@@ -1530,9 +1581,20 @@ class MontessoriPerceptionPipeline:
         occupancy = Occupancy(explanations=self.explanations)
         if board is not None:
             occupancy.claim(self.table_hidden_by(board, frame))
-        return MontessoriScene(
-            shapes=occupancy.keep_one_detection_per_place(pieces), board=board
-        )
+        kept = occupancy.keep_one_detection_per_place(pieces)
+        for rejected in pieces:
+            if rejected not in kept:
+                imagined.remove(rejected.role_taker)
+        return MontessoriScene(shapes=kept, board=board, imagined=imagined)
+
+    def imagine(self) -> ImaginedWorld:
+        """
+        Take the world a look is about to stand its findings in.
+
+        :return: A copy of the world this pipeline reads, reporting in the frame this
+            pipeline places its detections in.
+        """
+        return ImaginedWorld.copied_from(self.world, self.reference_frame)
 
     @staticmethod
     def _board_outlines_in(

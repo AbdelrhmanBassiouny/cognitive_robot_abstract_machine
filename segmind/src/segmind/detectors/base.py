@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Set, List, Any
+from typing import Optional, Dict, Set, List, Any, Callable
 
 from giskardpy.motion_statechart.context import MotionStatechartContext, ContextExtension
 from giskardpy.motion_statechart.data_types import ObservationStateValues
@@ -146,7 +146,12 @@ class AbstractDetector(MotionStatechartNode, ABC):
         return ObservationStateValues.TRUE if events else ObservationStateValues.FALSE
 
 
-    def get_relation(self, context: MotionStatechartContext, tracked_objects: List[Body], predicate) -> Dict[Body, Set[Body]]:
+    def get_relation(
+        self,
+        context: MotionStatechartContext,
+        tracked_objects: List[Body],
+        predicate: Callable[[Body, Body], bool],
+    ) -> Dict[Body, Set[Body]]:
         """
         Get the relation between tracked objects.
 
@@ -170,7 +175,7 @@ class AbstractDetector(MotionStatechartNode, ABC):
         self,
         segmind_context: SegmindContext,
         tracked_objects: List[Body],
-        predicate,
+        predicate: Callable[[Body, Region], bool],
         additional_candidates: Optional[Dict[Aperture, Region]] = None,
     ) -> Dict[Body, Set[Region]]:
         """

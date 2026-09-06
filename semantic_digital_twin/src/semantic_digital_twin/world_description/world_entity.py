@@ -52,6 +52,7 @@ from semantic_digital_twin.spatial_types.numeric import (
     NumericTransform,
 )
 from semantic_digital_twin.spatial_types.spatial_types import (
+    HasPose,
     HomogeneousTransformationMatrix,
     Point3,
     Pose,
@@ -314,7 +315,7 @@ class WorldEntityWithSimulatorProperties(WorldEntityWithID, HasSimulatorProperti
 
 
 @dataclass(eq=False)
-class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
+class KinematicStructureEntity(HasPose, ABC, WorldEntityWithSimulatorProperties):
     """
     An entity that is part of the kinematic structure of the world.
     """
@@ -426,6 +427,12 @@ class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
         :return: Pose representing the global pose.
         """
         return self._world.compute_forward_kinematics(self._world.root, self).to_pose()
+
+    def to_pose(self) -> Pose:
+        """
+        The pose this entity stands in, in the world frame.
+        """
+        return self.global_pose
 
     @property
     def numeric_global_pose(self) -> NumericPose:

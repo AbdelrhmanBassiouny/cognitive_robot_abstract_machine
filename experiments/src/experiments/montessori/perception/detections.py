@@ -18,8 +18,10 @@ from typing_extensions import List, Optional
 from experiments.montessori.perception.explanations import BoardOutlines, Explanation
 from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.hypotheses import PieceHypothesis
+from experiments.montessori.perception.imagination import ImaginedWorld
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
+from krrood.patterns.role import Role
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.geometry import Color
@@ -108,9 +110,15 @@ class MontessoriDetection(ABC):
 
 
 @dataclass(eq=False)
-class MontessoriShapeDetection(MontessoriDetection):
+class DetectedMontessoriShape(MontessoriDetection, Role[MontessoriShape]):
     """
-    A loose Montessori piece lying on the table.
+    A loose Montessori piece lying on the table, as one look found it.
+
+    A role of the piece as a world holds it, rather than a description of one: a
+    relation of the world's vocabulary is written over bodies and what the world says
+    about them, so a sighting with no such thing behind it is a subject no predicate can
+    be evaluated about. The role taker is the piece standing where it was seen in the
+    world the look brought its findings into.
     """
 
     category: MontessoriShapeCategory = field(kw_only=True)
@@ -265,7 +273,7 @@ class MontessoriScene:
     Everything one pass of the pipeline recognised.
     """
 
-    shapes: List[MontessoriShapeDetection] = field(default_factory=list)
+    shapes: List[DetectedMontessoriShape] = field(default_factory=list)
     """
     The loose pieces found on the table.
     """
@@ -273,6 +281,16 @@ class MontessoriScene:
     board: Optional[MontessoriBoardDetection] = None
     """
     The shape-sorting board, or None if it was not in view.
+    """
+
+    imagined: Optional[ImaginedWorld] = None
+    """
+    The world the pieces found stand in, or None for a scene assembled rather than
+    looked at.
+
+    A statement asking anything the search could not narrow itself by is answered there,
+    against the bodies standing for what was found, and what it rejects is taken out
+    again.
     """
 
     @property

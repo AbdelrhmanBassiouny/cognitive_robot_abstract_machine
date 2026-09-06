@@ -269,7 +269,7 @@ def _surface_at(height: float) -> WorkspaceSurface:
     :param height: Height of its plane above the world frame's origin, in metres.
     """
     return WorkspaceSurface(
-        name=PrefixedName("surface", "test"),
+        entity=Body(name=PrefixedName("surface", "test")),
         region=WorkspaceRegion(
             minimum_x=0.0, maximum_x=1.0, minimum_y=0.0, maximum_y=1.0
         ),

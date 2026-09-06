@@ -210,13 +210,24 @@ LID_PIECES_STILL_MISSED: List[str] = [
     "non_inserted_objects",
 ]
 """
-The captures whose lid pieces no look at them expects.
+The captures whose lid pieces this look does not report.
 
 Their pieces wear the lid's own hue or touch one another, so no colour suggests a place
-to look; and a capture carries no world, so nothing else here believes anything about
-the lid. A look told where to expect a piece finds it (see
-``test_a_piece_wearing_the_surfaces_own_hue_is_found_where_it_is_expected``), and what
-would tell it on a capture is the object's own history.
+to look, and a look told where to expect a piece finds it (see
+``test_a_piece_wearing_the_surfaces_own_hue_is_found_where_it_is_expected``). What can
+tell it differs between these four, and only one kind of telling exists on a capture.
+
+Two of them - ``disoriented_cube_on_hole`` and ``displaced_cube_from_hole`` - are a cube
+an insertion put at a named hole, so a history does say where to look, and armed with it
+the cube *is* fitted. Whether it is fitted is not stable in how far the belief is stated
+to reach: measured on 2026-09-03 it is found at a reach of 20 mm and of 40 mm and not at
+24 mm or 30 mm, because the agreement landscape over the lid is flat enough that which
+peak a coarse pass settles on decides the answer. Separating a piece from a ghost that
+follows the same edges is ``competing-explanations``, and no reach can be stated that
+does it here.
+
+The other two are pieces nothing acted on, so no history says anything about them, and a
+capture carries no world to say it instead.
 """
 
 
@@ -235,9 +246,10 @@ def test_every_piece_resting_on_the_lid_is_found(
             pytest.mark.xfail(
                 strict=True,
                 reason=(
-                    "Nothing tells this look to expect a piece on the lid, and colour "
-                    "cannot separate one there. Owned by the plan item "
-                    "expectations-from-events."
+                    "Colour cannot separate a piece on the lid, and what would tell "
+                    "this look to expect one differs per capture - see "
+                    "LID_PIECES_STILL_MISSED. Owned by the plan item "
+                    "competing-explanations."
                 ),
             )
         )

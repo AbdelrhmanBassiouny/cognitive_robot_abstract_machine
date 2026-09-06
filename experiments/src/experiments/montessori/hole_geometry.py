@@ -144,12 +144,12 @@ class HoleFootprint:
 
         :param thickness: Extrusion depth along z.
         """
-        return _extrude_polygon(
+        return extrude_polygon(
             np.asarray([(point.x, point.y) for point in self.boundary]), thickness
         )
 
 
-def _extrude_polygon(boundary: np.ndarray, thickness: float) -> trimesh.Trimesh:
+def extrude_polygon(boundary: np.ndarray, thickness: float) -> trimesh.Trimesh:
     """
     Extrude a closed 2D polygon that is star-shaped with respect to its own centroid
     (true of every hole shape on this board) into a solid, via fan triangulation from

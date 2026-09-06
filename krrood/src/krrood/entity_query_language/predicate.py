@@ -350,6 +350,19 @@ class Relation(Predicate, ABC):
         The thing the relation is asserted about.
         """
 
+    @classmethod
+    def subject_name(cls) -> str:
+        """
+        What the relation calls the thing it is asserted about, by the name of the field
+        :attr:`subject` reads.
+
+        This is what lets a statement about a thing be read as a relation asserted about
+        it, and a relation stated about nothing be asserted about one.
+        """
+        return get_accessed_attribute_name_in_return_statement_of_property(
+            cls.subject, cls
+        )
+
 
 @dataclass(eq=False)
 class Triple(Relation):
@@ -367,6 +380,16 @@ class Triple(Relation):
         """
         The object of the predicate.
         """
+
+    @classmethod
+    def object_name(cls) -> str:
+        """
+        What the relation calls the one thing it relates its subject to, by the name of
+        the field :attr:`object` reads.
+        """
+        return get_accessed_attribute_name_in_return_statement_of_property(
+            cls.object, cls
+        )
 
     @classmethod
     def _verbalization_fragment_(
@@ -390,12 +413,8 @@ class Triple(Relation):
         )
 
         words = camel_case_to_words(cls.__name__).split()
-        subject_name = get_accessed_attribute_name_in_return_statement_of_property(
-            cls.subject, cls
-        )
-        object_name = get_accessed_attribute_name_in_return_statement_of_property(
-            cls.object, cls
-        )
+        subject_name = cls.subject_name()
+        object_name = cls.object_name()
         particles = [WordFragment(text=word) for word in words[1:]]
         return clause(
             Noun(fields[subject_name]),
