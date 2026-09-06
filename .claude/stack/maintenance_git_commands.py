@@ -73,6 +73,15 @@ class MaintenanceGitCommandRunner(GitCommandRunner):
             "rebase" if strategy is IntegrationStrategy.REBASE else "merge", "--abort"
         )
 
+    def discard_since(self, commit: str) -> None:
+        """
+        Undo an integration that already committed, the way :meth:`abandon` undoes one
+        still in progress.
+
+        :param commit: What to put the checkout back to.
+        """
+        self.run("reset", "--hard", "--quiet", commit)
+
 
 # %% asking git what contains what
 

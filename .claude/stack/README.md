@@ -184,6 +184,9 @@ It gates nothing. Promotion asks whether one branch is ready for review; integra
 the branches coexist, and a collision between two of yours is not a reason to hold either back.
 A tip that collides is skipped so the rest still builds, and the report names the **pair** - which
 of the two should change is a judgement, and `/integration-conflict-triage` is where it is made.
+A tip that merges clean but takes the pipeline itself out of the tree - a relocation branch moving
+`.claude/stack` is a collision with nothing textual to show for it - is skipped the same way, and
+attributed the same way, rather than let through because nothing conflicted.
 
 **Only branches you have reviewed are integrated.** A pull request stays a draft here until its
 author has read it back, so leaving draft is that review, and a build is made of work that has
