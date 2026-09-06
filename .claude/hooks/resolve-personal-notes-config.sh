@@ -127,24 +127,47 @@ fetch_personal_notes_branch() {
   return 1
 }
 
-# default_branch_name: prints the repo's actual default branch name, with no
-# network access - resolved from origin's local HEAD ref
-# (refs/remotes/origin/HEAD, set by a normal `git clone` or `git remote
-# set-head`) when available, otherwise whichever of main/master actually
-# exists as a local or origin-tracking branch, otherwise "main". Used by
+# local_or_remote_branch_exists: whether a branch name resolves to anything in
+# this clone, as either a local branch or an origin-tracking one. Both halves
+# matter: a fresh clone has the second without the first, and a branch created
+# locally has the first without the second.
+local_or_remote_branch_exists() {
+  local branch="$1"
+  git show-ref --verify --quiet "refs/heads/${branch}" \
+    || git show-ref --verify --quiet "refs/remotes/origin/${branch}"
+}
+
+# default_branch_name: prints the branch work in this repo is based on, with no
+# network access. In precedence order: the base the stacked-PR configuration
+# names (configured_base_branch above), when a branch by that name actually
+# exists here; then origin's local HEAD ref (refs/remotes/origin/HEAD, set by a
+# normal `git clone` or `git remote set-head`); then whichever of main/master
+# exists as a local or origin-tracking branch; then "main". Used by
 # pr_progress_path below so a repo whose default branch is neither main nor
 # master (e.g. "develop") is still recognized, instead of being silently
 # treated as an ordinary per-branch PR-progress branch.
+#
+# The configured base outranks origin/HEAD because origin/HEAD is a repository
+# setting anyone can change, and changing it silently re-points every branch
+# cut from the repository afterwards. When the two disagree, this keeps every
+# caller reading the branch the tooling is actually configured around, and
+# check-setup.sh's default_branch row reports the disagreement itself. A repo
+# that configures no base is unaffected: the first step yields nothing and the
+# original resolution applies unchanged.
 default_branch_name() {
-  local remote_head candidate
+  local configured remote_head candidate
+  configured="$(configured_base_branch || true)"
+  if [ -n "${configured}" ] && local_or_remote_branch_exists "${configured}"; then
+    printf '%s\n' "${configured}"
+    return 0
+  fi
   remote_head="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null)"
   if [ -n "${remote_head}" ]; then
     printf '%s\n' "${remote_head#refs/remotes/origin/}"
     return 0
   fi
   for candidate in main master; do
-    if git show-ref --verify --quiet "refs/heads/${candidate}" \
-        || git show-ref --verify --quiet "refs/remotes/origin/${candidate}"; then
+    if local_or_remote_branch_exists "${candidate}"; then
       printf '%s\n' "${candidate}"
       return 0
     fi
@@ -381,6 +404,69 @@ REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
 # Python moved into the package above; the document stays, because it is
 # read rather than run.
 STACK_DIRECTORY=".claude/stack"
+
+# .claude/personal/stack.toml: the per-user overrides the notes branch may
+# layer over STACK_CONFIG_FILE's committed defaults. Named here as well as in
+# stack.py so the shell half and the Python half cannot drift apart on where
+# they look for the same file.
+PERSONAL_STACK_CONFIG_PATH=".claude/personal/stack.toml"
+
+# configured_base_branch: prints the branch the stacked-PR configuration names
+# as the base work is ultimately cut from (`upstream_base`), preferring the
+# personal override on the notes branch over the committed defaults - the same
+# precedence stack.py's load_configuration applies. Prints nothing and returns
+# 1 when neither layer names one, which is the ordinary state of a repository
+# that does not use the stacked-PR tooling at all.
+#
+# Read with grep rather than a TOML parser deliberately: it is one top-level
+# scalar, and one of the callers is check-setup.sh, whose whole job is to
+# report whether dependencies are installed - it cannot acquire one in order to
+# do so. Same reasoning as plan_id_for_branch's TSV and the tracking_issue
+# extraction in session-start.sh.
+#
+# The override is read from FETCH_HEAD, so a caller that has not fetched the
+# notes branch sees only the committed value - which is the same answer for
+# anyone who overrides nothing.
+configured_base_branch() {
+  local layer value
+  for layer in \
+      "$(git show "FETCH_HEAD:${PERSONAL_STACK_CONFIG_PATH}" 2>/dev/null || true)" \
+      "$(cat "${PROJECT_ROOT}/${STACK_CONFIG_FILE}" 2>/dev/null || true)"; do
+    value="$(printf '%s\n' "${layer}" \
+      | grep -E '^[[:space:]]*upstream_base[[:space:]]*=' \
+      | head -1 \
+      | sed -E 's/^[^=]*=[[:space:]]*"?([^"#[:space:]]+)"?.*/\1/' || true)"
+    if [ -n "${value}" ]; then
+      printf '%s\n' "${value}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# repository_default_branch: prints the branch this repository itself declares
+# as its default - refs/remotes/origin/HEAD when the clone recorded one (a
+# normal `git clone` does), otherwise whatever origin's own HEAD resolves to.
+# Prints nothing and returns 1 when neither answers.
+#
+# Deliberately a different question from default_branch_name below, which
+# answers "which branch should work be based on". This one answers "which
+# branch does the repository say it is", and the case the two disagree is
+# exactly what the check reading it exists to catch. The remote lookup is what
+# makes it useful in a session environment, whose fresh clones routinely carry
+# no origin/HEAD at all.
+repository_default_branch() {
+  local declared
+  declared="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null || true)"
+  if [ -n "${declared}" ]; then
+    printf '%s\n' "${declared#refs/remotes/origin/}"
+    return 0
+  fi
+  declared="$(git ls-remote --symref origin HEAD 2>/dev/null \
+    | grep -E '^ref:[[:space:]]' | head -1 | awk '{print $2}' || true)"
+  [ -n "${declared}" ] || return 1
+  printf '%s\n' "${declared#refs/heads/}"
+}
 
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
