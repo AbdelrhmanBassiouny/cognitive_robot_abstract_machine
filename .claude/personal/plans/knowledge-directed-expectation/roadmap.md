@@ -75,7 +75,18 @@ The #257 merge is where the second silent collision of the pass showed up, and i
 was this plan's fix that would have been lost: #257 replaced the grid a sweep walks
 with one laid out from the centre outwards, so that widening a belief's reach only
 *adds* placements, while the `knowledge-directed-grounding` lineage extracted the
-whole sweep into `OutlineFitter` and carried the old edge-anchored grid with it.
+whole sweep into `OutlineFitter` and carried its own edge-anchored grid with it.
 Merged textually, `offsets_within` would have arrived unused beside the phase bug it
 was written to fix, with #257's four tests still passing against code no longer
-reached. It now lives in `outline_fit.py`, where the sweep does.
+reached.
+
+The pass's first answer — unify them on the centred grid — was wrong, and the shipped
+captures are what caught it. The two grids mean different things. A believed reach is a
+bound the answer must be monotonic in, so its grid is centred on the claim and stops
+inside it, which is exactly what this plan measured and fixed. The board's seed search
+is pointed at the middle of whatever the lighting made dark, and it has to reach the
+whole radius it was given; walking the centred grid there shortened its forty millimetre
+search to thirty-six and left three of the board's six holes over wood on
+`tracy_pickup_demo`. So this plan's fix stands where it belongs — `offsets_within` and
+`OutlineFitter.placements_within`, for a belief — and the fitter keeps its own lattice
+for a search.
