@@ -1,30 +1,34 @@
-## `--tooling` filter for `integration.py build`
+## `--tooling` filter for `integration.py build` - PR #293 (draft)
 
 **Branch** `claude/tooling-filter-integration-build-6edarh`, re-cut from
-`claude/ready-tooling-integration-fkd5b5` (#284, which owns the tooling label's
-meaning and gets `Configuration.tooling_label` from #281). PR base will be #284.
+`claude/ready-tooling-integration-fkd5b5` (#284). PR #293 is based on #284.
 
-**Goal** `integration.py build --tooling` carries only the tips whose fork pull
-request carries `Configuration.tooling_label`, reporting the rest under a new
-`TipStatus` member the way `ANOTHER_PLAN` does on the plan-filter branch.
+**Done** all of it, in one commit:
+1. `TipStatus.NOT_A_TOOLING_CHANGE` (`not-a-tooling-change`, integrated=False).
+2. `integration_tooling.py` with `ToolingFilter` (`over`/`unfiltered`/
+   `is_filtering`/`leaves_out`).
+3. Threaded through `select_for_build`, `tips_of`, `build_integration`, and the
+   `build` test fixture.
+4. `--tooling` flag on `BuildCommand`; README + `integration.py` docstring.
+5. `.claude/stack/tests/test_integration_tooling.py` - 8 tests, written first;
+   4 proven to fail against the pre-change selection code.
+6. `scripts/format_docstrings.py` run on every modified file.
 
-**Note** the `--plan` filter (`integration_plans.py`) is *not* on this base - it
-lives on `claude/plan-item-kickoff-workflow-ixbvxl`. So this mirrors its shape
-(`leaves_out` returning a `TipStatus | None`, threaded through
-`select_for_build`/`tips_of`/`build_integration`) without being able to share a
-type with it yet. Whoever lands second unifies the two behind one protocol.
+**Test state** `pytest .claude/stack/tests/` = 340 passed, 4 failed. The 4 are
+pre-existing on #284's base (nested pytest in `test_integration_reproduction.py`
+cannot import its `-p integration_reproduction` plugin in this environment); they
+fail identically with this branch stashed. Not this branch's to fix.
 
-**Plan**
-1. `TipStatus.NOT_TOOLING` in `integration_tips.py`.
-2. New `integration_tooling.py` with `ToolingFilter`.
-3. Thread it through `select_for_build`, `tips_of`, `build_integration`.
-4. `--tooling` flag on `BuildCommand`.
-5. Tests in `.claude/stack/tests/test_integration_tooling.py`, written first.
-6. `scripts/format_docstrings.py` on everything touched.
-
-**Status** starting - nothing implemented yet.
-
-**Next** write the failing tests.
+**Left deliberately undone**
+- No shared protocol with `PlanFilter`: `integration_plans.py` is not on this
+  base (it lives on `claude/plan-item-kickoff-workflow-ixbvxl`), so the two
+  cannot be unified until they meet. Flagged in the PR body for whoever lands
+  second.
+- No candidate-title work (`--plan` marks a filtered candidate as never
+  publishable); that machinery is not on this base either, and the ask was the
+  build filter only.
 
 **Known collision** #284 and #285 both add to `.claude/stack/maintenance_github.py`
-- independent additions, trivially resolvable; not this branch's problem to fix.
+- independent additions, trivially resolvable; this branch touches neither.
+
+**Next** nothing outstanding. Session's obligation ends with the draft PR opened.
