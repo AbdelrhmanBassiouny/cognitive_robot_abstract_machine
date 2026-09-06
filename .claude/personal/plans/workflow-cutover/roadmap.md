@@ -250,3 +250,30 @@ promotable) is picked up the same run rather than waiting up to six hours for th
 Still unverified, and still this item's own recorded gate: whether GitHub actually allows this
 credential to retarget a base on this fork, rather than refusing with `403`/`422` for a reason not
 yet seen. That answer only comes from a real dispatched run once this is on the default branch.
+
+## `routine-cutover`'s #280 review round, 2026-09-06 (continued): a naming ask and a real coexistence question
+
+Two more comments, one mechanical and one worth the research it took to answer honestly rather
+than reassure.
+
+**The two retarget-refusal statuses are now `RetargetRefusal(IntEnum)`** (`CREDENTIAL_REFUSED = 403`,
+`STACK_MEMBER = 422`), replacing the bare `frozenset({403, 422})` literal `maintenance_github.py`'s
+`retarget_base` checks against - the one magic-number lapse in the previous round's own fix.
+
+**Whether this Action conflicts with the regenerated integration branch pipeline
+(`integration-branch`/`integration-branch-ci-verdict`, `stack-maintenance` plan, not yet on `main`)
+turned out to have already been answered, by that item's own history.** Its notes record a defect
+found during its own development - "the maintenance pass was adopting candidates" - where the
+executor's board read treated the pipeline's own judging pull requests as ordinary stack members.
+The fix, `BoardExport.is_a_candidate`, was placed deliberately "at the one place both readers derive
+their work from" - the shared board-export module both a build and any maintenance pass, this
+Action included, read through - and ships in the same pull request that starts opening candidate
+pull requests in the first place. So there is no landing-order gap where candidates exist without
+the exclusion protecting them: this Action inherits `is_a_candidate` automatically once
+`integration-branch` lands, with no change of its own needed. The one thing that still can happen -
+both workflows firing on the same `pull_request` event - is a benign race rather than an
+interruption, since they write to disjoint refs and a build is regenerated from scratch and
+self-limiting by design. Recorded as a comment in `stack-maintenance.yml` itself so a future reader
+does not have to re-derive it from `stack-maintenance`'s roadmap.
+
+Both threads replied to and resolved. Pushed as `a1409d71`.
