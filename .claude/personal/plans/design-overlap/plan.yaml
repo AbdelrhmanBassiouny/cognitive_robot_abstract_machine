@@ -1,0 +1,141 @@
+schema_version: 1
+id: design-overlap
+title: Catching two branches building the same thing, early enough to act
+description: >
+  Parallel branches converge on the same design independently, and it surfaces only at
+  review or at an integration build, by which point extracting the shared abstraction and
+  restacking both branches is expensive enough to be deferred. This derives a catalogue of
+  what each unlanded branch defines, compares it across branches, draws both the pull
+  request graph and the definition graph from it, and gives the reconcile verdict the
+  automation the other integration verdicts already have.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 102
+
+waves:
+- id: detection
+  name: What each branch defines, and where two collide
+  description: The catalogue, and the comparison over it. Everything downstream reads these.
+- id: acting
+  name: Seeing it, and doing something about it
+  description: The graphs that make an overlap visible, and the command that resolves one.
+
+tracks:
+- id: catalogue
+  name: The catalogue and the detector
+  wave: detection
+- id: visibility
+  name: Graphs on the dashboard
+  wave: acting
+- id: regrouping
+  name: Regrouping branches onto a common parent
+  wave: acting
+
+items:
+- id: definition-catalogue
+  title: Record what each unlanded branch defines, derived rather than written
+  track: catalogue
+  depends_on: []
+  status: not_started
+  notes: |-
+    `.claude/stack/definitions.py`. Per branch, relative to its merge base with `main`: parse
+    every changed `.py` file at both revisions with `ast` and record each top-level class and
+    module-level function as a `Definition` - name, kind, file, base classes, public method
+    names, signature, docstring summary, and whether the branch added or modified it. Added
+    non-Python files are recorded too, by path and first heading: the #110/#106 collision was
+    two sessions building the same markdown artifact under two names, which a Python-only
+    catalogue would miss.
+
+    Derived, never hand-written, so it cannot drift - the same rule `_generated/branch-index.tsv`
+    already follows. `AGENTS.md` mandates docstrings and dataclasses, so the catalogue is rich
+    by construction. Pure `ast` plus git: no network, no model call, runs in CI.
+
+    This item also establishes the git plumbing for reading revisions across branches, which
+    `common-parent` then reuses rather than writing a second time.
+  blockers:
+  - '#185 moves every `.claude/` Python module into the `bastler` package. Whichever lands
+    second re-applies its delta in the new location - the pattern #111 already exercised. Worth
+    checking #185''s state before starting rather than after.'
+- id: overlap-detector
+  title: Report the branch pairs that define the same thing under different names
+  track: catalogue
+  depends_on:
+  - definition-catalogue
+  status: not_started
+  notes: |-
+    `.claude/stack/overlaps.py`. Compares catalogues pairwise, skipping pairs already in an
+    ancestor relationship, since a stacked pair shares definitions by construction. Signals,
+    strongest first: the same definition name in different files; the same path added by both;
+    normalized name similarity; docstring-summary token overlap, which is the signal that
+    catches a rename.
+
+    Deterministic scoring, ranked pairs, and no verdict. It gathers evidence and the judgement
+    stays with `/integration-conflict-triage`, exactly as `check_scope_overlap.py`'s own
+    docstring establishes for the path-overlap case.
+
+    Writes `.claude/personal/plans/_generated/definitions.json`, under the same never-hand-edit
+    rule as its sibling index. Regenerated on every `/plan-dashboard` publish plus an on-demand
+    command; wiring it into `integration-refresh.yml` is deliberately left out, since that
+    workflow is still unlanded on `integration`.
+- id: plan-graphs
+  title: Draw the pull request graph and the definition graph on the dashboard
+  track: visibility
+  depends_on:
+  - overlap-detector
+  status: not_started
+  notes: |-
+    Both in `plan-dashboard`'s `templates/dashboard.html`, Cytoscape from cdnjs at a pinned
+    version, rendering into the Artifact and the Pages site alike.
+
+    The pull request graph draws items as nodes, with edges from both `depends_on` and the real
+    pull request base, highlighting where the two disagree. Overlap pairs are drawn as dashed
+    edges across parallel paths - that overlay is the point, since a dependency graph alone
+    cannot show where two parallel branches are about to collide. The definition graph groups
+    definitions by owning branch, draws inheritance, and links overlap pairs.
+  blockers:
+  - 'Four open pull requests already edit `templates/dashboard.html`: #218 (Pages site), #206
+    (refresh button), #157 (hide deferred items) and #111 (state chips). This item should be cut
+    after as many of them as possible have landed, and its own scope check re-run at kickoff.
+    #253 (cross-plan `depends_on`) changes the edge data this graph reads.'
+- id: common-parent
+  title: Give a set of branches a new common parent, after costing the move
+  track: regrouping
+  depends_on:
+  - definition-catalogue
+  status: not_started
+  notes: |-
+    `.claude/stack/common_parent.py`. Extracting a shared parent and changing direction
+    mid-plan are the same operation - give a set of branches a new common parent - so it is one
+    command in two phases rather than two commands.
+
+    `probe` runs `git merge-tree --write-tree` per branch against the proposed base, reusing the
+    non-mutating probe already in `stack.py`, and reports how many branches move, which
+    conflict, and which files. It mutates nothing, so it is the cost report a direction change
+    can be decided against.
+
+    `apply` cuts the new parent off `main`, optionally moves the shared files onto it with
+    `--extract`, opens its draft pull request, then per branch retargets the pull request base
+    and runs the existing `maintenance_restack_procedure.restack`, finally dropping the
+    duplicate copy from the branch that did not own it. Most of this is already built: the
+    expensive steps are the `RestackStep` pipeline that exists.
+
+    This writes to feature branches, a deliberate exception to
+    `integration-conflict-triage`'s "never writes a fix to a feature branch", approved by the
+    user on 2026-09-06. Bounded by: probe is always available and mutates nothing, and a
+    non-draft branch is flagged in the probe and needs an explicit `--include-reviewed`, since
+    resetting an approval is a real cost.
+- id: skill-wiring
+  title: Query the catalogue before implementing, and give reconcile a command to run
+  track: regrouping
+  depends_on:
+  - overlap-detector
+  - common-parent
+  status: not_started
+  notes: |-
+    Three edits. `plan-item-kickoff` queries the catalogue for what the item describes and
+    reports near-matches before implementation begins - the early gate. `integration-conflict-triage`'s
+    `reconcile` verdict stops being a dead end and names `common-parent` as what carries it out.
+    A post-review re-check covers the case the user named specifically: duplication that only
+    becomes visible after they have read what a session built.
+  blockers:
+  - '#282 already comments on branches an integration build leaves out. Check at kickoff whether
+    the post-review re-check belongs there instead of as a third surface.'
