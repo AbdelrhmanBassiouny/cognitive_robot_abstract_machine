@@ -48,6 +48,7 @@ claude/choose-detection-method-gf64yp	knowledge-directed-requests
 claude/knowledge-directed-perception-detector-zrm57t	knowledge-directed-requests
 perception_interactive_rule_tuning	knowledge-directed-requests
 claude/knowledge-directed-perception-vz2hhq	knowledge-directed-requests
+claude/camera-pose-fitted-p2mk7d	knowledge-directed-requests
 claude/match-query-ergonomics-idk9w2	match-query-ergonomics
 claude/match-query-ergonomics-where-rooted-b876wm	match-query-ergonomics
 claude/match-query-interface-refactor-l55jym	match-query-ergonomics

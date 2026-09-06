@@ -231,4 +231,30 @@ of two conditions is the intended sharing and is fine - there is now a test pinn
 escapes the bare case only by building each condition at insertion time, so this is a property of
 the expression machinery rather than of `state_rules`. The krrood mimic detector was the only
 thing in the workspace writing a bare attribute as a condition; it now states
-`look.depth_is_returned == True`, the way every real detector here writes a boolean.<!-- END-PLAN-ROADMAP -->
+`look.depth_is_returned == True`, the way every real detector here writes a boolean.
+
+## The ICRA convergence pass, 2026-09-06
+
+Every in-flight item of this plan is now carried by one branch: `perception-backend` (#222), `perception-predicates-guide-the-search` (#227), `predicates-answer-whether-they-hold` (#229), `search-clipped-to-a-predicates-region` (#238), `imagination-world-rejects-what-a-predicate-refuses` (#255), `how-to-look-concluded-from-the-request` (#266), `surface-finish-annotation` (#216), `surfaces-found-by-looking` (#259), `choose-detection-method` (#231), `detector-parameters-from-knowledge` (#239) and `a-look-is-described-by-a-match` (#275).
+
+The pass merged every one of them into the ICRA integration branch (#265,
+`claude/icra-experiments-simulation-pipeline-w4ep7n`) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.
+
+Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in `icra-foundation`'s `roadmap.md` under *The
+convergence pass, 2026-09-06*. Read it there rather than re-deriving it here.
+
+What this plan gained beyond the merge itself: #275's `SurfaceFinder` and
+`SurfaceRules` arrive over the newer, hypothesis-driven detectors rather than the
+colour-blob ones they were written against, and #231's two detectors now differ
+only in how tightly a blob's place is believed - a radius and a turn - which is a
+parameter rather than a subclass. Collapsing them into one detector the rules
+configure two ways is a design call and was left for the developer.
+
+`camera-pose-fitted-to-the-model` was startable from this pass onward: it depends
+on `surfaces-found-by-looking` (#259) and is blocked on
+`knowledge-directed-grounding`'s `holes-fitted-like-pieces` (#236), and the
+converged branch carries both.

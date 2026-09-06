@@ -765,12 +765,13 @@ items:
     '
 - id: camera-pose-fitted-to-the-model
   title: Correct where the camera stands by fitting what is seen to what the twin models
-  branch: null
+  branch: claude/camera-pose-fitted-p2mk7d
   pull_request_number: null
   track: method-selection
   depends_on:
   - surfaces-found-by-looking
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_01ViZEJchUqcVcsFMbYHeVR6
   blockers:
   - Depends on `knowledge-directed-grounding`'s `holes-fitted-like-pieces` (in_progress) - a cross-plan
     dependency that `split-knowledge-directed-perception` could not preserve (`depends_on` cannot
