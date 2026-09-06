@@ -72,10 +72,11 @@ items:
     the repo/branch/upstream repository variables, and three inconsistent poll-interval statements.
 - id: routine-cutover
   title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
-  branch: null
+  branch: claude/stack-maintenance-action
   status: in_progress
-  session: https://claude.ai/code/session_017JMftn3ujp7xsyhwcMaF75
+  session: https://claude.ai/code/session_01Q8JfYcge9pLWPxGSE9d9d1
   track: cutover
+  pull_request_number: 280
   blockers:
     - >-
       None left outside this item's own next step. The gate this item was waiting on ("stack tooling

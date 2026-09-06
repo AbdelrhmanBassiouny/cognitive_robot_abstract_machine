@@ -150,3 +150,4 @@ claude/plan-item-kickoff-workflow-s3mfvk	stack-tooling-install
 claude/flaky-marker-needs-rerun-plugin	test-suite-fixes
 claude/mcrdr-stop-only-flaky-skip	test-suite-fixes
 claude/dashboard-publish-automation-hnfi5a	workflow-cutover
+claude/stack-maintenance-action	workflow-cutover
