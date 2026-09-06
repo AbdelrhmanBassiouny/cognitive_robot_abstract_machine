@@ -465,4 +465,3 @@ are reached through association tables, and no test in this repository proves
 EQL translates a join across one; nothing here depends on that, and finding out
 belongs to whichever item first needs it. CI-only, per the standing ROS/`random_events`
 limitation.
-
