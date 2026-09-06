@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from plan_item_bootstrap import HookScript, PlanDocument
+
 SKILLS_DIRECTORY = Path(__file__).resolve().parents[2]
 """
 Where every skill's own directory lives.
@@ -60,7 +62,7 @@ def shell_constant(name: str) -> str:
         [
             "bash",
             "-c",
-            f'source .claude/hooks/resolve-personal-notes-config.sh; printf "%s" "${{{name}}}"',
+            f'source "{HookScript.CONFIGURATION.path}"; printf "%s" "${{{name}}}"',
         ],
         cwd=SKILLS_DIRECTORY.parents[1],
         capture_output=True,
@@ -90,7 +92,7 @@ def skills_writing_roadmap_narrative() -> list[Path]:
     return sorted(
         skill
         for skill in SKILLS_DIRECTORY.glob("*/SKILL.md")
-        if "roadmap.md" in (text := skill.read_text())
+        if PlanDocument.ROADMAP in (text := skill.read_text())
         and any(script in text for script in PLAN_WRITING_SCRIPTS)
     )
 

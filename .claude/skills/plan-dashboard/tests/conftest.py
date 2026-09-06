@@ -10,3 +10,6 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+# .claude/hooks: some dashboard tests cite HookScript/PlanDocument from
+# plan_item_bootstrap.py instead of spelling a filename it already defines.
+sys.path.insert(0, str(Path(__file__).parents[3] / "hooks"))
