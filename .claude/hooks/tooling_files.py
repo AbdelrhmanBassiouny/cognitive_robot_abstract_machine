@@ -1,10 +1,11 @@
 """
-The names and locations of this repository's own tooling files, stated once.
+The names this repository's own tooling is written in, stated once: where its files live,
+and the fixed tokens their contents are addressed by.
 
 The Python half of ``resolve-personal-notes-config.sh``: the shell scripts resolve their
 paths from that file, and everything written in Python - the hooks' own modules and the
-tests that drive them - resolves the same paths from here, so no caller spells a file
-name itself.
+tests that drive them - resolves the same names from here, so no caller spells one
+itself.
 """
 
 from __future__ import annotations
@@ -68,6 +69,21 @@ class HookScript(StrEnum):
     """
     Prints the setup steps that live outside the clone - labels, access, environment
     variables - filled in for the fork the clone points at.
+    """
+
+    WRITE_BRANCH_FILES = "write-branch-files.sh"
+    """
+    Pushes several files to a branch in one commit, through a scratch worktree.
+    """
+
+    CHECK_STACK_SETUP = "check-stack-setup.sh"
+    """
+    Reports, read-only, whether a clone is set up for the stacked-pull-request workflow.
+    """
+
+    SETUP_STACKED_PRS = "setup-stacked-prs.sh"
+    """
+    Runs that workflow's whole first-time setup non-interactively.
     """
 
     SESSION_START = "session-start.sh"
@@ -167,6 +183,44 @@ class SetupPrerequisiteFile(StrEnum):
     """
 
 
+class StackToolingFile(StrEnum):
+    """
+    The files check-stack-setup.sh's ``stack_tooling_files`` check requires, relative to
+    the project root - and, being the canonical set, what a fork-overlay install writes.
+
+    Stated here rather than read from ``resolve-personal-notes-config.sh``, for the same
+    reason :class:`SetupPrerequisiteFile` is: a rename that breaks the check has to be
+    made deliberately in both places rather than the two following each other silently.
+    """
+
+    STACK = ".claude/stack/stack.py"
+    """
+    The read-only tool the maintenance pass shells out to.
+    """
+
+    STACK_CONFIGURATION = ".claude/stack/stack.toml"
+    """
+    The committed configuration defaults a personal copy overrides.
+    """
+
+    STACK_README = ".claude/stack/README.md"
+    """
+    What the tooling is and how its pieces fit together.
+    """
+
+    MAINTENANCE_SKILL = ".claude/skills/stacked-pr-maintenance/SKILL.md"
+    """
+    The maintenance pass itself, invocable from any session.
+    """
+
+    MAINTENANCE_ROUTINE_PROMPT = (
+        ".claude/skills/stacked-pr-maintenance/routine-prompt.md"
+    )
+    """
+    The block registered as a scheduled Routine, which runs that skill.
+    """
+
+
 class ProjectFile(StrEnum):
     """
     The files in a clone that the hooks read, write or check, relative to the project
@@ -200,4 +254,48 @@ class ProjectFile(StrEnum):
     STARTER_NOTES = ".claude/skills/setup-personal-notes/starter-notes.md"
     """
     The template a new notes file can be seeded from.
+    """
+
+    STACK_BOARD = ".claude/stack/board.json"
+    """
+    The maintenance pass's scratch snapshot of the open pull requests, which is
+    gitignored rather than committed.
+    """
+
+    PERSONAL_STACK_CONFIGURATION = ".claude/personal/stack.toml"
+    """
+    Where the stack settings a contributor overrides live on the notes branch.
+    """
+
+
+# %% the prompt a scheduled maintenance run is registered as
+
+
+MAINTENANCE_SKILL_INVOCATION = "/stacked-pr-maintenance"
+"""
+How the registered prompt names the maintenance skill it runs.
+
+Mirrors the directory :attr:`StackToolingFile.MAINTENANCE_SKILL` sits in, which is what
+a skill is invoked by.
+"""
+
+
+class RoutinePromptPlaceholder(StrEnum):
+    """
+    The tokens :attr:`StackToolingFile.MAINTENANCE_ROUTINE_PROMPT` carries for a setup
+    run to substitute before the block is registered.
+
+    One reaching a registered prompt unsubstituted becomes an instruction a live run
+    cannot resolve, which is why what they are is stated rather than spelled at each
+    site that checks for them.
+    """
+
+    FORK_REPOSITORY = "<FORK_REPOSITORY>"
+    """
+    The fork the stack is staged in.
+    """
+
+    UPSTREAM_REPOSITORY = "<UPSTREAM_REPOSITORY>"
+    """
+    The repository the stack is ultimately reviewed in.
     """
