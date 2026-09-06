@@ -6,7 +6,7 @@ Perception is a backend beside the native and SQLAlchemy ones, so asking and loo
 the same act::
 
     statement = a(DetectedMontessoriShape)(pose=...)
-    statement = statement.where(SupportedBy(statement.variable, board_lid))
+    statement = statement.where(SupportedBy(statement._variable_, board_lid))
     [seen] = statement.evaluate(backend=MontessoriPerceptionBackend(source=node))
     reach_for = seen.pose
 

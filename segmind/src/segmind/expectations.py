@@ -91,7 +91,7 @@ class Expectation(Match[Body]):
         if not holds:
             return statement
         return statement.where(
-            *(relation_asserted_about(stated, statement.variable) for stated in holds)
+            *(relation_asserted_about(stated, statement._variable_) for stated in holds)
         )
 
     @property
@@ -202,10 +202,13 @@ class Expectation(Match[Body]):
         :param conditions: What the restated expectation says.
         """
         restated = type(self)(
-            self.factory, type_=self.type_, variable=self.variable, source=self.source
+            self._factory_,
+            _declared_type_=self._declared_type_,
+            _variable_=self._variable_,
+            source=self.source,
         )
         if self._has_been_called:
-            restated = restated(**self.kwargs)
+            restated = restated(**self._kwargs_)
         return restated.where(*conditions) if conditions else restated
 
 

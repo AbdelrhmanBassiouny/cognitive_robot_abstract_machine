@@ -877,8 +877,8 @@ def test_support_asserted_of_a_variable_is_carried_as_a_symbolic_expression():
     relation = SupportedBy(supported=sought, supporting=supporting)
 
     stated = relation_stated_by(relation, sought)
-    assert stated.type is SupportedBy
-    assert stated.kwargs == {"supporting": supporting}
+    assert stated._type_ is SupportedBy
+    assert stated._kwargs_ == {"supporting": supporting}
 
 
 def test_support_holds_exactly_where_the_geometric_reading_says_it_does(
@@ -1263,7 +1263,7 @@ def test_a_relation_this_vocabulary_adds_reads_as_a_sentence(assertion, sentence
     one = Body(name=PrefixedName("one"))
     other = Body(name=PrefixedName("other"))
     statement = an(object)()
-    statement = statement.where(assertion(statement.variable, one, other))
+    statement = statement.where(assertion(statement._variable_, one, other))
 
     assert verbalize_expression(statement) == sentence
 

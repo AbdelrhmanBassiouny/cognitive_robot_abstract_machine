@@ -70,7 +70,7 @@ def looking_for_something_supported_by(surface: WorkspaceSurface):
     :param surface: The measured surface whose world entity is asked about.
     """
     statement = a(DetectedMontessoriShape)()
-    return statement.where(SupportedBy(statement.variable, surface.entity))
+    return statement.where(SupportedBy(statement._variable_, surface.entity))
 
 
 @pytest.fixture
@@ -123,7 +123,7 @@ def test_a_search_narrows_itself_by_the_color_the_thing_sought_wears():
 def test_a_stated_color_is_what_the_look_is_asked_to_mark():
     color = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE].color
     statement = a(DetectedMontessoriShape)()
-    statement = statement.where(Colored(statement.variable, color))
+    statement = statement.where(Colored(statement._variable_, color))
 
     request = MontessoriPerceptionBackend.scene_request(
         MontessoriPerceptionBackend.read_request(statement)
@@ -141,7 +141,7 @@ def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
     """
     lid = pipeline.lid.entity
     statement = a(DetectedMontessoriShape)()
-    statement = statement.where(Near(statement.variable, lid, radius=0.05))
+    statement = statement.where(Near(statement._variable_, lid, radius=0.05))
 
     request = MontessoriPerceptionBackend.scene_request(
         MontessoriPerceptionBackend.read_request(statement)
@@ -159,7 +159,7 @@ def test_a_stated_turn_reaches_the_look_as_the_relation_that_says_it():
     the statement like a placement is.
     """
     statement = a(DetectedMontessoriShape)()
-    statement = statement.where(Turned(statement.variable, yaw=0.3, spread=0.1))
+    statement = statement.where(Turned(statement._variable_, yaw=0.3, spread=0.1))
 
     request = MontessoriPerceptionBackend.scene_request(
         MontessoriPerceptionBackend.read_request(statement)
@@ -180,7 +180,7 @@ def test_a_stated_turn_is_checked_over_what_came_back(
 
     def turned_to(yaw: float):
         statement = a(DetectedMontessoriShape)()
-        return statement.where(Turned(statement.variable, yaw=yaw, spread=0.05))
+        return statement.where(Turned(statement._variable_, yaw=yaw, spread=0.05))
 
     as_laid = list(turned_to(0.0).evaluate(backend=looking))
     a_turn_away = list(turned_to(1.0).evaluate(backend=looking))
@@ -303,7 +303,7 @@ def test_a_surface_the_statement_describes_is_read_as_the_one_it_describes(
     statement = a(DetectedMontessoriShape)()
     statement = statement.where(
         surface.name == pipeline.lid.name,
-        SupportedBy(statement.variable, surface),
+        SupportedBy(statement._variable_, surface),
     )
 
     request = MontessoriPerceptionBackend.read_request(statement)
@@ -321,7 +321,7 @@ def test_a_described_surface_is_answered_the_same_as_one_handed_over(
     described = a(DetectedMontessoriShape)()
     described = described.where(
         surface.name == pipeline.lid.name,
-        SupportedBy(described.variable, surface),
+        SupportedBy(described._variable_, surface),
     )
 
     found = list(described.evaluate(backend=looking))
@@ -343,7 +343,7 @@ def test_a_description_no_single_thing_answers_is_refused_rather_than_guessed_at
     statement = a(DetectedMontessoriShape)()
     statement = statement.where(
         surface.name.prefix == pipeline.lid.name.prefix,
-        SupportedBy(statement.variable, surface),
+        SupportedBy(statement._variable_, surface),
     )
 
     with pytest.raises(BackendCannotResolveCondition) as raised:
@@ -659,7 +659,7 @@ def touching_the_table(world: World):
     """
     statement = a(DetectedMontessoriShape)()
     return statement.where(
-        InContactWith(statement.variable.root, world.get_body_by_name("table"))
+        InContactWith(statement._variable_.root, world.get_body_by_name("table"))
     )
 
 
@@ -715,7 +715,7 @@ def touching_the_table_the_world_calls(name: PrefixedName, world: World):
     statement = a(DetectedMontessoriShape)()
     return statement.where(
         surface.name == name,
-        InContactWith(statement.variable.root, surface),
+        InContactWith(statement._variable_.root, surface),
     )
 
 

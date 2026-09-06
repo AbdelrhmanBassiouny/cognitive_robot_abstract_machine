@@ -232,7 +232,9 @@ def stating(*conditions: StatedCondition) -> Match[DetectedMontessoriShape]:
     statement = a(DetectedMontessoriShape)()
     if not conditions:
         return statement
-    return statement.where(*(condition(statement.variable) for condition in conditions))
+    return statement.where(
+        *(condition(statement._variable_) for condition in conditions)
+    )
 
 
 # %% what each stated condition leaves to rectify
@@ -404,7 +406,7 @@ def test_a_placement_a_look_cannot_read_is_refused_rather_than_ignored(
         source=FixedScene(captured=MontessoriScene(shapes=[seen]))
     )
     statement = a(DetectedMontessoriShape)()
-    statement = statement.where(InsideRegion(statement.variable, region))
+    statement = statement.where(InsideRegion(statement._variable_, region))
 
     with pytest.raises(LookHasNoReferenceFrame):
         backend.relations_hold(seen, backend.read_request(statement))
@@ -637,8 +639,8 @@ def looking_on_the_lid(lid: Body, condition: StatedCondition):
     :param condition: The condition to add.
     """
     statement = a(DetectedMontessoriShape)()
-    statement = statement.where(resting_on(lid)(statement.variable))
-    return statement.where(condition(statement.variable))
+    statement = statement.where(resting_on(lid)(statement._variable_))
+    return statement.where(condition(statement._variable_))
 
 
 def categories_reported(found) -> List[MontessoriShapeCategory]:
@@ -753,7 +755,7 @@ def test_a_look_asked_for_a_color_reports_only_the_pieces_that_wear_it(
     prism = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
     statement = a(DetectedMontessoriShape)()
 
-    found = statement.where(Colored(statement.variable, prism.color)).evaluate(
+    found = statement.where(Colored(statement._variable_, prism.color)).evaluate(
         backend=looking_at_the_capture
     )
 
