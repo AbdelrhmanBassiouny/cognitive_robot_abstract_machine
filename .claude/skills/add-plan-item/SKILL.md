@@ -64,7 +64,7 @@ The rule is in `${SCOPE_DECISION_DOCUMENT}` — read it rather than re-deriving
 it here. Gather its evidence in one call:
 
 ```bash
-python3 "${CHECK_SCOPE_OVERLAP_SCRIPT}" \
+python3 -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
     --base <base-branch> \
     --path <path> [--path <path> ...] \
     --candidate '<item-id-or-title>=<branch>' [--candidate ... ]
@@ -93,7 +93,7 @@ the work, measure its *current* manifest and roadmap (already fetched off
 ```bash
 git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/plan.yaml" > /tmp/plan.yaml
 git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/roadmap.md" > /tmp/roadmap.md 2>/dev/null || : > /tmp/roadmap.md
-python3 "${PLAN_SIZE_CHECK_SCRIPT}" --manifest /tmp/plan.yaml --roadmap /tmp/roadmap.md
+python3 -m "${PLAN_SIZE_CHECK_MODULE}" --manifest /tmp/plan.yaml --roadmap /tmp/roadmap.md
 ```
 
 `is_full: true` disqualifies that plan for growth, whatever its `description`

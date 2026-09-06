@@ -33,7 +33,7 @@ rather than failing partway through drafting a plan.
 
 Source the shared config script — it resolves the personal-notes
 remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines
-`SAVE_PLAN_SCRIPT` (used in step 8) and `PLAN_SIZE_CHECK_SCRIPT` (used in
+`SAVE_PLAN_SCRIPT` (used in step 8) and `PLAN_SIZE_CHECK_MODULE` (used in
 step 7):
 
 ```bash
@@ -188,7 +188,7 @@ Catch it here, before the first save, rather than after the fact. Measure the
 draft the same way a save would be measured:
 
 ```bash
-python3 "${PLAN_SIZE_CHECK_SCRIPT}" --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
+python3 -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
 ```
 
 If `is_full` is `false`, continue to step 8 unchanged.
