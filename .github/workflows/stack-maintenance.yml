@@ -113,4 +113,8 @@ jobs:
           # The identity every push this pass makes is committed under.
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          # `run-report` reads board.json and deletes it once the pass concludes - see
+          # `RunReportCommand.run`'s own docstring - so a caller starts every run by
+          # exporting a fresh one; running it stale would only replay one snapshot old.
+          python3 .claude/stack/maintenance.py board --write
           python3 .claude/stack/maintenance.py run-report --json
