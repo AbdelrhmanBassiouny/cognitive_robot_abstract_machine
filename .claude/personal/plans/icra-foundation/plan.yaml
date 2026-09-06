@@ -50,15 +50,17 @@ items:
       to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on
       #169's c8bf6f05.
     - >-
-      CI has never been green on #265, and no run has ever exercised what the convergence merged. On
-      5f63f0f5 ten of the twenty-three checks failed on one root cause of this branch's own (main is
-      green at the same base f6a53cf9): every job that builds the workspace ORM interfaces died in
-      generation with CouldNotResolveType on
-      experiments.montessori.perception.detector_choice.SurfacePass, "type 'Sequence' is not
-      subscriptable", before a single test ran. Fixed in krrood by f5c383a8 (2026-09-06) and pushed;
-      what is left of this blocker is that the generation has still never got past that point in CI,
-      so whatever the suites say about the convergence is unproven until a run gets through. Clear
-      it when a run collects.
+      Four tests in test_montessori_search_narrowing.py fail, and re-measuring them is not enough to
+      fix them, so they are the developer's call. They read a distance or a direction from the
+      board's square hole; all 27 tests in the file pass at 16c483635 and the same four fail at
+      03d9719d9, the merge of the hole layout fit (#236), which moves the board 40 mm along y on
+      tracy_pickup_demo and every hole with it. Projecting both layouts onto the capture settles
+      which is right: #236's hole centres land on the six real openings and the pre-#236 centres
+      land on bare wood. So the code is right and the docstrings' measurements are stale - but
+      against the corrected layout the cube stands 50.3 mm from the square hole and the cylinder
+      51.6 mm, so no radius separates them, and the cylinder is 5 mm to that hole's left rather
+      than its right. Two of the four have no reach and no two sides left to ask about, so they
+      need a different hole or a different pair, which is a design call about the perception story.
   notes: >
     The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor
     stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a
@@ -91,6 +93,18 @@ items:
     about the item is its evidence, not its scope: every suite number recorded for the convergence
     was measured in a session container with the ORM-dependent modules excluded, so this item is not
     verified until CI collects on this branch at least once.
+
+    CI collected 2026-09-06, and the wall was hiding two more defects, both this branch's own and
+    both fixed: the generated experiments interface named collections.abc.Sequence without importing
+    it, because a relationship was rendered with the container its field declares and SurfacePass
+    declares the abstract Sequence - which SQLAlchemy could not have instrumented anyway, so a
+    relationship is now held in a collection it can build and append to, as the tuple case already
+    was; every later import of that half-executed module then collided with the association table it
+    had already registered, which is where nine failures and six collection errors came from. And
+    InsideOf.compute_containment_ratio was kept in its older mesh-and-bounding-box form over
+    01e454d7b's numeric one, alone among that commit's numeric readings, against the test asserting
+    containment builds nothing symbolic. Thirteen of fifteen jobs were green before those two; what
+    is left is the four narrowing tests, which are now a blocker of their own.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback

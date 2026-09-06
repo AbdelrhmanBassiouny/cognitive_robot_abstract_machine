@@ -184,6 +184,12 @@ the failure-prediction metric, the determinism runs.
   (see the generator's name collision below), but the shape recurs: a class diagram
   resolves annotations with the classes it holds, so a class whose name a module also
   imports from `typing_extensions` is worth noticing before the generator meets it.
+- **An annotation the ORM generator has never met writes code nobody reads.** Its first
+  reader is the interpreter importing the generated interface, so a field shape new to
+  the workspace -- `SurfacePass` was the first to declare `Sequence[...]` -- surfaces as
+  a `NameError` or a mapping error in CI rather than as anything a session can see. And a
+  generated module that fails halfway leaves its already-registered tables behind, so the
+  cascade reads as many unrelated failures.
 - **Nothing on these branches runs in a session container.** `random_events`
   needs a C++ library that will not build there, and
   `scripts/regenerate_all_orm.py`/`test/experiments_test`/`test/segmind_test`
@@ -348,6 +354,58 @@ stand -- they were taken by a script, not by the suites -- but every suite numbe
 #265's description was taken in a session container with the ORM-dependent modules
 excluded, which is the container hazard above. A branch whose one untested path is the
 one only CI can run needs CI to have run before it is called verified.
+
+#### What the wall was hiding, 2026-09-06
+
+CI collected for the first time on `f5c383a8`: thirteen of the fifteen jobs green,
+`Examples and Demos` green in full, and each of the two that failed one defect of this
+branch's own.
+
+The experiments interface would not import at all, and the fifteen failures and errors
+of that job were one cause, not two. A relationship is rendered with the container its
+field declares, and `SurfacePass` declares the abstract `Sequence`, so the generated
+module named `collections.abc.Sequence` without importing it -- but naming it would not
+have helped, since SQLAlchemy instruments a collection in place and needs one it can
+build empty and append to, which `Sequence` can be as little as the `tuple` the
+generator already made a list of. So the choice is now which collections a relationship
+*can* be held in rather than the one it cannot, and everything else is a list, as
+`to_dao` already assumed when it handed a tuple over as one. The cascade was the second
+half: the `NameError` left a half-executed module behind, and every later import of it
+collided with the first association table it had already registered.
+
+The general shape is the same as the name collision above and worth carrying: an
+annotation the generator had never met before produces code nobody reads, so its first
+reader is the interpreter importing the generated file. Both defects were one annotation
+old.
+
+The second job was one test. `InsideOf.compute_containment_ratio` was kept in its older
+mesh-and-bounding-box form over `01e454d7b`'s, which counts the body's vertices against
+the other's numeric bounds -- alone among that commit's numeric readings, since
+`SupportedBy` and the region predicates both kept `numeric_global_transform`. The test
+it failed is #244's own contract: containment is checked against every collidable body
+on every detector tick, so it must reach its answer without building CasADi.
+
+#### The four narrowing tests, and where they broke
+
+What is left red is the four tests in `test_montessori_search_narrowing.py` the
+convergence had already flagged for the developer. Bisecting them says exactly where:
+all 27 tests in the file pass at `16c483635` and the same four fail at `03d9719d9`, the
+merge of the hole layout fit (#236), which moves the fitted board 40 mm along y on
+`tracy_pickup_demo` -- the square hole from `y=0.0569` to `y=0.0181` -- and every hole
+with it.
+
+Which fit is right is settled by the capture rather than by either branch's tests:
+projected onto the picture, #236's hole centres land on the six real openings and the
+pre-#236 centres land on bare wood, two of them off the holes entirely. So the code is
+right and the docstrings' measurements are stale, which is what the convergence
+suspected but could not show.
+
+Re-measuring is not enough, though, and that is why it stays a call rather than a chore.
+Against the corrected layout the cube stands 50.3 mm from the square hole and the
+cylinder 51.6 mm, so no radius separates them; and the cylinder is 5 mm to that hole's
+*left*, not its right. Two of the four tests have no reach and no two sides left to ask
+about, so keeping what they demonstrate needs a different hole or a different pair --
+a design call about the perception story, not a measurement.
 
 ### `scenario-domain-model` (#261)
 
