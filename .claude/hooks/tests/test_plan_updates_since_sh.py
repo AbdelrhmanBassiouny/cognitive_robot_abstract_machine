@@ -26,6 +26,7 @@ from plan_updates_since_support import (
     no_default_repository_message,
 )
 from scratch_repository import ScratchRepository
+from tooling_files import HookScript
 
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
 STUBS_DIRECTORY = Path(__file__).parent / "stubs"
@@ -87,9 +88,9 @@ def install_plan_updates_since(repository: ScratchRepository) -> None:
     :param repository: A fixture-built scratch repository.
     """
     repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "plan-updates-since.sh",
-        "plan_updates_since_support.py",
+        HookScript.CONFIGURATION,
+        HookScript.PLAN_UPDATES_SINCE,
+        HookScript.PLAN_UPDATES_SINCE_SUPPORT,
     )
     repository.write("README.md", "scratch repo\n")
     repository.commit_everything("initial commit")
@@ -133,7 +134,7 @@ def install_stub(stub_bin: Path, executable_name: str) -> None:
     *stub_bin*, executable.
 
     :param stub_bin: The directory built by the stub_bin fixture.
-    :param executable_name: ``"gh"`` or ``"curl"``.
+    :param executable_name:``"gh"`` or ``"curl"``.
     """
     source = STUBS_DIRECTORY / f"{executable_name}.sh"
     destination = stub_bin / executable_name
@@ -255,9 +256,7 @@ def run_plan_updates_since(
     return subprocess.run(
         [
             "bash",
-            str(
-                repository.project_root / ".claude" / "hooks" / "plan-updates-since.sh"
-            ),
+            str(repository.hook_script_path(HookScript.PLAN_UPDATES_SINCE)),
             *arguments,
         ],
         cwd=repository.project_root,
