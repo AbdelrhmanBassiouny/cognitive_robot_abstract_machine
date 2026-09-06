@@ -8,7 +8,10 @@ from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point2
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import PlanarBoundingBox
+from semantic_digital_twin.world_description.geometry import (
+    Bounds,
+    PlanarBoundingBox,
+)
 from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
 )
@@ -179,6 +182,34 @@ def test_planar_bounding_box_intersection_with_disjoint_box_is_none():
     assert a.intersection_with(b) is None
 
 
+# %% equality
+
+
+def test_two_planar_boxes_of_the_same_extent_and_origin_are_equal():
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("map")))
+    origin = HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=world.root)
+
+    assert PlanarBoundingBox(-1, -1, 1, 1, origin) == PlanarBoundingBox(
+        -1, -1, 1, 1, origin
+    )
+
+
+def test_two_planar_boxes_at_different_origins_are_unequal():
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("map")))
+    origin = HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=world.root)
+    moved_origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        0, 1, 0, reference_frame=world.root
+    )
+
+    assert PlanarBoundingBox(-1, -1, 1, 1, origin) != PlanarBoundingBox(
+        -1, -1, 1, 1, moved_origin
+    )
+
+
 # %% BoundingBoxCollection[PlanarBoundingBox]
 
 
@@ -216,3 +247,45 @@ def test_planar_bounding_box_collection_bounding_box():
     assert enclosing.min_y == -1
     assert enclosing.max_x == 3
     assert enclosing.max_y == 1
+
+
+# %% axis bounds
+
+
+def test_planar_axis_bounds_name_the_ends_of_every_axis():
+    """
+    A planar box spans two axes rather than three, and each still reads as a named lower
+    and upper.
+    """
+    bb = PlanarBoundingBox(
+        -0.5, -1, 0.5, 1, HomogeneousTransformationMatrix.from_xyz_rpy()
+    )
+
+    assert bb.axis_bounds == (Bounds(-0.5, 0.5), Bounds(-1, 1))
+
+
+def test_planar_axis_bounds_cover_exactly_the_axes_of_the_box():
+    bb = PlanarBoundingBox(
+        -0.5, -1, 0.5, 1, HomogeneousTransformationMatrix.from_xyz_rpy()
+    )
+
+    assert len(bb.axis_bounds) == len(PlanarBoundingBox.axes())
+    assert bb.axis_bounds[PlanarBoundingBox.axes().index(SpatialVariables.y)] == Bounds(
+        -1, 1
+    )
+
+
+def test_planar_corner_coordinates_pad_the_axis_the_box_does_not_span():
+    """
+    A two-axis box is transformed by a three-axis matrix, so its corners are padded up
+    to three coordinates before the transform sees them.
+    """
+    bb = PlanarBoundingBox(
+        -0.5, -1, 0.5, 1, HomogeneousTransformationMatrix.from_xyz_rpy()
+    )
+
+    corners = bb.corner_coordinates()
+
+    assert sorted(corner.tolist() for corner in corners) == sorted(
+        [x, y, 0.0, 1.0] for x in (-0.5, 0.5) for y in (-1.0, 1.0)
+    )

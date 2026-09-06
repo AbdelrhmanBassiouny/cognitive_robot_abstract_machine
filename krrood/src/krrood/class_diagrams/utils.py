@@ -16,6 +16,7 @@ from typing_extensions import (
     Any,
     Callable,
     Dict,
+    FrozenSet,
     List,
     Optional,
     Tuple,
@@ -298,6 +299,26 @@ def resolve_type(
 
 
 @lru_cache
+def names_bound_by_the_defining_modules(object_: Any) -> FrozenSet[str]:
+    """
+    The names bound by the modules an object's annotations were written in.
+
+    An annotation means whatever its own module binds the name to, so those bindings
+    settle it and anything offered from elsewhere may only fill a gap they leave.
+
+    :param object_: The object whose annotations are to be resolved.
+    :return: Every name those modules bind.
+    """
+    defining_objects = object_.__mro__ if inspect.isclass(object_) else (object_,)
+    names = set()
+    for defining_object in defining_objects:
+        module = inspect.getmodule(defining_object)
+        if module is not None:
+            names.update(vars(module))
+    return frozenset(names)
+
+
+@lru_cache
 def get_type_hints_of_object(
     object_: Any, namespace: Tuple[Tuple[str, Any], ...] = ()
 ) -> Dict[str, Any]:
@@ -308,12 +329,18 @@ def get_type_hints_of_object(
     that are not defined in the same module or are imported through TYPE_CHECKING.
 
     :param object_: The object to get the type hints of.
-    :param namespace: A starting namespace to use for resolving type hints.
+    :param namespace: Names to resolve type hints with where the modules the annotations
+        were written in bind none, such as a type imported only for type checking.
     :return: The type hints of the object as a dictionary.
     :raises CouldNotResolveType: If a type hint cannot be resolved.
     """
     if namespace:
-        local_namespace = dict(namespace)
+        already_bound = names_bound_by_the_defining_modules(object_)
+        local_namespace = {
+            name: named_object
+            for name, named_object in namespace
+            if name not in already_bound
+        }
     else:
         local_namespace = {}
     while True:

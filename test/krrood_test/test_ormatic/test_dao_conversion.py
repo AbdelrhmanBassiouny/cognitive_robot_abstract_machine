@@ -164,6 +164,26 @@ def test_empty_collection_is_not_aliased(session, database):
     assert len(queried.positions) == 0
 
 
+def test_tuple_typed_many_to_many_field_maps_and_round_trips(session, database):
+    """
+    A many-to-many field typed as a tuple (immutable, unlike list) must still map and
+    persist: SQLAlchemy's relationship() only accepts a mutable collection_class, so
+    both the generated interface and to_dao() fall back to list internally for such a
+    field. The round trip's values must survive intact; from_dao() reconstructs the
+    field as a list rather than the original tuple, a known, narrower gap than the
+    crash this test guards against.
+    """
+    positions = KRROODPositionsAsTuple((KRROODPosition(1, 2, 3),))
+    session.add(to_dao(positions))
+    session.commit()
+    session.expunge_all()
+
+    queried = session.scalars(select(KRROODPositionsAsTupleDAO)).one()
+    reconstructed = queried.from_dao()
+
+    assert tuple(reconstructed.positions) == (KRROODPosition(1, 2, 3),)
+
+
 class _LateDomainClass:
     pass
 

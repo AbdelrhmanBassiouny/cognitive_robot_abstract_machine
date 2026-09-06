@@ -21,6 +21,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 from giskardpy.motion_statechart.graph_node import CancelMotion
 from giskardpy.motion_statechart.graph_node import EndMotion, Goal, Task
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from giskardpy.executor import NoPacing, Pacer, RealTimePacer, SimulationTimePacer
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from giskardpy.ros_executor import Ros2Executor
 from krrood.entity_query_language.factories import evaluate_condition
@@ -93,6 +94,12 @@ class Executable:
             executable.execute()
 
 
+DEFAULT_MAX_TICKS_PER_MOTION_MAPPING: int = 2000
+"""
+Ticks a single motion mapping is given before the simulated tick loop gives up on it.
+"""
+
+
 @dataclass
 class GiskardExecutable(Executable):
     """
@@ -149,6 +156,28 @@ class GiskardExecutable(Executable):
     Whether an :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCo
     llisionAvoidance` is added to the motion state chart, managed by
     :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+    """
+
+    real_time_pacing: ClassVar[bool] = False
+    """
+    Whether the simulated tick loop is paced to wall-clock time (via
+    :class:`~giskardpy.executor.SimulationPacer`) instead of running as fast as the QP
+    solve allows, managed by :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+    """
+
+    max_ticks_per_motion_mapping: ClassVar[int] = DEFAULT_MAX_TICKS_PER_MOTION_MAPPING
+    """
+    Per-motion tick budget for :meth:`_execute_simulation`'s tick loop, managed by
+    :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+
+    A motion that never reaches its end monitor gives up after
+    :attr:`tick_limit` ticks and raises :class:`MotionDidNotFinish`, so it can
+    never run forever.
+
+    Matters most together with ``real_time_pacing``: a paced tick sleeps for a
+    full control period, so the default budget is ~40 s of wall clock *per
+    mapping* before a stuck motion gives up, during which the robot simply
+    appears frozen. Keep it low when pacing is on.
     """
 
     @property
@@ -258,6 +287,32 @@ class GiskardExecutable(Executable):
             case _:
                 raise UnknownExecutionType(GiskardExecutable.execution_type)
 
+    def _build_pacer(self) -> Pacer:
+        """
+        The pacer for the control loop: simulated time when the context knows how to
+        read a simulation clock, otherwise wall-clock time if ``real_time_pacing`` is on
+        and no pacing at all if it is not.
+
+        Pacing against a simulation that cannot hold real time keeps one control cycle
+        of simulation between commands, rather than letting the controller outrun the
+        plant by however far the simulation happens to be lagging.
+        """
+        if self.context.simulation_clock is not None:
+            return SimulationTimePacer(simulation_clock=self.context.simulation_clock)
+        if GiskardExecutable.real_time_pacing:
+            return RealTimePacer()
+        return NoPacing()
+
+    @property
+    def tick_limit(self) -> int:
+        """
+        Ticks the simulated loop gives this executable's motions in total before it
+        gives up on them.
+        """
+        return (
+            len(self.motion_mappings) * GiskardExecutable.max_ticks_per_motion_mapping
+        )
+
     def _execute_simulation(self) -> None:
         """
         Compiles the motion state chart and ticks it in the world of the context until
@@ -271,13 +326,15 @@ class GiskardExecutable(Executable):
                 ),
             ),
             ros_node=self.context.ros_node,
+            pacer=self._build_pacer(),
         )
         motion_state_chart = self.motion_state_chart
         executor.compile(motion_state_chart)
 
         counter = 0
-        while counter < len(self.motion_mappings) * 2000:
+        while counter < self.tick_limit:
             executor.tick()
+            executor.pacer.sleep()
             counter += 1
             if executor.motion_statechart.is_end_motion():
                 break
@@ -327,6 +384,7 @@ class ConditionExecutable(Executable):
             condition=self.condition_node.condition,
         )
 
+
 @dataclass
 class MoveBranchExecutable(Executable):
     """
@@ -336,7 +394,7 @@ class MoveBranchExecutable(Executable):
 
     body: Body = field(kw_only=True)
     """
-    The root of the branch in the kinematic structure that is moved 
+    The root of the branch in the kinematic structure that is moved.
     """
 
     new_parent: Body = field(kw_only=True)

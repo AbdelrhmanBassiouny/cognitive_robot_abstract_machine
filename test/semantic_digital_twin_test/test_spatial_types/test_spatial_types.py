@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 
 import krrood.symbolic_math.symbolic_math as sm
-from krrood.entity_query_language.factories import a, an
+from krrood.entity_query_language.factories import a, an, variable
+from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.symbolic_math.exceptions import (
     UnsupportedOperationError,
     WrongDimensionsError,
@@ -21,6 +22,7 @@ from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.geometry import Box
 from semantic_digital_twin.world_description.world_entity import Body
 from .reference_implementations import (
     rotation_matrix_from_quaternion,
@@ -1722,6 +1724,17 @@ class TestTransformationMatrix:
         quaternion = t.to_quaternion()
         assert isinstance(quaternion, Quaternion)
 
+    def test_to_position_quaternion_list(self):
+        """
+        Position and orientation flatten into one 7-element list, via :class:`Pose`.
+        """
+        t = HomogeneousTransformationMatrix.from_xyz_quaternion(
+            1.0, 2.0, 3.0, 0.0, 0.0, 0.70710678, 0.70710678
+        )
+        assert t.to_position_quaternion_list() == pytest.approx(
+            [1.0, 2.0, 3.0, 0.0, 0.0, 0.70710678, 0.70710678]
+        )
+
     def test_frame_properties(self):
         """
         Test reference frame and child frame properties.
@@ -1961,6 +1974,17 @@ class TestTransformationMatrix:
         assert transform_np[3, 3] == 1
 
 
+class TestPose:
+    def test_to_position_quaternion_list(self):
+        """
+        Position and orientation flatten into one 7-element list.
+        """
+        p = Pose.from_xyz_quaternion(1.0, 2.0, 3.0, 0.0, 0.0, 0.70710678, 0.70710678)
+        assert p.to_position_quaternion_list() == pytest.approx(
+            [1.0, 2.0, 3.0, 0.0, 0.0, 0.70710678, 0.70710678]
+        )
+
+
 class TestQuaternion:
 
     @pytest.mark.parametrize("q1", quaternions)
@@ -2045,7 +2069,7 @@ class TestQuaternion:
 
 def test_underspecification_of_vector():
     q = a(Vector3)(x=1, y=2, z=3)
-    q = q.where(q.variable.x > 0)
+    q = q.where(q.x > 0)
     v1 = q.construct_instance()
     assert v1.x == 1
     assert v1.y == 2
@@ -2054,7 +2078,7 @@ def test_underspecification_of_vector():
 
 def test_underspecification_of_transformation():
     q = a(HomogeneousTransformationMatrix.from_xyz_rpy)(x=1)
-    q = q.where(q.variable.x > 0)
+    q = q.where(q.x > 0)
     t1 = q.construct_instance()
     assert t1.x == 1
 
@@ -2102,3 +2126,47 @@ class TestConstantEntriesAreNormalised:
             sm.to_sx(self._matrix_with_wrong_constant_entries())
         )
         np.testing.assert_array_equal(rotation.to_np()[:3, 3], [0.0, 0.0, 0.0])
+
+
+# %% how a pose says where it is
+
+
+def test_a_pose_is_said_by_the_frame_it_is_of():
+    """
+    A pose stating where something is, is that thing: the frame it is of is what a
+    reader calls the spot.
+    """
+    camera = Body(name=PrefixedName("camera", "tracy"))
+    shape = variable(Box, [])
+    assert (
+        verbalize_expression(
+            shape.origin == HomogeneousTransformationMatrix(child_frame=camera)
+        )
+        == f"the origin of a Box is the {camera.name.name}"
+    )
+
+
+def test_a_pose_of_nothing_is_said_by_the_frame_it_is_stated_in():
+    """
+    A pose that is of no thing in particular is a spot, and the only thing there is to
+    say about it is the frame it was read in.
+    """
+    root = Body(name=PrefixedName("root", "tracy"))
+    shape = variable(Box, [])
+    assert (
+        verbalize_expression(
+            shape.origin == HomogeneousTransformationMatrix(reference_frame=root)
+        )
+        == f"the origin of a Box is a pose in the {root.name.name}"
+    )
+
+
+def test_a_pose_belonging_to_no_frame_at_all_is_still_said_as_a_pose():
+    """
+    A pose naming neither frame says what it is, rather than the class it is stored as.
+    """
+    shape = variable(Box, [])
+    assert (
+        verbalize_expression(shape.origin == HomogeneousTransformationMatrix())
+        == "the origin of a Box is a pose"
+    )

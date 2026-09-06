@@ -4,8 +4,10 @@ import hashlib
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 from functools import cached_property, lru_cache
 from inspect import isclass
+from types import NoneType
 
 import sqlalchemy
 from typing_extensions import (
@@ -33,6 +35,24 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+COLUMN_VALUE_TYPES = frozenset({bool, int, float, str, bytes, datetime, NoneType})
+"""
+The types a generated ``Mapped[...]`` annotation resolves to a column type for.
+
+Many other classes live in ``builtins`` -- every exception among them -- and a column
+declared for one of those cannot be built, so a field holding one is left unmapped.
+"""
+
+RELATIONSHIP_COLLECTION_TYPES = frozenset({list, set})
+"""
+The collection classes a generated relationship is held in.
+
+SQLAlchemy instruments a collection in place, so it needs one it can build empty and
+append to. A field declaring any other container -- an immutable one such as ``tuple``,
+or an abstract one such as ``Sequence`` -- is held in a ``list`` instead, and its object
+is handed its own container back on the way out.
+"""
 
 
 @dataclass
@@ -665,7 +685,11 @@ class WrappedTable(TableLike):
             logger.info(f"Parsing as type.")
             self.create_type_type_column(wrapped_field)
 
-        elif wrapped_field.is_builtin_type and not wrapped_field.is_container:
+        elif (
+            wrapped_field.is_builtin_type
+            and not wrapped_field.is_container
+            and type_endpoint in COLUMN_VALUE_TYPES
+        ):
             logger.info(f"Parsing as builtin type.")
             self.create_builtin_column(wrapped_field)
 
@@ -851,15 +875,12 @@ class WrappedTable(TableLike):
         # create a relationship
         rel_name = f"{wrapped_field.field.name}"
 
-        # SQLAlchemy instruments a collection class in place (it needs an appender
-        # method), which an immutable domain container such as tuple cannot provide.
-        # The relationship is therefore held as a list at the ORM layer; from_dao
-        # restores the domain field's own tuple type once its object is populated
-        # (see DataAccessObject._finalize_object_containers).
+        # from_dao restores the domain field's own container once its object is
+        # populated (see DataAccessObject._finalize_object_containers).
         collection_class_type = (
-            list
-            if wrapped_field.container_type is tuple
-            else wrapped_field.container_type
+            wrapped_field.container_type
+            if wrapped_field.container_type in RELATIONSHIP_COLLECTION_TYPES
+            else list
         )
         container_name = module_and_class_name(collection_class_type)
 
