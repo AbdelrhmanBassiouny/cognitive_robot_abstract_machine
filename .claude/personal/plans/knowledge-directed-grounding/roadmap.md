@@ -138,3 +138,26 @@ the whole workspace, including `giskardpy` and `coraplex`, and is the environmen
 item from `surface-finish-annotation` onward verified against; earlier items used a
 hand-built recipe (a virtual environment, `random_events` built from source, `urdf_parser_py`
 copied in) that `uv sync` supersedes.
+
+## The ICRA convergence pass, 2026-09-06
+
+Every in-flight item of this plan is now carried by one branch: `montessori-perception-on-main` (#202), `surfaces-from-world` (#205), `detect-per-supporting-surface` (#221), `one-detection-per-thing` (#225), `holes-fitted-like-pieces` (#236), `pieces-looked-for-where-expected` (#232), `competing-explanations` (#270) and `montessori-classes-in-the-orm` (#223).
+
+The pass merged every one of them into the ICRA integration branch (#265,
+`claude/icra-experiments-simulation-pipeline-w4ep7n`) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.
+
+Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in `icra-foundation`'s `roadmap.md` under *The
+convergence pass, 2026-09-06*. Read it there rather than re-deriving it here.
+
+The landing hazard this plan records for the `surfaces` track - every branch
+stacked past #223 conflicting on the `RectifiedFootprint` rename - was paid once
+here, in the #223 and #270 merges, with the mechanical resolution this roadmap
+already states: take the incoming edit, spell the class `RectifiedFootprint`.
+
+#223 turned out to add one thing the branch did not already have:
+`test_montessori_orm.py`. Its rename and its `montessori/__init__.py` were
+already there, so the merge is otherwise a record of ancestry.
