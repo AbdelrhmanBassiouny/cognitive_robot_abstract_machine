@@ -718,3 +718,28 @@ Nothing here changes `plan-item-kickoff`/`plan-item-resolve`'s own `record` writ
 grow an already-tracked item's plan by roadmap narrative rather than by a whole new item —
 that accretion path is `minimal-roadmap-writing`'s job, a sibling item in this same track,
 not this one's.
+
+## Done 2026-09-06: `minimal-roadmap-writing` — a shared compression rule, cited where roadmap text gets written
+
+Pull request: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/279
+
+Guidance only, no enforcement (that's `refuse-oversized-save`), so it needed nothing from
+`plan_size_budget.py` and is based on `main` rather than stacked on #207 — the item's own
+edits apply unchanged to `main`'s versions of every file it touches, checked before cutting
+the branch.
+
+`.claude/skills/plan-dashboard/roadmap-writing.md` states what to **keep** (the plan's "why",
+lasting design decisions, standing risks, open questions, conclusions a later item depends on)
+and what to **compress** (per-round implementation narrative on work already merged, to a line
+naming the outcome — the pull request already carries the detail). Deliberately does not restate
+`SizeBudget`'s own numbers, so it can't drift from them; a test enforces that.
+
+Cited from the four places that write roadmap text: `plan-create`'s migration guidance (which
+said "preserve its detail rather than compressing it away" until now), and one line each in
+`plan-item-kickoff`, `plan-item-resolve` and `add-plan-item` at the point each writes a section.
+`add-plan-item` had no content guidance at all before this, despite writing through the same
+`record` mechanism as kickoff.
+
+This item's own evidence is the three splits already on this roadmap: `split-workflow-unification`
+found 94% of its source roadmap was merged-PR narrative, `split-rdr-refactor` 92%, and
+`split-knowledge-directed-perception` most of a third — the direct measurement behind the rule.
