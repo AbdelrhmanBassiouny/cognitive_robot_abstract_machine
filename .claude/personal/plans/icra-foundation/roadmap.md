@@ -235,6 +235,78 @@ the one number in the merge that came from a run rather than either
 branch's text, worth revisiting if 0.04 was tuned against the old
 spawn-hovering geometry specifically.
 
+#### The convergence pass, 2026-09-06
+
+Every in-flight branch of the two knowledge-directed plans, the ripple-down rules
+stack and match-query-ergonomics was merged onto #265 in one pass, so the ICRA
+experiments run on one tree. Seven merges, each at its own tip and each into #265 —
+never sideways into each other, which would have paid the same conflict set twice:
+
+1. **#223** `montessori-classes-in-the-orm`. Its substance was already here
+   (`montessori/__init__.py`, the `RectifiedFootprint` rename); what it adds is
+   `test_montessori_orm.py`. Both conflicts resolved to this branch's newer
+   detector code.
+2. **#270** `competing-explanations`, carrying #225, #232 and #236. `detect()` keeps
+   the colour it is narrowed by and gains the board outlines and the comparison
+   thresholds.
+3. **#257** `expectations-from-events`, carrying #227, #238, #255 and #246.
+   `reasoning/predicates.py` took #257's already-settled resolution.
+4. **#229** `predicates-answer-whether-they-hold`. A pure ancestry merge: it changed
+   no file, because this branch already carried the predicate classes at an older
+   tip and #229's only newer commits are merges of `main`.
+5. **#275** `a-look-is-described-by-a-match`, carrying #231, #239, #266 and #259.
+6. **`D-deco` (#77)**, the whole ripple-down rules stack. A clean text merge.
+7. **#192, #196, #248**, the whole match-query-ergonomics set (#254 arriving with
+   #192).
+
+Both standing exclusions this item's notes carried are reversed at the developer's
+direction: the whole RDR stack is in rather than #239's one knowledge-half commit,
+and #192 is in.
+
+**What the merge cost, and what it removed.** #275 and the #227/#236/#238/#257
+lineage are two rewrites of the same pipeline, so most of the work was putting each
+capability where the other design says it belongs. The look's own knowledge —
+the request narrowing, the expectations, the imagined world, the table the board
+hides — moved onto `SceneToSearch`, and `FindThePieces` reads it there instead of
+the pipeline doing it inline. A detector is handed one `SurfacePass` rather than
+nine positional arguments, which is what let the two designs' parameter lists meet.
+
+Duplication the text merge would have left standing, all of it removed here:
+`SUPPORTING_SURFACE_ATTRIBUTE_NAME` (superseded by #227's `narrowing_relations`);
+`VIEW_DIRECTION_EPS` defined twice in `predicates.py`, and
+`_supported_stands_below_supporting` re-deriving what `unit_axis_of` computes;
+`_outlines_wearing` identical on both piece detectors, now `SurfaceColors`'s;
+`piece_height = 0.03` on each detector, now `LOOSE_PIECE_HEIGHT` on `PieceDetector`;
+`workspace_over` with two definitions under one name, the second silently shadowing
+the first; and `CanBehaveLikeAVariable` declared twice in `mapped_variable.py` after
+#248 — a conflict resolved wrong on the first pass and amended.
+
+**The collision git could not flag, twice.** The known one was #192 removing
+`Match.variable`, which #159 and therefore #239, #266 and #275 read. Because #192
+also gives `Match` symbolic attribute delegation, a stale read does not raise — it
+builds an `Attribute` expression for a field called "variable". They were found by
+making `Match._is_own_name_` refuse the retired spellings temporarily, running the
+suites, and migrating every hit; the guard was then removed, since #192 deliberately
+leaves every public name to the matched class.
+
+The second was not predicted: #257 fixed the grid a sweep walks — laid out from the
+centre outwards, so widening a belief's reach only *adds* placements — while the
+#225/#232/#236 lineage extracted the whole sweep into `OutlineFitter`, carrying the
+old edge-anchored grid with it. Merged textually, `offsets_within` would have
+arrived unused beside the phase bug it was written to fix, with #257's four tests
+still passing against the wrong code. It now lives in `outline_fit.py` where the
+sweep does.
+
+**What was measured.** The six real captures, run through the pipeline before and
+after with the same script: #265's tip missed 7 pieces and invented 3; the converged
+tree misses 6 and invents 1, and finds the board on all six. No capture got worse.
+
+**Left for the developer.** After the merge, `EdgeFitDetector` and
+`ColorBlobDetector` differ only in how tightly a blob's place is believed before
+the outline is fitted — a radius and a turn — which is a parameter rather than a
+subclass. Collapsing them into one detector the rules configure two ways is a design
+call, not a merge resolution, so it was not taken here.
+
 ### `scenario-domain-model` (#261)
 
 Generalises `BenchmarkScenario`/`ScenarioRunner` and
