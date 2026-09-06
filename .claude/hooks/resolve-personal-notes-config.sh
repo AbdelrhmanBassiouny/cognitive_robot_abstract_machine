@@ -309,6 +309,12 @@ BUILD_INDEX_MODULE="bastler.build_index"
 # build_site: the headless static-site build (every plan dashboard plus the
 # master index) a Pages workflow runs with no live session.
 BUILD_SITE_MODULE="bastler.build_site"
+# pages_site: points GitHub Pages at the branch the built site is pushed to
+# and prints the URL it is served from - run by the Pages workflow.
+PAGES_SITE_MODULE="bastler.pages_site"
+# publish_site: replaces a branch's whole content with a built site
+# directory, which is what Pages then serves - run by the Pages workflow.
+PUBLISH_SITE_MODULE="bastler.publish_site"
 # sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
 SYNC_MANIFEST_STATUS_MODULE="bastler.sync_manifest_status"
@@ -379,6 +385,11 @@ PLAN_DASHBOARD_DIRECTORY=".claude/skills/plan-dashboard"
 # conditional push of its correction, then build_dashboard - the whole
 # refresh sequence /plan-dashboard runs for one plan.
 REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
+
+# PLAN_DASHBOARDS_WORKFLOW: the Action that publishes every plan's dashboard
+# as a GitHub Pages site on every pull request event, on a change to the
+# renderer, and on demand.
+PLAN_DASHBOARDS_WORKFLOW=".github/workflows/plan-dashboards.yml"
 
 # STACK_DIRECTORY: where the stacked-PR workflow's own README lives. Its
 # Python moved into the package above; the document stays, because it is
