@@ -61,6 +61,21 @@ items:
       51.6 mm, so no radius separates them, and the cylinder is 5 mm to that hole's left rather
       than its right. Two of the four have no reach and no two sides left to ask about, so they
       need a different hole or a different pair, which is a design call about the perception story.
+    - >-
+      The experiments job is red on a name collision the convergence created, and clearing it is a
+      call about vocabulary rather than a merge resolution. Two dataclasses are called RecordedLook:
+      perception/step_by_step.py's (the world, pipeline, frame, board and viewpoint one look was
+      taken in, which watch_narrowing and the narrowing suite read) and perception/recordings.py's
+      (one colour image a rosbag holds with the depth published before it, read only inside that
+      module, watch_bag and capture_from_bag). The generator names a table after the bare class
+      name, so it emits RecordedLookDAO twice and SQLAlchemy refuses the second; the half-executed
+      module then leaves its tables registered, and every later import collides on the first
+      association table, which is the 13 failures and 8 errors. The same shape as the Footprint
+      collision already recorded as a standing hazard. Either rename one - #223's Footprint to
+      RectifiedFootprint is the precedent, and recordings.py's is the one with fewer readers and the
+      weaker claim to "look" - or extend generate_orm's ignored_classes over the bag-reading family,
+      which then has to cover watch_bag too, since BagReplay holds a RecordedCamera field. Neither
+      can be verified in a session container, which cannot run the experiments generation at all.
   notes: >
     The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor
     stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a
