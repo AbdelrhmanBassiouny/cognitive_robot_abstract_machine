@@ -1437,40 +1437,21 @@ class InsideOf(KinematicStructureEntitySpatialRelation):
     def compute_containment_ratio(self) -> float:
         """
         Compute the containment ratio of self.body inside self.other.
+
+        Both bodies' geometry is carried into the world frame as plain coordinates, so
+        neither the meshes themselves nor a box enclosing them is ever built.
         """
-        if self.other.combined_mesh is None:
+        body_mesh = self.body.combined_mesh
+        if body_mesh is None or body_mesh.is_empty:
             return 0.0
 
-        # Get meshes in their local (body) frames
-        mesh_a_local = self.body.combined_mesh
-        mesh_b_local = self.other.combined_mesh
-
-        # Check if either mesh is empty
-        if (
-            mesh_a_local is None
-            or mesh_a_local.is_empty
-            or mesh_b_local is None
-            or mesh_b_local.is_empty
-        ):
-            return 0.0
-
-        # Transform meshes from body frame to world frame
-        mesh_a = mesh_a_local.copy()
-        mesh_a.apply_transform(self.body.global_transform.to_np())
-
-        mesh_b = mesh_b_local.copy()
-        mesh_b.apply_transform(self.other.global_transform.to_np())
-
-        # Use bounding box of mesh_b to check if mesh_a is inside mesh_b
-        mesh_b_bbox = mesh_b.bounding_box
-
-        if not mesh_b_bbox.is_watertight:
-            return 0.0
-
-        inside = mesh_b_bbox.contains(mesh_a.vertices)
+        world_P_body = self.body.numeric_global_transform.transform_points(
+            body_mesh.vertices
+        )
+        inside = self.other.numeric_global_bounds.contains(world_P_body)
         if len(inside) == 0:
             return 0.0
-        return sum(inside) / len(inside)
+        return float(inside.sum()) / len(inside)
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
