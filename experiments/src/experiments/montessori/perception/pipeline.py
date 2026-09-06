@@ -849,12 +849,6 @@ class EdgeFitDetector(PieceDetector):
     Area a piece's outline may cover.
     """
 
-    hue_tolerance: int = HUE_TOLERANCE
-    """
-    How far a measured colour may sit from a piece's own before a colour seen at a place
-    stops suggesting that piece.
-    """
-
     def capability(self, look: TargetOnSurface) -> ConditionType:
         """
         Answers a look for a piece whose outline is modelled, on any surface.

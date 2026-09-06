@@ -208,7 +208,7 @@ class OutlineFitter:
         :param spacing: How far apart the points the outline is compared at stand.
         :return: The best placement.
         """
-        positions = self.placements_within(center, radius, step)
+        positions = self._lattice_across(center, radius, step)
         return max(
             (
                 self._best_position(outline, edges, positions, angle, reach, spacing)
@@ -216,6 +216,26 @@ class OutlineFitter:
             ),
             key=lambda placement: placement.outline_agreement,
         )
+
+    @staticmethod
+    def _lattice_across(center: PlanarPoint, radius: float, step: float) -> np.ndarray:
+        """
+        The positions a search tries across a stretch of plane it was pointed at.
+
+        The whole stretch is walked, out to the radius itself, because a radius given
+        here says how far the search may move rather than how far the thing is believed
+        to be -- the board's seed is the middle of whatever the lighting made dark, and
+        the fit has to be able to reach the board from it.
+
+        :param center: Where on the plane the search is pointed.
+        :param radius: How far, in metres, it may move from there.
+        :param step: How far apart, in metres, the positions stand.
+        :return: The world-frame ``(n, 2)`` positions.
+        """
+        walk = np.arange(-radius, radius + step / 2, step)
+        return np.stack(np.meshgrid(walk, walk, indexing="ij"), axis=-1).reshape(
+            -1, 2
+        ) + np.array([center.x, center.y])
 
     @staticmethod
     def placements_within(

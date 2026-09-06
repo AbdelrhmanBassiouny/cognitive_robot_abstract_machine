@@ -99,7 +99,7 @@ class Expectation(Match[Body]):
         """
         The thing this is expected of, as the world holds it.
         """
-        return self.domain[0]
+        return self._domain_[0]
 
     @property
     def holds(self) -> Tuple[Match[Relation], ...]:

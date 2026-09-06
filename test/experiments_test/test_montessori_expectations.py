@@ -18,7 +18,8 @@ from experiments.montessori.perception.expectations import (
     MontessoriExpectation,
     MontessoriExpectations,
 )
-from experiments.montessori.perception.footprint import Footprint
+from experiments.montessori.perception.explanations import Explanation
+from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
     PieceHypothesis,
@@ -269,7 +270,7 @@ def kinds_of(expectation: MontessoriExpectation) -> List[Type[Relation]]:
 
     :param expectation: What is expected of a piece.
     """
-    return [stated.type for stated in expectation.holds]
+    return [stated._type_ for stated in expectation.holds]
 
 
 def piece_seen_at(
@@ -300,7 +301,7 @@ def piece_seen_at(
     return DetectedMontessoriShape(
         role_taker=ImaginedWorld.copied_from(None).spawn(cube, pose),
         pose=pose,
-        footprint=Footprint(
+        footprint=RectifiedFootprint(
             area=HOLE_WIDTH**2,
             width=HOLE_WIDTH,
             length=HOLE_WIDTH,
@@ -312,7 +313,7 @@ def piece_seen_at(
         category=MontessoriShapeCategory.CUBE,
         supporting_surface=supporting_surface,
         height=PIECE_HEIGHT,
-        outline_agreement=0.8,
+        explanation=Explanation(outline_followed=0.8, edges_accounted_for=0.8),
         hypothesis=PieceHypothesis(
             place=BelievedPlace(
                 surface=supporting_surface, center=PlanarPoint(x=x, y=y)

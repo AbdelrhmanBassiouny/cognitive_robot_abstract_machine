@@ -20,6 +20,7 @@ from experiments.montessori.perception.detector_choice import (
     TargetOnSurface,
 )
 from experiments.montessori.perception.exceptions import NoDetectorAnswersTheLook
+from experiments.montessori.perception.imagination import ImaginedWorld
 from experiments.montessori.perception.orthophoto import (
     OrthophotoProjector,
     WorkspaceRegion,
@@ -48,6 +49,7 @@ from experiments.montessori.world import MontessoriWorld
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.geometry import Color, SurfaceFinish
+from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import List
 
 from .dataset import montessori_scene_fixtures
@@ -72,7 +74,7 @@ def _surface(
     :param color: The colour the world states for the surface.
     """
     return WorkspaceSurface(
-        name=PrefixedName("surface", "test"),
+        entity=Body(name=PrefixedName("surface", "test")),
         region=WorkspaceRegion(
             minimum_x=0.0, maximum_x=1.0, minimum_y=0.0, maximum_y=1.0
         ),
@@ -508,13 +510,15 @@ def test_the_colour_blob_finds_on_a_matte_lid_what_the_edge_fit_finds(
 
     found_by = {
         type(detector): detector.detect(
-            rectified.at(lid.height),
-            rectified.at(lid.height + detector.piece_height),
-            rectified.edges_at(lid.height + detector.piece_height),
-            frame,
-            None,
-            search,
-            cyan,
+            SurfacePass(
+                orthophoto=rectified.at(lid.height),
+                top_orthophoto=rectified.at(lid.height + detector.piece_height),
+                edges=rectified.edges_at(lid.height + detector.piece_height),
+                frame=frame,
+                search=search,
+                imagined=ImaginedWorld.copied_from(None),
+                candidates=cyan,
+            )
         )
         for detector in (EdgeFitDetector(), ColorBlobDetector())
     }

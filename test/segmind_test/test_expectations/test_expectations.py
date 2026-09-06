@@ -117,7 +117,7 @@ def test_a_thing_that_went_into_a_hole_is_not_expected_to_rest_on_what_the_hole_
 
     expected = release_the_cube(expectations, scene, declared)
 
-    assert SupportedBy not in [stated.type for stated in expected.holds]
+    assert SupportedBy not in [stated._type_ for stated in expected.holds]
     assert not SupportedBy(scene.cube, scene.plate)()
 
 
@@ -149,8 +149,8 @@ def test_an_expectation_is_a_statement_over_the_subjects_own_kind(
     expected = release_the_cube(expectations, scene, declared)
 
     assert isinstance(expected, Match)
-    assert expected.type is type(scene.cube)
-    assert expected.domain == [scene.cube]
+    assert expected._type_ is type(scene.cube)
+    assert expected._domain_ == [scene.cube]
     assert len(expected._where_conditions_) == len(expected.holds)
 
 
@@ -208,7 +208,7 @@ def test_a_pick_up_that_lifts_the_thing_out_of_the_hole_ends_its_being_in_it(
 
     expectations.record(PickUpEvent(tracked_object=scene.cube))
 
-    assert [stated.type for stated in expectations.of(scene.cube).holds] == [Near]
+    assert [stated._type_ for stated in expectations.of(scene.cube).holds] == [Near]
 
 
 def test_a_belief_only_decays_when_something_acts_on_that_thing(

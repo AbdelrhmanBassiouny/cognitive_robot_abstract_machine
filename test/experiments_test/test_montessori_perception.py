@@ -24,6 +24,7 @@ from experiments.montessori.perception.hypotheses import (
 )
 from experiments.montessori.perception.explanations import Explanation
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
+from experiments.montessori.perception.look_choice import SceneToSearch
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import (
@@ -251,7 +252,7 @@ def test_what_the_board_hides_reaches_from_the_table_up_to_its_own_lid(
     frame = renderer.render([*placed_pieces, piece_on_the_lid])
     board = pipeline.detect(frame).board
 
-    hidden = pipeline.table_hidden_by(board, frame)
+    hidden = pipeline.scene_to_search(frame).table_hidden_by(board)
 
     assert hidden.bottom == pytest.approx(pipeline.table.height)
     assert hidden.top == pytest.approx(board.lid_height)
@@ -269,7 +270,7 @@ def test_what_the_board_hides_covers_the_table_it_stands_on(
         outline=board.outline, bottom=pipeline.table.height, top=board.lid_height
     )
 
-    hidden = pipeline.table_hidden_by(board, frame)
+    hidden = pipeline.scene_to_search(frame).table_hidden_by(board)
 
     assert hidden.shared_area(standing_on_the_table) == pytest.approx(
         standing_on_the_table.area, rel=1e-3
@@ -285,7 +286,7 @@ def test_a_reading_taken_off_the_table_the_board_hides_is_not_reported(
     frame = renderer.render([*placed_pieces, piece_on_the_lid])
     scene = pipeline.detect(frame)
     occupancy = Occupancy()
-    occupancy.claim(pipeline.table_hidden_by(scene.board, frame))
+    occupancy.claim(pipeline.scene_to_search(frame).table_hidden_by(scene.board))
     against_the_board_pose = Pose.from_xyz_rpy(
         *scene.board.pose.to_position().to_np()[:2],
         pipeline.table.height + 0.015,
@@ -334,9 +335,16 @@ def test_a_look_expects_the_piece_the_world_says_it_placed(
     )
     placed = montessori.world.get_semantic_annotations_by_type(MontessoriShape)
 
+    scene = SceneToSearch(
+        frame=renderer.render([]),
+        table=pipeline.table,
+        lid=pipeline.lid,
+        world=pipeline.world,
+    )
+
     from_the_world = [
         hypothesis
-        for hypothesis in pipeline.expected_pieces()
+        for hypothesis in scene.expected_pieces()
         if hypothesis.source is montessori.world
     ]
 
@@ -350,10 +358,10 @@ def test_a_look_expects_the_piece_the_world_says_it_placed(
 
 
 def test_a_look_with_no_world_behind_it_expects_nothing_of_its_own(
-    pipeline: MontessoriPerceptionPipeline,
+    pipeline: MontessoriPerceptionPipeline, renderer: MontessoriSceneRenderer
 ):
     assert pipeline.world is None
-    assert pipeline.expected_pieces() == []
+    assert pipeline.scene_to_search(renderer.render([])).expected_pieces() == []
 
 
 # %% a piece colour cannot separate from what it rests on

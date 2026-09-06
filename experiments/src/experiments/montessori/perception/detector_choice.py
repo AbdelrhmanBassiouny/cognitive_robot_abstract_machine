@@ -53,6 +53,7 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Entity
+from krrood.patterns.belief_source import BeliefSource
 from typing_extensions import Dict, List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
@@ -234,7 +235,7 @@ class SurfacePass:
 # %% what a detector says it can answer
 
 
-class PieceDetector(PerceptionDetector[TargetOnSurface], ABC):
+class PieceDetector(PerceptionDetector[TargetOnSurface], BeliefSource, ABC):
     """
     Something that finds the loose pieces resting on one surface.
 
@@ -249,6 +250,12 @@ class PieceDetector(PerceptionDetector[TargetOnSurface], ABC):
     Roughly how tall a loose piece stands, in metres, which sets the plane a piece's top
     is rectified onto and is reported as its height wherever the depth image cannot
     resolve one.
+    """
+
+    hue_tolerance: int = HUE_TOLERANCE
+    """
+    How far a measured colour may sit from a piece's own before a colour seen at a place
+    stops suggesting that piece.
     """
 
     @abstractmethod

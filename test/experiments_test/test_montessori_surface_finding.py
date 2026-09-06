@@ -137,7 +137,7 @@ def modelled_surface(
     :param finish: How the world says it takes light, or None where it states none.
     """
     return WorkspaceSurface(
-        name=PrefixedName("table", "test"),
+        entity=Body(name=PrefixedName("table", "test")),
         region=bounds,
         height=height,
         finish=finish,

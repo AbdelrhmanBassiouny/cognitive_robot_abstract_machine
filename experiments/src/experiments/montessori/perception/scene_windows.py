@@ -55,7 +55,7 @@ class SceneWindows:
         :param scene: The detections to draw.
         """
         table = self.pipeline.table_in(frame)
-        workspace = self.pipeline.workspace_over(table)
+        workspace = self.pipeline.workspace_over(table.region)
         self.viewer.show_color(
             workspace.clip(self.overlay.draw(CameraView(frame), scene), frame)
         )
@@ -63,7 +63,7 @@ class SceneWindows:
         self.viewer.show_rectified(
             self.overlay.draw(
                 ViewFromAbove(
-                    RectifiedView(frame, self.pipeline.rectify(frame, table))
+                    RectifiedView(frame, self.pipeline.rectify(frame, table.height))
                 ),
                 scene,
             )

@@ -19,17 +19,27 @@ from importlib.resources import files
 from pathlib import Path
 
 import pytest
-from rclpy.action import get_action_names_and_types
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.sqltypes import NullType
 
-from coraplex.demonstrations import RobotDemonstrationRosSession
-from coraplex.perception import ROBOKUDO_QUERY_ACTION_NAME
-from experiments.real_stretch_apartment_demo.demo import CEREAL_NAME
 from krrood.ormatic.utils import create_engine
 from semantic_digital_twin.semantic_annotations.semantic_annotations import CheezeIt
 
-from coraplex.testing import StandaloneProcess
+# Only the standalone-controller fixtures below need ROS, and only they are skipped
+# without it; importing them at module scope would take every test in this directory
+# down with them. The root conftest already reads a missing ROS the same way.
+try:
+    from rclpy.action import get_action_names_and_types
+    from coraplex.demonstrations import RobotDemonstrationRosSession
+    from coraplex.perception import ROBOKUDO_QUERY_ACTION_NAME
+    from coraplex.testing import StandaloneProcess
+    from experiments.real_stretch_apartment_demo.demo import CEREAL_NAME
+except ModuleNotFoundError:
+    get_action_names_and_types = None
+    RobotDemonstrationRosSession = None
+    ROBOKUDO_QUERY_ACTION_NAME = None
+    StandaloneProcess = None
+    CEREAL_NAME = None
 
 # %% standalone controller process
 

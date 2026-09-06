@@ -265,7 +265,7 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         :param stated: One relation, as stated about the thing sought.
         """
         for reading in cls.readings:
-            if issubclass(stated.type, reading.relation_type()):
+            if issubclass(stated._type_, reading.relation_type()):
                 return reading.holds_for(instance, stated)
         return bool(relation_asserted_about(stated, cls._body_of(instance, stated))())
 
@@ -290,7 +290,7 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         :return: The body the look stood in its world for the sighting.
         """
         if not isinstance(instance, DetectedMontessoriShape):
-            raise SightingHasNoBody(stated.type.__name__, instance.label)
+            raise SightingHasNoBody(stated._type_.__name__, instance.label)
         return instance.role_taker.root
 
     @classmethod

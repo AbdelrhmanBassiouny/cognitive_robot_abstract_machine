@@ -247,7 +247,7 @@ def test_a_look_saying_nothing_reads_the_whole_searched_table(
 
     [bare] = narrowing.steps(capture_frame, stating())
 
-    assert bare.region == capture_pipeline.table.region
+    assert bare.region == capture_pipeline.scene_to_search(capture_frame).table.region
 
 
 def test_no_stated_condition_leaves_more_of_the_table_to_read(
