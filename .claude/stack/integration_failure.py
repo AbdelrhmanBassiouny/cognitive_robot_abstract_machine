@@ -19,12 +19,15 @@ from stack import (
     Branch,
     Configuration,
     LabelWrite,
+    Repository,
     Stack,
 )
 
 from maintenance_board import (
     PullRequestField,
+    branch_reference,
     get_session_link_in,
+    pull_request_numbers_by_branch,
 )
 from maintenance_git_commands import MaintenanceGitCommandRunner
 from maintenance_github import ForkPullRequests
@@ -137,7 +140,12 @@ class IntegrationTestFailure:
             ),
         )
 
-    def comment(self, session: str | None) -> str:
+    def comment(
+        self,
+        session: str | None,
+        repository: Repository,
+        breaks_against_pull_request_number: int | None,
+    ) -> str:
         """Write the comment telling a branch's owner that their branch breaks another.
 
         Names the branch it breaks, which is the half its owner cannot see: both pull
@@ -145,10 +153,15 @@ class IntegrationTestFailure:
         them is.
 
         :param session: The session named in the pull request's description, if any.
+        :param repository: The fork the branch it breaks would be published in.
+        :param breaks_against_pull_request_number: The open pull request publishing the
+            branch it breaks, when one still does.
         :return: The comment body.
         """
         partner = (
-            f"`{self.breaks_against}`"
+            branch_reference(
+                repository, self.breaks_against, breaks_against_pull_request_number
+            )
             if self.breaks_against
             else "the combination of branches merged before it, no single one of which "
             "reproduces it alone"
@@ -203,7 +216,16 @@ class IntegrationTestFailure:
                 added=[configuration.integration_conflict_label],
             ).labels,
         )
-        comment = self.comment(get_session_link_in(body))
+        breaks_against_pull_request_number = (
+            pull_request_numbers_by_branch(fork).get(self.breaks_against)
+            if self.breaks_against
+            else None
+        )
+        comment = self.comment(
+            get_session_link_in(body),
+            configuration.fork_repository,
+            breaks_against_pull_request_number,
+        )
         fork.add_comment(number, comment)
         return BlockedBranchReport(
             blocked=self.culprit,

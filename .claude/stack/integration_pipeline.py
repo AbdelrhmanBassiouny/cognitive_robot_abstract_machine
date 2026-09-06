@@ -393,6 +393,7 @@ class RefreshPipeline:
             ToolingScript.INTEGRATION,
             IntegrationSubcommand.BUILD,
             CommandLineFlag.RESTACK,
+            *self._report_left_out_flag(),
             *self._named_plans(),
             CommandLineFlag.JSON,
         )
@@ -482,6 +483,20 @@ class RefreshPipeline:
             print(opened.output, end="")
             return None
         return Candidate.from_json(opened.document())
+
+    def _report_left_out_flag(self) -> tuple[CommandLineFlag, ...]:
+        """
+        Whether this assembly should comment on the branches it leaves out.
+
+        A rebuild carrying particular plans judges a deliberately partial slice of what
+        is in flight, the same reason it settles no inherited candidate and publishes
+        nothing - so a branch it leaves out there is not the transparency layer a
+        whole-stack rebuild's own comment is, and commenting on it would tell an owner
+        their branch was left out of a build nobody meant to be complete.
+
+        :return: The flag, or nothing when this rebuild is plan-filtered.
+        """
+        return () if self.plans else (CommandLineFlag.REPORT_LEFT_OUT,)
 
     def _named_plans(self) -> tuple[str, ...]:
         """:return: The plans as a command line names them, empty when unfiltered."""

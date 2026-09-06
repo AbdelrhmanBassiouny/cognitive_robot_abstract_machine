@@ -148,6 +148,20 @@ class Repository:
         """:return: The ``owner/name`` form GitHub uses."""
         return f"{self.owner}/{self.name}"
 
+    def pull_request_url(self, number: int) -> str:
+        """
+        :param number: A pull request's number in this repository.
+        :return: The URL of that pull request.
+        """
+        return f"https://github.com/{self}/pull/{number}"
+
+    def pull_request_reference(self, number: int) -> str:
+        """
+        :param number: A pull request's number in this repository.
+        :return: A markdown link naming that pull request by its number.
+        """
+        return f"[#{number}]({self.pull_request_url(number)})"
+
 
 @dataclass(frozen=True)
 class Remote:
@@ -315,6 +329,15 @@ class Configuration:
     would clear this on evidence that says nothing here. Nothing removes it
     automatically."""
 
+    integration_left_out_label: str
+    """Fork-PR label marking a branch a scheduled build's automatic pass left out.
+
+    Purely informational, so it is never one of :attr:`blocking_labels`: the branch is
+    already excluded for its own real reason (a conflict, a red check, a draft ancestor),
+    and this label only remembers that its owner has already been told, so the same pass
+    does not comment again every time it rebuilds. Cleared silently once the branch
+    rejoins a build, the same way :attr:`needs_resolution_label` is."""
+
     fork_repository: Repository
     """The fork that holds the full stack, as GitHub names it."""
 
@@ -377,6 +400,10 @@ class DefaultLabel(StrEnum):
 
     NEEDS_RESOLUTION = "needs-resolution"
     """Marks a branch withheld pending resolution of a conflict with its own base."""
+
+    INTEGRATION_LEFT_OUT = "integration-left-out"
+    """Marks a branch a scheduled build's automatic pass has already told its owner it
+    left out."""
 
     INTEGRATION_CONFLICT = "integration-conflict"
     """Marks a branch that breaks a sibling it merges cleanly with."""

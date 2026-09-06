@@ -275,6 +275,38 @@ def test_blocking_a_failure_names_both_branches_to_the_one_that_broke_it():
     assert NEEDS_THE_MODULE in posted.body
 
 
+def test_the_block_comment_links_to_the_open_pull_request_it_breaks():
+    """
+    A bare branch name sends nobody anywhere. The branch it breaks still has an open
+    pull request, so the comment should let a reader click straight through to it.
+    """
+    breaks_against_number = 2
+    fork = RecordingPullRequests(heads={breaks_against_number: NEEDS_THE_MODULE})
+
+    create_integration_test_failure().block_the_branch_that_causes_it(
+        make_configuration(), fork, no_records()
+    )
+
+    expected_link = make_configuration().fork_repository.pull_request_reference(
+        breaks_against_number
+    )
+    assert expected_link in fork.comments[0].body
+
+
+def test_the_block_comment_names_the_bare_branch_when_its_pull_request_is_not_open():
+    """
+    The branch it breaks may have merged or closed since - there is no pull request
+    left to link to, so the comment falls back to naming it by branch alone.
+    """
+    fork = RecordingPullRequests()
+
+    create_integration_test_failure().block_the_branch_that_causes_it(
+        make_configuration(), fork, no_records()
+    )
+
+    assert f"`{NEEDS_THE_MODULE}`" in fork.comments[0].body
+
+
 def test_the_block_is_reported_as_a_document_a_caller_can_read():
     """
     ``block-branch --json`` is the half a caller acts on, and its keys are backed by no

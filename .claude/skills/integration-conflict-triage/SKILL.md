@@ -270,6 +270,16 @@ a fix, which is a design call and stays proposed.
   the plan's own state lives. Only *reconcile* and *stack* give an owner something to do, and
   only those earn a comment.
 
+This is about what *this skill* writes while judging a collision - it is not the whole of what
+ever comments on a build's behalf. A scheduled rebuild's own automatic pass (`build
+--report-left-out`, `integration_left_out.py`) separately tells a branch's owner why that
+*pass* left them out - a raw conflict, the build's own refusal to merge, or standing on a
+branch already blocked, red or draft. It fires before any judgement is made and states only
+the mechanical fact, never a verdict; it is the prompt to run this skill, not a substitute for
+the reasoning this skill does. Once a `defer` is recorded, the tip it named stops arriving as
+a raw conflict - it replays instead - so that comment stops of its own accord, the same way
+the label it applies clears silently the moment the branch rejoins a build.
+
 ## Finish
 
 Report every pair, with its verdict and the reason. For a *defer*, say that the resolution is
