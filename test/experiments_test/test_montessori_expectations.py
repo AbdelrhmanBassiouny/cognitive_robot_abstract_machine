@@ -790,9 +790,12 @@ def test_a_stated_hole_leaves_only_the_surface_it_is_cut_through_to_search(
     A hole's region reaches from the lid's plane down into the board, so a look told the
     piece lies in it has nothing of the table to read, without the lid being named.
     """
-    scene = pipeline.detect(renderer.render([prism_on_the_lid]))
+    frame = renderer.render([prism_on_the_lid])
+    scene = pipeline.detect(frame)
 
-    searched = pipeline.searched_surfaces(scene.board, released_prism.scene_request())
+    searched = pipeline.scene_to_search(
+        frame, released_prism.scene_request()
+    ).searched_surfaces(scene.board)
 
     assert [search.surface.name for search in searched] == [pipeline.lid.name]
 

@@ -284,6 +284,29 @@ class NothingIsHiddenFromBelow(DataclassException):
 
 
 @dataclass
+class NoDetectorAnswersTheLook(DataclassException):
+    """
+    Raised when no detector declares it can answer a look, so nothing would be run for
+    it and reporting nothing found would be a lie about the scene.
+    """
+
+    look: str
+    """
+    What was asked for, and what the world says about the surface it was asked about.
+    """
+
+    def error_message(self) -> str:
+        return f"No detector declares it can answer {self.look}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "State what the world knows about the surface or the target, so a detector "
+            "that already answers this kind of look declares it can, or add one that "
+            "does."
+        )
+
+
+@dataclass
 class RegionsDoNotMeet(DataclassException):
     """
     Raised when the stretch two patches of a plane have in common is asked for, and they
@@ -317,6 +340,28 @@ class RegionsDoNotMeet(DataclassException):
 
 
 @dataclass
+class NoDetectorAnswersTheRequest(DataclassException):
+    """
+    Raised when no rule says how a request is to be answered, so nothing would be run
+    for it and reporting nothing found would be a lie about the scene.
+    """
+
+    request: str
+    """
+    What the look was asked for, as the rules read it.
+    """
+
+    def error_message(self) -> str:
+        return f"No rule says how to answer {self.request}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "State the detector that answers this kind of request, through "
+            "LookRules.add_rule, or ask for something a stated rule already reaches."
+        )
+
+
+@dataclass
 class LookHasNoReferenceFrame(DataclassException):
     """
     Raised when a statement says where the thing sought lies, but the look reports its
@@ -338,6 +383,28 @@ class LookHasNoReferenceFrame(DataclassException):
         return (
             "Give the source the frame its detections are placed in, which for a "
             "pipeline read out of a world is that world's own root."
+        )
+
+
+@dataclass
+class NoSurfaceFinderAnswersTheLook(DataclassException):
+    """
+    Raised when no finder declares it can say where a surface reaches, so the stretch
+    searched would be a guess rather than anything the world or the picture states.
+    """
+
+    surface: str
+    """
+    What the world says about the surface that was looked for.
+    """
+
+    def error_message(self) -> str:
+        return f"No finder declares it can say where {self.surface} reaches."
+
+    def suggest_correction(self) -> str:
+        return (
+            "State how far the surface reaches in the world it is described in, so a "
+            "finder that already answers this kind of surface declares it can."
         )
 
 
@@ -368,4 +435,34 @@ class SightingHasNoBody(DataclassException):
         return (
             "Ask it of a sighting the look stood a body in its imagined world for, or "
             "state a relation the look can establish itself."
+        )
+
+
+@dataclass
+class SurfaceNotSeenWhereTheWorldPutsIt(DataclassException):
+    """
+    Raised when the depth image holds nothing standing where a surface is modelled, so
+    there is no measurement of it to report.
+    """
+
+    surface: str
+    """
+    What the world calls the surface that was looked for.
+    """
+
+    height: float
+    """
+    The height the world puts it at, above the reference frame's origin, in metres.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Nothing stands at {self.height} m where {self.surface} is modelled, so "
+            "the camera saw no surface there."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Point the camera at the surface, or correct the height the world puts it "
+            "at, so the picture and the model describe the same scene."
         )

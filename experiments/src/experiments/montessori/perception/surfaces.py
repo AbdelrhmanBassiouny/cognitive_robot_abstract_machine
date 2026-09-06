@@ -20,7 +20,13 @@ from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.pieces import LARGEST_PIECE_RADIUS
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.semantic_annotations.mixins import HasSupportingSurface
-from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.geometry import (
+    Color,
+    Shape,
+    SurfaceFinish,
+    VolumetricBoundingBox,
+)
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
@@ -67,6 +73,25 @@ class WorkspaceSurface:
     Height of the plane above the world frame's origin, in metres.
     """
 
+    finish: Optional[SurfaceFinish] = None
+    """
+    How the surface takes the light that falls on it, or ``None`` where the world states
+    no finish for it.
+
+    This is what decides whether colour separates anything from the surface at all, so
+    it is read here rather than looked up again wherever a look is being chosen.
+    ``None`` is *not stated* rather than :attr:`SurfaceFinish.MATTE`, so an unannotated
+    surface never silently reads as one colour segmentation works on.
+    """
+
+    color: Optional[Color] = None
+    """
+    The colour the world states for the surface, or ``None`` where it states none.
+
+    A target wearing this colour cannot be told from the surface by colour, whatever the
+    finish.
+    """
+
     @classmethod
     def of(
         cls,
@@ -103,7 +128,9 @@ class WorkspaceSurface:
         boxes = region.area.as_bounding_box_collection_in_frame(reference_frame)
         if not boxes.bounding_boxes:
             raise SurfaceHasNothingToMeasure(str(region.name))
-        return cls._of_box(region, boxes.bounding_box())
+        return cls._of_box(
+            region, boxes.bounding_box(), cls._one_shape_of(region.area)
+        )
 
     @classmethod
     def of_body(
@@ -119,12 +146,17 @@ class WorkspaceSurface:
         :param reference_frame: Frame to express the surface in.
         :raises SurfaceHasNothingToMeasure: If the body carries no collision shape.
         """
-        boxes = body.collision.as_bounding_box_collection_in_frame(
-            reference_frame
-        ).bounding_boxes
-        if not boxes:
+        measured = [
+            (shape, box)
+            for shape in body.collision.shapes
+            for box in ShapeCollection([shape])
+            .as_bounding_box_collection_in_frame(reference_frame)
+            .bounding_boxes
+        ]
+        if not measured:
             raise SurfaceHasNothingToMeasure(str(body.name))
-        return cls._of_box(body, max(boxes, key=lambda box: box.scale.x * box.scale.y))
+        shape, box = max(measured, key=lambda pair: pair[1].scale.x * pair[1].scale.y)
+        return cls._of_box(body, box, shape)
 
     @property
     def name(self) -> PrefixedName:
@@ -136,18 +168,40 @@ class WorkspaceSurface:
         """
         return self.entity.name
 
+    @staticmethod
+    def _one_shape_of(area: ShapeCollection) -> Optional[Shape]:
+        """
+        The shape an appearance can be read off, where the collection holds exactly one.
+
+        A collection of several shapes may state several finishes, and merging them
+        would be a rule nothing asks for, so it answers with none at all.
+
+        :param area: The shapes the surface is described by.
+        """
+        [shape] = area.shapes if len(area.shapes) == 1 else [None]
+        return shape
+
     @classmethod
     def _of_box(
-        cls, entity: KinematicStructureEntity, box: VolumetricBoundingBox
+        cls,
+        entity: KinematicStructureEntity,
+        box: VolumetricBoundingBox,
+        shape: Optional[Shape] = None,
     ) -> WorkspaceSurface:
         """
         The surface a box's top face describes.
 
         :param entity: The thing of the world the box was measured of.
         :param box: The box, already expressed in the frame the surface is wanted in.
+        :param shape: The shape the box was measured from, whose appearance the surface
+            takes, or None where no single shape describes it.
         """
         return cls(
-            entity=entity, region=WorkspaceRegion.of_box(box), height=float(box.max_z)
+            entity=entity,
+            region=WorkspaceRegion.of_box(box),
+            height=float(box.max_z),
+            finish=None if shape is None else shape.finish,
+            color=None if shape is None else shape.color,
         )
 
 

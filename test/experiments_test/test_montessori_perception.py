@@ -26,7 +26,11 @@ from experiments.montessori.perception.explanations import Explanation
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY, hue_distance
+from experiments.montessori.pieces import (
+    KNOWN_PIECE_BY_CATEGORY,
+    KNOWN_PIECES,
+    hue_distance,
+)
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.montessori.world import MontessoriWorld
@@ -364,12 +368,10 @@ def lid_search(
     :param pipeline: The pipeline taking the look.
     :param frame: The camera data to search.
     """
-    board = pipeline.board_detector.detect(
-        pipeline.rectify(frame, pipeline.lid.height), pipeline.reference_frame
-    )
+    board = pipeline.board_in(frame)
     [search] = [
         search
-        for search in pipeline.searched_surfaces(board)
+        for search in pipeline.scene_to_search(frame).searched_surfaces(board)
         if search.surface is pipeline.lid
     ]
     return search, board
@@ -385,16 +387,16 @@ def pieces_on_the_lid(
     :param frame: The camera data to search.
     :param expected: What is believed to be on the lid already.
     """
-    search, _ = lid_search(pipeline, frame)
-    return pipeline.piece_detector.detect(
-        pipeline.rectify(frame, pipeline.lid.height),
-        pipeline.rectify(
-            frame, pipeline.lid.height + pipeline.piece_detector.piece_height
-        ),
-        frame,
-        pipeline.imagine(),
-        search,
-        expected,
+    search, board = lid_search(pipeline, frame)
+    scene = pipeline.scene_to_search(frame)
+    find_the_pieces = pipeline.look_rules.find_the_pieces
+    [(detector, candidates)] = find_the_pieces.detector_rules.detectors_for(
+        search.surface, KNOWN_PIECES
+    )
+    return detector.detect(
+        find_the_pieces.surface_pass(
+            scene, search, detector, candidates, board, scene.imagine(), expected
+        )
     )
 
 
@@ -423,9 +425,10 @@ def test_a_piece_wearing_the_surfaces_own_hue_is_not_separated_from_it_by_colour
     so a mask of the piece's colour takes the whole lid with it and leaves no outline.
     """
     prism = prism_on_the_lid.known_piece
-    assert (
-        hue_distance(prism.hue, LID_COLOR[0]) <= pipeline.piece_detector.hue_tolerance
+    [(detector, _)] = pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
+        pipeline.lid, KNOWN_PIECES
     )
+    assert hue_distance(prism.hue, LID_COLOR[0]) <= detector.hue_tolerance
 
     found = pieces_on_the_lid(
         pipeline, renderer.render([prism_on_the_lid]), expected=()
@@ -486,9 +489,19 @@ def test_a_detection_a_colour_suggested_names_the_detector_that_read_it(
     """
     The source is the detector itself, so a reader can ask it how it was looking.
     """
+    chosen = {
+        surface.name: detector
+        for surface in (pipeline.table, pipeline.lid)
+        for detector, _ in (
+            pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
+                surface, KNOWN_PIECES
+            )
+        )
+    }
+
     assert scene.shapes
     for piece in scene.shapes:
-        assert piece.hypothesis.source is pipeline.piece_detector
+        assert piece.hypothesis.source is chosen[piece.supporting_surface]
 
 
 # %% how tall a piece is taken to stand
@@ -497,7 +510,10 @@ def test_a_detection_a_colour_suggested_names_the_detector_that_read_it(
 def test_a_piece_the_depth_image_cannot_resolve_stands_at_its_nominal_height(
     pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    nominal = pipeline.piece_detector.piece_height
+    [(detector, _)] = pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
+        pipeline.table, KNOWN_PIECES
+    )
+    nominal = detector.piece_height
     stands_at = {
         surface.name: surface.height for surface in (pipeline.table, pipeline.lid)
     }

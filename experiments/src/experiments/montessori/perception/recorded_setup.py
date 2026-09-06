@@ -26,6 +26,7 @@ from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import (
     BoardDetector,
     MontessoriPerceptionPipeline,
+    default_look_rules,
 )
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.planar_geometry import PlanarPoint
@@ -36,7 +37,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.geometry import Box, Scale, SurfaceFinish
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 from typing_extensions import Dict, Optional, Tuple
@@ -115,6 +116,11 @@ def searched_workspace(path: Path = TUNED_WORKSPACE_FILE) -> WorkspaceRegion:
     """
     The stretch of table a run over this setup's recordings searches.
 
+    This is the widest a look may search rather than what it does search: the stretch
+    of it the camera actually shows is measured every frame, and on these recordings
+    that measurement reaches the same answer from :data:`WIDEST_WORKSPACE` as from a
+    workspace already cut down by hand.
+
     :param path: The file a tuned workspace was written to.
     :return: That workspace, or the whole of :data:`WIDEST_WORKSPACE` where none has
         been tuned.
@@ -151,6 +157,7 @@ def table_surface(world: Optional[World] = None) -> WorkspaceSurface:
         entity=_slab_in(world, TABLE_NAME, TABLE_HEIGHT),
         region=searched_workspace(),
         height=TABLE_HEIGHT,
+        finish=SurfaceFinish.MIRROR,
     )
 
 
@@ -378,7 +385,7 @@ def perception_pipeline(world: Optional[World] = None) -> MontessoriPerceptionPi
     return MontessoriPerceptionPipeline(
         table=table_surface(world),
         lid=lid_surface(world),
-        board_detector=board_detector(),
+        look_rules=default_look_rules(board_detector=board_detector()),
         reference_frame=None if world is None else world.root,
         world=world,
     )

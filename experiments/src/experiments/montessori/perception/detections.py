@@ -141,7 +141,7 @@ class DetectedMontessoriShape(MontessoriDetection, Role[MontessoriShape]):
     How far its top surface stands above the surface it rests on, in metres.
 
     Read from the depth image where that image resolves the piece, and otherwise the
-    height :attr:`~experiments.montessori.perception.pipeline.LoosePieceDetector.piece_height`
+    height :attr:`~experiments.montessori.perception.pipeline.EdgeFitDetector.piece_height`
     says a loose piece stands: a depth sensor that cannot tell a two centimetre piece
     from the surface under it says nothing about how tall the piece is, and reporting
     zero would place it in the surface itself.

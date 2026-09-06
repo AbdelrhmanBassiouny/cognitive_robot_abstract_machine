@@ -13,8 +13,14 @@ from dataclasses import dataclass
 import numpy as np
 from typing_extensions import Optional, Tuple, Type
 
-from experiments.montessori.perception.detections import MontessoriDetection
+from experiments.montessori.perception.detections import (
+    DetectedMontessoriShape,
+    MontessoriBoardDetection,
+    MontessoriDetection,
+    ShapeSortingHoleDetection,
+)
 from experiments.montessori.perception.surfaces import WorkspaceSurface
+from krrood.entity_query_language.backends import Look, PerceptionDetector
 from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.reasoning.predicates import PlacementRelation, Turned
 from semantic_digital_twin.world_description.geometry import (
@@ -29,7 +35,7 @@ from semantic_digital_twin.world_description.world_entity import (
 
 
 @dataclass(frozen=True)
-class SceneRequest:
+class SceneRequest(Look):
     """
     The kind of thing a look is asked for, and where it is asked to search.
 
@@ -87,6 +93,32 @@ class SceneRequest:
     at whether or not any colour separates one there, and a look does that only on
     someone's say-so: a statement narrows what is read, a belief seeds a fit.
     """
+
+    detector: Optional[PerceptionDetector] = None
+    """
+    The detector that answers this request, left open for the rules to work out.
+
+    A request stating nothing here is a description whose answer has still to be
+    planned, which is what the rules that choose a detector are asked about; a request
+    carrying one has been planned already.
+    """
+
+    @property
+    def pieces_are_asked_for(self) -> bool:
+        """
+        Whether a loose piece is a thing this request can be answered with.
+        """
+        return self.wants(DetectedMontessoriShape)
+
+    @property
+    def the_board_is_asked_for(self) -> bool:
+        """
+        Whether the board, or one of the holes cut through its lid, is a thing this
+        request can be answered with.
+        """
+        return self.wants(MontessoriBoardDetection) or self.wants(
+            ShapeSortingHoleDetection
+        )
 
     def wants(self, detection_type: Type[MontessoriDetection]) -> bool:
         """

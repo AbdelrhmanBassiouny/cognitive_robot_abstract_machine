@@ -316,7 +316,7 @@ def test_a_camera_that_is_not_looking_at_the_workspace_has_nothing_to_show(
 def test_a_point_on_the_rectified_plane_lands_on_the_pixel_that_samples_it(
     frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline
 ):
-    orthophoto = pipeline.rectify(frame, pipeline.table.height)
+    orthophoto = pipeline.rectify(frame, pipeline.table)
     x, y = 0.6, 0.2
 
     [pixel] = RectifiedView(frame, orthophoto).to_pixels(
@@ -329,7 +329,7 @@ def test_a_point_on_the_rectified_plane_lands_on_the_pixel_that_samples_it(
 def test_a_point_above_the_rectified_plane_lands_further_from_the_camera_axis(
     frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline
 ):
-    orthophoto = pipeline.rectify(frame, pipeline.table.height)
+    orthophoto = pipeline.rectify(frame, pipeline.table)
     view = RectifiedView(frame, orthophoto)
     below_camera = np.array(frame.reference_frame_T_camera[:2, 3]).reshape(1, 2)
     point = below_camera + np.array([[0.2, 0.0]])
@@ -346,7 +346,7 @@ def test_a_point_above_the_rectified_plane_lands_further_from_the_camera_axis(
 def test_the_rectified_view_draws_on_the_rectified_image(
     frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    orthophoto = pipeline.rectify(frame, pipeline.table.height)
+    orthophoto = pipeline.rectify(frame, pipeline.table)
 
     drawn = DetectionOverlay().draw(RectifiedView(frame, orthophoto), scene)
 
@@ -360,7 +360,7 @@ def test_the_rectified_view_draws_on_the_rectified_image(
 def test_the_view_from_above_puts_the_world_x_axis_up_and_its_y_axis_to_the_left(
     frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline
 ):
-    orthophoto = pipeline.rectify(frame, pipeline.table.height)
+    orthophoto = pipeline.rectify(frame, pipeline.table)
     view = ViewFromAbove(RectifiedView(frame, orthophoto))
     somewhere = np.array([[0.6, 0.2]])
 
@@ -380,7 +380,7 @@ def test_the_view_from_above_turns_its_image_and_its_pixels_together(
     A world point drawn onto the rectified image is found again at the pixel the turned
     view puts it on, which is what keeps a drawn label the right way up.
     """
-    orthophoto = pipeline.rectify(frame, pipeline.table.height)
+    orthophoto = pipeline.rectify(frame, pipeline.table)
     somewhere = np.array([[0.6, 0.2]])
     [rectified_pixel] = RectifiedView(frame, orthophoto).to_pixels(
         somewhere, orthophoto.plane_height

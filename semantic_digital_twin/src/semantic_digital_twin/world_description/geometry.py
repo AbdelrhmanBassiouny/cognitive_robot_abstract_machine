@@ -8,7 +8,7 @@ import shutil
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
-from enum import Enum
+from enum import Enum, StrEnum, auto
 from functools import cached_property
 from pathlib import Path
 
@@ -292,6 +292,30 @@ class Texture:
         self.repeat = tuple(float(value) for value in self.repeat)
 
 
+class SurfaceFinish(StrEnum):
+    """
+    How a surface reflects the light that falls on it.
+    """
+
+    MATTE = auto()
+    """
+    Scatters light evenly in every direction, so the surface shows its own color and
+    keeps a sharp boundary against whatever rests on it.
+    """
+
+    GLOSSY = auto()
+    """
+    Scatters light unevenly, so the surface shows its own color under a highlight that
+    moves with the viewpoint.
+    """
+
+    MIRROR = auto()
+    """
+    Reflects light directionally, so the surface shows what stands on and above it
+    rather than its own color.
+    """
+
+
 @dataclass
 class Scale:
     """
@@ -415,6 +439,15 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     trimesh visual instead.
     """
 
+    finish: Optional[SurfaceFinish] = None
+    """
+    How this shape's surface takes light, or ``None`` where nobody has stated it.
+
+    ..note:: ``None`` is deliberately distinct from :attr:`SurfaceFinish.MATTE`, so a
+        reader deciding how to look at the surface can tell a surface nobody described
+        from one described as matte.
+    """
+
     _numeric_origin: Optional[NumericTransform] = field(
         default=None, init=False, repr=False, compare=False
     )
@@ -502,6 +535,31 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
             "origin": to_json(self.origin),
             "color": to_json(self.color),
             "texture": to_json(self.texture) if self.texture is not None else None,
+            "finish": self.finish.value if self.finish is not None else None,
+        }
+
+    @staticmethod
+    def finish_from_json(data: Dict[str, Any]) -> Optional[SurfaceFinish]:
+        """
+        :param data: The serialized shape to read the finish out of.
+        :return: The surface finish *data* declares, or ``None`` where it declares none.
+        """
+        finish = data.get("finish")
+        return None if finish is None else SurfaceFinish(finish)
+
+    @classmethod
+    def arguments_from_json(cls, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        :param data: The serialized shape to read from.
+        :return: The constructor arguments :class:`Shape` itself declares, so that a
+            subclass's :meth:`_from_json` supplies only its own geometry.
+        """
+        texture = data.get("texture")
+        return {
+            "origin": from_json(data["origin"], **kwargs),
+            "color": from_json(data["color"], **kwargs),
+            "texture": from_json(texture, **kwargs) if texture is not None else None,
+            "finish": cls.finish_from_json(data),
         }
 
     def __eq__(self, other: Shape) -> bool:
@@ -673,7 +731,11 @@ class Mesh(Shape):
         if vertex_colors is not None:
             file_type = "obj"
         return cls.from_trimesh(
-            mesh=mesh, origin=origin, scale=scale, file_type=file_type
+            mesh=mesh,
+            origin=origin,
+            scale=scale,
+            file_type=file_type,
+            finish=cls.finish_from_json(data),
         )
 
     @classmethod
@@ -825,6 +887,7 @@ class Mesh(Shape):
         texture_file_path: Optional[str] = None,
         directory: Optional[Path] = None,
         file_type: str = "obj",
+        finish: Optional[SurfaceFinish] = None,
     ) -> "Mesh":
         """
         Create a Mesh by exporting a trimesh to a file.
@@ -843,6 +906,7 @@ class Mesh(Shape):
         :param directory: Where to place the mesh's own directory inside of /tmp, defaulting to a root
             that is removed when this process exits.
         :param file_type: Format to export the mesh in.
+        :param finish: How the exported mesh's surface takes light.
         :return: Mesh reading from the exported file.
         """
         file_type = file_type.lower()
@@ -872,6 +936,7 @@ class Mesh(Shape):
             origin=origin,
             scale=scale,
             filename=str(mesh_file_path),
+            finish=finish,
         )
 
     @classmethod
@@ -1086,13 +1151,7 @@ class Sphere(Shape):
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        texture = data.get("texture")
-        return cls(
-            radius=data["radius"],
-            origin=from_json(data["origin"], **kwargs),
-            color=from_json(data["color"], **kwargs),
-            texture=from_json(texture, **kwargs) if texture is not None else None,
-        )
+        return cls(radius=data["radius"], **cls.arguments_from_json(data, **kwargs))
 
 
 @dataclass(eq=False)
@@ -1154,13 +1213,10 @@ class Cylinder(Shape):
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        texture = data.get("texture")
         return cls(
             width=data["width"],
             height=data["height"],
-            origin=from_json(data["origin"], **kwargs),
-            color=from_json(data["color"], **kwargs),
-            texture=from_json(texture, **kwargs) if texture is not None else None,
+            **cls.arguments_from_json(data, **kwargs),
         )
 
 
@@ -1222,12 +1278,9 @@ class Box(Shape):
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        texture = data.get("texture")
         return cls(
             scale=from_json(data["scale"], **kwargs),
-            origin=from_json(data["origin"], **kwargs),
-            color=from_json(data["color"], **kwargs),
-            texture=from_json(texture, **kwargs) if texture is not None else None,
+            **cls.arguments_from_json(data, **kwargs),
         )
 
 

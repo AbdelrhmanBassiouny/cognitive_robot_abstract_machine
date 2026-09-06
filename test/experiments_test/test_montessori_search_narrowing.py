@@ -309,10 +309,7 @@ def test_a_stated_color_narrows_what_is_fitted_rather_than_where_to_look(
 def test_a_look_supported_by_the_lid_reads_only_where_the_board_was_seen(
     capture_pipeline: MontessoriPerceptionPipeline, capture_frame
 ):
-    board = capture_pipeline.board_detector.detect(
-        capture_pipeline.rectify(capture_frame, capture_pipeline.lid.height),
-        capture_pipeline.reference_frame,
-    )
+    board = capture_pipeline.board_in(capture_frame)
     narrowing = SearchNarrowing(pipeline=capture_pipeline)
 
     bare, on_the_lid = narrowing.steps(

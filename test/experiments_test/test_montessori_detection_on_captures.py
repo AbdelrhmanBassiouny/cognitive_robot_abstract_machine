@@ -15,6 +15,7 @@ quietly passing.
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 
 import cv2
 import numpy as np
@@ -33,6 +34,7 @@ from experiments.montessori.perception.explanations import CompetingExplanations
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import (
     BOARD_SCALE_AGAINST_THE_MESH,
+    WIDEST_WORKSPACE,
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -142,7 +144,7 @@ def test_the_board_is_smaller_than_the_mesh_that_models_it(
     lid = capture_pipeline.rectify(capture.to_frame(), capture_pipeline.lid.height)
 
     assert (
-        capture_pipeline.board_detector.measure_scale(
+        capture_pipeline.look_rules.find_the_board.board_detector.measure_scale(
             lid, candidates=(BOARD_SCALE_AGAINST_THE_MESH, 1.0)
         )
         == BOARD_SCALE_AGAINST_THE_MESH
@@ -325,3 +327,69 @@ def test_saying_a_wrong_report_costs_more_trades_recall_for_it(
     assert missed == sorted(missed)
     assert invented == sorted(invented, reverse=True)
     assert invented[0] > invented[-1]
+
+
+# %% the table the look measured for itself
+
+
+def test_the_table_is_measured_smaller_than_the_stretch_the_world_allows(
+    capture: SceneCapture, capture_pipeline: MontessoriPerceptionPipeline
+) -> None:
+    """
+    A look reads the table rather than a rectangle drawn around it, so it searches less
+    of the picture than the setup allows it to.
+    """
+    modelled = capture_pipeline.table.region
+    measured = capture_pipeline.table_in(capture.to_frame()).region
+    assert measured.area < modelled.area
+
+
+def test_the_measured_table_stays_inside_the_stretch_the_world_allows(
+    capture: SceneCapture, capture_pipeline: MontessoriPerceptionPipeline
+) -> None:
+    """
+    The measurement narrows what the world states and never grows it, so a run only ever
+    searches ground the world had already described.
+    """
+    modelled = capture_pipeline.table.region
+    measured = capture_pipeline.table_in(capture.to_frame()).region
+    assert modelled.contains(measured.minimum_x, measured.minimum_y) and (
+        modelled.contains(measured.maximum_x, measured.maximum_y)
+    )
+
+
+def test_tuning_the_workspace_no_longer_changes_what_a_look_searches(
+    capture: SceneCapture, capture_pipeline: MontessoriPerceptionPipeline
+) -> None:
+    """
+    What this item replaces: the searched stretch used to be whatever a person had
+    dragged the sliders to, and it is now what the camera shows, so starting from the
+    whole stretch the camera looks over reaches the same answer as starting from a
+    workspace already cut down by hand.
+    """
+    untuned = replace(
+        capture_pipeline,
+        table=replace(capture_pipeline.table, region=WIDEST_WORKSPACE),
+    )
+    frame = capture.to_frame()
+    assert untuned.table_in(frame).region == capture_pipeline.table_in(frame).region
+
+
+def test_every_piece_reported_stands_on_the_table_that_was_measured(
+    capture: SceneCapture,
+    capture_pipeline: MontessoriPerceptionPipeline,
+    scene: MontessoriScene,
+) -> None:
+    """
+    Nothing is reported outside the stretch the look measured, which is what says the
+    narrowing threw away picture rather than pieces.
+    """
+    measured = capture_pipeline.table_in(capture.to_frame()).region
+    outside = [
+        shape.label
+        for shape in scene.shapes
+        if not measured.contains(
+            float(shape.pose.to_position().x), float(shape.pose.to_position().y)
+        )
+    ]
+    assert outside == []

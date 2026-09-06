@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
+from functools import cached_property
 from operator import eq
 from types import EllipsisType, NoneType
 from typing import Generic, Iterable, Type, TypeVar
@@ -28,7 +29,10 @@ from krrood.entity_query_language.operators.probabilistic_queries import (
     ProbabilisticQuery,
 )
 from krrood.entity_query_language.operators.aggregators import Average
-from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.core.mapped_variable import (
+    Attribute,
+    CanBehaveLikeAVariable,
+)
 from krrood.entity_query_language.core.variable import (
     InstantiatedVariable,
     Literal,
@@ -47,10 +51,27 @@ from krrood.entity_query_language.exceptions import (
     SelectiveBackendCannotResolveEllipsisMatch,
     UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration,
 )
-from krrood.entity_query_language.factories import an, entity, set_of, variable
+from krrood.entity_query_language.factories import (
+    ConditionType,
+    an,
+    and_,
+    entity,
+    set_of,
+    variable,
+)
 from krrood.entity_query_language.query.match import Match, AttributeMatch
 from krrood.entity_query_language.query.query import Entity, Query
+from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
+from krrood.entity_query_language.rdr.expert import Expert
+from krrood.entity_query_language.rdr.interface import (
+    AnswerRequest,
+    CaseContext,
+    FunctionInterface,
+)
+from krrood.entity_query_language.rdr.serialization import NullModelSaver
+from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.ormatic.eql_interface import eql_to_sql
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 try:
     from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
@@ -355,9 +376,22 @@ def _selects(operand: Any, variable_: Any) -> bool:
         selected is variable_ for selected in operand._selected_variables_
     )
 
+class Look(ABC):
+    """
+    One question put to perception: what is being sought, and the situation it is sought
+    in.
+
+    A detector states the looks it can answer as a condition over one of these, and a
+    rule tree binds one to decide which detector answers it, so a look is where
+    everything either of them may read is said -- what is sought, what the world states
+    about it, and what the sensor offers. Which of those a look carries differs with the
+    family of detectors asked, so each family states its own look and this declares
+    nothing beyond being one.
+    """
+
 
 @dataclass(frozen=True)
-class LookRequest(Generic[T]):
+class LookRequest(Generic[T], Look):
     """
     What a statement asks a look for.
 
@@ -448,6 +482,257 @@ class LookRequest(Generic[T]):
             if stated.attribute_name == attribute_name:
                 return stated.value
         return None
+
+
+LookT = TypeVar("LookT", bound=Look)
+
+
+@dataclass(eq=False)
+class PerceptionDetector(Generic[LookT], SubClassSafeGeneric, ABC):
+    """
+    Something that answers a look, and states for itself which looks it can answer.
+
+    What a detector can answer is its own statement rather than a caller's knowledge of
+    which detector is which, so a detector is never chosen for a look it declared it
+    cannot answer, and one added later brings its own condition with it.
+
+    The kind of look a detector answers is the type parameter it binds, so what its
+    conditions may read is part of its signature: bind the situation a look is decided
+    from -- what is being sought, what the world says about it, what the sensor
+    provides -- and state conditions over that.
+    """
+
+    __hash__ = object.__hash__
+    """
+    A detector is the one it is: two configured alike are not the same detector, and a
+    rule concludes the detector itself rather than a name for one, so it is compared and
+    hashed by identity.
+
+    Restated here because the generic base compares by value, which unsets hashing.
+    """
+
+    @abstractmethod
+    def capability(self, look: LookT) -> ConditionType:
+        """
+        The looks this detector can answer, as a condition over a look.
+
+        Written as an entity query language condition rather than as a predicate on a
+        value, so the same statement both decides one look and becomes a rule in the
+        tree that chooses among the detectors that can answer it.
+
+        :param look: The variable to state the condition over, of the kind this detector
+            binds.
+        :return: The condition, which holds exactly for the looks this detector answers.
+        """
+
+    @classmethod
+    def look_type(cls) -> Type[LookT]:
+        """
+        The kind of look this detector answers, read off the type parameter it binds.
+        """
+        return cls.get_generic_type_parameters()[0]
+
+    @cached_property
+    def stated_look(self) -> LookT:
+        """
+        The variable this detector states its own capability over.
+
+        The statement is made once and one look at a time is bound to this to ask it.
+        """
+        return variable(self.look_type(), domain=[])
+
+    @cached_property
+    def answerable_looks(self) -> Query:
+        """
+        The looks this detector can answer, stated once over :attr:`stated_look`.
+        """
+        return an(entity(self.stated_look).where(self.capability(self.stated_look)))
+
+    def asked_about(self, look: LookT) -> Query:
+        """
+        This detector's own capability, asked about one look.
+
+        Evaluating the query answers with the look where this detector declares it can
+        answer it and with nothing where it cannot, so whoever asks decides what to make
+        of it -- a verdict, the looks of a batch this detector takes, a drawing of the
+        condition, or a statement to narrow further.
+
+        .. note:: The query is the detector's own standing statement rather than a copy
+            of it, so changing it changes what the detector declares about itself.
+
+        :param look: The look to put to it.
+        """
+        self.stated_look._update_domain_([look])
+        return self.answerable_looks
+
+
+@dataclass
+class DetectorChoice(Generic[LookT], SubClassSafeGeneric, ABC):
+    """
+    Which detector of one family answers a look, decided by a tree of rules.
+
+    Every family faces the same question twice over. What a detector can answer at all
+    is its own
+    :meth:`~krrood.entity_query_language.backends.PerceptionDetector.capability`, so it
+    is never chosen for a look it declared it cannot answer. Which of the ones that can
+    should is what the rules decide, and that is knowledge about when a detector is
+    worth its cost rather than part of what it says about itself.
+
+    The rules a family starts with are stated outright
+    (:meth:`rules_stated_at_the_start`); a look they get wrong is corrected by
+    :meth:`add_rule`, which asks each detector for its own condition and narrows it by
+    :meth:`situation_answered_by`.
+    """
+
+    rules: EQLSingleClassRDR = field(init=False, repr=False, compare=False)
+    """
+    The rules themselves, as one tree that outlives the looks it decides.
+
+    Nothing is persisted when a rule is added: a rule concludes the detector itself
+    rather than a name for one, and the engine writes a model file as Python source,
+    which can spell an enum member or a number but not a collaborator. The rules are
+    recovered by stating them again from the detectors, which is what building this
+    does.
+    """
+
+    expert: Expert = field(init=False, repr=False, compare=False)
+    """
+    Asked for a new rule's condition, which it reads off
+    :meth:`state_the_condition_this_rule_needs`.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Build the tree from the family's own statement and state the rules it starts
+        with.
+        """
+        self.expert = Expert(
+            interface=FunctionInterface(
+                answer_function=self.state_the_condition_this_rule_needs
+            )
+        )
+        self.rules = EQLSingleClassRDR.from_underspecified(
+            self.underspecified_look(), model_saver=NullModelSaver()
+        )
+        self.rules.state_rules(self.rules_stated_at_the_start())
+
+    @abstractmethod
+    def underspecified_look(self) -> Match:
+        """
+        The statement the rules are built from: a look of this family whose detector is
+        left open, for example ``a(TargetOnSurface)(detector=...)``.
+
+        What is described and what is to be worked out are read off this, so neither is
+        named again anywhere else.
+        """
+
+    @abstractmethod
+    def rules_stated_at_the_start(self) -> Entity:
+        """
+        What this family already knows about which detector answers which look, written
+        as the rule tree it is.
+
+        Each condition is stated over :attr:`look` and concludes on
+        :attr:`chosen_detector`, and the first alternative whose condition holds is the
+        one that answers.
+        """
+
+    @abstractmethod
+    def nothing_answers(self, look: LookT) -> Exception:
+        """
+        The family's own account of a look no rule reaches, which is raised rather than
+        answering with nothing.
+
+        :param look: The look nothing answered.
+        """
+
+    @property
+    def look(self) -> LookT:
+        """
+        The variable every rule of this family is stated over.
+        """
+        return self.rules.case_variable
+
+    @property
+    def chosen_detector(self) -> CanBehaveLikeAVariable:
+        """
+        The attribute every rule of this family concludes on.
+        """
+        return self.rules.conclusion_variable
+
+    def state_the_condition_this_rule_needs(
+        self, context: CaseContext, requests: List[AnswerRequest]
+    ) -> Dict[AnswerName, Any]:
+        """
+        Answer the engine's question about a new rule with what the detector says it can
+        answer, narrowed by the situation these rules choose it in.
+
+        :param context: The look being fitted, and the detector it is fitted to.
+        :param requests: The answers asked for, which this reads nothing from.
+        :return: The conditions answer.
+        """
+        capability = context.target_conclusion.capability(context.case_variable)
+        situation = self.situation_answered_by(
+            context.target_conclusion, context.case_variable, context.case_instance
+        )
+        if situation is None:
+            return {AnswerName.CONDITIONS: capability}
+        return {AnswerName.CONDITIONS: and_(situation, capability)}
+
+    def situation_answered_by(
+        self,
+        detector: PerceptionDetector[LookT],
+        look: LookT,
+        example: LookT,
+    ) -> Optional[ConditionType]:
+        """
+        What these rules know about when a detector is worth running, over and above
+        what it says it can answer.
+
+        Nothing, unless a family says otherwise: a capability that already tells the
+        detectors apart leaves the rules nothing to add.
+
+        :param detector: The detector a rule is being stated for.
+        :param look: The variable the condition is stated over.
+        :param example: The look the rule is being stated from.
+        :return: The situation, or ``None`` where the rules hold none.
+        """
+        return None
+
+    def add_rule(self, look: LookT, detector: PerceptionDetector[LookT]) -> None:
+        """
+        State a kind of look the rules do not yet cover.
+
+        The rule joins the tree already in use, so such a look is answered by *detector*
+        from the next call onwards without any of the rules already stated being
+        rewritten. That is what a tree of rules is for, and it is the path an expert
+        correcting a choice takes.
+
+        :param look: The kind of look that was not covered.
+        :param detector: The detector that answers it.
+        """
+        self.rules.fit_case(look, detector, self.expert)
+
+    def detector_for(self, look: LookT) -> PerceptionDetector[LookT]:
+        """
+        The detector that answers one look.
+
+        :param look: The look to decide.
+        :raises Exception: The family's own :meth:`nothing_answers`, if no rule reaches
+            this look.
+        """
+        concluded = self.rules.classify(look)
+        if concluded is ...:
+            raise self.nothing_answers(look)
+        return concluded
+
+    def render_tree(self, look: LookT) -> str:
+        """
+        The rules as a tree, with the rule that answers one look marked out.
+
+        :param look: The look to read the tree for.
+        """
+        return self.rules.render_tree(look, use_color=False)
 
 
 @dataclass

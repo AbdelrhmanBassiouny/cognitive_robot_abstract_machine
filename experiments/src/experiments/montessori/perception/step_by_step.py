@@ -42,13 +42,17 @@ from experiments.montessori.perception.overlay import (
     RectifiedView,
     ViewFromAbove,
 )
-from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.pipeline import (
+    MontessoriPerceptionPipeline,
+    SurfaceColors,
+)
 from experiments.montessori.perception.recorded_setup import (
     camera_in,
     perception_pipeline,
     recorded_world,
 )
 from experiments.montessori.perception.scene_request import SceneRequest
+from experiments.montessori.pieces import KNOWN_PIECES
 from experiments.montessori.perception.scene_source import RecordedFrame
 from experiments.montessori.perception.viewer import (
     ImageDisplay,
@@ -320,7 +324,7 @@ class SearchNarrowing:
             source=RecordedFrame(pipeline=self.pipeline, frame=frame)
         )
         return [
-            self._step(said, board, backend)
+            self._step(said, board, backend, frame)
             for said in statement.one_condition_at_a_time()
         ]
 
@@ -329,6 +333,7 @@ class SearchNarrowing:
         statement: Match[DetectedMontessoriShape],
         board: Optional[MontessoriBoardDetection],
         backend: MontessoriPerceptionBackend,
+        frame: RgbdFrame,
     ) -> NarrowingStep:
         """
         What one statement leaves a look to read, and what answering it reports.
@@ -337,9 +342,12 @@ class SearchNarrowing:
         :param board: The board as this frame showed it, which is what says how far its
             lid reaches.
         :param backend: What answers the statement by looking.
+        :param frame: The camera data the look is taken from.
         """
         request = backend.scene_request(backend.read_request(statement))
-        searches = self.pipeline.searched_surfaces(board, request)
+        searches = self.pipeline.scene_to_search(frame, request).searched_surfaces(
+            board
+        )
         return NarrowingStep(
             label=verbalize_expression(statement, backend=backend),
             request=request,
@@ -451,12 +459,28 @@ class SearchNarrowing:
                 image=cv2.bitwise_and(
                     rectified.image,
                     rectified.image,
-                    mask=self.pipeline.piece_detector.colors.color_mask(
+                    mask=self._piece_colors().color_mask(
                         rectified, step.request.color
                     ),
                 ),
             )
         return ViewFromAbove(view=RectifiedView(frame=frame, orthophoto=rectified))
+
+    def _piece_colors(self) -> SurfaceColors:
+        """
+        How a piece separates from a surface by colour, as the detector that would read
+        the table states it.
+
+        The drawing blacks out everything but the colour a step asked for, so it marks
+        the picture the way the look marking it does rather than by a second set of
+        thresholds.
+        """
+        [(detector, _)] = (
+            self.pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
+                self.pipeline.table, KNOWN_PIECES
+            )
+        )
+        return detector.colors
 
     @staticmethod
     def window_name(view: NarrowingView, step: NarrowingStep) -> str:

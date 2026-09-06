@@ -369,17 +369,24 @@ def test_a_condition_about_something_other_than_what_is_looked_for_is_refused(
 
 
 def test_only_the_surface_asked_about_is_searched(
-    pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
+    pipeline: MontessoriPerceptionPipeline,
+    scene: MontessoriScene,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
 ):
     request = SceneRequest(supporting_surface=pipeline.lid.entity)
+    looking_at = pipeline.scene_to_search(renderer.render(placed_pieces), request)
 
-    searches = pipeline.searched_surfaces(scene.board, request)
+    searches = looking_at.searched_surfaces(scene.board)
 
     assert [search.surface for search in searches] == [pipeline.lid]
 
 
 def test_a_surface_that_only_shares_a_name_is_not_the_one_asked_about(
-    pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
+    pipeline: MontessoriPerceptionPipeline,
+    scene: MontessoriScene,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
 ):
     """
     A statement names a thing of the world, and the world tells its things apart by
@@ -387,16 +394,22 @@ def test_a_surface_that_only_shares_a_name_is_not_the_one_asked_about(
     that merely carries the lid's name is asked about no surface this pipeline measured.
     """
     request = SceneRequest(supporting_surface=Body(name=pipeline.lid.name))
+    looking_at = pipeline.scene_to_search(renderer.render(placed_pieces), request)
 
-    searches = pipeline.searched_surfaces(scene.board, request)
+    searches = looking_at.searched_surfaces(scene.board)
 
     assert searches == []
 
 
 def test_every_surface_is_searched_when_the_request_names_none(
-    pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
+    pipeline: MontessoriPerceptionPipeline,
+    scene: MontessoriScene,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
 ):
-    searches = pipeline.searched_surfaces(scene.board, SceneRequest())
+    looking_at = pipeline.scene_to_search(renderer.render(placed_pieces))
+
+    searches = looking_at.searched_surfaces(scene.board)
 
     assert [search.surface for search in searches] == [pipeline.table, pipeline.lid]
 
