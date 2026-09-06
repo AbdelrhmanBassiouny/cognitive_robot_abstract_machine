@@ -48,7 +48,7 @@ def species_of(animal: Animal) -> Species:
     The ground truth every fit below is given.
 
     :param animal: The animal to label.
-    :return: ``Species.mammal`` for a milk-bearing animal, ``Species.bird`` otherwise.
+    :return:``Species.mammal`` for a milk-bearing animal, ``Species.bird`` otherwise.
     """
     return Species.mammal if animal.milk else Species.bird
 
@@ -231,8 +231,8 @@ def test_inference_binds_each_case_and_its_conclusion_to_the_query(
 
     bindings = list(backend.infer(query))
 
-    assert [bound[query.variable] for bound in bindings] == animals
-    assert [bound[query.variable.species] for bound in bindings] == [
+    assert [bound[query._variable_] for bound in bindings] == animals
+    assert [bound[query._variable_.species] for bound in bindings] == [
         species_of(animal) for animal in animals
     ]
 
@@ -256,7 +256,7 @@ def test_inference_reaches_only_the_cases_the_concrete_constraints_keep(
 
     bindings = list(backend.infer(query))
 
-    assert [bound[query.variable].name for bound in bindings] == [
+    assert [bound[query._variable_].name for bound in bindings] == [
         animal.name for animal in animals if animal.milk
     ]
 
@@ -271,7 +271,8 @@ def test_inference_fits_an_attribute_it_has_no_model_for(
 
     assert list(backend.models) == [ModelKey(Animal, "species")]
     assert {
-        bound[query.variable].name: bound[query.variable.species] for bound in bindings
+        bound[query._variable_].name: bound[query._variable_.species]
+        for bound in bindings
     } == species_by_name
 
 
@@ -316,8 +317,8 @@ def test_a_reloaded_model_concludes_what_the_original_did(
         models={ModelKey(Animal, "species"): load_rdr(str(destination))}
     )
 
-    assert [bound[query.variable.species] for bound in reloaded.infer(query)] == [
-        bound[query.variable.species] for bound in backend.infer(query)
+    assert [bound[query._variable_.species] for bound in reloaded.infer(query)] == [
+        bound[query._variable_.species] for bound in backend.infer(query)
     ]
 
 

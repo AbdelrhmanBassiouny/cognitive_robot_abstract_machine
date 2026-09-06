@@ -266,7 +266,9 @@ def relation_asserted_about(stated: Match[Relation], subject: Any) -> Relation:
     :param stated: The relation as stated, with nothing standing in its subject's place.
     :param subject: What stands where the thing sought would.
     """
-    return stated.stating(**{stated.type.subject_name(): subject}).construct_instance()
+    return stated.stating(
+        **{stated._type_.subject_name(): subject}
+    ).construct_instance()
 
 
 def object_stated_by(stated: Match[Triple]) -> Optional[Any]:
@@ -277,7 +279,7 @@ def object_stated_by(stated: Match[Triple]) -> Optional[Any]:
     :return: The thing on the other side of it, or ``None`` where the statement leaves
         that side open -- *standing on something* rather than on anything named.
     """
-    return stated.kwargs.get(stated.type.object_name())
+    return stated._kwargs_.get(stated._type_.object_name())
 
 
 def relations_stated_in(
@@ -292,7 +294,7 @@ def relations_stated_in(
         already resolved to the thing that answers its description.
     """
     read = (
-        relation_stated_by(condition, statement.variable, described_things)
+        relation_stated_by(condition, statement._variable_, described_things)
         for condition in statement._where_conditions_
     )
     return [relation for relation in read if relation is not None]
@@ -376,6 +378,7 @@ def _selects(operand: Any, variable_: Any) -> bool:
         selected is variable_ for selected in operand._selected_variables_
     )
 
+
 class Look(ABC):
     """
     One question put to perception: what is being sought, and the situation it is sought
@@ -457,7 +460,7 @@ class LookRequest(Generic[T], Look):
         return [
             stated
             for stated in self.stated_relations
-            if issubclass(stated.type, relation_type)
+            if issubclass(stated._type_, relation_type)
         ]
 
     def admits(self, instance: Any) -> bool:
@@ -782,7 +785,7 @@ class PerceptionBackend(GenerativeBackend, ABC):
             for instance in self.look(request)
             if request.admits(instance) and self.relations_hold(instance, request)
         ]
-        expression.variable._update_domain_(found)
+        expression._variable_._update_domain_(found)
         kept = list(self._check_what_was_found(expression, request))
         self.discard([instance for instance in found if instance not in kept])
         yield from kept
@@ -849,12 +852,12 @@ class PerceptionBackend(GenerativeBackend, ABC):
         """
         described_things = cls.things_described_by(expression)
         return LookRequest(
-            type_=expression.variable._type_,
+            type_=expression._variable_._type_,
             stated_attributes=[
                 AttributeEqualityToLiteral(
                     attribute_match.attribute_name, attribute_match.assigned_value
                 )
-                for attribute_match in expression.matches_with_variables
+                for attribute_match in expression._matches_with_variables_
                 if not isinstance(attribute_match.assigned_value, EllipsisType)
             ],
             stated_relations=relations_stated_in(expression, described_things),
@@ -940,7 +943,7 @@ class PerceptionBackend(GenerativeBackend, ABC):
         constrained = set()
         for condition in expression._where_conditions_:
             constrained |= condition._constrained_variables_
-        return constrained - {expression.variable}
+        return constrained - {expression._variable_}
 
     def _check_what_was_found(
         self, expression: Match[T], request: LookRequest[T]
@@ -966,19 +969,19 @@ class PerceptionBackend(GenerativeBackend, ABC):
         remaining_conditions = []
         for condition in expression._where_conditions_:
             if self._look_answers(
-                condition, expression.variable, request.described_things
+                condition, expression._variable_, request.described_things
             ):
                 continue
             if not condition._constrained_variables_ - described:
                 continue
-            if condition._constrained_variables_ - {expression.variable} - described:
+            if condition._constrained_variables_ - {expression._variable_} - described:
                 raise BackendCannotResolveCondition(condition, type(self))
             remaining_conditions.append(condition)
         stated = [
-            getattr(expression.variable, attribute.attribute_name) == attribute.value
+            getattr(expression._variable_, attribute.attribute_name) == attribute.value
             for attribute in request.stated_attributes
         ]
-        found = entity(expression.variable)._quantify_(expression._quantifier_type_)
+        found = entity(expression._variable_)._quantify_(expression._quantifier_type_)
         if stated or remaining_conditions:
             found = found.where(*stated, *remaining_conditions)
         yield from found._evaluate_natively_()
@@ -997,7 +1000,9 @@ class PerceptionBackend(GenerativeBackend, ABC):
         :param described_things: What the statement describes rather than hands over.
         """
         stated = relation_stated_by(condition, selection, described_things)
-        return stated is not None and issubclass(stated.type, self.narrowing_relations)
+        return stated is not None and issubclass(
+            stated._type_, self.narrowing_relations
+        )
 
 
 @dataclass

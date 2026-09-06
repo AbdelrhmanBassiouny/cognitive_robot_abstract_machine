@@ -407,7 +407,7 @@ def test_sub_query_in_a_match_condition_reads_as_a_noun_phrase():
     sought = a(Pose)()
     text = _hierarchical(
         sought.where(
-            sought.variable.position == an(entity(corner).where(corner.x == 1.0))
+            sought._variable_.position == an(entity(corner).where(corner.x == 1.0))
         )
     )
     assert text.count(Directive.GENERATE.value.text) == 1, text

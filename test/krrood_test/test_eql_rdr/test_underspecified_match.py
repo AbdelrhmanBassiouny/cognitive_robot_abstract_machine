@@ -29,7 +29,9 @@ from krrood.entity_query_language.rdr.underspecified import (
 
 @dataclass(unsafe_hash=True)
 class Animal:
-    """Minimal RDR classification target used only by this test module."""
+    """
+    Minimal RDR classification target used only by this test module.
+    """
 
     name: str
     has_fur: bool = False
@@ -39,7 +41,10 @@ class Animal:
 
 @dataclass(unsafe_hash=True)
 class TaggedAnimal:
-    """A case type with an unbounded-iterable field, to exercise the unsupported-target guard."""
+    """
+    A case type with an unbounded-iterable field, to exercise the unsupported-target
+    guard.
+    """
 
     name: str
     tags: List[str] = field(default_factory=list)
@@ -57,14 +62,14 @@ def _animals():
 
 def test_is_ellipsis_target_true_for_an_ellipsis_assignment():
     match = an(Animal)(species=...).from_(_animals())
-    (attribute_match,) = match.matches_with_variables
+    (attribute_match,) = match._matches_with_variables_
 
     assert is_ellipsis_target(attribute_match) is True
 
 
 def test_is_ellipsis_target_false_for_a_concrete_assignment():
     match = an(Animal)(has_fur=True).from_(_animals())
-    (attribute_match,) = match.matches_with_variables
+    (attribute_match,) = match._matches_with_variables_
 
     assert is_ellipsis_target(attribute_match) is False
 
@@ -77,7 +82,7 @@ def test_case_type_and_variable_reflect_the_underlying_match():
     underspecified = UnderspecifiedMatch(match)
 
     assert underspecified.case_type is Animal
-    assert underspecified.variable is match.variable
+    assert underspecified.variable is match._variable_
 
 
 # %% inference_targets / single_target / target_attribute_name

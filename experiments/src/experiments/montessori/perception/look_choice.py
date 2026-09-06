@@ -331,9 +331,7 @@ class SceneToSearch:
             bottom=board.lid_height,
             top=board.lid_height + LOOSE_PIECE_HEIGHT,
         )
-        return standing_on_the_lid.hides(
-            self.table.height, self.frame.camera_position
-        )
+        return standing_on_the_lid.hides(self.table.height, self.frame.camera_position)
 
     def expected_pieces(self) -> List[PieceHypothesis]:
         """

@@ -459,9 +459,7 @@ class SearchNarrowing:
                 image=cv2.bitwise_and(
                     rectified.image,
                     rectified.image,
-                    mask=self._piece_colors().color_mask(
-                        rectified, step.request.color
-                    ),
+                    mask=self._piece_colors().color_mask(rectified, step.request.color),
                 ),
             )
         return ViewFromAbove(view=RectifiedView(frame=frame, orthophoto=rectified))

@@ -125,7 +125,7 @@ class TestLoadHumanFittedModel(unittest.TestCase):
         backend = RDRBackend()
         backend.models[ModelKey(Animal, "species")] = rdr
         query = an(Animal)(species=...).from_(animals)
-        inferred = [r[query.variable.species] for r in backend.infer(query)]
+        inferred = [r[query._variable_.species] for r in backend.infer(query)]
 
         # The backend reproduces the model's direct classifications exactly.
         self.assertEqual(inferred, [rdr.classify(a) for a in animals])

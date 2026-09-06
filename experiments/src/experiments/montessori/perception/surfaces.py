@@ -128,9 +128,7 @@ class WorkspaceSurface:
         boxes = region.area.as_bounding_box_collection_in_frame(reference_frame)
         if not boxes.bounding_boxes:
             raise SurfaceHasNothingToMeasure(str(region.name))
-        return cls._of_box(
-            region, boxes.bounding_box(), cls._one_shape_of(region.area)
-        )
+        return cls._of_box(region, boxes.bounding_box(), cls._one_shape_of(region.area))
 
     @classmethod
     def of_body(

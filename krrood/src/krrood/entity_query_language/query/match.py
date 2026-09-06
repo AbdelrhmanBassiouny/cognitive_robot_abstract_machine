@@ -663,7 +663,9 @@ class Match(
 
         :param kwargs: What to state, by the attribute's own name.
         """
-        return type(self)(self.factory, type_=self.type_)(**{**self.kwargs, **kwargs})
+        return type(self)(self._factory_, _declared_type_=self._declared_type_)(
+            **{**self._kwargs_, **kwargs}
+        )
 
     def covers(self, other: Match) -> bool:
         """
@@ -676,12 +678,12 @@ class Match(
         :param other: The pattern that may be one of those this one covers.
         """
         return (
-            self.type is not None
-            and other.type is not None
-            and issubclass(other.type, self.type)
+            self._type_ is not None
+            and other._type_ is not None
+            and issubclass(other._type_, self._type_)
             and all(
-                name in other.kwargs and other.kwargs[name] == value
-                for name, value in self.kwargs.items()
+                name in other._kwargs_ and other._kwargs_[name] == value
+                for name, value in self._kwargs_.items()
             )
         )
 
@@ -714,7 +716,7 @@ class Match(
         """
         about_it, about_others = [], []
         for condition in self._where_conditions_:
-            if self.variable in condition._constrained_variables_:
+            if self._variable_ in condition._constrained_variables_:
                 about_it.append(condition)
             else:
                 about_others.append(condition)
@@ -729,9 +731,13 @@ class Match(
 
         :param conditions: What the restated statement says.
         """
-        restated = type(self)(self.factory, type_=self.type_, variable=self.variable)
+        restated = type(self)(
+            self._factory_,
+            _declared_type_=self._declared_type_,
+            _variable_=self._variable_,
+        )
         if self._has_been_called:
-            restated = restated(**self.kwargs)
+            restated = restated(**self._kwargs_)
         return restated.where(*conditions) if conditions else restated
 
     def causes_effect(self, *conditions: ConditionType) -> Match[T]:

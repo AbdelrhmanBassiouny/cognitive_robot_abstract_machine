@@ -114,6 +114,7 @@ class PieceMatcher:
             key=lambda fit: fit.outline_agreement,
             reverse=True,
         )
+
     def match_at(
         self,
         edges: EdgeDistances,
@@ -141,7 +142,6 @@ class PieceMatcher:
             key=lambda fit: fit.outline_agreement,
             reverse=True,
         )
-
 
     def _fit(
         self, piece: KnownPiece, edges: EdgeDistances, hypothesis: PieceHypothesis

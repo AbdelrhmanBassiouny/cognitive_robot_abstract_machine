@@ -61,31 +61,39 @@ def _is_unbounded_iterable(annotation: Any) -> bool:
 
 @dataclass
 class UnderspecifiedMatch:
-    """Reads an underspecified :class:`Match` for RDR-based attribute inference."""
+    """
+    Reads an underspecified :class:`Match` for RDR-based attribute inference.
+    """
 
     match: Match
 
     def __post_init__(self) -> None:
         # Callers hand in a freshly built, unresolved template (e.g. an(Animal)(species=...));
-        # every property below reads match.type/.variable/.matches_with_variables, which only
+        # every property below reads match._type_/._variable_/._matches_with_variables_, which only
         # exist once resolved. Match.resolve() is idempotent, so this is safe if already resolved.
         self.match.resolve()
 
     @property
     def case_type(self) -> Type:
-        """The type whose instances are being completed (e.g. ``Animal``)."""
-        return self.match.type
+        """
+        The type whose instances are being completed (e.g. ``Animal``).
+        """
+        return self.match._type_
 
     @property
     def variable(self) -> Variable:
-        """The EQL variable the query ranges over."""
-        return self.match.variable
+        """
+        The EQL variable the query ranges over.
+        """
+        return self.match._variable_
 
     @cached_property
     def inference_targets(self) -> List[AttributeMatch]:
-        """The ``...`` attribute leaves to infer (each validated as single-valued)."""
+        """
+        The ``...`` attribute leaves to infer (each validated as single-valued).
+        """
         targets = [
-            m for m in self.match.matches_with_variables if is_ellipsis_target(m)
+            m for m in self.match._matches_with_variables_ if is_ellipsis_target(m)
         ]
         for target in targets:
             self._guard_single_valued(target)
@@ -102,7 +110,9 @@ class UnderspecifiedMatch:
 
     @property
     def target_attribute_name(self) -> str:
-        """The name of the single attribute this query asks to infer."""
+        """
+        The name of the single attribute this query asks to infer.
+        """
         return self.single_target().attribute_name
 
     def filtered_cases(self) -> Iterator[Any]:
@@ -117,9 +127,11 @@ class UnderspecifiedMatch:
         return query.evaluate()
 
     def _concrete_conditions(self) -> List[Any]:
-        """Fresh comparator nodes for the concrete attribute constraints (``...`` dropped)."""
+        """
+        Fresh comparator nodes for the concrete attribute constraints (``...`` dropped).
+        """
         conditions: List[Any] = []
-        for leaf in self.match.matches_with_variables:
+        for leaf in self.match._matches_with_variables_:
             if is_ellipsis_target(leaf):
                 continue
             attribute = getattr(self.variable, leaf.attribute_name)

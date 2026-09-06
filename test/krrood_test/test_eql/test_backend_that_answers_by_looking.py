@@ -60,7 +60,7 @@ def looking_for_something_standing_on(place: Place):
     :param place: The place the thing sought is asserted to stand on.
     """
     statement = an(Sighting)()
-    return statement.where(StandingOn(statement.variable, place))
+    return statement.where(StandingOn(statement._variable_, place))
 
 
 @pytest.fixture
@@ -130,8 +130,8 @@ def test_a_relation_asserted_about_the_thing_sought_is_read_off_the_condition():
     request = BackendThatLooksAtTheWorld.read_request(statement)
 
     [stated] = request.stated_relations
-    assert stated.type is StandingOn
-    assert stated.kwargs == {"place": LID}
+    assert stated._type_ is StandingOn
+    assert stated._kwargs_ == {"place": LID}
 
 
 def test_the_thing_a_relation_relates_the_sought_thing_to_is_read_back_by_its_class():
@@ -166,12 +166,12 @@ def test_a_relation_of_more_than_two_operands_is_read_whole():
     thing sought to, not only the one thing a triple names second.
     """
     statement = an(Sighting)()
-    statement = statement.where(StandingBetween(statement.variable, TABLE, LID))
+    statement = statement.where(StandingBetween(statement._variable_, TABLE, LID))
 
     [stated] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
 
-    assert stated.type is StandingBetween
-    assert stated.kwargs == {"one": TABLE, "other": LID}
+    assert stated._type_ is StandingBetween
+    assert stated._kwargs_ == {"one": TABLE, "other": LID}
 
 
 def test_a_relation_read_off_a_statement_can_be_rebuilt_without_the_thing_sought():
@@ -180,7 +180,7 @@ def test_a_relation_read_off_a_statement_can_be_rebuilt_without_the_thing_sought
     before anything has been found -- which is the form this builds.
     """
     statement = an(Sighting)()
-    statement = statement.where(StandingBetween(statement.variable, TABLE, LID))
+    statement = statement.where(StandingBetween(statement._variable_, TABLE, LID))
 
     [stated] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
     constraint = stated.construct_instance()
@@ -196,7 +196,7 @@ def test_a_relation_asserted_about_another_variable_is_not_read_as_the_sought_th
 
     [condition] = statement._where_conditions_
 
-    assert relation_stated_by(condition, statement.variable) is None
+    assert relation_stated_by(condition, statement._variable_) is None
 
 
 # %% what the look is told, and what is checked afterwards
@@ -226,7 +226,7 @@ def test_a_narrowed_look_still_has_its_own_attribute_checked_over_the_results(
     backend: BackendThatLooksAtTheWorld,
 ):
     statement = an(Sighting)(label=DISK_ON_THE_TABLE.label)
-    statement = statement.where(StandingOn(statement.variable, TABLE))
+    statement = statement.where(StandingOn(statement._variable_, TABLE))
 
     results = list(statement.evaluate(backend=backend))
 
@@ -247,8 +247,8 @@ def test_a_where_condition_is_checked_over_what_the_look_found(
 ):
     statement = an(Sighting)()
     statement = statement.where(
-        StandingOn(statement.variable, TABLE),
-        statement.variable.label == DISK_ON_THE_TABLE.label,
+        StandingOn(statement._variable_, TABLE),
+        statement._variable_.label == DISK_ON_THE_TABLE.label,
     )
 
     results = list(statement.evaluate(backend=backend))
@@ -283,7 +283,7 @@ def test_an_unstated_attribute_is_what_the_look_fills_in(
     narrows nothing and rejects nothing.
     """
     statement = an(Sighting)(label=...)
-    statement = statement.where(StandingOn(statement.variable, LID))
+    statement = statement.where(StandingOn(statement._variable_, LID))
 
     results = list(statement.evaluate(backend=backend))
 
@@ -303,7 +303,7 @@ def looking_for_something_standing_on_the_place_called(name: str):
     """
     place = variable(Place, [TABLE, LID])
     statement = an(Sighting)()
-    return statement.where(place.name == name, StandingOn(statement.variable, place))
+    return statement.where(place.name == name, StandingOn(statement._variable_, place))
 
 
 def test_a_thing_the_statement_describes_narrows_the_look_as_one_handed_over_does(
@@ -339,7 +339,7 @@ def test_a_description_no_single_thing_answers_is_refused_rather_than_guessed_at
     place = variable(Place, [TABLE, LID])
     statement = an(Sighting)()
     statement = statement.where(
-        place.name != "nowhere", StandingOn(statement.variable, place)
+        place.name != "nowhere", StandingOn(statement._variable_, place)
     )
 
     with pytest.raises(BackendCannotResolveCondition) as raised:
@@ -356,9 +356,11 @@ def looking_for_something_standing_on_the_place_answering(name: str):
     :param name: What the world calls the place.
     """
     place = a(Place)().from_([TABLE, LID])
-    place.where(place.variable.name == name)
+    place.where(place._variable_.name == name)
     statement = an(Sighting)()
-    return statement.where(StandingOn(statement.variable, place.expression))
+    return statement.where(
+        StandingOn(statement._variable_, place._symbolic_expression_)
+    )
 
 
 def test_a_thing_described_by_a_statement_of_its_own_narrows_the_look_too(
@@ -388,9 +390,11 @@ def test_a_statement_of_its_own_no_single_thing_answers_is_refused_too(
     stated beside the relation is.
     """
     place = a(Place)().from_([TABLE, LID])
-    place.where(place.variable.name != "nowhere")
+    place.where(place._variable_.name != "nowhere")
     statement = an(Sighting)()
-    statement = statement.where(StandingOn(statement.variable, place.expression))
+    statement = statement.where(
+        StandingOn(statement._variable_, place._symbolic_expression_)
+    )
 
     with pytest.raises(BackendCannotResolveCondition) as raised:
         list(statement.evaluate(backend=backend))
@@ -404,14 +408,14 @@ def test_a_statement_of_its_own_no_single_thing_answers_is_refused_too(
 def test_a_statement_is_read_from_saying_nothing_to_saying_all_it_says():
     statement = an(Sighting)()
     statement = statement.where(
-        StandingOn(statement.variable, LID),
-        statement.variable.label == CUBE_ON_THE_LID.label,
+        StandingOn(statement._variable_, LID),
+        statement._variable_.label == CUBE_ON_THE_LID.label,
     )
 
     said = statement.one_condition_at_a_time()
 
     assert [len(step._where_conditions_) for step in said] == [0, 1, 2]
-    assert all(step.variable is statement.variable for step in said)
+    assert all(step._variable_ is statement._variable_ for step in said)
 
 
 def test_a_description_is_carried_by_every_step_rather_than_being_one_of_them():
@@ -432,8 +436,8 @@ def test_each_condition_of_a_statement_narrows_what_a_look_answers(
 ):
     statement = an(Sighting)()
     statement = statement.where(
-        StandingOn(statement.variable, TABLE),
-        statement.variable.label == DISK_ON_THE_TABLE.label,
+        StandingOn(statement._variable_, TABLE),
+        statement._variable_.label == DISK_ON_THE_TABLE.label,
     )
 
     answers = [
@@ -461,7 +465,7 @@ def looking_for_something_standing_beside_the_place_called(name: str):
     place = variable(Place, [TABLE, LID])
     statement = an(Sighting)()
     return statement.where(
-        place.name == name, StandingBeside(statement.variable, place)
+        place.name == name, StandingBeside(statement._variable_, place)
     )
 
 
@@ -555,7 +559,7 @@ def test_a_relation_stated_about_nothing_can_be_asked_of_one_thing():
 
 def test_a_relation_stated_without_a_statement_reads_as_one_read_off_a_statement():
     statement = an(Sighting)()
-    statement = statement.where(StandingOn(statement.variable, TABLE))
+    statement = statement.where(StandingOn(statement._variable_, TABLE))
     [read] = BackendThatLooksAtTheWorld.read_request(statement).stated_relations
 
     assert read.states_the_same(an(StandingOn)(place=TABLE))
@@ -570,8 +574,8 @@ def test_a_stated_relation_is_a_statement_over_the_relations_own_class():
     on_the_table = an(StandingOn)(place=TABLE)
 
     assert isinstance(on_the_table, Match)
-    assert on_the_table.type is StandingOn
-    assert on_the_table.kwargs == {"place": TABLE}
+    assert on_the_table._type_ is StandingOn
+    assert on_the_table._kwargs_ == {"place": TABLE}
     assert StandingOn.subject_name() == "thing"
     assert StandingOn.object_name() == "place"
 
@@ -585,8 +589,8 @@ def test_stating_more_of_a_relation_leaves_the_one_it_grew_from_alone():
 
     on_the_table = on_anything.stating(place=TABLE)
 
-    assert on_the_table.kwargs == {"place": TABLE}
-    assert on_anything.kwargs == {}
+    assert on_the_table._kwargs_ == {"place": TABLE}
+    assert on_anything._kwargs_ == {}
 
 
 def test_a_relation_stating_a_thing_covers_only_relations_to_that_thing():

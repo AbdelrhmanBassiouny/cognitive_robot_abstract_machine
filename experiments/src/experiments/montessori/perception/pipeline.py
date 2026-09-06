@@ -1286,6 +1286,7 @@ def _to_rectified_contour(outline: np.ndarray, orthophoto: Orthophoto) -> np.nda
     pixels = orthophoto.region.to_pixels(outline)
     return np.round(pixels).astype(np.int32).reshape(-1, 1, 2)
 
+
 # %% the ways a look is answered
 
 
@@ -1394,7 +1395,13 @@ class FindThePieces(SceneDetector):
                 pieces.extend(
                     detector.detect(
                         self.surface_pass(
-                            scene, search, detector, candidates, board, imagined, expected
+                            scene,
+                            search,
+                            detector,
+                            candidates,
+                            board,
+                            imagined,
+                            expected,
                         )
                     )
                 )
@@ -1472,9 +1479,7 @@ def default_look_rules(
     :param board_detector: The detector that finds the board, for a setup whose board is
         not the size the mesh was drawn at, or None for the one every scene starts with.
     """
-    find_the_board = FindTheBoard(
-        board_detector=board_detector or BoardDetector()
-    )
+    find_the_board = FindTheBoard(board_detector=board_detector or BoardDetector())
     return LookRules(
         find_the_board=find_the_board,
         find_the_pieces=FindThePieces(find_the_board=find_the_board),
