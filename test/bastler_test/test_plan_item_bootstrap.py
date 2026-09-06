@@ -19,6 +19,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -26,13 +27,12 @@ import yaml
 import bastler.plan_item_bootstrap
 from bastler.plan_item_bootstrap import (
     BLOCK_STYLED_KEYS,
-    ITEM_FIELD_INDENT,
     MANIFEST_LINE_WIDTH,
     PLANS_DIRECTORY,
-    SEQUENCE_ENTRY_INDENT,
     CreatedPullRequest,
     ExitCode,
     HookScript,
+    ItemIndentation,
     ItemRecordRequest,
     ItemStatus,
     ItemUpdateRequest,
@@ -45,6 +45,7 @@ from bastler.plan_item_bootstrap import (
     UnknownPlanError,
     ValueStyle,
     WorkOpenRequest,
+    apply_item_fields,
     block_branch,
     check_item,
     open_work,
@@ -79,6 +80,24 @@ PLAN_ROADMAP = (DATASET_DIRECTORY / "bootstrap-roadmap.md").read_text()
 The roadmap every test starts from.
 """
 
+INDENTLESS_PLAN_MANIFEST = (
+    DATASET_DIRECTORY / "bootstrap-plan-indentless-items.yaml"
+).read_text()
+"""
+The same plan in the other block sequence style YAML admits, with items written flush
+with ``items:`` rather than indented one level inside it.
+
+This is the style every manifest ``save-plan.sh`` writes carries, because that is what
+PyYAML's dumper emits, so a writer that only ever sees the indented fixture is a writer
+no real caller's manifest exercises.
+"""
+
+PLAN_INDENTATION = ItemIndentation.of_manifest(PLAN_MANIFEST)
+"""
+The depth :data:`PLAN_MANIFEST`'s items are written at, read off the fixture rather than
+assumed, so a rendering test cannot silently drift from what the fixture actually uses.
+"""
+
 EXISTING_ITEM = "an-existing-item"
 """
 The fixture item the plan already tracks, with no branch of its own yet.
@@ -95,6 +114,12 @@ The fixture item that follows the one under test, for asserting a write left the
 after it untouched.
 """
 
+STACKED_ITEM = "a-stacked-item"
+"""
+The fixture item whose ``depends_on`` is written out beneath its key, only present in
+:data:`INDENTLESS_PLAN_MANIFEST`.
+"""
+
 WORK_REMOTE = "origin"
 """
 The remote :meth:`ScratchRepository.add_work_remote` registers, and the one the module's
@@ -104,6 +129,11 @@ own operations default to.
 NEW_BRANCH = "claude/a-new-branch"
 """
 The branch opening the work publishes.
+"""
+
+PULL_REQUEST_NUMBER = 143
+"""
+The pull request number recorded on an item whose work was opened.
 """
 
 SESSION_URL = "https://example.invalid/session_first"
@@ -145,7 +175,7 @@ def manifest_line(manifest_key: ManifestKey, value: str) -> str:
     :param value: The value it carries.
     :return: The rendered line.
     """
-    return manifest_key.render(value)
+    return manifest_key.render(value, PLAN_INDENTATION)
 
 
 # %% fixtures
@@ -198,13 +228,15 @@ class RefusingPullRequestOpener:
         raise bastler.plan_item_bootstrap.PullRequestRefusedError(detail="422 refused")
 
 
-@pytest.fixture
-def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
+def repository_with_plan(
+    scratch_repository: ScratchRepository, manifest_text: str
+) -> ScratchRepository:
     """
-    A scratch repository carrying the hook scripts this module drives, with a plan
+    A scratch repository carrying the hook scripts this module drives, with *manifest*
     already published on its notes branch.
 
     :param scratch_repository: The initialized scratch repository and notes remote.
+    :param manifest_text: The manifest to publish.
     :return: The same repository, ready to bootstrap an item in.
     """
     scratch_repository.install_hook_scripts(
@@ -217,7 +249,7 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     scratch_repository.publish_notes_branch(
         {
             PlanDocument.MANIFEST.path_within_notes_branch(PLAN_IDENTIFIER): (
-                PLAN_MANIFEST
+                manifest_text
             ),
             PlanDocument.ROADMAP.path_within_notes_branch(PLAN_IDENTIFIER): (
                 PLAN_ROADMAP
@@ -227,6 +259,30 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     scratch_repository.resolve_notes_remote_to()
     scratch_repository.add_work_remote()
     return scratch_repository
+
+
+@pytest.fixture
+def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
+    """
+    A scratch repository with a plan whose items are written indented under ``items:``.
+
+    :param scratch_repository: The initialized scratch repository and notes remote.
+    :return: The repository, ready to bootstrap an item in.
+    """
+    return repository_with_plan(scratch_repository, PLAN_MANIFEST)
+
+
+@pytest.fixture
+def indentless_plan_repository(
+    scratch_repository: ScratchRepository,
+) -> ScratchRepository:
+    """
+    A scratch repository with a plan whose items are written flush with ``items:``.
+
+    :param scratch_repository: The initialized scratch repository and notes remote.
+    :return: The repository, ready to bootstrap an item in.
+    """
+    return repository_with_plan(scratch_repository, INDENTLESS_PLAN_MANIFEST)
 
 
 def published_plan(repository: ScratchRepository) -> dict[PlanDocument, str]:
@@ -330,7 +386,9 @@ def entry_wrapping_across(unbreakable: str) -> str:
     :param unbreakable: The token that has to survive the wrap intact.
     :return: The blocker's text.
     """
-    body_width = MANIFEST_LINE_WIDTH - len(SEQUENCE_ENTRY_INDENT + ITEM_FIELD_INDENT)
+    body_width = MANIFEST_LINE_WIDTH - len(
+        PLAN_INDENTATION.nested + PLAN_INDENTATION.body
+    )
     lead = "word "
     return (
         lead * ((body_width - len(unbreakable) // 2) // len(lead))
@@ -351,6 +409,35 @@ def published_items(repository: ScratchRepository) -> dict[str, dict[str, object
         item[ManifestKey.IDENTIFIER.key]: item
         for item in manifest[ManifestKey.ITEMS.key]
     }
+
+
+def opened_item_fields() -> dict[ManifestKey, Any]:
+    """
+    The fields opening an item's work writes onto it, as the manifest spells them.
+
+    :return: The value written to each key.
+    """
+    return {
+        ManifestKey.BRANCH: NEW_BRANCH,
+        ManifestKey.PULL_REQUEST_NUMBER: PULL_REQUEST_NUMBER,
+        ManifestKey.SESSION: SESSION_URL,
+        ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value,
+    }
+
+
+def item_named(manifest_text: str, item_identifier: str) -> dict[str, object]:
+    """
+    One item as a YAML reader sees it, which is how every consumer of a manifest reads
+    it.
+
+    :param manifest_text: The manifest to parse.
+    :param item_identifier: The item's id.
+    :return: The item's parsed mapping.
+    """
+    items = yaml.safe_load(manifest_text)[ManifestKey.ITEMS.key]
+    return next(
+        item for item in items if item[ManifestKey.IDENTIFIER.key] == item_identifier
+    )
 
 
 def publish_the_branch_index(repository: ScratchRepository) -> None:
@@ -470,11 +557,11 @@ def test_recording_a_new_item_appends_it_to_the_manifest(
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     assert manifest.startswith(PLAN_MANIFEST)
     assert manifest.endswith(
-        ManifestKey.IDENTIFIER.render(NEW_ITEM, opening_the_item=True)
+        ManifestKey.IDENTIFIER.render(NEW_ITEM, PLAN_INDENTATION, opening_the_item=True)
         + manifest_line(ManifestKey.TITLE, "A brand new item")
-        + manifest_line(ManifestKey.BRANCH, "null")
+        + manifest_line(ManifestKey.BRANCH, None)
         + manifest_line(ManifestKey.TRACK, "a-track")
-        + manifest_line(ManifestKey.DEPENDS_ON, "[]")
+        + manifest_line(ManifestKey.DEPENDS_ON, ())
         + manifest_line(ManifestKey.STATUS, ItemStatus.NOT_STARTED.value)
     )
 
@@ -514,7 +601,7 @@ def test_recording_against_an_unknown_plan_is_refused(
 def test_opening_writes_the_branch_pull_request_and_session_onto_the_item(
     bootstrap_repository: ScratchRepository,
 ):
-    opener = RecordingPullRequestOpener(number=143)
+    opener = RecordingPullRequestOpener(number=PULL_REQUEST_NUMBER)
 
     result = open_work(
         open_request(),
@@ -523,14 +610,9 @@ def test_opening_writes_the_branch_pull_request_and_session_onto_the_item(
     )
 
     assert result.exit_code is ExitCode.SUCCESS
-    assert result.pull_request_number == 143
+    assert result.pull_request_number == PULL_REQUEST_NUMBER
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
-    for written_key, value in (
-        (ManifestKey.BRANCH, NEW_BRANCH),
-        (ManifestKey.PULL_REQUEST_NUMBER, "143"),
-        (ManifestKey.SESSION, SESSION_URL),
-        (ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value),
-    ):
+    for written_key, value in opened_item_fields().items():
         assert manifest_line(written_key, value) in manifest
 
 
@@ -658,7 +740,7 @@ def test_a_supplied_pull_request_number_is_recorded_without_creating_one(
     assert opener.requests == []
     assert result.pull_request_number == 57
     assert (
-        manifest_line(ManifestKey.PULL_REQUEST_NUMBER, "57")
+        manifest_line(ManifestKey.PULL_REQUEST_NUMBER, 57)
         in published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     )
 
@@ -1272,17 +1354,180 @@ def test_a_rendered_field_line_matches_how_a_real_manifest_writes_it():
     assert manifest_line(ManifestKey.TRACK, "a-track") in PLAN_MANIFEST
 
 
+def test_a_line_is_rendered_at_the_depth_the_manifest_it_edits_uses():
+    """
+    The depth is the manifest's to state, not this module's, so the same key renders
+    differently for a plan whose items are written flush with ``items:``.
+    """
+    indentation = ItemIndentation.of_manifest(INDENTLESS_PLAN_MANIFEST)
+
+    assert (
+        ManifestKey.STATUS.render(ItemStatus.NOT_STARTED.value, indentation)
+        in INDENTLESS_PLAN_MANIFEST
+    )
+    assert indentation != PLAN_INDENTATION
+
+
 def test_a_key_quotes_its_own_value_when_its_style_says_to():
     """
     Quoting is the key's to decide, so no caller has to know that a title is prose and a
     track is a bare identifier.
     """
-    assert ManifestKey.TITLE.render("A brand new item").endswith(
+    assert ManifestKey.TITLE.render("A brand new item", PLAN_INDENTATION).endswith(
         ': "A brand new item"\n'
     )
-    assert ManifestKey.TRACK.render("a-track").endswith(": a-track\n")
+    assert ManifestKey.TRACK.render("a-track", PLAN_INDENTATION).endswith(": a-track\n")
     assert ManifestKey.TITLE.style is ValueStyle.DOUBLE_QUOTED
     assert ManifestKey.TRACK.style is ValueStyle.PLAIN
+
+
+SCALAR_STYLED_KEYS = tuple(
+    manifest_key
+    for manifest_key in ManifestKey
+    if not manifest_key.style.spans_lines_beneath
+)
+"""
+The keys whose value is written on the key's own line, derived from the styles rather
+than listed a second time.
+"""
+
+VALUES_YAML_READS_BACK_DIFFERENTLY = (
+    "opened on #76",
+    'a value carrying a "quoted" phrase',
+    r"a path like C:\temp",
+    "a value ending in a colon:",
+)
+"""
+Values a manifest can legitimately carry that YAML does not read back as written unless
+the writer quotes and escapes them.
+
+A space before ``#`` opens a comment, a double quote closes an opening one, and a
+backslash is an escape inside double quotes - each losing the tail of the value, or the
+document, silently.
+"""
+
+
+@pytest.mark.parametrize("hostile_value", VALUES_YAML_READS_BACK_DIFFERENTLY)
+@pytest.mark.parametrize("manifest_key", SCALAR_STYLED_KEYS)
+def test_a_rendered_scalar_reads_back_as_the_value_it_was_given(
+    manifest_key: ManifestKey, hostile_value: str
+):
+    """
+    Rendering is only correct if it round-trips: what a key writes has to parse back as
+    what the caller handed it, whatever the value contains.
+    """
+    written = yaml.safe_load(manifest_key.render(hostile_value, PLAN_INDENTATION))
+
+    assert written[manifest_key.key] == hostile_value
+
+
+def test_patching_an_item_written_indentless_reads_back_the_fields_it_wrote():
+    """
+    A patch that writes its lines at a depth the item does not use produces YAML that no
+    longer parses, so the values are read back rather than the lines matched.
+    """
+    patched = apply_item_fields(
+        INDENTLESS_PLAN_MANIFEST, PLAN_IDENTIFIER, EXISTING_ITEM, opened_item_fields()
+    )
+
+    item = item_named(patched, EXISTING_ITEM)
+    assert item[ManifestKey.BRANCH.key] == NEW_BRANCH
+    assert item[ManifestKey.PULL_REQUEST_NUMBER.key] == PULL_REQUEST_NUMBER
+    assert item[ManifestKey.SESSION.key] == SESSION_URL
+    assert item[ManifestKey.STATUS.key] == ItemStatus.IN_PROGRESS
+
+
+def test_patching_an_item_written_indentless_leaves_the_other_items_alone():
+    patched = apply_item_fields(
+        INDENTLESS_PLAN_MANIFEST, PLAN_IDENTIFIER, EXISTING_ITEM, opened_item_fields()
+    )
+
+    assert item_named(patched, SECOND_ITEM) == item_named(
+        INDENTLESS_PLAN_MANIFEST, SECOND_ITEM
+    )
+
+
+def test_updating_an_item_whose_dependencies_are_written_out_keeps_the_manifest_parsing(
+    indentless_plan_repository: ScratchRepository,
+):
+    """
+    A field written after a block sequence has to land at the item's own depth.
+
+    Written one level deeper it sits under the sequence's last entry, where YAML reads a
+    mapping key inside a scalar and refuses the document - so the save fails rather than
+    writing something merely wrong.
+    """
+    update_item(
+        update_request(
+            item_identifier=STACKED_ITEM,
+            values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED.value},
+        ),
+        project_root=indentless_plan_repository.project_root,
+    )
+
+    written = published_items(indentless_plan_repository)[STACKED_ITEM]
+    assert written[ManifestKey.STATUS.key] == ItemStatus.BLOCKED
+    assert written[ManifestKey.DEPENDS_ON.key] == [EXISTING_ITEM]
+
+
+def test_replacing_written_out_dependencies_replaces_their_entries(
+    indentless_plan_repository: ScratchRepository,
+):
+    """
+    ``depends_on`` spans the lines beneath its key, so replacing it has to take the
+    entries with it.
+
+    Replacing the key's own line alone leaves them behind, where YAML reads them as a
+    sequence belonging to whatever key replaced it.
+    """
+    update_item(
+        update_request(
+            item_identifier=STACKED_ITEM,
+            values_by_key={ManifestKey.DEPENDS_ON: [SECOND_ITEM]},
+        ),
+        project_root=indentless_plan_repository.project_root,
+    )
+
+    written = published_items(indentless_plan_repository)[STACKED_ITEM]
+    assert written[ManifestKey.DEPENDS_ON.key] == [SECOND_ITEM]
+
+
+def test_opening_an_item_written_indentless_publishes_the_fields_it_wrote(
+    indentless_plan_repository: ScratchRepository,
+):
+    open_work(
+        open_request(),
+        project_root=indentless_plan_repository.project_root,
+        pull_request_opener=RecordingPullRequestOpener(number=PULL_REQUEST_NUMBER),
+    )
+
+    manifest = published_plan(indentless_plan_repository)[PlanDocument.MANIFEST]
+    item = item_named(manifest, EXISTING_ITEM)
+    assert item[ManifestKey.BRANCH.key] == NEW_BRANCH
+    assert item[ManifestKey.PULL_REQUEST_NUMBER.key] == PULL_REQUEST_NUMBER
+    assert item[ManifestKey.SESSION.key] == SESSION_URL
+    assert item[ManifestKey.STATUS.key] == ItemStatus.IN_PROGRESS
+
+
+def test_recording_a_new_item_in_an_indentless_plan_publishes_it(
+    indentless_plan_repository: ScratchRepository,
+):
+    record_item(
+        record_request(
+            indentless_plan_repository,
+            item_identifier=NEW_ITEM,
+            title="A brand new item",
+            track="a-track",
+            status=ItemStatus.NOT_STARTED,
+        ),
+        project_root=indentless_plan_repository.project_root,
+    )
+
+    manifest = published_plan(indentless_plan_repository)[PlanDocument.MANIFEST]
+    item = item_named(manifest, NEW_ITEM)
+    assert item[ManifestKey.TITLE.key] == "A brand new item"
+    assert item[ManifestKey.TRACK.key] == "a-track"
+    assert item[ManifestKey.STATUS.key] == ItemStatus.NOT_STARTED
 
 
 def test_every_key_is_a_specification_in_its_own_right():
@@ -1348,7 +1593,11 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
 
 
 def test_only_the_keys_whose_values_run_over_lines_are_block_styled():
-    assert BLOCK_STYLED_KEYS == {ManifestKey.NOTES, ManifestKey.BLOCKERS}
+    assert BLOCK_STYLED_KEYS == {
+        ManifestKey.NOTES,
+        ManifestKey.BLOCKERS,
+        ManifestKey.DEPENDS_ON,
+    }
 
 
 # %% exit statuses
@@ -1557,7 +1806,7 @@ def test_every_operation_is_reachable_by_the_word_it_names():
     """
     assert {
         word: type(subcommand).__name__
-        for word, subcommand in plan_item_bootstrap.SUBCOMMANDS.items()
+        for word, subcommand in bastler.plan_item_bootstrap.SUBCOMMANDS.items()
     } == {
         "record": "RecordSubcommand",
         "update": "UpdateSubcommand",
@@ -1577,7 +1826,7 @@ def test_a_command_that_names_no_word_of_its_own_cannot_be_built():
     """
 
     class NamelessSubcommand(Subcommand):
-        def add_arguments(self, parser):
+        def declare_arguments(self, parser):
             """
             Take no flags.
 
@@ -1607,10 +1856,10 @@ def test_the_parser_takes_each_registered_word(
     """
     refusals = {
         word: run_bootstrap(bootstrap_repository, word, "--help").returncode
-        for word in plan_item_bootstrap.SUBCOMMANDS
+        for word in bastler.plan_item_bootstrap.SUBCOMMANDS
     }
 
-    assert refusals == {word: 0 for word in plan_item_bootstrap.SUBCOMMANDS}
+    assert refusals == {word: 0 for word in bastler.plan_item_bootstrap.SUBCOMMANDS}
 
 
 # %% seeing what a written note actually became
@@ -1670,7 +1919,7 @@ def test_a_word_wrapped_at_its_hyphen_is_written_whole():
     wrote whole, so closing it up is what keeps the value the one they wrote. This is
     the case that put ``blank- line`` into the live manifest.
     """
-    written = plan_item_bootstrap.fold(
+    written = bastler.plan_item_bootstrap.fold(
         "the paragraphs have to be blank-\nline separated", ""
     )
 
@@ -1682,7 +1931,9 @@ def test_a_suspended_hyphen_typed_on_one_line_keeps_its_space():
     """
     ``network- and credential-free`` is correct English and must survive being written.
     """
-    written = plan_item_bootstrap.fold("all network- and credential-free tests", "")
+    written = bastler.plan_item_bootstrap.fold(
+        "all network- and credential-free tests", ""
+    )
 
     assert "network- and credential-free" in written
 
@@ -1691,7 +1942,7 @@ def test_a_paragraph_break_still_separates_paragraphs_after_a_hyphen():
     """
     Closing up a wrapped break must not swallow a blank line that follows a hyphen.
     """
-    assert plan_item_bootstrap.paragraphs_of("ends in a-\n\nnew paragraph") == [
+    assert bastler.plan_item_bootstrap.paragraphs_of("ends in a-\n\nnew paragraph") == [
         "ends in a-",
         "new paragraph",
     ]
