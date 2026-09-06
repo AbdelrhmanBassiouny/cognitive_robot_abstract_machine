@@ -9,6 +9,7 @@ import pytest
 
 from krrood.entity_query_language.backends import Look
 from krrood.entity_query_language.factories import a
+from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
 from krrood.entity_query_language.rdr.serialization import NullModelSaver
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.query.query import Query
@@ -95,15 +96,13 @@ def test_the_rules_conclude_the_detector_whose_condition_holds():
 
 def test_the_rules_a_family_starts_with_need_no_case_to_be_derived_from():
     """
-    Each is the detector's own capability, stated over the variable the rules range
-    over, so nothing has to be invented for the engine to read a rule off.
+    The tree is written outright rather than fitted, so the family arrives with its
+    rules and with no case any of them was read off.
     """
     rules = WhereToLookRules()
 
-    assert [rule.conclusion for rule in rules.rules_stated_at_the_start()] == [
-        rules.depth,
-        rules.colors,
-    ]
+    assert len(walk_rules(rules.rules.conditions_root)) == 2
+    assert rules.rules.corner_cases.cases == {}
 
 
 def test_a_look_no_rule_reaches_is_refused_in_the_familys_own_words():

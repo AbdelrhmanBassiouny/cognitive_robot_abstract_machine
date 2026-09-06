@@ -24,7 +24,6 @@ from typing_extensions import (
     List,
     Optional,
     Self,
-    Sequence,
     Set,
     TYPE_CHECKING,
     Type,
@@ -35,7 +34,7 @@ from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVari
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
 from krrood.entity_query_language.factories import add, entity, variable
-from krrood.entity_query_language.query.query import Query
+from krrood.entity_query_language.query.query import Entity, Query
 from krrood.entity_query_language.rdr.backward_inference import (
     BackwardInferenceIndex,
     ConclusionSufficientConditionSets,
@@ -54,6 +53,8 @@ from krrood.entity_query_language.rdr.exceptions import (
     ConditionsNotInsertable,
     ExpertRequired,
     RDRDidNotConvergeError,
+    RulesAlreadyPresent,
+    RulesOverAnotherCase,
 )
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import CaseContext
@@ -69,7 +70,6 @@ from krrood.entity_query_language.rdr.progress import (
     ProgressReporter,
 )
 from krrood.entity_query_language.rdr.rule_tree import (
-    StatedRule,
     insert_alternative,
     insert_refinement,
 )
@@ -446,8 +446,19 @@ class EQLSingleClassRDR:
         :param condition: The condition the new rule fires on.
         :param conclusion: The conclusion the new rule draws.
         """
-        if not context.has_current_conclusion:
-            new_node = self._add_alternative(condition, conclusion)
+        if self.query is None:
+            self.query = entity(self.case_variable).where(condition)
+            with self.query:
+                add(self.conclusion_variable, conclusion)
+            self.query.build()
+            new_node = self.query._conditions_root_
+        elif not context.has_current_conclusion:
+            new_node = insert_alternative(
+                self.query._conditions_root_,
+                condition,
+                self.conclusion_variable,
+                conclusion,
+            )
         else:
             new_node = insert_refinement(
                 context.trace.firing_anchor,
@@ -459,52 +470,33 @@ class EQLSingleClassRDR:
         self.corner_cases.record(new_node, context.case_instance)
         self._backward_index.invalidate()
 
-    def _add_alternative(
-        self, condition: SymbolicExpression, conclusion: Any
-    ) -> SymbolicExpression:
-        """
-        Seed the rule tree with its first rule, or add one to be tried after every rule
-        already in it.
-
-        :param condition: The condition the new rule fires on.
-        :param conclusion: The conclusion the new rule draws.
-        :return: The newly created condition node.
-        """
-        if self.query is None:
-            self.query = entity(self.case_variable).where(condition)
-            with self.query:
-                add(self.conclusion_variable, conclusion)
-            self.query.build()
-            return self.query._conditions_root_
-        return insert_alternative(
-            self.query._conditions_root_,
-            condition,
-            self.conclusion_variable,
-            conclusion,
-        )
-
     # %% rules stated outright
 
-    def state_rules(self, rules: Sequence[StatedRule]) -> Self:
+    def state_rules(self, rules: Entity) -> Self:
         """
-        Take rules already worked out, in the order they are to be tried.
+        Take a rule tree written outright as this RDR's own.
 
         Fitting derives a rule from a case, which is what an expert correcting a wrong
-        answer has to offer; an author who already knows the rules has instead to invent
-        a case each one would be derived from. So the rules are taken as they are, and
-        the tree they make is the same tree fitting grows -- a case one of them gets
-        wrong is still corrected by fitting it.
+        answer has to offer; an author who already knows the rules would otherwise have
+        to invent a case each one could be derived from. So the tree is written the way
+        any rule tree is -- a condition, its ``add``, and the alternatives and
+        exceptions hanging off it -- and the RDR adopts it. It is the same tree fitting
+        grows: a case a stated rule gets wrong is still corrected by fitting it.
 
-        The first rule whose condition holds is the one that answers, so stating a
-        narrow rule before the general one it overlaps is how the narrow one is
-        preferred.
-
-        :param rules: The rules to state, most specific first.
+        :param rules: A query over :attr:`case_variable` whose rules conclude on
+            :attr:`conclusion_variable`.
         :return: This RDR, for chaining.
+        :raises RulesAlreadyPresent: When the RDR already has rules.
+        :raises RulesOverAnotherCase: When the rules range over another variable.
         """
+        if self.query is not None:
+            raise RulesAlreadyPresent(case_type=self.case_type)
+        if rules.selected_variable is not self.case_variable:
+            raise RulesOverAnotherCase(
+                case_variable=self.case_variable, stated_over=rules.selected_variable
+            )
         with self._saved_when_the_rules_change():
-            for rule in rules:
-                self._add_alternative(rule.condition, rule.conclusion)
+            self.query = rules.build()
             self._backward_index.invalidate()
         return self
 

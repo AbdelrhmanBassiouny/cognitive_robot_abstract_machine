@@ -29,9 +29,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from krrood.entity_query_language.backends import DetectorChoice, PerceptionDetector
-from krrood.entity_query_language.factories import a
+from krrood.entity_query_language.factories import a, add, alternative, entity
 from krrood.entity_query_language.query.match import Match
-from krrood.entity_query_language.rdr.rule_tree import StatedRule
+from krrood.entity_query_language.query.query import Entity
 from typing_extensions import Dict, List, Optional
 
 from experiments.montessori.perception.camera import RgbdFrame
@@ -232,7 +232,7 @@ class LookRules(DetectorChoice[SceneRequest]):
         """
         return a(SceneRequest)(detector=...)
 
-    def rules_stated_at_the_start(self) -> List[StatedRule]:
+    def rules_stated_at_the_start(self) -> Entity:
         """
         Each detector answers the requests it says it can, and no two of them say the
         same, so what a request asks for settles the choice on its own.
@@ -240,10 +240,12 @@ class LookRules(DetectorChoice[SceneRequest]):
         Searching the surfaces comes first, so a request narrowed to neither is answered
         by the detector that reports both.
         """
-        return [
-            StatedRule(detector.capability(self.look), detector)
-            for detector in (self.find_the_pieces, self.find_the_board)
-        ]
+        rules = entity(self.look).where(self.find_the_pieces.capability(self.look))
+        with rules:
+            add(self.chosen_detector, self.find_the_pieces)
+            with alternative(self.find_the_board.capability(self.look)):
+                add(self.chosen_detector, self.find_the_board)
+        return rules
 
     def nothing_answers(self, request: SceneRequest) -> NoDetectorAnswersTheRequest:
         """

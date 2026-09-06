@@ -29,7 +29,10 @@ from krrood.entity_query_language.operators.probabilistic_queries import (
     ProbabilisticQuery,
 )
 from krrood.entity_query_language.operators.aggregators import Average
-from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.core.mapped_variable import (
+    Attribute,
+    CanBehaveLikeAVariable,
+)
 from krrood.entity_query_language.core.variable import Literal, Variable
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.evaluable import Evaluable
@@ -60,7 +63,6 @@ from krrood.entity_query_language.rdr.interface import (
     CaseContext,
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.rule_tree import StatedRule
 from krrood.entity_query_language.rdr.serialization import NullModelSaver
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.ormatic.eql_interface import eql_to_sql
@@ -445,13 +447,14 @@ class DetectorChoice(Generic[LookT], SubClassSafeGeneric, ABC):
         """
 
     @abstractmethod
-    def rules_stated_at_the_start(self) -> List[StatedRule]:
+    def rules_stated_at_the_start(self) -> Entity:
         """
-        What this family already knows about which detector answers which look, most
-        specific first.
+        What this family already knows about which detector answers which look, written
+        as the rule tree it is.
 
-        Each condition is stated over :attr:`look`, and the first whose condition holds
-        is the one that answers.
+        Each condition is stated over :attr:`look` and concludes on
+        :attr:`chosen_detector`, and the first alternative whose condition holds is the
+        one that answers.
         """
 
     @abstractmethod
@@ -469,6 +472,13 @@ class DetectorChoice(Generic[LookT], SubClassSafeGeneric, ABC):
         The variable every rule of this family is stated over.
         """
         return self.rules.case_variable
+
+    @property
+    def chosen_detector(self) -> CanBehaveLikeAVariable:
+        """
+        The attribute every rule of this family concludes on.
+        """
+        return self.rules.conclusion_variable
 
     def state_the_condition_this_rule_needs(
         self, context: CaseContext, requests: List[AnswerRequest]

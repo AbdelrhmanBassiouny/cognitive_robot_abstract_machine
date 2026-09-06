@@ -16,16 +16,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional
+from typing_extensions import Optional
 
 from krrood.entity_query_language.backends import (
     DetectorChoice,
     Look,
     PerceptionDetector,
 )
-from krrood.entity_query_language.factories import ConditionType, a, not_
+from krrood.entity_query_language.factories import (
+    ConditionType,
+    a,
+    add,
+    alternative,
+    entity,
+    not_,
+)
 from krrood.entity_query_language.query.match import Match
-from krrood.entity_query_language.rdr.rule_tree import StatedRule
+from krrood.entity_query_language.query.query import Entity
 from krrood.exceptions import DataclassException
 
 # %% the look a detector is put
@@ -132,11 +139,13 @@ class WhereToLookRules(DetectorChoice[PlaceToLookAt]):
     def underspecified_look(self) -> Match:
         return a(PlaceToLookAt)(detector=...)
 
-    def rules_stated_at_the_start(self) -> List[StatedRule]:
-        return [
-            StatedRule(detector.capability(self.look), detector)
-            for detector in (self.depth, self.colors)
-        ]
+    def rules_stated_at_the_start(self) -> Entity:
+        rules = entity(self.look).where(self.depth.capability(self.look))
+        with rules:
+            add(self.chosen_detector, self.depth)
+            with alternative(self.colors.capability(self.look)):
+                add(self.chosen_detector, self.colors)
+        return rules
 
     def nothing_answers(self, look: PlaceToLookAt) -> Exception:
         return NoDetectorAnswersThePlace(look.place)
@@ -163,8 +172,11 @@ class WhereEachDetectorIsWorthItsCostRules(DetectorChoice[PlaceToLookAt]):
     def underspecified_look(self) -> Match:
         return a(PlaceToLookAt)(detector=...)
 
-    def rules_stated_at_the_start(self) -> List[StatedRule]:
-        return [StatedRule(self.edges.capability(self.look), self.edges)]
+    def rules_stated_at_the_start(self) -> Entity:
+        rules = entity(self.look).where(self.edges.capability(self.look))
+        with rules:
+            add(self.chosen_detector, self.edges)
+        return rules
 
     def nothing_answers(self, look: PlaceToLookAt) -> Exception:
         return NoDetectorAnswersThePlace(look.place)

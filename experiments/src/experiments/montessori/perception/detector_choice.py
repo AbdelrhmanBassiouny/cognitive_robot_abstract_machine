@@ -43,9 +43,16 @@ from krrood.entity_query_language.backends import (
     Look,
     PerceptionDetector,
 )
-from krrood.entity_query_language.factories import ConditionType, a, and_
+from krrood.entity_query_language.factories import (
+    ConditionType,
+    a,
+    add,
+    alternative,
+    and_,
+    entity,
+)
 from krrood.entity_query_language.query.match import Match
-from krrood.entity_query_language.rdr.rule_tree import StatedRule
+from krrood.entity_query_language.query.query import Entity
 from typing_extensions import Dict, List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
@@ -211,23 +218,24 @@ class DetectorRules(DetectorChoice[TargetOnSurface]):
         """
         return a(TargetOnSurface)(detector=...)
 
-    def rules_stated_at_the_start(self) -> List[StatedRule]:
+    def rules_stated_at_the_start(self) -> Entity:
         """
         Both detectors answer a look at a piece that colour separates from the surface
         it rests on, so what tells them apart is how that surface takes light: the
         colour blob is worth its lower cost on a matte one, measured at 89 ms against
         126 ms on the same work, and the edge fit is the general answer everywhere else.
         """
-        return [
-            StatedRule(
-                and_(
-                    self.look.surface.finish == SurfaceFinish.MATTE,
-                    self.color_blob.capability(self.look),
-                ),
-                self.color_blob,
-            ),
-            StatedRule(self.edge_fit.capability(self.look), self.edge_fit),
-        ]
+        rules = entity(self.look).where(
+            and_(
+                self.look.surface.finish == SurfaceFinish.MATTE,
+                self.color_blob.capability(self.look),
+            )
+        )
+        with rules:
+            add(self.chosen_detector, self.color_blob)
+            with alternative(self.edge_fit.capability(self.look)):
+                add(self.chosen_detector, self.edge_fit)
+        return rules
 
     def nothing_answers(self, look: TargetOnSurface) -> NoDetectorAnswersTheLook:
         """

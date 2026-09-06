@@ -34,10 +34,17 @@ from krrood.entity_query_language.backends import (
     Look,
     PerceptionDetector,
 )
-from krrood.entity_query_language.factories import ConditionType, a, and_
+from krrood.entity_query_language.factories import (
+    ConditionType,
+    a,
+    add,
+    alternative,
+    and_,
+    entity,
+)
 from krrood.entity_query_language.query.match import Match
-from krrood.entity_query_language.rdr.rule_tree import StatedRule
-from typing_extensions import List, Optional
+from krrood.entity_query_language.query.query import Entity
+from typing_extensions import Optional
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.exceptions import (
@@ -360,7 +367,7 @@ class SurfaceRules(DetectorChoice[SoughtSurface]):
         """
         return a(SoughtSurface)(finder=...)
 
-    def rules_stated_at_the_start(self) -> List[StatedRule]:
+    def rules_stated_at_the_start(self) -> Entity:
         """
         Both finders answer any surface the world bounds, and on a picture carrying
         depth both answer it, so what tells them apart is how the surface takes light:
@@ -368,16 +375,17 @@ class SurfaceRules(DetectorChoice[SoughtSurface]):
         scene has already drifted away from, and the model is the general answer
         everywhere else.
         """
-        return [
-            StatedRule(
-                and_(
-                    self.look.surface.finish == SurfaceFinish.MIRROR,
-                    self.measured.capability(self.look),
-                ),
-                self.measured,
-            ),
-            StatedRule(self.modelled.capability(self.look), self.modelled),
-        ]
+        rules = entity(self.look).where(
+            and_(
+                self.look.surface.finish == SurfaceFinish.MIRROR,
+                self.measured.capability(self.look),
+            )
+        )
+        with rules:
+            add(self.chosen_detector, self.measured)
+            with alternative(self.modelled.capability(self.look)):
+                add(self.chosen_detector, self.modelled)
+        return rules
 
     def nothing_answers(self, sought: SoughtSurface) -> NoSurfaceFinderAnswersTheLook:
         """
