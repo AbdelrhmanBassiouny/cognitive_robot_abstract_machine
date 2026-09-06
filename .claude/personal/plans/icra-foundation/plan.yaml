@@ -74,21 +74,6 @@ items:
       what the corrected layout leaves both pieces on is
       watch_narrowing.look_for_the_cube_on_the_lid's own left-of the square hole, and the sequence
       the test asserts is still the right one.
-    - >-
-      The experiments job is red on a name collision the convergence created, and clearing it is a
-      call about vocabulary rather than a merge resolution. Two dataclasses are called RecordedLook:
-      perception/step_by_step.py's (the world, pipeline, frame, board and viewpoint one look was
-      taken in, which watch_narrowing and the narrowing suite read) and perception/recordings.py's
-      (one colour image a rosbag holds with the depth published before it, read only inside that
-      module, watch_bag and capture_from_bag). The generator names a table after the bare class
-      name, so it emits RecordedLookDAO twice and SQLAlchemy refuses the second; the half-executed
-      module then leaves its tables registered, and every later import collides on the first
-      association table, which is the 13 failures and 8 errors. The same shape as the Footprint
-      collision already recorded as a standing hazard. Either rename one - #223's Footprint to
-      RectifiedFootprint is the precedent, and recordings.py's is the one with fewer readers and the
-      weaker claim to "look" - or extend generate_orm's ignored_classes over the bag-reading family,
-      which then has to cover watch_bag too, since BagReplay holds a RecordedCamera field. Neither
-      can be verified in a session container, which cannot run the experiments generation at all.
   notes: >
     The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor
     stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a
@@ -133,6 +118,20 @@ items:
     01e454d7b's numeric one, alone among that commit's numeric readings, against the test asserting
     containment builds nothing symbolic. Thirteen of fifteen jobs were green before those two; what
     is left is the four narrowing tests, which are now a blocker of their own.
+    Resolved 2026-09-06 by #292, and this is the item's first fully measured experiments job. The
+    RecordedLook collision is cleared by renaming recordings.py's to RecordedImages, with
+    RecordedCamera.looks()/look_at() following as images()/image_at() and its three readers with
+    them; step_by_step.py keeps RecordedLook. Renamed rather than ignored because generate_orm's
+    ignored_classes would have had to grow over watch_bag as well - BagReplay holds a RecordedCamera
+    - and over every later holder of one, leaving the duplicate name in place for the next class to
+    hit; the rename is also the only one of the two a session container can check, by grep rather
+    than by running a generation it cannot run. RecordedFrame, the obvious name, is already
+    scene_source.py's, which is part of why the namespace collided. test_montessori_orm.py now
+    asserts that no two mapped Montessori classes share a name with each other, beside the upstream
+    check it already made. Measured on CI: the parent e6c665cec runs 13 failed, 742 passed, 8 errors
+    with 51 mentions of the duplicated table; #292's 76e37a70 runs 4 failed, 758 passed, no errors
+    and no collision at all. What is left red is the four narrowing tests of the blocker above,
+    which fail identically on the parent and are untouched by this.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback

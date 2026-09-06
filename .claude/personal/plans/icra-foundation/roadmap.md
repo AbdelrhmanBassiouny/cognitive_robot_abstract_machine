@@ -166,7 +166,11 @@ the failure-prediction metric, the determinism runs.
   `knowledge-directed-perception`'s `montessori-classes-in-the-orm` (#223)
   renamed the perception one to `RectifiedFootprint`; `integrated-simulation-pipeline`
   merges #223 rather than writing a second rename, and did so after the
-  perception tips so the rename lands over them.
+  perception tips so the rename lands over them. It is not a one-off: the same
+  shape recurred as two `RecordedLook`s within `experiments.montessori` itself
+  (cleared by #292, above), so the hazard is any bare class name reused anywhere the
+  generator's package walk reaches -- upstream or in the same package.
+  `test_montessori_orm.py` now asserts both directions for that package.
 - **#231 and #223 both fork before #236 rewrote `BoardDetector`.** Neither is
   a text merge onto `integrated-simulation-pipeline` — each has to be
   re-applied onto a detector rewritten since. #231 in particular is a design
@@ -406,6 +410,40 @@ cylinder 51.6 mm, so no radius separates them; and the cylinder is 5 mm to that 
 *left*, not its right. Two of the four tests have no reach and no two sides left to ask
 about, so keeping what they demonstrate needs a different hole or a different pair --
 a design call about the perception story, not a measurement.
+
+#### The second `RecordedLook`, cleared by #292 (2026-09-06)
+
+The last red job on #265 was the `Footprint` hazard below in a second instance, and it
+is worth recording as one: the convergence brought two dataclasses called `RecordedLook`
+into one package -- `perception/step_by_step.py`'s (the world, pipeline, frame, board and
+viewpoint one look was taken in) and `perception/recordings.py`'s (one colour image a
+rosbag holds with the depth published before it). ORMatic names a table after the bare
+class name, so it emitted `RecordedLookDAO` twice, SQLAlchemy refused the second, and the
+half-executed module left its tables registered for every later import to collide on --
+13 failures and 8 errors from one duplicated word.
+
+Renamed rather than added to `generate_orm`'s `ignored_classes`, and the reason matters
+for the next instance. Ignoring `recordings.py` does not stop there: `BagReplay` holds a
+`RecordedCamera`, so `watch_bag` joins the list, and so does every later holder of one --
+an ignore list nobody is reminded to extend, whose omissions fail as this same cascade,
+with the duplicate name still sitting there for the next class to hit. The rename is also
+the only one of the two a session container can check at all, by grep rather than by
+running a generation it cannot run.
+
+`recordings.py`'s is now `RecordedImages`, with `RecordedCamera.looks()`/`look_at()`
+following as `images()`/`image_at()`. `RecordedFrame`, the obvious name, is already
+`scene_source.py`'s -- which is part of why this namespace collided in the first place,
+and worth knowing before naming the next thing in it.
+
+What makes it not recur silently: `test_montessori_orm.py` asserted that no mapped
+Montessori class shares a name with an *upstream* one, which is the Footprint shape and
+not this one. It now also asserts that no two of them share a name with *each other*.
+
+Measured on CI, which is the only place it can be: the parent `e6c665cec` runs 13 failed,
+742 passed, 8 errors, with 51 log mentions of the duplicated table; #292's `76e37a70`
+runs 4 failed, 758 passed, no errors and no collision. The four are the narrowing tests
+above, which fail identically on the parent.
+
 
 ### `scenario-domain-model` (#261)
 
