@@ -148,6 +148,7 @@ claude/setup-personal-notes-script	stack-tooling-install
 claude/setup-stacked-prs-skill	stack-tooling-install
 claude/maintenance-tooling-pinning-gdod18	stack-tooling-install
 claude/plan-item-kickoff-workflow-s3mfvk	stack-tooling-install
+some/other-branch	test-plan
 claude/flaky-marker-needs-rerun-plugin	test-suite-fixes
 claude/mcrdr-stop-only-flaky-skip	test-suite-fixes
 claude/dashboard-publish-automation-hnfi5a	workflow-cutover
