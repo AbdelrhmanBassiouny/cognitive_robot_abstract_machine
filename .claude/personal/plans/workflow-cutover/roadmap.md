@@ -218,3 +218,35 @@ retires. Its own open question - "an already-registered scheduled run's notifica
 setting has no field on the update API" - resolves itself once this item deletes that
 registration; `routine-prompt.md`'s own guidance becomes dead weight at the same time,
 worth a look once this lands.
+
+## `routine-cutover`'s #280 review round, 2026-09-06: the retarget was never actually refused
+
+Two comments on #280, both from the credential-assumption angle. The first asked directly whether
+retargeting a base is actually doable from a GitHub Action - it is, for the write itself; what was
+never true was the inherited assumption that it wasn't.
+
+**The 403 `stack-maintenance-executor` (#139) recorded was through a Claude session's own proxied
+credential, not through a plain GitHub Actions token.** That probe never ran from an Actions runner
+at all. `maintenance_github.GitHubRepository` authenticates its own requests directly with
+`GH_TOKEN`/`GITHUB_TOKEN`, never through a session's proxy, so there was no basis for assuming it
+would hit the same wall - only for testing it, which this round's fix now does.
+
+`resolve_reparents` (renamed from `notify_reparents`) attempts the retarget itself first via a new
+`ForkPullRequests.retarget_base` (`PATCH /pulls/{number}` with `{"base": ...}`, the same shape
+`set_description` already uses), and only falls back to the label + comment notice on a genuine
+refusal - `403` (this credential specifically refused) or `422` (the pull request is a GitHub Stack
+member, which has to move through native Stack mechanics instead of a plain base change - a real,
+separate restriction traced in an earlier addendum). `MaintenanceReport` gained
+`reparents_retargeted` alongside the existing `reparents`, so `run-report --json` says which of the
+found reparents this pass resolved itself rather than only that they existed. Reparenting now also
+runs before restack in `run-report`, matching the session-driven doctrine's own step ordering - a
+restack integrates onto a branch's *current* parent, so a child left on a landed one has to be
+retargeted first or it restacks onto a dead end.
+
+The second comment widened the workflow's own triggers: `opened` and `ready_for_review` alongside
+`closed`, so a fresh pull request or one leaving draft (the self-review sign-off that makes it
+promotable) is picked up the same run rather than waiting up to six hours for the next schedule tick.
+
+Still unverified, and still this item's own recorded gate: whether GitHub actually allows this
+credential to retarget a base on this fork, rather than refusing with `403`/`422` for a reason not
+yet seen. That answer only comes from a real dispatched run once this is on the default branch.
