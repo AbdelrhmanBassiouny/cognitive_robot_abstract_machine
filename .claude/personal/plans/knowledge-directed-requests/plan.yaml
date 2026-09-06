@@ -736,6 +736,32 @@ items:
     attributes and property reads, so what is left here is the vocabulary the conditions are stated
     in rather than the shape the engine demands.
 
+    Review round of 2026-09-06, resolved as `0098923a1`. Two threads, one change. The developer
+    asked that an RDR be able to take a pre-fitted tree rather than have a family invent example
+    cases to fit from, and noticed that surface_finding''s fitting machinery was a copy of
+    detector_choice''s. EQLSingleClassRDR.state_rules now takes StatedRule (a condition and what
+    it concludes), splicing each in as an alternative in the order given - the same tree fitting
+    grows, so a case a stated rule gets wrong is still corrected by fit_case. Every invented
+    example is gone, the one-pixel picture included. The duplication was three-fold rather than
+    two: LookRules was the same class again, and all three now share krrood''s DetectorChoice,
+    beside PerceptionDetector, which subsumes state_the_detectors_own_condition; the three files
+    lose about 580 lines.
+
+    The developer then asked whether the corner cases could come from fitting on the captures.
+    Nothing reads them on these three today (NullModelSaver, no ConditionResolver), and a stated
+    rule has none by construction, so what the captures buy is the check rather than the authoring:
+    the surface rules are put to all six shipped captures and the detector rules to the two
+    surfaces the modelled scene states, each fitted with the detector it should get and each
+    leaving the tree the size it was. Authoring the trees from a run''s own data was rejected with
+    a reason worth keeping: the pipeline builds its rules before any frame exists, and the surfaces
+    it holds differ per setup - recorded_setup states MIRROR on the table and nothing on the lid,
+    the rendered-scene fixture states neither, and only of_world carries TABLE_FINISH and
+    BOARD_FINISH - so fitting from whatever a run happens to hold would give each setup a different
+    tree, and the colour-blob rule would simply not exist on the recorded setup.
+
+    468 passed, 1 skipped, 16 xfailed across test/experiments_test against 461; 1569 passed, 3
+    skipped across test_eql and test_eql_rdr against 1563.
+
     '
 - id: camera-pose-fitted-to-the-model
   title: Correct where the camera stands by fitting what is seen to what the twin models

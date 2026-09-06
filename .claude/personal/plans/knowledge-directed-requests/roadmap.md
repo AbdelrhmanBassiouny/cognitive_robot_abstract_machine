@@ -191,3 +191,44 @@ Removing the flattening does not fix it; it only moves the reading from a copied
 a property. Whether a `KnownPiece` may have no outline is a question about that type
 rather than about these rules, so the guard the edge fit's capability was written around
 is kept and the question is left for the developer.
+
+### The review round: stated rules, and one base for three copies of one class
+
+Two threads on 2026-09-06, which turned out to be one change, plus a question in chat that
+changed what the tests do.
+
+`EQLSingleClassRDR.state_rules` is the capability the developer asked for: an RDR takes rules
+already worked out - a `StatedRule` is a condition and what it concludes - spliced in as
+alternatives in the order given, first-holding-condition wins. It grows the same tree fitting
+grows, so seeding and correcting are one mechanism. That deletes every invented example these
+families had, the one-pixel `RgbdFrame` included.
+
+The duplication thread named two files; it was three. `LookRules` was the same class again, and
+`state_the_detectors_own_condition` existed only to serve this shape. All of it is now krrood's
+`DetectorChoice`, beside `Look` and `PerceptionDetector`, generic over the kind of look a family
+answers. A family keeps `underspecified_look`, `rules_stated_at_the_start`, `nothing_answers`,
+and `situation_answered_by` where a capability does not tell its detectors apart.
+
+**Why the trees are stated and only checked against real data.** Asked whether the corner cases
+could come from fitting on the captures, the answer is: not for authoring. A pipeline builds its
+rules before any frame exists, and the surfaces it holds differ per setup - `recorded_setup`
+states `MIRROR` on the table and nothing on the lid, the rendered-scene fixture states neither,
+and only `of_world` carries `TABLE_FINISH`/`BOARD_FINISH`. Fitting from whatever a run happens to
+hold would give each setup a different tree, and the colour-blob rule would not exist at all on
+the recorded setup, when "the colour blob is worth its lower cost on a matte surface where colour
+separates the piece" is true whether or not this run's world says so. So the rules are stated
+once and the real data checks them: all six shipped captures for `SurfaceRules`, the two surfaces
+the modelled scene states for `DetectorRules`, each fitted with the detector it should get and
+each leaving the tree the size it was. Corner cases themselves are read by nothing here today
+(`NullModelSaver`, no `ConditionResolver`); when `tune-detection-rules-against-the-camera` brings
+the interactive expert, a capture is the right one to show.
+
+**A hazard found while building `state_rules`, left for the developer.** Conditions are stated
+before any is in the tree, and `look.attribute` returns the same shared node every time, so a rule
+whose *whole* condition is a bare attribute together with a second rule wrapping that same node
+splice into a structure `classify` never returns from. Sharing an attribute as a *subexpression*
+of two conditions is the intended sharing and is fine - there is now a test pinning it. Fitting
+escapes the bare case only by building each condition at insertion time, so this is a property of
+the expression machinery rather than of `state_rules`. The krrood mimic detector was the only
+thing in the workspace writing a bare attribute as a condition; it now states
+`look.depth_is_returned == True`, the way every real detector here writes a boolean.<!-- END-PLAN-ROADMAP -->
