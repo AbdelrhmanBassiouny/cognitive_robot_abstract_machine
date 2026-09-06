@@ -76,45 +76,151 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_017JMftn3ujp7xsyhwcMaF75
   track: cutover
+  blockers:
+    - >-
+      None left outside this item's own next step. The gate this item was waiting on ("stack tooling
+      on cram2/main and fork main fast-forwards") is now clear: verified 2026-09-06, cram2/main and
+      this fork's main are the identical commit f6a53cf9, both carrying .claude/stack/ including
+      maintenance.py. What remains is this item's own deliverable: no .github/workflows/*.yml calls
+      the deterministic executor yet (confirmed absent on main, on integration, and on #218's
+      branch).
   depends_on: []
-  notes: "Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no scheduled\
-    \ LLM run\nat all, which finally aligns the Routine with the no-scheduled-checks rule. A plain\
-    \ scheduled Action\ntakes the deterministic duties - fork-main fast-forward from cram2/main, label\
-    \ hygiene, the\ncram2-link comment, the plans-site build, and the happy-path cascade, since `gh\
-    \ stack sync` is\ndocumented as safe in automation and Actions runners ship `gh`. The judgment\
-    \ residue - cascade\nconflicts, red CI after a restack - runs in on-demand sessions surfaced by\
-    \ the dashboard rather than\nby a timer. The gate is unchanged: only after the stack tooling is\
-    \ on cram2/main and fork main\nfast-forwards; one green Action cycle flips this done. The live\
-    \ Routine is trigger\n`trig_01N79jHmLo3bSbg8pLM6MNTB` (\"PR Stack Monitor and Update\"), which\
-    \ the final cutover deletes.\n\n**The base-change 403 is one credential, not the platform** (corrected\
-    \ 2026-08-02 by\n`session-safe-pr-reparent`'s probe). The MCP `update_pull_request` tool changes\
-    \ a base fine, verified\non throwaway pull request #129, so the \"no session can ever reparent\"\
-    \ reading was wrong and there is\nno close-and-recreate fallback to inherit. The Action's own\
-    \ credential is a third identity again;\nverify it with a real base change from the Action before\
-    \ relying on it, and if it does 403, call the\nsame REST endpoint under a token that does not\
-    \ carry the restriction rather than degrade to\nrenumbering pull requests.\n\n**Detection must\
-    \ be event-triggered, and one event type wider than first designed.** Tracing #40/#41\non 2026-08-02\
-    \ showed the human action was correct maintenance, not a mistake automation should\nprevent: the\
-    \ user closed #40 after rebuilding its branch, and its successor #53 merged normally nine\ndays\
-    \ later. The real defect is that *any* pull request leaving the open set drops it from\n`board.json`,\
-    \ whether it closes unmerged or merges and GitHub auto-closes it. `pull_request: closed`\nfires\
-    \ for both, so the Action re-sweeps git ancestry for every remaining open fork pull request's\n\
-    base on that one event - not only the closed pull request's own branch. In the real case that\
-    \ would\nhave caught #41's orphaning at #53's merge, days before a review round noticed it by\
-    \ accident.\n\n**The interim pointer prompt is adopted and live** (2026-08-02). The user replaced\
-    \ the Routine's\n~17.5k-token inline prompt with the short pointer this item specified: HARD RULES\
-    \ inline, because\nthey must bind before any file is read, plus \"read `.claude/stack/ROUTINE.md`\
-    \ and execute\". It\nresolves `origin/main` first and falls back to the landed-parent-detection\
-    \ branch while\n`.claude/stack/` is still in review, so that branch is live production input and\
-    \ an edit to\n`ROUTINE.md` ships on push with no deploy step. That is what stops doctrine corrections\
-    \ needing a\nmanual paste. Adoption immediately exposed a latent ordering bug, fixed in #117:\
-    \ SETUP step 0 \nasserted that `stack.py` and `stack.toml` were already on the checkout, written\
-    \ in anticipation of a\nlanding that had not happened. Under the pointer the Routine would have\
-    \ resolved its doctrine,\nbelieved the tooling present, and failed on the first `stack.py` call\
-    \ in phase 2 - after phase 1 had\nalready mutated pull requests. Step 0 now fetches `.claude/stack/`\
-    \ from the same ref instead of\nasserting it. Two deletions fall due when `.claude/stack/` reaches\
-    \ main: the pointer prompt's\nsecond source line, which needs a manual paste, and step 0's fetch\
-    \ fallback. Neither breaks anything\nif forgotten; both are dead weight."
+  notes: >
+    Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no scheduled LLM
+    run
+
+    at all, which finally aligns the Routine with the no-scheduled-checks rule. A plain scheduled
+    Action
+
+    takes the deterministic duties - fork-main fast-forward from cram2/main, label hygiene, the
+
+    cram2-link comment, the plans-site build, and the happy-path cascade, since `gh stack sync` is
+
+    documented as safe in automation and Actions runners ship `gh`. The judgment residue - cascade
+
+    conflicts, red CI after a restack - runs in on-demand sessions surfaced by the dashboard rather
+    than
+
+    by a timer. The gate is unchanged: only after the stack tooling is on cram2/main and fork main
+
+    fast-forwards; one green Action cycle flips this done. The live Routine is trigger
+
+    `trig_01N79jHmLo3bSbg8pLM6MNTB` ("PR Stack Monitor and Update"), which the final cutover
+    deletes.
+
+    **The base-change 403 is one credential, not the platform** (corrected 2026-08-02 by
+
+    `session-safe-pr-reparent`'s probe). The MCP `update_pull_request` tool changes a base fine,
+    verified
+
+    on throwaway pull request #129, so the "no session can ever reparent" reading was wrong and
+    there is
+
+    no close-and-recreate fallback to inherit. The Action's own credential is a third identity
+    again;
+
+    verify it with a real base change from the Action before relying on it, and if it does 403, call
+    the
+
+    same REST endpoint under a token that does not carry the restriction rather than degrade to
+
+    renumbering pull requests.
+
+    **Detection must be event-triggered, and one event type wider than first designed.** Tracing
+    #40/#41
+
+    on 2026-08-02 showed the human action was correct maintenance, not a mistake automation should
+
+    prevent: the user closed #40 after rebuilding its branch, and its successor #53 merged normally
+    nine
+
+    days later. The real defect is that *any* pull request leaving the open set drops it from
+
+    `board.json`, whether it closes unmerged or merges and GitHub auto-closes it. `pull_request:
+    closed`
+
+    fires for both, so the Action re-sweeps git ancestry for every remaining open fork pull
+    request's
+
+    base on that one event - not only the closed pull request's own branch. In the real case that
+    would
+
+    have caught #41's orphaning at #53's merge, days before a review round noticed it by accident.
+
+    **The interim pointer prompt is adopted and live** (2026-08-02). The user replaced the Routine's
+
+    ~17.5k-token inline prompt with the short pointer this item specified: HARD RULES inline,
+    because
+
+    they must bind before any file is read, plus "read `.claude/stack/ROUTINE.md` and execute". It
+
+    resolves `origin/main` first and falls back to the landed-parent-detection branch while
+
+    `.claude/stack/` is still in review, so that branch is live production input and an edit to
+
+    `ROUTINE.md` ships on push with no deploy step. That is what stops doctrine corrections needing
+    a
+
+    manual paste. Adoption immediately exposed a latent ordering bug, fixed in #117: SETUP step 0
+
+    asserted that `stack.py` and `stack.toml` were already on the checkout, written in anticipation
+    of a
+
+    landing that had not happened. Under the pointer the Routine would have resolved its doctrine,
+
+    believed the tooling present, and failed on the first `stack.py` call in phase 2 - after phase 1
+    had
+
+    already mutated pull requests. Step 0 now fetches `.claude/stack/` from the same ref instead of
+
+    asserting it. Two deletions fall due when `.claude/stack/` reaches main: the pointer prompt's
+
+    second source line, which needs a manual paste, and step 0's fetch fallback. Neither breaks
+    anything
+
+    if forgotten; both are dead weight.
+
+    Re-checked 2026-09-06 after finding the item in_progress with no branch and no PR - the same
+    "recorded state said nothing was wrong" gap #218 and #211 hit. What actually happened: the
+    prerequisite work landed on a sibling plan and nobody came back to close the loop here.
+
+    **The gate is clear.** cram2/main and this fork's main are the identical commit (f6a53cf9), both
+    carrying .claude/stack/. Both halves of "stack tooling on cram2/main, fork main fast-forwards"
+    are satisfied.
+
+    **The 2026-08-02 open question is already answered, in code.** stack-maintenance-executor (#139,
+    done) probed the Action's own credential directly and recorded the result in its own notes:
+    "label writes, conflict comments and description writes are all available to deterministic code;
+    only the base change needs the MCP client. That table is what the cutover's Action needs for its
+    own credential." maintenance.py's module docstring independently confirms it and adds:
+    run-report --json exists "so a scheduled job with no model in the loop can emit it directly."
+    The deterministic executor this item's endgame calls for is already built
+    (board/fast-forward/restack/promote/run-report); restack conflicts already self-report (comment
+    + needs-resolution, via conflict_report()/DefaultLabel.NEEDS_RESOLUTION); the only un-surfaced
+    residue is reparents (base retargets), which nothing today posts a notice for.
+
+    **The interim pointer prompt is superseded twice over.** ROUTINE.md no longer exists anywhere
+    (renamed away in the bastler-package rename); the live Routine's own registered prompt
+    (trig_01N79jHmLo3bSbg8pLM6MNTB, per .claude/skills/stacked-pr-maintenance/routine-prompt.md
+    merged 2026-08-13) already invokes `/stacked-pr-maintenance --non-interactive` directly rather
+    than pointing at a doctrine file. The two dead-weight deletions the old note flagged (the
+    pointer's second source line, SETUP step 0's fetch fallback) are themselves now moot in a
+    different way - there is no pointer prompt left to carry them.
+
+    **A live coordination gap, not a blocker:** stack-maintenance is still investing in the
+    session/Routine-invoked path - promotion-summaries-and-table (#162, in_progress) is adding
+    features to the pass an LLM session runs, and routine-prompt.md documents registering exactly
+    the scheduled Routine this item retires. Not a scope overlap (different deliverables: skill
+    enrichment vs. this item's Action wrapper), but #162's open "an already-registered scheduled
+    run's notification setting has no field on the update API" question resolves itself once this
+    item deletes the registration - worth flagging to whoever picks up #162 next.
+
+    Plan: add reparent notification (comment + needs-resolution) to the executor, since nothing
+    posts one today, then a stack-maintenance.yml Action calling run-report --json on
+    pull_request:closed / schedule / workflow_dispatch, using the same GH_TOKEN/GITHUB_TOKEN the
+    executor already reads (no new secret). Routine deletion and flipping this item done still wait
+    on this item's own recorded gate: one green cycle of that Action, which needs the PR on the
+    default branch first.
 - id: artifact-path-retirement
   title: Retire the Artifact publishing path once the Pages site has run one green cycle
   branch: null
