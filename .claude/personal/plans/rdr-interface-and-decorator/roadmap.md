@@ -277,3 +277,25 @@ passing suite:
 - The programme's working method — run the probe rather than reasoning, compare
   sorted collected test ids rather than counts, stage by explicit path — is
   recorded in `rdr-core-engine`'s roadmap and applies here unchanged.
+
+## The ICRA convergence pass, 2026-09-06
+
+The whole stack is now carried by one branch, taken at its tip `D-deco` (#77): `D-ui-rendering` (#79), `D-ui` (#76), `D-store` (#80) and `D-deco` (#77) itself.
+
+The pass merged every one of them into the ICRA integration branch (#265,
+`claude/icra-experiments-simulation-pipeline-w4ep7n`) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.
+
+Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in `icra-foundation`'s `roadmap.md` under *The
+convergence pass, 2026-09-06*. Read it there rather than re-deriving it here.
+
+A clean text merge over the perception tips: 47 files added, nothing on the
+receiving branch edited. What it brings over the #159-era engine the perception work
+already carried is the `@rdr` decorator, the model store a fitted tree is written to
+and read back from, and the expert interface a rule is stated through. The
+perception package's own three rule trees still build and the pipeline still
+answers, so the engine underneath them is the newer one without any of them
+changing.
