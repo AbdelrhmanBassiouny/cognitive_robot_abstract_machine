@@ -78,6 +78,26 @@ class GitCommandResult:
         return self
 
 
+@dataclass(frozen=True)
+class GitSetting:
+    """
+    One git configuration entry.
+
+    A pair of bare strings says nothing about which half is which, and both halves are
+    strings, so nothing catches them being swapped.
+    """
+
+    key: str
+    """
+    The setting's name, as ``git config`` spells it.
+    """
+
+    value: str
+    """
+    What to set it to.
+    """
+
+
 # %% what a pass is allowed to publish
 
 
@@ -198,6 +218,51 @@ class GitCommandRunner:
     def checked_out_branch(self) -> str:
         """:return: The branch whose content a push would move."""
         return self.run("branch", "--show-current")
+
+    def checkout_orphan(self, branch: str) -> None:
+        """
+        Start a branch with no history behind it, leaving the index as it was.
+
+        :param branch: The branch to start.
+        """
+        self.run("checkout", "--quiet", "--orphan", branch)
+
+    def move_branch(self, branch: str, commit: str) -> None:
+        """
+        Point a branch at a commit without checking it out, which leaves the working
+        tree alone whatever branch it is on.
+
+        :param branch: The branch to move.
+        :param commit: What to point it at.
+        """
+        self.run("update-ref", f"refs/heads/{branch}", commit)
+
+    def add_remote(self, remote: str, url: str) -> None:
+        """
+        :param remote: What this checkout is to call the remote.
+        :param url: What the remote points at.
+        """
+        self.run("remote", "add", remote, url)
+
+    def remove_remote(self, remote: str) -> None:
+        """
+        :param remote: The remote to stop tracking.
+        """
+        self.run("remote", "remove", remote)
+
+    def configure(self, setting: GitSetting) -> None:
+        """
+        Write a setting into this checkout's own configuration.
+
+        :param setting: The setting to write.
+        """
+        self.run("config", setting.key, setting.value)
+
+    def remove_setting(self, key: str) -> None:
+        """
+        :param key: The configuration entry to drop from this checkout.
+        """
+        self.run("config", "--unset", key)
 
     def merge(self, reference: str) -> GitCommandResult:
         """:param reference: The reference to merge in.
