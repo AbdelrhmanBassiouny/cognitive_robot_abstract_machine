@@ -884,7 +884,7 @@ does not have to re-derive it from <code>stack-maintenance</code>'s roadmap.</p>
             <h4 class="item-title">PR 4: plans-only Pages site (stack board retired for the native stack map)</h4>
             <div class="item-badges">
               <span class="badge status-badge status-in_progress">In progress</span>
-              <span class="badge live-badge live-open_draft">Open · Draft</span>
+              <span class="badge live-badge live-open_ready">Open · Ready</span>
               <span class="badge board-chip chip-pending" title="Latest checks on the head commit: pending">checks pending</span>
               <span class="badge board-chip chip-negative" title="1757 lines changed versus the base - over the short-change threshold of 400, consider splitting or restacking">+1757 −0</span>
               <span class="badge board-chip chip-positive" title="GitHub reports this pull request merges cleanly onto its base">mergeable</span>
@@ -895,7 +895,6 @@ does not have to re-derive it from <code>stack-maintenance</code>'s roadmap.</p>
             <span class="mono branch">claude/dashboard-publish-automation-hnfi5a</span>
             <a class="pr-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/218" target="_blank" rel="noopener">#218</a>
             <a class="session-link" href="https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk" target="_blank" rel="noopener">session ↗</a>
-            <a class="review-button" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/218" target="_blank" rel="noopener">↗ Review</a>
             <span class="action-group">
   <span class="model-picker" data-model="" aria-label="Model for Resume">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
@@ -973,7 +972,20 @@ the repo/branch/upstream repository variables, and three inconsistent poll-inter
             <span class="mono id">artifact-path-retirement</span>
             <span class="mono branch">None</span>
             <span class="muted">no pull request yet</span>
-            
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff workflow-cutover artifact-path-retirement" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
@@ -999,7 +1011,7 @@ Gate: one green site-Action cycle, the same bar `tooling-branch-retirement` alre
           </details>
           <div class="deps">
             <span class="deps-label">needs</span>
-            <span class="chip chip-unmet" title="PR 4: plans-only Pages site (stack board retired for the native stack map) (not ready yet — this item is blocked on it)">stack-board-single-site</span>
+            <span class="chip" title="PR 4: plans-only Pages site (stack board retired for the native stack map)">stack-board-single-site</span>
 
           </div>
         </div>
@@ -1109,7 +1121,20 @@ Plan: add reparent notification (comment + needs-resolution) to the executor, si
             <span class="mono id">tooling-branch-retirement</span>
             <span class="mono branch">None</span>
             <span class="muted">no pull request yet</span>
-            
+            <span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for Start now">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">Session default ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      <li role="option" data-value="" onclick="planDashboardSelectModel(event, this)" class="model-picker-option-selected">Session default</li>
+      <li role="option" data-value="claude-opus-5" onclick="planDashboardSelectModel(event, this)">Opus 5</li>
+      <li role="option" data-value="claude-sonnet-5" onclick="planDashboardSelectModel(event, this)">Sonnet 5</li>
+      <li role="option" data-value="claude-haiku-4-5-20251001" onclick="planDashboardSelectModel(event, this)">Haiku 4.5</li>
+      <li role="option" data-value="claude-fable-5" onclick="planDashboardSelectModel(event, this)">Fable 5</li>
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="/plan-item-kickoff workflow-cutover tooling-branch-retirement" onclick="planDashboardCopyActionCommand(this)">▸ Start now</button>
+</span>
+
           </div>
           <details class="notes-details">
             <summary>Notes</summary>
@@ -1125,7 +1150,7 @@ through a session&#39;s git proxy, so those two steps run outside the harness - 
             <span class="deps-label">needs</span>
             <span class="chip" title="Retire the scheduled LLM Routine: deterministic Action + on-demand sessions">routine-cutover</span>
 
-            <span class="chip chip-unmet" title="PR 4: plans-only Pages site (stack board retired for the native stack map) (not ready yet — this item is blocked on it)">stack-board-single-site</span>
+            <span class="chip" title="PR 4: plans-only Pages site (stack board retired for the native stack map)">stack-board-single-site</span>
 
           </div>
         </div>
@@ -1155,11 +1180,13 @@ through a session&#39;s git proxy, so those two steps run outside the harness - 
       </div>
       <div class="sidebar-card" id="next-steps-card">
         <h3>What to do next</h3>
-          <div class="next-group next-review">
-            <h4>Ready to review <span class="next-count-all">(1)</span><span class="next-count-bug">(0)</span></h4>
+          <div class="next-group next-ready">
+            <h4>Ready to start <span class="next-count-all">(2)</span><span class="next-count-bug">(0)</span></h4>
             <ul>
               <li class="next-entry">
-                <a class="next-item-link" href="#item-stack-board-single-site" data-item-identifier="stack-board-single-site" onclick="planDashboardHighlightItem(event, this)"><strong>PR 4: plans-only Pages site (stack board retired for the native stack map)</strong><br><span class="next-reason">open draft pull request, ready for your review</span></a>                <a class="next-review-link" href="https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/218" target="_blank" rel="noopener">Review ↗</a>              </li>
+                <a class="next-item-link" href="#item-artifact-path-retirement" data-item-identifier="artifact-path-retirement" onclick="planDashboardHighlightItem(event, this)"><strong>Retire the Artifact publishing path once the Pages site has run one green cycle</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
+              <li class="next-entry">
+                <a class="next-item-link" href="#item-tooling-branch-retirement" data-item-identifier="tooling-branch-retirement" onclick="planDashboardHighlightItem(event, this)"><strong>Tag and delete claude/stack-workflow-tooling after one green cycle</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a>              </li>
             </ul>
           </div>
       </div>
