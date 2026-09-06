@@ -1614,3 +1614,29 @@ and the translator call it.
 Verification: `test/krrood_test` 1903 passed, 5 skipped on #254 alone, 1930 passed on
 #192 with it merged and the six bindings removed; the two `test_object_diagram` failures
 are this container having no Graphviz `dot` binary.
+
+## The ICRA convergence pass, 2026-09-06
+
+The whole set is now carried by one branch: #192 (both `match-underscore-rename-and-forwarding` and `factories-unwrap-match-and-migrate`), #196, #248 and #254, which arrived with #192. #186 and #182 were already on `main`.
+
+The pass merged every one of them into the ICRA integration branch (#265,
+`claude/icra-experiments-simulation-pipeline-w4ep7n`) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.
+
+Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in `icra-foundation`'s `roadmap.md` under *The
+convergence pass, 2026-09-06*. Read it there rather than re-deriving it here.
+
+The exclusion that kept #192 off the ICRA branch is reversed: it removes
+`Match.variable`, which #159 and therefore #239, #266 and #275 read, and the
+developer had asked for it to stay out until that was dealt with. It is dealt with
+now, in a commit of its own after the merge.
+
+Worth recording for anyone migrating past this rename: because #192 also gives
+`Match` symbolic attribute delegation, a stale read of a retired name does **not**
+raise - it quietly builds an `Attribute` expression for a field of that name. The
+reads were found by making `Match._is_own_name_` refuse the retired spellings
+temporarily, running the suites, and migrating every hit; the guard was then removed,
+since #192 deliberately leaves every public name to the matched class.
