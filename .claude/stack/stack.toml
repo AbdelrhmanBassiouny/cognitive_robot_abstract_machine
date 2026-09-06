@@ -34,6 +34,20 @@ needs_resolution_label = "needs-resolution"  # set by the routine on a delegated
 integration_conflict_label = "integration-conflict"
 bug_label = "bug"              # fork-PR label raising a branch's merge priority; fixes a defect
 tooling_label = "tooling"      # fork-PR label raising a branch's merge priority; changes this tooling
+# tooling_paths / shared_paths: what decides, from a pull request's changed files alone,
+# whether it carries `tooling_label` - see `maintenance.py label-tooling`. A pull request is a
+# tooling change when it changes something under `tooling_paths` and nothing outside them, with
+# `shared_paths` settling neither way: repository-wide configuration and the developer scripts are
+# changed by both sides, so reading either as one side would misclassify whichever side it was
+# read against.
+# Prefixes, matched against a path from the repository root; a trailing "/" is what keeps a
+# directory from also matching a file whose name merely starts with it. They name where the
+# tooling lives on any branch this fork has in flight rather than only where it lives here, since
+# what is classified is another branch's changed files: `bastler/` is where an in-flight branch
+# has moved the tooling to, and a pull request carrying that move is a tooling change like any
+# other.
+tooling_paths = [".claude/", ".github/", "bastler/", "test/bastler_test/"]
+shared_paths = [".gitignore", "pytest.ini", "scripts/"]
 # fork_repository: deliberately unset - the fork is derived from `fork_remote`'s URL, so this file
 # names nobody's fork. Set it (here or in a personal override) only for a checkout whose fork remote
 # is not the fork. `ROUTINE.md` reads the resolved value rather than naming an owner.

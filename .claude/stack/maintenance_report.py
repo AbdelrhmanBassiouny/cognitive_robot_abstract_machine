@@ -17,7 +17,9 @@ from pathlib import Path
 
 from maintenance_board import BoardExport
 from maintenance_fast_forward import FastForwardOutcome, FastForwardReport
+from changed_paths import PathSubject
 from maintenance_promotion import Promotion
+from maintenance_tooling_label import ToolingLabelling
 from maintenance_restack_steps import BranchOutcome, RestackOutcome
 from stack import Reparent, Stack, landed_branches, promotion_order, reparents
 
@@ -178,6 +180,19 @@ def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> N
             )
     for branch in cleared:
         print(f"{branch}\tlink-label-cleared\t")
+
+
+def print_tooling_labels(labelled: Sequence[ToolingLabelling]) -> None:
+    """:param labelled: What each pull request read was found to be, and whether its
+    labels had to move to say so."""
+    for labelling in labelled:
+        subject = (
+            PathSubject.TOOLING
+            if labelling.is_a_tooling_change
+            else PathSubject.SOFTWARE
+        )
+        written = "written" if labelling.label_was_written else "already-right"
+        print(f"#{labelling.pull_request_number}\t{subject}\t{written}")
 
 
 # %% the exit status

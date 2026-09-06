@@ -46,7 +46,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
@@ -347,6 +347,14 @@ class Configuration:
     Empty when this checkout's configuration names none, which the integration build
     refuses rather than reading as a suite that passed."""
 
+    tooling_paths: tuple[str, ...] = ()
+    """The path prefixes this fork's own maintenance tooling lives under, read by
+    :class:`~changed_paths.ChangedPaths` to tell a tooling pull request from any other."""
+
+    shared_paths: tuple[str, ...] = ()
+    """The paths the tooling and the software the repository builds both change, which say
+    nothing either way about the change they are part of."""
+
     @property
     def blocking_labels(self) -> tuple[str, ...]:
         """The labels that hold a branch out of a pass and out of promotion.
@@ -413,6 +421,12 @@ class ConfigurationKey(StrEnum):
     INTEGRATION_TEST_COMMAND = "integration_test_command"
     """The suite run against a finished integration branch."""
 
+    TOOLING_PATHS = "tooling_paths"
+    """The path prefixes the fork's own maintenance tooling lives under."""
+
+    SHARED_PATHS = "shared_paths"
+    """The paths both the tooling and the software change, which settle neither way."""
+
 
 def load_configuration(
     path: Path = CONFIGURATION_PATH,
@@ -451,14 +465,16 @@ def load_configuration(
         integration_test_command=values.get(
             ConfigurationKey.INTEGRATION_TEST_COMMAND, ""
         ),
+        tooling_paths=tuple(values.get(ConfigurationKey.TOOLING_PATHS, ())),
+        shared_paths=tuple(values.get(ConfigurationKey.SHARED_PATHS, ())),
     )
 
 
-def _configuration_values(path: Path) -> dict[str, str]:
+def _configuration_values(path: Path) -> dict[str, Any]:
     """Read the committed defaults with any personal-notes overrides layered on top.
 
     :param path: The committed defaults file.
-    :return: The layered values.
+    :return: The layered values, each as whatever TOML type its key is written with.
     """
     values = tomllib.loads(path.read_text())
     values.update(_personal_configuration_overrides())

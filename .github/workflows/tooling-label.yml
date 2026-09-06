@@ -1,0 +1,51 @@
+name: Tooling label
+
+# Keeps a pull request's tooling label saying what its changed files say.
+#
+# The label decides which of two colliding tips an integration build keeps, and it was
+# applied by hand - so a branch took its merge priority from somebody having remembered
+# rather than from what the branch does. The files it changes answer that already.
+#
+# Runs on every push to a pull request rather than on its opening alone, because a pull
+# request that grows a change to the software stops being a tooling change and the label
+# has to come back off.
+#
+# Runs unchanged in any fork: the label and the paths come from .claude/stack/stack.toml
+# and the repository from the runner's own context, so no repository is named here.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Say whether this pull request changes the tooling
+    # A pull request from somebody else's fork is handed a read-only token, so the label
+    # write could only fail - and fail on their pull request, where it reads as theirs.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # A dispatch names no pull request, and labels every open one instead: that is how
+      # a fork whose pull requests predate this workflow gets them labelled at all.
+      - name: Label what the changed files say
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          python "${STACK_DIRECTORY}/maintenance.py" label-tooling \
+            ${PULL_REQUEST:+--pull-request "${PULL_REQUEST}"}
