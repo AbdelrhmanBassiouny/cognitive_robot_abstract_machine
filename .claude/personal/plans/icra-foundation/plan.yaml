@@ -38,6 +38,18 @@ items:
   session: https://claude.ai/code/session_01G5fPjf58191jHuL1dvrKNv
   blockers:
     - >-
+      Cross-plan: this item merges montessori-eql-stack's montessori_monitor_and_recording (#256)
+      rather than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was split out of
+      #169 so this plan need not take the cramera console with the monitor. As of 2026-09-03 it
+      takes only the monitor half of #256: the recording half is being cut off main as its own item,
+      run-results-recorded-into-sql, which this item merges instead. What is left of that debt here
+      is one item: SimulationTimePacer.sleep() waits on the simulation clock with no bound, so a
+      stalled simulation blocks a tick forever. No test reaches it - only the demo scripts set
+      context.simulation_clock - but it is a real hang, and what a stalled simulation should do is
+      the developer's call. The three coraplex failures and the hanging Tracy demo this blocker used
+      to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on
+      #169's c8bf6f05.
+    - >-
       CI has never been green on #265. As of the run on 5f63f0f5 (2026-09-06) ten of the
       twenty-three checks fail, all of them on one root cause and all of them this branch's own --
       main is green at f6a53cf9, the base this pull request is measured against. Every test job that
