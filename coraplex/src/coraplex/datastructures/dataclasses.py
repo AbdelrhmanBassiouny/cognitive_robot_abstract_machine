@@ -20,6 +20,7 @@ from krrood.class_diagrams.mocking import MockedClass, MockedModule
 from krrood.utils import memoize
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_entity import PlanEntity
+from giskardpy.simulation_clock import SimulationClock
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
 if TYPE_CHECKING:
@@ -81,6 +82,24 @@ class Context(PlanEntity):
     ros_node: Optional[rclpy.node.Node] = field(default=None)
     """
     A ROS node that should be used for communication in this plan.
+    """
+
+    simulation_clock: Optional[SimulationClock] = field(default=None)
+    """
+    The clock of the simulator the plan is driving, when it is driving one.
+
+    Set this to pace motion execution against simulated rather than wall-clock
+    time, so a simulation that cannot keep up with real time slows the
+    controller down with it instead of being outrun by it.
+    """
+
+    update_world_model_attachment: bool = field(default=True)
+    """
+    Whether grasping and releasing reparent the object in the world model.
+
+    Set to ``False`` when a physics simulator holds objects by contact rather
+    than by a rigid attachment, so the world model does not come to believe an
+    object is fixed to the gripper that the simulator never welded there.
     """
 
     evaluate_conditions: bool = field(default=True)

@@ -18,9 +18,19 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
-from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
+from coraplex.datastructures.enums import (
+    ApproachDirection,
+    Arms,
+    ExecutionType,
+    VerticalAlignment,
+)
 from coraplex.datastructures.grasp import GraspDescription
-from coraplex.execution_environment import real_robot, simulated_robot
+from coraplex.execution_environment import (
+    ExecutionEnvironment,
+    real_robot,
+    simulated_robot,
+)
+from coraplex.plans.executables import DEFAULT_MAX_TICKS_PER_MOTION_MAPPING
 from coraplex.plans.factories import execute_single
 from coraplex.robot_plans.actions.core.pick_up import ReachAction
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
@@ -176,3 +186,44 @@ def test_pre_condition_monitor_gates_the_root_goal(reach_action_executable):
     assert root_goal.start_condition.free_variables() == [
         pre_monitor.observation_variable
     ]
+
+
+# %% tick budget
+
+
+def test_a_motion_is_given_a_finite_tick_budget_without_being_asked_for_one(
+    reach_action_executable,
+):
+    """
+    The simulated tick loop must be bounded whether or not an
+    :class:`~coraplex.execution_environment.ExecutionEnvironment` set a budget.
+
+    An unbounded loop turns a motion that never reaches its end monitor -- an
+    unreachable target, say -- from a :class:`MotionDidNotFinish` into a run that
+    never returns.
+    """
+    with simulated_robot:
+        assert (
+            reach_action_executable.tick_limit
+            == len(reach_action_executable.motion_mappings)
+            * DEFAULT_MAX_TICKS_PER_MOTION_MAPPING
+        )
+
+
+def test_an_execution_environment_budget_replaces_the_default(
+    reach_action_executable,
+):
+    budget = 7
+    with ExecutionEnvironment(
+        ExecutionType.SIMULATED, max_ticks_per_motion_mapping=budget
+    ):
+        assert (
+            reach_action_executable.tick_limit
+            == len(reach_action_executable.motion_mappings) * budget
+        )
+
+    assert (
+        reach_action_executable.tick_limit
+        == len(reach_action_executable.motion_mappings)
+        * DEFAULT_MAX_TICKS_PER_MOTION_MAPPING
+    )
