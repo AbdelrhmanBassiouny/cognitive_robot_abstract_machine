@@ -660,3 +660,61 @@ deleting a published Artifact is not something a session does unprompted. The
 candidate would have restored all 9 edges dropped here; three programmes in a row (7, then
 29, now 9 more) have paid this same cost, which is a stronger case for building it than any
 one of the three was alone.
+
+## Kickoff 2026-09-06: `new-plan-when-full` — measure before writing, not after
+
+Pull request: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/277
+
+Stacked on #207's branch (`claude/plan-size-limits-budget-alp8p2`), not `main`: this item
+imports `PlanSize`/`SizeBudget` from `plan_size_budget.py`, which exists only there. #207
+is open and non-draft, which `plan-schema.md` counts as ready to stack on. Independent of
+`refuse-oversized-save` (#273): this item only needs the budget's measurement to exist
+(`SizeBudget().overruns(size)`), not `enforce`/`PlanOverBudgetError`, which #273 adds — so
+it does not stack on or depend on that branch.
+
+### The mechanism: `plan_size_check.py`, a third small script beside the budget and the gate
+
+`plan_size_budget.py` reports on every plan; `plan_size_gate.py` (#273) refuses a save
+already written. Neither answers the question `/add-plan-item` and `/plan-create` actually
+need to ask **before** writing anything: is the plan this work would land in already full?
+`.claude/hooks/plan_size_check.py` is that check — `--manifest <path> --roadmap <path>` in,
+one-line JSON out (`is_full`, `item_count`, `line_count`, `overruns`), always exits 0. It
+reuses `PlanSize.measure` and `SizeBudget().overruns` directly rather than re-deriving the
+measurement, and never imports `enforce`/`PlanOverBudgetError` — those name a refusal this
+script does not perform.
+
+### Where each skill wires it in — checked, not re-derived
+
+- **`/add-plan-item` step 5** — before choosing **New item in an existing plan**, the
+  candidate plan's *current* manifest+roadmap (already fetched off `FETCH_HEAD` in step 2)
+  is measured. `is_full: true` disqualifies that plan for growth regardless of what its
+  `description` says, and the check runs against every other candidate plan whose
+  description also covers the work before falling back to **New plan**. This is exactly
+  "the plan they would otherwise grow is at it" from the item's own notes — the plan's
+  *current* state decides it, not a projection of the plan plus the not-yet-written item.
+- **`/plan-create` step 6b (new)** — after drafting and validating a brand-new plan and
+  before handing it to `save-plan.sh`, the draft itself is measured the same way. A
+  freshly-drafted plan that is already full is exactly the failure `split-workflow-unification`,
+  `split-rdr-refactor`, `split-knowledge-directed-perception` and `split-icra-experiments`
+  each had to undo after the fact — this catches it before the first save. On `is_full: true`
+  the skill does not call `save-plan.sh`; it reports which half is blown and points at this
+  plan's own four split sections for the measured-seam methodology (by track/wave first,
+  verified by measuring, cut on subject only when a track/wave alone is still over), then
+  asks via `AskUserQuestion` whether to re-draft along that seam or trim scope — the same
+  judgment call those four items made by hand, not one this skill re-derives automatically.
+  This item does not reimplement that methodology; wave 2 already did, by hand, four times.
+
+### Why this reads the plan's current size, not a projected one
+
+`/add-plan-item` never has the not-yet-written item's exact line count in hand at the point
+it is choosing an outcome, and a projection would be a guess dressed as a measurement. The
+plan's own current size is both the number `refuse-oversized-save`'s future gate will judge
+the *next* save against and the number this check can read right now — so it is what
+`is_full` measures.
+
+### Left for later, deliberately
+
+Nothing here changes `plan-item-kickoff`/`plan-item-resolve`'s own `record` writes, which
+grow an already-tracked item's plan by roadmap narrative rather than by a whole new item —
+that accretion path is `minimal-roadmap-writing`'s job, a sibling item in this same track,
+not this one's.
