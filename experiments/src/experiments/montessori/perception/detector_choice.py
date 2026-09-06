@@ -26,46 +26,42 @@ Neither part subsumes the other. Both detectors here can answer a look at a piec
 matte surface, so a capability alone leaves the question open; and a tree that named
 detectors without asking them would have to be rewritten to gain one.
 
-The tree is a live one. It is stated when the rules are built and grows through
-:meth:`DetectorRules.add_rule`, so a situation nobody foresaw is given a rule while the
-rules are in use rather than written into the code that reads them.
+The tree is a live one. The rules it starts with are written down outright
+(:meth:`DetectorRules.rules_stated_at_the_start`), and it grows through
+:meth:`~krrood.entity_query_language.backends.DetectorChoice.add_rule`, so a situation
+nobody foresaw is given a rule while the rules are in use rather than written into the
+code that reads them.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from krrood.entity_query_language.backends import Look, PerceptionDetector
-from krrood.entity_query_language.factories import ConditionType, a, and_
-from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
-from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.interface import (
-    AnswerRequest,
-    CaseContext,
-    FunctionInterface,
+from krrood.entity_query_language.backends import (
+    DetectorChoice,
+    Look,
+    PerceptionDetector,
 )
-from krrood.entity_query_language.rdr.serialization import NullModelSaver
-from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from typing_extensions import Any, Dict, List, Optional, Sequence, Tuple
+from krrood.entity_query_language.factories import ConditionType, a, and_
+from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.rdr.rule_tree import StatedRule
+from typing_extensions import Dict, List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import MontessoriShapeDetection
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.exceptions import NoDetectorAnswersTheLook
-from experiments.montessori.perception.orthophoto import Orthophoto, WorkspaceRegion
+from experiments.montessori.perception.orthophoto import Orthophoto
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import (
-    HUE_RANGE,
     HUE_TOLERANCE,
     KNOWN_PIECES,
     KnownPiece,
-    color_of_hue,
     hue_distance,
     hue_of,
 )
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.world_description.geometry import Color, SurfaceFinish
+from semantic_digital_twin.world_description.geometry import SurfaceFinish
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -181,14 +177,15 @@ class PieceDetector(PerceptionDetector[TargetOnSurface], ABC):
 
 
 @dataclass
-class DetectorRules:
+class DetectorRules(DetectorChoice[TargetOnSurface]):
     """
     The rule tree that says which detector answers a look at this scene.
 
     Its rules are krrood ripple-down rules whose conditions are entity query language
     expressions over the look itself, so a look the rules get wrong is corrected by
     adding a rule rather than by editing the ones already stated, and the tree can be
-    read (:meth:`render_tree`) rather than only run.
+    read (:meth:`~krrood.entity_query_language.backends.DetectorChoice.render_tree`)
+    rather than only run.
     """
 
     edge_fit: PieceDetector
@@ -208,81 +205,46 @@ class DetectorRules:
     cube resting on the board.
     """
 
-    rules: EQLSingleClassRDR = field(init=False, repr=False, compare=False)
-    """
-    The rules themselves, as one tree that outlives the looks it decides.
-
-    Nothing is persisted when a rule is added: a rule concludes the detector itself
-    rather than a name for one, and the engine writes a model file as Python source,
-    which can spell an enum member or a number but not a collaborator. The rules are
-    recovered by stating them again from the detectors, which is what building this
-    does.
-    """
-
-    expert: Expert = field(init=False, repr=False, compare=False)
-    """
-    Asked for a new rule's condition, which it reads off
-    :meth:`state_the_condition_this_rule_needs`.
-    """
-
-    def __post_init__(self) -> None:
+    def underspecified_look(self) -> Match:
         """
-        State the rules by fitting the looks each detector answers.
-
-        The engine authors its own tree, so a rule is written by putting a known kind of
-        look and the detector that answers it to it.
+        A look whose detector is to be worked out.
         """
-        self.expert = Expert(
-            interface=FunctionInterface(
-                answer_function=self.state_the_condition_this_rule_needs
-            )
-        )
-        self.rules = EQLSingleClassRDR.from_underspecified(
-            a(TargetOnSurface)(detector=...), model_saver=NullModelSaver()
-        )
-        answered = self.looks_each_detector_answers()
-        self.rules.fit(
-            cases=[look for look, _ in answered],
-            targets=[detector for _, detector in answered],
-            expert=self.expert,
-        )
+        return a(TargetOnSurface)(detector=...)
 
-    def state_the_condition_this_rule_needs(
-        self, context: CaseContext, requests: List[AnswerRequest]
-    ) -> Dict[AnswerName, Any]:
+    def rules_stated_at_the_start(self) -> List[StatedRule]:
         """
-        Answer the engine's question about a new rule with what the detector says it can
-        answer, narrowed by the situation these rules choose it in.
-
-        A capability alone does not tell the detectors apart -- both answer a look at a
-        piece that colour separates from the surface it rests on -- so the condition a
-        rule needs is the capability *and* whatever these rules know about when that
-        detector is worth running.
-
-        :param context: The look being fitted, and the detector it is fitted to.
-        :param requests: The answers asked for, which this reads nothing from.
-        :return: The conditions answer.
+        Both detectors answer a look at a piece that colour separates from the surface
+        it rests on, so what tells them apart is how that surface takes light: the
+        colour blob is worth its lower cost on a matte one, measured at 89 ms against
+        126 ms on the same work, and the edge fit is the general answer everywhere else.
         """
-        capability = context.target_conclusion.capability(context.case_variable)
-        situation = self.situation_answered_by(
-            context.target_conclusion, context.case_variable, context.case_instance
-        )
-        if situation is None:
-            return {AnswerName.CONDITIONS: capability}
-        return {AnswerName.CONDITIONS: and_(situation, capability)}
+        return [
+            StatedRule(
+                and_(
+                    self.look.surface.finish == SurfaceFinish.MATTE,
+                    self.color_blob.capability(self.look),
+                ),
+                self.color_blob,
+            ),
+            StatedRule(self.edge_fit.capability(self.look), self.edge_fit),
+        ]
+
+    def nothing_answers(self, look: TargetOnSurface) -> NoDetectorAnswersTheLook:
+        """
+        :param look: The look no rule reached.
+        """
+        return NoDetectorAnswersTheLook(str(look))
 
     def situation_answered_by(
-        self, detector: PieceDetector, look: TargetOnSurface, example: TargetOnSurface
+        self,
+        detector: PieceDetector,
+        look: TargetOnSurface,
+        example: TargetOnSurface,
     ) -> Optional[ConditionType]:
         """
-        What these rules know about when a detector is worth running, over and above
-        what it says it can answer.
-
-        How the surface takes light is what these rules decide by: the edge fit is the
-        general answer and needs no situation of its own, and every other detector is
-        worth its cost on the finishes it was stated for -- the colour blob on a matte
-        surface, measured at 89 ms against 126 ms on the same work -- which is read off
-        the look the rule is being stated from rather than named again here.
+        How the surface takes light is what these rules decide by, so a rule added for a
+        detector other than the general one holds only on surfaces finished like the one
+        it was stated from.
 
         :param detector: The detector a rule is being stated for.
         :param look: The variable the condition is stated over.
@@ -292,79 +254,6 @@ class DetectorRules:
         if detector is self.edge_fit:
             return None
         return look.surface.finish == example.surface.finish
-
-    def looks_each_detector_answers(
-        self,
-    ) -> List[Tuple[TargetOnSurface, PieceDetector]]:
-        """
-        The known kinds of look, each paired with the detector that answers it.
-
-        A look at a surface nothing is stated about is fitted alongside the matte one,
-        so the rules are held to answering it by fitting edges rather than left to
-        happen to.
-        """
-        target = KNOWN_PIECES[0]
-        return [
-            (
-                TargetOnSurface(self.a_surface_of(None, None), target),
-                self.edge_fit,
-            ),
-            (
-                TargetOnSurface(
-                    self.a_surface_of(
-                        SurfaceFinish.MATTE, self.a_color_separating_from(target)
-                    ),
-                    target,
-                ),
-                self.color_blob,
-            ),
-        ]
-
-    @staticmethod
-    def a_surface_of(
-        finish: Optional[SurfaceFinish], color: Optional[Color]
-    ) -> WorkspaceSurface:
-        """
-        A surface of a kind the rules are stated from, stating only what a rule reads of
-        one.
-
-        :param finish: How it takes light, or ``None`` where nothing is stated.
-        :param color: The colour the world states for it, or ``None`` where it states
-            none.
-        """
-        return WorkspaceSurface(
-            name=PrefixedName("a_surface_the_rules_are_stated_from", "detector_choice"),
-            region=WorkspaceRegion(
-                minimum_x=0.0, maximum_x=1.0, minimum_y=0.0, maximum_y=1.0
-            ),
-            height=0.0,
-            finish=finish,
-            color=color,
-        )
-
-    @staticmethod
-    def a_color_separating_from(target: KnownPiece) -> Color:
-        """
-        A colour far enough from a piece's own for colour to cut the piece out of a
-        surface wearing it, which is what the colour blob states it needs.
-
-        :param target: The piece the colour has to separate from.
-        """
-        return color_of_hue((target.hue + HUE_RANGE // 2) % HUE_RANGE)
-
-    def add_rule(self, look: TargetOnSurface, detector: PieceDetector) -> None:
-        """
-        State a kind of look the rules do not yet cover.
-
-        The rule joins the tree already in use, so such a look is answered by *detector*
-        from the next call onwards without any of the rules already stated being
-        rewritten. That is what a tree of rules is for, and it is the path an expert
-        correcting a choice takes.
-
-        :param look: The kind of look that was not covered.
-        :param detector: The detector that answers it.
-        """
-        self.rules.fit_case(look, detector, self.expert)
 
     def detectors_for(
         self, surface: WorkspaceSurface, targets: Sequence[KnownPiece]
@@ -388,23 +277,3 @@ class DetectorRules:
             detector = self.detector_for(TargetOnSurface(surface, target))
             grouped.setdefault(id(detector), (detector, []))[1].append(target)
         return [(detector, tuple(pieces)) for detector, pieces in grouped.values()]
-
-    def detector_for(self, look: TargetOnSurface) -> PieceDetector:
-        """
-        The detector that answers one look.
-
-        :param look: The piece being looked for and the surface it is looked for on.
-        :raises NoDetectorAnswersTheLook: If no rule reaches this look.
-        """
-        concluded = self.rules.classify(look)
-        if concluded is ...:
-            raise NoDetectorAnswersTheLook(str(look))
-        return concluded
-
-    def render_tree(self, look: TargetOnSurface) -> str:
-        """
-        The rules as a tree, with the rule that answers one look marked out.
-
-        :param look: The look to read the tree for.
-        """
-        return self.rules.render_tree(look, use_color=False)

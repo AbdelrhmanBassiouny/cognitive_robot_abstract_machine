@@ -4,7 +4,9 @@ Tests for finding a surface in the picture from what the world says it is like.
 The rules and the measurement are tested apart from the pipeline, so a failure names
 which of the two is wrong: the measurement is put to a depth image built here, where
 what it should answer is known exactly, and the rules are put to descriptions built
-here, where what the world says is the whole of the input.
+here, where what the world says is the whole of the input. The rules are then put to the
+shipped captures, which is what says the rules stated for this scene are right about it
+rather than only self-consistent.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import pytest
 from typing_extensions import Tuple
 
 from experiments.montessori.perception.camera import CameraIntrinsics, RgbdFrame
+from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.exceptions import (
     NoSurfaceFinderAnswersTheLook,
     SurfaceNotSeenWhereTheWorldPutsIt,
@@ -29,7 +32,12 @@ from experiments.montessori.perception.surface_finding import (
     SurfaceFinder,
     SurfaceRules,
 )
+from experiments.montessori.perception.recorded_setup import (
+    lid_surface,
+    table_surface,
+)
 from krrood.entity_query_language.backends import PerceptionDetector
+from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
@@ -290,7 +298,7 @@ def test_a_mirror_finished_surface_is_measured_in_the_picture() -> None:
     what settles where it reaches.
     """
     rules = SurfaceRules()
-    finder = rules.finder_for(
+    finder = rules.detector_for(
         SoughtSurface(
             modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT, SurfaceFinish.MIRROR),
             frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
@@ -322,7 +330,7 @@ def test_the_rules_read_the_finish_the_worlds_own_shape_states() -> None:
     )
 
     assert sought.surface.finish is SurfaceFinish.MIRROR
-    assert rules.finder_for(sought) is rules.measured
+    assert rules.detector_for(sought) is rules.measured
 
 
 def test_a_surface_the_world_states_no_finish_for_is_taken_from_the_model() -> None:
@@ -331,7 +339,7 @@ def test_a_surface_the_world_states_no_finish_for_is_taken_from_the_model() -> N
     what answers -- which is the state every world in this workspace is in.
     """
     rules = SurfaceRules()
-    finder = rules.finder_for(
+    finder = rules.detector_for(
         SoughtSurface(
             modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT),
             frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
@@ -348,7 +356,7 @@ def test_a_surface_the_world_bounds_to_nothing_is_refused() -> None:
     """
     rules = SurfaceRules()
     with pytest.raises(NoSurfaceFinderAnswersTheLook):
-        rules.finder_for(
+        rules.detector_for(
             SoughtSurface(
                 modelled_surface(NO_GROUND, PLANE_HEIGHT, SurfaceFinish.MIRROR),
                 frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
@@ -366,9 +374,9 @@ def test_a_rule_added_while_the_rules_are_in_use_changes_the_next_answer() -> No
         modelled_surface(MODELLED_BOUNDS, PLANE_HEIGHT, SurfaceFinish.GLOSSY),
         frame_showing(PLANE_BOUNDS, PLANE_HEIGHT),
     )
-    assert rules.finder_for(glossy) is rules.modelled
+    assert rules.detector_for(glossy) is rules.modelled
     rules.add_rule(glossy, rules.measured)
-    assert rules.finder_for(glossy) is rules.measured
+    assert rules.detector_for(glossy) is rules.measured
 
 
 def test_the_rules_are_stated_over_the_surface_being_sought() -> None:
@@ -520,3 +528,34 @@ def test_a_measurement_is_declared_only_where_there_is_depth_to_take_it_in() -> 
         bool(finder.asked_about(SoughtSurface(mirror, seen)).tolist()),
         bool(finder.asked_about(SoughtSurface(mirror, colour_only)).tolist()),
     ] == [True, False]
+
+
+# %% the stated rules, put to the captures they were written for
+
+
+@pytest.mark.parametrize("capture_name", SceneCapture.names_in())
+def test_the_stated_rules_answer_every_shipped_capture_without_needing_a_new_one(
+    capture_name: str,
+) -> None:
+    """
+    A stated rule is not derived from a case, so what says it is right is a real look
+    put to it: fitting each capture with the finder it should get leaves the tree the
+    size it was, because every one of them was already answered that way.
+
+    The two surfaces are the ones the recordings were taken over -- the brushed steel
+    table, which the world says takes light like a mirror, and the board's lid, which it
+    says nothing about.
+    """
+    rules = SurfaceRules()
+    frame = SceneCapture.load(capture_name).to_frame()
+    stated = len(walk_rules(rules.rules.conditions_root))
+
+    for surface, expected in (
+        (table_surface(), rules.measured),
+        (lid_surface(), rules.modelled),
+    ):
+        sought = SoughtSurface(surface, frame)
+        assert rules.detector_for(sought) is expected
+        rules.add_rule(sought, expected)
+
+    assert len(walk_rules(rules.rules.conditions_root)) == stated

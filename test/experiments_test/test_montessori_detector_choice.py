@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 import pytest
 
 from krrood.entity_query_language.factories import ConditionType
+from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import MontessoriShapeDetection
@@ -574,3 +575,33 @@ def test_a_piece_wearing_the_boards_own_wood_falls_back_to_fitting_edges(rules):
     )
 
     assert rules.detector_for(look) is rules.edge_fit
+
+
+# %% the stated rules, put to the surfaces the world really states
+
+
+def test_the_stated_rules_answer_the_scenes_own_surfaces_without_needing_a_new_rule(
+    rules,
+):
+    """
+    A stated rule is not derived from a case, so what says it is right is a real surface
+    put to it: fitting the two the modelled scene states -- the brushed steel table and
+    the board's painted lid -- with the detector each should get leaves the tree the size
+    it was, because both were already answered that way.
+    """
+    montessori = MontessoriWorld()
+    montessori.world.update_forward_kinematics()
+    [table] = montessori.world.get_semantic_annotations_by_type(Table)
+    pipeline = MontessoriPerceptionPipeline.of_world(montessori.world, table.root)
+    target = KNOWN_PIECES[0]
+    stated = len(walk_rules(rules.rules.conditions_root))
+
+    for surface, expected in (
+        (pipeline.table, rules.edge_fit),
+        (pipeline.lid, rules.color_blob),
+    ):
+        look = TargetOnSurface(surface, target)
+        assert rules.detector_for(look) is expected
+        rules.add_rule(look, expected)
+
+    assert len(walk_rules(rules.rules.conditions_root)) == stated

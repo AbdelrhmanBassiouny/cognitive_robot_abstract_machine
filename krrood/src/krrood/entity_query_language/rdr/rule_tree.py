@@ -11,6 +11,8 @@ Conditions and conclusion values are live EQL expression objects, never strings.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from typing_extensions import Any, Type
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -24,6 +26,26 @@ from krrood.entity_query_language.rules.conclusion_selector import (
     ConclusionSelector,
     Refinement,
 )
+
+
+@dataclass
+class StatedRule:
+    """
+    One rule written down outright rather than derived from a case.
+
+    An author who already knows a rule has nothing to be worked out for them, so this is
+    the rule itself: what it fires on, and what it concludes when it does.
+    """
+
+    condition: SymbolicExpression
+    """
+    The condition the rule fires on, as a live expression over the case variable.
+    """
+
+    conclusion: Any
+    """
+    What the rule concludes for a case its condition holds for.
+    """
 
 
 def _insert_rule(

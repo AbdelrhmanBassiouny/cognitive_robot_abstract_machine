@@ -22,6 +22,7 @@ from krrood.entity_query_language.rdr.exceptions import ExpertRequired
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.rdr.interface import FunctionInterface
+from krrood.entity_query_language.rdr.rule_tree import StatedRule
 from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rules.conclusion_selector import (
@@ -29,7 +30,7 @@ from krrood.entity_query_language.rules.conclusion_selector import (
     Refinement,
 )
 
-from .animal import Animal, Species, make_animal
+from .animal import Animal, Species, make_animal, make_bird, make_mammal
 from .expert_doubles import (
     feature_vector,
     maximally_specific_expert,
@@ -486,3 +487,115 @@ class TestAutomaticConditionResolution:
 
         assert len(expert.interface.calls) > calls_before
         assert rdr.classify(unknown) == Species.bird
+
+
+# %% rules stated outright
+
+
+class TestStateRules:
+    """
+    Rules an author already has need no case to be derived from: they are written down
+    and taken as they are.
+    """
+
+    def test_a_stated_rule_answers_the_cases_its_condition_holds_for(self):
+        rdr = EQLSingleClassRDR(Animal, "species")
+
+        rdr.state_rules([StatedRule(rdr.case_variable.milk == True, Species.mammal)])
+
+        assert rdr.classify(make_mammal()) == Species.mammal
+
+    def test_a_case_no_stated_rule_reaches_stays_undetermined(self):
+        rdr = EQLSingleClassRDR(Animal, "species")
+
+        rdr.state_rules([StatedRule(rdr.case_variable.milk == True, Species.mammal)])
+
+        assert rdr.classify(make_bird()) is ...
+
+    def test_the_first_rule_whose_condition_holds_is_the_one_that_answers(self):
+        """
+        Stated order is the order they are tried in, which is how an author says that a
+        narrow rule is to be preferred to the general one it overlaps.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+
+        rdr.state_rules(
+            [
+                StatedRule(rdr.case_variable.feathers == True, Species.bird),
+                StatedRule(rdr.case_variable.backbone == True, Species.fish),
+            ]
+        )
+
+        assert rdr.classify(make_bird()) == Species.bird
+        assert rdr.classify(make_mammal()) == Species.fish
+
+    def test_every_stated_rule_is_one_rule_of_the_tree(self):
+        rdr = EQLSingleClassRDR(Animal, "species")
+
+        rdr.state_rules(
+            [
+                StatedRule(rdr.case_variable.feathers == True, Species.bird),
+                StatedRule(rdr.case_variable.milk == True, Species.mammal),
+                StatedRule(rdr.case_variable.backbone == True, Species.fish),
+            ]
+        )
+
+        assert len(walk_rules(rdr.conditions_root)) == 3
+
+    def test_stating_rules_answers_with_the_rules_themselves(self):
+        rdr = EQLSingleClassRDR.from_underspecified(an(Animal)(species=...))
+
+        assert (
+            rdr.state_rules(
+                [StatedRule(rdr.case_variable.milk == True, Species.mammal)]
+            )
+            is rdr
+        )
+
+    def test_a_case_a_stated_rule_gets_wrong_is_corrected_by_fitting_it(self):
+        """
+        A stated tree is a starting point rather than the last word: the rules an author
+        wrote and the rules an expert adds afterwards are one tree.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        rdr.state_rules([StatedRule(rdr.case_variable.backbone == True, Species.fish)])
+        mammal = make_mammal()
+
+        rdr.fit_case(
+            mammal,
+            Species.mammal,
+            scripted_expert({Species.mammal: lambda v: v.milk == True}),
+        )
+
+        assert rdr.classify(mammal) == Species.mammal
+        assert rdr.classify(make_animal("a_fish", backbone=True)) == Species.fish
+
+    def test_rules_reading_one_trait_are_stated_together_without_clashing(self):
+        """
+        Rules are written down before any of them is in the tree, so two that read the
+        same trait share the expression that reads it -- which the tree has to take as
+        one trait read twice rather than as two rules fighting over one node.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+
+        rdr.state_rules(
+            [
+                StatedRule(rdr.case_variable.milk == True, Species.mammal),
+                StatedRule(rdr.case_variable.milk == False, Species.bird),
+            ]
+        )
+
+        assert rdr.classify(make_mammal()) == Species.mammal
+        assert rdr.classify(make_bird()) == Species.bird
+
+    def test_a_conclusion_a_stated_rule_reaches_is_inferable_backwards(self):
+        rdr = EQLSingleClassRDR(Animal, "species")
+
+        rdr.state_rules(
+            [
+                StatedRule(rdr.case_variable.feathers == True, Species.bird),
+                StatedRule(rdr.case_variable.milk == True, Species.mammal),
+            ]
+        )
+
+        assert rdr.sufficient_conditions_for(Species.mammal).is_satisfiable()

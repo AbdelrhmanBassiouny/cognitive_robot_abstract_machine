@@ -13,9 +13,9 @@ piece off a surface. The rules are krrood's
 :class:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`, built from the
 underspecified statement *a surface whose finder is to be worked out*, so what is
 described and what is left open are read off that statement rather than named again
-here. A surface the world says colour cannot outline is measured in the
-depth image; one it says nothing about is taken from the model, because a description
-nothing states is not one a look can be compiled from.
+here. A surface the world says colour cannot outline is measured in the depth image; one
+it says nothing about is taken from the model, because a description nothing states is
+not one a look can be compiled from.
 
 ..note:: A plane fit answers the *surface* and not what rests on it. The point-cloud
     trial this measurement follows found a plane holding a third of the points on the
@@ -29,27 +29,23 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 
 import numpy as np
-from krrood.entity_query_language.backends import Look, PerceptionDetector
-from krrood.entity_query_language.factories import ConditionType, a, and_
-from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
-from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.interface import (
-    AnswerRequest,
-    CaseContext,
-    FunctionInterface,
+from krrood.entity_query_language.backends import (
+    DetectorChoice,
+    Look,
+    PerceptionDetector,
 )
-from krrood.entity_query_language.rdr.serialization import NullModelSaver
-from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from krrood.entity_query_language.factories import ConditionType, a, and_
+from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.rdr.rule_tree import StatedRule
+from typing_extensions import List, Optional
 
-from experiments.montessori.perception.camera import CameraIntrinsics, RgbdFrame
+from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.exceptions import (
     NoSurfaceFinderAnswersTheLook,
     SurfaceNotSeenWhereTheWorldPutsIt,
 )
 from experiments.montessori.perception.orthophoto import WorkspaceBox, WorkspaceRegion
 from experiments.montessori.perception.surfaces import WorkspaceSurface
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.geometry import SurfaceFinish
 
 # %% how far a surface's own points scatter
@@ -333,14 +329,16 @@ class MeasuredSurfaceFinder(SurfaceFinder):
 
 
 @dataclass
-class SurfaceRules:
+class SurfaceRules(DetectorChoice[SoughtSurface]):
     """
     The rule tree that says which finder answers a surface of this scene.
 
     Its rules are krrood ripple-down rules whose conditions are entity query language
     expressions over the surface being sought itself, so a surface the rules get wrong
     is corrected by adding a rule rather than by editing the ones already stated, and
-    the tree can be read (:meth:`render_tree`) rather than only run.
+    the tree can be read
+    (:meth:`~krrood.entity_query_language.backends.DetectorChoice.render_tree`) rather
+    than only run.
     """
 
     modelled: SurfaceFinder = field(default_factory=ModelledSurfaceFinder)
@@ -356,79 +354,47 @@ class SurfaceRules:
     Answers with the stretch of the surface the camera actually saw.
     """
 
-    rules: EQLSingleClassRDR = field(init=False, repr=False, compare=False)
-    """
-    The rules themselves, as one tree that outlives the surfaces it decides.
-
-    Nothing is persisted when a rule is added: a rule concludes the finder itself rather
-    than a name for one, and the engine writes a model file as Python source, which can
-    spell an enum member or a number but not a collaborator. The rules are recovered by
-    stating them again from the finders, which is what building this does.
-    """
-
-    expert: Expert = field(init=False, repr=False, compare=False)
-    """
-    Asked for a new rule's condition, which it reads off
-    :meth:`state_the_condition_this_rule_needs`.
-    """
-
-    def __post_init__(self) -> None:
+    def underspecified_look(self) -> Match:
         """
-        State the rules by fitting the surfaces each finder answers.
-
-        The engine authors its own tree, so a rule is written by putting a known kind of
-        sought surface and the finder that answers it to it.
+        A surface whose finder is to be worked out.
         """
-        self.expert = Expert(
-            interface=FunctionInterface(
-                answer_function=self.state_the_condition_this_rule_needs
-            )
-        )
-        self.rules = EQLSingleClassRDR.from_underspecified(
-            a(SoughtSurface)(finder=...), model_saver=NullModelSaver()
-        )
-        answered = self.surfaces_each_finder_answers()
-        self.rules.fit(
-            cases=[sought for sought, _ in answered],
-            targets=[finder for _, finder in answered],
-            expert=self.expert,
-        )
+        return a(SoughtSurface)(finder=...)
 
-    def state_the_condition_this_rule_needs(
-        self, context: CaseContext, requests: List[AnswerRequest]
-    ) -> Dict[AnswerName, Any]:
+    def rules_stated_at_the_start(self) -> List[StatedRule]:
         """
-        Answer the engine's question about a new rule with what the finder says it can
-        answer, narrowed by the situation these rules choose it in.
-
-        A capability alone does not tell the finders apart -- both answer any surface
-        the world bounds, and on a picture with depth both answer it -- so the condition
-        a rule needs is the capability *and* whatever these rules know about when that
-        finder is worth running.
-
-        :param context: The surface being fitted, and the finder it is fitted to.
-        :param requests: The answers asked for, which this reads nothing from.
-        :return: The conditions answer.
+        Both finders answer any surface the world bounds, and on a picture carrying
+        depth both answer it, so what tells them apart is how the surface takes light:
+        a mirror-finished one is worth measuring, because its own model is what this
+        scene has already drifted away from, and the model is the general answer
+        everywhere else.
         """
-        capability = context.target_conclusion.capability(context.case_variable)
-        situation = self.situation_answered_by(
-            context.target_conclusion, context.case_variable, context.case_instance
-        )
-        if situation is None:
-            return {AnswerName.CONDITIONS: capability}
-        return {AnswerName.CONDITIONS: and_(situation, capability)}
+        return [
+            StatedRule(
+                and_(
+                    self.look.surface.finish == SurfaceFinish.MIRROR,
+                    self.measured.capability(self.look),
+                ),
+                self.measured,
+            ),
+            StatedRule(self.modelled.capability(self.look), self.modelled),
+        ]
+
+    def nothing_answers(self, sought: SoughtSurface) -> NoSurfaceFinderAnswersTheLook:
+        """
+        :param sought: The surface no rule reached.
+        """
+        return NoSurfaceFinderAnswersTheLook(str(sought))
 
     def situation_answered_by(
-        self, finder: SurfaceFinder, sought: SoughtSurface, example: SoughtSurface
+        self,
+        finder: SurfaceFinder,
+        sought: SoughtSurface,
+        example: SoughtSurface,
     ) -> Optional[ConditionType]:
         """
-        What these rules know about when a finder is worth running, over and above what
-        it says it can answer.
-
-        How the surface takes light is what these rules decide by: the model is the
-        general answer and needs no situation of its own, and every other finder is
-        worth its cost on the finishes it was stated for, which is read off the surface
-        the rule is being stated from rather than named again here.
+        How the surface takes light is what these rules decide by, so a rule added for a
+        finder other than the general one holds only on surfaces finished like the one
+        it was stated from.
 
         :param finder: The finder a rule is being stated for.
         :param sought: The variable the condition is stated over.
@@ -438,90 +404,6 @@ class SurfaceRules:
         if finder is self.modelled:
             return None
         return sought.surface.finish == example.surface.finish
-
-    def surfaces_each_finder_answers(
-        self,
-    ) -> List[Tuple[SoughtSurface, SurfaceFinder]]:
-        """
-        The known kinds of sought surface, each paired with the finder that answers it.
-
-        A surface nothing is stated about is fitted alongside the mirror-finished one,
-        so the rules are held to answering it from the model rather than left to happen
-        to.
-        """
-        bounds = WorkspaceRegion(
-            minimum_x=0.0, maximum_x=1.0, minimum_y=0.0, maximum_y=1.0
-        )
-        return [
-            (
-                SoughtSurface(
-                    self.a_surface_of(bounds), self.a_picture_carrying_depth(False)
-                ),
-                self.modelled,
-            ),
-            (
-                SoughtSurface(
-                    self.a_surface_of(bounds, SurfaceFinish.MIRROR),
-                    self.a_picture_carrying_depth(True),
-                ),
-                self.measured,
-            ),
-        ]
-
-    @staticmethod
-    def a_surface_of(
-        bounds: WorkspaceRegion, finish: Optional[SurfaceFinish] = None
-    ) -> WorkspaceSurface:
-        """
-        A surface of a kind the rules are stated from, bounded to some ground so both
-        finders declare they can answer it.
-
-        :param bounds: The stretch of plane it covers.
-        :param finish: How it takes light, or ``None`` where nothing is stated.
-        """
-        return WorkspaceSurface(
-            name=PrefixedName("a_surface_the_rules_are_stated_from", "surface_finding"),
-            region=bounds,
-            height=0.0,
-            finish=finish,
-        )
-
-    @staticmethod
-    def a_picture_carrying_depth(carries_depth: bool) -> RgbdFrame:
-        """
-        A picture of a kind the rules are stated from, as small as one can be.
-
-        Only whether the camera returned any depth at all separates the kinds of look
-        the rules tell apart, so a single pixel says everything a rule reads of a
-        picture, and nothing is claimed about a scene that was never photographed.
-
-        :param carries_depth: Whether the camera returned a depth reading.
-        """
-        return RgbdFrame(
-            color=np.zeros((1, 1, 3), dtype=np.uint8),
-            depth=np.full((1, 1), 1.0 if carries_depth else 0.0),
-            intrinsics=CameraIntrinsics(
-                focal_length_x=1.0,
-                focal_length_y=1.0,
-                principal_point_x=0.0,
-                principal_point_y=0.0,
-            ),
-            reference_frame_T_camera=np.eye(4),
-        )
-
-    def add_rule(self, sought: SoughtSurface, finder: SurfaceFinder) -> None:
-        """
-        State a kind of surface the rules do not yet cover.
-
-        The rule joins the tree already in use, so such a surface is answered by
-        *finder* from the next call onwards without any of the rules already stated
-        being rewritten. That is what a tree of rules is for, and it is the path an
-        expert correcting an answer takes.
-
-        :param sought: The kind of surface that was not covered.
-        :param finder: The finder that answers it.
-        """
-        self.rules.fit_case(sought, finder, self.expert)
 
     def surface_in(
         self, modelled: WorkspaceSurface, frame: RgbdFrame
@@ -535,24 +417,4 @@ class SurfaceRules:
             about it.
         """
         sought = SoughtSurface(modelled, frame)
-        return self.finder_for(sought).find(sought)
-
-    def finder_for(self, sought: SoughtSurface) -> SurfaceFinder:
-        """
-        The finder that answers one description.
-
-        :param sought: What the world says about the surface being looked for.
-        :raises NoSurfaceFinderAnswersTheLook: If no rule reaches this surface.
-        """
-        concluded = self.rules.classify(sought)
-        if concluded is ...:
-            raise NoSurfaceFinderAnswersTheLook(str(sought))
-        return concluded
-
-    def render_tree(self, sought: SoughtSurface) -> str:
-        """
-        The rules as a tree, with the rule that answers one surface marked out.
-
-        :param sought: The surface to read the tree for.
-        """
-        return self.rules.render_tree(sought, use_color=False)
+        return self.detector_for(sought).find(sought)

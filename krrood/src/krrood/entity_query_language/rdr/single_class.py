@@ -24,6 +24,7 @@ from typing_extensions import (
     List,
     Optional,
     Self,
+    Sequence,
     Set,
     TYPE_CHECKING,
     Type,
@@ -68,6 +69,7 @@ from krrood.entity_query_language.rdr.progress import (
     ProgressReporter,
 )
 from krrood.entity_query_language.rdr.rule_tree import (
+    StatedRule,
     insert_alternative,
     insert_refinement,
 )
@@ -259,9 +261,10 @@ class EQLSingleClassRDR:
     # %% fitting one case
 
     @contextmanager
-    def _saved_when_the_fit_ends(self) -> Iterator[None]:
+    def _saved_when_the_rules_change(self) -> Iterator[None]:
         """
-        Persist the RDR once the enclosing fit finishes, whether it returned or raised.
+        Persist the RDR once the enclosing change finishes, whether it returned or
+        raised.
 
         A fit that dies partway has still authored real rules, and this is what keeps
         them: the save runs on the way out either way, and an exception carries on
@@ -295,7 +298,7 @@ class EQLSingleClassRDR:
         :return: The conclusion now associated with ``case``.
         :raises ExpertRequired: When a rule must be inserted but no expert was supplied.
         """
-        with self._saved_when_the_fit_ends():
+        with self._saved_when_the_rules_change():
             return self._fit_case(case, target, expert)
 
     def _fit_case(
@@ -443,19 +446,8 @@ class EQLSingleClassRDR:
         :param condition: The condition the new rule fires on.
         :param conclusion: The conclusion the new rule draws.
         """
-        if self.query is None:
-            self.query = entity(self.case_variable).where(condition)
-            with self.query:
-                add(self.conclusion_variable, conclusion)
-            self.query.build()
-            new_node = self.query._conditions_root_
-        elif not context.has_current_conclusion:
-            new_node = insert_alternative(
-                self.query._conditions_root_,
-                condition,
-                self.conclusion_variable,
-                conclusion,
-            )
+        if not context.has_current_conclusion:
+            new_node = self._add_alternative(condition, conclusion)
         else:
             new_node = insert_refinement(
                 context.trace.firing_anchor,
@@ -466,6 +458,55 @@ class EQLSingleClassRDR:
 
         self.corner_cases.record(new_node, context.case_instance)
         self._backward_index.invalidate()
+
+    def _add_alternative(
+        self, condition: SymbolicExpression, conclusion: Any
+    ) -> SymbolicExpression:
+        """
+        Seed the rule tree with its first rule, or add one to be tried after every rule
+        already in it.
+
+        :param condition: The condition the new rule fires on.
+        :param conclusion: The conclusion the new rule draws.
+        :return: The newly created condition node.
+        """
+        if self.query is None:
+            self.query = entity(self.case_variable).where(condition)
+            with self.query:
+                add(self.conclusion_variable, conclusion)
+            self.query.build()
+            return self.query._conditions_root_
+        return insert_alternative(
+            self.query._conditions_root_,
+            condition,
+            self.conclusion_variable,
+            conclusion,
+        )
+
+    # %% rules stated outright
+
+    def state_rules(self, rules: Sequence[StatedRule]) -> Self:
+        """
+        Take rules already worked out, in the order they are to be tried.
+
+        Fitting derives a rule from a case, which is what an expert correcting a wrong
+        answer has to offer; an author who already knows the rules has instead to invent
+        a case each one would be derived from. So the rules are taken as they are, and
+        the tree they make is the same tree fitting grows -- a case one of them gets
+        wrong is still corrected by fitting it.
+
+        The first rule whose condition holds is the one that answers, so stating a
+        narrow rule before the general one it overlaps is how the narrow one is
+        preferred.
+
+        :param rules: The rules to state, most specific first.
+        :return: This RDR, for chaining.
+        """
+        with self._saved_when_the_rules_change():
+            for rule in rules:
+                self._add_alternative(rule.condition, rule.conclusion)
+            self._backward_index.invalidate()
+        return self
 
     # %% fitting a dataset
 
@@ -494,7 +535,7 @@ class EQLSingleClassRDR:
         """
         paired_targets = targets if targets is not None else [...] * len(cases)
         self.progress_reporter.start(len(cases), ProgressDescription.FITTING)
-        with self._saved_when_the_fit_ends():
+        with self._saved_when_the_rules_change():
             try:
                 if targets is None:
                     for case, target in zip(cases, paired_targets):
