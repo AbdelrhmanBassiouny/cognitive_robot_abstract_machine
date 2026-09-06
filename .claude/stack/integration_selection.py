@@ -169,7 +169,11 @@ def tips_of(stack: Stack) -> list[Branch]:
     upstream base or ruled out by :func:`select_for_build`.
 
     Order is part of the contract rather than incidental, since it decides *which* tip a
-    conflict skips: ascending pull request number.
+    conflict skips: ascending :class:`~stack.BranchPriority` first - a bug fix, then a
+    tooling change, then everything else - and ascending pull request number breaking
+    ties within a tier. A collision always skips the later tip in that order, so a bug
+    fix or a tooling change is never bumped by a branch that merely happens to carry a
+    lower pull request number.
 
     :param stack: The derived stack.
     :return: The tips, in merge order.
@@ -183,7 +187,7 @@ def tips_of(stack: Stack) -> list[Branch]:
             if branch.name not in claimed_as_parent
             and not stack.has_landed_upstream(branch.name)
         ),
-        key=lambda branch: branch.pull_request_number,
+        key=lambda branch: (stack.priority(branch), branch.pull_request_number),
     )
 
 

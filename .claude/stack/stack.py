@@ -315,6 +315,14 @@ class Configuration:
     would clear this on evidence that says nothing here. Nothing removes it
     automatically."""
 
+    bug_label: str
+    """Fork-PR label marking a branch as fixing a defect, read by :class:`BranchPriority`
+    to decide which of two colliding tips a build keeps."""
+
+    tooling_label: str
+    """Fork-PR label marking a branch as changing the fork's own stack/integration
+    tooling, read by :class:`BranchPriority` alongside :attr:`bug_label`."""
+
     fork_repository: Repository
     """The fork that holds the full stack, as GitHub names it."""
 
@@ -380,6 +388,13 @@ class DefaultLabel(StrEnum):
 
     INTEGRATION_CONFLICT = "integration-conflict"
     """Marks a branch that breaks a sibling it merges cleanly with."""
+
+    BUG = "bug"
+    """Marks a branch as fixing a defect, for :class:`BranchPriority`."""
+
+    TOOLING = "tooling"
+    """Marks a branch as changing the fork's own stack/integration tooling, for
+    :class:`BranchPriority`."""
 
 
 class ConfigurationKey(StrEnum):
@@ -567,6 +582,45 @@ class IntegrationStrategy(StrEnum):
     authorised only by the branch's own rebase label."""
 
 
+class BranchPriority(IntEnum):
+    """How eagerly a build tries to keep a tip when it collides with a rival.
+
+    Ordered so the member's own value sorts a build's merge order: a build merges its
+    tips in ascending :class:`BranchPriority` (bug before tooling before everything
+    else), pull request number breaking ties within a tier - and a collision always
+    skips the *later* tip in that order, per :func:`integration_selection.tips_of`. So
+    a bug fix or a tooling change wins a collision it would otherwise have lost to
+    nothing more meaningful than a lower pull request number.
+    """
+
+    BUG = 0
+    """Fixes a defect - carries the fork's :attr:`Configuration.bug_label`."""
+
+    TOOLING = 1
+    """Changes the fork's own stack/integration tooling - carries the fork's
+    :attr:`Configuration.tooling_label`."""
+
+    ORDINARY = 2
+    """Neither of the above."""
+
+    @classmethod
+    def of(cls, branch: Branch, configuration: Configuration) -> BranchPriority:
+        """Read the priority a branch's own labels claim.
+
+        A branch carrying both labels is read as :attr:`BUG`, the higher of the two -
+        there is no third tier for "both" to occupy.
+
+        :param branch: The branch to classify.
+        :param configuration: The configuration naming the two labels.
+        :return: The priority its labels claim.
+        """
+        if configuration.bug_label in branch.labels:
+            return cls.BUG
+        if configuration.tooling_label in branch.labels:
+            return cls.TOOLING
+        return cls.ORDINARY
+
+
 @dataclass
 class PullRequest:
     """One fork pull request as exported into ``board.json``."""
@@ -657,6 +711,15 @@ class Stack:
         :return: Whether it is blocked.
         """
         return bool(set(self.configuration.blocking_labels).intersection(branch.labels))
+
+    def priority(self, branch: Branch) -> BranchPriority:
+        """The priority a branch's own labels claim, read against this stack's own
+        label names rather than the defaults.
+
+        :param branch: The branch to classify.
+        :return: Its priority.
+        """
+        return BranchPriority.of(branch, self.configuration)
 
     def has_landed_upstream(self, branch_name: str) -> bool:
         """Whether a branch's commits are already in the upstream base.

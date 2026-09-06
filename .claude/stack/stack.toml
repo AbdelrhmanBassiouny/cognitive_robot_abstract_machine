@@ -19,6 +19,11 @@
 #   * integration-conflict = the `integration_conflict_label` on the fork PR (set when a branch is
 #                            found to break a sibling it merges cleanly with; withholds the branch
 #                            the same way, and is never cleared automatically).
+#   * bug / tooling        = the `bug_label` / `tooling_label` on the fork PR, hand-applied. Neither
+#                            blocks anything; both raise a tip's `stack.BranchPriority`, so a build
+#                            merges it ahead of an ordinary branch a collision would otherwise have
+#                            skipped it for - whichever of the two collide, the later one still gives
+#                            way. Bug outranks tooling when a branch somehow carries both.
 
 in_review_label = "in-review"  # fork-PR label marking "promoted to cram2, under review"
 rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
@@ -27,6 +32,8 @@ needs_resolution_label = "needs-resolution"  # set by the routine on a delegated
 # mergeable state that clears `needs_resolution_label` says nothing about it. A separate label keeps
 # the automatic clearing keyed to the case it actually describes; both labels block through one path.
 integration_conflict_label = "integration-conflict"
+bug_label = "bug"              # fork-PR label raising a branch's merge priority; fixes a defect
+tooling_label = "tooling"      # fork-PR label raising a branch's merge priority; changes this tooling
 # fork_repository: deliberately unset - the fork is derived from `fork_remote`'s URL, so this file
 # names nobody's fork. Set it (here or in a personal override) only for a checkout whose fork remote
 # is not the fork. `ROUTINE.md` reads the resolved value rather than naming an owner.

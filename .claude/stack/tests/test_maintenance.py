@@ -121,6 +121,8 @@ def make_configuration() -> Configuration:
         rebase_label="rebase",
         needs_resolution_label="needs-resolution",
         integration_conflict_label="integration-conflict",
+        bug_label="bug",
+        tooling_label="tooling",
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
