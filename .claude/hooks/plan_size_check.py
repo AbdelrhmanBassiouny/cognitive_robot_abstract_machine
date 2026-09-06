@@ -97,7 +97,7 @@ class PlanSizeCheckResult:
             overruns=tuple(str(overrun) for overrun in overruns),
         )
 
-    def to_mapping(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         :return: This result as the mapping this script prints as JSON.
         """
@@ -109,7 +109,7 @@ class PlanSizeCheckResult:
         }
 
     @classmethod
-    def from_mapping(cls, data: dict[str, Any]) -> PlanSizeCheckResult:
+    def from_json(cls, data: dict[str, Any]) -> PlanSizeCheckResult:
         """
         Build a result from this script's own parsed JSON output.
 
@@ -138,7 +138,7 @@ def main() -> int:
     arguments = parser.parse_args()
 
     result = PlanSizeCheckResult.measure(arguments.manifest, arguments.roadmap)
-    print(json.dumps(result.to_mapping()))
+    print(json.dumps(result.to_json()))
     return 0
 
 

@@ -67,7 +67,7 @@ def run_check(
     )
     exit_code = main()
     assert exit_code == 0
-    return PlanSizeCheckResult.from_mapping(json.loads(capsys.readouterr().out))
+    return PlanSizeCheckResult.from_json(json.loads(capsys.readouterr().out))
 
 
 def test_a_plan_within_budget_is_not_full(tmp_path, monkeypatch, capsys):
