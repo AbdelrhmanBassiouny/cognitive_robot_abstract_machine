@@ -12,7 +12,12 @@ from dataclasses import asdict, dataclass
 
 from bastler.integration_constants import ReportKey
 from bastler.integration_exit_codes import IntegrationExitCode
-from bastler.integration_tips import PullRequestStackTipOutcome, ResolutionAuthor, TipStatus
+from bastler.integration_tips import (
+    PullRequestStackTipOutcome,
+    ReadmittedBranch,
+    ResolutionAuthor,
+    TipStatus,
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +51,11 @@ class IntegrationReport:
     Kept apart from :attr:`tips` rather than filed among them: a tip left out is a build
     that did not do what it set out to, and one of these is the build doing exactly what
     it was asked to."""
+
+    readmitted: tuple[ReadmittedBranch, ...] = ()
+    """The branches carried although a label withholds them, because the tree their
+    block was measured in is gone, and that reached the finished branch - so a suite
+    that passed over it is what lifts their label."""
 
     def as_json(self) -> str:
         """:return: The build as one machine-readable document, led by its status."""
@@ -82,6 +92,10 @@ class IntegrationReport:
             left_out=tuple(
                 PullRequestStackTipOutcome.from_json(outcome)
                 for outcome in document[ReportKey.LEFT_OUT]
+            ),
+            readmitted=tuple(
+                ReadmittedBranch.from_json(branch)
+                for branch in document[ReportKey.READMITTED]
             ),
         )
 
@@ -136,6 +150,10 @@ def print_build(report: IntegrationReport) -> None:
     for absent in report.left_out:
         beneath = f"under {absent.attributed_to}" if absent.attributed_to else "itself"
         print(f"{absent.branch}\t{absent.status}\t{beneath}")
+    for carried_again in report.readmitted:
+        print(
+            f"{carried_again.branch}\treadmitted\t#{carried_again.pull_request_number}"
+        )
     if report.tests_passed is not None:
         print(
             f"{report.build_branch}\ttests\t{'passed' if report.tests_passed else 'failed'}"

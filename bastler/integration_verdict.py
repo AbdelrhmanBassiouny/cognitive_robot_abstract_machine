@@ -11,16 +11,69 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any
 
 
-from bastler.maintenance_github import CandidatePullRequests, CheckRunRecord  # noqa: E402
+from bastler.integration_constants import (  # noqa: E402
+    CANDIDATE_TITLE_PREFIX,
+    POINTER_BRANCH,
+)
+from bastler.maintenance_board import PullRequestField  # noqa: E402
+from bastler.maintenance_github import (  # noqa: E402
+    CandidatePullRequests,
+    CheckRunRecord,
+    PullRequestReader,
+)
+from bastler.workflow_document import CALLED_JOB_SEPARATOR, WorkflowFile  # noqa: E402
 
-CANDIDATE_TITLE_PREFIX = "Integration candidate:"
+PIPELINE_WORKFLOWS = (
+    WorkflowFile.INTEGRATION_REFRESH,
+    WorkflowFile.INTEGRATION_PROBE,
+)
 """
-Opens a candidate's title, so one is recognisable among the fork's pull requests.
+The workflows this pipeline runs about its own work rather than about a tree.
+"""
+
+
+@dataclass(frozen=True)
+class CandidateCheckTiming:
+    """
+    How long a candidate's checks took on this fork, measured rather than assumed.
+
+    Recorded once because four separate designs are shaped by it and none of them is
+    arguable without it: no run can outwait its own candidate, so one run opens a
+    candidate and the next settles it; a candidate reporting nothing at all is slow
+    rather than broken until a whole cycle has passed; and a build whose tree has
+    already been seen to pass is worth remembering rather than checking again.
+    """
+
+    soonest_first_check: timedelta
+    """
+    How long the quickest candidate waited before anything was reported against it.
+    """
+
+    slowest_first_check: timedelta
+    """
+    How long the slowest one waited, which is the figure no in-job wait can outlast.
+    """
+
+    matrix_duration: timedelta
+    """
+    How long the matrix itself runs, once GitHub has got round to starting it.
+    """
+
+
+MEASURED_CANDIDATE_CHECK_TIMING = CandidateCheckTiming(
+    soonest_first_check=timedelta(minutes=19),
+    slowest_first_check=timedelta(hours=2, minutes=47),
+    matrix_duration=timedelta(minutes=25),
+)
+"""
+What two candidates and their matrices actually took on this fork.
 """
 
 
@@ -95,6 +148,69 @@ class ChecksVerdict(StrEnum):
     wrong rather than slow: a candidate opened by a credential whose pushes start no
     workflow run sits here forever rather than turning red."""
 
+    @property
+    def has_settled(self) -> bool:
+        """Whether this is the verdict the checks will keep.
+
+        :return: Whether the checks have said everything they are going to.
+        """
+        return self in SETTLED_VERDICTS
+
+
+SETTLED_VERDICTS = frozenset({ChecksVerdict.PASSED, ChecksVerdict.FAILED})
+"""
+The verdicts a candidate is done collecting checks for.
+
+Neither of the other two is: a candidate opened seconds ago has reported nothing yet, so
+reading an absent check as an answer acts on a build nothing has judged.
+"""
+
+
+@dataclass(frozen=True)
+class ChecksAboutTheBuild:
+    """
+    The checks this pipeline reports about its own work.
+
+    A rebuild runs on the branch whose ready-flip asked for it and a probe runs on the
+    reference carrying the pipeline, so both attach checks to a branch they say nothing
+    about: the rebuild's answers for the build it assembled, and a probe's failing is how
+    a localisation finds what it is looking for. Counting either would let the pipeline
+    decide that a branch is unfit to carry because the pipeline itself had a bad run.
+    """
+
+    job_names: tuple[str, ...]
+    """
+    What each of those workflows calls the jobs it reports checks for.
+    """
+
+    @classmethod
+    def read(cls) -> ChecksAboutTheBuild:
+        """
+        Read the names off the workflows that report them.
+
+        A workflow cannot import a constant, so the names are its own to state - and one
+        retyped here would go on matching a job that had since been renamed.
+
+        :return: What the pipeline reports about itself.
+        """
+        return cls(
+            tuple(
+                job.name
+                for workflow in PIPELINE_WORKFLOWS
+                for job in workflow.read().jobs
+            )
+        )
+
+    def reports(self, check_name: str) -> bool:
+        """
+        :param check_name: A check reported against some commit or branch.
+        :return: Whether this pipeline is what reported it.
+        """
+        return any(
+            check_name == name or check_name.startswith(f"{name}{CALLED_JOB_SEPARATOR}")
+            for name in self.job_names
+        )
+
 
 @dataclass(frozen=True)
 class CheckRun:
@@ -145,15 +261,27 @@ class ReportedChecks:
     """
 
     runs: tuple[CheckRun, ...]
-    """The checks, in the order the API reported them."""
+    """The checks that judge the tree, in the order the API reported them."""
 
     @classmethod
     def of(cls, records: list[CheckRunRecord]) -> ReportedChecks:
         """
+        Read what the checks say, leaving out the ones the pipeline reports about its
+        own work: those are about the build rather than about the tree they are attached
+        to, so a rebuild that failed for its own reasons must not make the branch that
+        triggered it unfit to carry.
+
         :param records: The check runs, as the API answers them.
         :return: The checks they make up.
         """
-        return cls(tuple(CheckRun.from_json(record) for record in records))
+        about_the_build = ChecksAboutTheBuild.read()
+        return cls(
+            tuple(
+                CheckRun.from_json(record)
+                for record in records
+                if not about_the_build.reports(str(record[CheckRunField.NAME]))
+            )
+        )
 
     @property
     def failed(self) -> tuple[CheckRun, ...]:
@@ -198,50 +326,164 @@ class Candidate:
     """The commit its checks are reported against."""
 
 
-def candidate_title(build_branch: str) -> str:
-    """
-    :param build_branch: The build to be judged.
-    :return: The candidate's title.
-    """
-    return f"{CANDIDATE_TITLE_PREFIX} {build_branch}"
+NAMED_PLANS_OPENING = " (plans: "
+"""
+What opens the part of a candidate's title naming the plans its build was asked for.
+"""
+
+NAMED_PLANS_CLOSING = ")"
+"""
+What closes it.
+"""
+
+PLAN_NAME_SEPARATOR = ", "
+"""
+What stands between two plan names inside it.
+"""
 
 
-def candidate_description(build_branch: str, base: str) -> str:
+@dataclass(frozen=True)
+class CandidateTitle:
+    """
+    What a candidate is called, which is also what tells the two kinds of candidate
+    apart.
+
+    A build carrying everything in flight is the one a later run settles and publishes;
+    one carrying named plans answers a narrower question and is never published. The
+    title carries that distinction because it is set in the one call that creates the
+    candidate: anything written afterwards is a second call that can fail on its own,
+    and a candidate nothing recognises is one no later run ever settles.
+    """
+
+    build_branch: str
+    """
+    The build being judged.
+    """
+
+    plans: tuple[str, ...] = ()
+    """
+    The plans it was asked to carry, empty when it carries everything in flight.
+    """
+
+    def __str__(self) -> str:
+        """:return: The title the candidate is opened under."""
+        opened = f"{CANDIDATE_TITLE_PREFIX} {self.build_branch}"
+        if not self.plans:
+            return opened
+        named = PLAN_NAME_SEPARATOR.join(self.plans)
+        return f"{opened}{NAMED_PLANS_OPENING}{named}{NAMED_PLANS_CLOSING}"
+
+    @classmethod
+    def read(cls, title: str) -> CandidateTitle | None:
+        """
+        :param title: One open pull request's title.
+        :return: What it says its build was asked to carry, or ``None`` where it is not
+            a candidate's title at all.
+        """
+        if not title.startswith(CANDIDATE_TITLE_PREFIX):
+            return None
+        named = title[len(CANDIDATE_TITLE_PREFIX) :].strip()
+        if not named.endswith(NAMED_PLANS_CLOSING) or NAMED_PLANS_OPENING not in named:
+            return cls(build_branch=named)
+        build_branch, _, plans = named.partition(NAMED_PLANS_OPENING)
+        return cls(
+            build_branch=build_branch,
+            plans=tuple(plans[: -len(NAMED_PLANS_CLOSING)].split(PLAN_NAME_SEPARATOR)),
+        )
+
+    @property
+    def judges_everything_in_flight(self) -> bool:
+        """:return: Whether this is the candidate a later run may publish from."""
+        return not self.plans
+
+
+def candidate_for_everything_in_flight(fork: PullRequestReader) -> Candidate | None:
+    """
+    Find the candidate a later run settles, if one is open.
+
+    Recognised by what its title says it judges rather than by what it is opened
+    against. Every candidate is opened against the base its build was assembled over,
+    because that is the base a build always merges with - so the base is a merge target
+    rather than a discriminator, and one field cannot be both.
+
+    :param fork: The fork to read the open pull requests of.
+    :return: The candidate, or ``None`` when nothing is being judged.
+    """
+    for record in fork.open_pull_requests():
+        number = int(PullRequestField.NUMBER.read(record))
+        title = CandidateTitle.read(PullRequestField.TITLE.read(record, number) or "")
+        if title is None or not title.judges_everything_in_flight:
+            continue
+        return Candidate(
+            number=number,
+            build_branch=PullRequestField.HEAD.read(record, number),
+            head=PullRequestField.HEAD_COMMIT.read(record, number),
+        )
+    return None
+
+
+def candidate_description(
+    build_branch: str, base: str, plans: Sequence[str] = ()
+) -> str:
     """Write what the candidate is for, since a reader meets it as an ordinary pull
     request and it is not one.
 
     :param build_branch: The build to be judged.
-    :param base: The branch the build would replace.
+    :param base: The branch the build is opened against.
+    :param plans: The plans this build was asked to carry, empty when it carries all of
+        them.
     :return: The description.
     """
+    if plans:
+        return (
+            f"Opened so that this repository's own checks run over `{build_branch}`, "
+            f"which is a build of the upstream base plus only the reviewed, unblocked "
+            f"branches belonging to {', '.join(f'`{plan}`' for plan in sorted(plans))}."
+            f"\n\n"
+            f"**Not for review, never merged, and never published.** It exists to answer "
+            f"whether those branches hold together on their own; `{POINTER_BRANCH}` is "
+            f"only ever moved onto a build carrying everything in flight, which is what "
+            f"the plans named in this pull request's own title say this is not."
+        )
     return (
         f"Opened so that this repository's own checks run over `{build_branch}`, which "
         f"is a build of the upstream base plus every reviewed, unblocked branch in "
         f"flight.\n\n"
         f"**Not for review, and never merged.** A build is regenerated from scratch, so "
-        f"it shares no history with `{base}` and there is nothing here to merge: if the "
-        f"checks pass, `{base}` is moved to this commit and this pull request is closed "
-        f"unmerged; if they fail, it is closed and the branches that broke it are the "
-        f"ones to act on."
+        f"it shares no history with `{POINTER_BRANCH}` and there is nothing here to "
+        f"merge: if the checks pass, `{POINTER_BRANCH}` is moved to this commit and "
+        f"this pull request is closed unmerged; if they fail, it is closed and the "
+        f"branches that broke it are the ones to act on.\n\n"
+        f"It is opened against `{base}` rather than against `{POINTER_BRANCH}` because "
+        f"a build is that base plus the merged tips and so merges with it by "
+        f"construction, where `{POINTER_BRANCH}` is an older build of the same branches "
+        f"and conflicts with it - leaving GitHub no merge reference to compute and so no "
+        f"run to create."
     )
 
 
 def open_candidate(
-    fork: CandidatePullRequests, build_branch: str, base: str, head: str
+    fork: CandidatePullRequests,
+    build_branch: str,
+    base: str,
+    head: str,
+    plans: Sequence[str] = (),
 ) -> Candidate:
     """Open the pull request that gets the build judged.
 
     :param fork: The fork to open it on.
     :param build_branch: The build to be judged, already published.
-    :param base: The branch the build would replace.
+    :param base: The branch to open it against.
     :param head: The build's head commit.
+    :param plans: The plans this build was asked to carry, empty when it carries all of
+        them.
     :return: The candidate.
     """
     number = fork.open_pull_request(
-        title=candidate_title(build_branch),
+        title=str(CandidateTitle(build_branch, tuple(plans))),
         head=build_branch,
         base=base,
-        body=candidate_description(build_branch, base),
+        body=candidate_description(build_branch, base, plans),
     )
     return Candidate(number=number, build_branch=build_branch, head=head)
 
@@ -281,6 +523,10 @@ class VerdictReportKey(StrEnum):
     PUBLISHED = "published"
     """Whether the base branch was moved to this build."""
 
+    MISSING_PIPELINE = "missing_pipeline"
+    """The pipeline's own files this build does not carry, which is why it was not
+    published."""
+
 
 @dataclass(frozen=True)
 class VerdictReport:
@@ -297,7 +543,11 @@ class VerdictReport:
     published: bool
     """Whether the base branch was moved to this build."""
 
-    def as_json(self) -> dict[str, Any]:
+    missing_pipeline: tuple[str, ...] = ()
+    """The pipeline's own files this build does not carry, empty when it carries them
+    all."""
+
+    def to_json(self) -> dict[str, Any]:
         """:return: This verdict, keyed the way a reader parses it."""
         return {
             VerdictReportKey.VERDICT: str(self.checks.verdict),
@@ -306,4 +556,5 @@ class VerdictReport:
             VerdictReportKey.HEAD: self.candidate.head,
             VerdictReportKey.FAILED_CHECKS: [run.name for run in self.checks.failed],
             VerdictReportKey.PUBLISHED: self.published,
+            VerdictReportKey.MISSING_PIPELINE: list(self.missing_pipeline),
         }

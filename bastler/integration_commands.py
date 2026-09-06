@@ -12,6 +12,10 @@ from bastler.command_line import commands_of
 
 from bastler.integration_build_commands import BuildCommand  # noqa: F401
 from bastler.integration_candidate_commands import OpenCandidateCommand  # noqa: F401
+from bastler.integration_localisation_commands import (  # noqa: F401
+    LocateCandidateFailureCommand,
+)
+from bastler.integration_pipeline_commands import RefreshCommand  # noqa: F401
 from bastler.integration_resolution_commands import StageConflictCommand  # noqa: F401
 from bastler.integration_run import IntegrationCommand
 
