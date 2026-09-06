@@ -51,6 +51,10 @@ To do the same by hand:
 
 `check-setup.sh` prints one row per check and exits non-zero if anything still needs doing.
 
+Every session start also installs whatever of the dependencies `bastler/pyproject.toml` declares
+is missing, for a clone whose personal-notes branch resolves — reported on its `dependencies:`
+line, never fatal, and described in `bastler/README.md`.
+
 Every session start prints its own summary, so none of the three things below has to be
 remembered. Its `setup:` line runs `check-setup.sh` and names any check that still needs setup;
 its `plan:` line distinguishes *no plans are tracked here* from *plans exist and no item tracks
@@ -152,7 +156,8 @@ Override only what you need:
     config from them, and is a no-op if none are set.
 
 For Claude Code on the web, see <https://code.claude.com/docs/en/claude-code-on-the-web> for where
-either of those lives. [`setup_steps.py`](./setup_steps.py) prints the exact variable lines your
+either of those lives. [`bastler/setup_steps.py`](../../bastler/setup_steps.py), run as
+`python3 -m bastler.setup_steps`, prints the exact variable lines your
 clone needs — only the settings you have moved off their defaults — alongside the other two steps
 no script can perform for you.
 
@@ -181,15 +186,17 @@ the narrative that doesn't belong in structured data.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in_progress` as soon as its plan is approved — via
-  [`plan_item_bootstrap.py`](./plan_item_bootstrap.py), which you can also run by hand — so the
+  [`bastler/plan_item_bootstrap.py`](../../bastler/plan_item_bootstrap.py), which you can also
+  run by hand as `python3 -m bastler.plan_item_bootstrap` — so the
   manifest never says `not_started` while the work is underway.
 - Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope
   check in [`scope-decision.md`](../skills/add-plan-item/scope-decision.md) — the rule all four plan
   skills defer to for "is this new work, or a change to work already in flight?"
 - Choose whether either skill implements on its own, plans first, or asks → `/plan-item-mode
   <auto|plan|ask> [kickoff|resolve|both]`, or the
-  [`plan_item_mode.py`](./plan_item_mode.py) `resolve|set` it calls. Defaults in
-  [`plan-item-modes.toml`](./plan-item-modes.toml) are `auto` for both; `set` pins a per-user
+  [`bastler/plan_item_mode.py`](../../bastler/plan_item_mode.py) `resolve|set` it calls, which you
+  can also run by hand as `python3 -m bastler.plan_item_mode`. Defaults in
+  [`plan-item-modes.toml`](../../bastler/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
   override at `.claude/personal/plan-item-modes.toml` on the notes branch. What each mode obliges
   the skill to do, and when `auto` still stops to ask →
   [`execution-modes.md`](../skills/plan-dashboard/execution-modes.md).
