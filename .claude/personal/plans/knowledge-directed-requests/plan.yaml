@@ -766,7 +766,7 @@ items:
 - id: camera-pose-fitted-to-the-model
   title: Correct where the camera stands by fitting what is seen to what the twin models
   branch: claude/camera-pose-fitted-p2mk7d
-  pull_request_number: null
+  pull_request_number: 286
   track: method-selection
   depends_on:
   - surfaces-found-by-looking
@@ -821,6 +821,30 @@ items:
     and is what keeps a run searching only ground the world described. Combining properly means letting
     the measurement move the model, which is a different contract and is why this is a new finder
     under a new rule rather than a tweak to MeasuredSurfaceFinder.
+
+    Built 2026-09-06 as #286, off the converged #265 (which is where SurfaceFinder, SurfaceRules and
+    MeasuredSurfaceFinder now live). FittedSurfaceFinder joins the rules by one add_rule and edits
+    neither finder already there; BelievedCameraPose in camera.py is where a correction lives between
+    frames, copying #232''s BelievedPlace/BeliefSource shape; CameraTiltedFurtherThanTrusted refuses a
+    turn past LARGEST_TRUSTED_TILT rather than absorbing a wrong model into a pose, and a refused fit
+    believes nothing. Only the tilt is fitted: a horizontal plane fixes which way is up and nothing
+    else, and the height is the half of the model this setup has not drifted away from.
+
+    What it measures, on all six shipped captures: the table is read leaning 1.56 to 1.71 degrees, and
+    turning the camera by what the fit answers leaves it at 1.04 to 1.27. It reduces the lean on every
+    capture and removes it on none. The reason is stated in the code rather than iterated away - the
+    slab that picks a surface''s own points out of the depth image is horizontal, so cut out of a plane
+    that leans it keeps the middle of the lean and neither end, and the plane fitted through it comes
+    back flatter than the one it was cut from; driven to a fixed point on these captures it walks
+    (1.73 -> 0.96 -> 1.60 -> 2.36 degrees, 14 degrees of accumulated turn) rather than settling.
+
+    The finding left for the developer, which is what decides what this item needs next: SURFACE_SCATTER
+    is 17 mm, measured as how far the table''s own points scatter either side of the plane fitted through
+    them, and a 1.7 degree lean across the stretch these captures search displaces the plane by very
+    nearly the same 17 mm. So on this setup the table alone does not separate a leaning plane from a
+    level noisy one - exactly why the notes above say the fit must be told which side is trusted per
+    capture. The second, independent observation is the board''s own outline, and adding it needs the
+    board in the SoughtSurface, which it does not carry today.
 
     '
 - id: demo-asks-by-query

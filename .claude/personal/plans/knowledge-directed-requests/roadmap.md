@@ -258,3 +258,33 @@ configure two ways is a design call and was left for the developer.
 on `surfaces-found-by-looking` (#259) and is blocked on
 `knowledge-directed-grounding`'s `holes-fitted-like-pieces` (#236), and the
 converged branch carries both.
+
+##### `camera-pose-fitted-to-the-model`, and what the table alone cannot say
+
+Built 2026-09-06 as #286, off the converged branch. The item's own `notes` carry the
+mechanism and the numbers; what belongs here is the one measurement that changes what
+the item means next.
+
+`SURFACE_SCATTER` is 17 mm, and it was measured as how far the table's own points
+scatter either side of the plane fitted through them. Fitting a camera pose to that
+table answers a lean of 1.56 to 1.71 degrees on all six shipped captures — and a 1.7
+degree lean across the stretch those captures search displaces the plane by very nearly
+the same 17 mm. The two are the same size. So the quantity the measurement was written
+around as *noise* and the quantity this fit reads as *a pose error* are not separable
+from the table on its own, whatever estimator is used on it.
+
+That is not a defect in the fit; it is the reason the item's notes already gave for
+saying the solve must be told which side is trusted per capture, now with a number on
+it. It also settles what comes next: the board's own outline is the second, independent
+observation — measured every frame with its layout known exactly — and it is what breaks
+the tie. Adding it needs the board in the `SoughtSurface`, which today carries only the
+surface and the frame, so it is a change to what a surface look *is* rather than a
+change inside the finder.
+
+Two smaller things the round left standing, both recorded rather than taken:
+`LARGEST_TRUSTED_TILT` is a bound on how far a fit may turn the camera and its value
+(3 degrees) is deliberately loose — it refuses what cannot be a drifted mount and does
+not arbitrate between a small pose error and a small model error, which is the developer's
+call per setup. And a belief is *the* pose rather than an offset composed with each
+frame's own, which is right for a camera that does not move between captures and would
+need revisiting for one that does.
