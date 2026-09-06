@@ -2,7 +2,11 @@
 Assembling the branch: the upstream base, then each tip in a stated order.
 
 A collision skips its tip and the build continues, because a build that halted on the
-first one would leave nothing to work from.
+first one would leave nothing to work from. A tip can also take something out of the
+tree without leaving anything to conflict on - a relocation branch merges clean and the
+paths it moved are simply gone - so a merge that succeeds is still checked for whether
+it cost the build the pipeline that would rebuild it again, and undone the same way a
+collision is when it did.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from maintenance_restack_procedure import (
     RestackWorktree,
 )
 
+from integration_carried_pipeline import pipeline_carried_by
 from integration_constants import (
     POINTER_BRANCH,
     RERERE_SETTINGS,
@@ -100,18 +105,24 @@ class IntegrationBuild:
         :param already_included: The tips merged so far, oldest first.
         :return: What became of it.
         """
+        before = self.git.commit_at("HEAD")
         result = self.git.merge(self.reference_to(tip.name))
         if result.succeeded:
-            return PullRequestStackTipOutcome(
-                branch=tip.name,
-                pull_request_number=tip.pull_request_number,
-                status=TipStatus.MERGED,
+            return self._settle(
+                tip,
+                already_included,
+                before,
+                PullRequestStackTipOutcome(
+                    branch=tip.name,
+                    pull_request_number=tip.pull_request_number,
+                    status=TipStatus.MERGED,
+                ),
             )
         conflicting_paths = self.git.unmerged_paths()
         if not conflicting_paths and self._replayed_a_resolution(
             result.output, result.error_output
         ):
-            return self._conclude_replay(tip, already_included)
+            return self._conclude_replay(tip, already_included, before)
         self.git.abandon(tip.strategy)
         if not conflicting_paths:
             return PullRequestStackTipOutcome(
@@ -135,22 +146,75 @@ class IntegrationBuild:
         return any(RESOLUTION_REPLAY_MARKER in stream for stream in streams)
 
     def _conclude_replay(
-        self, tip: Branch, already_included: list[str]
+        self, tip: Branch, already_included: list[str], before: str
     ) -> PullRequestStackTipOutcome:
         """
         Commit a merge whose conflicts the replay already resolved.
 
         :param tip: The tip being merged.
         :param already_included: The tips merged so far, oldest first.
+        :param before: The commit the checkout held before this tip was merged.
         :return: The tip's outcome, reported as replayed rather than as clean.
         """
         self.git.conclude_merge().raise_if_failed()
+        return self._settle(
+            tip,
+            already_included,
+            before,
+            PullRequestStackTipOutcome(
+                branch=tip.name,
+                pull_request_number=tip.pull_request_number,
+                status=TipStatus.REPLAYED,
+                attributed_to=self._attribution_for(tip, already_included),
+                resolved_by=self.provenance.author_for(tip.name),
+            ),
+        )
+
+    def _settle(
+        self,
+        tip: Branch,
+        already_included: list[str],
+        before: str,
+        integrated: PullRequestStackTipOutcome,
+    ) -> PullRequestStackTipOutcome:
+        """
+        Accept a merge that reached the tree, unless it took the pipeline out of it.
+
+        A merge can succeed with nothing left to conflict on and still cost the build
+        the rebuild that would produce the next one - a relocation branch moving the
+        pipeline's own files is a clean merge, not a collision, right up until the tree
+        it leaves behind cannot run again. That is undone the same way a collision is:
+        the tip is left out and the build carries on.
+
+        :param tip: The tip just merged.
+        :param already_included: The tips merged so far, oldest first.
+        :param before: The commit the checkout held before this tip was merged.
+        :param integrated: The outcome to report had the pipeline survived.
+        :return: *integrated*, or a skip attributed the same way a collision is.
+        """
+        lost = self._pipeline_paths_lost_since(before)
+        if not lost:
+            return integrated
+        self.git.discard_since(before)
         return PullRequestStackTipOutcome(
             branch=tip.name,
             pull_request_number=tip.pull_request_number,
-            status=TipStatus.REPLAYED,
+            status=TipStatus.SKIPPED,
             attributed_to=self._attribution_for(tip, already_included),
-            resolved_by=self.provenance.author_for(tip.name),
+            conflicting_paths=lost,
+        )
+
+    def _pipeline_paths_lost_since(self, before: str) -> tuple[str, ...]:
+        """
+        :param before: The commit the checkout held before the tip just merged.
+        :return: The pipeline paths the merge took out of the tree, which were held at
+            *before* and are missing from the checkout now.
+        """
+        missing_before = set(pipeline_carried_by(self.git, before).missing)
+        return tuple(
+            path
+            for path in pipeline_carried_by(self.git, "HEAD").missing
+            if path not in missing_before
         )
 
     def _attribution_for(self, tip: Branch, already_included: list[str]) -> str:
