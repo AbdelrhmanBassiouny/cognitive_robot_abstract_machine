@@ -102,7 +102,7 @@ jobs:
         with:
           # A `pull_request` run checks out that pull request's merge reference, so
           # taking the reference the run was started on would run whatever
-          # integration.py the triggering branch carries, against a token that can
+          # integration module the triggering branch carries, against a token that can
           # write. The rebuild is never about the branch that triggered it.
           #
           # Every other trigger keeps that reference, and it is what makes a change to
@@ -125,7 +125,7 @@ jobs:
       - name: Install the tooling dependencies
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install pytest -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
+          pip install pytest "./${BASTLER_PACKAGE_DIRECTORY}"
 
       # A pull request's run is pinned to the default branch, and that branch is the one
       # this pipeline publishes: it only moves when a build goes green, so it lags every
@@ -139,7 +139,7 @@ jobs:
         continue-on-error: true
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          python "${STACK_DIRECTORY}/integration.py" refresh --help > /dev/null
+          python -m "${INTEGRATION_MODULE}" refresh --help > /dev/null
 
       - name: Say that the published pipeline is too old to rebuild
         if: steps.published_pipeline.outcome != 'success'
@@ -165,6 +165,6 @@ jobs:
           PLANS: ${{ inputs.plans }}
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          python "${STACK_DIRECTORY}/integration.py" refresh \
+          python -m "${INTEGRATION_MODULE}" refresh \
             --dispatch-on "${PIPELINE_REFERENCE}" \
             ${PLANS:+--plan "${PLANS}"}
