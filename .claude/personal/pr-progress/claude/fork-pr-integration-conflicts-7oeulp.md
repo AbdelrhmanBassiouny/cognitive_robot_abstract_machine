@@ -2,7 +2,19 @@ PR #282 (draft), base `claude/plan-item-kickoff-workflow-unification-wg4w4x` (PR
 head - this is NOT a main-based PR; .claude/stack/integration_*.py does not exist on
 main at all, it's unlanded tooling built across the plan-item-kickoff-workflow-* stack).
 
-Status: DONE, pushed, PR opened as draft. Nothing outstanding from this session.
+Status: DONE, pushed, PR opened as draft. One red check, NOT this PR's - see below.
+Nothing else outstanding from this session.
+
+CI: "Rebuild the integration branch and publish it if it is green" (integration-refresh.yml)
+is red, but it's pre-existing and unrelated - fails identically on scheduled `integration`
+runs from before this PR existed and on unrelated PRs (#281, #260), same error every time:
+`.claude/stack/integration.py: No such file or directory` after refresh's restack step
+checks branches out directly in the pipeline's own working directory (no worktree) and
+never restores it to one carrying `.claude/stack/`. An open fix exists (#158, "Pin the
+stack tooling for the length of a maintenance pass") but its own CI is red and it sits on
+an unrelated, unstacked branch, so I did not port it in unilaterally - posted a diagnosis
+comment on #282 instead: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/282#issuecomment-5558055687
+This PR's own suite (test_claude_dev_tooling, every test_each_lib job) is green.
 
 What it does:
 - Links the branch a semantic break is against in the existing "breaks another branch"
