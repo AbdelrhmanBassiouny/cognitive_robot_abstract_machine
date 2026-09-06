@@ -61,7 +61,7 @@ jobs:
         with:
           # A `pull_request` run checks out that pull request's merge reference, so
           # taking the reference the run was started on would run whatever
-          # integration.py the triggering branch carries, against a token that can
+          # integration module the triggering branch carries, against a token that can
           # write. The rebuild is never about the branch that triggered it.
           #
           # Every other trigger keeps that reference, and it is what makes a change to
@@ -84,14 +84,14 @@ jobs:
       - name: Install the tooling dependencies
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install pytest -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
+          pip install pytest "./${BASTLER_PACKAGE_DIRECTORY}"
 
       - name: Add the upstream the build is based on
         env:
           GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          eval "$(python "${STACK_DIRECTORY}/stack.py" configuration \
+          eval "$(python -m "${STACK_MODULE}" configuration \
             | awk -F'\t' '$1 == "upstream_setup_command" { print $2 }')"
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
@@ -101,7 +101,7 @@ jobs:
           GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          python "${STACK_DIRECTORY}/maintenance.py" fast-forward
+          python -m "${MAINTENANCE_MODULE}" fast-forward
 
       # The suite runs here rather than being left to the candidate, even though the
       # candidate's own checks include it. A build the tooling suite rejects is one
@@ -117,7 +117,7 @@ jobs:
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
           set +e
-          python "${STACK_DIRECTORY}/integration.py" build --restack \
+          python -m "${INTEGRATION_MODULE}" build --restack \
             --json > "${RUNNER_TEMP}/build.json"
           status=$?
           set -e
@@ -130,7 +130,7 @@ jobs:
           # localises it to the tip that turned the suite and blocks that branch, so the
           # next run leaves it out and builds cleanly without it.
           if [ $status -eq 11 ]; then
-            python "${STACK_DIRECTORY}/integration.py" block-branch --json
+            python -m "${INTEGRATION_MODULE}" block-branch --json
           fi
           # The job still fails on anything but a build: the branch did not move, and
           # that is what a red run in the Actions list is telling somebody. Blocking the
@@ -144,7 +144,7 @@ jobs:
           GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          python "${STACK_DIRECTORY}/integration.py" open-candidate \
+          python -m "${INTEGRATION_MODULE}" open-candidate \
             --build "${{ steps.build.outputs.branch }}" --json \
             > "${RUNNER_TEMP}/candidate.json"
           python - <<'READ' >> "$GITHUB_OUTPUT"
@@ -163,7 +163,7 @@ jobs:
           # inside it, so a caller that does not want to wait need not.
           for _ in $(seq 60); do
             set +e
-            python "${STACK_DIRECTORY}/integration.py" settle-candidate \
+            python -m "${INTEGRATION_MODULE}" settle-candidate \
               --candidate "${{ steps.candidate.outputs.number }}" \
               --build "${{ steps.build.outputs.branch }}" \
               --head "${{ steps.candidate.outputs.head }}" --json
