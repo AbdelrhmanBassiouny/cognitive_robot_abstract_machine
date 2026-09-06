@@ -37,13 +37,21 @@ resolved — commit `26570adb7`:
   and derives it (`Path(plan_size_check.__file__).name`).
 - Result dict used bare string keys (`is_full`, `overruns`, ...) → added
   `PlanSizeCheckField` (`StrEnum`) and `PlanSizeCheckResult` (dataclass with
-  `measure`/`to_mapping`/`from_mapping`); test now asserts on typed
-  attributes.
+  `measure`/`to_mapping`/`from_mapping`, later renamed — see round 2); test
+  now asserts on typed attributes.
 - `/add-plan-item` step 5's closing sentence read as if "has room" were the
   only gate → made explicit that a covering plan must fit both ways, topic
   *and* room, before falling through to a new plan.
 
 Full `.claude/hooks/tests` suite still green (211 passed) after the fixes.
+
+### Review round 2 (2026-09-06)
+
+Two more inline comments, both naming conventions — `to_mapping`/`from_mapping`
+should be `to_json`/`from_json` to match this codebase's convention for a
+hand-written JSON round trip. Renamed both, updated the one call site in
+`main()` and the one in the test. Commit `9b54f5bd2`, both threads replied to
+and resolved. Full suite still green (211 passed).
 
 ### Next
 
