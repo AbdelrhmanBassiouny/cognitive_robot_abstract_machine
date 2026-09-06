@@ -537,6 +537,13 @@ EXECUTION_MODES_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/execution-modes.md"
 # situation needs, instead of each carrying its own copy.
 PLAN_ITEM_GATHERING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-item-gathering.md"
 
+# ROADMAP_WRITING_DOCUMENT: the shared "what belongs in a roadmap.md section,
+# and what to compress instead" rule - referenced by every skill that adds
+# text to a plan's roadmap (plan-create, plan-item-kickoff, plan-item-resolve,
+# add-plan-item) instead of each restating it, and each writing against its
+# own idea of how much detail to keep.
+ROADMAP_WRITING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/roadmap-writing.md"
+
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
 # MCP tools every pr_data.json-gathering procedure in this system calls
 # (see pr-data-fetching.md), named once here so every doc references the
