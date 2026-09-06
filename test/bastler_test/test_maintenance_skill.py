@@ -98,7 +98,7 @@ def test_the_skill_restores_the_tooling_without_writing_the_index():
 
 def test_the_skill_runs_nothing_from_the_working_tree_once_the_tool_is_pinned():
     """
-    A pass switches branches in the checkout it runs from, so every command it runs
+    A pass switches branches in the checkout it runs from, so every command it runs.
 
     after step 0 must name the pinned copy. Only the two commands that pin - resolving
     which repositories the pass runs on, and the pinning itself - may still come from
