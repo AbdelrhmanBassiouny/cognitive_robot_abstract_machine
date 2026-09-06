@@ -207,11 +207,12 @@ items:
 
   - id: minimal-roadmap-writing
     title: "Write roadmap sections against the budget, not against completeness"
-    branch: null
-    pull_request_number: null
+    branch: claude/plan-size-limits-minimal-roadmap-n3qz8f
+    pull_request_number: 279
     track: gate-and-skills
     depends_on: [size-budget-and-report]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01CqcnoLDrWd3RHWepDqDsWz
     notes: >
       plan-create/SKILL.md currently instructs the opposite - "preserve its detail
       rather than compressing it away" - and plan-item-kickoff and
