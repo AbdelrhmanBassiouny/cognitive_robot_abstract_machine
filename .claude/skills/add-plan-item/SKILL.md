@@ -106,8 +106,11 @@ item's own size isn't known yet, and a plan already at the limit has no room
 regardless of how small the addition would be.
 
 Check every covering plan this way before ruling out **New item in an
-existing plan** entirely; only when none has room does the outcome fall
-through to **New plan**.
+existing plan** entirely — a plan qualifies only if it fits both ways, topic
+*and* room; a full plan is disqualified even if its `description` fits, and a
+plan with room is never a candidate if its `description` doesn't cover the
+work in the first place. Only when no plan satisfies both does the outcome
+fall through to **New plan**.
 
 ## 6. Choose exactly one outcome
 
