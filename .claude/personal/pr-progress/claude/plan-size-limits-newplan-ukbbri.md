@@ -28,7 +28,24 @@ suite green (211 passed). Both skill docs stay generic — no plan id
 hardcoded in either, per their own "plan-agnostic" rule. PR #277 opened as
 draft, description updated to match, dashboard republished.
 
+### Review round 1 (2026-09-06)
+
+Three inline comments from the author, all addressed and replied to, threads
+resolved — commit `26570adb7`:
+
+- Test hardcoded `"plan_size_check.py"` as `argv[0]` → now imports the module
+  and derives it (`Path(plan_size_check.__file__).name`).
+- Result dict used bare string keys (`is_full`, `overruns`, ...) → added
+  `PlanSizeCheckField` (`StrEnum`) and `PlanSizeCheckResult` (dataclass with
+  `measure`/`to_mapping`/`from_mapping`); test now asserts on typed
+  attributes.
+- `/add-plan-item` step 5's closing sentence read as if "has room" were the
+  only gate → made explicit that a covering plan must fit both ways, topic
+  *and* room, before falling through to a new plan.
+
+Full `.claude/hooks/tests` suite still green (211 passed) after the fixes.
+
 ### Next
 
-Nothing outstanding. Ready for review — I'll flip it out of draft myself
-when I've read it.
+Nothing outstanding. CI hadn't reported yet as of the last push. Ready for
+review — I'll flip it out of draft myself when I've read it.
