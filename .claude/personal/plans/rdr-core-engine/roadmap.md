@@ -234,3 +234,23 @@ inherits them rather than rediscovering them.
 - Subscribing to tracking issue #94 has been refused by the permission
   classifier in every container that has tried it, nine times. A skill relying
   on it for concurrent-change awareness should assume it will not work.
+
+## The ICRA convergence pass, 2026-09-06
+
+The in-flight core items are now carried by one branch, through the `rdr-interface-and-decorator` tip `D-deco` (#77) that stacks on them: #64, #65, #66, #67, #98, #159 and #210.
+
+The pass merged every one of them into the ICRA integration branch (#265,
+`claude/icra-experiments-simulation-pipeline-w4ep7n`) rather than into each other,
+so each conflict set was resolved once. Each item keeps its own branch and pull
+request and its own status here; what changed is that its work now also stands on a
+tree with everything else, which is what the ICRA experiments run on.
+
+Merge order, resolutions, the duplication removed and the two collisions git could
+not flag are recorded once, in `icra-foundation`'s `roadmap.md` under *The
+convergence pass, 2026-09-06*. Read it there rather than re-deriving it here.
+
+The standing exclusion that kept this stack off the ICRA branch - "the rest of #239
+is 177 commits of the RDR stack and stays out" - is reversed at the developer's
+direction. Two of this stack's own reads of the entity query language needed
+migrating in the same pass, since #192 landed beside it: `rdr/backend.py` and
+`rdr/underspecified.py` both read `Match.variable` and `Match.type`.
