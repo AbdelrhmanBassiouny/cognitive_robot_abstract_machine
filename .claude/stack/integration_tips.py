@@ -82,6 +82,13 @@ class TipStatus(StrEnum):
     tried to merge it. Reported apart from :attr:`BLOCKED` because nobody labelled it:
     what lets it back in is its checks going green, not a label coming off."""
 
+    NOT_A_TOOLING_CHANGE = TipStatusSpecification(
+        "not-a-tooling-change", integrated=False
+    )
+    """This build was asked for the tooling and the branch changes something else, or
+    stands on one that does. Nothing is wrong with it; it is simply not what was asked
+    for."""
+
 
 # %% who resolved the conflict that let it in
 

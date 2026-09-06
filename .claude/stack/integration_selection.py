@@ -29,6 +29,7 @@ from integration_verdict import (
 from integration_constants import BUILD_NAME_FORMAT, POINTER_BRANCH
 from integration_run import IntegrationRun
 from integration_tips import PullRequestStackTipOutcome, TipStatus
+from integration_tooling import ToolingFilter
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,9 @@ class BuildSelection:
     """
 
 
-def select_for_build(stack: Stack) -> BuildSelection:
+def select_for_build(
+    stack: Stack, tooling: ToolingFilter | None = None
+) -> BuildSelection:
     """
     Split the stack into the work a build may integrate and the work it may not.
 
@@ -64,14 +67,20 @@ def select_for_build(stack: Stack) -> BuildSelection:
     A label that withholds a branch and a branch whose own checks failed hold their
     dependents out the same way, and for the same reason.
 
+    A build asked for the tooling holds a branch out the same way again, so what this
+    workflow runs on can be judged without the software it sits beside.
+
     A branch is read as red only from a *finished* failure, never from want of a pass: a
     restack rewrites every stale tip's head, so requiring green would empty the build
     whenever one ran.
 
     :param stack: The derived stack, its branches carrying whatever
         :func:`branches_annotated_with_their_own_checks` last read.
+    :param tooling: Whether this build was asked for the tooling alone, or ``None`` for
+        a build carrying everything.
     :return: The integrated branches and the ones left out.
     """
+    filtering = tooling or ToolingFilter.unfiltered()
     in_the_stack = {branch.name for branch in stack.branches}
     integrated: list[Branch] = []
     integrated_names: set[str] = set()
@@ -85,10 +94,12 @@ def select_for_build(stack: Stack) -> BuildSelection:
         )
         blocked = stack.is_blocked(branch)
         red = branch.ci == ChecksVerdict.FAILED
+        outside_the_tooling = filtering.leaves_out(branch)
         carried = (
             branch.status.is_out_of_draft
             and not blocked
             and not red
+            and outside_the_tooling is None
             and stands_on_integrated_work
         )
         if carried:
@@ -101,6 +112,8 @@ def select_for_build(stack: Stack) -> BuildSelection:
             reason = (TipStatus.CHECKS_FAILED, branch.name)
         elif not branch.status.is_out_of_draft:
             reason = (TipStatus.UNREVIEWED, branch.name)
+        elif outside_the_tooling is not None:
+            reason = (outside_the_tooling, branch.name)
         else:
             reason = reasons.get(branch.parent, (TipStatus.UNREVIEWED, branch.parent))
         reasons[branch.name] = reason
@@ -160,7 +173,7 @@ def stack_to_build(
     return branches_annotated_with_their_own_checks(run.stack(fork), fork)
 
 
-def tips_of(stack: Stack) -> list[Branch]:
+def tips_of(stack: Stack, tooling: ToolingFilter | None = None) -> list[Branch]:
     """
     The branches to merge, in the order they are merged.
 
@@ -176,9 +189,11 @@ def tips_of(stack: Stack) -> list[Branch]:
     lower pull request number.
 
     :param stack: The derived stack.
+    :param tooling: Whether this build was asked for the tooling alone, or ``None`` for
+        a build carrying everything.
     :return: The tips, in merge order.
     """
-    integrated = select_for_build(stack).integrated
+    integrated = select_for_build(stack, tooling).integrated
     claimed_as_parent = {branch.parent for branch in integrated}
     return sorted(
         (

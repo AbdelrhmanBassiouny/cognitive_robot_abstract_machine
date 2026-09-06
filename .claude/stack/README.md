@@ -100,7 +100,9 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   each time. It writes to no branch and pushes nothing.
   - `python .claude/stack/integration.py build` - assemble it, then run the suite on the result.
     `--restack` brings stale tips forward first, which pushes to other people's branches and is
-    why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document.
+    why it is opt-in; `--no-test` skips the suite; `--tooling` carries only the tips labelled a
+    change to this workflow's own tooling, so the machinery can be rebuilt out of the branches in
+    flight without the software beside it; `--json` emits the whole build as one document.
   - `python .claude/stack/integration.py locate-failure` - when the branch builds and the suite fails on
     it, add the tips back one at a time until it turns, and name the pair. A semantic collision
     leaves no conflict to attribute, so there is nothing else to go on.
@@ -177,10 +179,11 @@ The labels are the ones a maintenance pass writes, so run `build --restack` and 
 verdict decides what the build carries; a build reads the stack again afterwards, since the restack
 is what writes those labels.
 
-Everything left out is named in the report - as `blocked` or `unreviewed`, distinct from a tip the
-build tried to integrate and could not - so a build that integrated nine branches out of nineteen
-says which nine and why, rather than saying so only by omission. Leaving either out is the rule
-working, so it is not a failing build and does not change the exit status.
+Everything left out is named in the report - as `blocked`, `unreviewed` or, on a `--tooling` build,
+`not-a-tooling-change`, each distinct from a tip the build tried to integrate and could not - so a
+build that integrated nine branches out of nineteen says which nine and why, rather than saying so
+only by omission. Leaving any of them out is the rule working, so it is not a failing build and does
+not change the exit status.
 
 Two branches can also merge perfectly and still not work together - one removing what another's
 test imports, one adding a dependency another's fixture does not provide. No per-branch check can
