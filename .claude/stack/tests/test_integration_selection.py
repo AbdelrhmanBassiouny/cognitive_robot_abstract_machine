@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 
-from git_commands import ReferenceUpdate
+from git_commands import GitCommandResult, ReferenceUpdate
 
 import pytest
 
@@ -569,6 +569,15 @@ class GitWithOneBranchPublished:
             return f"{self.head}\t{recorded.reference}"
         self.pushes.append(arguments)
         return ""
+
+    def attempt(self, *arguments: str) -> GitCommandResult:
+        """:param arguments: What git was asked to do.
+        :return: The command, having succeeded - this fork accepts what is written to
+            it."""
+        self.run(*arguments)
+        return GitCommandResult(
+            arguments=arguments, exit_status=0, output="", error_output=""
+        )
 
 
 def test_a_branch_head_already_recorded_as_passing_is_not_asked_about_again():
