@@ -1098,7 +1098,50 @@ class DependencyChip:
 
 
 @dataclass(frozen=True)
-class ItemAction(ABC):
+class CopyableCommand(ABC):
+    """A dashboard button that copies a slash command to the clipboard.
+
+    A published page cannot start a session itself, so every button the
+    dashboard offers hands the user the command to paste into one instead.
+    Declares the two things the template's button markup reads, so the same
+    markup renders an item's action and the page-level refresh alike."""
+
+    label: str
+    """The button's text, e.g. ``"Start now"`` or ``"Refresh"``."""
+
+    plan_id: str
+    """The plan this command targets."""
+
+    skill_command_name: ClassVar[str]
+    """The skill this command invokes - fixed per subclass, since which
+    skill a button routes to never varies per instance (only :attr:`label`
+    does, e.g. ``"Resolve"`` vs. ``"Resume"`` for the same
+    :class:`ResolveAction`)."""
+
+    @property
+    @abstractmethod
+    def command(self) -> str:
+        """The full command copied to the clipboard when the button is
+        clicked."""
+
+
+@dataclass(frozen=True)
+class RefreshDashboardAction(CopyableCommand):
+    """The masthead button that re-runs this plan's own dashboard.
+
+    The published page is a snapshot: only a session re-running
+    ``/plan-dashboard`` republishes it against live GitHub state, so the
+    page's own way of offering that is the command to paste into one."""
+
+    skill_command_name: ClassVar[str] = "/plan-dashboard"
+
+    @property
+    def command(self) -> str:
+        return f"{self.skill_command_name} {self.plan_id}"
+
+
+@dataclass(frozen=True)
+class ItemAction(CopyableCommand):
     """One not-done item's actionable dashboard button - see
     :attr:`Item.action`. The label matches what the status actually calls
     for (starting fresh work reads differently from resolving a blocker),
@@ -1110,25 +1153,11 @@ class ItemAction(ABC):
     skill instead. Not instantiated directly - see :class:`StartNowAction`/
     :class:`ResolveAction`."""
 
-    label: str
-    """The button's text, e.g. ``"Start now"`` or ``"Resolve"``."""
-
-    plan_id: str
-    """The plan this action's command targets."""
-
     item_identifier: str
     """The item this action's command targets."""
 
-    skill_command_name: ClassVar[str]
-    """The ``/plan-item-...`` skill this action invokes - fixed per
-    subclass, since which skill an action routes to never varies per
-    instance (only :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"``
-    for the same :class:`ResolveAction`)."""
-
     @property
     def command(self) -> str:
-        """The full command copied to the clipboard when the button is
-        clicked."""
         return f"{self.skill_command_name} {self.plan_id} {self.item_identifier}"
 
 
@@ -1871,6 +1900,9 @@ class DashboardRenderer:
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
             available_models=AVAILABLE_MODELS,
+            refresh_action=RefreshDashboardAction(
+                label="Refresh", plan_id=self.plan.id
+            ),
         )
 
         summary = DashboardSummary(

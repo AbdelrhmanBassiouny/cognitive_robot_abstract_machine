@@ -179,7 +179,10 @@ not-started once every dependency is ready, "Resolve"/"Resume"/"Reconsider"
 (`plan-item-resolve`) for blocked/in-progress/deferred respectively — plus
 a model dropdown beside it; a page can't spawn a session itself, so these
 are copy-to-clipboard affordances (the dropdown's choice is prepended as a
-`/model <id>` line ahead of the skill command), not live triggers. An item
+`/model <id>` line ahead of the skill command), not live triggers. The
+masthead carries the same affordance for the page as a whole: a "Refresh"
+button copying `/plan-dashboard <plan-id>`, since a published page is a
+snapshot and only a session re-running this skill can rebuild it. An item
 whose PR is open and still a draft also gets a "Review" button linking
 straight to the PR on GitHub — this plan's convention keeps every PR in
 draft until its own author has reviewed it, so a draft PR is exactly the
