@@ -3,12 +3,13 @@ Recognise a loose piece by laying the pieces this set is known to contain over t
 the camera saw, and keeping the one that follows them best.
 
 Rather than measuring proportions of an outline and deciding from thresholds what shape
-they suggest (which is how the holes in the board's lid are still read, see
-:class:`~experiments.montessori.perception.footprint.CrossSectionClassifier`), each known
-piece is placed and turned until its own outline lies along the edges in the picture. The
-set is small and every piece in it has been measured, so the question is not *what shape
-is this* but *which of these four is it, where, and how is it turned* -- a question with
-a far narrower answer, and one whose answer carries how well it fitted.
+they suggest, each known piece is placed and turned until its own outline lies along the
+edges in the picture. The set is small and every piece in it has been measured, so the
+question is not *what shape is this* but *which of these four is it, where, and how is it
+turned* -- a question with a far narrower answer, and one whose answer carries how well
+it fitted. The board's own holes are recognised the same way, as one rigid layout (see
+:class:`~experiments.montessori.hole_geometry.BoardHoleLayout`), so the sweep itself
+lives in :mod:`~experiments.montessori.perception.outline_fit` and is shared.
 
 Fitting to edges rather than to a segmented colour is what lets a piece be recognised on
 a mirror-finish table (see
@@ -20,15 +21,14 @@ known piece follows instead of reporting whichever threshold it happened to fall
 
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-import numpy as np
-from typing_extensions import List, Optional, Sequence
+from typing_extensions import Optional
 
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.hypotheses import PieceHypothesis
-from experiments.montessori.pieces import KnownPiece, points_along
+from experiments.montessori.perception.outline_fit import OutlineFitter
+from experiments.montessori.pieces import KnownPiece
 from experiments.montessori.planar_geometry import PlanarPoint
 
 # %% what a fit came to
@@ -73,13 +73,8 @@ class MatchedPiece:
 @dataclass(frozen=True)
 class PieceMatcher:
     """
-    Recognises the piece standing at a believed place.
-
-    The search runs twice: once coarsely and forgivingly, over everything the belief
-    allows, and once finely around the placement that came back, to settle its position
-    and its turn. How far the coarse search reaches, which turns it tries and which
-    pieces it tries there are all read from the belief, so a place known closely costs a
-    fraction of what an unguided pass over the same surface costs.
+    Recognises the piece standing at a believed place, by fitting each piece the belief
+    allows and keeping whichever followed the edges best.
     """
 
     minimum_agreement: float = 0.62
@@ -92,48 +87,9 @@ class PieceMatcher:
     sits at that boundary, so a piece is refused rather than reported as its neighbour.
     """
 
-    coarse_step: float = 0.003
+    fitter: OutlineFitter = field(default_factory=OutlineFitter)
     """
-    How far apart, in metres, the placements of the first search stand.
-    """
-
-    step: float = 0.001
-    """
-    How far apart, in metres, the placements of the second search stand, matching the
-    rectified image's own resolution.
-    """
-
-    coarse_angle_step: float = math.radians(6.0)
-    """
-    How finely a piece is turned in the first search, in radians.
-    """
-
-    angle_step: float = math.radians(2.0)
-    """
-    How finely a piece is turned in the second search, in radians.
-
-    Two degrees moves the far corner of the largest piece here by under a millimetre, so
-    a finer sweep would be answering below the resolution the edges were found at.
-    """
-
-    coarse_reach: float = 0.008
-    """
-    How far, in metres, an edge may lie from an outline and still count in the first
-    search.
-
-    Wide on purpose: the first search only has to find which placement to look around,
-    and a reach narrower than the step it walks in would step over the answer.
-    """
-
-    reach: float = 0.003
-    """
-    How far, in metres, an edge may lie from an outline and still count in the second
-    search.
-    """
-
-    outline_spacing: float = 0.002
-    """
-    How far apart, in metres, the points an outline is compared to the picture at stand.
+    Places and turns one piece over the edges.
     """
 
     def match(
@@ -169,101 +125,16 @@ class PieceMatcher:
         :param hypothesis: What is believed about where it stands.
         :return: The best placement this piece reaches.
         """
-        coarse = self._sweep(
+        placement = self.fitter.fit(
             piece,
             edges,
-            hypothesis.place.center,
-            hypothesis.turns_of(piece, self.coarse_angle_step),
-            hypothesis.place.radius,
-            self.coarse_step,
-            self.coarse_reach,
+            center=hypothesis.place.center,
+            radius=hypothesis.place.radius,
+            angles=hypothesis.turns_of(piece, self.fitter.coarse_angle_step),
         )
-        return self._sweep(
-            piece,
-            edges,
-            coarse.center,
-            self._turns_around(piece, coarse.yaw),
-            self.coarse_step,
-            self.step,
-            self.reach,
-        )
-
-    def _sweep(
-        self,
-        piece: KnownPiece,
-        edges: EdgeDistances,
-        center: PlanarPoint,
-        angles: Sequence[float],
-        radius: float,
-        step: float,
-        reach: float,
-    ) -> MatchedPiece:
-        """
-        Try one piece at every placement of a grid of positions and turns.
-
-        :param piece: The piece to place.
-        :param edges: The edges seen in the plane its top face stands on.
-        :param center: Where on the plane the grid is centred.
-        :param angles: The turns to try, in radians.
-        :param radius: How far, in metres, the grid reaches from its centre.
-        :param step: How far apart, in metres, the grid's positions stand.
-        :param reach: How far an edge may lie from the outline and still count.
-        :return: The best placement.
-        """
-        walk = np.arange(-radius, radius + step / 2, step)
-        positions = np.stack(np.meshgrid(walk, walk, indexing="ij"), axis=-1).reshape(
-            -1, 2
-        ) + np.array([center.x, center.y])
-        return max(
-            (
-                self._best_position(piece, edges, positions, angle, reach)
-                for angle in angles
-            ),
-            key=lambda fit: fit.outline_agreement,
-        )
-
-    def _best_position(
-        self,
-        piece: KnownPiece,
-        edges: EdgeDistances,
-        positions: np.ndarray,
-        angle: float,
-        reach: float,
-    ) -> MatchedPiece:
-        """
-        Where a piece turned to one angle follows the edges best.
-
-        :param piece: The piece to place.
-        :param edges: The edges seen in the plane its top face stands on.
-        :param positions: The world-frame ``(n, 2)`` positions to try it at.
-        :param angle: The turn to try it at, in radians.
-        :param reach: How far an edge may lie from the outline and still count.
-        :return: The best of those positions.
-        """
-        outline = points_along(piece.turned_outline(angle), self.outline_spacing)
-        agreements = edges.agreement(outline[None, :, :] + positions[:, None, :], reach)
-        best = int(np.argmax(agreements))
         return MatchedPiece(
             piece=piece,
-            center=PlanarPoint(
-                x=float(positions[best][0]), y=float(positions[best][1])
-            ),
-            yaw=piece.smallest_equivalent_turn(angle),
-            outline_agreement=float(agreements[best]),
+            center=placement.center,
+            yaw=placement.yaw,
+            outline_agreement=placement.outline_agreement,
         )
-
-    def _turns_around(self, piece: KnownPiece, angle: float) -> List[float]:
-        """
-        The turns worth trying either side of one the coarse search settled on, which
-        reach a full coarse step in both directions.
-
-        Refining a turn the coarse sweep already chose from what the belief allowed,
-        rather than a second reading of the belief itself.
-
-        :param piece: The piece to turn.
-        :param angle: The turn to search around, in radians.
-        """
-        if piece.rotation_period is None:
-            return [0.0]
-        steps = int(round(self.coarse_angle_step / self.angle_step))
-        return list(angle + np.arange(-steps, steps + 1) * self.angle_step)

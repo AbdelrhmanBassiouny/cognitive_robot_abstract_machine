@@ -14,8 +14,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from experiments.montessori.hole_geometry import BoardHoleLayout
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
-from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.pipeline import (
+    BoardDetector,
+    MontessoriPerceptionPipeline,
+)
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -41,6 +45,24 @@ The whole stretch of that table the camera looks over, and the widest a run may 
 A workspace tuned for this setup is cut out of this one, so an edge brought in by
 :mod:`~experiments.montessori.perception.tune_workspace` can always be pushed back out
 to where it started.
+"""
+
+BOARD_SCALE_AGAINST_THE_MESH = 0.865
+"""
+How large the shape-sorting board on this table is, against ``resources/board.stl``.
+
+The mesh is not cut to the size of the board these recordings hold: laid over the lid at
+its own size, its holes miss the openings actually seen by about nineteen millimetres,
+and no plane the board could be rectified onto brings them together. Fitted at this size
+they land two to three millimetres from them, which is what
+:meth:`~experiments.montessori.perception.pipeline.BoardDetector.measure_scale` answers
+on each of the six shipped captures -- 0.82, 0.84, 0.86, 0.87, 0.90 and 0.92, whose
+middle this is. Measuring the board itself would settle it more tightly than six looks
+from one angle can.
+
+Stated here rather than on the detector because it is knowledge about a particular
+board, not about how a board is looked for: a scene built from the mesh is the mesh's
+own size, and reads one.
 """
 
 TUNED_WORKSPACE_FILE = (
@@ -86,8 +108,20 @@ def lid_surface() -> WorkspaceSurface:
     )
 
 
+def board_detector() -> BoardDetector:
+    """
+    :return: The detector that looks for the board this setup holds, at the size that
+        board was measured to be.
+    """
+    return BoardDetector(
+        layout=BoardHoleLayout.of_board_mesh(BOARD_SCALE_AGAINST_THE_MESH)
+    )
+
+
 def perception_pipeline() -> MontessoriPerceptionPipeline:
     """
     :return: The pipeline that reads a recording of this setup.
     """
-    return MontessoriPerceptionPipeline(table=table_surface(), lid=lid_surface())
+    return MontessoriPerceptionPipeline(
+        table=table_surface(), lid=lid_surface(), board_detector=board_detector()
+    )
