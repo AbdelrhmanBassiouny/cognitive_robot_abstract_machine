@@ -48,7 +48,7 @@ from krrood.entity_query_language.utils import is_iterable
 from krrood.utils import ensure_hashable
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.entity_query_language.core.expression_structure import root_variable_ids
-from krrood.utils import memoize
+from krrood.patterns.caching import memoize
 
 GroupKey = Tuple[Any, ...]
 """
