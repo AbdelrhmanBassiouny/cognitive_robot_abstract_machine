@@ -44,6 +44,16 @@ Many other classes live in ``builtins`` -- every exception among them -- and a c
 declared for one of those cannot be built, so a field holding one is left unmapped.
 """
 
+RELATIONSHIP_COLLECTION_TYPES = frozenset({list, set})
+"""
+The collection classes a generated relationship is held in.
+
+SQLAlchemy instruments a collection in place, so it needs one it can build empty and
+append to. A field declaring any other container -- an immutable one such as ``tuple``,
+or an abstract one such as ``Sequence`` -- is held in a ``list`` instead, and its object
+is handed its own container back on the way out.
+"""
+
 
 @dataclass
 class WrappedTableNotFound(KeyError):
@@ -865,15 +875,12 @@ class WrappedTable(TableLike):
         # create a relationship
         rel_name = f"{wrapped_field.field.name}"
 
-        # SQLAlchemy instruments a collection class in place (it needs an appender
-        # method), which an immutable domain container such as tuple cannot provide.
-        # The relationship is therefore held as a list at the ORM layer; from_dao
-        # restores the domain field's own tuple type once its object is populated
-        # (see DataAccessObject._finalize_object_containers).
+        # from_dao restores the domain field's own container once its object is
+        # populated (see DataAccessObject._finalize_object_containers).
         collection_class_type = (
-            list
-            if wrapped_field.container_type is tuple
-            else wrapped_field.container_type
+            wrapped_field.container_type
+            if wrapped_field.container_type in RELATIONSHIP_COLLECTION_TYPES
+            else list
         )
         container_name = module_and_class_name(collection_class_type)
 
