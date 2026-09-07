@@ -6,15 +6,14 @@ from uuid import UUID
 
 import numpy as np
 import rustworkx.visit
-from typing_extensions import List
 
+from krrood.patterns.caching import copy_memoize, memoize, clear_memoization_cache
 from krrood.symbolic_math.symbolic_math import (
+    CasadiLock,
     CompiledFunction,
     Matrix,
     VariableParameters,
-    FloatVariable,
 )
-from krrood.utils import copy_memoize, memoize, clear_memoization_cache
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.datastructures.types import NpMatrix4x4
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -152,16 +151,17 @@ class ForwardKinematicsManager(ModelChangeCallback):
         """
         if root == self._world.root:
             return self.root_T_kse_expression_cache[tip.id]
-        fk = HomogeneousTransformationMatrix()
         root_chain, tip_chain = self._world.compute_split_chain_of_connections(
             root, tip
         )
-        connection: Connection
-        for connection in root_chain:
-            tip_T_root = connection.origin_expression.inverse()
-            fk = fk.dot(tip_T_root)
-        for connection in tip_chain:
-            fk = fk.dot(connection.origin_expression)
+        with CasadiLock():
+            fk = HomogeneousTransformationMatrix()
+            connection: Connection
+            for connection in root_chain:
+                tip_T_root = connection.origin_expression.inverse()
+                fk = fk.dot(tip_T_root)
+            for connection in tip_chain:
+                fk = fk.dot(connection.origin_expression)
         fk.reference_frame = root
         fk.child_frame = tip
         return fk
