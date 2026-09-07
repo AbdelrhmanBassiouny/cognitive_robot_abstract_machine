@@ -12,8 +12,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import MontessoriScene
+from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_request import SceneRequest
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
+from typing_extensions import Optional
 
 # %% where a scene comes from
 
@@ -22,6 +28,17 @@ class MontessoriSceneSource(ABC):
     """
     Something that can say what the Montessori scene currently looks like.
     """
+
+    @property
+    @abstractmethod
+    def reference_frame(self) -> Optional[KinematicStructureEntity]:
+        """
+        The frame this source reports its detections in, or None where it reports them
+        in none.
+
+        A region a statement names is a world entity, so what it reaches in metres can
+        only be read against the frame the things it is stated about are placed in.
+        """
 
     @abstractmethod
     def scene(self, request: SceneRequest = SceneRequest()) -> MontessoriScene:
@@ -45,9 +62,50 @@ class FixedScene(MontessoriSceneSource):
     The scene to answer every query from.
     """
 
+    reported_in: Optional[KinematicStructureEntity] = None
+    """
+    The frame the captured scene's detections were placed in, where it is known.
+    """
+
+    @property
+    def reference_frame(self) -> Optional[KinematicStructureEntity]:
+        return self.reported_in
+
     def scene(self, request: SceneRequest = SceneRequest()) -> MontessoriScene:
         """
         :param request: Ignored: this look was taken before the request existed.
         :return: The captured scene, whole.
         """
         return self.captured
+
+
+@dataclass
+class RecordedFrame(MontessoriSceneSource):
+    """
+    One frame of camera data, looked at afresh for every request.
+
+    The counterpart of :class:`FixedScene` for a recording: the look has not been taken
+    yet, so what a request narrows is what is actually searched rather than what is
+    filtered afterwards.
+    """
+
+    pipeline: MontessoriPerceptionPipeline
+    """
+    What takes the look.
+    """
+
+    frame: RgbdFrame
+    """
+    The camera data to look at.
+    """
+
+    @property
+    def reference_frame(self) -> Optional[KinematicStructureEntity]:
+        return self.pipeline.reference_frame
+
+    def scene(self, request: SceneRequest = SceneRequest()) -> MontessoriScene:
+        """
+        :param request: What the look is asked for, which this one acts on.
+        :return: What was found.
+        """
+        return self.pipeline.detect(self.frame, request)

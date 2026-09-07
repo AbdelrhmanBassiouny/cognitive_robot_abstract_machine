@@ -13,6 +13,7 @@ than numbers tied to where the camera happened to stand.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import cached_property
@@ -23,11 +24,35 @@ import numpy as np
 from typing_extensions import Any, Dict, Self, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
-from experiments.montessori.perception.exceptions import WorkspaceOutOfView
+from experiments.montessori.perception.exceptions import (
+    RegionsDoNotMeet,
+    WorkspaceOutOfView,
+)
+from experiments.montessori.planar_geometry import PlanarPoint
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from semantic_digital_twin.spatial_types.math import inverse_frame
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 # %% the region being looked at
+
+SAMPLE_ROUNDING_TOLERANCE = 1e-6
+"""
+How far, as a fraction of one sample, a grid position may sit from a whole number of
+samples and still be read as that number.
+
+Dividing metre-scale coordinates by a millimetre leaves the count a few parts in ten to
+the thirteenth off, so a bound that lies exactly on a sample would otherwise be pushed
+out to the next one.
+"""
+
+DEFAULT_RESOLUTION = 0.001
+"""
+Edge length of one rectified pixel, in metres, where nothing says otherwise.
+
+One millimetre resolves the smallest hole on the board (a five millimetre wide slot)
+across several pixels while keeping the rectified image small enough to process at
+camera rate.
+"""
 
 
 class RegionField(StrEnum):
@@ -69,13 +94,9 @@ class WorkspaceRegion(SubclassJSONSerializer):
     Upper bound of the patch along the world frame's y-axis, in metres.
     """
 
-    resolution: float = 0.001
+    resolution: float = DEFAULT_RESOLUTION
     """
     Edge length of one rectified pixel, in metres.
-
-    One millimetre resolves the smallest hole on the board (a five millimetre wide slot)
-    across several pixels while keeping the rectified image small enough to process at
-    camera rate.
     """
 
     @property
@@ -116,6 +137,168 @@ class WorkspaceRegion(SubclassJSONSerializer):
         return (
             self.minimum_x + pixel_x * self.resolution,
             self.minimum_y + pixel_y * self.resolution,
+        )
+
+    def to_pixels(self, positions: np.ndarray) -> np.ndarray:
+        """
+        The rectified pixels world-frame positions on this plane fall on.
+
+        :param positions: The positions, as ``(n, 2)`` world-frame ``(x, y)`` points in
+            metres.
+        :return: The pixels, as ``(n, 2)`` fractional ``(column, row)`` points.
+        """
+        return (
+            np.asarray(positions, dtype=float)
+            - np.array([self.minimum_x, self.minimum_y])
+        ) / self.resolution
+
+    def meets(self, other: WorkspaceRegion) -> bool:
+        """
+        Whether this patch and another share any ground at all.
+
+        Asked before :meth:`intersection`, which has nothing to answer for two that do
+        not: a look narrowed past the surface it searches leaves that surface out
+        rather than failing.
+
+        :param other: The patch to compare against.
+        """
+        return (
+            self.minimum_x <= other.maximum_x
+            and other.minimum_x <= self.maximum_x
+            and self.minimum_y <= other.maximum_y
+            and other.minimum_y <= self.maximum_y
+        )
+
+    def intersection(self, other: WorkspaceRegion) -> WorkspaceRegion:
+        """
+        The ground this patch and another share, sampled on this patch's own grid.
+
+        Two narrowings compose rather than the second replacing the first, which is what
+        lets a look be cut down by a surface and by a stated region at once.
+
+        **The grid is this patch's, and that is what makes the result less of the same
+        picture rather than a different one.** A rectified pixel samples the world point
+        its patch's own lower corner puts it over, so a narrowed patch whose corner fell
+        between this one's samples would rectify every point half a pixel away from
+        where this one had it -- measured on the shipped captures, enough to change
+        which piece a fit settles on. So the shared ground is taken out to the nearest
+        sample of this patch's grid, never in.
+
+        :param other: The patch to narrow this one by.
+        :raises RegionsDoNotMeet: If the two share no ground.
+        """
+        if not self.meets(other):
+            raise RegionsDoNotMeet(
+                bounds=(self.minimum_x, self.maximum_x, self.minimum_y, self.maximum_y),
+                other_bounds=(
+                    other.minimum_x,
+                    other.maximum_x,
+                    other.minimum_y,
+                    other.maximum_y,
+                ),
+            )
+        minimum_x = self._sample_at_or_below(self.minimum_x, other.minimum_x)
+        minimum_y = self._sample_at_or_below(self.minimum_y, other.minimum_y)
+        return WorkspaceRegion(
+            minimum_x=minimum_x,
+            maximum_x=min(
+                self._sample_at_or_above(
+                    minimum_x, min(self.maximum_x, other.maximum_x)
+                ),
+                self.maximum_x,
+            ),
+            minimum_y=minimum_y,
+            maximum_y=min(
+                self._sample_at_or_above(
+                    minimum_y, min(self.maximum_y, other.maximum_y)
+                ),
+                self.maximum_y,
+            ),
+            resolution=self.resolution,
+        )
+
+    def _sample_at_or_below(self, origin: float, bound: float) -> float:
+        """
+        The last sample of this patch's grid that does not reach past a bound.
+
+        :param origin: Where this patch's grid starts along the axis, in metres.
+        :param bound: The bound to stay at or below, in metres.
+        """
+        if bound <= origin:
+            return origin
+        samples = (bound - origin) / self.resolution
+        return (
+            origin + math.floor(samples + SAMPLE_ROUNDING_TOLERANCE) * self.resolution
+        )
+
+    def _sample_at_or_above(self, origin: float, bound: float) -> float:
+        """
+        The first sample of this patch's grid that reaches a bound.
+
+        :param origin: Where this patch's grid starts along the axis, in metres.
+        :param bound: The bound to reach, in metres.
+        """
+        samples = (bound - origin) / self.resolution
+        return origin + math.ceil(samples - SAMPLE_ROUNDING_TOLERANCE) * self.resolution
+
+    def grown_by(self, margin: float) -> WorkspaceRegion:
+        """
+        This patch reaching the given distance further on every side.
+
+        A thing is searched for by its centre but recognised by its whole outline, so a
+        patch cut to where a centre may lie has to reach past that for the outline
+        around it to still be in the picture.
+
+        :param margin: How much further to reach, in metres.
+        """
+        return WorkspaceRegion(
+            minimum_x=self.minimum_x - margin,
+            maximum_x=self.maximum_x + margin,
+            minimum_y=self.minimum_y - margin,
+            maximum_y=self.maximum_y + margin,
+            resolution=self.resolution,
+        )
+
+    @classmethod
+    def of_box(
+        cls, box: VolumetricBoundingBox, resolution: float = DEFAULT_RESOLUTION
+    ) -> WorkspaceRegion:
+        """
+        The patch of plane a box stands over.
+
+        :param box: The box, already expressed in the frame the patch is wanted in.
+        :param resolution: Edge length of one rectified pixel, in metres.
+        """
+        return cls(
+            minimum_x=float(box.min_x),
+            maximum_x=float(box.max_x),
+            minimum_y=float(box.min_y),
+            maximum_y=float(box.max_y),
+            resolution=resolution,
+        )
+
+    @classmethod
+    def of_outline(
+        cls, outline: np.ndarray, resolution: float = DEFAULT_RESOLUTION
+    ) -> WorkspaceRegion:
+        """
+        The patch of plane an outline spans.
+
+        This is how a surface that was *seen* rather than modelled says where it
+        reaches, which is what a surface whose pose the world no longer agrees with has
+        to be read from.
+
+        :param outline: The outline, as ``(n, 2)`` world-frame ``(x, y)`` points in
+            metres.
+        :param resolution: Edge length of one rectified pixel, in metres.
+        """
+        points = np.asarray(outline, dtype=float).reshape(-1, 2)
+        return cls(
+            minimum_x=float(points[:, 0].min()),
+            maximum_x=float(points[:, 0].max()),
+            minimum_y=float(points[:, 1].min()),
+            maximum_y=float(points[:, 1].max()),
+            resolution=resolution,
         )
 
     def contains(self, x: float, y: float) -> bool:
@@ -288,18 +471,22 @@ class Orthophoto:
         """
         return self.image.any(axis=2)
 
-    def contour_center(self, contour: np.ndarray) -> Tuple[float, float]:
+    def contour_center(self, contour: np.ndarray) -> PlanarPoint:
         """
-        The world-frame ``(x, y)`` of a contour's centre of area.
+        Where on this image's own plane a contour's centre of area lies.
 
         :param contour: An OpenCV contour in this image's pixels.
         """
         moments = cv2.moments(contour)
         if moments["m00"] == 0.0:
             pixel_x, pixel_y = contour.reshape(-1, 2).mean(axis=0)
-            return self.region.to_world_position(float(pixel_x), float(pixel_y))
-        return self.region.to_world_position(
-            moments["m10"] / moments["m00"], moments["m01"] / moments["m00"]
+            return PlanarPoint(
+                *self.region.to_world_position(float(pixel_x), float(pixel_y))
+            )
+        return PlanarPoint(
+            *self.region.to_world_position(
+                moments["m10"] / moments["m00"], moments["m01"] / moments["m00"]
+            )
         )
 
 

@@ -217,7 +217,7 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T], HasEx
         Dataclass-generated `__init__` never have this problem unless `InitVar` is used.
     """
 
-    _expression: Query = field(init=False, default=None)
+    _expression: Optional[Query] = field(init=False, default=None)
     """
     Cache for the expression (the actual EQL query) as soon as it has been calculated.
 
@@ -501,6 +501,43 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T], HasEx
         self.expression.where(*conditions)
         self.expression.build()
         return self
+
+    def one_condition_at_a_time(self) -> List[Match[T]]:
+        """
+        This statement as it grows: first saying nothing about the thing it looks for,
+        then one more of the conditions it states about that thing each time, ending in
+        everything this statement says.
+
+        Whatever it says about anything else is carried by every one of them, since a
+        description of another thing is what gives a condition about this one its
+        meaning rather than a step of its own. Every one of them is stated about this
+        statement's own variable, so what answers one answers the next, and what each
+        condition buys can be measured rather than argued about.
+
+        :return: One statement per condition stated about the thing looked for, plus the
+            bare one they grow from.
+        """
+        about_it, about_others = [], []
+        for condition in self._where_conditions_:
+            if self.variable in condition._constrained_variables_:
+                about_it.append(condition)
+            else:
+                about_others.append(condition)
+        return [
+            self._restated(about_others + about_it[:count])
+            for count in range(len(about_it) + 1)
+        ]
+
+    def _restated(self, conditions: List[ConditionType]) -> Match[T]:
+        """
+        This statement over the same variable, saying only what it is given.
+
+        :param conditions: What the restated statement says.
+        """
+        restated = type(self)(self.factory, type_=self.type_, variable=self.variable)
+        if self._has_been_called:
+            restated = restated(**self.kwargs)
+        return restated.where(*conditions) if conditions else restated
 
     def causes_effect(self, *conditions: ConditionType) -> Match[T]:
         """

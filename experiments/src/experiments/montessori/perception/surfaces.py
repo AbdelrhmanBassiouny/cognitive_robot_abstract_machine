@@ -17,12 +17,14 @@ from typing_extensions import Optional, Tuple
 from experiments.montessori.perception.detections import MontessoriDetection
 from experiments.montessori.perception.exceptions import SurfaceHasNothingToMeasure
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
+from experiments.montessori.pieces import LARGEST_PIECE_RADIUS
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.semantic_annotations.mixins import HasSupportingSurface
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
+    Region,
 )
 
 # %% one plane, and the patch of it that is searched
@@ -84,10 +86,23 @@ class WorkspaceSurface:
         declared = supporter.supporting_surface
         if declared is None:
             return cls.of_body(supporter.root, reference_frame)
-        boxes = declared.area.as_bounding_box_collection_in_frame(reference_frame)
+        return cls.of_region(declared, reference_frame)
+
+    @classmethod
+    def of_region(
+        cls, region: Region, reference_frame: KinematicStructureEntity
+    ) -> WorkspaceSurface:
+        """
+        The surface a region the world declares describes.
+
+        :param region: The declared region.
+        :param reference_frame: Frame to express the surface in.
+        :raises SurfaceHasNothingToMeasure: If the region carries no shape.
+        """
+        boxes = region.area.as_bounding_box_collection_in_frame(reference_frame)
         if not boxes.bounding_boxes:
-            raise SurfaceHasNothingToMeasure(str(declared.name))
-        return cls._of_box(declared.name, boxes.bounding_box())
+            raise SurfaceHasNothingToMeasure(str(region.name))
+        return cls._of_box(region.name, boxes.bounding_box())
 
     @classmethod
     def of_body(
@@ -123,14 +138,7 @@ class WorkspaceSurface:
         :param box: The box, already expressed in the frame the surface is wanted in.
         """
         return cls(
-            name=name,
-            region=WorkspaceRegion(
-                minimum_x=float(box.min_x),
-                maximum_x=float(box.max_x),
-                minimum_y=float(box.min_y),
-                maximum_y=float(box.max_y),
-            ),
-            height=float(box.max_z),
+            name=name, region=WorkspaceRegion.of_box(box), height=float(box.max_z)
         )
 
 
@@ -168,6 +176,76 @@ class SurfaceSearch:
     Whatever lies within one of them rests on it and is that surface's pass to report,
     even though this plane sees it too.
     """
+
+    narrowed_to: Optional[WorkspaceRegion] = None
+    """
+    A stretch of the world the look was asked to stay inside, or None where it was asked
+    to search wherever this surface reaches.
+    """
+
+    overhang: float = LARGEST_PIECE_RADIUS
+    """
+    How far past :attr:`boundary` something resting on this surface may reach, in
+    metres.
+
+    A thing standing at the very edge of a surface has its centre on it and its outline
+    beyond it, so a picture cut to the boundary alone would have nothing to measure at
+    the thing's far side. The widest piece this set holds is what has to fit.
+    """
+
+    @property
+    def is_searched(self) -> bool:
+        """
+        Whether any of this surface is left once the look's own narrowing is applied.
+
+        A look asked about a stretch of the world that this surface never reaches has no
+        pass to run here, which is not a failure: it is the narrowing doing its work.
+        """
+        return self._narrowing is None or self._reach.meets(self._narrowing)
+
+    @property
+    def region(self) -> WorkspaceRegion:
+        """
+        The stretch of this plane one pass rectifies and searches.
+
+        :raises RegionsDoNotMeet: If the look was narrowed away from this surface, which
+            :attr:`is_searched` answers before it is asked.
+        """
+        if self._narrowing is None:
+            return self._reach
+        return self._reach.intersection(self._narrowing)
+
+    @property
+    def _narrowing(self) -> Optional[WorkspaceRegion]:
+        """
+        The stretch of the world the look was asked to stay inside, as much of it as a
+        picture has to reach to measure something standing at its very edge.
+
+        A statement says where the *thing* is, not which pixels may be read, so the
+        picture reaches an :attr:`overhang` past it for the same reason it does past a
+        surface's own boundary -- otherwise a piece standing just inside the stretch a
+        statement allows has its far side cut off and is never fitted.
+        """
+        if self.narrowed_to is None:
+            return None
+        return self.narrowed_to.grown_by(self.overhang)
+
+    @property
+    def _reach(self) -> WorkspaceRegion:
+        """
+        How far this surface itself reaches, before the look's own narrowing.
+
+        A surface seen only where its boundary was found reaches no further than that
+        boundary, since where it stands is measured every frame rather than modelled;
+        one with no boundary of its own reaches across everything the world says it
+        spans.
+        """
+        if self.boundary is None:
+            return self.surface.region
+        seen = WorkspaceRegion.of_outline(
+            self.boundary.outline, self.surface.region.resolution
+        )
+        return self.surface.region.intersection(seen.grown_by(self.overhang))
 
     def claims(self, x: float, y: float) -> bool:
         """

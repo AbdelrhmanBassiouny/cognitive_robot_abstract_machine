@@ -19,6 +19,12 @@ from experiments.montessori.perception.exceptions import (
     UnsupportedImageEncoding,
 )
 from semantic_digital_twin.spatial_types.math import inverse_frame
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
 
 # %% encodings
 
@@ -161,6 +167,23 @@ class CameraIntrinsics:
 
 # %% frames
 
+VIEW_T_OPTICAL = np.array(
+    [
+        [0.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
+"""
+The turn from a camera's optical frame to the way round a pose is stated in.
+
+The optical frame has x to the right of the picture, y down it and z along the axis the
+camera looks down; a pose has x the way the thing faces, y to its left and z up. So
+facing is the optical z, left is the optical x turned around, and up is the optical y
+turned around.
+"""
+
 
 @dataclass(frozen=True)
 class RgbdFrame:
@@ -200,6 +223,39 @@ class RgbdFrame:
             raise DepthAndColourNotRegistered(
                 self.color.shape[:2], self.depth.shape[:2]
             )
+
+    @property
+    def camera_position(self) -> np.ndarray:
+        """
+        Where the camera stands, as world-frame ``(x, y, z)`` in the frame detections
+        are reported in.
+        """
+        return self.reference_frame_T_camera[:3, 3]
+
+    def point_of_view(
+        self,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+        camera: Optional[KinematicStructureEntity] = None,
+    ) -> HomogeneousTransformationMatrix:
+        """
+        Where the camera looks from, in the way round a direction is read.
+
+        A relation like *right of* is one axis of the spot it is seen from, in the
+        convention the world states poses in: x the way the looker faces, y to its left,
+        z up. A camera's own frame is the optical one -- x to the right of the picture,
+        y down it, z along the axis it looks down -- so the two are a fixed turn apart,
+        and the turn is what makes *right of* mean right in the picture.
+
+        :param reference_frame: The frame the answer is expressed in, which is the one
+            this frame gives the camera's pose in.
+        :param camera: The camera itself, where the world knows one, so that a direction
+            read from here says it was seen from the camera rather than from a pose.
+        """
+        return HomogeneousTransformationMatrix(
+            self.reference_frame_T_camera @ VIEW_T_OPTICAL,
+            reference_frame=reference_frame,
+            child_frame=camera,
+        )
 
     @property
     def height(self) -> int:

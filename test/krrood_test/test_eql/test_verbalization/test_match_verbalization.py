@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from krrood.entity_query_language.factories import (
     a,
     an,
+    entity,
     variable,
 )
 from krrood.entity_query_language.verbalization.pipeline import (
@@ -32,6 +33,7 @@ from krrood.entity_query_language.verbalization.rendering.formatter import (
 from krrood.entity_query_language.verbalization.rendering.renderer import (
     HierarchicalRenderer,
 )
+from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
 
 @dataclass
@@ -395,3 +397,23 @@ def test_compound_value_pulled_out_of_respectively_group():
     text = verbalize_expression(a(_Trio)(a=1.0, b=2.0, c=variable(float, [7.0, 8.0])))
     assert "the a and b of the _Trio are 1.0 and 2.0 respectively" in text
     assert "its c is one of 7.0 or 8.0" in text
+
+
+# %% a sub-query inside a match condition
+
+
+def test_sub_query_in_a_match_condition_reads_as_a_noun_phrase():
+    """
+    A sub-query used as a value inside a match's ``where`` is a noun phrase, not a
+    second directive: the whole match is one request, so only its own header opens it.
+    """
+    corner = variable(Position, [])
+    sought = a(Pose)()
+    text = _hierarchical(
+        sought.where(
+            sought.variable.position == an(entity(corner).where(corner.x == 1.0))
+        )
+    )
+    assert text.count(Directive.GENERATE.value.text) == 1, text
+    assert Directive.FIND.value.text not in text
+    assert "its position is a Position whose x is 1.0" in text

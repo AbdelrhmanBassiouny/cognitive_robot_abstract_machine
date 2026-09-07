@@ -24,7 +24,16 @@ from experiments.montessori.perception.scene_source import FixedScene
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
-from semantic_digital_twin.reasoning.predicates import SupportedBy
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
+from semantic_digital_twin.reasoning.predicates import (
+    Between,
+    Colored,
+    InsideRegion,
+    Near,
+    PlacementRelation,
+    RightOf,
+    SupportedBy,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
@@ -69,7 +78,68 @@ def test_what_the_search_narrows_by_is_a_relation_rather_than_an_attributes_name
     Support is a relation the world means something by, so the search is narrowed by the
     class that means it and there is no attribute name spelled a second time.
     """
-    assert MontessoriPerceptionBackend.narrowing_relations == (SupportedBy,)
+    assert SupportedBy in MontessoriPerceptionBackend.narrowing_relations
+
+
+def test_a_search_narrows_itself_by_where_a_statement_says_the_thing_lies():
+    """
+    Every relation that says where a thing may be answers the stretch it leaves, so a
+    look stating one can cut its picture down to that before anything is detected --
+    whatever the relation happens to be.
+    """
+    assert PlacementRelation in MontessoriPerceptionBackend.narrowing_relations
+    assert issubclass(InsideRegion, PlacementRelation)
+
+
+@pytest.mark.parametrize("relation", [RightOf, Between, Near])
+def test_a_search_narrows_itself_by_any_relation_that_says_where_a_thing_lies(relation):
+    """
+    Naming the family rather than its members is what lets the vocabulary grow without
+    the backend being edited for each new way of saying where something is.
+    """
+    assert issubclass(relation, PlacementRelation)
+    assert issubclass(relation, MontessoriPerceptionBackend.narrowing_relations)
+
+
+def test_a_search_narrows_itself_by_the_color_the_thing_sought_wears():
+    """
+    What colour a piece is, is knowledge about the piece, so a look asked for one marks
+    that colour alone instead of every colour a piece of this set can wear.
+    """
+    assert Colored in MontessoriPerceptionBackend.narrowing_relations
+
+
+def test_a_stated_color_is_what_the_look_is_asked_to_mark():
+    color = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE].color
+    statement = an(MontessoriShapeDetection)()
+    statement = statement.where(Colored(statement.variable, color))
+
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
+
+    assert request.color == color
+
+
+def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
+    pipeline: MontessoriPerceptionPipeline,
+):
+    """
+    The relation itself rather than a patch in metres: what it allows is read where the
+    frame the detections are reported in is known, which is the look.
+    """
+    lid = Body(name=pipeline.lid.name)
+    statement = an(MontessoriShapeDetection)()
+    statement = statement.where(Near(statement.variable, lid, radius=0.05))
+
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
+
+    [placement] = request.placements
+    assert isinstance(placement, Near)
+    assert placement.place is lid
+    assert placement.radius == 0.05
 
 
 def test_the_kind_of_detection_asked_for_is_what_the_look_is_asked_for():
@@ -121,6 +191,79 @@ def test_a_surface_left_unstated_narrows_nothing(
     )
 
     assert request.supporting_surface is None
+
+
+def surfaces_of(pipeline: MontessoriPerceptionPipeline):
+    """
+    The bodies a statement can pick a surface out of by describing it.
+
+    :param pipeline: The pipeline whose surfaces they stand for.
+    """
+    return [Body(name=pipeline.table.name), Body(name=pipeline.lid.name)]
+
+
+def test_a_surface_the_statement_describes_is_read_as_the_one_it_describes(
+    pipeline: MontessoriPerceptionPipeline,
+):
+    """
+    A statement can say which surface it means by describing it -- the body the world
+    calls the lid -- rather than by handing that body over.
+
+    The description is answered out of the world it was given before any look is taken,
+    so what the relation says is a relation to something concrete and narrows the search
+    like any other.
+    """
+    surface = variable(Body, surfaces_of(pipeline))
+    statement = an(MontessoriShapeDetection)()
+    statement = statement.where(
+        surface.name == pipeline.lid.name,
+        SupportedBy(statement.variable, surface),
+    )
+
+    request = MontessoriPerceptionBackend.read_request(statement)
+
+    assert (
+        MontessoriPerceptionBackend.supporting_surface_asked_about(request)
+        == pipeline.lid.name
+    )
+
+
+def test_a_described_surface_is_answered_the_same_as_one_handed_over(
+    pipeline: MontessoriPerceptionPipeline, looking: MontessoriPerceptionBackend
+):
+    surface = variable(Body, surfaces_of(pipeline))
+    described = an(MontessoriShapeDetection)()
+    described = described.where(
+        surface.name == pipeline.lid.name,
+        SupportedBy(described.variable, surface),
+    )
+
+    found = list(described.evaluate(backend=looking))
+
+    assert found == list(
+        looking_for_something_supported_by(pipeline.lid).evaluate(backend=looking)
+    )
+
+
+def test_a_description_no_single_thing_answers_is_refused_rather_than_guessed_at(
+    pipeline: MontessoriPerceptionPipeline, looking: MontessoriPerceptionBackend
+):
+    """
+    Which surface a look searches has to be settled before it is taken, so a description
+    several surfaces answer is a condition this backend cannot resolve rather than one
+    of them picked.
+    """
+    surface = variable(Body, surfaces_of(pipeline))
+    statement = an(MontessoriShapeDetection)()
+    statement = statement.where(
+        surface.name.prefix == pipeline.lid.name.prefix,
+        SupportedBy(statement.variable, surface),
+    )
+
+    with pytest.raises(BackendCannotResolveCondition) as raised:
+        list(statement.evaluate(backend=looking))
+
+    assert raised.value.backend_type is MontessoriPerceptionBackend
 
 
 def test_a_condition_about_something_other_than_what_is_looked_for_is_refused(

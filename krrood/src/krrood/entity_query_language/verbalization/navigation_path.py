@@ -16,6 +16,7 @@ from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.source_reference import (
     SourceReference,
 )
+from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.relational_attributes import (
@@ -120,6 +121,11 @@ def build_path_parts(
     * ``Attribute`` nodes appear as the attribute name, linked to their source reference. When
       *relation_verb* recognises the name as a verb relation (returns its split verb), the hop is
       flagged relational, so it renders as a relative clause instead of a genitive.
+    * An ``Attribute`` reading the field its owner is a wrapper around
+      (:attr:`GrammarMetadata.stands_for_its_owner`) names no hop of its own: the hop that reached
+      the wrapper already said it, and it takes over the value's scalarness (*"the name of the
+      Body"* rather than *"the name of its name"*). A wrapper reached by no hop keeps the field,
+      since there is nothing for it to be said by.
     * An integer ``Index`` node folds its ordinal (``0`` → ``"first"``) into the collection attribute
       it subscripts, which singularizes: *"the first task of …"* rather than *"the first of the tasks
       of …"* or a raw subscript (``"tasks[0]"``). An index that does not follow a plain attribute
@@ -141,6 +147,11 @@ def build_path_parts(
     parts: List[PathStep] = []
     for node in chain:
         if isinstance(node, Attribute):
+            if parts and stands_for_its_owner(node):
+                parts[-1] = replace(
+                    parts[-1], is_scalar_value=_is_scalar_value(node._type_)
+                )
+                continue
             owner = node._owner_class_
             name = node._attribute_name_
             verb = relation_verb(name) if relation_verb is not None else None
@@ -174,6 +185,28 @@ def build_path_parts(
             # step before it reached, which the path already names.
             pass
     return parts
+
+
+def stands_for_its_owner(node: Attribute) -> bool:
+    """:return: ``True`` when *node* reads the field its owner is a wrapper around
+    (:attr:`GrammarMetadata.stands_for_its_owner`), so the hop says nothing the hop that reached
+    that owner has not already said.
+
+    The one place that rule is read: a path leaves such a hop out, and a condition on one counts as
+    reading its owner directly, so both ask here rather than each deciding for itself.
+
+    >>> from dataclasses import dataclass, field
+    >>> from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
+    >>> @dataclass
+    ... class Label:
+    ...     text: str = field(metadata=GrammarMetadata(stands_for_its_owner=True).as_dict())
+    >>> stands_for_its_owner(variable(Label, []).text)
+    True
+    >>> stands_for_its_owner(variable(Robot, []).battery)
+    False
+    """
+    grammar = GrammarMetadata.of_field(node._owner_class_, node._attribute_name_)
+    return grammar is not None and grammar.stands_for_its_owner
 
 
 def _is_scalar_value(value_type: Optional[type]) -> bool:

@@ -333,21 +333,33 @@ class SymbolicFunction(SymbolicCallable, ABC):
 
 
 @dataclass(eq=False)
-class Triple(Predicate):
+class Relation(Predicate, ABC):
     """
-    A Triple is a type predicate that represents a relation between two entities.
+    A predicate that asserts something about one thing: its subject.
 
-    To know if your predicate is a Triple or not ask yourself can I say
-    "subject" "predicate_name" "object" and it makes sense? if so then
-    yes. Check the verbalization function below as a reference.
+    Whatever else it relates that thing to is its own to declare -- one other thing for
+    a :class:`Triple`, two for a relation like *between*, none at all for a property the
+    subject has by itself. Naming the subject is what lets a statement be read as an
+    assertion about the thing it is looking for.
     """
 
     @property
     @abstractmethod
     def subject(self) -> Any:
         """
-        The subject of the predicate.
+        The thing the relation is asserted about.
         """
+
+
+@dataclass(eq=False)
+class Triple(Relation):
+    """
+    A Triple is a relation between two entities.
+
+    To know if your predicate is a Triple or not ask yourself can I say
+    "subject" "predicate_name" "object" and it makes sense? if so then
+    yes. Check the verbalization function below as a reference.
+    """
 
     @property
     @abstractmethod

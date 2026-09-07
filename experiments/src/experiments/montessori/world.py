@@ -22,6 +22,7 @@ from experiments.montessori.hole_geometry import (
     HoleFootprint,
     cut_board_mesh,
     detect_hole_footprints,
+    hole_names,
 )
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import (
@@ -187,21 +188,6 @@ class _HoleSpec:
     """
 
 
-_HOLE_KEY_BY_CATEGORY = {
-    MontessoriShapeCategory.CUBE: "square_hole",
-    MontessoriShapeCategory.TRIANGULAR_PRISM: "triangle_hole",
-    MontessoriShapeCategory.RECTANGULAR_PRISM: "rectangular_hole",
-    MontessoriShapeCategory.DISK: "disk_hole",
-}
-"""
-Name given to a hole of a given category, for the categories that occur at most once on
-the board.
-
-The :attr:`~MontessoriShapeCategory.CYLINDER` category occurs twice and is numbered
-instead (``circular_hole_1``, ``circular_hole_2``).
-"""
-
-
 def _hole_spec_from_footprint(footprint: HoleFootprint, key: str) -> _HoleSpec:
     """
     Place a mesh-detected :class:`HoleFootprint` onto the board, flush with its top
@@ -219,16 +205,10 @@ def _build_hole_specs(footprints: List[HoleFootprint]) -> List[_HoleSpec]:
     """
     Build the board's hole specifications from its mesh-detected hole shapes.
     """
-    circular_hole_count = 0
-    hole_specs = []
-    for footprint in footprints:
-        if footprint.category is MontessoriShapeCategory.CYLINDER:
-            circular_hole_count += 1
-            key = f"circular_hole_{circular_hole_count}"
-        else:
-            key = _HOLE_KEY_BY_CATEGORY[footprint.category]
-        hole_specs.append(_hole_spec_from_footprint(footprint, key))
-    return hole_specs
+    return [
+        _hole_spec_from_footprint(footprint, name)
+        for footprint, name in zip(footprints, hole_names(footprints))
+    ]
 
 
 _HOLE_FOOTPRINTS: List[HoleFootprint] = detect_hole_footprints()

@@ -10,7 +10,7 @@ from typing import Generic, Iterable, Type, TypeVar
 import random_events.variable
 from random_events.product_algebra import Event
 from sqlalchemy.orm import sessionmaker
-from typing_extensions import Any, ClassVar, Dict, List, Optional, Tuple
+from typing_extensions import Any, ClassVar, Dict, List, Optional, Set, Tuple
 
 from krrood import logger
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
@@ -34,7 +34,7 @@ from krrood.entity_query_language.core.variable import (
     Literal,
     Variable,
 )
-from krrood.entity_query_language.predicate import Triple
+from krrood.entity_query_language.predicate import Relation, Triple
 from krrood.patterns.code_parsing_utils import (
     get_accessed_attribute_name_in_return_statement_of_property,
 )
@@ -50,7 +50,7 @@ from krrood.entity_query_language.exceptions import (
     SelectiveBackendCannotResolveEllipsisMatch,
     UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration,
 )
-from krrood.entity_query_language.factories import entity, set_of, variable
+from krrood.entity_query_language.factories import an, entity, set_of, variable
 from krrood.entity_query_language.query.match import Match, AttributeMatch
 from krrood.entity_query_language.query.query import Entity, Query
 from krrood.ormatic.eql_interface import eql_to_sql
@@ -241,49 +241,137 @@ class StatedRelation:
     of an attribute nor the name of a field.
     """
 
-    relation_type: Type[Triple]
+    relation_type: Type[Relation]
     """
     The relation asserted, by the class that means it.
     """
 
-    related_thing: Any
+    stated_operands: Dict[str, Any] = field(default_factory=dict)
     """
-    What the thing being looked for is asserted to stand in that relation to.
+    What the statement already holds each of the relation's other operands to be, keyed
+    by the operand's own name.
 
-    Always something the statement already holds, never the thing being looked for --
-    which is why a search can act on it before anything has been found.
+    Never the thing being looked for, which is why a search can act on them before
+    anything has been found -- and everything but that thing, so a relation of more than
+    two operands is read whole rather than down to the one it happens to name second.
     """
+
+    @property
+    def related_thing(self) -> Any:
+        """
+        The one thing the thing being looked for is asserted to stand in this relation
+        to.
+
+        :raises KeyError: If the relation is not a :class:`Triple`, and so relates the
+            thing sought to other than exactly one thing.
+        """
+        return self.stated_operands[
+            self._name_of(self.relation_type.object, self.relation_type)
+        ]
+
+    def constraint(self) -> Relation:
+        """
+        The relation as stated, with nothing standing where the thing sought would.
+
+        What a relation allows is read from its other operands alone, so this is the
+        form a search reads before anything has been found. A relation meant to be read
+        this way declares the thing it is asserted about optional.
+        """
+        return self.relation_type(**self.stated_operands)
 
     @classmethod
     def read_from(
-        cls, condition: Evaluable, selection: Selectable
+        cls,
+        condition: Evaluable,
+        selection: Selectable,
+        described_things: Optional[Dict[Any, Any]] = None,
     ) -> Optional[StatedRelation]:
         """
         Read a condition as a relation asserted about the thing being looked for.
 
         :param condition: The condition to read.
         :param selection: The thing the statement is looking for.
+        :param described_things: What the statement describes rather than hands over,
+            each already resolved to the thing that answers its description, so a
+            relation stated about one of them is read as a relation to that thing.
         :return: The relation the condition asserts, or ``None`` when it asserts none --
-            because it is not a relation, because it relates something else, or because
-            the thing it relates the selection to is not known yet.
+            because it is not a relation, because it is asserted about something else,
+            or because something it relates the selection to is not known yet.
+        """
+        relation_type = cls.relation_stated_by(condition, selection)
+        if relation_type is None:
+            return None
+        subject_name = cls._name_of(relation_type.subject, relation_type)
+        operands = {
+            name: cls._thing_stood_for(value, described_things or {})
+            for name, value in condition._kwargs_.items()
+            if name != subject_name
+        }
+        if any(isinstance(value, SymbolicExpression) for value in operands.values()):
+            return None
+        return cls(relation_type=relation_type, stated_operands=operands)
+
+    @classmethod
+    def relation_stated_by(
+        cls, condition: Evaluable, selection: Selectable
+    ) -> Optional[Type[Relation]]:
+        """
+        :param condition: The condition to read.
+        :param selection: The thing the statement is looking for.
+        :return: The kind of relation the condition asserts about that thing, or
+            ``None`` when it asserts none about it -- whether or not everything it
+            relates that thing to is known yet.
         """
         if not isinstance(condition, InstantiatedVariable):
             return None
         relation_type = condition._type_
-        if not isinstance(relation_type, type) or not issubclass(relation_type, Triple):
+        if not isinstance(relation_type, type) or not issubclass(
+            relation_type, Relation
+        ):
             return None
-        subject_name = get_accessed_attribute_name_in_return_statement_of_property(
-            relation_type.subject, relation_type
-        )
-        object_name = get_accessed_attribute_name_in_return_statement_of_property(
-            relation_type.object, relation_type
-        )
+        subject_name = cls._name_of(relation_type.subject, relation_type)
         if condition._kwargs_.get(subject_name) is not selection:
             return None
-        related_thing = condition._kwargs_.get(object_name)
-        if isinstance(related_thing, SymbolicExpression):
-            return None
-        return cls(relation_type=relation_type, related_thing=related_thing)
+        return relation_type
+
+    @classmethod
+    def _thing_stood_for(cls, operand: Any, described_things: Dict[Any, Any]) -> Any:
+        """
+        :param operand: What the statement puts in one of the relation's places.
+        :param described_things: What the statement describes rather than hands over.
+        :return: The thing that operand stands for, or the operand itself where it
+            stands for nothing the statement described. Read by identity rather than by
+            equality, since a thing the world holds need be neither hashable nor
+            comparable to a variable.
+        """
+        for variable_, thing in described_things.items():
+            if operand is variable_ or cls._selects(operand, variable_):
+                return thing
+        return operand
+
+    @staticmethod
+    def _selects(operand: Any, variable_: Any) -> bool:
+        """
+        :param operand: What the statement puts in one of the relation's places.
+        :param variable_: The variable standing for a thing the statement describes.
+        :return: Whether that operand is a statement of its own selecting that variable,
+            which is the other way a statement puts a thing it describes in a
+            relation's place.
+        """
+        return isinstance(operand, Query) and any(
+            selected is variable_ for selected in operand._selected_variables_
+        )
+
+    @staticmethod
+    def _name_of(operand: property, relation_type: Type[Relation]) -> str:
+        """
+        :param operand: The property naming one of the relation's operands.
+        :param relation_type: The relation that property belongs to.
+        :return: The name of the field that property returns.
+        """
+        return get_accessed_attribute_name_in_return_statement_of_property(
+            operand, relation_type
+        )
 
 
 @dataclass(frozen=True)
@@ -319,16 +407,41 @@ class LookRequest(Generic[T]):
     rather than by naming a field.
     """
 
+    described_things: Dict[Any, Any] = field(default_factory=dict)
+    """
+    Everything the statement describes rather than hands over, each resolved to the one
+    thing that answers its description, keyed by the variable standing for it.
+
+    A statement can say what it is looking for by relating it to something it describes
+    -- the surface the world calls the board's lid, the hole the cube fits -- and those
+    descriptions are answered out of the world the statement gave them before any look
+    is taken, so what the relation says is a relation to something concrete.
+    """
+
     def related_by(self, relation_type: Type[Triple]) -> Optional[Any]:
         """
         :param relation_type: The relation to read.
         :return: What the statement says the thing sought stands in that relation to, or
             ``None`` when it asserts no such relation.
         """
-        for stated in self.stated_relations:
-            if issubclass(stated.relation_type, relation_type):
-                return stated.related_thing
-        return None
+        stated = self.stated_relations_of(relation_type)
+        if not stated:
+            return None
+        return stated[0].related_thing
+
+    def stated_relations_of(
+        self, relation_type: Type[Relation]
+    ) -> List[StatedRelation]:
+        """
+        :param relation_type: The kind of relation to read.
+        :return: Every relation of that kind the statement asserts about the thing
+            sought, in the order it states them.
+        """
+        return [
+            stated
+            for stated in self.stated_relations
+            if issubclass(stated.relation_type, relation_type)
+        ]
 
     def admits(self, instance: Any) -> bool:
         """
@@ -376,7 +489,7 @@ class PerceptionBackend(GenerativeBackend, ABC):
     something already recorded.
     """
 
-    narrowing_relations: ClassVar[Tuple[Type[Triple], ...]] = ()
+    narrowing_relations: ClassVar[Tuple[Type[Relation], ...]] = ()
     """
     The relations a look of this kind can narrow itself by.
 
@@ -438,8 +551,9 @@ class PerceptionBackend(GenerativeBackend, ABC):
             the relations it asserts about it. An attribute left as ``...`` fixes
             nothing: the statement is saying the look must supply it.
         """
+        described_things = cls.things_described_by(expression)
         stated_relations = [
-            StatedRelation.read_from(condition, expression.variable)
+            StatedRelation.read_from(condition, expression.variable, described_things)
             for condition in expression._where_conditions_
         ]
         return LookRequest(
@@ -454,7 +568,89 @@ class PerceptionBackend(GenerativeBackend, ABC):
             stated_relations=[
                 relation for relation in stated_relations if relation is not None
             ],
+            described_things=described_things,
         )
+
+    @classmethod
+    def things_described_by(cls, expression: Match[T]) -> Dict[Any, Any]:
+        """
+        Answer the descriptions a statement gives of things other than the one it is
+        looking for.
+
+        A statement can name what it wants by relating it to something it describes
+        rather than hands over -- the surface the world calls the board's lid, the hole
+        the cube fits. Nothing is looked for to answer those: they are things the world
+        already holds, so the statement's own domain for each answers it, and the look
+        is then narrowed by a relation to something concrete.
+
+        :param expression: The statement to read.
+        :return: The one thing answering each description, keyed by the variable
+            standing for it. A description no single thing answers is left out, so the
+            condition stating it stays one this backend cannot resolve.
+        """
+        described_things = {}
+        for variable_, description in cls._descriptions_in(expression).items():
+            answers = list(description._evaluate_natively_())
+            if len(answers) == 1:
+                described_things[variable_] = answers[0]
+        return described_things
+
+    @classmethod
+    def _descriptions_in(cls, expression: Match[T]) -> Dict[Any, Evaluable]:
+        """
+        What the statement says about each thing other than the one it is looking for.
+
+        Such a description is written one of two ways: as conditions stated beside the
+        relation that mentions the thing, or as a statement of its own handed to that
+        relation in the thing's place. Both say the same, so both are read as the query
+        answering the description out of the domain the statement gave it.
+
+        :param expression: The statement to read.
+        :return: The query answering each description, keyed by the variable standing
+            for the thing described. A variable the statement constrains but describes
+            neither way is left out.
+        """
+        descriptions = {
+            selected: description
+            for description in cls._statements_handed_to(expression)
+            for selected in description._selected_variables_
+        }
+        for variable_ in cls._variables_described_by(expression):
+            about_it = [
+                condition
+                for condition in expression._where_conditions_
+                if condition._constrained_variables_ == {variable_}
+            ]
+            if not about_it or variable_ in descriptions:
+                continue
+            descriptions[variable_] = an(entity(variable_)).where(*about_it)
+        return descriptions
+
+    @staticmethod
+    def _statements_handed_to(expression: Match[T]) -> List[Query]:
+        """
+        :param expression: The statement to read.
+        :return: Every statement of its own the conditions hand over in the place of a
+            thing they mention.
+        """
+        return [
+            reached
+            for condition in expression._where_conditions_
+            for reached in condition._descendants_
+            if isinstance(reached, Query)
+        ]
+
+    @staticmethod
+    def _variables_described_by(expression: Match[T]) -> Set[Any]:
+        """
+        :param expression: The statement to read.
+        :return: Every variable the statement constrains other than the one it is
+            looking for.
+        """
+        constrained = set()
+        for condition in expression._where_conditions_:
+            constrained |= condition._constrained_variables_
+        return constrained - {expression.variable}
 
     def _check_what_was_found(
         self, expression: Match[T], request: LookRequest[T]
@@ -471,17 +667,23 @@ class PerceptionBackend(GenerativeBackend, ABC):
         :param request: What the look was asked for.
         :raises BackendCannotResolveCondition: If a ``where`` condition constrains any
             variable other than the thing being looked for, which a look can neither
-            search for nor check afterwards.
+            search for nor check afterwards -- unless it is a description this backend
+            answered out of the world, or a relation to something so described, both of
+            which are settled before the look.
         :return: Every found instance the statement admits.
         """
+        described = set(request.described_things)
+        remaining_conditions = []
         for condition in expression._where_conditions_:
+            if self._look_answers(
+                condition, expression.variable, request.described_things
+            ):
+                continue
+            if not condition._constrained_variables_ - described:
+                continue
             if condition._constrained_variables_ - {expression.variable}:
                 raise BackendCannotResolveCondition(condition, type(self))
-        remaining_conditions = [
-            condition
-            for condition in expression._where_conditions_
-            if not self._look_answers(condition, expression.variable)
-        ]
+            remaining_conditions.append(condition)
         stated = [
             getattr(expression.variable, attribute.attribute_name) == attribute.value
             for attribute in request.stated_attributes
@@ -491,14 +693,20 @@ class PerceptionBackend(GenerativeBackend, ABC):
             found = found.where(*stated, *remaining_conditions)
         yield from found._evaluate_natively_()
 
-    def _look_answers(self, condition: Evaluable, selection: Selectable) -> bool:
+    def _look_answers(
+        self,
+        condition: Evaluable,
+        selection: Selectable,
+        described_things: Optional[Dict[Any, Any]] = None,
+    ) -> bool:
         """
         Whether a condition asserts one of the relations this look narrows itself by.
 
         :param condition: The condition to read.
         :param selection: The thing the statement is looking for.
+        :param described_things: What the statement describes rather than hands over.
         """
-        stated = StatedRelation.read_from(condition, selection)
+        stated = StatedRelation.read_from(condition, selection, described_things)
         return stated is not None and issubclass(
             stated.relation_type, self.narrowing_relations
         )
