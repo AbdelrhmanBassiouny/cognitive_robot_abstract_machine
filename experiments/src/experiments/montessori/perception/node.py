@@ -8,10 +8,10 @@ via ``ros2 launch iai_tracy_bringup tracy_ros2.launch.py``)::
 
 It subscribes to the colour and depth streams, runs
 :class:`~experiments.montessori.perception.pipeline.MontessoriPerceptionPipeline` on each
-pair, and keeps the newest result. That result is what
-:class:`~experiments.montessori.perception.scene_source.PerceivedObjects` hands to an
-entity query language query, and it is also drawn into rviz so the detections can be
-checked against the real table.
+pair, and keeps the newest result. That result is what an entity query language query
+evaluated against
+:class:`~experiments.montessori.perception.backend.MontessoriPerceptionBackend` is answered from,
+and it is also drawn into rviz so the detections can be checked against the real table.
 """
 
 from __future__ import annotations
@@ -47,8 +47,9 @@ from experiments.montessori.perception.overlay import (
     DetectionOverlay,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.perception.scene_windows import SceneWindows
+from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
+from experiments.montessori.perception.scene_windows import SceneWindows
 from experiments.montessori.perception.viewer import CameraFrameViewer
 from experiments.network_limits import check_large_messages_can_arrive
 from semantic_digital_twin.adapters.ros.tfwrapper import TFWrapper
@@ -81,10 +82,10 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     """
     Watches the Montessori scene continuously and serves the newest result.
 
-    Answers :class:`~experiments.montessori.perception.scene_source.PerceivedObjects`,
-    so an entity query language query asking for a pose is served the most recent look
-    at the table rather than one taken on demand -- the camera is already running, and a
-    result that is one frame old beats blocking a plan on a fresh capture.
+    Answers a query evaluated against
+    :class:`~experiments.montessori.perception.backend.MontessoriPerceptionBackend` with the most
+    recent look at the table rather than one taken on demand -- the camera is already
+    running, and a result that is one frame old beats blocking a plan on a fresh capture.
     """
 
     node: Node
@@ -313,7 +314,18 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
 
     # %% serving results
 
-    def scene(self) -> MontessoriScene:
+    def scene(self, request: SceneRequest = SceneRequest()) -> MontessoriScene:
+        """
+        Serve the newest look, whatever the request narrowed it to.
+
+        The camera is already running and the pipeline already searches every surface
+        for rviz, so a request cannot narrow a look that has been taken: answering from
+        the newest result costs nothing, where taking a fresh one would block a plan on
+        a capture. Whoever asked keeps filtering.
+
+        :param request: What the look was asked for, which this source cannot act on.
+        :return: The newest result the pipeline produced.
+        """
         with self._lock:
             if self._scene is not None:
                 return self._scene
