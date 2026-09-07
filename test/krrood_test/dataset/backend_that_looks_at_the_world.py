@@ -11,9 +11,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import ClassVar, List, Optional
+from typing_extensions import Any, ClassVar, List, Optional, Tuple, Type
 
 from krrood.entity_query_language.backends import LookRequest, PerceptionBackend
+from krrood.entity_query_language.predicate import Triple
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    clause,
+    Noun,
+    Verb,
+)
 
 # %% what a look finds
 
@@ -43,6 +49,56 @@ class SightingOfSomethingHeldUp(Sighting):
     """
 
 
+# %% what the world means by where a thing is
+
+
+@dataclass(frozen=True)
+class Place:
+    """
+    Somewhere in the world a thing can be found, mimicking an entity the world holds.
+    """
+
+    name: str
+    """
+    What the world calls it.
+    """
+
+
+@dataclass(eq=False)
+class StandingOn(Triple):
+    """
+    Asserts that a thing rests on a place.
+
+    A relation rather than an attribute, so a statement narrowing a look by it names a
+    class the world already means something by instead of spelling a field's name.
+    """
+
+    thing: Any
+    """
+    What is resting.
+    """
+
+    place: Place
+    """
+    What it is resting on.
+    """
+
+    @property
+    def subject(self) -> Any:
+        return self.thing
+
+    @property
+    def object(self) -> Place:
+        return self.place
+
+    def __call__(self) -> bool:
+        return self.thing.place == self.place.name
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return clause(Noun(fields["thing"]), Verb("stand on"), Noun(fields["place"]))
+
+
 # %% the backend
 
 
@@ -57,14 +113,14 @@ class BackendThatLooksAtTheWorld(PerceptionBackend):
     Everything a look could find, were it to search everywhere.
     """
 
-    searched_place: Optional[str] = field(init=False, default=None)
+    searched_place: Optional[Place] = field(init=False, default=None)
     """
     The place the last look was narrowed to, or ``None`` when the statement named none.
     """
 
-    PLACE_ATTRIBUTE_NAME: ClassVar[str] = "place"
+    narrowing_relations: ClassVar[Tuple[Type[Triple], ...]] = (StandingOn,)
     """
-    The attribute of a sighting a look can narrow itself by.
+    A look here can be narrowed to one place, and says so by the relation that means it.
     """
 
     def look(self, request: LookRequest[Sighting]) -> List[Sighting]:
@@ -74,11 +130,23 @@ class BackendThatLooksAtTheWorld(PerceptionBackend):
         :param request: What the statement asks a look for.
         :return: Every sighting the look found.
         """
-        self.searched_place = request.value_stated_for(self.PLACE_ATTRIBUTE_NAME)
+        self.searched_place = request.related_by(StandingOn)
         if self.searched_place is None:
             return list(self.sightings)
         return [
             sighting
             for sighting in self.sightings
-            if sighting.place == self.searched_place
+            if sighting.place == self.searched_place.name
         ]
+
+    def relations_hold(
+        self, instance: Sighting, request: LookRequest[Sighting]
+    ) -> bool:
+        """
+        Whether a sighting stands where the statement said the thing sought stands.
+
+        :param instance: One sighting the look found.
+        :param request: What the look was asked for.
+        """
+        place = request.related_by(StandingOn)
+        return place is None or instance.place == place.name
