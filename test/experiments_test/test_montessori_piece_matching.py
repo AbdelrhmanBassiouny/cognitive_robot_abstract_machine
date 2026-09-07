@@ -15,7 +15,7 @@ from typing_extensions import List, Optional, Tuple
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.detections import (
     MontessoriScene,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
 )
 from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
@@ -183,7 +183,7 @@ def _drawn(
 
 def _resting_on(
     scene: MontessoriScene, surface: PrefixedName
-) -> List[MontessoriShapeDetection]:
+) -> List[DetectedMontessoriShape]:
     """
     The pieces one look put on one surface.
 

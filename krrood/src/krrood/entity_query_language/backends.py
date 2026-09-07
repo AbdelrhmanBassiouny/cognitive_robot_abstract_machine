@@ -508,13 +508,41 @@ class PerceptionBackend(GenerativeBackend, ABC):
             than the thing being looked for.
         """
         request = self.read_request(expression)
+        self._hold_each_description_to_its_answer(request)
         found = [
             instance
             for instance in self.look(request)
             if request.admits(instance) and self.relations_hold(instance, request)
         ]
         expression.variable._update_domain_(found)
-        yield from self._check_what_was_found(expression, request)
+        kept = list(self._check_what_was_found(expression, request))
+        self.discard([instance for instance in found if instance not in kept])
+        yield from kept
+
+    @staticmethod
+    def _hold_each_description_to_its_answer(request: LookRequest[T]) -> None:
+        """
+        Leave each thing the statement describes standing for the one thing that answers
+        its description.
+
+        A relation to something described is checked over what the look reported, and a
+        variable still ranging over everything it could have meant would let the check
+        pass against something the statement ruled out.
+
+        :param request: What the statement asks a look for.
+        """
+        for variable_, thing in request.described_things.items():
+            variable_._update_domain_([thing])
+
+    def discard(self, instances: List[T]) -> None:
+        """
+        Let go of what the statement rejected.
+
+        A backend that brought what it found into a world of its own is left holding
+        exactly the answer; one that brought it nowhere has nothing to let go of.
+
+        :param instances: Everything the look reported that the statement rejected.
+        """
 
     def relations_hold(self, instance: T, request: LookRequest[T]) -> bool:
         """
@@ -681,7 +709,7 @@ class PerceptionBackend(GenerativeBackend, ABC):
                 continue
             if not condition._constrained_variables_ - described:
                 continue
-            if condition._constrained_variables_ - {expression.variable}:
+            if condition._constrained_variables_ - {expression.variable} - described:
                 raise BackendCannotResolveCondition(condition, type(self))
             remaining_conditions.append(condition)
         stated = [

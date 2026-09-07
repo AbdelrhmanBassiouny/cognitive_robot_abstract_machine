@@ -24,7 +24,7 @@ from typing_extensions import List, Self
 
 from experiments.montessori.perception.detections import (
     MontessoriDetection,
-    MontessoriShapeDetection,
+    DetectedMontessoriShape,
 )
 from experiments.montessori.perception.exceptions import NothingIsHiddenFromBelow
 
@@ -160,8 +160,8 @@ class Occupancy:
         return True
 
     def keep_one_detection_per_place(
-        self, detections: List[MontessoriShapeDetection]
-    ) -> List[MontessoriShapeDetection]:
+        self, detections: List[DetectedMontessoriShape]
+    ) -> List[DetectedMontessoriShape]:
         """
         The detections that each stand somewhere nothing else does.
 
