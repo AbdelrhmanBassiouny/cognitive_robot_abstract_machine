@@ -431,26 +431,24 @@ class CausalCircuit:
     def _check_sum_unit_for_variable(
         self,
         node: SumUnit,
-        child_support_events: List[Any],
+        child_marginals: List[Any],
         query_variable: Variable,
     ) -> Optional[OverlappingChildSupportsViolation]:
         """
-        Check a single SumUnit against a single query Variable.
+        Check a single SumUnit, already marginalized to query_variable, for disjoint
+        children.
 
         Returns a violation if the SumUnit splits on the variable but has at least one
         overlapping child pair. Returns None if the SumUnit does not split on the
         variable, or if all splitting children are pairwise disjoint.
 
-        :param node: The SumUnit to inspect.
-        :param child_support_events: result_of_current_query from each child.
-        :param query_variable: The query Variable to check marginal disjointness on.
+        :param node: The SumUnit to inspect, as it appears in the circuit already
+            marginalized to query_variable.
+        :param child_marginals: Each child's own result_of_current_query, already
+            restricted to query_variable by that marginalization.
+        :param query_variable: The query Variable being checked.
         :returns: A violation if overlapping children are detected, else None.
         """
-        if not all(query_variable in event.variables for event in child_support_events):
-            return None
-        child_marginals = [
-            event.marginal([query_variable]) for event in child_support_events
-        ]
         if not self._child_marginals_split_on_variable(child_marginals):
             return None
         if self._overlapping_pair_exists(child_marginals):
@@ -467,35 +465,44 @@ class CausalCircuit:
         Check that for each declared query Variable, no SumUnit that splits on that
         Variable has children with overlapping marginal support.
 
-        Calls self.probabilistic_circuit.support once as a side-effecting traversal that
-        populates result_of_current_query on every node bottom-up. The returned event is
-        discarded; only the per-node side effect matters. Delegates per-node, per-
-        variable inspection to _check_sum_unit_for_variable.
+        Marginalizes the circuit down to each query Variable in turn before computing
+        support, rather than computing the full joint support once and marginalizing
+        it per check: a circuit with several retained relational latents can carry
+        thousands of nodes, and the joint support's own representation grows with
+        every one of them even though only a handful of variables are ever queried.
+        Restricting to one variable first keeps every downstream union small, since
+        random_events.product_algebra.Event.__or__ does not shrink already-computed
+        regions back down after each union -- collapsing that growth is exactly what
+        marginalizing away the irrelevant variables first does, and it is mathematically
+        the same disjointness question: a sum unit's children are disjoint on a
+        variable set V iff they are disjoint on V after marginalizing every other
+        variable out, since marginalization cannot merge regions that a shared variable
+        assignment does not already connect.
 
         :param all_query_variables: Union of all Variables across all query_sets.
         :returns: List of violations, empty if all split nodes are support-disjoint.
         """
         violations: List[OverlappingChildSupportsViolation] = []
-        _ = self.probabilistic_circuit.support
 
-        for layer in self.probabilistic_circuit.layers:
-            for node in layer:
-                if (
-                    not isinstance(node, SumUnit)
-                    or len(node.subcircuits) < 2
-                    or len(node.variables) == 1
-                ):
-                    continue
+        for query_variable in all_query_variables:
+            marginal_circuit = self.probabilistic_circuit.marginal([query_variable])
+            if marginal_circuit is None:
+                continue
+            _ = marginal_circuit.support
 
-                child_support_events = [
-                    child.result_of_current_query for child in node.subcircuits
-                ]
-                if any(event is None for event in child_support_events):
-                    continue
+            for layer in marginal_circuit.layers:
+                for node in layer:
+                    if not isinstance(node, SumUnit) or len(node.subcircuits) < 2:
+                        continue
 
-                for query_variable in all_query_variables:
+                    child_marginals = [
+                        child.result_of_current_query for child in node.subcircuits
+                    ]
+                    if any(marginal is None for marginal in child_marginals):
+                        continue
+
                     violation = self._check_sum_unit_for_variable(
-                        node, child_support_events, query_variable
+                        node, child_marginals, query_variable
                     )
                     if violation is not None:
                         violations.append(violation)
@@ -927,6 +934,15 @@ class CausalCircuit:
         `verify_support_determinism`) guarantees SumUnit children have disjoint support
         on them, so the regions returned here correspond to actual circuit branches
         rather than an arbitrary decomposition.
+
+        Marginalizing the *circuit* first (instead of the joint support) is not a safe
+        shortcut here, unlike in `_check_support_disjointness`: two branches whose
+        query-variable ranges are merely adjacent (e.g. ``[0, 1]`` and ``[1, 2]``) union
+        into one contiguous region under plain set algebra regardless of which side
+        marginalizes first, which loses exactly the per-branch separation this method
+        exists to keep. Reading values off the full joint support's own simple sets
+        avoids that because two branches differing on *any* other variable stay
+        distinct there, even when their projections onto variable alone would merge.
 
         Query variables with a discrete (:class:`~random_events.set.Set`) domain need
         one further step: a single SumUnit branch can itself be a mixture over several

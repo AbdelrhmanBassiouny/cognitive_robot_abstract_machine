@@ -7,7 +7,6 @@ conditioning against backdoor adjustment.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from experiments.causal_reasoning.mutagenesis.causal_query import (
@@ -16,7 +15,6 @@ from experiments.causal_reasoning.mutagenesis.causal_query import (
 from experiments.causal_reasoning.mutagenesis.dataset import (
     fetch_mutagenesis_molecules,
     is_mutagenesis_dataset_reachable,
-    molecules_with_distinct_chlorine_counts,
 )
 
 requires_mutagenesis_dataset = pytest.mark.skipif(
@@ -28,10 +26,7 @@ requires_mutagenesis_dataset = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def causal_query_result():
     molecules = fetch_mutagenesis_molecules()
-    training_molecules = molecules_with_distinct_chlorine_counts(
-        molecules, np.random.default_rng(0)
-    )
-    return run_chlorine_count_backdoor_adjustment(training_molecules, atom_count=2)
+    return run_chlorine_count_backdoor_adjustment(molecules, atom_count=2)
 
 
 @requires_mutagenesis_dataset
@@ -40,11 +35,22 @@ def test_causal_circuit_is_support_deterministic(causal_query_result):
 
 
 @requires_mutagenesis_dataset
-def test_every_selected_chlorine_count_is_reported(causal_query_result):
+def test_every_distinct_chlorine_count_is_reported(causal_query_result):
+    """
+    ``mutagenesis_188`` has molecules with chlorine counts 0 through 5 (chlorine is
+    rare: 177 of 188 molecules have none). All six must survive grounding and
+    registration, not just the dominant one.
+    """
     reported_counts = [effect.chlorine_count for effect in causal_query_result.effects]
     assert reported_counts == sorted(reported_counts)
     assert len(reported_counts) == len(set(reported_counts))
-    assert len(reported_counts) == causal_query_result.training_molecule_count
+    assert reported_counts == [0, 1, 2, 3, 4, 5]
+
+
+@requires_mutagenesis_dataset
+def test_region_probabilities_sum_to_one(causal_query_result):
+    total = sum(effect.region_probability for effect in causal_query_result.effects)
+    assert total == pytest.approx(1.0, abs=0.01)
 
 
 @requires_mutagenesis_dataset

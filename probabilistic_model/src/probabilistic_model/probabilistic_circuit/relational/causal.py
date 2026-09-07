@@ -117,6 +117,7 @@ class RelationalCausalCircuit:
         effect_variables: List[VariableReference],
         adjustment_variables: Optional[List[VariableReference]] = None,
         grounding_mode: GroundingMode = GroundingMode.SAMPLED,
+        trim_to_registered_variables: bool = False,
     ) -> CausalCircuit:
         """
         Ground a relational circuit for a query and wrap it as a ``CausalCircuit``.
@@ -139,6 +140,7 @@ class RelationalCausalCircuit:
             succeeds; :attr:`GroundingMode.EXACT` gives reproducible, domain-covering
             regions but may fall back internally if its precondition isn't met. See
             :class:`~probabilistic_model.probabilistic_circuit.relational.rspn.GroundingMode`.
+        :param trim_to_registered_variables: See :meth:`from_grounded_circuit`.
         :return: A verified, support-deterministic ``CausalCircuit`` over the grounded
             circuit.
         :raises SupportDeterminismVerificationResult: If the grounded circuit is not
@@ -148,7 +150,11 @@ class RelationalCausalCircuit:
             query, grounding_mode
         )
         return self.from_grounded_circuit(
-            grounded_circuit, causal_variables, effect_variables, adjustment_variables
+            grounded_circuit,
+            causal_variables,
+            effect_variables,
+            adjustment_variables,
+            trim_to_registered_variables,
         )
 
     def from_grounded_circuit(
@@ -157,6 +163,7 @@ class RelationalCausalCircuit:
         causal_variables: List[VariableReference],
         effect_variables: List[VariableReference],
         adjustment_variables: Optional[List[VariableReference]] = None,
+        trim_to_registered_variables: bool = False,
     ) -> CausalCircuit:
         """
         Wrap an already-grounded circuit as a verified ``CausalCircuit``.
@@ -173,8 +180,20 @@ class RelationalCausalCircuit:
         :param effect_variables: Effect variables to register, same format.
         :param adjustment_variables: Backdoor-adjustment variables to register, same
             format. Defaults to none.
+        :param trim_to_registered_variables: Marginalize ``grounded_circuit`` down to
+            exactly the union of ``causal_variables``, ``effect_variables`` and
+            ``adjustment_variables`` before registering it, discarding every other
+            variable grounding retained. Every check and query this class runs
+            afterward reads only those variables, so the discarded ones cannot change
+            the result -- marginalizing to a set that includes all of them is exact,
+            not an approximation. It matters for cost, not correctness: on a class
+            circuit fitted over many unrelated scalar and exchangeable variables, the
+            joint support ``verify_support_determinism`` and `backdoor_adjustment`
+            compute grows with all of them, not just the ones actually queried, so
+            trimming first keeps that cost down to the registered variables alone.
+            Defaults to ``False``, preserving every variable grounding retained.
         :return: A verified, support-deterministic ``CausalCircuit`` over
-            ``grounded_circuit``.
+            ``grounded_circuit`` (or its trim, if requested).
         :raises SupportDeterminismVerificationResult: If ``grounded_circuit`` is not
             support-deterministic for ``causal_variables``.
         """
@@ -184,6 +203,14 @@ class RelationalCausalCircuit:
         adjustment_variables = self._resolve_variables(
             grounded_circuit, adjustment_variables
         )
+
+        if trim_to_registered_variables:
+            registered_variables = list(
+                dict.fromkeys(
+                    causal_variables + effect_variables + adjustment_variables
+                )
+            )
+            grounded_circuit = grounded_circuit.marginal(registered_variables)
 
         self._warn_if_adjustment_regions_are_expensive(
             grounded_circuit, adjustment_variables

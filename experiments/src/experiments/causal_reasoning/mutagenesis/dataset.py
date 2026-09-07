@@ -159,43 +159,6 @@ def fetch_mutagenesis_molecules(
     ]
 
 
-def molecules_with_distinct_chlorine_counts(
-    molecules: List[MutagenesisMolecule],
-    random_state: np.random.Generator,
-    count: int = 6,
-) -> List[MutagenesisMolecule]:
-    """
-    Pick one molecule per distinct chlorine count, up to ``count`` values.
-
-    Training on molecules whose chlorine counts collide (several molecules sharing the
-    same count) currently breaks
-    :meth:`~probabilistic_model.probabilistic_circuit.causal.causal_circuit.CausalCircuit.verify_support_determinism`:
-    each colliding molecule keeps its own retained-latent branch, so the registered
-    cause ends up with more than one circuit branch claiming the same chlorine-count
-    region, which is exactly what support determinism forbids. Selecting molecules
-    with pairwise-distinct counts avoids the collision.
-
-    :param molecules: Molecules to select from.
-    :param random_state: Source of randomness for picking among molecules that share a
-        chlorine count.
-    :param count: Number of distinct chlorine-count values to select, lowest first.
-    :return: One molecule per selected chlorine-count value.
-    """
-    molecules_by_chlorine_count: dict = {}
-    for molecule in molecules:
-        chlorine_count = sum(
-            1 for atom in molecule.atoms if atom.element == MutagenesisElement.CHLORINE
-        )
-        molecules_by_chlorine_count.setdefault(chlorine_count, []).append(molecule)
-
-    selected = []
-    for chlorine_count in sorted(molecules_by_chlorine_count)[:count]:
-        candidates = list(molecules_by_chlorine_count[chlorine_count])
-        random_state.shuffle(candidates)
-        selected.append(candidates[0])
-    return selected
-
-
 def synthetic_mutagenesis_molecules(
     random_state: np.random.Generator,
     molecule_count: int = 20,
