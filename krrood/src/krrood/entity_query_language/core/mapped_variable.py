@@ -55,7 +55,10 @@ from krrood.entity_query_language.utils import (
     merge_args_and_kwargs,
     convert_args_and_kwargs_into_hashable_key,
 )
-from krrood.symbol_graph.helpers import get_field_type_endpoint
+from krrood.symbol_graph.helpers import (
+    get_field_type_endpoint,
+    get_method_return_type,
+)
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.operators.arithmetic import (
@@ -736,9 +739,19 @@ class Call(SingleValueMapping[T]):
         return f"{self._child_._var_._name_}()"
 
     def _update_type_(self) -> None:
-        if self._child_._type_ is None:
+        """
+        Resolve ``_type_`` to what the called thing returns.
+
+        A method is not a field, so the attribute naming it resolves to no type of its
+        own; the return annotation is then read off the method on its owner class.
+        """
+        if self._child_._type_ is not None:
+            self._type_ = get_type_hints_of_object(self._child_._type_)["return"]
             return
-        self._type_ = get_type_hints_of_object(self._child_._type_)["return"]
+        if isinstance(self._child_, Attribute):
+            self._type_ = get_method_return_type(
+                self._child_._owner_class_, self._child_._attribute_name_
+            )
 
 
 @dataclass(eq=False, repr=False)
