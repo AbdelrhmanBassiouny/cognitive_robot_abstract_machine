@@ -60,8 +60,7 @@ class MutagenesisAtom:
 @dataclass
 class MutagenesisMolecule:
     """
-    One molecule of the CTU Mutagenesis dataset, with its atoms as an exchangeable
-    part.
+    One molecule of the CTU Mutagenesis dataset, with its atoms as an exchangeable part.
     """
 
     indicator_1: bool

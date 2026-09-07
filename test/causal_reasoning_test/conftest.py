@@ -2,7 +2,7 @@
 Fixtures for :mod:`test.causal_reasoning_test`.
 
 Builds this test package's own, self-contained ``ormatic_interface.py`` -- mapping
-only :mod:`experiments.causal_reasoning.mutagenesis_classes`'s dataclasses -- instead
+only :mod:`experiments.causal_reasoning.mutagenesis.domain`'s dataclasses -- instead
 of hooking into the workspace-wide ORM build ``test/experiments_test/conftest.py``
 uses. That build chains through ``semantic_digital_twin``, ``giskardpy``, ``segmind``
 and ``coraplex`` before reaching ``experiments``, none of which this package's
@@ -20,7 +20,7 @@ from krrood.ormatic.helper import OrmaticInterfaceInformation
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module
 
-from experiments.causal_reasoning import mutagenesis_classes
+from experiments.causal_reasoning.mutagenesis import domain as mutagenesis_domain
 
 
 def generate_sqlalchemy_interface() -> None:
@@ -33,9 +33,7 @@ def generate_sqlalchemy_interface() -> None:
     writing.
     """
     all_classes = {
-        clazz
-        for clazz in classes_of_module(mutagenesis_classes)
-        if is_dataclass(clazz)
+        clazz for clazz in classes_of_module(mutagenesis_domain) if is_dataclass(clazz)
     }
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda clazz: clazz.__name__, reverse=True))

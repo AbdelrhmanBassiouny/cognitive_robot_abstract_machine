@@ -1,6 +1,6 @@
 """
 Loading the CTU Mutagenesis dataset (https://relational.fel.cvut.cz/dataset/Mutagenesis)
-into :class:`~experiments.causal_reasoning.mutagenesis_classes.MutagenesisMolecule`
+into :class:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisMolecule`
 instances, plus a synthetic generator with the same shape for the CI-safe pairing
 :mod:`test.causal_reasoning_test.test_mutagenesis_pipeline` needs alongside its
 live-dataset tests.
@@ -16,7 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
 from typing_extensions import List
 
-from experiments.causal_reasoning.mutagenesis_classes import (
+from experiments.causal_reasoning.mutagenesis.domain import (
     MutagenesisAtom,
     MutagenesisElement,
     MutagenesisMolecule,
@@ -42,8 +42,7 @@ class MutagenesisDatasetUnavailableError(Exception):
 @dataclass(frozen=True)
 class MutagenesisDatabaseConnection:
     """
-    Connection details for the CTU relational-dataset repository's Mutagenesis
-    database.
+    Connection details for the CTU relational-dataset repository's Mutagenesis database.
     """
 
     host: str = "relational.fel.cvut.cz"
@@ -89,7 +88,7 @@ def is_mutagenesis_dataset_reachable(
     Check whether the CTU Mutagenesis database can be connected to right now.
 
     :param connection: Connection details to check.
-    :return: ``True`` if a connection could be established, ``False`` otherwise.
+    :return:``True`` if a connection could be established, ``False`` otherwise.
     """
     engine = create_engine(connection.url, connect_args={"connect_timeout": 5})
     try:
@@ -108,13 +107,13 @@ def fetch_mutagenesis_molecules(
     Download the Mutagenesis dataset and convert it into domain objects.
 
     Pulls the ``drugs``, ``atoms`` and ``bonds`` tables, derives
-    :attr:`~experiments.causal_reasoning.mutagenesis_classes.MutagenesisMolecule.double_bond_count`
+    :attr:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisMolecule.double_bond_count`
     and
-    :attr:`~experiments.causal_reasoning.mutagenesis_classes.MutagenesisMolecule.aromatic_bond_count`
+    :attr:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisMolecule.aromatic_bond_count`
     from the bond table, and groups atoms by their owning molecule.
 
     :param connection: Connection details for the database.
-    :return: One :class:`~experiments.causal_reasoning.mutagenesis_classes.MutagenesisMolecule`
+    :return: One :class:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisMolecule`
         per row of ``drugs``.
     :raises MutagenesisDatasetUnavailableError: If the database cannot be reached.
     """
@@ -160,6 +159,43 @@ def fetch_mutagenesis_molecules(
     ]
 
 
+def molecules_with_distinct_chlorine_counts(
+    molecules: List[MutagenesisMolecule],
+    random_state: np.random.Generator,
+    count: int = 6,
+) -> List[MutagenesisMolecule]:
+    """
+    Pick one molecule per distinct chlorine count, up to ``count`` values.
+
+    Training on molecules whose chlorine counts collide (several molecules sharing the
+    same count) currently breaks
+    :meth:`~probabilistic_model.probabilistic_circuit.causal.causal_circuit.CausalCircuit.verify_support_determinism`:
+    each colliding molecule keeps its own retained-latent branch, so the registered
+    cause ends up with more than one circuit branch claiming the same chlorine-count
+    region, which is exactly what support determinism forbids. Selecting molecules
+    with pairwise-distinct counts avoids the collision.
+
+    :param molecules: Molecules to select from.
+    :param random_state: Source of randomness for picking among molecules that share a
+        chlorine count.
+    :param count: Number of distinct chlorine-count values to select, lowest first.
+    :return: One molecule per selected chlorine-count value.
+    """
+    molecules_by_chlorine_count: dict = {}
+    for molecule in molecules:
+        chlorine_count = sum(
+            1 for atom in molecule.atoms if atom.element == MutagenesisElement.CHLORINE
+        )
+        molecules_by_chlorine_count.setdefault(chlorine_count, []).append(molecule)
+
+    selected = []
+    for chlorine_count in sorted(molecules_by_chlorine_count)[:count]:
+        candidates = list(molecules_by_chlorine_count[chlorine_count])
+        random_state.shuffle(candidates)
+        selected.append(candidates[0])
+    return selected
+
+
 def synthetic_mutagenesis_molecules(
     random_state: np.random.Generator,
     molecule_count: int = 20,
@@ -172,8 +208,8 @@ def synthetic_mutagenesis_molecules(
 
     Each molecule's chlorine count is drawn to be either 0 or ``atom_count`` (all
     chlorine, none hydrogen), and ``mutagenic`` is set to match, baking in a real
-    chlorine-count/mutagenicity correlation so a fitted circuit has something genuine
-    to pick up, mirroring ``_room_with_chair_count`` in ``test_rspns.py``.
+    chlorine-count/mutagenicity correlation so a fitted circuit has something genuine to
+    pick up, mirroring ``_room_with_chair_count`` in ``test_rspns.py``.
 
     :param random_state: Source of randomness for the non-causal fields.
     :param molecule_count: How many molecules to generate.

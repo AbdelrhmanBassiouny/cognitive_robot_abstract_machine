@@ -17,8 +17,8 @@ import numpy as np
 import pytest
 from random_events.product_algebra import SimpleEvent
 
-from experiments.causal_reasoning.mutagenesis_classes import MutagenesisMolecule
-from experiments.causal_reasoning.mutagenesis_dataset import (
+from experiments.causal_reasoning.mutagenesis.domain import MutagenesisMolecule
+from experiments.causal_reasoning.mutagenesis.dataset import (
     fetch_mutagenesis_molecules,
     is_mutagenesis_dataset_reachable,
     synthetic_mutagenesis_molecules,
@@ -91,8 +91,8 @@ def mutagenesis_rpc(mutagenesis_split) -> RelationalProbabilisticCircuit:
 
 def _evidence_for(molecule: MutagenesisMolecule, circuit) -> dict:
     """
-    Build the ``log_conditional`` evidence dict for every one of ``molecule``'s
-    non-target class-level variables that ``circuit`` actually models.
+    Build the ``log_conditional`` evidence dict for every one of ``molecule``'s non-
+    target class-level variables that ``circuit`` actually models.
 
     :param molecule: The molecule to build evidence from.
     :param circuit: The circuit whose variables the evidence must be keyed on.
@@ -116,17 +116,17 @@ def _predict_mutagenic(
     circuit, molecule: MutagenesisMolecule, mutagenic_variable, majority_label: bool
 ) -> bool:
     """
-    Predict ``molecule``'s mutagenicity from its non-target features by conditioning
-    the fitted class-level circuit and comparing ``P(mutagenic=True | evidence)``
-    against ``P(mutagenic=False | evidence)``.
+    Predict ``molecule``'s mutagenicity from its non-target features by conditioning the
+    fitted class-level circuit and comparing ``P(mutagenic=True | evidence)`` against
+    ``P(mutagenic=False | evidence)``.
 
     A held-out molecule's continuous features can fall outside every leaf the fitted
-    tree covers, since a JPT's leaves partition the training data's own observed
-    ranges rather than extrapolating; ``log_conditional`` then reports no support at
-    all (``None``), for which this falls back to ``majority_label``.
+    tree covers, since a JPT's leaves partition the training data's own observed ranges
+    rather than extrapolating; ``log_conditional`` then reports no support at all
+    (``None``), for which this falls back to ``majority_label``.
 
-    :param majority_label: Training-set majority class, used as the fallback
-        prediction when ``molecule``'s evidence is unsupported by the fitted circuit.
+    :param majority_label: Training-set majority class, used as the fallback prediction
+        when ``molecule``'s evidence is unsupported by the fitted circuit.
     """
     evidence = _evidence_for(molecule, circuit)
     conditioned, log_likelihood = circuit.log_conditional(evidence)
@@ -177,11 +177,11 @@ def test_mutagenesis_chlorine_count_is_not_a_split_feature(mutagenesis_rpc):
     the fitted tree, the precondition ``GroundingMode.EXACT`` needs to avoid silently
     falling back to ``SAMPLED``.
 
-    On ``mutagenesis_188``, chlorine is rare (23 atoms out of 4893, ~0.12 per
-    molecule), so the fitted tree does not pick it as a split feature -- this is a
-    property of the real dataset, not a pipeline defect; a later causal-query change
-    building on this fit should use ``GroundingMode.SAMPLED`` for ``chlorine_count``
-    accordingly, exactly the fallback the plan anticipates for this case.
+    On ``mutagenesis_188``, chlorine is rare (23 atoms out of 4893, ~0.12 per molecule),
+    so the fitted tree does not pick it as a split feature -- this is a property of the
+    real dataset, not a pipeline defect; a later causal-query change building on this
+    fit should use ``GroundingMode.SAMPLED`` for ``chlorine_count`` accordingly, exactly
+    the fallback the plan anticipates for this case.
     """
     circuit = mutagenesis_rpc.class_probabilistic_circuit
     chlorine_count_variable = next(
