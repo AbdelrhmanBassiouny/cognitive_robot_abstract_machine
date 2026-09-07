@@ -13,6 +13,7 @@ import numpy as np
 import trimesh
 from typing_extensions import List, Tuple
 
+from experiments.montessori.planar_geometry import PlanarPoint, PlanarSize
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.world_description.geometry import Scale
 
@@ -56,40 +57,6 @@ _RECTANGLE_ASPECT_RATIO_THRESHOLD = 1.3
 Bounding-box aspect ratio above which a box-shaped hole is classified as rectangular
 rather than square.
 """
-
-
-@dataclass(frozen=True)
-class PlanarPoint:
-    """
-    A point on the board mesh's local ``x-y`` plane.
-    """
-
-    x: float
-    """
-    Position along the board mesh's local x-axis, in metres.
-    """
-
-    y: float
-    """
-    Position along the board mesh's local y-axis, in metres.
-    """
-
-
-@dataclass(frozen=True)
-class PlanarSize:
-    """
-    How far something reaches along the board mesh's local ``x`` and ``y`` axes.
-    """
-
-    x: float
-    """
-    Reach along the board mesh's local x-axis, in metres.
-    """
-
-    y: float
-    """
-    Reach along the board mesh's local y-axis, in metres.
-    """
 
 
 @dataclass(frozen=True)
@@ -206,9 +173,7 @@ def cut_board_mesh(
     :param footprints: The holes to cut, as detected by :func:`detect_hole_footprints`.
     :return: The board blank with all holes cut clean through it.
     """
-    board = trimesh.creation.box(
-        extents=(board_scale.x, board_scale.y, board_scale.z)
-    )
+    board = trimesh.creation.box(extents=(board_scale.x, board_scale.y, board_scale.z))
     cut_depth = board_scale.z * 2
     for footprint in footprints:
         cutter = footprint.extrude(cut_depth)

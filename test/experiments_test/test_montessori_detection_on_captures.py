@@ -167,10 +167,13 @@ LID_PIECES_STILL_MISSED: List[str] = [
     "non_inserted_objects",
 ]
 """
-The captures whose lid pieces the detectors cannot yet read.
+The captures whose lid pieces no look at them expects.
 
-Their pieces either wear the lid's own hue or touch one another, so segmentation hands
-the edge fit either nothing to start from or one blob covering several pieces.
+Their pieces wear the lid's own hue or touch one another, so no colour suggests a place
+to look; and a capture carries no world, so nothing else here believes anything about
+the lid. A look told where to expect a piece finds it (see
+``test_a_piece_wearing_the_surfaces_own_hue_is_found_where_it_is_expected``), and what
+would tell it on a capture is the object's own history.
 """
 
 
@@ -189,8 +192,9 @@ def test_every_piece_resting_on_the_lid_is_found(
             pytest.mark.xfail(
                 strict=True,
                 reason=(
-                    "Pieces on the lid are lost to it or to one another; owned by the "
-                    "plan item detector-parameters-from-knowledge."
+                    "Nothing tells this look to expect a piece on the lid, and colour "
+                    "cannot separate one there. Owned by the plan item "
+                    "expectations-from-events."
                 ),
             )
         )

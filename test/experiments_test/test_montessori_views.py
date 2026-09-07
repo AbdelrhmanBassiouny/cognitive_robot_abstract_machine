@@ -89,7 +89,7 @@ def test_a_hole_lands_at_its_own_world_position_in_the_rectified_lid(
     centers = [orthophoto.contour_center(contour) for contour in contours]
 
     assert min(
-        math.hypot(x - expected_x, y - expected_y) for x, y in centers
+        math.hypot(center.x - expected_x, center.y - expected_y) for center in centers
     ) == pytest.approx(0.0, abs=0.003)
 
 
@@ -215,7 +215,11 @@ def test_a_standing_piece_is_boxed_around_the_top_face_the_camera_sees(
     renderer: MontessoriSceneRenderer, pipeline: MontessoriPerceptionPipeline
 ):
     frame = renderer.render([PlacedPiece(MontessoriShapeCategory.CUBE, x=0.58, y=0.15)])
-    [piece] = pipeline.detect(frame).shapes
+    [piece] = [
+        detected
+        for detected in pipeline.detect(frame).shapes
+        if detected.supporting_surface == pipeline.table.name
+    ]
     view = CameraView(frame)
 
     drawn = DetectionOverlay().draw(view, MontessoriScene(shapes=[piece]))
