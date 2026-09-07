@@ -3,15 +3,12 @@ from __future__ import annotations
 import ast
 import builtins
 import importlib
-import inspect
 import os
-import subprocess
 import sys
 import types
-from copy import deepcopy
 from dataclasses import Field
 from dataclasses import fields, MISSING
-from functools import lru_cache, wraps
+from functools import lru_cache
 from importlib.util import resolve_name
 from inspect import isclass
 from os import PathLike
@@ -21,6 +18,11 @@ from typing import Tuple, Generic, Hashable
 from typing import Union, Any
 
 from typing_extensions import (
+    Dict,
+    get_origin,
+    get_args,
+)
+from typing_extensions import (
     TypeVar,
     Type,
     List,
@@ -29,12 +31,6 @@ from typing_extensions import (
     TypeVarTuple,
     _SpecialForm,
 )
-from typing_extensions import (
-    Iterable,
-    Dict,
-    get_origin,
-    get_args,
-)
 
 from krrood import logger
 from krrood.exceptions import (
@@ -42,7 +38,6 @@ from krrood.exceptions import (
     NoDefaultValueFound,
     PackageNameNotFoundError,
     PathMissingRequiredPartsError,
-    SubprocessExecutionError,
     SourceDataNotProvided,
 )
 
@@ -93,7 +88,6 @@ def get_default_value(dataclass_type, field_name):
 
     :param dataclass_type: The dataclass type to get the default value for.
     :param field_name: The name of the field to get the default value for.
-
     :return: The default value for the field.
     """
     for f in fields(dataclass_type):
@@ -111,10 +105,10 @@ def get_default_value(dataclass_type, field_name):
 def get_default_values_for_dataclass(dataclass_type):
     """
     Return a dict mapping field names to their default values.
+
     Only includes fields that actually define a default.
 
     :param dataclass_type: The dataclass type to get the default values for.
-
     :return: A dict mapping field names to their default values.
     """
     defaults = {}
@@ -343,9 +337,11 @@ def get_path_starting_from_latest_encounter_of(
     :param path: The full path to the file.
     :param package_name: The name of the package to start from.
     :param should_contain: The names of the files or directories to look for.
-    :return: The path starting from the package name that contains all the names in should_contain, otherwise raise an error.
+    :return: The path starting from the package name that contains all the names in
+        should_contain, otherwise raise an error.
     :raise PackageNameNotFoundError: If the package name could not be found in the path.
-    :raise PathMissingRequiredComponentsError: If the path does not contain all the names in should_contain.
+    :raise PathMissingRequiredComponentsError: If the path does not contain all the
+        names in should_contain.
     """
     path_parts = path.split(os.path.sep)
     if package_name not in path_parts:
@@ -463,8 +459,10 @@ def get_scope_from_imports(
     :param file_path: The path to the Python file to extract imports from.
     :param tree: An AST tree to extract imports from. If provided, file_path is ignored.
     :param package_name: The name of the package to use for relative imports.
-    :param source: The source code to extract imports from. If provided, file_path and tree are ignored.
-    :return: A dictionary representing the scope with imported modules and their attributes.
+    :param source: The source code to extract imports from. If provided, file_path and
+        tree are ignored.
+    :return: A dictionary representing the scope with imported modules and their
+        attributes.
     """
     if tree is None and file_path is None and source is None:
         raise SourceDataNotProvided(file_path, tree, source)
@@ -499,10 +497,12 @@ def get_and_import_module(
     module_name: str, package_name: Optional[str]
 ) -> types.ModuleType:
     """
-    Attempt to import a module with an optional package context and return the module or raise.
+    Attempt to import a module with an optional package context and return the module or
+    raise.
 
     :param module_name: The name of the module to import.
-    :param package_name: The package name to use for relative imports, or None for absolute imports.
+    :param package_name: The package name to use for relative imports, or None for
+        absolute imports.
     :return: The imported module.
     :raises ModuleNotFoundError: If the module cannot be found.
     """
@@ -550,7 +550,8 @@ def _resolve_relative_import(
     package_name: Optional[str],
 ) -> tuple[Optional[str], Optional[str]]:
     """
-    Resolve relative import context and possibly adjust module and package names based on file location.
+    Resolve relative import context and possibly adjust module and package names based
+    on file location.
 
     :param file_path: The path to the file containing the import statement.
     :param node: The import from node to process.
@@ -700,68 +701,13 @@ def _handle_import_from_node(
     return package_name
 
 
-TCallable = TypeVar("TCallable", bound=Callable[..., Any])
-
-
-def memoize(function: TCallable) -> TCallable:
-    """
-    Caches the return value of a function call at the instance level.
-    """
-
-    @wraps(function)
-    def wrapper(self, *args: Any, **kwargs: Any) -> Any:
-        if not hasattr(self, "__memo__"):
-            self.__memo__ = {}
-        memo = self.__memo__
-
-        key = (function, self, args, frozenset(kwargs.items()))
-        try:
-            return memo[key]
-        except KeyError:
-            rv = function(self, *args, **kwargs)
-            memo[key] = rv
-            return rv
-
-    return wrapper  # type: ignore
-
-
-def copy_memoize(function: TCallable) -> TCallable:
-    """
-    Caches the return value of a function call at the instance level but returns a deepcopy of the value.
-    """
-
-    @wraps(function)
-    def wrapper(self, *args, **kwargs):
-        if not hasattr(self, "__memo__"):
-            self.__memo__ = {}
-        memo = self.__memo__
-
-        key = (function, self, args, frozenset(kwargs.items()))
-        try:
-            return deepcopy(memo[key])
-        except KeyError:
-            rv = function(self, *args, **kwargs)
-            memo[key] = rv
-            return deepcopy(rv)
-
-    return wrapper
-
-
-def clear_memoization_cache(instance):
-    """
-    Clears the memoization cache of an instance.
-    """
-    if hasattr(instance, "__memo__"):
-        instance.__memo__.clear()
-
-
 def is_dynamic_class(cls: Type) -> bool:
     """
     Check if a class is dynamically created.
 
-    This is done by checking if the class is actually registered in that module under its own name
-    Normal classes will be found; classes created with  for instance make_dataclass  usually won't be
-    unless manually assigned.
+    This is done by checking if the class is actually registered in that module under
+    its own name Normal classes will be found; classes created with  for instance
+    make_dataclass  usually won't be unless manually assigned.
     :param cls: The class to check.
     :return: True if the class is dynamically created, False otherwise.
     """
