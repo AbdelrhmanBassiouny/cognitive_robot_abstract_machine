@@ -4,6 +4,7 @@ The ways Montessori perception can fail.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from typing_extensions import List, Tuple
@@ -465,4 +466,39 @@ class SurfaceNotSeenWhereTheWorldPutsIt(DataclassException):
         return (
             "Point the camera at the surface, or correct the height the world puts it "
             "at, so the picture and the model describe the same scene."
+        )
+
+
+@dataclass
+class CameraTiltedFurtherThanTrusted(DataclassException):
+    """
+    Raised when fitting the camera to a surface the world models asks it to turn further
+    than the setup trusts the model, which is a disagreement about the model rather than
+    about the pose.
+    """
+
+    measured_tilt: float
+    """
+    How far the fit wanted to turn the camera, in radians.
+    """
+
+    largest_trusted_tilt: float
+    """
+    How far it may be turned before the disagreement stops being a pose error, in
+    radians.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Fitting the camera to the modelled surface turns it "
+            f"{math.degrees(self.measured_tilt):.1f} deg, past the "
+            f"{math.degrees(self.largest_trusted_tilt):.1f} deg this setup reads as a "
+            "pose error."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check the surface the model states before the pose: a disagreement this "
+            "large is usually the plane being modelled at the wrong height or the wrong "
+            "place, which a turn of the camera would absorb rather than reveal."
         )
