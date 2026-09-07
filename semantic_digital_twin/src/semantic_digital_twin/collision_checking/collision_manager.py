@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from krrood.utils import memoize, clear_memoization_cache
+from krrood.patterns.caching import memoize, clear_memoization_cache
 from typing import Dict, Any, Self
 
 from typing_extensions import List, TYPE_CHECKING
