@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Type
+from typing_extensions import Any, Type
 
 from krrood.exceptions import DataclassException
 
@@ -77,4 +77,36 @@ class RoleAttributeNotDeclaredError(DataclassException):
         return (
             f"Declare '{self.attribute_name}' as a field on {self.role_type.__name__}, or assign "
             f"through .role_taker to change the underlying entity."
+        )
+
+
+@dataclass
+class UnmemoizableOwnerError(DataclassException):
+    """
+    Raised when a memoized call's owner cannot hold a cache.
+
+    A memoization cache lives exactly as long as the object whose results it caches, so
+    an owner whose lifetime cannot be observed has nowhere to keep one.
+    """
+
+    owner: Any
+    """
+    The receiver of the memoized call.
+    """
+
+    function_name: str
+    """
+    The name of the memoized function that was called.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.function_name}() was called on a {type(self.owner).__name__}, which cannot be "
+            f"weakly referenced and therefore cannot own a memoization cache."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Memoize on an object whose lifetime can be tracked, or cache "
+            f"{self.function_name}() with functools.lru_cache instead."
         )
