@@ -76,21 +76,25 @@ class PlaceAction(
 
     def _retract_plan(self, retract_pose: Pose) -> PlanNode:
         """
-        :return: The plan that re-parents the placed object back to the world and
-            retracts the end effector away from it.
+        :return: The plan that retracts the end effector away from the placed object,
+            re-parenting the object back to the world first unless the context leaves
+            attachment to a physics simulator.
         """
-        return sequential(
-            [
-                ReAttachNode(body=self.object_designator, new_parent=self.world.root),
-                MoveToolCenterPointMotion(
-                    retract_pose,
-                    self.arm,
-                    max_linear_velocity=self.retract_linear_velocity,
-                    position_threshold=self.position_threshold,
-                    orientation_threshold=self.orientation_threshold,
-                ),
-            ],
+        children = []
+        if self.context.update_world_model_attachment:
+            children.append(
+                ReAttachNode(body=self.object_designator, new_parent=self.world.root)
+            )
+        children.append(
+            MoveToolCenterPointMotion(
+                retract_pose,
+                self.arm,
+                max_linear_velocity=self.retract_linear_velocity,
+                position_threshold=self.position_threshold,
+                orientation_threshold=self.orientation_threshold,
+            )
         )
+        return sequential(children)
 
     @property
     def _action_plan(self) -> PlanNode:
