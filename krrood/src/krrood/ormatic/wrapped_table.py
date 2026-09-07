@@ -26,7 +26,8 @@ from krrood.class_diagrams.class_diagram import (
 )
 from krrood.class_diagrams.exceptions import ClassIsUnMappedInClassDiagram
 from krrood.class_diagrams.wrapped_field import WrappedField
-from krrood.utils import module_and_class_name, memoize
+from krrood.utils import module_and_class_name
+from krrood.patterns.caching import memoize
 
 if TYPE_CHECKING:
     from krrood.ormatic.ormatic import ORMatic
@@ -180,9 +181,9 @@ class AssociationObject:
 
 class TableLike(ABC):
     """
-    Common interface of :class:`WrappedTable` and :class:`ExternalTable`: something
-    that names a SQLAlchemy table, whether generated in this run or already mapped by
-    a dependency.
+    Common interface of :class:`WrappedTable` and :class:`ExternalTable`: something that
+    names a SQLAlchemy table, whether generated in this run or already mapped by a
+    dependency.
     """
 
     @property
@@ -213,9 +214,9 @@ class ExternalTable(TableLike):
     dependency.
 
     It is never rendered by the generator — its columns already exist in the
-    dependency's generated file. It exists purely so that local tables which use it
-    as a foreign key target, relationship target, or parent class can resolve it,
-    the same way they would resolve a locally generated :class:`WrappedTable`.
+    dependency's generated file. It exists purely so that local tables which use it as a
+    foreign key target, relationship target, or parent class can resolve it, the same
+    way they would resolve a locally generated :class:`WrappedTable`.
     """
 
     wrapped_clazz: WrappedClass
@@ -429,7 +430,10 @@ class WrappedTable(TableLike):
         )
         key = self._to_wrapped_tables_key(resolved_parent_wrapped)
         # the resolved parent may itself be mapped by a dependency rather than locally
-        if key not in self.ormatic.wrapped_tables and key not in self.ormatic.external_tables:
+        if (
+            key not in self.ormatic.wrapped_tables
+            and key not in self.ormatic.external_tables
+        ):
             return None
         return self.ormatic.table_for(key)
 
@@ -757,9 +761,7 @@ class WrappedTable(TableLike):
             ColumnConstructor(column_name, column_type, column_constructor)
         )
 
-    def get_table_of_wrapped_field(
-        self, wrapped_field: WrappedField
-    ) -> TableLike:
+    def get_table_of_wrapped_field(self, wrapped_field: WrappedField) -> TableLike:
         """
         :param wrapped_field: The wrapped field to get the table for.
         :return: The wrapped table for the given wrapped field.
