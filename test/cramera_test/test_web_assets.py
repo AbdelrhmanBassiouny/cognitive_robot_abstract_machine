@@ -1,0 +1,291 @@
+"""
+Consistency checks of the packaged frontend, plus the node-based JS tests.
+
+The asset checks keep the panel architecture honest: every asset the shell references
+must exist, every panel id in config.js must be defined by an included panel script, and
+panels must not reach outside their own DOM subtree.
+"""
+
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+from typing_extensions import List
+
+from cramera.knowledge.eql_session import EqlSession
+from cramera.knowledge.query_runner import RenderResult
+from cramera.paths import WEB_ROOT
+
+JS_DIR = Path(__file__).parent / "js"
+
+TAB_LABEL_PATTERN = re.compile(r"label:\s*'[^']*'")
+"""
+How ``config.js`` writes a tab's display text, as opposed to the panel id beside it.
+"""
+
+RUN_NODE_PATTERN = re.compile(r'run_node\("([^"]+)"\)')
+"""
+How :class:`TestJsUnits` names each node test file it runs.
+"""
+
+SCRIPT_PATTERN = re.compile(r'<script src="([^"]+)"')
+"""
+How the shell references the assets that must ship with it.
+"""
+
+STYLESHEET_PATTERN = re.compile(r'<link rel="stylesheet" href="([^"]+)"')
+IMAGE_PATTERN = re.compile(r'<img[^>]+src="([^"]+)"')
+CSS_URL_PATTERN = re.compile(r"url\(['\"]?([^)'\"]+)['\"]?\)")
+
+#: the EQL variables the query panel advertises: the ``vars:`` list in its placeholder,
+#: and every bare identifier it marks up as ``<code>``
+ADVERTISED_VARIABLES_PATTERN = re.compile(r"vars: ([a-z_, ]+)")
+MARKED_UP_IDENTIFIER_PATTERN = re.compile(r"<code>([a-z_]+)</code>")
+
+#: the ready-to-run query the panel shows in its empty input box
+PLACEHOLDER_QUERY_PATTERN = re.compile(r'placeholder="(the\(entity.*?\)\))')
+
+
+def read(relative_path: str) -> str:
+    """
+    The text of one packaged frontend file.
+    """
+    return (WEB_ROOT / relative_path).read_text(encoding="utf-8")
+
+
+def configured_panel_ids() -> set[str]:
+    """
+    Every panel id ``config.js`` mounts, a tab group's own entries included.
+
+    Labels are display text rather than ids, so they are dropped before the quoted names
+    are read out.
+    """
+    layout = read("config.js").split("layout", 1)[1]
+    return set(re.findall(r"'([\w-]+)'", TAB_LABEL_PATTERN.sub("", layout)))
+
+
+def panel_scripts() -> List[Path]:
+    """
+    Every script belonging to a panel, at any depth under ``panels/``.
+    """
+    return sorted(WEB_ROOT.glob("panels/**/*.js"))
+
+
+class TestAssetConsistency:
+    def test_every_included_script_exists(self):
+        for source in SCRIPT_PATTERN.findall(read("index.html")):
+            assert (WEB_ROOT / source).is_file(), source
+
+    def test_stylesheet_and_slots_exist(self):
+        html = read("index.html")
+        for href in STYLESHEET_PATTERN.findall(html):
+            assert (WEB_ROOT / href).is_file(), href
+        assert 'data-slot="left"' in html and 'data-slot="right"' in html
+
+    def test_every_referenced_image_exists(self):
+        """
+        A missing image is invisible at runtime, so it has to fail here.
+        """
+        for source in IMAGE_PATTERN.findall(read("index.html")):
+            assert (WEB_ROOT / source).is_file(), source
+
+    def test_every_css_url_resolves(self):
+        """
+        Backgrounds and fonts referenced by the stylesheet must ship with it.
+        """
+        for reference in CSS_URL_PATTERN.findall(read("app.css")):
+            if reference.startswith(("data:", "http:", "https:", "//")):
+                continue
+            assert (WEB_ROOT / reference).is_file(), reference
+
+    def test_no_undefined_css_variables(self):
+        """
+        A ``var(--x)`` with no declaration silently drops the whole property.
+        """
+        stylesheet = read("app.css")
+        declared = set(re.findall(r"(--[\w-]+)\s*:", stylesheet))
+        used = set(re.findall(r"var\((--[\w-]+)", stylesheet))
+        assert used <= declared, used - declared
+
+    def test_configured_panels_are_defined(self):
+        defined = set()
+        for panel_js in WEB_ROOT.glob("panels/*/panel.js"):
+            defined |= set(
+                re.findall(r"Panels\.define\('([\w-]+)'", panel_js.read_text())
+            )
+        configured = configured_panel_ids()
+        assert configured <= defined, configured - defined
+
+    def test_a_tab_groups_panels_are_read_out_of_the_layout_too(self):
+        """
+        A tabbed panel's id sits behind a ``panel:`` key rather than in the slot's own
+        list, so a reader of bare entries alone would stop checking it and say nothing.
+        """
+        assert {"event-timeline", "plan-graph"} <= configured_panel_ids()
+
+    def test_panels_only_query_their_own_root(self):
+        """
+        A panel owns its DOM subtree; a document-level lookup couples it to the shell
+        and to whichever other panel happens to use the same id.
+        """
+        for panel_js in panel_scripts():
+            source = panel_js.read_text()
+            assert "document.getElementById" not in source, panel_js.name
+            assert "document.querySelector" not in source, panel_js.name
+
+    def test_no_stale_static_urls(self):
+        # the old repo served under /static/; the packaged app is rooted at /
+        for panel_js in panel_scripts():
+            assert "'static/" not in panel_js.read_text(), panel_js.name
+
+
+class TestJsSuiteRegistration:
+    """
+    A node test file only runs if :class:`TestJsUnits` names it, and nothing else would
+    report one that is missing — it would simply never execute.
+    """
+
+    def test_every_node_test_file_is_run(self):
+        registered = set(RUN_NODE_PATTERN.findall(Path(__file__).read_text()))
+
+        assert {path.name for path in JS_DIR.glob("test_*.js")} == registered
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+class TestJsUnits:
+    def run_node(self, name: str) -> None:
+        """
+        Run one node test file, failing with its output.
+        """
+        result = subprocess.run(
+            ["node", "--test", str(JS_DIR / name)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_bus_and_registry(self):
+        self.run_node("test_bus_registry.js")
+
+    def test_panel_tabs(self):
+        self.run_node("test_panel_tabs.js")
+
+    def test_timeline_layout(self):
+        self.run_node("test_timeline_layout.js")
+
+    def test_event_summary(self):
+        self.run_node("test_event_summary.js")
+
+    def test_event_timeline_panel(self):
+        self.run_node("test_event_timeline_panel.js")
+
+    def test_graph_status_rendering(self):
+        self.run_node("test_graph_status.js")
+
+    def test_graph_panel(self):
+        self.run_node("test_graph_panel.js")
+
+    def test_plan_graph_panel(self):
+        self.run_node("test_plan_graph_panel.js")
+
+    def test_response_util(self):
+        self.run_node("test_response_util.js")
+
+    def test_scene_context(self):
+        self.run_node("test_scene_context.js")
+
+    def test_query_source_routing(self):
+        self.run_node("test_query_source.js")
+
+    def test_run_control_buttons(self):
+        self.run_node("test_run_control.js")
+
+    def test_live_attach_decision(self):
+        self.run_node("test_live_attach.js")
+
+    def test_answer_table(self):
+        self.run_node("test_answer_table.js")
+
+    def test_preset_groups(self):
+        self.run_node("test_preset_groups.js")
+
+    def test_scene_picker(self):
+        self.run_node("test_scene_picker.js")
+
+    def test_collada_mesh(self):
+        self.run_node("test_collada_mesh.js")
+
+    def test_environment_theme(self):
+        self.run_node("test_environment_theme.js")
+
+    def test_split_sizing(self):
+        self.run_node("test_split_sizing.js")
+
+    def test_split_resize(self):
+        self.run_node("test_split_resize.js")
+
+    def test_graph_gestures(self):
+        self.run_node("test_graph_gestures.js")
+
+    def test_joint_routing(self):
+        self.run_node("test_joint_routing.js")
+
+
+class TestQueryPanelReadsTheAnswer:
+    """
+    The answer payload is produced in Python and consumed in JavaScript, so a renamed
+    key drifts silently until someone opens the panel.
+    """
+
+    def test_the_panel_reads_the_verbalization_under_the_key_it_is_sent_as(self):
+        payload = RenderResult(
+            kind="rows", rows=[], count=0, more=False, highlight=[]
+        ).to_payload()
+
+        assert "verbalization" in payload
+        assert "res.verbalization" in read("panels/eql/panel.js")
+
+    def test_the_verbalization_is_styled_by_the_stylesheet(self):
+        """
+        The words are coloured by krrood; the block they sit in is cramera's own.
+        """
+        panel = read("panels/eql/panel.js")
+        assert 'class="qverb"' in panel
+        assert ".qverb{" in read("app.css")
+
+
+class TestQueryPanelHints:
+    """
+    The EQL panel hard-codes the variable names it tells users to type, so a rename in
+    the EQL namespace silently leaves the panel advertising names that no longer
+    resolve.
+    """
+
+    def advertised_variables(self) -> List[str]:
+        """
+        Every EQL variable name the query panel offers the user.
+        """
+        panel = read("panels/eql/panel.js")
+        [listed] = ADVERTISED_VARIABLES_PATTERN.findall(panel)
+        names = [name.strip() for name in listed.split(",")]
+        return sorted(set(names) | set(MARKED_UP_IDENTIFIER_PATTERN.findall(panel)))
+
+    def test_every_advertised_variable_exists_in_the_namespace(self, fixture_scene):
+        namespace = EqlSession.of_active_scene().namespace()
+        assert self.advertised_variables()
+        for name in self.advertised_variables():
+            assert name in namespace, name
+
+    def test_the_placeholder_query_runs(self, fixture_scene):
+        """
+        The query shown in the empty input box must be one a user can actually run.
+        """
+        placeholder = PLACEHOLDER_QUERY_PATTERN.search(read("panels/eql/panel.js"))
+        assert placeholder is not None
+        result = EqlSession.of_active_scene().run(
+            placeholder.group(1).replace("\\'", "'")
+        )
+        assert result.ok

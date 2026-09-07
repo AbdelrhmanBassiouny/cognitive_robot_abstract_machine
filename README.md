@@ -89,6 +89,22 @@ Install the CRAM package along with its dependencies:
 poetry install
 ```
 
+### Generate the ORM interfaces
+
+The database mappings of the packages (their `ormatic_interface.py`) are generated code
+that is never reviewed, so the repository ignores them rather than tracking them. Build
+them once after cloning, and again whenever a mapped datastructure changes:
+
+```bash
+python scripts/regenerate_all_orm.py
+```
+
+Until then, anything that reads objects from or writes objects to a database - including
+the probabilistic query backend - raises `NoDAOFoundError`. Generating takes about a
+minute; git ignores what it writes, so the generated content is never proposed for
+staging and never stands in the way of a branch switch (see
+[contributing](doc/contributing.rst)).
+
 ## To run tests
 
 **1. Install system dependencies, set up and build the ROS 2 workspace**
