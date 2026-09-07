@@ -11,7 +11,7 @@ from typing import Set, Generic, TypeVar as TypingTypeVar
 
 from sqlalchemy import types, TypeDecorator
 from typing_extensions import Dict, Any, Sequence, Self
-from typing_extensions import List, Optional, Type
+from typing_extensions import List, Optional, Tuple, Type
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.class_diagrams.mocking import MockedClass
@@ -27,6 +27,7 @@ from krrood.ormatic.data_access_objects.alternative_mappings import (
 )
 from krrood.symbol_graph.symbol_graph import Symbol
 from krrood import logger
+
 try:
     from random_events.interval import Bound, SimpleInterval
     from krrood.parametrization.feature_extraction.aggregations import (
@@ -36,8 +37,9 @@ try:
 except ImportError as e:
     # Was added to allow this to work on Windows which random_events does not support.
     logger.debug(f"Could not import random_events: {e}")
-    class AggregationStatistic(MockedClass, Generic[T]):
-        ...
+
+    class AggregationStatistic(MockedClass, Generic[T]): ...
+
     aggregation_statistic = lambda *args: lambda *args2: args2
     Bound = NoneType
     SimpleInterval = NoneType
@@ -113,6 +115,15 @@ class KRROODPositions(Symbol):
 @dataclass
 class KRROODPositionsSubclassWithAnotherKRROODPosition(KRROODPositions):
     positions2: KRROODPosition
+
+
+# check that a many-to-many relationship typed as a tuple (immutable, unlike list) also
+# maps cleanly -- SQLAlchemy's relationship() only accepts a mutable collection_class
+# (list/set/dict, or a custom @collection-decorated class), so this must not be passed
+# tuple directly
+@dataclass
+class KRROODPositionsAsTuple(Symbol):
+    positions: Tuple[KRROODPosition, ...]
 
 
 # check that one to many relationships work where the many side is of the same type
@@ -919,3 +930,23 @@ class ActionWithMissingAggregationsMixin:
     """
 
     domain_object: Cabinet
+
+
+# %% Builtin types SQLAlchemy has no column type for
+
+
+@dataclass
+class HoldsAnException:
+    """
+    Class with a field whose type lives in ``builtins`` yet cannot be a column.
+    """
+
+    name: str
+    """
+    A field that does map to a column, so a skipped neighbour is visibly the exception.
+    """
+
+    cause: Optional[BaseException] = None
+    """
+    The exception that was raised, kept only while the object is alive.
+    """

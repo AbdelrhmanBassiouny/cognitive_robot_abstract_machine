@@ -46,6 +46,7 @@ from krrood.entity_query_language.factories import (
     not_,
     max,
     min,
+    mode,
     sum,
     average,
     set_of,
@@ -546,6 +547,30 @@ def test_having_with_min(session, database):
     assert len(results) == 2
     names = sorted([r.name for r in results])
     assert names == ["Body1", "Body3"]
+
+
+def test_having_with_mode(session, database):
+    """
+    Prove bug: mode(b.size) is not translated by _translate_comparator_operand, so
+    grouping/selecting it raises NoDAOFoundForSelectionError instead of emitting
+    MODE() WITHIN GROUP (ORDER BY ...).
+    """
+    session.add(BodyDAO(name="Group1", size=10))
+    session.add(BodyDAO(name="Group1", size=10))
+    session.add(BodyDAO(name="Group1", size=20))
+    session.add(BodyDAO(name="Group2", size=5))
+    session.commit()
+
+    b = variable(type_=Body, domain=[])
+    most_common_size = mode(b.size)
+    query = an(set_of(b.name, most_common_size).grouped_by(b.name))
+
+    translator = eql_to_sql(query, session)
+    expected = select(BodyDAO.name, func.mode().within_group(BodyDAO.size)).group_by(
+        BodyDAO.name
+    )
+
+    assert str(translator.sql_query) == str(expected)
 
 
 def test_having_with_sum(session, database):
@@ -1285,6 +1310,86 @@ def test_case_when_with_max(session):
     assert str(translator.sql_query) == str(expected)
 
 
+def test_sum_of_bare_comparator_casts_boolean_to_integer(session, database):
+    """
+    Prove bug: EntityAggregator now accepts a bare Comparator child (e.g. ``sum(b.size ==
+    10)``, not just ``sum(case_when(...))``), but the translator passed the comparator
+    straight through as SUM(size = 10). Postgres has no ``sum(boolean)`` overload, so this
+    fails at execution; only SQLite's untyped booleans hid it locally, and the query also
+    could not resolve its base DAO (``NoDAOFoundForSelectionError``) since a Comparator
+    was not one of the recognised child-DAO shapes.
+
+    After the fix, a bare Comparator child is lowered to ``CASE WHEN ... THEN 1 ELSE 0
+    END`` so SUM receives an integer, and the DAO is resolved through the comparator's
+    operands.
+    """
+    session.add(BodyDAO(name="Body1", size=10))
+    session.add(BodyDAO(name="Body2", size=20))
+    session.commit()
+
+    b = variable(type_=Body, domain=[])
+    query = an(set_of(sum(b.size == 10)))
+
+    translator = eql_to_sql(query, session)
+    expected = select(BodyDAO).with_only_columns(
+        func.sum(case((BodyDAO.size == 10, 1), else_=0))
+    )
+
+    assert str(translator.sql_query) == str(expected)
+
+    results = translator.evaluate()
+    assert list(results[0].values()) == [1]
+
+
+def test_average_of_bare_comparator_casts_boolean_to_integer(session):
+    """
+    Verify average(comparator) also lowers its boolean child to an integer CASE
+    expression — the same fix as :func:`test_sum_of_bare_comparator_casts_boolean_to_integer`
+    applied to AVG, which has no boolean overload in Postgres either.
+    """
+    b = variable(type_=Body, domain=[])
+    query = an(set_of(average(b.size == 10)))
+
+    translator = eql_to_sql(query, session)
+    expected = select(BodyDAO).with_only_columns(
+        func.avg(case((BodyDAO.size == 10, 1), else_=0))
+    )
+
+    assert str(translator.sql_query) == str(expected)
+
+
+def test_max_of_bare_comparator_casts_boolean_to_integer(session):
+    """
+    Verify max(comparator) also lowers its boolean child to an integer CASE expression —
+    Postgres has no ``max(boolean)`` overload either.
+    """
+    b = variable(type_=Body, domain=[])
+    query = an(set_of(max(b.size == 10)))
+
+    translator = eql_to_sql(query, session)
+    expected = select(BodyDAO).with_only_columns(
+        func.max(case((BodyDAO.size == 10, 1), else_=0))
+    )
+
+    assert str(translator.sql_query) == str(expected)
+
+
+def test_min_of_bare_comparator_casts_boolean_to_integer(session):
+    """
+    Verify min(comparator) also lowers its boolean child to an integer CASE expression —
+    Postgres has no ``min(boolean)`` overload either.
+    """
+    b = variable(type_=Body, domain=[])
+    query = an(set_of(min(b.size == 10)))
+
+    translator = eql_to_sql(query, session)
+    expected = select(BodyDAO).with_only_columns(
+        func.min(case((BodyDAO.size == 10, 1), else_=0))
+    )
+
+    assert str(translator.sql_query) == str(expected)
+
+
 def test_entity_from_multi_hop_attribute(session, database):
     """
     Prove bug: entity(a.pose.position) where the chain is two hops deep (NestedAction →
@@ -1328,8 +1433,12 @@ def test_entity_with_relationship_selected_variable(session, database):
     After the fix, GraspConfigDAO must be joined with MoveActionDAO via the FK so only
     the grasp_config linked to a high-robot_x move is returned.
     """
-    grasp_matching = GraspConfigDAO(rotate_gripper=0.3, approach_direction=0.0, manipulation_offset=0.0)
-    grasp_not_matching = GraspConfigDAO(rotate_gripper=0.9, approach_direction=0.0, manipulation_offset=0.0)
+    grasp_matching = GraspConfigDAO(
+        rotate_gripper=0.3, approach_direction=0.0, manipulation_offset=0.0
+    )
+    grasp_not_matching = GraspConfigDAO(
+        rotate_gripper=0.9, approach_direction=0.0, manipulation_offset=0.0
+    )
     session.add(grasp_matching)
     session.add(grasp_not_matching)
 
@@ -1426,8 +1535,12 @@ def test_exists_in_where_clause(session, database):
 
     so only MoveActions that have an associated GraspConfig are returned.
     """
-    grasp_a = GraspConfigDAO(rotate_gripper=0.1, approach_direction=0.0, manipulation_offset=0.0)
-    grasp_b = GraspConfigDAO(rotate_gripper=0.5, approach_direction=0.0, manipulation_offset=0.0)
+    grasp_a = GraspConfigDAO(
+        rotate_gripper=0.1, approach_direction=0.0, manipulation_offset=0.0
+    )
+    grasp_b = GraspConfigDAO(
+        rotate_gripper=0.5, approach_direction=0.0, manipulation_offset=0.0
+    )
     session.add_all([grasp_a, grasp_b])
 
     move_with_grasp_a = MoveActionDAO(robot_x=1.0, robot_y=0.0, hip_rotation=0.0)

@@ -13,7 +13,7 @@ from segmind.datastructures.object_tracker import ObjectTrackerFactory
 from segmind.event_logger import EventLogger
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.world_description.connections import Connection6DoF
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body, Region
 
 
 @dataclass
@@ -79,6 +79,20 @@ class SegmindContext(ContextExtension):
     holes: List[Aperture] = field(default_factory=list)
     """
     List of bodies that can be considered holes
+    """
+
+    latest_hole_contacts: Dict[Body, Set[Region]] = field(default_factory=dict)
+    """
+    Dictionary mapping each body to the set of hole Regions (see :attr:`holes`) it is
+    currently overlapping.
+
+    Kept separate from :attr:`latest_contact_bodies` rather than reused for it: an
+    aperture's root is a virtual ``Region``, never seen by the world's collision
+    manager, so it is detected by a different (mesh-overlap) check than real
+    body-body :attr:`latest_contact_bodies`, and mixing the two would make
+    :class:`~segmind.detectors.atomic_event_detectors_nodes.LossOfContactDetector`
+    (which only ever recomputes real contact) immediately -- and incorrectly -- drop
+    every hole entry the very next tick.
     """
 
     insertion_pairs: set[Any] = field(default_factory=set)
@@ -151,6 +165,45 @@ class AbstractDetector(MotionStatechartNode, ABC):
                 if predicate(obj, body):
                     related_bodies.setdefault(obj, set()).add(body)
         return related_bodies
+
+    def get_relation_to_holes(
+        self,
+        segmind_context: SegmindContext,
+        tracked_objects: List[Body],
+        predicate,
+        additional_candidates: Optional[Dict[Aperture, Region]] = None,
+    ) -> Dict[Body, Set[Region]]:
+        """
+        Like :meth:`get_relation`, but checked against each hole's own ``Region`` root
+        (:attr:`SegmindContext.holes`) instead of ``context.world.bodies_with_collision``.
+
+        A hole is a virtual :class:`~semantic_digital_twin.world_description.world_entity.Region`,
+        never registered with the world's collision manager, so it is never among
+        ``bodies_with_collision`` and needs its own candidate set.
+
+        :param segmind_context: The shared SegmindContext holding the detected holes.
+        :param tracked_objects: List of bodies to check for a relation to a hole.
+        :param predicate: Function that returns true if a body and a Region are related.
+        :param additional_candidates: An extra region checked alongside a given hole's
+            own root, keyed by that hole, e.g. a scene-specific volume built around it
+            for a more reliable check than that hole's own (possibly very thin) root
+            region gives on its own. A match against the extra region is still recorded
+            against that hole's own root, not the extra region, so callers matching on
+            a hole's identity (e.g. :class:`~segmind.detectors.spatial_relation_detector_nodes.InsertionDetector`)
+            need no change. Defaults to none, so every existing caller's behaviour is
+            unchanged.
+        :return: Dictionary mapping bodies to sets of related hole root regions.
+        """
+        additional_candidates = additional_candidates or {}
+        related_regions: Dict[Body, Set[Region]] = {}
+        for obj in tracked_objects:
+            for hole in segmind_context.holes:
+                candidates = [hole.root]
+                if hole in additional_candidates:
+                    candidates.append(additional_candidates[hole])
+                if any(predicate(obj, candidate) for candidate in candidates):
+                    related_regions.setdefault(obj, set()).add(hole.root)
+        return related_regions
 
     @abstractmethod
     def update_context_and_events(self, context:MotionStatechartContext, segmind_context:SegmindContext, tracked_objects: List[Body]) -> List[DetectionEvent]:
