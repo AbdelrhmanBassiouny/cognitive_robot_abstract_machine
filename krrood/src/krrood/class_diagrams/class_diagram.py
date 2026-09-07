@@ -7,7 +7,8 @@ from abc import ABC
 from copy import copy
 from dataclasses import dataclass, is_dataclass
 from dataclasses import field
-from functools import cached_property
+from functools import cached_property, lru_cache
+from types import GenericAlias
 from typing import _GenericAlias
 
 import rustworkx as rx
@@ -1219,12 +1220,17 @@ class ClassDiagram:
                         to_process.add(wrapped_field.type_endpoint)
 
 
-@memoize
-def make_specialized_dataclass(alias: _GenericAlias) -> Type:
+@lru_cache(maxsize=None)
+def make_specialized_dataclass(alias: Union[_GenericAlias, GenericAlias]) -> Type:
     """
     Build a concrete dataclass for a fully specialized generic alias, e.g., GenericClass[float].
 
     The resulting class is intended for internal use only and should never be used directly.
+    One class is built per alias, so two ways of writing the same specialization share it.
+
+    ..note:: The result is cached against the alias rather than on it, since an alias of
+        a class that subscripts through :class:`types.GenericAlias` holds no attributes
+        of its own.
 
     :param alias: The fully specialized generic alias to build a dataclass for.
     :return: A concrete dataclass corresponding to the provided alias.

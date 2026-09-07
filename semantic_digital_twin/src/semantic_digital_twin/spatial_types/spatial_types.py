@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
 from enum import Enum
@@ -47,6 +47,7 @@ from semantic_digital_twin.exceptions import (
     SpatialTypesError,
     SpatialTypeNotJsonSerializable,
 )
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
@@ -189,9 +190,49 @@ class SpatialType:
         return result
 
 
+class HasPosition(ABC):
+    """
+    Something the world can say the place of: a point, or anything standing somewhere in
+    the world.
+
+    A relation that reads where a thing is is written over this rather than over each
+    kind of thing it accepts, so a point, a pose and an entity of the world are all read
+    the one way.
+    """
+
+    @abstractmethod
+    def to_position(self) -> Point3:
+        """
+        Where this stands.
+        """
+
+
+class HasPose(HasPosition, ABC):
+    """
+    Something that stands in a pose: a pose itself, or a thing of the world standing in
+    one.
+
+    A relation that reads which way a thing faces is written over this rather than over
+    each kind of thing it accepts, so a pose, a transformation and an entity of the
+    world are all read the one way.
+    """
+
+    @abstractmethod
+    def to_pose(self) -> Pose:
+        """
+        The pose this stands in.
+        """
+
+    def to_position(self) -> Point3:
+        """
+        Where this stands, which is where the pose it stands in puts it.
+        """
+        return self.to_pose().to_position()
+
+
 @dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
-    sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, SelfNamingValue
+    HasPose, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, SelfNamingValue
 ):
     """
     Represents a 4x4 transformation matrix used in kinematics and transformations.
@@ -543,6 +584,15 @@ class HomogeneousTransformationMatrix(
         result = Pose.from_casadi_sx(casadi_sx=self.casadi_sx)
         result.reference_frame = self.reference_frame
         return result
+
+    def to_position_quaternion_list(self) -> List[float]:
+        """
+        :return: This transform's position and orientation, as
+            ``[x, y, z, qx, qy, qz, qw]``.
+        """
+        return NumericPose.from_transformation_matrix(
+            self.to_np()
+        ).to_position_quaternion_list()
 
     def _copy_with_data(self, data: ca.SX) -> HomogeneousTransformationMatrix:
         result = super()._copy_with_data(data)
@@ -992,7 +1042,7 @@ class Point(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, ABC):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Point3(Point):
+class Point3(HasPosition, Point):
     """
     Represents a 3D point with reference frame handling.
 
@@ -1021,6 +1071,12 @@ class Point3(Point):
         self.casadi_sx = sm.to_sx([x, y, z, 1])
         self.reference_frame = reference_frame
         super().__post_init__()
+
+    def to_position(self) -> Point3:
+        """
+        Where this stands, which for a point is itself.
+        """
+        return self
 
     def _verify_type(self):
         if self.shape == (3, 1):
@@ -2021,7 +2077,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Pose(HasPose, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __init__(
         self,
@@ -2225,6 +2281,12 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def orientation(self) -> Quaternion:
         return self.to_quaternion()
 
+    def to_pose(self) -> Pose:
+        """
+        The pose this stands in, which is itself.
+        """
+        return self
+
     def to_position(self) -> Point3:
         result = Point3.from_iterable(
             self[:4, 3:], reference_frame=self.reference_frame
@@ -2236,6 +2298,30 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def to_quaternion(self) -> Quaternion:
         return self.to_rotation_matrix().to_quaternion()
+
+    def to_position_quaternion_list(self) -> List[float]:
+        """
+        :return: This pose's position and orientation, as ``[x, y, z, qx, qy, qz, qw]``.
+        """
+        return NumericPose.of_pose(self).to_position_quaternion_list()
+
+    @classmethod
+    def from_numeric_pose(
+        cls,
+        numeric_pose: NumericPose,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Self:
+        """
+        Build a pose from one that was read out into numbers.
+
+        :param numeric_pose: The numbers to build the pose from.
+        :param reference_frame: The frame the pose is expressed in.
+        """
+        return cls.from_xyz_quaternion(
+            *numeric_pose.position,
+            *numeric_pose.quaternion,
+            reference_frame=reference_frame,
+        )
 
     def to_homogeneous_matrix(self) -> HomogeneousTransformationMatrix:
         return HomogeneousTransformationMatrix(
@@ -2255,7 +2341,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Pose2D(HasPose, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     """
     Represents a 2D pose consisting of an x coordinate, a y coordinate, and a yaw angle.
 

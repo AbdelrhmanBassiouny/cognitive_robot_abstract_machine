@@ -40,6 +40,7 @@ from krrood.entity_query_language.operators.aggregators import (
     Count,
     Max,
     Min,
+    Mode,
     Sum,
     Average,
 )
@@ -719,13 +720,18 @@ class EQLTranslator:
         """
         Extract the base DAO class from an expression node.
 
-        Handles Attribute chains and CaseWhen nodes.
+        Handles Attribute chains, CaseWhen nodes and Comparator nodes (an aggregator's
+        child can now be a bare boolean comparator, e.g. ``sum(b.size == 10)``).
         """
         if isinstance(expression, Attribute):
             resolver = AttributeChainResolver()
             return resolver.extract_base_dao(expression)
         if isinstance(expression, CaseWhen):
             return self._extract_dao_from_expression(expression.then_value)
+        if isinstance(expression, Comparator):
+            return self._extract_dao_from_expression(
+                expression.left
+            ) or self._extract_dao_from_expression(expression.right)
         if isinstance(expression, Aggregator):
             if hasattr(expression, "_child_"):
                 return self._extract_dao_from_expression(expression._child_)
@@ -1152,6 +1158,23 @@ class EQLTranslator:
 
         return True
 
+    def _translate_aggregated_child(self, child: Any) -> Any:
+        """
+        Translate an EntityAggregator's child, lowering a bare boolean comparator to an
+        integer ``CASE WHEN ... THEN 1 ELSE 0 END``.
+
+        Postgres's ``SUM``/``AVG``/``MAX``/``MIN`` have no boolean overload, so a
+        Comparator child (a valid EQL aggregator child, e.g. ``sum(b.size == 10)``) must
+        be cast to 0/1 rather than passed through as a raw boolean expression.
+
+        :param child: The aggregator's child expression.
+        :return: The translated SQL expression.
+        """
+        translated = self.translate_query(child)
+        if isinstance(child, Comparator):
+            return case((translated, 1), else_=0)
+        return translated
+
     def _translate_comparator_operand(self, operand: Any) -> Any:
         """
         Translate a comparator operand to SQL.
@@ -1170,20 +1193,24 @@ class EQLTranslator:
             return func.count() if col is None else func.count(col)
 
         if isinstance(operand, Max):
-            col = self.translate_query(operand._child_)
+            col = self._translate_aggregated_child(operand._child_)
             return func.max(col)
 
         if isinstance(operand, Min):
-            col = self.translate_query(operand._child_)
+            col = self._translate_aggregated_child(operand._child_)
             return func.min(col)
 
         if isinstance(operand, Average):
-            col = self.translate_query(operand._child_)
+            col = self._translate_aggregated_child(operand._child_)
             return func.avg(col)
 
         if isinstance(operand, Sum):
-            col = self.translate_query(operand._child_)
+            col = self._translate_aggregated_child(operand._child_)
             return func.sum(col)
+
+        if isinstance(operand, Mode):
+            col = self.translate_query(operand._child_)
+            return func.mode().within_group(col)
 
         if isinstance(operand, CaseWhen):
             condition = self.translate_query(operand.condition)

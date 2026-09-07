@@ -23,6 +23,8 @@ from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import FixedScene, RecordedFrame
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
+from experiments.montessori.perception.exceptions import SightingHasNoBody
+from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from semantic_digital_twin.reasoning.predicates import (
@@ -34,6 +36,7 @@ from semantic_digital_twin.reasoning.predicates import (
     PlacementRelation,
     RightOf,
     SupportedBy,
+    Turned,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -62,13 +65,12 @@ def looking_for_something_supported_by(surface: WorkspaceSurface):
     A statement asking a look for whatever rests on a surface, said as a relation.
 
     The statement names the world entity, since that is what support is a relation
-    between; the pipeline fixtures hold only the measurement taken of it, so the body
-    standing for it here carries the very name that measurement records.
+    between, and a measured surface carries the very entity it was measured of.
 
     :param surface: The measured surface whose world entity is asked about.
     """
     statement = a(DetectedMontessoriShape)()
-    return statement.where(SupportedBy(statement.variable, Body(name=surface.name)))
+    return statement.where(SupportedBy(statement.variable, surface.entity))
 
 
 @pytest.fixture
@@ -137,7 +139,7 @@ def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
     The relation itself rather than a patch in metres: what it allows is read where the
     frame the detections are reported in is known, which is the look.
     """
-    lid = Body(name=pipeline.lid.name)
+    lid = pipeline.lid.entity
     statement = a(DetectedMontessoriShape)()
     statement = statement.where(Near(statement.variable, lid, radius=0.05))
 
@@ -149,6 +151,83 @@ def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
     assert isinstance(placement, Near)
     assert placement.place is lid
     assert placement.radius == 0.05
+
+
+def test_a_stated_turn_reaches_the_look_as_the_relation_that_says_it():
+    """
+    Which way round to lay a piece is something the look can act on, so it is read off
+    the statement like a placement is.
+    """
+    statement = a(DetectedMontessoriShape)()
+    statement = statement.where(Turned(statement.variable, yaw=0.3, spread=0.1))
+
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
+
+    assert isinstance(request.turn, Turned)
+    assert request.turn.body is None
+    assert (request.turn.yaw, request.turn.spread) == (0.3, 0.1)
+
+
+def test_a_stated_turn_is_checked_over_what_came_back(
+    scene: MontessoriScene, looking: MontessoriPerceptionBackend
+):
+    """
+    A look already taken laid its pieces whichever way it did, so a stated turn is
+    checked over what it reported.
+    """
+
+    def turned_to(yaw: float):
+        statement = a(DetectedMontessoriShape)()
+        return statement.where(Turned(statement.variable, yaw=yaw, spread=0.05))
+
+    as_laid = list(turned_to(0.0).evaluate(backend=looking))
+    a_turn_away = list(turned_to(1.0).evaluate(backend=looking))
+
+    assert len(as_laid) == len(scene.shapes)
+    assert a_turn_away == []
+
+
+def test_a_relation_naming_nothing_to_rest_on_is_satisfied_by_resting_on_anything(
+    scene: MontessoriScene,
+):
+    """
+    *Supported by something* asks less than *supported by the lid*, so a look answering
+    it is contradicted by nothing it found.
+    """
+    seen = scene.shapes[0]
+
+    assert MontessoriPerceptionBackend.contradicted_by(seen, [an(SupportedBy)()]) == ()
+
+
+def test_a_relation_the_look_cannot_establish_is_asked_of_the_sightings_body(
+    scene: MontessoriScene,
+):
+    """
+    Contact is read off two bodies, so asked of a piece it is asked of the body the look
+    stood in its world for that piece.
+    """
+    seen, another = scene.shapes[:2]
+    stated = an(InContactWith)(body2=another.role_taker.root)
+
+    [contradicted] = MontessoriPerceptionBackend.contradicted_by(seen, [stated])
+
+    assert isinstance(contradicted, InContactWith)
+    assert contradicted.subject is seen.role_taker.root
+
+
+def test_a_relation_the_look_cannot_establish_needs_a_body_to_be_asked_of(
+    scene: MontessoriScene,
+):
+    """
+    The board is a sighting no body stands for, so a relation read off bodies cannot be
+    asked of it, and says so rather than answering.
+    """
+    stated = an(InContactWith)(body2=Body(name=PrefixedName("table")))
+
+    with pytest.raises(SightingHasNoBody):
+        MontessoriPerceptionBackend.contradicted_by(scene.board, [stated])
 
 
 def test_the_kind_of_detection_asked_for_is_what_the_look_is_asked_for():
@@ -170,10 +249,8 @@ def test_a_stated_supporting_surface_narrows_the_look_to_it(
         MontessoriPerceptionBackend.read_request(statement)
     )
 
-    assert request == SceneRequest(
-        detection_type=DetectedMontessoriShape,
-        supporting_surface=pipeline.lid.name,
-    )
+    assert request.detection_type is DetectedMontessoriShape
+    assert request.supporting_surface.name == pipeline.lid.name
 
 
 def test_an_attribute_the_look_cannot_act_on_leaves_it_searching_everywhere():
@@ -208,7 +285,7 @@ def surfaces_of(pipeline: MontessoriPerceptionPipeline):
 
     :param pipeline: The pipeline whose surfaces they stand for.
     """
-    return [Body(name=pipeline.table.name), Body(name=pipeline.lid.name)]
+    return [pipeline.table.entity, pipeline.lid.entity]
 
 
 def test_a_surface_the_statement_describes_is_read_as_the_one_it_describes(
@@ -232,7 +309,7 @@ def test_a_surface_the_statement_describes_is_read_as_the_one_it_describes(
     request = MontessoriPerceptionBackend.read_request(statement)
 
     assert (
-        MontessoriPerceptionBackend.supporting_surface_asked_about(request)
+        MontessoriPerceptionBackend.supporting_surface_asked_about(request).name
         == pipeline.lid.name
     )
 
@@ -294,11 +371,26 @@ def test_a_condition_about_something_other_than_what_is_looked_for_is_refused(
 def test_only_the_surface_asked_about_is_searched(
     pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    request = SceneRequest(supporting_surface=pipeline.lid.name)
+    request = SceneRequest(supporting_surface=pipeline.lid.entity)
 
     searches = pipeline.searched_surfaces(scene.board, request)
 
     assert [search.surface for search in searches] == [pipeline.lid]
+
+
+def test_a_surface_that_only_shares_a_name_is_not_the_one_asked_about(
+    pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
+):
+    """
+    A statement names a thing of the world, and the world tells its things apart by
+    which one they are rather than by what they are called, so a look asked about a body
+    that merely carries the lid's name is asked about no surface this pipeline measured.
+    """
+    request = SceneRequest(supporting_surface=Body(name=pipeline.lid.name))
+
+    searches = pipeline.searched_surfaces(scene.board, request)
+
+    assert searches == []
 
 
 def test_every_surface_is_searched_when_the_request_names_none(
@@ -339,7 +431,7 @@ def test_a_look_narrowed_to_one_surface_reports_only_what_rests_on_it(
     frame = renderer.render([*placed_pieces, piece_on_the_lid])
 
     asked_about_the_lid = pipeline.detect(
-        frame, SceneRequest(supporting_surface=pipeline.lid.name)
+        frame, SceneRequest(supporting_surface=pipeline.lid.entity)
     )
 
     assert [found.supporting_surface for found in asked_about_the_lid.shapes] == [

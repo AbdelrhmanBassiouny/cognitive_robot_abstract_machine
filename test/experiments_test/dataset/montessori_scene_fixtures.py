@@ -13,6 +13,7 @@ from experiments.montessori.perception.pipeline import MontessoriPerceptionPipel
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.world_entity import Body
 
 from .montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
 
@@ -43,12 +44,12 @@ The stretch of table the rendered scene is set up on.
 def pipeline(renderer: MontessoriSceneRenderer) -> MontessoriPerceptionPipeline:
     return MontessoriPerceptionPipeline(
         table=WorkspaceSurface(
-            name=PrefixedName("table", "montessori_scene"),
+            entity=Body(name=PrefixedName("table", "montessori_scene")),
             region=SCENE_REGION,
             height=renderer.table_height,
         ),
         lid=WorkspaceSurface(
-            name=PrefixedName("board_lid", "montessori_scene"),
+            entity=Body(name=PrefixedName("board_lid", "montessori_scene")),
             region=SCENE_REGION,
             height=renderer.lid_height,
         ),

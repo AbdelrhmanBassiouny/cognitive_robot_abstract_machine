@@ -26,9 +26,11 @@ from typing_extensions import TYPE_CHECKING
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from semantic_digital_twin.exceptions import MismatchingWorld
+from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.world_description.geometry import (
     Shape,
     AxisAlignedBox,
+    Bounds,
     VolumetricBoundingBox,
     Color,
 )
@@ -161,14 +163,14 @@ class ShapeCollection(SubclassJSONSerializer):
         """
         transformed_meshes = []
         for shape in self.shapes:
-            transform = shape.origin.to_np()
+            transform = shape.numeric_origin.to_np()
             mesh = shape.mesh.copy()
             mesh.apply_transform(transform)
             transformed_meshes.append(mesh)
         return concatenate(transformed_meshes)
 
     def as_bounding_box_collection_at_origin(
-        self, origin: HomogeneousTransformationMatrix
+        self, origin: NumericTransform
     ) -> BoundingBoxCollection:
         """
         Provides the bounding box collection for this entity given a transformation
@@ -202,7 +204,7 @@ class ShapeCollection(SubclassJSONSerializer):
         :returns: A collection of bounding boxes in world-space coordinates.
         """
         return self.as_bounding_box_collection_at_origin(
-            HomogeneousTransformationMatrix(reference_frame=reference_frame)
+            NumericTransform.identity(reference_frame)
         )
 
     def to_json(self) -> Dict[str, Any]:
@@ -234,7 +236,7 @@ class ShapeCollection(SubclassJSONSerializer):
     def scale(self):
         return (
             self.as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=self.reference_frame)
+                NumericTransform.identity(self.reference_frame)
             )
             .bounding_box()
             .scale
@@ -287,6 +289,24 @@ class BoundingBoxCollection(Generic[BoxT], ShapeCollection):
         """
         return Event.from_simple_sets(
             *[box.simple_event for box in self.bounding_boxes]
+        )
+
+    @property
+    def enclosing_bounds(self) -> Bounds[np.ndarray]:
+        """
+        The corners of the smallest axis-aligned region holding every box.
+
+        An empty collection encloses nothing, which reads back as a region no point lies
+        in and no other region overlaps.
+
+        :return: The region's lower and upper corner, in this collection's frame.
+        """
+        if not self.bounding_boxes:
+            return Bounds.empty()
+        corners = [box.to_array_bounds() for box in self.bounding_boxes]
+        return Bounds(
+            np.min([corner.lower for corner in corners], axis=0),
+            np.max([corner.upper for corner in corners], axis=0),
         )
 
     def merge(self, other: Self) -> Self:

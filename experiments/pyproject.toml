@@ -15,6 +15,7 @@ dependencies = [
     "giskardpy",
     "krrood",
     "random_events",
+    "segmind",
     "semantic_digital_twin",
 ]
 
@@ -31,5 +32,6 @@ workspace = [
     "giskardpy",
     "krrood",
     "random_events",
+    "segmind",
     "semantic_digital_twin",
 ]

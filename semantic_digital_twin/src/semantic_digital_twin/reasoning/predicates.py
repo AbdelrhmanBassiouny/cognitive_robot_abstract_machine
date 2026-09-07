@@ -4,7 +4,7 @@ import itertools
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Optional, Any, Union
+from typing import Optional, Any
 
 import numpy as np
 import trimesh.boolean
@@ -47,9 +47,13 @@ from semantic_digital_twin.spatial_computations.ik_solver import (
 )
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 from semantic_digital_twin.spatial_types import Vector3, Point3, math
+from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.spatial_types.spatial_types import (
+    HasPose,
+    HasPosition,
     HomogeneousTransformationMatrix,
     Pose,
+    Pose2D,
 )
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.exceptions import RelationStatedAboutNothing
@@ -477,24 +481,33 @@ class SupportedBy(Triple):
         )
 
     def __call__(self) -> bool:
-        if Below(
-            self.supported.center_of_mass,
-            self.supporting.center_of_mass,
-            self.supported.global_transform,
-        )():
+        """
+        Answered from numeric geometry alone, since support is asked on every detector
+        tick from a thread that does not own the world.
+        """
+        if self._supported_stands_below_supporting():
             return False
-        supported_bounding_box = (
+        supported_origin = NumericTransform.identity(self.supported)
+        boxes_of_supported = (
             self.supported.collision.as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=self.supported)
-            ).event
+                supported_origin
+            )
         )
-        supporting_bounding_box = (
+        boxes_of_supporting = (
             self.supporting.collision.as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=self.supported)
-            ).event
+                supported_origin
+            )
         )
+        # bodies whose enclosing regions miss each other cannot intersect box by box
+        # either, and most candidate pairs a detector tick asks about are such a pair
+        if not boxes_of_supported.enclosing_bounds.overlaps(
+            boxes_of_supporting.enclosing_bounds
+        ):
+            return False
 
-        intersection = (supported_bounding_box & supporting_bounding_box).bounding_box()
+        intersection = (
+            boxes_of_supported.event & boxes_of_supporting.event
+        ).bounding_box()
 
         if intersection.is_empty():
             return False
@@ -502,6 +515,19 @@ class SupportedBy(Triple):
         z_intersection: Interval = intersection[SpatialVariables.z.value]
         size = sum([si.upper - si.lower for si in z_intersection.simple_sets])
         return size < self.maximum_intersection_height
+
+    def _supported_stands_below_supporting(self) -> bool:
+        """
+        Whether the supported body's centre of mass lies below the supporting body's,
+        along the supported body's own vertical.
+        """
+        up = self.supported.numeric_global_transform.to_np()[:3, 2]
+        up = up / (np.linalg.norm(up) + VIEW_DIRECTION_EPS)
+        apart = (
+            self.supported.numeric_center_of_mass.to_np()[:3]
+            - self.supporting.numeric_center_of_mass.to_np()[:3]
+        )
+        return float(up @ apart) < 0.0
 
 
 is_supported_by = symbolic_callable_to_function(SupportedBy)
@@ -565,11 +591,6 @@ The function spelling of
 
 # %% where a relation allows a thing to be
 
-Placed = Union[Point3, Pose, HomogeneousTransformationMatrix, KinematicStructureEntity]
-"""
-Anything the world can say the place of: a point, a pose, or something standing in it.
-"""
-
 AXES: Tuple[SpatialVariables, ...] = VolumetricBoundingBox.axes()
 """
 The world's own axes, in the order a bounding box states its bounds along them.
@@ -584,18 +605,10 @@ A direction is a unit vector, so a component within this of one leaves the other
 within a rounding error of zero.
 """
 
-
-def position_of(placed: Placed) -> Point3:
-    """
-    Where something stands.
-
-    :param placed: The point, pose, or thing standing in the world to read.
-    """
-    if isinstance(placed, Point3):
-        return placed
-    if isinstance(placed, (Pose, HomogeneousTransformationMatrix)):
-        return placed.to_position()
-    return placed.global_pose.to_position()
+VIEW_DIRECTION_EPS = 1e-12
+"""
+Guards a point of view's direction against division by a degenerate axis.
+"""
 
 
 def space_between(
@@ -732,16 +745,19 @@ class InsideRegion(Triple, PlacementRelation):
         """
         :return: The fraction (0.0..1.0) of the body's volume lying in the region.
         """
-        # Retrieve meshes in local frames
-        local_body_mesh = self._stated(self.body, "body").collision.combined_mesh
-        local_region_mesh = self._stated(self.region, "region").area.combined_mesh
+        body = self._stated(self.body, "body")
+        region = self._stated(self.region, "region")
+        # a body whose enclosing region misses the region's own shares no volume with
+        # it, and the exact boolean below is far too dear to reach for such a pair
+        if not body.numeric_global_bounds.overlaps(region.numeric_global_bounds):
+            return 0.0
 
-        # Transform copies of the meshes into the world frame
-        body_mesh = local_body_mesh.copy().apply_transform(
-            self.body.global_transform.to_np()
+        # Transform copies of the local meshes into the world frame
+        body_mesh = body.collision.combined_mesh.copy().apply_transform(
+            body.numeric_global_transform.to_np()
         )
-        region_mesh = local_region_mesh.copy().apply_transform(
-            self.region.global_transform.to_np()
+        region_mesh = region.area.combined_mesh.copy().apply_transform(
+            region.numeric_global_transform.to_np()
         )
         intersection = trimesh.boolean.intersection([body_mesh, region_mesh])
 
@@ -804,23 +820,23 @@ class PointSpatialRelation(Triple, PlacementRelation, ABC):
     what the relation reads of each is only where it stands.
     """
 
-    point: Optional[Placed] = None
+    point: Optional[HasPosition] = None
     """
     The thing the relation is asserted about, or None where it is asserted about nothing
     and read as the stretch of the world it allows.
     """
 
-    other: Optional[Placed] = None
+    other: Optional[HasPosition] = None
     """
     The thing it is placed with respect to.
     """
 
     @property
-    def subject(self) -> Optional[Placed]:
+    def subject(self) -> Optional[HasPosition]:
         return self.point
 
     @property
-    def object(self) -> Optional[Placed]:
+    def object(self) -> Optional[HasPosition]:
         return self.other
 
 
@@ -868,7 +884,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
     """
     The reference spot from where to look at the bodies.
     """
-    eps: float = 1e-12
+    eps: float = VIEW_DIRECTION_EPS
     """
     A small value to avoid division by zero.
     """
@@ -876,7 +892,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
 
     def __call__(self) -> bool:
         self.spatial_relation_result = self.allows(
-            position_of(self._stated(self.point, "point"))
+            self._stated(self.point, "point").to_position()
         )
         return self.spatial_relation_result
 
@@ -902,7 +918,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         since no box then holds exactly what the relation allows.
         """
         direction = self._direction()
-        other = position_of(self._stated(self.other, "other"))
+        other = self._stated(self.other, "other").to_position()
         place = other.to_np()[:3]
         lower, upper = np.full(3, -np.inf), np.full(3, np.inf)
         for index, component in enumerate(direction):
@@ -932,7 +948,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         corners = self._corners_of(space)
         if not np.isfinite(corners).all():
             return super().allowed_part_of(space)
-        other = position_of(self._stated(self.other, "other")).to_np()[:3]
+        other = self._stated(self.other, "other").to_position().to_np()[:3]
         beyond = (corners - other) @ self._direction()
         allowed = [*corners[beyond > 0.0], *self._crossings(corners, beyond)]
         if not allowed:
@@ -992,7 +1008,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         :return: How far along the direction that place lies from the other thing, in
             metres, negative where it lies against it.
         """
-        other = position_of(self._stated(self.other, "other")).to_np()[:3]
+        other = self._stated(self.other, "other").to_position().to_np()[:3]
         return float(np.dot(self._direction(), place.to_np()[:3] - other))
 
 
@@ -1066,18 +1082,18 @@ class Between(PlacementRelation):
     :attr:`maximum_sideways_fraction` is where that judgement is stated.
     """
 
-    body: Optional[Placed] = None
+    body: Optional[HasPosition] = None
     """
     The thing that may lie between the two, or None where the relation is asserted about
     nothing and read as the stretch it allows.
     """
 
-    one: Optional[Placed] = None
+    one: Optional[HasPosition] = None
     """
     One of the two it may lie between.
     """
 
-    other: Optional[Placed] = None
+    other: Optional[HasPosition] = None
     """
     The other of the two.
     """
@@ -1094,11 +1110,11 @@ class Between(PlacementRelation):
     """
 
     @property
-    def subject(self) -> Optional[Placed]:
+    def subject(self) -> Optional[HasPosition]:
         return self.body
 
     def __call__(self) -> bool:
-        return self.allows(position_of(self._stated(self.body, "body")))
+        return self.allows(self._stated(self.body, "body").to_position())
 
     def allows(self, place: Point3) -> bool:
         """
@@ -1132,7 +1148,7 @@ class Between(PlacementRelation):
         return space_between(
             np.minimum(one, other) - reach,
             np.maximum(one, other) + reach,
-            position_of(self.one).reference_frame,
+            self.one.to_position().reference_frame,
         )
 
     def _places(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -1140,8 +1156,8 @@ class Between(PlacementRelation):
         :return: Where the two things it may lie between stand, in metres.
         """
         return (
-            position_of(self._stated(self.one, "one")).to_np()[:3],
-            position_of(self._stated(self.other, "other")).to_np()[:3],
+            self._stated(self.one, "one").to_position().to_np()[:3],
+            self._stated(self.other, "other").to_position().to_np()[:3],
         )
 
     @classmethod
@@ -1170,13 +1186,13 @@ class Near(Triple, PlacementRelation):
     :attr:`radius` has to be stated.
     """
 
-    body: Optional[Placed] = None
+    body: Optional[HasPosition] = None
     """
     The thing that may stand near the place, or None where the relation is asserted
     about nothing and read as the stretch it allows.
     """
 
-    place: Optional[Placed] = None
+    place: Optional[HasPosition] = None
     """
     The place it may stand near, which may be given as a point, a pose, or something the
     world places.
@@ -1188,15 +1204,15 @@ class Near(Triple, PlacementRelation):
     """
 
     @property
-    def subject(self) -> Optional[Placed]:
+    def subject(self) -> Optional[HasPosition]:
         return self.body
 
     @property
-    def object(self) -> Optional[Placed]:
+    def object(self) -> Optional[HasPosition]:
         return self.place
 
     def __call__(self) -> bool:
-        return self.allows(position_of(self._stated(self.body, "body")))
+        return self.allows(self._stated(self.body, "body").to_position())
 
     def allows(self, place: Point3) -> bool:
         """
@@ -1214,7 +1230,7 @@ class Near(Triple, PlacementRelation):
         The box the radius reaches into, which is the smallest one holding everything
         within that distance of the place.
         """
-        place = position_of(self._stated(self.place, "place"))
+        place = self._stated(self.place, "place").to_position()
         stands_at = place.to_np()[:3]
         return space_between(
             stands_at - self.radius, stands_at + self.radius, place.reference_frame
@@ -1224,7 +1240,7 @@ class Near(Triple, PlacementRelation):
         """
         :return: Where the place it is measured from stands, in metres.
         """
-        return position_of(self._stated(self.place, "place")).to_np()[:3]
+        return self._stated(self.place, "place").to_position().to_np()[:3]
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
@@ -1240,6 +1256,83 @@ class Near(Triple, PlacementRelation):
             Noun(fields["radius"]),
             Prepositions.OF,
             Noun(fields["place"]),
+        )
+
+
+# %% which way a thing is turned
+
+
+def yaw_of(posed: HasPose) -> float:
+    """
+    How far something is turned about the world's vertical, in radians.
+
+    :param posed: The pose, or the thing standing in one, to read.
+    """
+    return float(Pose2D.from_pose(posed.to_pose()).yaw)
+
+
+@dataclass(eq=False)
+class Turned(Triple):
+    """
+    Whether something is turned about the vertical to a given angle, give or take a
+    spread either side.
+
+    Stated about nothing it is the constraint alone -- the turns it allows -- which is
+    what a search reads before anything has been found.
+    """
+
+    body: Optional[HasPose] = None
+    """
+    The thing that may be turned so, or None where the relation is stated about nothing.
+    """
+
+    yaw: float = field(kw_only=True)
+    """
+    The turn it may be at, about the world's vertical, in radians.
+    """
+
+    spread: float = field(kw_only=True)
+    """
+    How far either side of :attr:`yaw` a turn may fall and still count, in radians.
+    """
+
+    @property
+    def subject(self) -> Optional[HasPose]:
+        return self.body
+
+    @property
+    def object(self) -> float:
+        return self.yaw
+
+    def __call__(self) -> bool:
+        if self.body is None:
+            raise RelationStatedAboutNothing(type(self).__name__, "body")
+        return self.allows_turn(yaw_of(self.body))
+
+    def allows_turn(self, yaw: float) -> bool:
+        """
+        Whether a turn is one this relation allows.
+
+        :param yaw: The turn to check, about the world's vertical, in radians.
+        """
+        apart = (yaw - self.yaw + np.pi) % (2 * np.pi) - np.pi
+        return abs(float(apart)) <= self.spread
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the body is turned to the yaw within the spread"*.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun(fields["body"]),
+            Copula(),
+            Adjective("turned"),
+            Prepositions.TO,
+            Noun(fields["yaw"]),
+            Prepositions.WITHIN,
+            Noun(fields["spread"]),
         )
 
 
@@ -1324,40 +1417,21 @@ class InsideOf(KinematicStructureEntitySpatialRelation):
     def compute_containment_ratio(self) -> float:
         """
         Compute the containment ratio of self.body inside self.other.
+
+        Both bodies' geometry is carried into the world frame as plain coordinates, so
+        neither the meshes themselves nor a box enclosing them is ever built.
         """
-        if self.other.combined_mesh is None:
+        body_mesh = self.body.combined_mesh
+        if body_mesh is None or body_mesh.is_empty:
             return 0.0
 
-        # Get meshes in their local (body) frames
-        mesh_a_local = self.body.combined_mesh
-        mesh_b_local = self.other.combined_mesh
-
-        # Check if either mesh is empty
-        if (
-            mesh_a_local is None
-            or mesh_a_local.is_empty
-            or mesh_b_local is None
-            or mesh_b_local.is_empty
-        ):
-            return 0.0
-
-        # Transform meshes from body frame to world frame
-        mesh_a = mesh_a_local.copy()
-        mesh_a.apply_transform(self.body.global_transform.to_np())
-
-        mesh_b = mesh_b_local.copy()
-        mesh_b.apply_transform(self.other.global_transform.to_np())
-
-        # Use bounding box of mesh_b to check if mesh_a is inside mesh_b
-        mesh_b_bbox = mesh_b.bounding_box
-
-        if not mesh_b_bbox.is_watertight:
-            return 0.0
-
-        inside = mesh_b_bbox.contains(mesh_a.vertices)
+        world_P_body = self.body.numeric_global_transform.transform_points(
+            body_mesh.vertices
+        )
+        inside = self.other.numeric_global_bounds.contains(world_P_body)
         if len(inside) == 0:
             return 0.0
-        return sum(inside) / len(inside)
+        return float(inside.sum()) / len(inside)
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
