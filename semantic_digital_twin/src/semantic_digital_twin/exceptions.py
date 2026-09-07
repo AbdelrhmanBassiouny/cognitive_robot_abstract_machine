@@ -65,6 +65,28 @@ class NoJointStateWithType(DataclassException):
 
 
 @dataclass
+class MalformedHexColor(DataclassException):
+    """
+    Raised when a string meant to name a color is not written as hex digits.
+    """
+
+    hex_color: str
+    """
+    The string that was read as a color.
+    """
+
+    def error_message(self) -> str:
+        return f"'{self.hex_color}' does not name a color."
+
+    def suggest_correction(self) -> str:
+        return (
+            "write the color as two hex digits per channel, red first, optionally "
+            "preceded by a '#' and followed by a fourth pair for the opacity, for "
+            "example '#4080C0' or '#4080C020'."
+        )
+
+
+@dataclass
 class UnknownWorldModification(DataclassException):
     """
     Raised when an unknown world modification is attempted.
@@ -248,6 +270,48 @@ class UsageError(LogicalError):
 
 
 @dataclass
+class InvalidCameraResolutionError(UsageError):
+    """
+    Raised when a camera resolution cannot describe an image.
+    """
+
+    width: int
+    """
+    The invalid image width.
+    """
+
+    height: int
+    """
+    The invalid image height.
+    """
+
+    def error_message(self) -> str:
+        return (
+            "Camera resolution width and height must be positive, "
+            f"got width={self.width} and height={self.height}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "provide positive width and height values."
+
+
+@dataclass
+class ROSNodeNotRegisteredError(UsageError, RuntimeError):
+    """
+    Raised when shared ROS node access is requested before registration.
+    """
+
+    def error_message(self) -> str:
+        return "No shared ROS node is registered in this process."
+
+    def suggest_correction(self) -> str:
+        return (
+            "register the application-owned ROS node before constructing components "
+            "that require ROS access. Please check out the ROSNodeRegistry class and its register() method."
+        )
+
+
+@dataclass
 class WorldValidationError(LogicalError):
     """
     Raised when the world fails validation, e.g., when the kinematic structure is not a
@@ -297,6 +361,59 @@ class BrokenWorldModificationHistoryError(WorldValidationError):
 
     def suggest_correction(self) -> str:
         return ""
+
+
+@dataclass
+class InsufficientModificationHistoryError(WorldValidationError):
+    """
+    Raised when attempting to roll back more modification blocks than the world's
+    history contains.
+    """
+
+    requested_count: int
+    """
+    The number of modification blocks that were requested to be rolled back.
+    """
+
+    available_count: int
+    """
+    The number of modification blocks actually available in the world's history.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Cannot roll back {self.requested_count} modification block(s): the "
+            f"world's history only contains {self.available_count}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "reduce the requested count to at most the number of available modification blocks."
+
+
+@dataclass
+class InvalidRollbackVersionError(WorldValidationError):
+    """
+    Raised when attempting to roll back to a version the world has not (yet) reached.
+    """
+
+    target_version: int
+    """
+    The version that was requested.
+    """
+
+    current_version: int
+    """
+    The version the world is currently at.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Cannot roll back to version {self.target_version}: the world is "
+            f"currently at version {self.current_version}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "pass a version between 0 and the world's current version."
 
 
 @dataclass
@@ -941,6 +1058,7 @@ class DuplicateWorldEntityError(UsageError):
             "PrefixedName with the desired prefix, or use the plural get_..._by_name variant "
             "to retrieve all matches."
         )
+
 
 @dataclass
 class DuplicateRobotAssignmentsError(UsageError):

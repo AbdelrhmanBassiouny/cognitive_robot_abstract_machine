@@ -36,7 +36,7 @@ from typing_extensions import Type, Set
 
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
-from krrood.utils import memoize, clear_memoization_cache
+from krrood.patterns.caching import memoize, clear_memoization_cache
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.collision_checking.collision_manager import CollisionManager
 from semantic_digital_twin.collision_checking.pybullet_collision_detector import (
@@ -59,6 +59,8 @@ from semantic_digital_twin.exceptions import (
     WorldContainsOrphanedDegreeOfFreedom,
     BrokenWorldModificationHistoryError,
     MismatchingWorld,
+    InsufficientModificationHistoryError,
+    InvalidRollbackVersionError,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
@@ -1637,6 +1639,30 @@ class World(HasSimulatorProperties):
             and semantic_annotation in self.semantic_annotations
         )
 
+    def get_semantic_annotation_equal_to(
+        self, semantic_annotation: SemanticAnnotation
+    ) -> Optional[SemanticAnnotation]:
+        """
+        The annotation this world holds that describes the same thing, if it holds one.
+
+        An annotation is equal to another when it is of the same type and refers to the
+        same entities, so an annotation built separately can stand for one the world
+        already holds. Use this before adding a freshly built annotation, and wire up
+        the result rather than the argument, or the wiring lands on an annotation the
+        world does not hold.
+
+        :param semantic_annotation: The annotation to look for an equal of.
+        :return: The equal annotation this world holds, or ``None`` when it holds none.
+        """
+        return next(
+            (
+                held_annotation
+                for held_annotation in self.semantic_annotations
+                if held_annotation == semantic_annotation
+            ),
+            None,
+        )
+
     def is_body_in_world(self, body: Body) -> bool:
         return self._is_world_entity_with_hash_in_world_from_iterable(hash(body))
 
@@ -2612,6 +2638,60 @@ class World(HasSimulatorProperties):
 
     def get_world_model_manager(self) -> WorldModelManager:
         return self._model_manager
+
+    def rollback_modification_blocks(
+        self, count: int = 1
+    ) -> List[WorldModelModificationBlock]:
+        """
+        Revert the most recently completed modification blocks, restoring the world to
+        the state it was in before they were applied.
+
+        Reverting a block is itself recorded as a new modification block (see
+        :meth:`WorldModification.revert`), so the history retains a full account of what
+        happened, including the rollback.
+
+        :param count: How many of the most recently completed modification blocks to
+            revert, starting with the most recent.
+        :return: The modification blocks that were rolled back, most recent first.
+        :raises InsufficientModificationHistoryError: If the history contains fewer than
+            ``count`` completed modification blocks.
+        """
+        model_modification_blocks = self._model_manager.model_modification_blocks
+        if count > len(model_modification_blocks):
+            raise InsufficientModificationHistoryError(
+                world=self,
+                requested_count=count,
+                available_count=len(model_modification_blocks),
+            )
+        # count == 0 has to be handled explicitly: model_modification_blocks[-0:] is
+        # model_modification_blocks[0:], i.e. the whole list, not an empty slice.
+        blocks_to_roll_back = (
+            list(reversed(model_modification_blocks[-count:])) if count else []
+        )
+        for block in blocks_to_roll_back:
+            with self.modify_world():
+                block.revert(self)
+        return blocks_to_roll_back
+
+    def rollback_to_version(self, version: int) -> List[WorldModelModificationBlock]:
+        """
+        Roll back the world's modification history to the given version, undoing every
+        modification block completed since.
+
+        :param version: The target :attr:`WorldModelManager.version` to roll back to,
+            e.g. taken from an earlier :attr:`WorldModelManager.revision`.
+        :return: The modification blocks that were rolled back, most recent first.
+        :raises InvalidRollbackVersionError: If ``version`` is not a version the world
+            has already reached.
+        """
+        current_version = self._model_manager.version
+        if not 0 <= version <= current_version:
+            raise InvalidRollbackVersionError(
+                world=self,
+                target_version=version,
+                current_version=current_version,
+            )
+        return self.rollback_modification_blocks(current_version - version)
 
     @cached_property
     def ray_tracer(self) -> RayTracer:

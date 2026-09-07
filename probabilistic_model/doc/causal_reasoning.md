@@ -49,7 +49,7 @@ an adjustment set on a `CausalCircuit` is the analyst's assertion, from domain k
 that such a $G$ exists and that the chosen adjustment set satisfies the backdoor criterion
 relative to it. What the package verifies instead is the circuit-side precondition the next
 section's polytime algorithm depends on -- support determinism -- which is a property of the
-probabilistic circuit itself, not of $G$; it is unrelated to the vtree used later for
+probabilistic circuit itself, not of $G$; it is unrelated to the variable tree used later for
 tractability, and to the `MarginalDeterminismTreeNode` structure introduced below, which only
 groups query variables for that check and does not represent $G$'s edges.
 
@@ -78,20 +78,21 @@ Evaluating the backdoor formula requires computing $P(Y \mid X = x, Z = z)$ for 
 $z$ in the adjustment set's domain, and summing. On an arbitrary joint distribution this can
 be as expensive as the domain of $Z$ is large.
 
-````{prf:definition} Vtree
-:label: def-vtree
+````{prf:definition} Variable Tree
+:label: def-variable-tree
 
-A vtree over a variable set $X$ is a full, rooted binary tree whose leaves are in
+A variable tree over a variable set $X$ is a full, rooted binary tree whose leaves are in
 one-to-one correspondence with the variables in $X$. Each internal node corresponds to
 the subset of $X$ at the leaves beneath it, partitioned by that node's two children into
-disjoint left and right subsets {cite}`kisa2014probabilistic`.
+disjoint left and right subsets ({cite}`kisa2014probabilistic`, where it is termed a
+*vtree*).
 ````
 
 {cite}`wang2023compositional` shows that on a *structured-decomposable* probabilistic
 circuit -- one where every product unit's children partition the scope along a shared,
-recursively fixed {prf:ref}`def-vtree` -- backdoor adjustment is tractable in the size of
-the circuit whenever the circuit satisfies one additional structural property for the
-relevant variables: **support determinism**.
+recursively fixed {prf:ref}`def-variable-tree` -- backdoor adjustment is tractable in the
+size of the circuit whenever the circuit satisfies one additional structural property for
+the relevant variables: **support determinism**.
 
 ````{prf:definition} Support Determinism
 :label: def-support-determinism
@@ -109,12 +110,14 @@ already partition the world by the value those variables take -- so answering "w
 $P(Y \mid X = x, Z = z)$ under this branch" never requires mixing across branches, and the
 backdoor sum becomes a single weighted pass over the circuit rather than one circuit
 evaluation per $(x, z)$ pair. {cite}`wang2023compositional` formalizes the circuit family
-that guarantees this -- *marginal-deterministic vtrees* (*md-vtrees*), a generalization of
-probabilistic sentential decision diagrams {cite}`kisa2014probabilistic` -- and derives the
-first polytime algorithm for backdoor adjustment on such circuits.
-This package does not require an md-vtree-typed circuit outright; instead it *verifies* the
-support-determinism property directly on whatever structured-decomposable circuit it is
-given, which is the property the polytime algorithm actually depends on.
+that guarantees this -- *marginal-deterministic variable trees* (termed *md-vtrees* in
+{cite}`wang2023compositional`), a generalization of probabilistic sentential decision
+diagrams {cite}`kisa2014probabilistic` -- and derives the first polytime algorithm for
+backdoor adjustment on such circuits.
+This package does not require a marginal-deterministic-variable-tree-typed circuit
+outright; instead it *verifies* the support-determinism property directly on whatever
+structured-decomposable circuit it is given, which is the property the polytime algorithm
+actually depends on.
 
 ### Implementation: `CausalCircuit`
 
@@ -203,7 +206,7 @@ single flat circuit has "object count" as one of its variables ahead of time -- 
 set depends on which scene is being described.
 
 `RelationalProbabilisticCircuit` ({cite}`nath2015rspn`, "Relational Sum-Product Networks",
-and KRRUESER by David Prüser, extended here onto circuits with the query system
+and {cite}`prueser2026knowledge`, extended here onto circuits with the query system
 `probabilistic_model.probabilistic_circuit.relational` bridges into `krrood`) resolves this
 by *grounding*: given a query describing one concrete
 scene, it stamps out one instance of a fitted template circuit per object the query
@@ -312,18 +315,19 @@ grounded.
 
 | Work | Relational | Causal | Substrate | Tractability mechanism |
 |---|---|---|---|---|
-| {cite}`nath2015rspn` (RSPN) | Yes | No | Sum-product network | Templated grounding |
-| {cite}`wang2023compositional` (md-vtrees) | No | Yes | Structured-decomposable circuit | Support determinism $\to$ polytime backdoor adjustment |
+| {cite}`nath2015rspn` (Relational Sum-Product Networks) | Yes | No | Sum-product network | Templated grounding |
+| {cite}`wang2023compositional` (marginal-deterministic variable trees) | No | Yes | Structured-decomposable circuit | Support determinism $\to$ polytime backdoor adjustment |
 | {cite}`luttermann2024lifted` (Lifted Causal Inference) | Yes | Yes | Parametric factor graphs | Domain-lifted: polynomial in domain size for a bounded-logvar fragment, non-grounding queries only |
-| This package | Yes | Yes | RSPN grounded onto a structured-decomposable circuit | Cause/effect registration: free (additive to circuit size). Adjustment registration: guarded against Cartesian-product blowup |
+| This package | Yes | Yes | Relational Sum-Product Network grounded onto a structured-decomposable circuit | Cause/effect registration: free (additive to circuit size). Adjustment registration: guarded against Cartesian-product blowup |
 
-No prior work was found combining md-vtree-style circuit causal inference with relational
-grounding directly; {cite}`luttermann2024lifted` is the closest bridge, but on a different
-substrate (parametric factor graphs, not circuits) with its own, differently scoped
-tractability class (lifted over object symmetry, rather than exact per-query grounding).
+No prior work was found combining marginal-deterministic-variable-tree-style circuit causal
+inference with relational grounding directly; {cite}`luttermann2024lifted` is the closest
+bridge, but on a different substrate (parametric factor graphs, not circuits) with its own,
+differently scoped tractability class (lifted over object symmetry, rather than exact
+per-query grounding).
 This package stays fully grounded per query rather than lifted: it answers exact causal
-queries at RSPN's existing per-query grounding granularity, not population-scale inference
-over many symmetric objects at once.
+queries at the relational sum-product network's existing per-query grounding granularity,
+not population-scale inference over many symmetric objects at once.
 
 ```{bibliography}
 ```
