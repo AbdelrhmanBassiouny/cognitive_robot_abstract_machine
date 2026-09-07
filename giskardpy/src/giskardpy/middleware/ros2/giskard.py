@@ -34,7 +34,7 @@ from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from giskardpy.ros_executor import Ros2Executor
 from krrood.ormatic.utils import create_engine
-from krrood.utils import clear_memoization_cache
+from krrood.patterns.caching import clear_memoization_cache
 from semantic_digital_twin.adapters.ros.tf_publisher import TFPublisher
 from semantic_digital_twin.adapters.ros.visualization.collision_viz_marker import (
     CollisionVisualizationMarkerPublisher,
