@@ -1,0 +1,179 @@
+"""
+Tests for the launcher that runs the cramera viewer and the Montessori demo together.
+
+The script names ports and demo flags that live in Python, so what it checks is that
+none of them has drifted out from under it; actually running two processes is not
+something a test suite should do.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+from pathlib import Path
+
+import pytest
+
+krrood = pytest.importorskip("krrood", reason="the viewer's EQL panel requires krrood")
+
+from cramera.live.http import DEFAULT_PORT as BRIDGE_PORT  # noqa: E402
+from cramera.server import DEFAULT_PORT as VIEWER_PORT  # noqa: E402
+
+from experiments.montessori.franka_montessori_demo import (  # noqa: E402
+    _parse_arguments,
+)
+
+SCRIPT_PATH = Path(__file__).parents[2] / "run_montessori_demo.sh"
+"""
+The launcher, at the repository root beside ``run_cramera.sh``.
+"""
+
+SCRIPT_TEXT = SCRIPT_PATH.read_text()
+"""
+The launcher's source, which every assertion here reads.
+"""
+
+
+def documented_demo_flags() -> list:
+    """
+    Every demo flag the script's help text advertises, ready to be parsed.
+
+    A flag documented with an upper-case metavar after it (``--only-shape KEY``) takes a
+    value, so it is returned with one.
+    """
+    help_text = SCRIPT_TEXT.split("cat <<USAGE", 1)[1].split("\nUSAGE", 1)[0]
+    documented = []
+    for line in help_text.splitlines():
+        words = line.strip().split()
+        if not words or not words[0].startswith("--") or words[0] == "--no-browser":
+            continue
+        takes_a_value = len(words) > 1 and words[1].isupper()
+        documented.append([words[0], "value"] if takes_a_value else [words[0]])
+    return documented
+
+
+def chosen_demo_defaults() -> list:
+    """
+    The demo flags the script supplies unless the caller decides about them itself.
+    """
+    return SCRIPT_TEXT.split("default_demo_arguments=(", 1)[1].split(")", 1)[0].split()
+
+
+def opposite_flag(flag: str) -> str:
+    """
+    The flag that says the opposite of ``flag``.
+
+    :param flag: A boolean demo flag, in either its positive or its negative form.
+    """
+    if flag.startswith("--no-"):
+        return "--" + flag[len("--no-") :]
+    return flag.replace("--", "--no-", 1)
+
+
+# %% the script itself
+class TestTheLauncherIsRunnable:
+    def test_it_is_executable(self):
+        assert os.access(SCRIPT_PATH, os.X_OK)
+
+    def test_it_is_valid_bash(self):
+        assert subprocess.run(["bash", "-n", str(SCRIPT_PATH)]).returncode == 0
+
+    def test_its_help_needs_no_running_services(self):
+        finished = subprocess.run(
+            [str(SCRIPT_PATH), "--help"], capture_output=True, text=True, timeout=60
+        )
+
+        assert finished.returncode == 0
+        assert "--no-browser" in finished.stdout
+
+
+# %% what it launches
+class TestItLaunchesTheQueryablePair:
+    def test_it_starts_the_viewer_server(self):
+        assert "-m cramera.server" in SCRIPT_TEXT
+
+    def test_it_starts_the_demo_with_queries_enabled(self):
+        """
+        Without ``--cramera`` the demo runs perfectly well and answers nothing, which is
+        the one failure this script exists to prevent.
+        """
+        assert (
+            "-m experiments.montessori.franka_montessori_demo --cramera" in SCRIPT_TEXT
+        )
+
+    def test_every_flag_it_advertises_is_one_the_demo_accepts(self):
+        advertised = documented_demo_flags()
+        assert advertised
+        for arguments in advertised:
+            assert _parse_arguments(arguments), arguments
+
+    def test_it_passes_further_arguments_through_to_the_demo(self):
+        assert '${demo_arguments[@]+"${demo_arguments[@]}"}' in SCRIPT_TEXT
+
+    def test_it_checks_the_results_database_before_starting_anything(self):
+        """
+        Where a run's results go is worth knowing before the CRAM stack has imported and
+        a world has been built, which costs a minute for an answer worth a fraction of a
+        second.
+        """
+        preflight = SCRIPT_TEXT.index("-m experiments.montessori.results_database")
+        assert preflight < SCRIPT_TEXT.index("-m cramera.server")
+        assert preflight < SCRIPT_TEXT.index(
+            "-m experiments.montessori.franka_montessori_demo"
+        )
+
+
+# %% what it runs the demo with by default
+class TestItChoosesTheDemosDefaults:
+    """
+    The demo module itself stays headless and single-table, since the headless batch
+    runners invoke it directly; the launcher exists to watch a run, so it chooses
+    otherwise and says how to override it.
+    """
+
+    def test_it_turns_on_the_window_and_the_second_layout(self):
+        assert {"--world2", "--viewer"} <= set(chosen_demo_defaults())
+
+    def test_it_turns_off_rviz_publishing(self):
+        """
+        The TF publisher evaluates a compiled CasADi expression on the physics thread
+        every time the simulation syncs its state back, while the plan thread is
+        building CasADi expressions of its own.
+
+        CasADi releases the GIL and counts its node references without atomics, so the
+        two corrupt each other and the demo dies of a segmentation fault. Nothing
+        watches RViz in a run being watched through the cramera viewer anyway.
+        """
+        assert "--no-rviz" in chosen_demo_defaults()
+
+    def test_each_default_is_one_the_demo_accepts(self):
+        arguments = chosen_demo_defaults()
+
+        assert arguments
+        assert _parse_arguments(arguments)
+
+    def test_each_default_can_be_turned_back_off(self):
+        """
+        A default is only a default if the caller can still say the opposite.
+        """
+        for flag in chosen_demo_defaults():
+            opposite = opposite_flag(flag)
+            assert _parse_arguments([flag, opposite]), opposite
+            assert opposite in SCRIPT_TEXT
+
+
+# %% the ports it names
+class TestItNamesThePortsInUse:
+    def test_it_waits_on_the_port_the_viewer_serves(self):
+        assert "cramera_port=%d" % VIEWER_PORT in SCRIPT_TEXT
+
+    def test_it_names_the_port_the_demos_bridge_serves(self):
+        assert "bridge_port=%d" % BRIDGE_PORT in SCRIPT_TEXT
+
+    def test_it_opens_the_viewer_without_naming_a_recorded_scene(self):
+        """
+        The viewer only attaches to a running demo on its own when the page names no
+        recorded scene, so a ``?scene=`` in the opened URL would leave the buttons
+        unanswered until someone clicked *Live*.
+        """
+        assert 'viewer_url="http://localhost:${cramera_port}/"' in SCRIPT_TEXT

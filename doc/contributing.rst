@@ -31,6 +31,11 @@ are generated from changed. ``--orm-build`` overrides that:
 Runs that state no choice on their command line take one from ``CRAM_ORM_BUILD``, which
 is how a shell or a CI job sets the default for every run it starts.
 
+Anything that is not a test run makes the same check through
+``python scripts/ensure_orm_interfaces.py``, which builds only what the sources have
+outrun. ``run_montessori_demo.sh`` runs it as a pre-flight, so a fresh checkout pays for
+the build before the demo starts rather than a world build into the run.
+
 If you have any questions or feedback, consider submitting a `GitHub
 Issue <https://github.com/cram2/cognitive_robot_abstract_machine/issues>`__.
 

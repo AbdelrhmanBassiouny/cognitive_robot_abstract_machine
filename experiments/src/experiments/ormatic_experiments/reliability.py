@@ -18,10 +18,8 @@ import tqdm
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
-import coraplex.orm.ormatic_interface  # type: ignore  # noqa: F401
 from coraplex.datastructures.dataclasses import Context
 from coraplex.execution_environment import simulated_robot
-from coraplex.orm.ormatic_interface import Base, PlanMappingDAO  # type: ignore
 from coraplex.plans.factories import sequential
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from experiments.experiment_definitions import (
@@ -218,6 +216,16 @@ def reliability_experiment(
     :param world_building_duration: Pre-measured world building time (s).
     :return: Timing breakdown for this single run.
     """
+    # Local import: experiments.orm.ormatic_interface (imported by every other
+    # module in this package, including experiments.montessori.franka_montessori_demo)
+    # pulls this whole module in just to discover its dataclasses, and a module-level
+    # import here would register coraplex.orm.ormatic_interface's DAO classes
+    # (e.g. BodyDAO) alongside experiments.orm.ormatic_interface's own separately
+    # generated DAOs for the same domain classes -- krrood.ormatic.data_access_objects
+    # .helper.get_dao_class resolves ambiguously between the two, breaking any
+    # unrelated to_dao() call whose object graph reaches those domain classes.
+    from coraplex.orm.ormatic_interface import Base, PlanMappingDAO
+
     plan = create_plan(world, context, plan_size)
 
     t0 = time.perf_counter()

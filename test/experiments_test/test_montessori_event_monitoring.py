@@ -3,12 +3,14 @@ import threading
 import numpy as np
 from giskardpy.motion_statechart.context import MotionStatechartContext
 
+from cramera.live.run_clock import RunClock
 from krrood.patterns.method_patch import MethodPatch
 
 from experiments.montessori.event_monitoring import (
     build_shape_monitor,
     ControlCycleTicking,
 )
+from experiments.montessori.live_event_source import MontessoriLiveEventSource
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingHole
 from experiments.montessori.world import MontessoriWorld, TABLE_POSITION, TABLE_SCALE
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
@@ -409,3 +411,21 @@ class TestTheListenerHearsWhatEachTickDetected:
             monitor.tick()
 
         assert monitor.events
+
+    def test_the_viewers_own_record_can_be_the_listener(self):
+        """
+        Nothing checks a :class:`Protocol` at runtime, so the one seam that matters -- a
+        monitor handing its detections to what the viewer's timeline is drawn from -- is
+        exercised with both real objects rather than a stand-in for either.
+        """
+        montessori = MontessoriWorld(shapes_are_movable=True)
+        shape, _ = _shape_and_hole(montessori, "square_hole")
+        source = MontessoriLiveEventSource(clock=RunClock())
+        monitor = build_shape_monitor(montessori, shape, listener=source)
+
+        for _ in range(5):
+            monitor.tick()
+
+        assert [detected.kind for detected in source.events()] == [
+            type(event).__name__ for event in monitor.events
+        ]
