@@ -1,11 +1,13 @@
 import time
-from typing_extensions import Callable
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 import numpy as np
 
-from giskardpy.data_types.exceptions import NonPositiveRealTimeFactorError
+from giskardpy.data_types.exceptions import (
+    NonPositiveRealTimeFactorError,
+    SimulationStoppedError,
+)
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.exceptions import (
     PlotterNotConfiguredError,
@@ -18,6 +20,7 @@ from giskardpy.motion_statechart.plotters.debug_expression_trajectory_plotter im
 from giskardpy.qp.exceptions import EmptyProblemException
 from giskardpy.qp.qp_controller import QPController
 from giskardpy.qp.qp_controller_config import QPControllerConfig
+from giskardpy.simulation_clock import SimulationClock
 from krrood.symbolic_math.symbolic_math import FloatVariable
 from semantic_digital_twin.world_description.world_state_trajectory_plotter import (
     WorldStateTrajectoryPlotter,
@@ -129,11 +132,15 @@ class SimulationTimePacer(Pacer):
     margin that varies with whatever else the machine is doing. Waiting on simulated
     time instead keeps one control cycle worth of simulation between commands however
     fast the simulation happens to run.
+
+    A paused simulation is waited for however long the pause lasts, since its time is
+    only standing still until someone resumes it. A simulation that has stopped is not,
+    since its time will never reach the next cycle.
     """
 
-    simulation_clock: Callable[[], float]
+    simulation_clock: SimulationClock
     """
-    Returns the simulation's current time in seconds.
+    The clock of the simulation this loop is driving.
     """
 
     poll_interval: float = 0.0002
@@ -146,20 +153,40 @@ class SimulationTimePacer(Pacer):
     Simulated time the next control cycle may start at.
     """
 
-    def sleep(self):
+    def sleep(self) -> None:
         """
         Block until the simulation has advanced one control cycle.
+
+        :raises SimulationStoppedError: If the simulation stops short of the next cycle.
         """
         cycle = 1 / self.target_frequency
         if self._next_target_time is None:
-            self._next_target_time = self.simulation_clock() + cycle
-        while self.simulation_clock() < self._next_target_time:
-            time.sleep(self.poll_interval)
+            self._next_target_time = self.simulation_clock.time + cycle
+        self._wait_for_the_next_cycle()
         # A simulation that ran ahead while we were busy must not leave a
         # backlog of instantly-satisfied cycles behind it.
-        now = self.simulation_clock()
+        now = self.simulation_clock.time
         while self._next_target_time <= now:
             self._next_target_time += cycle
+
+    def _wait_for_the_next_cycle(self) -> None:
+        """
+        Poll the simulation clock until its time reaches :attr:`_next_target_time`.
+
+        Whether the simulation has stopped is read before its time is, so the time read
+        after a stop is the simulation's final one; reading them the other way round
+        would report a cycle the simulation did complete as one it never will.
+
+        :raises SimulationStoppedError: If the simulation stops short of the next cycle.
+        """
+        while True:
+            simulation_has_stopped = self.simulation_clock.has_stopped
+            simulation_time = self.simulation_clock.time
+            if simulation_time >= self._next_target_time:
+                return
+            if simulation_has_stopped:
+                raise SimulationStoppedError(simulation_time, self._next_target_time)
+            time.sleep(self.poll_interval)
 
 
 @dataclass
