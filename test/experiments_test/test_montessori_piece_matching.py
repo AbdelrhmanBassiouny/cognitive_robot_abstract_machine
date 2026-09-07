@@ -22,7 +22,7 @@ from experiments.montessori.perception.hypotheses import (
     PieceHypothesis,
 )
 from experiments.montessori.perception.orthophoto import Orthophoto, WorkspaceRegion
-from experiments.montessori.perception.piece_matcher import PieceMatcher
+from experiments.montessori.perception.piece_matcher import MatchedPiece, PieceMatcher
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.perception.pipeline import (
     MontessoriPerceptionPipeline,
@@ -220,13 +220,28 @@ def _believing(
     )
 
 
+def _best_fit(
+    matcher: PieceMatcher, edges: EdgeDistances, hypothesis: PieceHypothesis
+) -> Optional[MatchedPiece]:
+    """
+    The piece a belief allows that followed the edges best, or None where it allows
+    none.
+
+    :param matcher: The matcher to ask.
+    :param edges: The edges seen in the plane the piece stands on.
+    :param hypothesis: What is expected, and where.
+    """
+    fits = matcher.fits(edges, hypothesis)
+    return fits[0] if fits else None
+
+
 @pytest.mark.parametrize("piece", KNOWN_PIECES, ids=_piece_id)
 def test_each_known_piece_is_recognised_from_its_own_outline(piece: KnownPiece):
     matcher = PieceMatcher()
     placed = math.radians(17)
 
-    match = matcher.match(
-        _drawn(piece.turned_outline(placed)), _believing(hue=piece.hue)
+    match = _best_fit(
+        matcher, _drawn(piece.turned_outline(placed)), _believing(hue=piece.hue)
     )
 
     assert match.piece.category is piece.category
@@ -240,8 +255,10 @@ def test_each_known_piece_is_recognised_from_its_own_outline(piece: KnownPiece):
 def test_a_piece_turned_by_its_own_period_looks_untouched(piece: KnownPiece):
     matcher = PieceMatcher()
 
-    match = matcher.match(
-        _drawn(piece.turned_outline(piece.rotation_period)), _believing(hue=piece.hue)
+    match = _best_fit(
+        matcher,
+        _drawn(piece.turned_outline(piece.rotation_period)),
+        _believing(hue=piece.hue),
     )
 
     assert match.piece.category is piece.category
@@ -253,7 +270,9 @@ def test_an_orientation_is_reported_as_the_smallest_turn_that_reaches_it():
     matcher = PieceMatcher()
     placed = cube.rotation_period - math.radians(10)
 
-    match = matcher.match(_drawn(cube.turned_outline(placed)), _believing(hue=cube.hue))
+    match = _best_fit(
+        matcher, _drawn(cube.turned_outline(placed)), _believing(hue=cube.hue)
+    )
 
     assert match.yaw == pytest.approx(math.radians(-10), abs=matcher.fitter.angle_step)
 
@@ -270,8 +289,8 @@ def test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for(
     stands_at = (0.6, 0.2)
     looked_for = (stands_at[0] - 0.012, stands_at[1] + 0.009)
 
-    match = matcher.match(
-        _drawn(piece.outline, stands_at), _believing(looked_for, piece.hue)
+    match = _best_fit(
+        matcher, _drawn(piece.outline, stands_at), _believing(looked_for, piece.hue)
     )
 
     assert match.center == PlanarPoint(
@@ -285,8 +304,8 @@ def test_a_piece_is_never_recognised_as_one_of_the_other_colour():
     matcher = PieceMatcher()
     edges = _drawn(cylinder.outline)
 
-    recognised = matcher.match(edges, _believing(hue=cylinder.hue))
-    seen_yellow = matcher.match(edges, _believing(hue=YELLOW_HUE))
+    recognised = _best_fit(matcher, edges, _believing(hue=cylinder.hue))
+    seen_yellow = _best_fit(matcher, edges, _believing(hue=YELLOW_HUE))
 
     assert recognised.piece.category is MontessoriShapeCategory.CYLINDER
     assert seen_yellow is None or seen_yellow.piece.hue == YELLOW_HUE
@@ -296,22 +315,31 @@ def test_a_colour_no_piece_wears_leaves_nothing_to_recognise():
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     unworn = (CYAN_HUE + YELLOW_HUE) // 2
 
-    assert PieceMatcher().match(_drawn(cube.outline), _believing(hue=unworn)) is None
+    assert PieceMatcher().fits(_drawn(cube.outline), _believing(hue=unworn)) == []
 
 
-def test_edges_no_known_piece_follows_are_refused():
+def test_edges_no_known_piece_follows_are_fitted_poorly_rather_than_refused():
+    """
+    Refusing is no longer the matcher's to do: how well an outline follows some edge
+    says nothing about what put that edge there, so every fit is reported and what is
+    really standing there is settled by comparing the accounts of that place (see
+    ``test_montessori_explanations.py``).
+    """
     reach = max(piece.radius for piece in KNOWN_PIECES) * 1.5
     sprawl = np.array(
         [[-reach, -reach], [reach, -reach], [reach, reach], [-reach, reach]]
     )
 
-    assert PieceMatcher().match(_drawn(sprawl), _believing(hue=CYAN_HUE)) is None
+    fitted = PieceMatcher().fits(_drawn(sprawl), _believing(hue=CYAN_HUE))
+
+    assert fitted
+    assert max(fit.outline_agreement for fit in fitted) < CLEAN_FIT_AGREEMENT
 
 
 def test_an_outline_with_no_colour_to_read_is_recognised_by_its_shape_alone():
     triangle = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
 
-    match = PieceMatcher().match(_drawn(triangle.outline), _believing())
+    match = _best_fit(PieceMatcher(), _drawn(triangle.outline), _believing())
 
     assert match.piece.category is MontessoriShapeCategory.TRIANGULAR_PRISM
 
@@ -326,8 +354,10 @@ def test_a_reflection_around_a_piece_does_not_move_where_it_is_recognised():
     stands_at = (0.6, 0.2)
     edges = _drawn(cube.outline, stands_at)
 
-    match = PieceMatcher().match(
-        edges, _believing((stands_at[0] - 0.015, stands_at[1]), cube.hue)
+    match = _best_fit(
+        PieceMatcher(),
+        edges,
+        _believing((stands_at[0] - 0.015, stands_at[1]), cube.hue),
     )
 
     assert match.piece.category is MontessoriShapeCategory.CUBE
@@ -419,4 +449,4 @@ def test_a_piece_only_half_in_view_is_not_reported(
 
 def test_a_cleanly_seen_piece_reports_how_closely_it_fitted(scene: MontessoriScene):
     for detected in scene.shapes:
-        assert detected.outline_agreement > PieceMatcher().minimum_agreement
+        assert detected.outline_agreement > CLEAN_FIT_AGREEMENT

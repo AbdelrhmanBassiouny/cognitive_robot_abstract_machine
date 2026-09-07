@@ -112,6 +112,23 @@ class EdgeDistances:
         ).astype(int)
         return self.distances[rows, columns]
 
+    @property
+    def positions(self) -> np.ndarray:
+        """
+        Where every edge seen in this plane stands, as ``(n, 2)`` world-frame points.
+
+        The distances are zero exactly on an edge, so the edges themselves are read back
+        from what was already measured rather than kept a second time.
+        """
+        rows, columns = np.nonzero(self.distances == 0.0)
+        return np.stack(
+            [
+                self.region.minimum_x + columns * self.region.resolution,
+                self.region.minimum_y + rows * self.region.resolution,
+            ],
+            axis=-1,
+        )
+
     def agreement(self, outline: np.ndarray, reach: float) -> np.ndarray:
         """
         How well outlines follow the edges that were seen.

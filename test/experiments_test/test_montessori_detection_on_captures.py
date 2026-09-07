@@ -19,7 +19,7 @@ from collections import Counter
 import cv2
 import numpy as np
 import pytest
-from typing_extensions import List
+from typing_extensions import List, Tuple
 
 from experiments.montessori.hole_geometry import detect_hole_footprints
 from experiments.montessori.perception.captures import SceneCapture
@@ -29,6 +29,7 @@ from experiments.montessori.perception.detections import (
     ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.orthophoto import Orthophoto
+from experiments.montessori.perception.explanations import CompetingExplanations
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import (
     BOARD_SCALE_AGAINST_THE_MESH,
@@ -218,22 +219,6 @@ the lid. A look told where to expect a piece finds it (see
 would tell it on a capture is the object's own history.
 """
 
-LID_PIECES_LOST_TO_A_STRONGER_GHOST: List[str] = ["tracy_pickup_demo"]
-"""
-The captures where a piece on the lid is displaced by something that is not there.
-
-A triangular prism laid over the round hole's own rim follows those edges at 0.682,
-against 0.673 for the cylinder actually sitting in that hole, and the two claim one
-place, so the stronger of them is kept and the real piece is dropped. Nine parts in a
-thousand of agreement is not a difference any threshold can be set against, which is why
-telling a piece from the board's own edges is ``competing-explanations``'s to do rather
-than a number to tune here.
-
-The ghost is not new. It is found on the table pass before the board's layout is fitted,
-where a board read as standing forty millimetres from where it does happened to hide it;
-placing the board correctly is what brings it into view.
-"""
-
 
 def test_every_piece_resting_on_the_lid_is_found(
     request: pytest.FixtureRequest,
@@ -256,16 +241,75 @@ def test_every_piece_resting_on_the_lid_is_found(
                 ),
             )
         )
-    if capture.name in LID_PIECES_LOST_TO_A_STRONGER_GHOST:
-        request.node.add_marker(
-            pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "A hole's own rim is fitted as a piece more strongly than the piece "
-                    "sitting in that hole, and the two claim one place. Owned by the "
-                    "plan item competing-explanations."
-                ),
-            )
-        )
     found = detections_on(scene, capture_pipeline.lid.name)
     assert not (Counter(truth.pieces_on_lid) - found)
+
+
+# %% what the stated lead buys
+
+
+LEADS_MEASURED_AGAINST_EACH_OTHER = (0.0, 0.075, 0.2)
+"""
+Three statements of how costly a wrong report is, from *not at all* upwards.
+
+The middle one is what :class:`~experiments.montessori.perception.explanations.CompetingExplanations`
+states by default, and the outer two bracket it far enough for the trade between the two
+kinds of error to be visible over six captures.
+"""
+
+
+def missed_and_invented(
+    scene: MontessoriScene, truth: CaptureTruth, pipeline: MontessoriPerceptionPipeline
+) -> Tuple[int, int]:
+    """
+    How many pieces a look failed to report, and how many it reported that are not
+    there.
+
+    :param scene: The result of one look.
+    :param truth: What the capture really holds.
+    :param pipeline: The pipeline that took the look, for what it calls each surface.
+    :return: The two counts, in that order.
+    """
+    missed = invented = 0
+    for surface, standing_there in (
+        (pipeline.table.name, truth.pieces_on_table),
+        (pipeline.lid.name, truth.pieces_on_lid),
+    ):
+        found = detections_on(scene, surface)
+        missed += sum((Counter(standing_there) - found).values())
+        invented += sum((found - Counter(standing_there)).values())
+    return missed, invented
+
+
+def test_saying_a_wrong_report_costs_more_trades_recall_for_it(
+    capture_pipeline: MontessoriPerceptionPipeline,
+) -> None:
+    """
+    The plan's central claim as a measurement: what a look must show before it reports
+    something is a statement about cost, and moving that statement moves the two kinds
+    of error against each other rather than only one of them.
+
+    This is the quantity the item exists to make plottable, kept answerable from the
+    captures rather than written down as a table that stops being true.
+    """
+    frames = {
+        name: SceneCapture.load(name).to_frame() for name in sorted(CAPTURE_TRUTHS)
+    }
+    measured = []
+    for lead in LEADS_MEASURED_AGAINST_EACH_OTHER:
+        capture_pipeline.explanations = CompetingExplanations(required_lead=lead)
+        totals = [
+            missed_and_invented(
+                capture_pipeline.detect(frame), CAPTURE_TRUTHS[name], capture_pipeline
+            )
+            for name, frame in frames.items()
+        ]
+        measured.append(
+            (sum(missed for missed, _ in totals), sum(made_up for _, made_up in totals))
+        )
+
+    missed = [count for count, _ in measured]
+    invented = [count for _, count in measured]
+    assert missed == sorted(missed)
+    assert invented == sorted(invented, reverse=True)
+    assert invented[0] > invented[-1]

@@ -27,6 +27,7 @@ from experiments.montessori.perception.detections import (
     MontessoriShapeDetection,
 )
 from experiments.montessori.perception.exceptions import NothingIsHiddenFromBelow
+from experiments.montessori.perception.explanations import CompetingExplanations
 
 # %% the space one thing takes up
 
@@ -147,6 +148,15 @@ class Occupancy:
     The places already held, in the order they were claimed.
     """
 
+    explanations: CompetingExplanations = field(default_factory=CompetingExplanations)
+    """
+    How much better one account of a place must be than the next before it is reported.
+
+    The same rule that decides whether a fit is reported at all decides which of two
+    fits claiming one place is kept, so a place and a report are settled by one
+    comparison rather than by two filters run in sequence on two different quantities.
+    """
+
     def claim(self, volume: OccupiedVolume) -> bool:
         """
         Give a place to whatever asks for it, unless something already holds it.
@@ -165,20 +175,59 @@ class Occupancy:
         """
         The detections that each stand somewhere nothing else does.
 
-        Places go to the best-fitted detection first, since how much of a recognised
-        outline lay along an edge the camera saw is what tells a thing from a second
-        reading of it: a reading taken off a plane the thing does not rest on is measured
-        against edges that are not where its own are.
+        Places go to the account that explains its own place best, and one is given away
+        only where that account clearly leads the next one claiming it: two readings of
+        one thing are one thing seen twice, and where neither explanation leads the other
+        the picture does not say which of them is the thing, so neither is reported. That
+        is the same comparison that decided a fit was worth reporting at all, asked of
+        place instead of of evidence.
 
         :param detections: Everything the look found, in the order it found it.
         :return: Those of them left, in the order they were offered.
         """
-        best_fitted_first = sorted(
-            detections, key=lambda detection: detection.outline_agreement, reverse=True
-        )
-        kept = {
-            detection
-            for detection in best_fitted_first
-            if self.claim(OccupiedVolume.of(detection))
-        }
+        kept: List[MontessoriShapeDetection] = []
+        volumes: List[OccupiedVolume] = []
+        for detection in sorted(
+            detections,
+            key=lambda found: found.explanation.strength,
+            reverse=True,
+        ):
+            volume = OccupiedVolume.of(detection)
+            if any(volume.overlaps(held) for held in self.taken):
+                continue
+            claimants = [
+                index for index, held in enumerate(volumes) if volume.overlaps(held)
+            ]
+            if claimants:
+                self._drop_whichever_does_not_lead(detection, claimants, kept, volumes)
+                continue
+            kept.append(detection)
+            volumes.append(volume)
         return [detection for detection in detections if detection in kept]
+
+    def _drop_whichever_does_not_lead(
+        self,
+        detection: MontessoriShapeDetection,
+        claimants: List[int],
+        kept: List[MontessoriShapeDetection],
+        volumes: List[OccupiedVolume],
+    ) -> None:
+        """
+        Give up a place already held where what holds it does not clearly explain it
+        better than the reading now claiming it.
+
+        The claimant is never reported either way: it was offered the place second
+        because it explains it less well, so the question is only whether the holder
+        explains it well enough to keep it.
+
+        :param detection: The reading now claiming the place.
+        :param claimants: Where in *kept* the readings already holding it stand.
+        :param kept: The readings holding a place, which this may shorten.
+        :param volumes: The places they hold, kept alongside them.
+        """
+        for index in reversed(claimants):
+            if not self.explanations.leads(
+                kept[index].explanation, detection.explanation
+            ):
+                kept.pop(index)
+                volumes.pop(index)

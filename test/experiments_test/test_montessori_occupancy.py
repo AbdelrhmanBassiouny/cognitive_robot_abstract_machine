@@ -15,6 +15,7 @@ from experiments.montessori.perception.hypotheses import (
     PieceHypothesis,
 )
 from experiments.montessori.perception.exceptions import NothingIsHiddenFromBelow
+from experiments.montessori.perception.explanations import Explanation
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -71,15 +72,18 @@ def volume_at(
 
 
 def piece_at(
-    x: float, y: float, surface_height: float, outline_agreement: float
+    x: float, y: float, surface_height: float, explains: float
 ) -> MontessoriShapeDetection:
     """
-    A cube detection standing at a position, fitted as well as the caller says.
+    A cube detection standing at a position, explaining its place as well as the caller
+    says.
 
     :param x: Centre along the world frame's x-axis, in metres.
     :param y: Centre along the world frame's y-axis, in metres.
     :param surface_height: Height of the surface it was found resting on, in metres.
-    :param outline_agreement: How much of its outline lay along a seen edge.
+    :param explains: How well its account explains the edges seen where it stands. Read
+        from both sides at once, an account that is equally good on each of them is
+        exactly that strong.
     """
     height = 0.03
     resting_on = PrefixedName("table", "occupancy_test")
@@ -97,7 +101,9 @@ def piece_at(
         category=MontessoriShapeCategory.CUBE,
         supporting_surface=resting_on,
         height=height,
-        outline_agreement=outline_agreement,
+        explanation=Explanation(
+            outline_followed=explains, edges_accounted_for=explains
+        ),
         hypothesis=PieceHypothesis(
             place=BelievedPlace(surface=resting_on, center=PlanarPoint(x, y)),
             source=WHOEVER_ASKED,
@@ -152,7 +158,7 @@ def test_a_thing_lying_flat_in_a_surface_takes_up_no_place_in_it():
 
 
 def test_a_detection_takes_up_the_space_between_its_surface_and_its_own_top():
-    piece = piece_at(0.6, 0.2, surface_height=0.88, outline_agreement=0.9)
+    piece = piece_at(0.6, 0.2, surface_height=0.88, explains=0.9)
 
     volume = OccupiedVolume.of(piece)
 
@@ -189,8 +195,8 @@ def test_a_refused_thing_does_not_take_the_place_it_was_refused():
 
 
 def test_the_better_fitted_of_two_detections_in_one_place_is_the_one_kept():
-    poorly_fitted = piece_at(0.60, 0.20, surface_height=0.88, outline_agreement=0.66)
-    well_fitted = piece_at(0.61, 0.20, surface_height=0.88, outline_agreement=0.94)
+    poorly_fitted = piece_at(0.60, 0.20, surface_height=0.88, explains=0.66)
+    well_fitted = piece_at(0.61, 0.20, surface_height=0.88, explains=0.94)
 
     kept = Occupancy().keep_one_detection_per_place([poorly_fitted, well_fitted])
 
@@ -199,9 +205,9 @@ def test_the_better_fitted_of_two_detections_in_one_place_is_the_one_kept():
 
 def test_detections_in_places_of_their_own_are_all_kept():
     pieces = [
-        piece_at(0.60, 0.20, surface_height=0.88, outline_agreement=0.9),
-        piece_at(0.70, 0.20, surface_height=0.88, outline_agreement=0.8),
-        piece_at(0.60, 0.30, surface_height=0.88, outline_agreement=0.7),
+        piece_at(0.60, 0.20, surface_height=0.88, explains=0.9),
+        piece_at(0.70, 0.20, surface_height=0.88, explains=0.8),
+        piece_at(0.60, 0.30, surface_height=0.88, explains=0.7),
     ]
 
     assert Occupancy().keep_one_detection_per_place(pieces) == pieces
@@ -211,8 +217,8 @@ def test_a_detection_standing_in_a_place_already_taken_is_dropped():
     board = volume_at(0.80, 0.03, bottom=0.88, top=0.96, width=0.15)
     occupancy = Occupancy()
     occupancy.claim(board)
-    on_the_lid = piece_at(0.80, 0.03, surface_height=0.96, outline_agreement=0.66)
-    inside_the_board = piece_at(0.80, 0.03, surface_height=0.88, outline_agreement=0.94)
+    on_the_lid = piece_at(0.80, 0.03, surface_height=0.96, explains=0.66)
+    inside_the_board = piece_at(0.80, 0.03, surface_height=0.88, explains=0.94)
 
     kept = occupancy.keep_one_detection_per_place([on_the_lid, inside_the_board])
 
@@ -220,8 +226,8 @@ def test_a_detection_standing_in_a_place_already_taken_is_dropped():
 
 
 def test_the_kept_detections_keep_the_order_they_were_offered_in():
-    first = piece_at(0.60, 0.20, surface_height=0.88, outline_agreement=0.7)
-    second = piece_at(0.70, 0.20, surface_height=0.88, outline_agreement=0.9)
+    first = piece_at(0.60, 0.20, surface_height=0.88, explains=0.7)
+    second = piece_at(0.70, 0.20, surface_height=0.88, explains=0.9)
 
     kept: List[MontessoriShapeDetection] = Occupancy().keep_one_detection_per_place(
         [first, second]
@@ -295,3 +301,26 @@ def test_a_camera_that_does_not_look_down_on_a_thing_is_refused():
 
     with pytest.raises(NothingIsHiddenFromBelow):
         lid.hides(0.88, np.array([0.41, -0.05, 0.5]))
+
+
+def test_neither_of_two_readings_of_one_place_is_reported_where_neither_leads():
+    """
+    Two readings that explain one place equally well are one thing seen twice with
+    nothing to say which of them the thing is, so the place is given to neither.
+
+    That is the same comparison that decided either was worth reporting at all, asked of
+    place.
+    """
+    barely_ahead = piece_at(0.60, 0.20, surface_height=0.88, explains=0.52)
+    barely_behind = piece_at(0.61, 0.20, surface_height=0.88, explains=0.50)
+
+    assert Occupancy().keep_one_detection_per_place([barely_ahead, barely_behind]) == []
+
+
+def test_a_reading_that_clearly_leads_the_other_keeps_the_place():
+    clearly_ahead = piece_at(0.60, 0.20, surface_height=0.88, explains=0.90)
+    well_behind = piece_at(0.61, 0.20, surface_height=0.88, explains=0.50)
+
+    assert Occupancy().keep_one_detection_per_place([clearly_ahead, well_behind]) == [
+        clearly_ahead
+    ]
