@@ -32,17 +32,26 @@ from conditioning, $P(Y \mid X = x)$, whenever $X$ and $Y$ share a common cause:
 $X = x$ also tells you something about that common cause, which then leaks into what you
 infer about $Y$; intervening on $X$ does not.
 
-The backdoor criterion below is stated over a causal graph: a directed acyclic graph
-$G = (V, E)$ whose edges represent direct causal influence, with $X$, $Y$, and every
-candidate adjustment variable among its nodes $V$. This package neither constructs nor
-verifies $G$: registering `causal_variables`, `effect_variables`, and an adjustment set on
-a `CausalCircuit` is the analyst's assertion, from domain knowledge, that such a $G$ exists
-and that the chosen adjustment set satisfies the backdoor criterion relative to it. What the
-package verifies instead is the circuit-side precondition the next section's polytime
-algorithm depends on -- support determinism -- which is a property of the probabilistic
-circuit itself, not of $G$; it is unrelated to the vtree used later for tractability, and to
-the `MarginalDeterminismTreeNode` structure introduced below, which only groups query
-variables for that check and does not represent $G$'s edges.
+The backdoor criterion below is stated over a causal graph:
+
+````{prf:definition} Causal Graph
+:label: def-causal-graph
+
+A causal graph is a directed acyclic graph $G = (V, E)$ whose nodes $V$ are random
+variables and whose edges $E$ represent direct causal influence: an edge $U \to W$
+means $U$ is a direct cause of $W$. A node $Z$ is a *descendant* of $X$ in $G$ if $G$
+contains a directed path from $X$ to $Z$.
+````
+
+with $X$, $Y$, and every candidate adjustment variable among $G$'s nodes $V$. This package
+neither constructs nor verifies $G$: registering `causal_variables`, `effect_variables`, and
+an adjustment set on a `CausalCircuit` is the analyst's assertion, from domain knowledge,
+that such a $G$ exists and that the chosen adjustment set satisfies the backdoor criterion
+relative to it. What the package verifies instead is the circuit-side precondition the next
+section's polytime algorithm depends on -- support determinism -- which is a property of the
+probabilistic circuit itself, not of $G$; it is unrelated to the vtree used later for
+tractability, and to the `MarginalDeterminismTreeNode` structure introduced below, which only
+groups query variables for that check and does not represent $G$'s edges.
 
 ````{prf:definition} Backdoor Criterion
 :label: def-backdoor-criterion
@@ -67,11 +76,22 @@ interventional and observational distributions coincide.
 
 Evaluating the backdoor formula requires computing $P(Y \mid X = x, Z = z)$ for every value
 $z$ in the adjustment set's domain, and summing. On an arbitrary joint distribution this can
-be as expensive as the domain of $Z$ is large. {cite}`wang2023compositional` shows that on a
-*structured-decomposable* probabilistic circuit -- one where every product unit's children
-partition the scope along a shared, recursively fixed variable tree (a vtree) -- backdoor
-adjustment is tractable in the size of the circuit whenever the circuit satisfies one
-additional structural property for the relevant variables: **support determinism**.
+be as expensive as the domain of $Z$ is large.
+
+````{prf:definition} Vtree
+:label: def-vtree
+
+A vtree over a variable set $X$ is a full, rooted binary tree whose leaves are in
+one-to-one correspondence with the variables in $X$. Each internal node corresponds to
+the subset of $X$ at the leaves beneath it, partitioned by that node's two children into
+disjoint left and right subsets {cite}`kisa2014probabilistic`.
+````
+
+{cite}`wang2023compositional` shows that on a *structured-decomposable* probabilistic
+circuit -- one where every product unit's children partition the scope along a shared,
+recursively fixed {prf:ref}`def-vtree` -- backdoor adjustment is tractable in the size of
+the circuit whenever the circuit satisfies one additional structural property for the
+relevant variables: **support determinism**.
 
 ````{prf:definition} Support Determinism
 :label: def-support-determinism
@@ -89,8 +109,9 @@ already partition the world by the value those variables take -- so answering "w
 $P(Y \mid X = x, Z = z)$ under this branch" never requires mixing across branches, and the
 backdoor sum becomes a single weighted pass over the circuit rather than one circuit
 evaluation per $(x, z)$ pair. {cite}`wang2023compositional` formalizes the circuit family
-that guarantees this (*md-vtrees*, a generalization of probabilistic sentential decision
-diagrams) and derives the first polytime algorithm for backdoor adjustment on such circuits.
+that guarantees this -- *marginal-deterministic vtrees* (*md-vtrees*), a generalization of
+probabilistic sentential decision diagrams {cite}`kisa2014probabilistic` -- and derives the
+first polytime algorithm for backdoor adjustment on such circuits.
 This package does not require an md-vtree-typed circuit outright; instead it *verifies* the
 support-determinism property directly on whatever structured-decomposable circuit it is
 given, which is the property the polytime algorithm actually depends on.
