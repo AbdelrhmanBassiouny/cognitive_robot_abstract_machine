@@ -16,10 +16,12 @@ from experiments.montessori.perception.detections import (
     MontessoriShapeDetection,
     ShapeSortingHoleDetection,
 )
+from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import FixedScene, PerceivedObjects
 from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.entity_query_language.factories import a, the
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
@@ -228,6 +230,69 @@ def test_the_board_is_still_found_under_a_piece_standing_on_its_lid(
 ):
     assert scene_with_a_piece_on_the_lid.board is not None
     assert len(scene_with_a_piece_on_the_lid.holes) == len(renderer.hole_footprints())
+
+
+# %% the table the board stands in front of
+
+
+def test_what_the_board_hides_reaches_from_the_table_up_to_its_own_lid(
+    pipeline: MontessoriPerceptionPipeline,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
+    piece_on_the_lid: PlacedPiece,
+):
+    frame = renderer.render([*placed_pieces, piece_on_the_lid])
+    board = pipeline.detect(frame).board
+
+    hidden = pipeline.table_hidden_by(board, frame)
+
+    assert hidden.bottom == pytest.approx(pipeline.table.height)
+    assert hidden.top == pytest.approx(board.lid_height)
+
+
+def test_what_the_board_hides_covers_the_table_it_stands_on(
+    pipeline: MontessoriPerceptionPipeline,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
+    piece_on_the_lid: PlacedPiece,
+):
+    frame = renderer.render([*placed_pieces, piece_on_the_lid])
+    board = pipeline.detect(frame).board
+    standing_on_the_table = OccupiedVolume(
+        outline=board.outline, bottom=pipeline.table.height, top=board.lid_height
+    )
+
+    hidden = pipeline.table_hidden_by(board, frame)
+
+    assert hidden.shared_area(standing_on_the_table) == pytest.approx(
+        standing_on_the_table.area, rel=1e-3
+    )
+
+
+def test_a_reading_taken_off_the_table_the_board_hides_is_not_reported(
+    pipeline: MontessoriPerceptionPipeline,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
+    piece_on_the_lid: PlacedPiece,
+):
+    frame = renderer.render([*placed_pieces, piece_on_the_lid])
+    scene = pipeline.detect(frame)
+    occupancy = Occupancy()
+    occupancy.claim(pipeline.table_hidden_by(scene.board, frame))
+    against_the_board = MontessoriShapeDetection(
+        pose=Pose.from_xyz_rpy(
+            *scene.board.pose.to_position().to_np()[:2],
+            pipeline.table.height + 0.015,
+        ),
+        footprint=scene.shapes[0].footprint,
+        outline=scene.board.outline,
+        category=MontessoriShapeCategory.CUBE,
+        supporting_surface=pipeline.table.name,
+        height=0.03,
+        outline_agreement=0.7,
+    )
+
+    assert occupancy.keep_one_detection_per_place([against_the_board]) == []
 
 
 # %% querying it

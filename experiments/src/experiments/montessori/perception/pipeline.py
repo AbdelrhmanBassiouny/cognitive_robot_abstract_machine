@@ -43,6 +43,7 @@ from experiments.montessori.perception.footprint import (
     Footprint,
     FootprintClassifier,
 )
+from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
 from experiments.montessori.perception.orthophoto import (
     Orthophoto,
     OrthophotoProjector,
@@ -911,6 +912,29 @@ class MontessoriPerceptionPipeline:
             SurfaceSearch(surface=self.lid, boundary=board),
         ]
 
+    def table_hidden_by(
+        self, board: MontessoriBoardDetection, frame: RgbdFrame
+    ) -> OccupiedVolume:
+        """
+        The stretch of table the board takes out of the search: what it stands on, and
+        what it stands in front of.
+
+        A piece on the lid is seen against the table behind the board, so the table's
+        own pass reads it as something resting there. The shadow is cast from the top of
+        a piece standing on the lid rather than from the lid itself, since that is what
+        actually stands between the camera and the table. Only the space up to the lid
+        is taken, so a piece resting on the lid stands above it and keeps its own place.
+
+        :param board: The board as it was seen.
+        :param frame: The camera data the look was taken from.
+        """
+        standing_on_the_lid = OccupiedVolume(
+            outline=board.outline,
+            bottom=board.lid_height,
+            top=board.lid_height + self.piece_detector.piece_height,
+        )
+        return standing_on_the_lid.hides(self.table.height, frame.camera_position)
+
     def detect(self, frame: RgbdFrame) -> MontessoriScene:
         """
         Recognise everything in one frame.
@@ -918,7 +942,8 @@ class MontessoriPerceptionPipeline:
         Every surface of the scene is searched on its own plane, so a piece standing on
         the board's lid is rectified from the lid rather than from the table eighty
         millimetres below it, where parallax would have pushed its two silhouettes past
-        each other.
+        each other. The same frame seen from two planes reports one thing twice, so what
+        every surface found is settled against the places already taken.
 
         :param frame: The camera data to search.
         :return: The pieces, the board, and its holes.
@@ -940,4 +965,9 @@ class MontessoriPerceptionPipeline:
                     search,
                 )
             )
-        return MontessoriScene(shapes=pieces, board=board)
+        occupancy = Occupancy()
+        if board is not None:
+            occupancy.claim(self.table_hidden_by(board, frame))
+        return MontessoriScene(
+            shapes=occupancy.keep_one_detection_per_place(pieces), board=board
+        )
