@@ -4,6 +4,7 @@ import itertools
 import logging
 import math
 import os
+import re
 import shutil
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -36,6 +37,7 @@ from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.exceptions import MalformedHexColor
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -96,11 +98,26 @@ class Color:
         self.B = float(self.B)
         self.A = float(self.A)
 
+    def __hash__(self):
+        return hash((self.R, self.G, self.B, self.A))
+
     def to_rgba(self) -> Tuple[float, float, float, float]:
         return (self.R, self.G, self.B, self.A)
 
     def to_rgb(self) -> Tuple[float, float, float]:
         return (self.R, self.G, self.B)
+
+    def to_hex(self, prefix: str = "#") -> str:
+        """
+        :param prefix: The characters the digits are written behind.
+        :return: The color written as ``#RRGGBB``, two hex digits per channel.
+
+        ..note:: The opacity is not part of it, the same way it is not part of
+            :meth:`to_rgb`.
+        """
+        return prefix + "".join(
+            f"{round(channel * 255):02X}" for channel in self.to_rgb()
+        )
 
     @classmethod
     def RED(self):
@@ -177,6 +194,36 @@ class Color:
         :param rgba: The list of RGBA values
         """
         return cls(*rgba)
+
+    @classmethod
+    def from_hex(
+        cls,
+        hex_color: str,
+        prefix: str = "#",
+        pattern: str = "(?:[0-9a-fA-F]{2}){3,4}",
+    ) -> Self:
+        """
+        Read a color written as two hex digits per channel, red first.
+
+        A fourth pair of digits sets the opacity; without it the color is fully opaque.
+
+        :param hex_color: The color, optionally preceded by a ``#`` and written in
+            either case.
+        :param prefix: The characters the digits may be written behind.
+        :param pattern: What the digits have to look like, by default three or four
+            channels of two hex digits each.
+        :raises MalformedHexColor: If the string is not written that way.
+        :return: The color it names.
+        """
+        digits = hex_color.removeprefix(prefix)
+        if re.fullmatch(pattern, digits) is None:
+            raise MalformedHexColor(hex_color)
+        return cls.from_list(
+            [
+                int(digits[index : index + 2], 16) / 255
+                for index in range(0, len(digits), 2)
+            ]
+        )
 
     @classmethod
     def PINK(cls) -> Self:
