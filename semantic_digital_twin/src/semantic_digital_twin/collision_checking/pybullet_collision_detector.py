@@ -12,7 +12,7 @@ import giskardpy_bullet_bindings as bullet
 import numpy as np
 import trimesh
 from giskardpy.utils.utils import create_path
-from krrood.utils import memoize, clear_memoization_cache
+from krrood.patterns.caching import memoize, clear_memoization_cache
 from semantic_digital_twin.collision_checking.collision_detector import (
     CollisionDetector,
     CollisionCheckingResult,
@@ -41,11 +41,13 @@ LOG_DIR = create_cache_dir("log")
 _shape_cache: Dict[Any, bullet.CollisionShape] = {}
 """
 Process-wide cache of built Bullet collision shapes, keyed by geometry content (see
-:func:`_geometry_cache_key`). Shapes are immutable geometry definitions with no
-per-instance transform state, so a single shape can safely be referenced by many
-``bullet.CollisionObject``s across independent ``KineverseWorld`` instances (e.g. after
-``deepcopy`` of a ``World``). Persists for the life of the process rather than being
-scoped to a single ``BulletCollisionDetector``.
+:func:`_geometry_cache_key`).
+
+Shapes are immutable geometry definitions with no per-instance transform state, so a
+single shape can safely be referenced by many ``bullet.CollisionObject``s across
+independent ``KineverseWorld`` instances (e.g. after ``deepcopy`` of a ``World``).
+Persists for the life of the process rather than being scoped to a single
+``BulletCollisionDetector``.
 """
 
 
@@ -53,9 +55,9 @@ def _geometry_cache_key(geometry: Shape) -> Any:
     """
     Builds a cheap, content-based cache key for a geometry's collision shape.
 
-    Only touches plain dataclass fields, never the lazily-loaded
-    :attr:`Mesh.mesh` property, so looking up the key never forces the expensive
-    mesh load the cache is meant to avoid.
+    Only touches plain dataclass fields, never the lazily-loaded :attr:`Mesh.mesh`
+    property, so looking up the key never forces the expensive mesh load the cache is
+    meant to avoid.
 
     :param geometry: the geometry to build a cache key for.
     :return: a hashable key identifying the shape that would be built for this geometry.
