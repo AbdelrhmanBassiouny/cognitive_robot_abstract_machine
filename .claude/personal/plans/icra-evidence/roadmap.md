@@ -394,3 +394,120 @@ bucket is represented, that a question's Bloom level follows its memory, and
 that `required_facts` names what the question actually reads.
 
 CI-only, per the standing ROS/`random_events` limitation.
+
+### `question-set-and-ground-truth` (#295), as built 2026-09-08
+
+What changed against the plan above, and what was found while building it.
+
+**The container limitation this track has recorded throughout is out of date.**
+Every item of the `long-term-memory` track says the workspace cannot be
+installed in a session container because `random_events` needs a native library
+whose PyPI build fails. It installs fine. The three packages that actually
+failed -- `arff`, `dnutils` and `antlr4-python3-runtime` -- fail against the
+Debian-patched `setuptools` a system Python carries, and build without
+complaint in a fresh virtual environment; `giskardpy_bullet_bindings` is on
+PyPI too. What genuinely still needs CI is *ORM generation*, because giskardpy's
+`DebugExpressionPublisher` imports a real `rclpy`.
+
+So the split is not "session versus CI" but "does this touch the generated
+interface". The working-memory half touches none of it and was run here against
+a real twin -- 20 tests, every question asked of a built scene and checked
+against ground truth. The long-term half is CI-only, as before.
+
+**The developer chose to write the long-term half rather than split it out**,
+and to fix #271 in the same pass. Both were put to him because they change what
+the item delivers: the long-term spellings could not be run here at all, and
+#271 is another plan's branch.
+
+#### #271 grew the two references its own fold had promised
+
+`icra-foundation`'s roadmap recorded on 2026-09-08 that
+`self-model-and-control-state-recorded` folded into
+`episodes-recorded-through-ormatic` because "that is a field or two, not an
+item". The fold was recorded but never made: `Episode` named the scenario, the
+conditions and an identifier, `RecordedTrial` named the outcome, the ticks, the
+queries and the attempts, and neither named the world the run happened in or the
+motion the trial ran. `a96531635` on that branch adds `Episode.world` and
+`RecordedTrial.motion_statechart`, both optional, with three round-trip tests,
+and its description and a comment record why. Whether a corpus keeps a world per
+episode or shares one is still the developer's open call -- the field allows
+both.
+
+#### What the six buckets actually got
+
+| bucket | over working memory | over long-term memory |
+|---|---|---|
+| scene | three questions | one question |
+| support and spatial relations | two questions | waits |
+| temporal and agency | four questions | four questions |
+| embodiment | one question | waits |
+| self-model | three questions | one question |
+| control | waits | waits |
+
+Three gaps, and each is now a specific statement rather than a guess:
+
+- **control, both spellings** -- unchanged from the item's own blocker: nothing
+  names a task's constraints or the degrees of freedom it used until
+  `icra-mechanism`'s `control-constraints-and-degrees-of-freedom-queried`.
+  `RecordedTrial.motion_statechart` is now recorded, so that item has something
+  to be written against, but naming the constraints is still its work.
+- **support and spatial relations over long-term memory** -- the spatial
+  relations are geometric predicates evaluated over a world. Answering them from
+  rows is a routed predicate, which is `icra-mechanism`'s
+  `query-routed-per-predicate`. Not previously recorded anywhere; it is the one
+  gap this plan had not anticipated.
+- **embodiment over long-term memory** -- reduces to the pick-up record, which
+  the temporal bucket already asks, unless an episode also records *which links
+  were the robot's*. Recording the world does not answer that: an object the
+  robot picks up hangs off one of its links without becoming one, and nothing in
+  a recorded world tells the two apart. Whoever needs it decides whether an
+  episode should record the robot's own links as well as its world.
+
+#### Design calls taken while building
+
+- **The Bloom level comes from the memory, not from a per-question field.** The
+  roadmap's own definitions make the level a property of which store answers, so
+  a field could only disagree with the one thing that decides it. It is also
+  what makes understanding and remembering separately measurable on the same
+  English question.
+- **`WorkingMemory.own_bodies` is given rather than derived.** The first attempt
+  read the robot's links off the kinematic branch under its root and was wrong
+  the moment anything was grasped: a held object is in that branch, so it counted
+  as a link and the objects list lost it. Which links the robot is made of is
+  knowledge working memory holds, not something the twin still says afterwards.
+- **"Is it in your hand?" is answered from the attachment, not from
+  `bodies_in_gripper`.** `icra-foundation`'s roadmap names `bodies_in_gripper` as
+  how the twin answers gripper contents, and it does -- geometrically, by casting
+  rays between the fingers. Working memory is what the robot *believes* it is
+  holding, which is what a grasp writes into the twin and a release takes out.
+  Different questions; this bucket asks the second.
+- **"How many joints do you have?" counts degrees of freedom**, not connections:
+  a fixed connection joins two links without being a joint anything can move.
+- **"Is the cube left or right of the cylinder?" is frozen as the two questions
+  it decomposes into**, one per side, each a single query answering a judgement.
+  The alternative -- one question answering which relation holds -- needs either a
+  Python branch over two queries or an aggregate the query language does not
+  translate here.
+- **`is_on_side_of` is ours.** The twin's `LeftOf`/`RightOf` relate `Point3`s and
+  are plain `Symbol` dataclasses, which the query language rejects as a
+  condition (`LiteralConditionError`). One `symbolic_function` adapting them to
+  the two bodies a question is about is what lets the bucket be asked in the
+  query language at all; `Side` carries which relation it means, so left and
+  right are spelled once.
+- **The self-model spelling over long-term memory selects rather than counts.**
+  `LongTermMemory.answer` converts every row it gets back into a domain object,
+  so an aggregate has no way through it. The live spelling uses `count`; the
+  recorded one selects the degrees of freedom and takes how many came back. If
+  the counting matters at corpus scale, a counting method on `LongTermMemory` is
+  that item's work.
+
+#### The hazard, still open
+
+`icra-foundation`'s note on #278 -- that nothing proves the query language
+translates a join across the association table an episode's to-many collections
+are reached through, and that finding out belongs to whoever needs it first --
+is still the largest risk on this branch. Every long-term question crosses one,
+most of them twice (`RecordedTrial.ticks`, then `Tick.events`).
+`test_long_term_questions.py` is what answers it, and CI is where it runs. If it
+does not translate, the shape changes in one place -- each question's `query` --
+and the finding belongs on this branch.
