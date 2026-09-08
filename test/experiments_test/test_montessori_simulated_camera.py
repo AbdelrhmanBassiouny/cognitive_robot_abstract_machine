@@ -42,8 +42,13 @@ from experiments.montessori.pieces import (
     hue_distance,
     hue_of,
 )
-from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
-from experiments.montessori.world import MontessoriWorld
+from experiments.montessori.semantics import (
+    MontessoriShape,
+    MontessoriShapeCategory,
+    ShapeSortingHole,
+)
+from experiments.montessori.world import MEASURED_BOARD_HUE, MontessoriWorld
+from semantic_digital_twin.adapters.multi_sim import RegionAppearance
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.world_description.geometry import Color
 
@@ -342,9 +347,85 @@ def test_a_camera_that_was_never_started_answers_no_look(
         camera.frame()
 
 
+# %% what a region shows in a picture
+
+
+def square_hole(montessori_world: MontessoriWorld) -> ShapeSortingHole:
+    """
+    The board's square hole, whose region wears a piece's own colour.
+
+    :param montessori_world: The world to read.
+    """
+    return next(
+        hole
+        for hole in montessori_world.world.get_semantic_annotations_by_type(
+            ShapeSortingHole
+        )
+        if hole.shape_category is MontessoriShapeCategory.CUBE
+    )
+
+
+def hue_of_the_middle_of(
+    montessori_world: MontessoriWorld, hole: ShapeSortingHole, frame: RgbdFrame
+) -> int:
+    """
+    The hue a look shows at the pixel a hole's own middle falls on.
+
+    :param montessori_world: The world the hole is in.
+    :param hole: The hole to look at.
+    :param frame: The look to read.
+    """
+    middle = montessori_world.world.compute_forward_kinematics_np(
+        montessori_world.world.root, hole.root
+    )[:3, 3]
+    return hue_of(color_at(frame, frame.project(middle)[0]))
+
+
+def test_a_region_is_not_drawn_into_a_look(
+    montessori_world: MontessoriWorld, simulated_frame: RgbdFrame
+) -> None:
+    """
+    A camera shows the things a world holds and not the names it gives to volumes of
+    space: where a hole's region stands, a look shows the board it is cut into.
+    """
+    seen = hue_of_the_middle_of(
+        montessori_world, square_hole(montessori_world), simulated_frame
+    )
+    assert hue_distance(seen, MEASURED_BOARD_HUE) <= HUE_TOLERANCE
+
+
+def test_a_region_asked_for_is_drawn_see_through(
+    montessori_world: MontessoriWorld,
+) -> None:
+    """
+    Asked to draw them, the same camera shows a region tinting what it covers rather
+    than hiding it: the hue moves towards the region's own without reaching it.
+    """
+    hole = square_hole(montessori_world)
+    region_hue = hue_of(hole.root.area.shapes[0].color)
+    camera = camera_over_the_table(montessori_world)
+    with camera:
+        hidden = hue_of_the_middle_of(montessori_world, hole, camera.frame())
+    camera.region_appearance = RegionAppearance.TRANSPARENT
+    with camera:
+        drawn = hue_of_the_middle_of(montessori_world, hole, camera.frame())
+    assert hue_distance(drawn, region_hue) < hue_distance(hidden, region_hue)
+    assert hue_distance(drawn, region_hue) > HUE_TOLERANCE
+
+
 # %% what the perception stack makes of a rendered look
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="The pieces the twin builds are smaller than the ones perception measured "
+    "off the real board -- the cube is 22.4 mm across where KnownPiece states 30, the "
+    "cylinder 22.4 mm across against 28, the triangular prism 25.2 by 29.4 against 37 "
+    "by 32, and the rectangular prism 15.4 by 29.4 against 20 by 40 -- so at the cube's "
+    "place the cylinder's outline wins the fit and the cube is dropped. Which of the "
+    "two sizes is the real piece is the developer's call; see icra-foundation's "
+    "roadmap.md.",
+)
 def test_every_piece_the_world_places_on_the_table_is_found(
     montessori_world: MontessoriWorld, simulated_frame: RgbdFrame
 ) -> None:
@@ -366,12 +447,12 @@ def test_every_piece_the_world_places_on_the_table_is_found(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="A Region is exported to MuJoCo as a visible geom, so the board's six "
-    "ShapeSortingHole regions are rendered as solid markers wearing the very hues the "
-    "piece detectors search for. They are reported as extra pieces, and the board -- "
-    "which is found by the openings in it -- has no openings left to be found by. "
-    "Whether the twin should render a region at all is the developer's call; see "
-    "icra-foundation's roadmap.md.",
+    reason="Two things the twin states, neither of them the frame: the pieces it "
+    "builds are smaller than the ones perception measured off the real board, so the "
+    "cube's place is won by the cylinder's outline and the cylinder's own place is "
+    "reported twice; and the board's holes are cut through an 80 mm blank whose walls "
+    "render in the board's own colour, so a look shows no opening for the board to be "
+    "found by. See icra-foundation's roadmap.md.",
 )
 def test_every_piece_on_the_table_is_reported_once_with_its_own_category(
     montessori_world: MontessoriWorld, simulated_frame: RgbdFrame

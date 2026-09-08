@@ -27,6 +27,7 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoCamera,
     MujocoSim,
     MujocoSynchronizer,
+    RegionAppearance,
     select_offscreen_rendering_backend,
 )
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -92,6 +93,14 @@ class SimulatedCamera:
     """
     The frame a rendered look reports the camera's pose in, or None for the world's own
     root.
+    """
+
+    region_appearance: RegionAppearance = RegionAppearance.HIDDEN
+    """
+    How much of the regions the twin holds is drawn into the picture.
+
+    Hidden by default, because a region names a volume of space rather than a thing
+    standing in it and the real camera this one stands in for sees no such thing.
     """
 
     _mirror: Optional[MujocoSim] = field(default=None, init=False, repr=False)
@@ -163,7 +172,11 @@ class SimulatedCamera:
             raise SimulatedCameraIsAlreadyLooking(self.camera.name)
 
         select_offscreen_rendering_backend()
-        self._mirror = MujocoSim(world=self.world, headless=True)
+        self._mirror = MujocoSim(
+            world=self.world,
+            headless=True,
+            region_appearance=self.region_appearance,
+        )
         self._mirror.synchronizer.sync_rate_hz = (
             MujocoSynchronizer.UNTHROTTLED_SYNC_RATE_HZ
         )
