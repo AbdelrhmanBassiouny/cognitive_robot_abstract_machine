@@ -10,28 +10,36 @@ import subprocess
 import pytest
 import yaml
 
-from bastler.missing_requirements import RequirementsFile
-from bastler.plan_item_bootstrap import (
-    HOOKS_DIRECTORY,
-    PLANS_DIRECTORY,
-    HookScript,
-    PlanDocument,
-)
+from bastler import dependencies
+from bastler.plan_item_bootstrap import PLANS_DIRECTORY, HookScript, PlanDocument
 from bastler.plan_size_budget import PlanSize, SizeBudget, SizeReport
 
-from .scratch_repository import HOOKS_SOURCE_DIRECTORY, ScratchRepository
+from .constants import PACKAGE_DIRECTORY
+from .scratch_repository import ScratchRepository
 
-REQUIREMENTS_PATH = f"{HOOKS_DIRECTORY}/{RequirementsFile.FILENAME}"
+DECLARATION_PATH = f"{PACKAGE_DIRECTORY.name}/{dependencies.DECLARATION_PATH.name}"
 """
-Where the hooks list their Python dependencies, composed from the two definitions that
-own its halves rather than spelled again here.
+Where the package declares its dependencies within a checkout, composed from the two
+definitions that own its halves rather than spelled again here.
 """
 
 ABSENT_DISTRIBUTION = "no-such-distribution-exists"
 """
-A name no environment can have installed, so a requirements file naming it is always
-reported as missing.
+A name no environment can have installed, so a declaration naming it is always reported
+as missing.
 """
+
+
+def declaring_only(specifier: str) -> str:
+    """
+    :param specifier: The one requirement the declaration is to state.
+    :return: A ``pyproject.toml`` declaring it and nothing else, written through the
+        table and field names the reader looks them up by.
+    """
+    return (
+        f"[{dependencies.PROJECT_TABLE}]\n"
+        f'{dependencies.DEPENDENCIES_FIELD} = ["{specifier}"]\n'
+    )
 
 
 def plan_files(plan_id: str, item_count: int = 0, roadmap_line_count: int = 0) -> dict:
@@ -69,10 +77,6 @@ def report_repository(scratch_repository: ScratchRepository) -> ScratchRepositor
         HookScript.CONFIGURATION, HookScript.PLAN_SIZE_REPORT
     )
     scratch_repository.install_package()
-    scratch_repository.write(
-        REQUIREMENTS_PATH,
-        (HOOKS_SOURCE_DIRECTORY / RequirementsFile.FILENAME).read_text(),
-    )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
     scratch_repository.resolve_notes_remote_to()
@@ -189,20 +193,21 @@ def test_fails_when_the_notes_branch_does_not_exist(
     assert "doesn't exist yet" in result.stderr
 
 
-def test_reports_whichever_requirement_is_missing(
+def test_reports_whichever_dependency_is_missing(
     report_repository: ScratchRepository,
 ):
-    report_repository.write(REQUIREMENTS_PATH, f"{ABSENT_DISTRIBUTION}>=2\n")
+    report_repository.write(
+        DECLARATION_PATH, declaring_only(f"{ABSENT_DISTRIBUTION}>=2")
+    )
     report_repository.publish_notes_branch(plan_files("plan-a"))
 
     result = run_report(report_repository)
 
     assert result.returncode == 1
     assert ABSENT_DISTRIBUTION in result.stderr
-    assert REQUIREMENTS_PATH in result.stderr
 
 
-def test_runs_when_every_requirement_is_installed(
+def test_runs_when_every_dependency_is_installed(
     report_repository: ScratchRepository,
 ):
     report_repository.publish_notes_branch(plan_files("plan-a"))
@@ -213,24 +218,23 @@ def test_runs_when_every_requirement_is_installed(
     assert ABSENT_DISTRIBUTION not in result.stderr
 
 
-def test_the_requirements_path_matches_the_shell_configuration_that_owns_it(
+def test_the_declaration_path_matches_the_shell_configuration_that_owns_it(
     report_repository: ScratchRepository,
 ):
     """
-    ``REQUIREMENTS_PATH`` mirrors ``HOOKS_REQUIREMENTS_FILE`` in the shell
-    configuration; this is what stops the mirror drifting, since the two are edited in
-    different files.
+    ``DECLARATION_PATH`` mirrors ``BASTLER_PYPROJECT_FILE`` in the shell configuration;
+    this is what stops the mirror drifting, since the two are edited in different files.
     """
     resolved = subprocess.run(
         [
             "bash",
             "-c",
             f'source "{HookScript.CONFIGURATION.path}" && '
-            'printf "%s\\n" "${HOOKS_REQUIREMENTS_FILE}"',
+            'printf "%s\\n" "${BASTLER_PYPROJECT_FILE}"',
         ],
         cwd=report_repository.project_root,
         capture_output=True,
         text=True,
         check=True,
     )
-    assert resolved.stdout.strip() == REQUIREMENTS_PATH
+    assert resolved.stdout.strip() == DECLARATION_PATH
