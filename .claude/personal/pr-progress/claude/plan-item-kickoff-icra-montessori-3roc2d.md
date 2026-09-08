@@ -24,14 +24,24 @@ recorded — that edge is the plan's call, and #252 asks about it.
   `PiecePlacement`, `PieceLayout` (`randomized` / `partial` / `nearly_ambiguous`),
   `SortingScene`, the steps, the four goals, `LightingChanged`, the four scripts and
   their `Tracy…` bindings.
-- `test/experiments_test/test_montessori_scenarios.py`: 25 tests, all passing, each
-  non-trivial one mutation-checked.
+- `test/experiments_test/test_montessori_scenarios.py`: 26 tests (29 items), all
+  passing, each non-trivial one mutation-checked.
 - `experiments/scripts/generate_orm.py`: these classes added to `ignored_classes`.
+- Review round 1 (`c6a00274a`): `Goal` is a krrood `Predicate` — `is_reached` became
+  `__call__`, every goal states its own `_verbalization_fragment_` (mandatory for free,
+  the base method being abstract), the world it judges became one of its operands, and
+  `Scenario.goal` therefore moved from a field to a method beside `steps(world)`.
+  `Condition` renamed `ScenarioCondition` with every reader. Five new tests in
+  `test_scenarios.py`, one parametrized verbalization test here; all mutation-checked.
+  Description and inline replies posted; rename thread resolved.
 
 ## Next
 
-- Nothing outstanding on my side. CI has not reported yet; it is the authority for the
-  `generate_orm.py` change, which needs a generation this container cannot run.
+- The `Goal` review thread is answered but deliberately left open: the reply asks
+  whether that change should have landed on #261 (whose file it is) instead of here.
+  Waiting on the developer.
+- CI is the authority for the `generate_orm.py` change and for
+  `control_loop_experiments`, which needs ROS to import; neither runs in this container.
 - If the developer wants `depends_on` repointed at `montessori-perception-on-main`, that
   is a one-line manifest change, waiting on his answer on #252.
 
