@@ -12,12 +12,10 @@ against the live robot reads this.
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 from experiments.montessori.hole_geometry import (
     BoardHoleLayout,
-    detect_hole_footprints,
     hole_names,
 )
 from experiments.montessori.perception.camera import RgbdFrame
@@ -29,7 +27,6 @@ from experiments.montessori.perception.pipeline import (
     default_look_rules,
 )
 from experiments.montessori.perception.surfaces import WorkspaceSurface
-from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -40,7 +37,7 @@ from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Scale, SurfaceFinish
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
-from typing_extensions import Dict, Optional, Tuple
+from typing_extensions import Dict, Optional
 
 SETUP_NAME = "tracy"
 """
@@ -328,30 +325,33 @@ def board_holes_in(world: World, board: MontessoriBoardDetection) -> Dict[str, B
     """
     The board's holes, placed in the world where a look found the board.
 
-    Which holes the board has and where each lies on it is knowledge, cut into the mesh
-    the board is modelled from; where the board itself stands is what the look says. A
-    statement about one particular hole needs both, which is why the holes are placed
-    from a detection rather than written down here: where this board stands has been
-    measured to drift from where the world models it.
+    Which holes the board has and what each is called is knowledge, cut into the mesh the
+    board is modelled from; where each one stands is what the look says, which is why
+    they are placed from a detection rather than written down here: where this board
+    stands has been measured to drift from where the world models it.
+
+    The look is also the only thing that says how far apart they stand, since the mesh is
+    not cut to the size of the board these recordings hold -- see
+    :data:`BOARD_SCALE_AGAINST_THE_MESH`. Reading their spacing off the mesh instead
+    leaves a body about twelve millimetres from the hole a statement means by it.
 
     :param world: The world to place them in, from :func:`recorded_world`.
     :param board: The board as a look found it.
     :return: One body per hole, by the name the board's own mesh gives it.
     """
-    footprints = detect_hole_footprints()
-    stands_at = board.pose.to_position().to_np()
     placed = {}
+    names = hole_names([hole.category for hole in board.holes])
     with world.modify_world():
-        for footprint, name in zip(footprints, hole_names(footprints)):
+        for detection, name in zip(board.holes, names):
+            stands_at = detection.pose.to_position().to_np()
             hole = Body(name=PrefixedName(name, SETUP_NAME))
-            across, along = _turned(footprint.center, board.yaw)
             world.add_connection(
                 FixedConnection(
                     parent=world.root,
                     child=hole,
                     parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                        x=float(stands_at[0]) + across,
-                        y=float(stands_at[1]) + along,
+                        x=float(stands_at[0]),
+                        y=float(stands_at[1]),
                         z=board.lid_height,
                         reference_frame=world.root,
                     ),
@@ -360,20 +360,6 @@ def board_holes_in(world: World, board: MontessoriBoardDetection) -> Dict[str, B
             placed[name] = hole
     world.update_forward_kinematics()
     return placed
-
-
-def _turned(center: PlanarPoint, yaw: float) -> Tuple[float, float]:
-    """
-    Where a place on the board lies once the board itself is turned.
-
-    :param center: The place, in the board mesh's own frame, in metres.
-    :param yaw: How far the board is turned about the world frame's z-axis, in radians.
-    """
-    turn, tilt = math.cos(yaw), math.sin(yaw)
-    return (
-        center.x * turn - center.y * tilt,
-        center.x * tilt + center.y * turn,
-    )
 
 
 def perception_pipeline(world: Optional[World] = None) -> MontessoriPerceptionPipeline:

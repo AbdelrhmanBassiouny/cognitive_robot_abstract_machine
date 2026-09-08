@@ -661,8 +661,8 @@ def test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen(
     """
     Read from where the camera stands, a direction means what it means on screen.
 
-    Measured on this capture: the cube stands 28 mm above the square hole in the picture
-    and the cylinder 34 mm to its right, so *right of* leaves the cylinder and the cube
+    Measured on this capture: the cube stands 21 mm above the square hole in the picture
+    and the cylinder 7 mm to its right, so *right of* leaves the cylinder and the cube
     is told from it by *above* -- which the two of them standing on one table is what
     makes possible, since neither is above the other in the world.
     """
@@ -731,11 +731,11 @@ def test_a_look_near_a_hole_reaches_as_far_as_the_radius_it_was_asked_for(
     lid: Body,
 ):
     """
-    The two pieces on this lid stand 35 mm and 75 mm from the square hole, so a reach
+    The two pieces on this lid stand 41 mm and 49 mm from the square hole, so a reach
     between the two tells them apart and one past both reports them both.
     """
     close = looking_on_the_lid(
-        lid, lambda sought: Near(sought, square_hole, radius=0.05)
+        lid, lambda sought: Near(sought, square_hole, radius=0.045)
     ).evaluate(backend=looking_at_the_capture)
     wider = looking_on_the_lid(
         lid, lambda sought: Near(sought, square_hole, radius=0.10)
