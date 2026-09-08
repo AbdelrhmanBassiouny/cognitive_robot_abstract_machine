@@ -11,7 +11,7 @@ import trimesh
 import PIL.ImageFile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from types import NoneType
 from typing_extensions import (
     Dict,
@@ -835,6 +835,44 @@ class MujocoActuator(SimulatorAdditionalProperty):
     mujoco.mjtGain.mjGAIN_MUSCLE:   gain_term = mju_muscleGain(…)
     mujoco.mjtGain.mjGAIN_USER:     gain_term = mjcb_act_gain(…)
     """
+
+
+class MujocoRenderingBackend(StrEnum):
+    """
+    The graphics backends MuJoCo can draw through, by the name it answers to.
+    """
+
+    EGL = "egl"
+    """
+    Draws without a window, on a machine with a graphics device but no display.
+    """
+
+    OSMESA = "osmesa"
+    """
+    Draws without a window and without a graphics device, in software.
+    """
+
+
+MUJOCO_RENDERING_BACKEND_VARIABLE = "MUJOCO_GL"
+"""
+The environment variable MuJoCo reads its backend from, which it does once, at the
+moment something first draws.
+"""
+
+
+def select_offscreen_rendering_backend() -> None:
+    """
+    Ask MuJoCo for a backend that can draw with no window, unless one was already asked
+    for.
+
+    MuJoCo's own default where a display is present is a windowed backend, which cannot
+    make a context on a machine with no display and aborts a render with no context at
+    all. A backend already named is left alone, since it is the caller's own choice.
+    """
+    already_chosen = os.environ.get(MUJOCO_RENDERING_BACKEND_VARIABLE, "").lower()
+    if already_chosen in tuple(MujocoRenderingBackend):
+        return
+    os.environ[MUJOCO_RENDERING_BACKEND_VARIABLE] = MujocoRenderingBackend.EGL
 
 
 @dataclass
