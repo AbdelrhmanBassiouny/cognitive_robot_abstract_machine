@@ -58,7 +58,10 @@ from krrood.entity_query_language.utils import (
     merge_args_and_kwargs,
     convert_args_and_kwargs_into_hashable_key,
 )
-from krrood.symbol_graph.helpers import get_field_type_endpoint
+from krrood.symbol_graph.helpers import (
+    get_field_type_endpoint,
+    get_method_return_type,
+)
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.operators.arithmetic import (
@@ -813,10 +816,16 @@ class Call(SingleValueMapping[T]):
 
         The child stands either for a callable itself - a function or method, whose own
         hints carry the return type - or for an instance of a class that defines
-        ``__call__``, where the return type is that method's. An unannotated callable
-        leaves the type unknown.
+        ``__call__``, where the return type is that method's. An attribute naming a
+        method resolves to no type of its own, so its return annotation is read off the
+        class owning it. An unannotated callable leaves the type unknown.
         """
         called = self._child_._type_
+        if called is None and isinstance(self._child_, Attribute):
+            self._type_ = get_method_return_type(
+                self._child_._owner_class_, self._child_._attribute_name_
+            )
+            return
         if called is None:
             return
         type_hints = get_type_hints_of_object(called)
