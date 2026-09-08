@@ -16,7 +16,7 @@ from sqlalchemy import (
     not_ as sa_not,
     exists as sqlalchemy_exists,
 )
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from krrood.entity_query_language.query.query import (
     Query,
@@ -46,6 +46,7 @@ from krrood.entity_query_language.operators.aggregators import (
 
 from krrood.entity_query_language.operators.conditionals import CaseWhen
 from krrood.exceptions import DataclassException
+from krrood.ormatic.data_access_objects.dao import AssociationDataAccessObject
 from krrood.ormatic.data_access_objects.helper import get_dao_class
 from krrood.ormatic.exceptions import (
     NoDAOFoundForTypeError,
@@ -1349,8 +1350,6 @@ class EQLTranslator:
 
         # Resolve target DAO class and create a dedicated alias for this path
         target_dao = relationship.entity.class_
-        from sqlalchemy.orm import aliased
-
         aliased_target = aliased(target_dao, flat=True)
 
         # Relationship attribute on the source class, e.g., PoseDAO.position
@@ -1360,12 +1359,45 @@ class EQLTranslator:
         # determines the ON clause, while we control aliasing of the right side
         self.sql_query = self.sql_query.join(aliased_target, relationship_attr)
 
-        # Record both the logical path and the table as joined to avoid duplicates
-        self.join_manager.add_path_join(dao_class, attribute_name, aliased_target)
         # Track underlying table class as joined; alias class type differs but table is the same
         self.join_manager.add_table_join(target_dao)
 
-        return aliased_target
+        member_alias = self._join_association_target(target_dao, aliased_target)
+
+        # Record the logical path against the element the members actually live in, so a
+        # later traversal of the same path resolves to the same FROM element
+        self.join_manager.add_path_join(dao_class, attribute_name, member_alias)
+
+        return member_alias
+
+    def _join_association_target(self, target_dao: type, aliased_target: Any) -> Any:
+        """
+        Follow an association object through to the members it stands for.
+
+        A collection whose members may repeat is mapped as an association object rather
+        than a plain secondary table, so joining the relationship alone reaches the rows
+        that record the membership instead of the members themselves.
+
+        :param target_dao: The DAO class the relationship points at.
+        :param aliased_target: The alias that class was joined under.
+        :return: The alias holding the members, which is the given one where the
+            relationship already points at them.
+        """
+        if not issubclass(target_dao, AssociationDataAccessObject):
+            return aliased_target
+
+        association = sqlalchemy.inspection.inspect(target_dao)
+        member_relationship = association.relationships[
+            AssociationDataAccessObject.target.fget.__name__
+        ]
+        member_alias = aliased(member_relationship.entity.class_, flat=True)
+        self.sql_query = self.sql_query.join_from(
+            aliased_target,
+            member_alias,
+            getattr(aliased_target, member_relationship.key),
+        )
+        self.join_manager.add_table_join(member_relationship.entity.class_)
+        return member_alias
 
     def _translate_exists(self, exists_node: EQLExists) -> Any:
         """

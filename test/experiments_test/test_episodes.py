@@ -262,7 +262,8 @@ def test_an_episode_keeps_the_world_the_run_happened_in(experiments_database_ses
     session.commit()
 
     [recorded] = session.scalars(select(EpisodeDAO)).all()
-    assert [body.name.name for body in recorded.world.bodies] == ["shape_sorter"]
+    restored: Episode = recorded.from_dao()
+    assert [body.name.name for body in restored.world.bodies] == ["shape_sorter"]
 
 
 def test_a_trial_keeps_the_motion_it_ran(experiments_database_session):
@@ -282,7 +283,8 @@ def test_a_trial_keeps_the_motion_it_ran(experiments_database_session):
     session.commit()
 
     [recorded_trial] = session.scalars(select(RecordedTrialDAO)).all()
-    assert recorded_trial.motion_statechart is not None
+    restored: RecordedTrial = recorded_trial.from_dao()
+    assert isinstance(restored.motion_statechart, MotionStatechart)
 
 
 def test_an_episode_that_kept_no_world_round_trips_without_one(
@@ -298,4 +300,5 @@ def test_an_episode_that_kept_no_world_round_trips_without_one(
     session.commit()
 
     [recorded] = session.scalars(select(EpisodeDAO)).all()
-    assert recorded.world is None
+    restored: Episode = recorded.from_dao()
+    assert restored.world is None

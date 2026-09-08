@@ -1449,3 +1449,76 @@ def test_exists_in_where_clause(session, database):
     assert len(results) == 2
     result_robot_xs = {r.robot_x for r in results}
     assert result_robot_xs == {1.0, 2.0}
+
+
+# %% collections whose members may repeat
+
+WORLD_UNDER_TEST = 1
+"""
+Which world the collection queries below ask about, so a member of the other one is a
+row the query has to leave out rather than one it never saw.
+"""
+
+OTHER_WORLD = 2
+"""
+The world whose member no collection query below should return.
+"""
+
+
+def _two_worlds_of_bodies(session) -> None:
+    """
+    Store two worlds, so a query over one world's collection has something to exclude.
+
+    :param session: The session to store them through.
+    """
+    session.add(
+        to_dao(
+            World(
+                id=WORLD_UNDER_TEST,
+                bodies=[Body("first_body"), Body("second_body")],
+            )
+        )
+    )
+    session.add(to_dao(World(id=OTHER_WORLD, bodies=[Body("body_elsewhere")])))
+    session.commit()
+
+
+def test_selecting_a_collection_yields_its_members(session, database):
+    """
+    A collection reached through an association object selects the members rather than
+    the rows that record the membership.
+    """
+    _two_worlds_of_bodies(session)
+
+    world = variable(World, domain=[])
+    query = an(entity(world.bodies).where(world.id == WORLD_UNDER_TEST))
+
+    assert sorted(body.name for body in eql_to_sql(query, session).evaluate()) == [
+        "first_body",
+        "second_body",
+    ]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="The owner and the member are read against one another's base table: each "
+    "variable is translated to its unaliased DAO, so two variables whose classes share "
+    "a mapped base cannot be told apart in the ON clause.",
+)
+def test_membership_in_a_collection_joins_the_members(session, database):
+    """
+    A membership condition over a collection restricts to the members of that collection
+    rather than to every row of their table.
+    """
+    _two_worlds_of_bodies(session)
+
+    world = variable(World, domain=[])
+    body = variable(Body, domain=[])
+    query = an(
+        entity(body).where(world.id == WORLD_UNDER_TEST, contains(world.bodies, body))
+    )
+
+    assert sorted(row.name for row in eql_to_sql(query, session).evaluate()) == [
+        "first_body",
+        "second_body",
+    ]
