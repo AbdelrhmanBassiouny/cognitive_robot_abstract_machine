@@ -601,3 +601,88 @@ recorder a run uses and asserts the figures regenerated through `LongTermMemory`
 equal the ones computed in memory, which is what "regenerated from the episode
 database" actually claims. That half is CI-only: it needs the generated ORM
 interface, and generating it needs ROS.
+
+### `paper-figures-from-episodes` (#297), as built 2026-09-08
+
+What changed against the plan above, and what was found while building it.
+
+**The six tables the plan named are the six that were built**, in
+`experiments/src/experiments/paper/`: trial outcome per ablation and per
+execution type, the failure types each ablation produced, the precision and
+recall of failure prediction, what each backend answered and how long those
+queries took, and whether a repeated question came back with the same answer.
+`LongTermMemory` gained `recall_every_trial`, the one question the script asks
+it — a table reports the whole corpus, and `recall_trials` only reaches one
+episode's.
+
+**Two things the plan did not anticipate, both about where these tests can
+run.**
+
+- `test/experiments_test/conftest.py` regenerates the ORM interfaces for
+  *every* test in that package, and that generation still fails in a session
+  container on giskardpy's `DebugExpressionPublisher`, exactly as #295
+  recorded. So the in-memory half is CI-only in-tree even though it needs no
+  generated interface of its own. It was verified here by running a copy of it
+  outside that package — 23 tests, every row checked against the value the
+  corpus determines, all passing.
+- #295's correction ("the split is not session versus CI but does this touch
+  the generated interface") is very slightly too narrow.
+  `experiments.episodes.episode` reaches ROS at import time through
+  `segmind.datastructures.events`, which imports `geometry_msgs`, and that is
+  not on PyPI. So anything touching the episode model needs ROS message
+  packages present, generated interface or not.
+
+#### Design calls taken while building
+
+- **Read with EQL, aggregate in Python.** Each figure selects whole
+  `RecordedTrial` objects and walks their collections rather than asking the
+  query language to join across the association tables those collections are
+  reached through — the hazard `icra-foundation` recorded on #278, which #295
+  is the first to meet. `report_on` already traverses `trials[0].episode` the
+  same way. It also means this branch benefits if #295's CI run shows the join
+  translates, and is unaffected if it does not.
+- **A rate is the average of a per-trial indicator.** One `MeasuredQuantity`
+  therefore serves a success rate, a failure share, a precision and a latency
+  alike, and every number in the paper carries its interval without a second
+  summarizing path existing.
+- **A quantity measured over nothing is left out rather than reported as
+  zero.** Precision over no prediction, or a failure share over no attempt, is
+  undefined; a zero there reads as a system that never foresaw anything.
+- **A question asked once is not reported as deterministic.** One asking always
+  agrees with itself, so including it would fill the determinism table with
+  rows of ones on the one subject it exists to measure.
+- **The success rate is measured with `GoalReached`**, the metric a run's own
+  report already uses, so a table regenerated from the database says what the
+  run said rather than something computed a second way.
+- **Every table sorts its own rows**, each by what actually orders that table:
+  the unablated run first (which is what `RunConditions`'s ordering is for),
+  backends and questions alphabetically, precision before recall. The database
+  returns trials in no particular order, and a regenerated paper table must not
+  reshuffle between runs.
+- **The stacked failure-type bars are drawn from the failure-type table rather
+  than rendered here.** `TypstRenderer` renders tables; a bar chart is a
+  rendering change with no episode data behind it, and it would be the only
+  part of this item not regenerated from the database.
+
+#### What waits, and on which item
+
+- **Accuracy per bucket and per Bloom level** — `question-set-answered-from-memory`
+  is what first records a question's answer as an episode row. Nothing here
+  reads a bucket or a level because no row carries one yet.
+- **The resource cost table** — `resource-cost-measured-per-system` is what adds
+  processor time, peak resident memory and corpus size to a recorded query;
+  `RecordedQuery` carries latency alone.
+
+Neither is stubbed. The figure each needs is one `PaperFigure` subclass, so
+adding it belongs to the item that adds the column it reads.
+
+#### A bug in the plan tooling, found while bootstrapping this item
+
+`plan_item_bootstrap.py`'s `open` and `record` write an item's fields at the
+wrong indentation when that item's `title` is a folded block scalar (`>-`):
+`branch`, `pull_request_number`, `status` and `session` land indented under the
+title's continuation line, and `save-plan.sh` then rejects the manifest as
+invalid YAML. Every item in this plan has such a title, so both operations fail
+for all of them. This item's manifest entry and this roadmap section were
+written by hand instead. Reported to the developer; not fixed here, since it is
+tooling on `main` and unrelated to this branch.
