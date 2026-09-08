@@ -49,31 +49,6 @@ items:
       the developer's call. The three coraplex failures and the hanging Tracy demo this blocker used
       to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on
       #169's c8bf6f05.
-    - >-
-      Four tests in test_montessori_search_narrowing.py fail, and re-measuring them is not enough to
-      fix them, so they are the developer's call. They read a distance or a direction from the
-      board's square hole; all 27 tests in the file pass at 16c483635 and the same four fail at
-      03d9719d9, the merge of the hole layout fit (#236), which moves the board 40 mm along y on
-      tracy_pickup_demo and every hole with it. Projecting both layouts onto the capture settles
-      which is right: #236's hole centres land on the six real openings and the pre-#236 centres
-      land on bare wood. So the code is right and the docstrings' measurements are stale - but
-      against the corrected layout the cube stands 50.3 mm from the square hole and the cylinder
-      51.6 mm, so no radius separates them, and the cylinder is 5 mm to that hole's left rather than
-      its right.
-
-      Measured again on e6c665cec 2026-09-06, over all six holes rather than the square one: the
-      left-right axis separates the two pieces from no hole on this board, read from the camera or
-      from the world, because no hole's y lies between them (cube y=0.0634, cylinder y=0.0231, holes
-      at 0.0182, 0.0189, 0.1053, 0.1060, 0.1960 and 0.1968). Only front-back in the world and
-      up-down in the picture do, and every hole affords both, since the cube stands in front of all
-      six and above all six on screen while the cylinder stands behind and below all six. So three
-      of the four need a different hole or a different pair, not two:
-      test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen reads right-of the
-      square hole as well and cannot be re-measured either. The fourth,
-      test_the_demonstration_states_its_way_down_to_the_cube_alone, is not a test change at all -
-      what the corrected layout leaves both pieces on is
-      watch_narrowing.look_for_the_cube_on_the_lid's own left-of the square hole, and the sequence
-      the test asserts is still the right one.
   notes: >
     The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor
     stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a
@@ -132,6 +107,24 @@ items:
     with 51 mentions of the duplicated table; #292's 76e37a70 runs 4 failed, 758 passed, no errors
     and no collision at all. What is left red is the four narrowing tests of the blocker above,
     which fail identically on the parent and are untouched by this.
+    Resolved 2026-09-08: the four narrowing tests state what the corrected layout shows. Measured
+    over all six holes, left and right separate the cube from the cylinder from no hole on this
+    board, read from the camera or from the world, so three of the four needed a different pair
+    rather than a re-measurement and the fourth was not a test change at all. Which way a piece lies
+    now pairs Above with Below on the square hole (cube 18.6 mm up the picture, cylinder 45.4 mm
+    down); the two sides of a hole pairs InFrontOf with Behind on it (cube 16.2 mm in front,
+    cylinder 49.1 mm behind), which is one axis where the old pair crossed two; the reach moves to
+    the triangle hole with radii 0.07 and 0.12 (cube 50.0 mm, cylinder 93.8 mm), the square hole
+    separating them by 1.3 mm. The demonstration test is untouched: what was wrong was
+    watch_narrowing.look_for_the_cube_on_the_lid asking for LeftOf the square hole, now Above it,
+    and the step sequence the test asserts holds unchanged. Every replacement was run end to end
+    through MontessoriPerceptionBackend, and the sibling assertions over the demonstration
+    statement still hold - areas 0.517 > 0.041 > 0.023, five distinct labels of non-decreasing
+    length, the camera named exactly twice. Pushed as dae41889c on the item's own branch, since the
+    scope check leaves the touched files on no other base. The roadmap's standing hazard that
+    nothing on these branches runs in a session container is wrong for the montessori perception
+    suite: a python3.12 venv with casadi~=3.7.0 runs the whole pipeline, and only pytest is blocked,
+    by the conftest's ORM generation.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback

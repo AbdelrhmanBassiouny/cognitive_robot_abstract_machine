@@ -1067,3 +1067,60 @@ installed) and the whole perception pipeline runs -- which is how every number a
 measured. What still needs CI is the ORM generation, which needs ROS. Note the
 interpreter: the workspace needs Python 3.12, and `dataclasses.make_dataclass(module=)`
 is what fails first on 3.11.
+
+## 2026-09-08: the four narrowing tests, and the fact that settled all four
+
+The four failures in `test_montessori_search_narrowing.py` came to this session already
+diagnosed: the hole layout fit (#236) moves the board 40 mm along y on
+`tracy_pickup_demo`, projecting both layouts onto the capture shows the fitted centres
+landing on the six real openings and the pre-#236 centres on bare wood, so the code was
+right and the docstrings were stale. What was open was which hole and which pair each
+test should read instead, since two of them had been shown to have no reach and no two
+sides left.
+
+**The premise that "two of the four need a new pairing" was itself too narrow, and one
+measurement settled it.** Measured over all six holes rather than the square one, the
+left-right axis separates the cube from the cylinder from *no* hole on this board, read
+from the camera or from the world, because no hole's y lies between the two pieces (cube
+0.0634, cylinder 0.0231; holes at 0.0182, 0.0189, 0.1053, 0.1060, 0.1960 and 0.1968).
+Only front-back in the world and up-down in the picture separate them, and every hole
+affords both. So it was three tests reading a left-right direction, not two — and the
+fourth was never a test problem, but the production statement's own `LeftOf`.
+
+That one fact chose every replacement, rather than each test being re-fitted on its own:
+
+| test | now reads | measured |
+|---|---|---|
+| which way a piece lies, from where it is seen | `Above` / `Below`, square hole | cube 18.6 mm up the picture, cylinder 45.4 mm down |
+| the two sides of a hole | `InFrontOf` / `Behind`, square hole | cube 16.2 mm in front, cylinder 49.1 mm behind |
+| how far a reach was asked for | `Near` the triangle hole, 0.07 and 0.12 | cube 50.0 mm, cylinder 93.8 mm |
+| the demonstration down to the cube | unchanged; the statement asks `Above` the square hole | — |
+
+Two of them say what they were written for *better* than before. The two sides of a hole
+paired `InFrontOf` with `RightOf`, which is two axes rather than two sides of one; it is
+now one axis. And reading up and down from the camera is the sharper case for the
+viewpoint mattering at all, since in the world both pieces stand the lid's own 15.0 mm
+above every hole and neither is above the other — so the direction separates them only
+when read from where the camera stands, which is exactly that test's claim.
+
+The reach test moved hole rather than radius because the square hole holds the two pieces
+1.3 mm apart (50.3 and 51.6). The triangle hole was taken over `circular_hole_1`, whose
+gap is wider still (17.1 and 74.8), because it is named through `HOLE_NAME_BY_CATEGORY`
+where the circular hole would have to be addressed by a raw string. 0.05 was not reusable
+as the near radius: the cube stands at 50.04 mm and would land inside it.
+
+**Standing hazard corrected, again.** "Nothing on these branches runs in a session
+container" is wrong for the montessori perception suite. A python3.12 venv with the
+workspace sources, `random_events` installed editable, and `casadi~=3.7.0` (3.8 breaks
+`FunctionBuffer.set_res`) runs the whole pipeline; every number above was measured there
+and reproduces the recorded ones exactly. What is still blocked is `pytest` itself, in
+the conftest's ORM generation (`CouldNotResolveType: QPControllerConfig`, walking
+giskardpy), so the four behaviours were driven from a script that mirrors the test bodies
+instead. That also kept the fix honest: no test file was open while the measurements were
+being taken.
+
+**Left red.** The experiments job still carries the duplicate `RecordedLook`, which #292
+fixes against this branch and which had already been decided before this session — the
+manifest's own record of it is what corrected this session's stale reading of it as an
+open call. #292's `76e37a70` ran 4 failed, 758 passed, no errors, and those four were
+these tests, so #292 plus `dae41889c` is what takes the job green.
