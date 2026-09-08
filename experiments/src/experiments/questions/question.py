@@ -16,6 +16,11 @@ from enum import StrEnum
 
 from coraplex.datastructures.enums import ExecutionType
 from krrood.entity_query_language.query.query import Query
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
+from semantic_digital_twin.world_description.world_entity import Body
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
 from typing_extensions import Any, ClassVar, Generic, List, Tuple, TypeVar
@@ -212,3 +217,71 @@ class Question(Generic[SourceType, AnswerType], SubClassSafeGeneric, ABC):
 
         :param source: The memory holding what actually happened.
         """
+
+    @staticmethod
+    def distinct(answered: List[Any]) -> List[Any]:
+        """
+        The things a question found, each named once and in the order they were found.
+
+        A query yields one row per witness, so an object two remembered events are about
+        comes back twice while the question asks which objects, not how often.
+
+        :param answered: What the query found.
+        """
+        return list(dict.fromkeys(answered))
+
+
+# %% what a scene fills in
+
+
+@dataclass
+class QuestionedThings:
+    """
+    What a scene fills in for the questions of the set that single out one thing.
+    """
+
+    object_asked_about: Body
+    """
+    The object the questions about one object are about.
+    """
+
+    object_compared_against: Body
+    """
+    The object the first one is placed against, which is what a spatial question needs a
+    second thing for.
+    """
+
+    object_in_the_hand: Body
+    """
+    The object the robot is being asked whether it is holding.
+    """
+
+    own_body_asked_about: PrefixedName
+    """
+    The robot's own link the self-model questions are about.
+    """
+
+    point_of_view: HomogeneousTransformationMatrix
+    """
+    Where the scene is looked at from, which is what makes left and right mean anything.
+    """
+
+
+@dataclass
+class RememberedThings:
+    """
+    What a recorded run fills in for the questions of the set that single out one thing.
+    """
+
+    episode_identifier: str
+    """
+    Which run the questions are about.
+    """
+
+    object_name: str
+    """
+    What the object the questions about one object are about was called.
+
+    A name rather than the body itself, because the body a run recorded is read back out
+    of the database and is not the object anyone still holds.
+    """

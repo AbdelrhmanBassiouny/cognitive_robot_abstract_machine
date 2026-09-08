@@ -2,28 +2,34 @@
 The questions asked of what the robot holds right now.
 
 Working memory is the twin as it currently is together with the events the segmentation
-has seen in it, so these questions are answered without reaching for a record of
-anything. Answering them exercises understanding: everything they ask about is already
+has seen in it. Nothing here is handed to a question: every variable ranges over what
+the symbol graph already tracks, and what a question is about is said as a condition on
+it. Answering them exercises understanding -- everything they ask about is already
 represented, and the query only has to interpret it.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 
 from krrood.entity_query_language.factories import (
     an,
-    count,
+    contains,
     entity,
-    exists,
-    set_of,
+    not_,
     variable,
 )
 from krrood.entity_query_language.predicate import symbolic_function
 from krrood.entity_query_language.query.query import Query
-from segmind.datastructures.events import DetectionEvent, MotionEvent, PickUpEvent
+from krrood.symbol_graph.symbol_graph import SymbolGraph
+from segmind.datastructures.events import (
+    DetectionEvent,
+    ManipulatesBodies,
+    MotionEvent,
+    PickUpEvent,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.reasoning.predicates import (
     LeftOf,
@@ -31,14 +37,14 @@ from semantic_digital_twin.reasoning.predicates import (
     ViewDependentSpatialRelation,
     is_supported_by,
 )
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Pose,
 )
-from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import ActiveConnection
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
-from semantic_digital_twin.world_description.geometry import Color, Shape
+from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, ClassVar, Generic, List, Tuple, Type
 
@@ -48,85 +54,24 @@ from experiments.questions.question import (
     Bucket,
     Memory,
     Question,
+    QuestionedThings,
     RequiredFact,
 )
 
-# %% what a question of this kind is asked of
-
-
-@dataclass
-class WorkingMemory:
-    """
-    What the robot holds right now: the twin as it currently is, and what the event
-    segmentation has seen happen in it.
-    """
-
-    world: World
-    """
-    The twin the robot is acting in.
-    """
-
-    own_bodies: List[Body]
-    """
-    The links the robot is made of, as it was put into the world.
-
-    Given rather than read off the kinematic structure, because an object the robot
-    picks up hangs from one of its links without becoming one of them, and nothing in
-    the twin tells the two apart afterwards.
-    """
-
-    point_of_view: HomogeneousTransformationMatrix
-    """
-    Where the scene is looked at from, which is what makes left and right mean anything.
-    """
-
-    events: List[DetectionEvent] = field(default_factory=list)
-    """
-    What the event segmentation has detected so far, oldest first.
-    """
-
-    @property
-    def own_degrees_of_freedom(self) -> List[DegreeOfFreedom]:
-        """
-        The degrees of freedom the robot can move along.
-
-        ..note:: Read off the connections between two of its own links that are actively
-            controlled, so a fixed connection contributes none and neither does the one
-            an object it is holding hangs by.
-        """
-        own = set(self.own_bodies)
-        return [
-            degree_of_freedom
-            for connection in self.world.connections
-            if isinstance(connection, ActiveConnection)
-            and connection.parent in own
-            and connection.child in own
-            for degree_of_freedom in connection.active_dofs
-        ]
-
-    @property
-    def objects(self) -> List[Body]:
-        """
-        The bodies around the robot that have a shape, which is what it can be asked
-        about as an object.
-        """
-        own = set(self.own_bodies)
-        return [body for body in self.world.bodies_with_collision if body not in own]
-
-    @property
-    def object_shapes(self) -> List[Shape]:
-        """
-        Every shape every object around the robot is made of, object by object.
-        """
-        return [shape for body in self.objects for shape in body.collision.shapes]
+# %% what a live question is asked of
 
 
 @dataclass
 class WorkingMemoryQuestion(
-    Question[WorkingMemory, AnswerType], Generic[AnswerType], ABC
+    Question[AbstractRobot, AnswerType], Generic[AnswerType], ABC
 ):
     """
     A question answered from what the robot holds right now.
+
+    Asked of the robot rather than of a store, because the robot is whose memory it is:
+    which links it is made of and what hangs off its hand are read from it, and
+    everything else the question needs is already tracked and reached by a variable of
+    the type it is about.
     """
 
     memory: ClassVar[Memory] = Memory.WORKING
@@ -140,16 +85,47 @@ class WorkingMemoryQuestion(
     rather than recall.
     """
 
-    def solutions(self, source: WorkingMemory) -> List[Any]:
+    def solutions(self, source: AbstractRobot) -> List[Any]:
         """
         Every solution this question's query has over the live twin.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
         return list(self.query(source).evaluate())
 
+    @classmethod
+    def asked_of(cls, things: QuestionedThings) -> List[WorkingMemoryQuestion]:
+        """
+        How this question is put to a scene, which is once and about nothing in
+        particular unless it singles something out.
 
-# %% which side of another object something is on
+        :param things: What the scene fills in for the questions about one thing.
+        """
+        return [cls()]
+
+    def remembered_events(self, kind: Type[DetectionEvent]) -> List[DetectionEvent]:
+        """
+        What the segmentation has seen happen, of one kind.
+
+        Read off the symbol graph for the same reason the queries range over it: an
+        event is tracked from the moment it is made, so nothing has to be handed a log.
+
+        :param kind: The kind of event to read.
+        """
+        return list(SymbolGraph().get_instances_of_type(kind))
+
+
+# %% what a question says about the scene rather than hands to it
+
+
+@symbolic_function
+def has_a_shape(body: Body) -> bool:
+    """
+    Whether a body is one the robot can be asked about as an object.
+
+    :param body: The body to judge.
+    """
+    return body.has_collision()
 
 
 class Side(StrEnum):
@@ -194,6 +170,22 @@ def is_on_side_of(
     return bool(relation())
 
 
+def objects_of_the_scene(robot: AbstractRobot) -> List[Body]:
+    """
+    The bodies the robot can be asked about as objects, read off the twin directly.
+
+    ..note:: A body the robot is holding is one of its own by the twin's account, so it
+        is answered by the embodiment bucket rather than counted here.
+
+    :param robot: The robot whose scene it is.
+    """
+    return [
+        body
+        for body in robot._world.bodies
+        if body.has_collision() and body not in robot.bodies
+    ]
+
+
 # %% scene
 
 
@@ -220,22 +212,24 @@ class ObjectsSeen(WorkingMemoryQuestion[List[Body]]):
         """
         return "What objects do you see now?"
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
-        Every object the twin holds.
+        Every body with a shape that is not one of the robot's own.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        body = variable(Body, domain=source.objects)
-        return an(entity(body))
+        body = variable(Body)
+        return an(
+            entity(body).where(has_a_shape(body), not_(contains(source.bodies, body)))
+        )
 
-    def ground_truth(self, source: WorkingMemory) -> List[Body]:
+    def ground_truth(self, source: AbstractRobot) -> List[Body]:
         """
         The objects the twin holds, read off it directly.
 
-        :param source: The working memory holding what is actually there.
+        :param source: The robot whose scene it is.
         """
-        return source.objects
+        return objects_of_the_scene(source)
 
 
 @dataclass
@@ -264,22 +258,42 @@ class ObjectColours(WorkingMemoryQuestion[List[Color]]):
         """
         return "What colours are they?"
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
-        The colour of every shape every object is made of.
+        The shapes every object is made of.
 
-        :param source: The working memory the question is put to.
+        ..note:: The shapes rather than their colours, because a shape is not tracked as
+            a symbol, so a variable cannot range over one and the colour has to be read
+            off the shape the query selected.
+
+        :param source: The robot the question is put to.
         """
-        shape = variable(Shape, domain=source.object_shapes)
-        return an(entity(shape.color))
+        body = variable(Body)
+        return an(
+            entity(body.collision.shapes).where(
+                has_a_shape(body), not_(contains(source.bodies, body))
+            )
+        )
 
-    def ground_truth(self, source: WorkingMemory) -> List[Color]:
+    def ask(self, source: AbstractRobot) -> List[Color]:
+        """
+        The colour of every shape the query selected.
+
+        :param source: The robot the question is put to.
+        """
+        return [shape.color for shapes in self.solutions(source) for shape in shapes]
+
+    def ground_truth(self, source: AbstractRobot) -> List[Color]:
         """
         The colours the twin holds, read off it directly.
 
-        :param source: The working memory holding what is actually there.
+        :param source: The robot whose scene it is.
         """
-        return [shape.color for shape in source.object_shapes]
+        return [
+            shape.color
+            for body in objects_of_the_scene(source)
+            for shape in body.collision.shapes
+        ]
 
 
 @dataclass
@@ -308,22 +322,26 @@ class ObjectPlaces(WorkingMemoryQuestion[List[Pose]]):
         """
         return "Where are they?"
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
         Where every object stands in the world.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        body = variable(Body, domain=source.objects)
-        return an(entity(body.global_pose))
+        body = variable(Body)
+        return an(
+            entity(body.global_pose).where(
+                has_a_shape(body), not_(contains(source.bodies, body))
+            )
+        )
 
-    def ground_truth(self, source: WorkingMemory) -> List[Pose]:
+    def ground_truth(self, source: AbstractRobot) -> List[Pose]:
         """
         The places the twin holds, read off it directly.
 
-        :param source: The working memory holding what is actually there.
+        :param source: The robot whose scene it is.
         """
-        return [body.global_pose for body in source.objects]
+        return [body.global_pose for body in objects_of_the_scene(source)]
 
 
 # %% support and spatial relations
@@ -354,6 +372,15 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]]):
     The object the question is about.
     """
 
+    @classmethod
+    def asked_of(cls, things: QuestionedThings) -> List[SupportingSurfaces]:
+        """
+        Asked about the one object the scene singles out.
+
+        :param things: What the scene fills in for the questions about one thing.
+        """
+        return [cls(subject=things.object_asked_about)]
+
     @property
     def english(self) -> str:
         """
@@ -361,24 +388,30 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]]):
         """
         return "What surface is the %s standing on?" % self.subject.name.name
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
         Every object the subject stands on.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        surface = variable(Body, domain=source.objects)
-        return an(entity(surface).where(is_supported_by(self.subject, surface)))
+        surface = variable(Body)
+        return an(
+            entity(surface).where(
+                has_a_shape(surface),
+                not_(contains(source.bodies, surface)),
+                is_supported_by(self.subject, surface),
+            )
+        )
 
-    def ground_truth(self, source: WorkingMemory) -> List[Body]:
+    def ground_truth(self, source: AbstractRobot) -> List[Body]:
         """
         What the subject stands on, read off the twin directly.
 
-        :param source: The working memory holding what is actually there.
+        :param source: The robot whose scene it is.
         """
         return [
             surface
-            for surface in source.objects
+            for surface in objects_of_the_scene(source)
             if is_supported_by(self.subject, surface)
         ]
 
@@ -419,6 +452,33 @@ class SideOfAnotherObject(WorkingMemoryQuestion[bool]):
     Which side is being asked about.
     """
 
+    point_of_view: HomogeneousTransformationMatrix
+    """
+    Where the scene is looked at from, which is what makes left and right mean anything.
+
+    ..note:: Part of what is asked rather than of what answers it: a robot that carries
+        a camera is looked at the scene from it, and a question about a view nobody
+        holds still has to say which view it means.
+    """
+
+    @classmethod
+    def asked_of(cls, things: QuestionedThings) -> List[SideOfAnotherObject]:
+        """
+        Asked once per side, because a question answering which of the two holds needs
+        either a branch in python or an aggregate the query language does not translate.
+
+        :param things: What the scene fills in for the questions about one thing.
+        """
+        return [
+            cls(
+                subject=things.object_asked_about,
+                other=things.object_compared_against,
+                side=side,
+                point_of_view=things.point_of_view,
+            )
+            for side in Side
+        ]
+
     @property
     def english(self) -> str:
         """
@@ -430,37 +490,38 @@ class SideOfAnotherObject(WorkingMemoryQuestion[bool]):
             self.other.name.name,
         )
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
         The subject, if it is on that side of the other object.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        body = variable(Body, domain=[self.subject])
+        body = variable(Body)
         return an(
             entity(body).where(
-                is_on_side_of(body, self.other, self.side, source.point_of_view)
+                body == self.subject,
+                is_on_side_of(body, self.other, self.side, self.point_of_view),
             )
         )
 
-    def ask(self, source: WorkingMemory) -> bool:
+    def ask(self, source: AbstractRobot) -> bool:
         """
         Whether the subject is on that side of the other object.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
         return bool(self.solutions(source))
 
-    def ground_truth(self, source: WorkingMemory) -> bool:
+    def ground_truth(self, source: AbstractRobot) -> bool:
         """
         Which side the subject really is on, read off the twin directly.
 
-        :param source: The working memory holding what is actually there.
+        :param source: The robot whose scene it is.
         """
         relation = self.side.relation(
             self.subject.center_of_mass,
             self.other.center_of_mass,
-            source.point_of_view,
+            self.point_of_view,
         )
         return bool(relation())
 
@@ -491,30 +552,30 @@ class AnythingMoved(WorkingMemoryQuestion[bool]):
         """
         return "Did any object recently move?"
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
         Every motion the segmentation reported.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        motion = variable(MotionEvent, domain=source.events)
+        motion = variable(MotionEvent)
         return an(entity(motion))
 
-    def ask(self, source: WorkingMemory) -> bool:
+    def ask(self, source: AbstractRobot) -> bool:
         """
         Whether anything moved.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
         return bool(self.solutions(source))
 
-    def ground_truth(self, source: WorkingMemory) -> bool:
+    def ground_truth(self, source: AbstractRobot) -> bool:
         """
-        Whether the event log holds a motion, read off it directly.
+        Whether anything the segmentation saw was a motion, read off it directly.
 
-        :param source: The working memory holding what actually happened.
+        :param source: The robot whose memory it is.
         """
-        return any(isinstance(event, MotionEvent) for event in source.events)
+        return bool(self.remembered_events(MotionEvent))
 
 
 @dataclass
@@ -540,26 +601,32 @@ class ObjectsThatMoved(WorkingMemoryQuestion[List[Body]]):
         """
         return "Which objects recently moved?"
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
         What every reported motion was about.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        motion = variable(MotionEvent, domain=source.events)
+        motion = variable(MotionEvent)
         return an(entity(motion.tracked_object))
 
-    def ground_truth(self, source: WorkingMemory) -> List[Body]:
+    def ask(self, source: AbstractRobot) -> List[Body]:
         """
-        The objects the event log says moved, read off it directly.
+        The objects that moved, each named once however often it moved.
 
-        :param source: The working memory holding what actually happened.
+        :param source: The robot the question is put to.
         """
-        return [
-            event.tracked_object
-            for event in source.events
-            if isinstance(event, MotionEvent)
-        ]
+        return self.distinct(self.solutions(source))
+
+    def ground_truth(self, source: AbstractRobot) -> List[Body]:
+        """
+        The objects the segmentation says moved, read off it directly.
+
+        :param source: The robot whose memory it is.
+        """
+        return self.distinct(
+            [event.tracked_object for event in self.remembered_events(MotionEvent)]
+        )
 
 
 @dataclass
@@ -581,8 +648,8 @@ class ObjectsTheRobotMoved(WorkingMemoryQuestion[List[Body]]):
         RequiredFact.PICK_UP_EVENTS,
     )
     """
-    An object the robot moved is one it moved and had picked up, so both kinds of event
-    have to be there.
+    An object the robot moved is one it moved and acted on, so both kinds of event have
+    to be there.
     """
 
     @property
@@ -592,36 +659,52 @@ class ObjectsTheRobotMoved(WorkingMemoryQuestion[List[Body]]):
         """
         return "Did you move them?"
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
         What every reported motion of an object the robot had picked up was about.
 
-        :param source: The working memory the question is put to.
+        Asked of every event in which the robot acted on a body rather than only of the
+        pick-ups, so an object it placed or inserted counts as one it moved.
+
+        ..note:: Spelled as a join rather than through ``exists``, which answers this
+            shape with every object that moved whether the robot acted on it or not.
+
+        :param source: The robot the question is put to.
         """
-        motion = variable(MotionEvent, domain=source.events)
-        pick_up = variable(PickUpEvent, domain=source.events)
+        motion = variable(MotionEvent)
+        manipulation = variable(ManipulatesBodies)
         return an(
             entity(motion.tracked_object).where(
-                exists(pick_up, pick_up.tracked_object == motion.tracked_object)
+                contains(manipulation.manipulated_bodies, motion.tracked_object)
             )
         )
 
-    def ground_truth(self, source: WorkingMemory) -> List[Body]:
+    def ask(self, source: AbstractRobot) -> List[Body]:
         """
-        The objects the event log says the robot moved, read off it directly.
+        The objects the robot moved, each named once.
 
-        :param source: The working memory holding what actually happened.
+        :param source: The robot the question is put to.
         """
-        picked_up = {
-            event.tracked_object
-            for event in source.events
-            if isinstance(event, PickUpEvent)
+        return self.distinct(self.solutions(source))
+
+    def ground_truth(self, source: AbstractRobot) -> List[Body]:
+        """
+        The objects the segmentation says the robot moved, read off it directly.
+
+        :param source: The robot whose memory it is.
+        """
+        manipulated = {
+            body
+            for event in self.remembered_events(ManipulatesBodies)
+            for body in event.manipulated_bodies
         }
-        return [
-            event.tracked_object
-            for event in source.events
-            if isinstance(event, MotionEvent) and event.tracked_object in picked_up
-        ]
+        return self.distinct(
+            [
+                event.tracked_object
+                for event in self.remembered_events(MotionEvent)
+                if event.tracked_object in manipulated
+            ]
+        )
 
 
 @dataclass
@@ -645,6 +728,15 @@ class PickedUpRecently(WorkingMemoryQuestion[bool]):
     The object the question is about.
     """
 
+    @classmethod
+    def asked_of(cls, things: QuestionedThings) -> List[PickedUpRecently]:
+        """
+        Asked about the one object the scene singles out.
+
+        :param things: What the scene fills in for the questions about one thing.
+        """
+        return [cls(subject=things.object_asked_about)]
+
     @property
     def english(self) -> str:
         """
@@ -652,32 +744,32 @@ class PickedUpRecently(WorkingMemoryQuestion[bool]):
         """
         return "Was the %s recently picked up?" % self.subject.name.name
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
         Every reported pick-up of the subject.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        pick_up = variable(PickUpEvent, domain=source.events)
+        pick_up = variable(PickUpEvent)
         return an(entity(pick_up).where(pick_up.tracked_object == self.subject))
 
-    def ask(self, source: WorkingMemory) -> bool:
+    def ask(self, source: AbstractRobot) -> bool:
         """
         Whether the subject was picked up.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
         return bool(self.solutions(source))
 
-    def ground_truth(self, source: WorkingMemory) -> bool:
+    def ground_truth(self, source: AbstractRobot) -> bool:
         """
-        Whether the event log holds a pick-up of the subject, read off it directly.
+        Whether the segmentation saw the subject picked up, read off it directly.
 
-        :param source: The working memory holding what actually happened.
+        :param source: The robot whose memory it is.
         """
         return any(
-            isinstance(event, PickUpEvent) and event.tracked_object is self.subject
-            for event in source.events
+            event.tracked_object is self.subject
+            for event in self.remembered_events(PickUpEvent)
         )
 
 
@@ -713,6 +805,15 @@ class HeldInTheHand(WorkingMemoryQuestion[bool]):
     The object the question is about.
     """
 
+    @classmethod
+    def asked_of(cls, things: QuestionedThings) -> List[HeldInTheHand]:
+        """
+        Asked about the object the scene put in the robot's hand.
+
+        :param things: What the scene fills in for the questions about one thing.
+        """
+        return [cls(subject=things.object_in_the_hand)]
+
     @property
     def english(self) -> str:
         """
@@ -720,35 +821,35 @@ class HeldInTheHand(WorkingMemoryQuestion[bool]):
         """
         return "Is the %s currently in your hand?" % self.subject.name.name
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
         The subject, if it hangs from one of the robot's own links.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        held = variable(Body, domain=[self.subject])
-        own = variable(Body, domain=source.own_bodies)
+        held = variable(Body)
         return an(
             entity(held).where(
-                exists(own, held.parent_kinematic_structure_entity == own)
+                held == self.subject,
+                contains(source.bodies, held.parent_kinematic_structure_entity),
             )
         )
 
-    def ask(self, source: WorkingMemory) -> bool:
+    def ask(self, source: AbstractRobot) -> bool:
         """
         Whether the robot is holding the subject.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
         return bool(self.solutions(source))
 
-    def ground_truth(self, source: WorkingMemory) -> bool:
+    def ground_truth(self, source: AbstractRobot) -> bool:
         """
         What the twin has the subject hanging from, read off it directly.
 
-        :param source: The working memory holding what is actually there.
+        :param source: The robot whose hand it is.
         """
-        return self.subject.parent_kinematic_structure_entity in source.own_bodies
+        return self.subject.parent_kinematic_structure_entity in source.bodies
 
 
 # %% self-model
@@ -778,6 +879,15 @@ class PlaceOfOwnBody(WorkingMemoryQuestion[Pose]):
     The link the question is about.
     """
 
+    @classmethod
+    def asked_of(cls, things: QuestionedThings) -> List[PlaceOfOwnBody]:
+        """
+        Asked about the robot's own link the scene singles out.
+
+        :param things: What the scene fills in for the questions about one thing.
+        """
+        return [cls(body_name=things.own_body_asked_about)]
+
     @property
     def english(self) -> str:
         """
@@ -785,31 +895,35 @@ class PlaceOfOwnBody(WorkingMemoryQuestion[Pose]):
         """
         return "Where is your %s located?" % self.body_name.name
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
         Where the named link stands in the world.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        own = variable(Body, domain=source.own_bodies)
-        return an(entity(own.global_pose).where(own.name == self.body_name))
+        own = variable(Body)
+        return an(
+            entity(own.global_pose).where(
+                contains(source.bodies, own), own.name == self.body_name
+            )
+        )
 
-    def ask(self, source: WorkingMemory) -> Pose:
+    def ask(self, source: AbstractRobot) -> Pose:
         """
         Where the named link is.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
         (place,) = self.solutions(source)
         return place
 
-    def ground_truth(self, source: WorkingMemory) -> Pose:
+    def ground_truth(self, source: AbstractRobot) -> Pose:
         """
         Where the twin puts the named link, read off it directly.
 
-        :param source: The working memory holding what is actually there.
+        :param source: The robot whose link it is.
         """
-        return source.world.get_body_by_name(self.body_name).global_pose
+        return source._world.get_body_by_name(self.body_name).global_pose
 
 
 @dataclass
@@ -824,28 +938,32 @@ class NumberOfOwnParts(WorkingMemoryQuestion[int], ABC):
     """
 
     @abstractmethod
-    def parts(self, source: WorkingMemory) -> List[Any]:
+    def parts(self, source: AbstractRobot) -> List[Any]:
         """
         The robot's own parts of the kind this question counts.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
 
-    def ask(self, source: WorkingMemory) -> int:
+    def ask(self, source: AbstractRobot) -> int:
         """
-        The number the query counted.
+        How many parts the query selected.
 
-        :param source: The working memory the question is put to.
+        ..note:: Counted off the selected parts rather than by an aggregate, so that the
+            same spelling answers this over a recorded run, where every row a query
+            returns is converted into a part before anything can be counted. Counted
+            once each, because a part reached by two of the conditions that select it is
+            one part.
+
+        :param source: The robot the question is put to.
         """
-        (solution,) = self.solutions(source)
-        (number,) = solution.values()
-        return number
+        return len(self.distinct(self.solutions(source)))
 
-    def ground_truth(self, source: WorkingMemory) -> int:
+    def ground_truth(self, source: AbstractRobot) -> int:
         """
         How many the twin holds, counted off it directly.
 
-        :param source: The working memory holding what is actually there.
+        :param source: The robot whose body it is.
         """
         return len(self.parts(source))
 
@@ -870,22 +988,22 @@ class NumberOfOwnBodies(NumberOfOwnParts):
         """
         return "How many links do you have?"
 
-    def parts(self, source: WorkingMemory) -> List[Body]:
+    def parts(self, source: AbstractRobot) -> List[Body]:
         """
         The robot's own links.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot whose body it is.
         """
-        return source.own_bodies
+        return source.bodies
 
-    def query(self, source: WorkingMemory) -> Query:
+    def query(self, source: AbstractRobot) -> Query:
         """
-        How many links the robot has.
+        Every link the robot is made of.
 
-        :param source: The working memory the question is put to.
+        :param source: The robot the question is put to.
         """
-        own = variable(Body, domain=self.parts(source))
-        return set_of(count(own))
+        own = variable(Body)
+        return an(entity(own).where(contains(source.bodies, own)))
 
 
 @dataclass
@@ -912,19 +1030,38 @@ class NumberOfOwnDegreesOfFreedom(NumberOfOwnParts):
         """
         return "How many joints do you have?"
 
-    def parts(self, source: WorkingMemory) -> List[DegreeOfFreedom]:
+    def parts(self, source: AbstractRobot) -> List[DegreeOfFreedom]:
         """
         The degrees of freedom the robot can move along.
 
-        :param source: The working memory the question is put to.
-        """
-        return source.own_degrees_of_freedom
+        ..note:: Read off the connections between two of its own links that are actively
+            controlled, so a fixed connection contributes none and neither does the one
+            an object it is holding hangs by.
 
-    def query(self, source: WorkingMemory) -> Query:
+        :param source: The robot whose body it is.
         """
-        How many degrees of freedom the robot has.
+        own = set(source.bodies)
+        return [
+            degree_of_freedom
+            for connection in source._world.connections
+            if isinstance(connection, ActiveConnection)
+            and connection.parent in own
+            and connection.child in own
+            for degree_of_freedom in connection.active_dofs
+        ]
 
-        :param source: The working memory the question is put to.
+    def query(self, source: AbstractRobot) -> Query:
         """
-        degree_of_freedom = variable(DegreeOfFreedom, domain=self.parts(source))
-        return set_of(count(degree_of_freedom))
+        Every degree of freedom a connection between two of the robot's links carries.
+
+        :param source: The robot the question is put to.
+        """
+        connection = variable(ActiveConnection)
+        degree_of_freedom = variable(DegreeOfFreedom)
+        return an(
+            entity(degree_of_freedom).where(
+                contains(source.bodies, connection.parent),
+                contains(source.bodies, connection.child),
+                contains(connection.active_dofs, degree_of_freedom),
+            )
+        )

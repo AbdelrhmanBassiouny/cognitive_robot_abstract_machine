@@ -21,11 +21,16 @@ from krrood.entity_query_language.factories import (
     an,
     contains,
     entity,
-    exists,
     variable,
 )
 from krrood.entity_query_language.query.query import Query
-from segmind.datastructures.events import DetectionEvent, MotionEvent, PickUpEvent
+from segmind.datastructures.events import (
+    DetectionEvent,
+    EventWithTrackedObjects,
+    ManipulatesBodies,
+    MotionEvent,
+    PickUpEvent,
+)
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, ClassVar, Generic, List, Tuple
@@ -38,6 +43,7 @@ from experiments.questions.question import (
     Bucket,
     Memory,
     Question,
+    RememberedThings,
     RequiredFact,
 )
 
@@ -66,6 +72,16 @@ class LongTermMemoryQuestion(
     """
     Which run the question is about.
     """
+
+    @classmethod
+    def asked_of(cls, things: RememberedThings) -> List[LongTermMemoryQuestion]:
+        """
+        How this question is put to a recorded run, which is once and about the run as a
+        whole unless it singles something out.
+
+        :param things: What the run fills in for the questions about one thing.
+        """
+        return [cls(episode_identifier=things.episode_identifier)]
 
     def solutions(self, source: LongTermMemory) -> List[Any]:
         """
@@ -128,7 +144,7 @@ class ObjectsSeenInTheEpisode(LongTermMemoryQuestion[List[Body]]):
         """
         trial = variable(RecordedTrial, domain=[])
         tick = variable(Tick, domain=[])
-        event = variable(DetectionEvent, domain=[])
+        event = variable(EventWithTrackedObjects, domain=[])
         return an(
             entity(event.tracked_object).where(
                 trial.episode.identifier == self.episode_identifier,
@@ -290,26 +306,26 @@ class ObjectsTheRobotMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
 
     def query(self, source: LongTermMemory) -> Query:
         """
-        What every recorded motion of an object that run had picked up was about.
+        What every recorded motion of an object that run acted on was about.
+
+        ..note:: Spelled as a join rather than through ``exists``, which answers this
+            shape with every object that moved whether the robot acted on it or not.
 
         :param source: The long-term memory the question is put to.
         """
         trial = variable(RecordedTrial, domain=[])
         tick = variable(Tick, domain=[])
         motion = variable(MotionEvent, domain=[])
-        picking_tick = variable(Tick, domain=[])
-        pick_up = variable(PickUpEvent, domain=[])
+        acting_tick = variable(Tick, domain=[])
+        manipulation = variable(ManipulatesBodies, domain=[])
         return an(
             entity(motion.tracked_object).where(
                 trial.episode.identifier == self.episode_identifier,
                 contains(trial.ticks, tick),
                 contains(tick.events, motion),
-                exists(
-                    pick_up,
-                    contains(trial.ticks, picking_tick),
-                    contains(picking_tick.events, pick_up),
-                    pick_up.tracked_object == motion.tracked_object,
-                ),
+                contains(trial.ticks, acting_tick),
+                contains(acting_tick.events, manipulation),
+                contains(manipulation.manipulated_bodies, motion.tracked_object),
             )
         )
 
@@ -322,7 +338,10 @@ class ObjectsTheRobotMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
         """
         events = self.recorded_events(source)
         picked_up = {
-            event.tracked_object for event in events if isinstance(event, PickUpEvent)
+            body
+            for event in events
+            if isinstance(event, ManipulatesBodies)
+            for body in event.manipulated_bodies
         }
         return [
             event.tracked_object
@@ -351,6 +370,20 @@ class PickedUpInTheEpisode(LongTermMemoryQuestion[bool]):
     """
     What the object the question is about was called.
     """
+
+    @classmethod
+    def asked_of(cls, things: RememberedThings) -> List[PickedUpInTheEpisode]:
+        """
+        Asked about the one object the run singles out.
+
+        :param things: What the run fills in for the questions about one thing.
+        """
+        return [
+            cls(
+                episode_identifier=things.episode_identifier,
+                object_name=things.object_name,
+            )
+        ]
 
     @property
     def english(self) -> str:
@@ -406,19 +439,21 @@ class PickedUpInTheEpisode(LongTermMemoryQuestion[bool]):
 
 
 @dataclass
-class NumberOfDegreesOfFreedomInTheEpisode(LongTermMemoryQuestion[int]):
+class NumberOfDegreesOfFreedomInTheRecordedWorld(LongTermMemoryQuestion[int]):
     """
-    How many joints the robot had during one past run.
+    How many joints there were in the world one past run happened in.
 
-    Counted over the whole world the run happened in rather than over the robot alone:
-    the episode records the world without recording which of its links were the robot's,
-    and everything else standing in a sorting scene is fixed in place, so its degrees of
-    freedom are the robot's.
+    The world's rather than the robot's, and named so: an environment has degrees of
+    freedom of its own, and an episode records the world without recording which of its
+    links were the robot's, so the robot's own count is not separable from it. Asking
+    both is what the self-model bucket wants, and the robot's half waits on the same
+    thing the embodiment bucket does.
     """
 
     bucket: ClassVar[Bucket] = Bucket.SELF_MODEL
     """
-    A question about the robot's own body, asked of the body it had at the time.
+    The bucket the robot's own count belongs to, which this is as much of as a recorded
+    run can answer.
     """
 
     required_facts: ClassVar[Tuple[RequiredFact, ...]] = (

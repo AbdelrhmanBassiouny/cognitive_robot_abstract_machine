@@ -18,13 +18,19 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     SpatialType,
 )
+from semantic_digital_twin.robots.minimal_robot import MinimalRobot
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.testing import two_arm_robot_world
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-from segmind.datastructures.events import PickUpEvent, TranslationEvent
+from segmind.datastructures.events import (
+    DetectionEvent,
+    PickUpEvent,
+    TranslationEvent,
+)
 from typing_extensions import Any, List
 
 from experiments.questions.question import (
@@ -34,7 +40,8 @@ from experiments.questions.question import (
     Memory,
     RequiredFact,
 )
-from experiments.questions.question_set import QuestionedThings, QuestionSet
+from experiments.questions.question import QuestionedThings
+from experiments.questions.question_set import QuestionSet
 from experiments.questions.working_memory import (
     AnythingMoved,
     HeldInTheHand,
@@ -50,7 +57,6 @@ from experiments.questions.working_memory import (
     Side,
     SideOfAnotherObject,
     SupportingSurfaces,
-    WorkingMemory,
 )
 
 TABLE_COLOUR = Color(0.5, 0.3, 0.1)
@@ -127,9 +133,10 @@ class QuestionedScene:
     The twin the whole scene stands in.
     """
 
-    own_bodies: List[Body]
+    robot: AbstractRobot
     """
-    The links the robot is made of, taken before anything was put in its hand.
+    The robot every question is put to, which is what the questions read their own links
+    and their own hand from.
     """
 
     table: Body
@@ -157,9 +164,18 @@ class QuestionedScene:
     The robot's own link the self-model questions are about.
     """
 
-    working_memory: WorkingMemory
+    point_of_view: HomogeneousTransformationMatrix
     """
-    What the robot holds right now in this scene.
+    Where this scene is looked at from, which is what makes left and right mean anything
+    in it.
+    """
+
+    events: List[DetectionEvent]
+    """
+    What the segmentation saw happen in this scene.
+
+    Held here because the symbol graph tracks what is alive rather than keeping it
+    alive, so an event nothing holds is one the robot no longer remembers.
     """
 
     question_set: QuestionSet
@@ -175,8 +191,13 @@ def scene(two_arm_robot_world: World) -> QuestionedScene:
     and a second cube in its hand, with the cube reported moved and picked up.
     """
     world = two_arm_robot_world
-    own_bodies = list(world.bodies)
-    hand = own_bodies[-1]
+    (robot_root,) = [
+        entity
+        for entity in world.kinematic_structure_entities
+        if entity.parent_kinematic_structure_entity is world.root
+    ]
+    robot = MinimalRobot.from_branch_in_world(robot_root)
+    hand = robot.bodies[-1]
 
     table = dye("table", TABLE_COLOUR, Scale(1.0, 1.0, TABLE_TOP_HEIGHT))
     cube = dye("cube", CUBE_COLOUR, Scale(OBJECT_EDGE, OBJECT_EDGE, OBJECT_EDGE))
@@ -221,41 +242,39 @@ def scene(two_arm_robot_world: World) -> QuestionedScene:
             )
         )
 
-    working_memory = WorkingMemory(
-        world=world,
-        own_bodies=own_bodies,
-        point_of_view=HomogeneousTransformationMatrix.from_xyz_rpy(x=3.0),
-        events=[
-            TranslationEvent(tracked_object=cube),
-            PickUpEvent(tracked_object=cube),
-        ],
-    )
+    events = [
+        TranslationEvent(tracked_object=cube),
+        PickUpEvent(tracked_object=cube),
+    ]
+    point_of_view = HomogeneousTransformationMatrix.from_xyz_rpy(x=3.0)
     return QuestionedScene(
         world=world,
-        own_bodies=own_bodies,
+        robot=robot,
         table=table,
         cube=cube,
         cylinder=cylinder,
         held_cube=held_cube,
         own_body_name=hand.name,
-        working_memory=working_memory,
+        point_of_view=point_of_view,
+        events=events,
         question_set=QuestionSet.over_working_memory(
             QuestionedThings(
                 object_asked_about=cube,
                 object_compared_against=cylinder,
                 object_in_the_hand=held_cube,
                 own_body_asked_about=hand.name,
+                point_of_view=point_of_view,
             )
         ),
     )
 
 
 @pytest.fixture
-def memory(scene: QuestionedScene) -> WorkingMemory:
+def robot(scene: QuestionedScene) -> AbstractRobot:
     """
-    What the robot of that scene holds right now.
+    The robot of that scene, which is what its questions are put to.
     """
-    return scene.working_memory
+    return scene.robot
 
 
 def answers_agree(answered: Any, true: Any) -> bool:
@@ -307,7 +326,12 @@ def test_the_working_memory_set_covers_every_bucket_it_can_be_asked_today(
 def test_a_spatial_question_declares_that_it_reads_the_point_of_view(
     scene: QuestionedScene,
 ):
-    side = SideOfAnotherObject(subject=scene.cube, other=scene.cylinder, side=Side.LEFT)
+    side = SideOfAnotherObject(
+        subject=scene.cube,
+        other=scene.cylinder,
+        side=Side.LEFT,
+        point_of_view=scene.point_of_view,
+    )
     assert RequiredFact.POINT_OF_VIEW in side.required_facts
     assert RequiredFact.POINT_OF_VIEW not in ObjectsSeen().required_facts
 
@@ -329,115 +353,110 @@ def test_ground_truth_is_the_twin_in_simulation_and_a_human_check_on_the_robot()
 
 
 def test_the_objects_seen_are_the_bodies_that_are_not_the_robot(
-    scene: QuestionedScene, memory: WorkingMemory
+    scene: QuestionedScene, robot: AbstractRobot
 ):
-    assert ObjectsSeen().ask(memory) == [
-        scene.table,
-        scene.cube,
-        scene.cylinder,
-        scene.held_cube,
-    ]
+    assert ObjectsSeen().ask(robot) == [scene.table, scene.cube, scene.cylinder]
 
 
-def test_the_colours_are_the_ones_the_shapes_carry(memory: WorkingMemory):
-    assert ObjectColours().ask(memory) == [
-        TABLE_COLOUR,
-        CUBE_COLOUR,
-        CYLINDER_COLOUR,
-        HELD_CUBE_COLOUR,
-    ]
+def test_the_colours_are_the_ones_the_shapes_carry(robot: AbstractRobot):
+    assert ObjectColours().ask(robot) == [TABLE_COLOUR, CUBE_COLOUR, CYLINDER_COLOUR]
 
 
-def test_the_places_are_where_the_twin_puts_the_objects(memory: WorkingMemory):
+def test_the_places_are_where_the_twin_puts_the_objects(robot: AbstractRobot):
     question = ObjectPlaces()
-    assert answers_agree(question.ask(memory), question.ground_truth(memory))
+    assert answers_agree(question.ask(robot), question.ground_truth(robot))
 
 
 # %% support and spatial relations
 
 
-def test_the_cube_stands_on_the_table(scene: QuestionedScene, memory: WorkingMemory):
-    assert SupportingSurfaces(subject=scene.cube).ask(memory) == [scene.table]
+def test_the_cube_stands_on_the_table(scene: QuestionedScene, robot: AbstractRobot):
+    assert SupportingSurfaces(subject=scene.cube).ask(robot) == [scene.table]
 
 
 def test_the_cube_is_left_of_the_cylinder_and_not_right_of_it(
-    scene: QuestionedScene, memory: WorkingMemory
+    scene: QuestionedScene, robot: AbstractRobot
 ):
-    left = SideOfAnotherObject(subject=scene.cube, other=scene.cylinder, side=Side.LEFT)
-    right = SideOfAnotherObject(
-        subject=scene.cube, other=scene.cylinder, side=Side.RIGHT
+    left, right = (
+        SideOfAnotherObject(
+            subject=scene.cube,
+            other=scene.cylinder,
+            side=side,
+            point_of_view=scene.point_of_view,
+        )
+        for side in (Side.LEFT, Side.RIGHT)
     )
-    assert left.ask(memory) is True
-    assert right.ask(memory) is False
+    assert left.ask(robot) is True
+    assert right.ask(robot) is False
 
 
 # %% temporal and agency
 
 
-def test_the_event_log_says_something_moved(memory: WorkingMemory):
-    assert AnythingMoved().ask(memory) is True
+def test_the_event_log_says_something_moved(robot: AbstractRobot):
+    assert AnythingMoved().ask(robot) is True
 
 
 def test_the_object_that_moved_is_the_one_the_event_named(
-    scene: QuestionedScene, memory: WorkingMemory
+    scene: QuestionedScene, robot: AbstractRobot
 ):
-    assert ObjectsThatMoved().ask(memory) == [scene.cube]
+    assert ObjectsThatMoved().ask(robot) == [scene.cube]
 
 
 def test_an_object_moved_after_being_picked_up_is_one_the_robot_moved_itself(
-    scene: QuestionedScene, memory: WorkingMemory
+    scene: QuestionedScene, robot: AbstractRobot
 ):
-    assert ObjectsTheRobotMoved().ask(memory) == [scene.cube]
+    assert ObjectsTheRobotMoved().ask(robot) == [scene.cube]
 
 
 def test_only_the_object_with_a_pick_up_event_was_picked_up(
-    scene: QuestionedScene, memory: WorkingMemory
+    scene: QuestionedScene, robot: AbstractRobot
 ):
-    assert PickedUpRecently(subject=scene.cube).ask(memory) is True
-    assert PickedUpRecently(subject=scene.cylinder).ask(memory) is False
+    assert PickedUpRecently(subject=scene.cube).ask(robot) is True
+    assert PickedUpRecently(subject=scene.cylinder).ask(robot) is False
 
 
 # %% embodiment
 
 
 def test_only_the_object_hanging_from_the_robot_is_in_its_hand(
-    scene: QuestionedScene, memory: WorkingMemory
+    scene: QuestionedScene, robot: AbstractRobot
 ):
-    assert HeldInTheHand(subject=scene.held_cube).ask(memory) is True
-    assert HeldInTheHand(subject=scene.cube).ask(memory) is False
+    assert HeldInTheHand(subject=scene.held_cube).ask(robot) is True
+    assert HeldInTheHand(subject=scene.cube).ask(robot) is False
 
 
 # %% self-model
 
 
 def test_the_place_of_a_link_is_where_the_twin_puts_it(
-    scene: QuestionedScene, memory: WorkingMemory
+    scene: QuestionedScene, robot: AbstractRobot
 ):
     question = PlaceOfOwnBody(body_name=scene.own_body_name)
-    assert answers_agree(question.ask(memory), question.ground_truth(memory))
+    assert answers_agree(question.ask(robot), question.ground_truth(robot))
 
 
-def test_the_robot_counts_its_own_links_and_not_what_it_is_holding(
-    scene: QuestionedScene, memory: WorkingMemory
+def test_the_robot_counts_the_links_the_twin_says_are_its_own(
+    scene: QuestionedScene, robot: AbstractRobot
 ):
-    assert NumberOfOwnBodies().ask(memory) == len(scene.own_bodies)
-    assert scene.held_cube not in scene.own_bodies
+    assert NumberOfOwnBodies().ask(robot) == len(robot.bodies)
+    assert scene.held_cube in robot.bodies
 
 
-def test_the_robot_counts_the_joints_it_can_move(memory: WorkingMemory):
+def test_the_robot_counts_the_joints_it_can_move(robot: AbstractRobot):
     question = NumberOfOwnDegreesOfFreedom()
-    assert question.ask(memory) == question.ground_truth(memory)
+    assert question.ask(robot) == question.ground_truth(robot)
 
 
 # %% every question at once
 
 
 def test_every_question_of_the_set_answers_its_own_ground_truth(
-    scene: QuestionedScene, memory: WorkingMemory
+    scene: QuestionedScene, robot: AbstractRobot
 ):
     for question in scene.question_set.questions:
         assert answers_agree(
-            question.ask(memory), question.ground_truth(memory)
+            question.ask(robot), question.ground_truth(robot)
         ), question.english
 
 

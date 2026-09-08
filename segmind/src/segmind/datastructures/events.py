@@ -8,6 +8,7 @@ from functools import cached_property
 from geometry_msgs.msg import PoseStamped
 from typing_extensions import Optional, List
 
+from krrood.symbol_graph.symbol_graph import Symbol
 from segmind.datastructures.object_tracker import (
     ObjectEventTracker,
     ObjectTrackerFactory,
@@ -19,7 +20,14 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass
-class DetectionEvent(ABC):
+class DetectionEvent(Symbol, ABC):
+    """
+    Something the segmentation saw happen.
+
+    A symbol, so that what the robot has seen is part of what it can be asked about
+    without anyone having to hand the events to the question.
+    """
+
     timestamp: datetime = field(default_factory=datetime.now)
     """
     The time at which the event occurred, defaults to current time.
@@ -248,26 +256,54 @@ class LossOfContactEvent(AbstractContactEvent):
     ...
 
 
+@dataclass
+class ManipulatesBodies(Symbol, ABC):
+    """
+    An event in which the robot itself acts on a body rather than only observing one.
+
+    What separates what the robot did from what merely happened around it, which is the
+    difference an agency question is about. A symbol, so that a question can ask which
+    bodies the robot acted on without naming every kind of event that acts on one.
+    """
+
+    @property
+    @abstractmethod
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The bodies this event acted on.
+        """
+
+
 @dataclass(unsafe_hash=True)
-class PickUpEvent(EventWithTrackedObjects):
+class PickUpEvent(EventWithTrackedObjects, ManipulatesBodies):
     """
     Represents an event where an object is picked up by another object.
     """
 
-    ...
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The object that was picked up.
+        """
+        return [self.tracked_object]
 
 
 @dataclass(unsafe_hash=True)
-class PlacingEvent(EventWithTrackedObjects):
+class PlacingEvent(EventWithTrackedObjects, ManipulatesBodies):
     """
     Represents an event where an object is placed on another object.
     """
 
-    ...
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The object that was placed.
+        """
+        return [self.tracked_object]
 
 
 @dataclass(unsafe_hash=True)
-class InsertionEvent(EventWithTrackedObjects):
+class InsertionEvent(EventWithTrackedObjects, ManipulatesBodies):
     """
     Represents an event where an object is inserted into another object.
     """
@@ -276,6 +312,13 @@ class InsertionEvent(EventWithTrackedObjects):
     """
     List of objects into which the object was inserted.
     """
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The object that was inserted.
+        """
+        return [self.tracked_object]
 
     @property
     def through_hole(self) -> Aperture:
