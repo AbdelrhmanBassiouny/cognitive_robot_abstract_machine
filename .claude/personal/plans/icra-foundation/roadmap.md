@@ -1228,6 +1228,108 @@ Two things the twin would have to say for either to pass, neither of them the fr
 12 passed and 2 xfailed, `test_region_appearance.py` 4 passed, `test_mujoco_video_recording.py`
 16 passed with `CI=true`, `test_mujoco_rendering_backend.py` 4 passed, `test_mjcf.py` 10 passed.
 
+### The second review round on #298, 2026-09-08: the pieces are the size they were measured to be
+
+The developer's answer, in his words: *"scale the objects to the known pieces, and remove
+the marker boarders, this should look like the real thing for the camera"*, on two threads.
+
+**The marker half needed nothing** -- `SimulatedCamera` already builds its mirror with
+`RegionAppearance.HIDDEN`. What the comment settles is the open question the first round
+left: the camera's default was a guess and is now the developer's own answer, so it stays
+hidden.
+
+**The size half changed the world, not the camera.** A loose shape was built as a fixed
+0.7 of the hole it drops through, and `pieces.py`'s own module docstring already says why
+that is the wrong source: *a piece is cut smaller than the hole it drops through, so the
+hole's footprint is the wrong size to recognise a piece by or to build one from*. So the
+size now comes from `KnownPiece` and only the cross-section from the hole. Built: cube
+30.0 mm, both cylinders 28.0, rectangular prism 21.0 by 40.0, triangular prism 31.7 by
+37.0, every one of them 30.0 tall.
+
+One scale for both axes, which is the decision worth recording rather than the numbers. A
+per-axis scale onto the piece's own bounding box looks obvious and is wrong here: the
+hole's triangle is a side-42 mm one pointing along `+x` and the measured piece's a
+side-37 mm one pointing along `+y`, ninety degrees apart, so per-axis scaling squashes the
+hole's outline into neither shape and comes out 3 per cent *wider* than the hole it has to
+fall through. Building from `KnownPiece.outline` directly is wrong for the same reason
+from the other side: it would put the piece in its own local frame rather than the hole's,
+and `insertion_pose_relative_to_hole` releases a piece over its hole unrotated *because*
+the two share a frame -- a contract
+`test_orientation_sensitive_shape_matches_its_holes_footprint_orientation` already pinned.
+A uniform scale keeps both. What the two are matched by is `cross_section_size`, which
+`MontessoriShape` and `ShapeSortingHole` already agreed on the meaning of;
+`KnownPiece` and `HoleFootprint` now answer it too.
+
+**Two consequences, both reported rather than hidden.** Clearance against the hole goes
+from 0.70 everywhere to between 0.70 and 0.95, tightest on the rectangular prism at about
+a millimetre a side; the 0.7 carried a docstring recording that it was tuned against
+insertion pass rates over 20 runs, and what replaces it is the real set's own clearance
+rather than a chosen number -- a sorting run is what would settle it and no session
+container can run one. And both circular shapes are now one size, since the set holds one
+cylinder, so no hole can be resolved by size at all: `hole_for` already preferred the name
+pairing, and that preference is now the only thing that works.
+
+#### What it fixed, and the defect it exposed instead
+
+At the measured sizes **both detectors read all four pieces within a millimetre of where
+the twin put them, each with its own category** -- the cube's place is no longer won by the
+cylinder's outline, which is what the first round found the old test passing on. And then
+the scene reports one of them, because of the arbitration afterwards:
+`Occupancy.keep_one_detection_per_place` drops a place two readings claim unless one leads
+the other by `CompetingExplanations.required_lead` (0.075), **and it drops the holder as
+well as the claimant**.
+
+| piece | the two readings | outcome |
+|---|---|---|
+| cube | 0.7121 and 0.7121 | both dropped |
+| rectangular prism | 0.6596 and 0.6596 | both dropped |
+| triangular prism | 0.7480 and 0.7433 | both dropped |
+| cylinder | 0.8635 and 0.8464 | kept |
+
+On `tracy_pickup_demo` the same two detectors read 0.5821 against 0.4669 and 0.4726
+against 0.4495, far enough apart for one to lead, and all four pieces come back once each.
+**So two detectors agreeing exactly is what is fatal, and only a noiseless picture makes
+them agree exactly.** That is worth carrying as a general lesson about this whole
+programme: a rendering is not a weaker capture, it is a picture with the disagreement taken
+out, and every arbitration tuned on disagreement is a candidate to behave differently under
+one. The fix belongs in `occupancy.py` -- agreement should reinforce a reading rather than
+annihilate it -- and it is a third bug PR this item has now surfaced without taking, beside
+`SceneToSearch.expected_pieces`.
+
+Both expected-to-fail marks stay strict and name the arbitration instead of the sizes.
+
+#### The CI failure, and why nothing in the process could have fixed it
+
+`test_montessori_simulated_camera.py` failed CI on `mujoco.FatalError: gladLoadGL`, two
+failures and six errors, and the reason was written in the workflow that failed it: MuJoCo
+reads `MUJOCO_GL` when Python first imports it and holds to what it read. `ci_reusable.yml`
+exported `egl` for `semantic_digital_twin` only, whose video recorder was the one thing
+that rendered offscreen; the simulated camera is the second and runs in the `experiments`
+job. Reproduced in a container with no display -- the same two failures, six errors and
+GLFW warnings -- and `MUJOCO_GL=egl` takes the file to 12 passed and 2 xfailed.
+
+The corollary is worth recording because it is `main`'s and will outlive this branch:
+`select_offscreen_rendering_backend()` **cannot reach either of its callers**. Both
+`MujocoVideoRecorder.start` and `SimulatedCamera.start` call it after their module has
+imported mujoco, so it sets a variable that is already too late to matter; the four lines
+had the same shape inline on `main` before they were extracted. Only the environment a run
+is started from can choose the backend. The function keeps its behaviour and gains the
+warning that says so.
+
+The job's other 9 failures and 14 errors were the base branch's duplicate `RecordedLook`,
+which the base has since merged the fix for; this branch takes the base's merge, cleanly,
+and they go with it.
+
+**Verified**, Python 3.12 session container with `MUJOCO_GL=egl`:
+`test_montessori_simulated_camera.py` 12 passed and 2 xfailed, `test_montessori_world.py`
+25 passed and 1 skipped, `test_region_appearance.py` 4 passed,
+`test_mujoco_rendering_backend.py` 4 passed. The whole of `test/experiments_test` this
+container collects runs 707 passed, 4 failed, 1 skipped, 6 xfailed, and all four failures
+reproduce identically on the branch's own merge commit in a worktree -- the
+`test_free_space_volume_estimation` one, the two `test_montessori_perception_backend`
+narrowing ones, and `test_montessori_insertion_diagnosis`'s `failed_motions` keyword, which
+arrived with the base's merge of `main` and which #265's own session has already recorded.
+
 ### `montessori-scenarios` (#296): the second review round, 2026-09-08
 
 Two threads on `experiments/montessori/scenarios.py`, taken in `66eefdbb9`. Both are
@@ -1399,4 +1501,3 @@ account for 25 failures and 11 errors, every one of them an import of something 
 and none of them a defect. CI, which has all of it, is the authority and reported exactly
 one failure. CI on `06e7af3eb` had not reported when this was written, and per the
 standing rule no check of it was armed.
-

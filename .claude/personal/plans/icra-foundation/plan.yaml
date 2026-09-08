@@ -213,6 +213,36 @@ items:
     22.4 against 28, triangular prism 25.2 by 29.4 against 37 by 32, rectangular prism 15.4 by 29.4
     against 20 by 40), and its board's holes are cut through an 80 mm blank whose walls render in
     the board's own colour, so a look shows no opening for a board to be found by.
+
+    Second review round 2026-09-08: "scale the objects to the known pieces, and remove the marker
+    boarders, this should look like the real thing for the camera". The marker half needed nothing
+    - SimulatedCamera already hides them, and the comment settles the first round's open question
+    about that default. The size half changed the world: a loose shape was built as a fixed 0.7 of
+    the hole it drops through, and pieces.py already says the hole is the wrong source, so the size
+    now comes from KnownPiece and only the cross-section from the hole - cube 30.0 mm, both
+    cylinders 28.0, rectangular prism 21.0 by 40.0, triangular prism 31.7 by 37.0, all 30.0 tall.
+    One scale for both axes, because per-axis scaling squashes the triangle (the hole's points
+    along +x and the measured piece's along +y) and building from KnownPiece.outline would put a
+    piece in its own frame rather than its hole's, which is what lets it be released unrotated.
+    Reported and not settled: clearance goes from 0.70 everywhere to 0.70-0.95, tightest on the
+    rectangular prism, and the 0.7 it replaces was tuned against insertion pass rates, so a sorting
+    run is what would confirm it and no session container can run one.
+
+    What that uncovered is the item's third bug for someone else: with the pieces at their measured
+    sizes both detectors read all four within a millimetre of where the twin put them, each with its
+    own category, and then Occupancy drops both readings of every place they agree on too closely -
+    cube 0.7121 against 0.7121, rectangular prism 0.6596 against 0.6596, triangular prism 0.7480
+    against 0.7433, all inside CompetingExplanations.required_lead - so only the cylinder is
+    reported. The same two detectors disagree enough on tracy_pickup_demo for all four to come back
+    once each, so a noiseless picture is what shows it, which is one of the things a simulated frame
+    source is for. It belongs in occupancy.py on its own branch. Both marks stay strict and name it.
+
+    CI: the experiments job now exports MUJOCO_GL=egl, which is what the gladLoadGL failures were.
+    MuJoCo fixes its backend when Python imports it, so select_offscreen_rendering_backend() cannot
+    reach either of its callers - main's own shape, inherited when the four lines left
+    MujocoVideoRecorder.start - and only the environment a run starts from can choose it. The job's
+    other failures were the base's duplicate RecordedLook, which this branch takes the base's merge
+    of.
 - id: tracy-demo-takes-the-integrated-branch
   title: >-
     tracy_icra takes the integrated branch and the real robot runs it
