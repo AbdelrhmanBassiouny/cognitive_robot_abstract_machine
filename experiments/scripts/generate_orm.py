@@ -10,6 +10,9 @@ import experiments.scenarios.scenario
 import experiments.scenarios.trial
 import experiments.episodes.recording
 import experiments.episodes.long_term_memory
+import experiments.questions.question
+import experiments.questions.question_set
+import experiments.questions.working_memory
 import coraplex.orm.ormatic_interface
 import segmind.orm.ormatic_interface
 
@@ -44,6 +47,15 @@ for episode_database_module in (
     experiments.episodes.long_term_memory,
 ):
     ignored_classes |= set(classes_of_module(episode_database_module))
+
+# a question is asked rather than recorded: it holds the query that answers it and the
+# memory it is put to, neither of which is anything to store
+for question_module in (
+    experiments.questions.question,
+    experiments.questions.question_set,
+    experiments.questions.working_memory,
+):
+    ignored_classes |= set(classes_of_module(question_module))
 
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(
