@@ -978,3 +978,92 @@ measurement and the diagnosis, not a weakened assertion.
 CI is the authority, per the standing ROS/`random_events` limitation this plan has recorded
 throughout, with the addition that offscreen MuJoCo rendering needs an EGL context a session
 container may not offer either.
+
+#### What the implementation found, 2026-09-08
+
+**The frames work, and every conversion is pinned by a measurement rather than by a
+comment.** Rendering a `MontessoriWorld` through a camera placed where the real one
+stands produces intrinsics of `focal_length = 1117.04` against the captures' own
+`1117.02`; the point read back out of a piece's pixel stands within two millimetres of
+where the twin put it; and the depth read at the board's middle is the lid height
+`WorkspaceSurface` states. The four conversions are:
+
+- *Intrinsics.* `focal_length = (height / 2) / tan(fovy / 2)`, both axes equal, with the
+  principal point at `((width - 1) / 2, (height - 1) / 2)`. The pixel-centre convention
+  is not a detail: measured against a rendered marker, the edge convention is off by
+  0.55 px and the centre convention by 0.05 px.
+- *Depth.* MuJoCo answers with `model.stat.extent * model.vis.map.zfar` for a pixel
+  showing nothing, and renders it in single precision, so the value comes back a little
+  past the distance the model states -- 43.66174 against a stated 43.660254 in the
+  probe. Anything at 0.999 of the far plane or beyond is therefore zeroed, which is what
+  `RgbdFrame` means by *not measured*.
+- *Colour order.* MuJoCo renders RGB; `RgbdFrame.color` is OpenCV's BGR.
+- *Pose.* A half turn about x, `diag(1, -1, -1)`.
+
+One thing the tests had to be corrected about, and it is the kind of mistake the whole
+chain being asserted at once catches: a look measures the face it lands on, not the
+middle of the solid behind it, so reading back the pixel a piece's own centre projects to
+answers three and a half millimetres further out -- exactly the parallax between the two
+heights over the twenty centimetres the piece stands from under the camera. The tests ask
+about the middle of the face a piece shows instead.
+
+**The camera stands where the real one does, and every number saying so is read off the
+captures rather than chosen**: 0.935 m above the table, 51.6 degrees, 1920 by 1080. Each
+is a constant with a test pinning it to `tracy_pickup_demo`'s own frame, so none can
+drift from the rig it stands in for. The one deliberate difference is that it looks
+straight down while the real camera is about eleven degrees off vertical; the picture is
+turned the real one's way (its right is the world's negative y) so a direction read off a
+simulated look reads as it does off a capture.
+
+**The item's own criterion does not pass, and the cause is not in this branch.** A look
+at the simulated scene reports every kind of piece standing on the table -- so the stack
+that reads a capture reads a rendering, which is what the item is for -- but it reports
+eight things where four stand, and does not find the board at all. Both are one cause: a
+`Region` is exported to MuJoCo as a visible geom, so the board's six `ShapeSortingHole`
+regions render as solid coloured markers filling its holes. They wear the very hues the
+piece detectors search for, which is where the four extra reports come from; and
+`BoardDetector` finds a board *by the openings cut through it*, which a board with its
+holes filled in no longer has.
+
+That is a property of the twin, not of the frame source, and the fix is a design call
+this item does not get to take: `MujocoGeomConverter` puts a region's shapes in the same
+geom group as real visual geometry, so a camera cannot simply decline to draw them, and
+making regions invisible would change what every MuJoCo viewer and every recorded video
+shows. `test_every_piece_on_the_table_is_reported_once_with_its_own_category` is
+therefore written exactly as the item states it and marked expected-to-fail, strictly, in
+the same style `test_montessori_detection_on_captures.py` already uses -- the day regions
+stop being rendered it reports the mark as stale rather than quietly passing.
+
+**Open question for the developer, raised by this item:** should a `Region` be rendered
+into a simulated picture at all? It is a named volume of space rather than a thing, and
+anything looking through a camera in the twin currently sees it as an object. Answering
+*no* is one flag at the region conversion site and is what would let this item's own
+criterion pass.
+
+**A second finding, left alone for the same reason.**
+`SceneToSearch.expected_pieces` reads every `MontessoriShape` inside the searched
+stretch and looks each up in `KNOWN_PIECE_BY_CATEGORY`, which holds only the four pieces
+perception knows -- so a look at an unthinned `MontessoriWorld`, which also spawns a disk
+and a sphere, raises `KeyError` before anything is detected. It is a defect of the merged
+tree rather than of this item, and per the one-root-cause-per-branch rule it belongs in a
+bug fix of its own. This item's tests work on a scene holding one of each piece
+perception knows, derived from `KNOWN_PIECE_BY_CATEGORY` rather than named by hand.
+
+**Verified:** `test_montessori_simulated_camera.py` 11 passed and 1 xfailed;
+`test_mujoco_rendering_backend.py` 4 passed; `test_mujoco_video_recording.py` 16 passed
+with `CI=true`, which is what actually runs the extracted backend choice through the
+recorder.
+
+**One shared piece of tooling moved.** Choosing MuJoCo's offscreen backend was written
+inline in `MujocoVideoRecorder.start`, and a second renderer needs the same four lines
+and the same reasoning, so it is now `multi_sim.select_offscreen_rendering_backend()`
+with the backend names a `StrEnum` and `MUJOCO_GL` named once. The recorder calls it.
+
+**On the container, correcting the note again.** With `mujoco`, `casadi`, `opencv`,
+`trimesh`, `usd-core`, `rtree` and the `random_events` wheel's compiled library beside
+the workspace sources, and stubs for `xacro` and `giskardpy_bullet_bindings`, a
+`MontessoriWorld` builds, a MuJoCo mirror renders through EGL (after `libegl-mesa0` is
+installed) and the whole perception pipeline runs -- which is how every number above was
+measured. What still needs CI is the ORM generation, which needs ROS. Note the
+interpreter: the workspace needs Python 3.12, and `dataclasses.make_dataclass(module=)`
+is what fails first on 3.11.
