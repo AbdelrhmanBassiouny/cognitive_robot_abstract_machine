@@ -10,6 +10,7 @@ import experiments.scenarios.scenario
 import experiments.scenarios.trial
 import experiments.episodes.recording
 import experiments.episodes.long_term_memory
+import experiments.questions.long_term_memory
 import experiments.questions.question
 import experiments.questions.question_set
 import experiments.questions.working_memory
@@ -54,6 +55,7 @@ for question_module in (
     experiments.questions.question,
     experiments.questions.question_set,
     experiments.questions.working_memory,
+    experiments.questions.long_term_memory,
 ):
     ignored_classes |= set(classes_of_module(question_module))
 

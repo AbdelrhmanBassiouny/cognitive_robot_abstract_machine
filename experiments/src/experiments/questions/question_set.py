@@ -14,6 +14,14 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, List
 
+from experiments.questions.long_term_memory import (
+    AnythingMovedInTheEpisode,
+    NumberOfDegreesOfFreedomInTheEpisode,
+    ObjectsSeenInTheEpisode,
+    ObjectsThatMovedInTheEpisode,
+    ObjectsTheRobotMovedInTheEpisode,
+    PickedUpInTheEpisode,
+)
 from experiments.questions.question import (
     BloomLevel,
     Bucket,
@@ -68,6 +76,26 @@ class QuestionedThings:
     """
 
 
+@dataclass
+class RememberedThings:
+    """
+    What a recorded run fills in for the questions of the set that single out one thing.
+    """
+
+    episode_identifier: str
+    """
+    Which run the questions are about.
+    """
+
+    object_name: str
+    """
+    What the object the questions about one object are about was called.
+
+    A name rather than the body itself, because the body a run recorded is read back out
+    of the database and is not the object anyone still holds.
+    """
+
+
 # %% the set
 
 
@@ -113,6 +141,39 @@ class QuestionSet:
                 PlaceOfOwnBody(body_name=things.own_body_asked_about),
                 NumberOfOwnBodies(),
                 NumberOfOwnDegreesOfFreedom(),
+            ]
+        )
+
+    @classmethod
+    def over_long_term_memory(cls, things: RememberedThings) -> QuestionSet:
+        """
+        The questions put to what past runs recorded.
+
+        ..note:: Thinner than the working-memory set, and the gaps are what other items
+            still owe: the support and spatial relations bucket needs geometric predicates
+            routed to a backend that can answer them from rows, the embodiment bucket
+            reduces to the pick-up record unless an episode also records which links were
+            the robot's, and the control bucket has no spelling in either memory yet.
+
+        :param things: What this run fills in for the questions about one thing.
+        """
+        return cls(
+            questions=[
+                ObjectsSeenInTheEpisode(episode_identifier=things.episode_identifier),
+                AnythingMovedInTheEpisode(episode_identifier=things.episode_identifier),
+                ObjectsThatMovedInTheEpisode(
+                    episode_identifier=things.episode_identifier
+                ),
+                ObjectsTheRobotMovedInTheEpisode(
+                    episode_identifier=things.episode_identifier
+                ),
+                PickedUpInTheEpisode(
+                    episode_identifier=things.episode_identifier,
+                    object_name=things.object_name,
+                ),
+                NumberOfDegreesOfFreedomInTheEpisode(
+                    episode_identifier=things.episode_identifier
+                ),
             ]
         )
 
