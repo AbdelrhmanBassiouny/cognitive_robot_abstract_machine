@@ -511,3 +511,93 @@ most of them twice (`RecordedTrial.ticks`, then `Tick.events`).
 `test_long_term_questions.py` is what answers it, and CI is where it runs. If it
 does not translate, the shape changes in one place -- each question's `query` --
 and the finding belongs on this branch.
+
+### `paper-figures-from-episodes` (#297), as planned 2026-09-08
+
+Lane 3's writing item, and the second item of this plan to open a branch.
+
+**Cut off #278 (`episodes-queried-by-eql`), not off `main` and not off #295.**
+The item's one recorded blocker is #278, and `LongTermMemory.answer(query)` is
+the seam every table here reads through: a figure is an EQL query over the
+recorded episodes plus an aggregation of the domain objects it answers with.
+#278 is open and not a draft, so it counts as ready to build on, the same
+reading #295 was cut under, and it carries #271 (the episode model), #262 (the
+database) and #261 (the scenario model).
+
+Not #295, even though the two are lane 3 neighbours and #295 is the nearer
+sibling: it is still a draft, so it is not ready by the plan's own rule, and
+the tables it would unlock — accuracy per bucket, per Bloom level — need
+*recorded answers* to those questions, which is
+`question-set-answered-from-memory`'s work and has not run. Waiting on it would
+buy nothing. The item's recorded blocker also said `episodes-queried-by-eql`
+was `not_started`, which it has not been since #278 opened; the blocker is
+cleared here rather than carried stale.
+
+**What an episode currently records is what bounds the script.** The item's
+contract is "every table and figure in the paper", and the honest reading of
+that on 2026-09-08 is every table the recorded model can already produce. An
+`Episode` carries its scenario, execution type, conditions and perturbations; a
+`RecordedTrial` its outcome, duration, ticks, queries and insertion attempts; an
+`InsertionAttempt` its predicted and observed failure and how it was resolved; a
+`RecordedQuery` its text, answer, latency and the backend each predicate was
+routed to. Six tables follow from that, and each is one the paper prints:
+
+| figure | what it reports | whose experiment |
+|---|---|---|
+| trial outcome by condition | success rate per ablation condition, with its interval | C |
+| failure type by condition | observed failure types counted per condition | C |
+| failure prediction | precision and recall of predicted against observed failure | C |
+| query latency by backend | how many predicates each backend answered, and how long | B |
+| query determinism | how often a repeated question came back with the same answer | A, D |
+| trial outcome by execution type | simulation against the robot | A, C |
+
+Three of these are on the roadmap's own never-cut list (the failure-prediction
+metric, the determinism runs, the perturbation conditions' outcomes).
+
+**What is not here, and which item owns it.** Accuracy per bucket and per Bloom
+level waits on `question-set-answered-from-memory`, which is what first records
+a question's answer as an episode row. The resource-cost table waits on
+`resource-cost-measured-per-system`, which is what adds processor time, peak
+resident memory and corpus size to a recorded query — `RecordedQuery` carries
+latency alone today. Neither is stubbed here: the figure each needs is a
+`PaperFigure` subclass, and adding one is the work of the item that adds the
+column it reads.
+
+The stacked failure-type bars the plan names are drawn from the failure-type
+table rather than rendered here. `TypstRenderer` renders tables, and giving it a
+bar chart is a rendering change with no episode data behind it.
+
+#### Design
+
+- **A figure is a class, and the set of them is built by a classmethod**, the
+  shape `QuestionSet` already takes on #295. `PaperFigure` carries the name it is
+  written under and its caption, and answers `rows(trials)`; `FigureSet` holds
+  every figure the paper prints and writes them all.
+- **Read with EQL, aggregate in Python.** The figures select whole
+  `RecordedTrial` objects and traverse their collections, rather than asking the
+  query language to join across the association tables those collections are
+  reached through — the hazard `icra-foundation` recorded on #278 and #295 was
+  the first to meet. `report_on` already traverses `trials[0].episode` the same
+  way. If #295's CI run shows the join translates, nothing here has to change to
+  benefit; the reverse is not true.
+- **Every rate carries its interval.** `ConfidenceInterval.for_mean` and
+  `MeanAndStandardDeviation` already exist and are what the item's "confidence
+  intervals on every rate" asks for; a rate is the mean of a per-trial
+  indicator, so the same summary serves both.
+- **A figure's file name is an enum member, not a string.** `FigureName`'s
+  members are the file stems the script writes, so the paper and the script name
+  the same figure once.
+- **The script writes the JSON manifest beside every table.**
+  `ExperimentsTable.write_manifest` already exists for exactly that, and it is
+  what makes a number in the paper traceable to the rows it came from.
+
+#### Testing
+
+`test/experiments_test/test_paper_figures.py` builds recorded trials in memory
+and asserts each figure's rows against values read off those trials — no
+database, so it runs anywhere the workspace imports.
+`test_paper_figures_from_the_database.py` records the same corpus through the
+recorder a run uses and asserts the figures regenerated through `LongTermMemory`
+equal the ones computed in memory, which is what "regenerated from the episode
+database" actually claims. That half is CI-only: it needs the generated ORM
+interface, and generating it needs ROS.

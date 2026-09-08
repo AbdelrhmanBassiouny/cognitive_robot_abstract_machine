@@ -232,13 +232,24 @@ items:
   branch: claude/paper-figures-episodes-bkfozu
   pull_request_number: 297
   track: release
+  session: https://claude.ai/code/session_0143PRk7LAujLic5ZXN9jB35
   depends_on: []
-  status: not_started
-  notes: >-
-    The writer's item, started before any experiment has run so the first draft's tables are already the script's output on simulated data and the robot numbers drop in by rerunning it. Confidence intervals on every rate.
-  blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `episodes-queried-by-eql` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  status: in_progress
+  notes: >
+    The writer's item, started before any experiment has run so the first draft's tables are
+    already the script's output on simulated data and the robot numbers drop in by rerunning it.
+    Confidence intervals on every rate.
+
+    Cut off #278 on 2026-09-08 rather than off main or #295: `LongTermMemory.answer` is the seam
+    every table reads through, and #278 carries #271, #262 and #261, so the item's one recorded
+    blocker is satisfied through it. What the script can regenerate is bounded by what an episode
+    currently records - trial outcomes, insertion attempts with their predicted and observed
+    failures, and recorded queries with their latency and the backend each predicate was routed
+    to. The accuracy-per-bucket and resource-cost tables wait on
+    `question-set-answered-from-memory` and `resource-cost-measured-per-system` respectively,
+    because neither the answers nor the cost columns exist on an episode row yet; the figure the
+    script adds for each is that item's work, not this one's.
+  blockers: []
 - id: benchmark-artifact
   title: >-
     The released artifact: scenes, ground truth, questions, prompts, conditions, captures and the episode database
