@@ -263,6 +263,15 @@ class KnownPiece(KnownOutline):
         """
         return float(np.abs(self.outline).max())
 
+    @property
+    def cross_section_size(self) -> float:
+        """
+        The larger of its outline's two extents, in metres: how wide a hole has to be
+        for it to pass through, and so how large a copy of it is built.
+        """
+        reach = self.outline.max(axis=0) - self.outline.min(axis=0)
+        return float(reach.max())
+
     def turned_outline(self, angle: float) -> np.ndarray:
         """
         Its outline turned about its own centre.

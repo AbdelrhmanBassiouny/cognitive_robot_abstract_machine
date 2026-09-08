@@ -73,7 +73,7 @@ class MontessoriShape(HasRootBody):
 
         Every shape's loose body and its matching hole are built from the same local
         cross-section (see
-        :func:`~experiments.montessori.world._footprint_shape_mesh`) and spawned
+        :func:`~experiments.montessori.world._measured_piece_mesh`) and spawned
         without any relative rotation, so hovering directly above the hole's own
         origin, unrotated, already lines any shape up with its hole regardless of
         category; a shape category whose fit depends on some other relative
@@ -293,13 +293,12 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
         are both :attr:`MontessoriShapeCategory.CYLINDER`, but sized differently). A
         hole whose name matches ``montessori_shape``'s own name (stripped of its
         ``"_shape"`` suffix, the naming convention :meth:`~experiments.montessori.world.MontessoriWorld._build_shapes`
-        pairs a shape and the hole it was built for with) is preferred: relying on
-        size alone breaks once a shape sized after one hole (see
-        :func:`~experiments.montessori.world._footprint_shape_mesh`) is also small
-        enough to fit through a different, same-category hole, which silently resolves
-        it to the wrong one instead of the hole it was actually built for. Falls back
-        to the smallest fitting hole (for shapes with no such name pairing, e.g. in
-        tests) when no name matches.
+        pairs a shape and the hole it was built for with) is preferred: size cannot
+        tell the two apart at all, since a shape is built the size the one real piece
+        of its kind was measured to be (see
+        :func:`~experiments.montessori.world._measured_piece_mesh`) and so passes
+        through either hole of its category. Falls back to the smallest fitting hole
+        (for shapes with no such name pairing, e.g. in tests) when no name matches.
 
         :raises NoMatchingHoleError: If this board has no hole ``montessori_shape``
             fits through.

@@ -24,7 +24,11 @@ from experiments.montessori.hole_geometry import (
     detect_hole_footprints,
     hole_names,
 )
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY, color_of_hue
+from experiments.montessori.pieces import (
+    KNOWN_PIECE_BY_CATEGORY,
+    KnownPiece,
+    color_of_hue,
+)
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
@@ -602,46 +606,29 @@ def _table_shapes(
     return shapes
 
 
-SHAPE_FOOTPRINT_CLEARANCE_SCALE = 0.7
-"""
-In-plane scale applied to a hole's true footprint when deriving the matching loose
-shape's cross-section from it, so the shape is a smaller copy of the hole rather than an
-exact fit, leaving clearance to actually pass through.
-
-Widened from the original 0.85 (roughly doubling the per-side gap) as a hacky attempt to
-make a shape's release pose more forgiving of the small positioning error that otherwise
-leaves it resting on the hole's rim instead of falling through. circular_hole_1 has the
-smallest true footprint of the six holes, so the same fraction leaves it the least
-absolute clearance in mm and was observed to have the worst pass rate (50% over 20 runs)
-of any shape. Widening further to 0.6 was tested (5 full runs): circular_hole_1 scored
-2/5, no better than the 0.7 baseline, so 0.6 was reverted. circular_hole_1's failure mode
-is not explained by clearance alone.
-"""
-
-
-def _footprint_shape_mesh(
-    footprint: HoleFootprint, thickness: float, color: Color
-) -> Mesh:
+def _measured_piece_mesh(footprint: HoleFootprint, piece: KnownPiece) -> Mesh:
     """
-    Build a solid :class:`Mesh` whose cross-section is a clearance-scaled copy of a
-    hole's true footprint, centered on its own origin.
+    Build a solid :class:`Mesh` of one loose piece: its hole's own cross-section, at the
+    size and in the colour that piece was measured to be.
 
-    Deriving the shape from the same :class:`HoleFootprint` its hole is cut from (rather
-    than independently hand-authoring a same-category shape, as done for a hole's
-    non-rectangular category, e.g. :attr:`MontessoriShapeCategory.TRIANGULAR_PRISM`)
-    keeps the two in the same local orientation by construction, since both are read
-    from one detected outline instead of risking two independent authors picking
-    different reference orientations for the same nominal shape.
+    The cross-section is read from the same :class:`HoleFootprint` its hole is cut from,
+    so a piece and its hole stand in one local orientation by construction rather than by
+    two authors happening to pick the same one, which is what lets a piece be released
+    over its hole unrotated (see
+    :meth:`~experiments.montessori.semantics.MontessoriShape.insertion_pose_relative_to_hole`).
+    How large it comes out is the piece's own, because a piece is cut smaller than the
+    hole it drops through by an amount the hole says nothing about (see
+    :mod:`experiments.montessori.pieces`). One scale serves both axes, so the
+    cross-section stays the shape the hole is rather than being stretched into another.
 
-    :param footprint: The hole this shape is sized and oriented after.
-    :param thickness: Extrusion depth of the solid along its own z-axis.
-    :param color: Color of the resulting shape.
+    :param footprint: The hole this piece drops through, which fixes its cross-section.
+    :param piece: The piece as it was measured, which fixes how large it comes out.
     """
-    scale = SHAPE_FOOTPRINT_CLEARANCE_SCALE
-    solid = footprint.extrude(thickness)
+    solid = footprint.extrude(piece.height)
+    scale = piece.cross_section_size / footprint.cross_section_size
     solid.apply_transform(np.diag([scale, scale, 1.0, 1.0]))
     mesh = Mesh.from_trimesh(mesh=solid)
-    mesh.color = color
+    mesh.color = piece.color
     return mesh
 
 
@@ -736,39 +723,22 @@ def _shape_body(
     Build the :class:`Body` of a loose Montessori shape, its geometry depending on its
     category.
 
+    :param name: Name of the resulting body.
+    :param category: The geometric shape it is.
     :param footprint: The footprint of the hole this shape is meant to be dropped
-        through, used to derive the shape's cross-section (see
-        :func:`_footprint_shape_mesh`) for every category except disk and sphere: a
-        disk fits through its hole at any fixed size and yaw (mirroring the board's
-        single hole of that category), and the sphere has no hole at all. A cube's
-        cross-section is derived the same way rather than kept at a fixed size, so it
-        gets the same :data:`SHAPE_FOOTPRINT_CLEARANCE_SCALE` clearance every other
-        footprint-derived shape does instead of whatever clearance the hole's own true
-        size happens to leave against a hardcoded constant; unlike the others, its own
-        thickness is derived from that same clearance-scaled edge too (not the shared
-        fixed thickness the others use), so it comes out an actual cube rather than a
-        flat square tile.
+        through, which every piece this set was measured off is shaped after (see
+        :func:`_measured_piece_mesh`). The disk and the sphere have none, since this set
+        holds neither: a disk fits through its hole at any fixed size and yaw, mirroring
+        the board's single hole of that category, and the sphere has no hole at all.
     """
     color = _SHAPE_COLORS[category]
-    match category:
-        case MontessoriShapeCategory.CUBE:
-            # A cube's hole footprint is square, so giving it the same thickness its
-            # own footprint edge scales down to (rather than the fixed 0.03 every other
-            # footprint-derived category uses) makes all three of its edges equal --
-            # an actual cube, not a flat square tile.
-            cube_edge = footprint.size.x * SHAPE_FOOTPRINT_CLEARANCE_SCALE
-            shape = _footprint_shape_mesh(footprint, thickness=cube_edge, color=color)
-        case MontessoriShapeCategory.CYLINDER:
-            shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)
-        case MontessoriShapeCategory.DISK:
-            shape = Cylinder(width=0.044, height=0.004, color=color)
-        case MontessoriShapeCategory.SPHERE:
-            shape = Sphere(radius=0.02, color=color)
-        case MontessoriShapeCategory.RECTANGULAR_PRISM:
-            shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)
-        case MontessoriShapeCategory.TRIANGULAR_PRISM:
-            shape = _footprint_shape_mesh(footprint, thickness=0.02, color=color)
-    return _body_with_shape(name, shape)
+    if category is MontessoriShapeCategory.DISK:
+        return _body_with_shape(name, Cylinder(width=0.044, height=0.004, color=color))
+    if category is MontessoriShapeCategory.SPHERE:
+        return _body_with_shape(name, Sphere(radius=0.02, color=color))
+    return _body_with_shape(
+        name, _measured_piece_mesh(footprint, KNOWN_PIECE_BY_CATEGORY[category])
+    )
 
 
 def robot_installed(robot_class: Type[AbstractRobot]) -> bool:
