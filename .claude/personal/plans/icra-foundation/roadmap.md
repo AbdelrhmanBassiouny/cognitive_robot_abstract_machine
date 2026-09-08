@@ -859,3 +859,15 @@ holes, seven shapes, six landing regions — against a stub for `xacro` and a pe
 stub for the compiled `giskardpy_bullet_bindings`, which is the one piece that genuinely
 will not build. So the world, the layouts and the goals are checkable here; the collision
 checker is not, and CI stays the authority on anything that reaches it.
+
+**Two refinements the implementation settled, 2026-09-08.** The near-ambiguous layout
+takes the *closest* of the placements it draws at the matched depth rather than the
+first: sharing a depth is what the scene is built for, but a scene where the two also
+stand half a metre apart is not confusable, and picking the nearest valid candidate
+makes it confusable without a separation nobody chose being written down. On the default
+area it stands them 29 mm apart at one depth. And every height in the module is measured
+in the world root frame against one `TABLE_TOP_Z`: the first pass measured a piece's own
+height above the table while the viewpoint's was absolute, which cancelled in the
+equal-depth comparison the test makes and would have been wrong for anything else
+reading a depth. A test now pins the frame by asserting a built piece's lowest point
+sits exactly on the table.
