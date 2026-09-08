@@ -293,8 +293,11 @@ class CausalCircuit:
     """
     A ProbabilisticCircuit extended with exact, tractable causal inference using the
     marginal determinism framework. The Marginal Determinism Variable Tree structure
-    encodes the causal graph and enables polytime backdoor adjustment for any valid
-    adjustment set Z.
+    groups the registered cause variables for the support-determinism check that enables
+    polytime backdoor adjustment for any valid adjustment set Z; it does not represent
+    the causal graph itself, which the caller supplies implicitly by registering
+    causal_variables, effect_variables, and an adjustment set known to satisfy the
+    backdoor criterion.
 
     Wraps a fitted ProbabilisticCircuit and adds:
       - backdoor_adjustment()        — P(effect | do(cause)) as a new circuit

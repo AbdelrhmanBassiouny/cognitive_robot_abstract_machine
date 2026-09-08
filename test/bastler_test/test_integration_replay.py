@@ -1,0 +1,271 @@
+"""
+Recorded conflict resolutions, and the replays a later build makes of them.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import bastler.integration_run
+from bastler.integration_constants import ReportKey
+from bastler.integration_tips import ResolutionAuthor, ResolutionProvenance, TipStatus
+
+from .test_maintenance import (
+    ForkCheckout,
+    fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
+    make_configuration,
+)
+
+from .integration_fixtures import (
+    CONFLICT_MARKER,
+    FIRST_TIP,
+    SECOND_TIP,
+    a_recorded_resolution,
+    build,
+    outcome_for,
+    two_colliding_tips,
+)
+
+# %% replayed resolutions
+
+
+def test_a_replayed_resolution_is_never_reported_as_a_clean_merge(
+    fork_checkout: ForkCheckout,
+):
+    """
+    rerere makes the collision invisible - the merge succeeds and the branch builds -
+    and reporting that as clean would hide the fact that two branches still conflict
+    upstream. A replay buys a working daily driver, not a discharged obligation.
+    """
+    pull_requests = two_colliding_tips(fork_checkout)
+    a_recorded_resolution(fork_checkout)
+
+    report = build(fork_checkout, pull_requests)
+
+    replayed = outcome_for(report, SECOND_TIP)
+    assert replayed.status is TipStatus.REPLAYED
+    assert replayed.attributed_to == FIRST_TIP
+
+
+def test_a_replayed_resolution_carries_the_author_that_recorded_it(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A resolution a skill wrote is replayed unreviewed on every later build, which is a
+    different proposition from replaying one a developer wrote - so the report says
+    which, rather than leaving them indistinguishable.
+    """
+    pull_requests = two_colliding_tips(fork_checkout)
+    a_recorded_resolution(fork_checkout)
+
+    report = build(
+        fork_checkout,
+        pull_requests,
+        provenance=ResolutionProvenance({SECOND_TIP: ResolutionAuthor.SKILL}),
+    )
+
+    assert outcome_for(report, SECOND_TIP).resolved_by is ResolutionAuthor.SKILL
+
+
+def test_a_resolution_nobody_claimed_is_read_as_a_developer_s_own(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The skill records every resolution it writes, so an unrecorded one is a developer's
+    - and reading it as machine-authored would flag the one case that was always
+    acceptable.
+    """
+    pull_requests = two_colliding_tips(fork_checkout)
+    a_recorded_resolution(fork_checkout)
+
+    report = build(fork_checkout, pull_requests)
+
+    assert outcome_for(report, SECOND_TIP).resolved_by is ResolutionAuthor.HUMAN
+
+
+def test_provenance_round_trips_through_the_file_it_is_persisted_in(tmp_path: Path):
+    """
+    Containers are ephemeral, so the authorship of a recorded resolution has to survive
+    somewhere other than the cache it describes.
+    """
+    path = tmp_path / "resolution-authors.json"
+    ResolutionProvenance({"a-branch": ResolutionAuthor.SKILL}).write(path)
+
+    assert ResolutionProvenance.read(path).author_for("a-branch") is (
+        ResolutionAuthor.SKILL
+    )
+
+
+def test_provenance_missing_altogether_reads_as_no_claims(tmp_path: Path):
+    """
+    A first build on a fresh container has no manifest, which is not an error.
+    """
+    assert ResolutionProvenance.read(tmp_path / "absent.json").author_for("x") is (
+        ResolutionAuthor.HUMAN
+    )
+
+
+def a_run(checkout: ForkCheckout) -> bastler.integration_run.IntegrationRun:
+    """
+    :param checkout: The checkout to run in.
+    :return: A run wired to the scratch fork, without asking GitHub anything.
+    """
+    return bastler.integration_run.IntegrationRun(
+        configuration=make_configuration(), git=checkout.git
+    )
+
+
+def test_a_staged_conflict_is_left_live_for_a_resolution_to_be_written_into(
+    fork_checkout: ForkCheckout,
+):
+    """
+    What goes into the conflicted files is the judgement the script does not make, so it
+    reproduces the collision and stops - handing back somewhere to make it.
+    """
+    two_colliding_tips(fork_checkout)
+
+    staged = a_run(fork_checkout).stage_conflict(FIRST_TIP, SECOND_TIP)
+
+    assert staged.conflicting_paths == ("contested",)
+    assert CONFLICT_MARKER in (staged.worktree / "contested").read_text()
+
+
+def test_a_staged_conflict_is_written_as_the_document_a_caller_parses(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The triage skill reads this to know which files to resolve and where, so it is a
+    document keyed the same way every other report this module writes is - rather than
+    field names only the code that built it knows.
+    """
+    two_colliding_tips(fork_checkout)
+
+    staged = a_run(fork_checkout).stage_conflict(FIRST_TIP, SECOND_TIP)
+
+    document = json.loads(staged.as_json())
+    assert document[ReportKey.BRANCH] == SECOND_TIP
+    assert document[ReportKey.ATTRIBUTED_TO] == FIRST_TIP
+    assert document[ReportKey.CONFLICTING_PATHS] == ["contested"]
+    assert document[ReportKey.WORKTREE] == str(staged.worktree)
+
+
+def test_a_recorded_resolution_is_replayed_by_the_next_build(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The round trip is the point: a resolution recorded once is what stops the same
+    collision costing a skipped tip on every later build.
+    """
+    pull_requests = two_colliding_tips(fork_checkout)
+    run = a_run(fork_checkout)
+    staged = run.stage_conflict(FIRST_TIP, SECOND_TIP)
+    (staged.worktree / "contested").write_text("what a resolution chose\n")
+    run.record_resolution(
+        worktree=staged.worktree,
+        tip=SECOND_TIP,
+        author=ResolutionAuthor.SKILL,
+    )
+
+    report = build(
+        fork_checkout,
+        pull_requests,
+        provenance=ResolutionProvenance.read(run.provenance_path()),
+    )
+
+    replayed = outcome_for(report, SECOND_TIP)
+    assert replayed.status is TipStatus.REPLAYED
+    assert replayed.resolved_by is ResolutionAuthor.SKILL
+
+
+def test_recording_a_resolution_leaves_no_worktree_behind(fork_checkout: ForkCheckout):
+    """
+    A resolution is recorded into the cache, not into a checkout somebody has to
+    remember to remove.
+    """
+    two_colliding_tips(fork_checkout)
+    run = a_run(fork_checkout)
+    staged = run.stage_conflict(FIRST_TIP, SECOND_TIP)
+    (staged.worktree / "contested").write_text("what a resolution chose\n")
+
+    run.record_resolution(
+        worktree=staged.worktree,
+        tip=SECOND_TIP,
+        author=ResolutionAuthor.HUMAN,
+    )
+
+    assert not any(
+        "stack-resolve-" in path for path in fork_checkout.git.worktree_paths()
+    )
+
+
+def test_recording_a_resolution_keeps_the_claims_already_made(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The manifest accumulates across builds, so a write that replaced it would forget
+    every earlier resolution's author and read them all back as a developer's.
+    """
+    two_colliding_tips(fork_checkout)
+    run = a_run(fork_checkout)
+    ResolutionProvenance({"an-earlier-tip": ResolutionAuthor.SKILL}).write(
+        run.provenance_path()
+    )
+    staged = run.stage_conflict(FIRST_TIP, SECOND_TIP)
+    (staged.worktree / "contested").write_text("what a resolution chose\n")
+
+    run.record_resolution(
+        worktree=staged.worktree,
+        tip=SECOND_TIP,
+        author=ResolutionAuthor.HUMAN,
+    )
+
+    recorded = ResolutionProvenance.read(run.provenance_path())
+    assert recorded.author_for("an-earlier-tip") is ResolutionAuthor.SKILL
+
+
+def test_a_tip_whose_replay_leaves_another_conflict_is_skipped_not_fatal(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A tip whose replay leaves a second conflict behind is left out like any other
+    collision, naming the paths nothing resolved so whoever owns them can act.
+
+    rerere replays per conflict rather than per merge, so one tip can carry both a
+    conflict a recorded resolution covers and another nothing has ever seen. Git reports
+    having used a previous resolution either way, so that marker alone cannot stand for
+    "the merge is finished" - taking it that way concludes a merge with files still
+    unmerged, which fails and ends the whole build over one skippable tip.
+    """
+    pull_requests = two_colliding_tips(fork_checkout)
+    a_recorded_resolution(fork_checkout)
+    for tip in (FIRST_TIP, SECOND_TIP):
+        fork_checkout.commit_on(tip, "unresolved", f"a second collision, from {tip}\n")
+    fork_checkout.git.fetch("origin")
+
+    report = build(fork_checkout, pull_requests)
+
+    left_out = outcome_for(report, SECOND_TIP)
+    assert left_out.status is TipStatus.SKIPPED
+    assert left_out.conflicting_paths == ("unresolved",)
+
+
+def test_the_provenance_manifest_belongs_to_the_checkout_being_built(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The manifest recording who wrote each cached resolution belongs to the checkout
+    being built, whatever directory the process was started in.
+
+    `git rev-parse --git-common-dir` answers relatively inside a main working tree, so the
+    answer only means anything against the runner's own working directory. Read against
+    the process's instead, it names whichever repository the command happened to be run
+    from - and the suite then writes its fixtures' authors over a developer's real ones,
+    destroying the record of which resolutions a skill wrote, which is the one thing that
+    makes a bad replay findable later.
+    """
+    two_colliding_tips(fork_checkout)
+
+    path = a_run(fork_checkout).provenance_path()
+
+    assert path.is_relative_to(fork_checkout.project_root.resolve())

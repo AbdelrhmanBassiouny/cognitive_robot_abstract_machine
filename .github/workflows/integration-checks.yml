@@ -13,8 +13,8 @@ name: Integration checks
 # nothing to say about whether the tree is good. The candidate's full ci.yml run is
 # what judges a build.
 #
-# Runs unchanged in any fork - the labels come from .claude/stack/stack.toml and the
-# repository from the runner's own context, so no repository is named here.
+# Runs unchanged in any fork - the labels come from the package's own stack.toml and
+# the repository from the runner's own context, so no repository is named here.
 
 on:
   pull_request:
@@ -39,26 +39,25 @@ jobs:
       - name: Install the tooling dependencies
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install pytest -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
+          pip install pytest "./${BASTLER_PACKAGE_DIRECTORY}"
 
-      # Collected over the tooling test directories rather than the repository root:
+      # Collected over the package's test directory rather than the repository root:
       # the root loads every conftest, the robotics stack's included, and that one
       # imports numpy - so a runner carrying the tooling dependencies alone dies during
-      # collection before it reaches a reproduction at all. These are the same
-      # directories ci.yml's tooling job names, because it installs the same
-      # dependencies. A reproduction that has to live inside a robotics package is
-      # therefore not collected here and its branch stays blocked, which is the safe
-      # direction and the limit this job was scoped with.
+      # collection before it reaches a reproduction at all. This is the same directory
+      # ci.yml's tooling job names, because it installs the same dependencies. A
+      # reproduction that has to live inside a robotics package is therefore not
+      # collected here and its branch stays blocked, which is the safe direction and
+      # the limit this job was scoped with.
       - name: Run every recorded reproduction
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
           set +e
-          PYTHONPATH="${STACK_DIRECTORY}" python -m pytest \
-            -p integration_reproduction \
+          python -m pytest \
+            -p bastler.integration_reproduction \
             --reproduction-report="${RUNNER_TEMP}/reproductions.json" \
             -m integration_conflict \
-            "${PLAN_DASHBOARD_TESTS_DIRECTORY}" "${HOOKS_TESTS_DIRECTORY}" \
-            "${STACK_TESTS_DIRECTORY}" "${ADD_PLAN_ITEM_TESTS_DIRECTORY}"
+            "${BASTLER_TESTS_DIRECTORY}" --confcutdir="${BASTLER_TESTS_DIRECTORY}"
           status=$?
           set -e
           # 0: every recorded break is fixed. 1: at least one still reproduces, which
@@ -72,5 +71,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          python "${STACK_DIRECTORY}/integration.py" clear-fixed-breaks \
+          python -m "${INTEGRATION_MODULE}" clear-fixed-breaks \
             --report "${RUNNER_TEMP}/reproductions.json" --json
