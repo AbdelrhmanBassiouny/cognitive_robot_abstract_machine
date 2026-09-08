@@ -784,3 +784,78 @@ every `plan.yaml` in `.claude/personal/plans/` indents an item's fields by two. 
 written directly instead. Unfixed on this branch because it is `.claude/` tooling and
 nothing to do with episode artifacts; it blocks every `plan-item-kickoff` and
 `plan-item-resolve` bootstrap until it is fixed.
+
+### `montessori-scenarios` (#296), as planned 2026-09-08
+
+The memo's scenes and its four scripted temporal scenarios, written as instances of
+#261's domain model. New module `experiments/montessori/scenarios.py`, holding the
+layouts, the scenarios, their goals and steps, and the lighting perturbation; the
+scenarios live in `experiments/montessori/` rather than beside `experiments/scenarios/`
+by the same reasoning that put the episode model in `experiments/episodes/` — an episode
+is recorded by every scenario, but these scenarios are one demo's.
+
+**Cut off #202 with #261 merged in, not off #265, and that is the one decision here
+worth arguing.** The item's recorded dependencies are `scenario-domain-model` (#261) and
+`integrated-simulation-pipeline` (#265), and the obvious reading is to base on #265.
+Measured rather than assumed: #265's merge base with `main` is 74 commits and 114 files
+behind the `main` that both #261 and #202 are built on, so merging #261 into #265 does
+not merge a scenario model — it advances the whole convergence branch onto that `main`.
+Four files conflict (`mapped_variable.py`, `world.py`, `geometry.py`, `test_color.py`),
+every one of them a file #261 never touched and #265 hand-resolved during its own
+convergence pass, and at least one breakage follows silently: `memoize` has moved from
+`krrood.utils` to `krrood.patterns.caching`, which #265's `world.py` still imports the
+old spelling of.
+
+That advance is #265's own work, and the convergence pass already recorded the principle
+it violates — seven branches were merged *into* #265, each at its own tip, "never
+sideways into each other, which would have paid the same conflict set twice". Basing
+this item on #265 and merging #261 in is exactly that sideways merge.
+
+What these scenarios need is the Montessori world (`world.py`, `semantics.py`,
+`pieces.py`, `hole_geometry.py`) and the scenario domain model. #202
+(`montessori_perception_on_main`) carries the first and is current with `main`; #261
+carries the second and is current with `main`; the two merge with **zero conflicts**.
+Nothing here reads the perception pipeline, the event monitor or the predicates, so
+nothing here needs #265 — and #265 merges this branch later, the way it merges every
+other tip. The `depends_on` edge to `integrated-simulation-pipeline` is left as recorded
+rather than rewritten here: which edges a plan declares is the plan's call, and the
+question is raised on the tracking issue rather than answered on a branch.
+
+**Design.** A `PieceLayout` is where the pieces stand, and it is the parameter every
+scene shares rather than a scene of its own: `randomized` over a seed places all four of
+`KNOWN_PIECES`, `partial` places a named subset (the two- and three-piece scenes), and
+`nearly_ambiguous` places the cube and the cylinder at one distance from a stated
+viewpoint. The near-ambiguity is real and is the set's own: `pieces.py` gives the cube
+and the cylinder the same `CYAN_HUE`, so at one depth neither colour nor depth separates
+them and only the outline does.
+
+The lighting change is a `Perturbation`, not a scene. #261's review settled that
+conditions and perturbations belong to a run rather than to a scenario, so a scene that
+differed only by its light would be a second scenario for a change the model already
+has a place for.
+
+The four scripted scenarios differ by their steps rather than by their worlds: nothing
+happens; the robot picks a piece up and puts it down; an external body pushes a piece
+while the robot is idle; a piece is in the gripper when the trial ends. Each carries a
+`PieceLayout`, so the scenes and the scripts compose rather than multiplying.
+
+The robot is a bound generic parameter, as #261's review decided, so the scripted
+scenarios stay generic in it and the concrete bindings pick the robot: the demo's
+scenarios bind `Tracy`, and the tests bind the test dataset's `SyntheticFixedArmRobot`,
+which parses from a URDF in the repository and therefore builds headless where
+`tracy_description` is not installed.
+
+`generate_orm.py`'s ignore list gains these classes for the reason #261 gave for its
+own: a scenario describes how an experiment is run, not what it recorded. That is an
+appended block in the same region #261, #278 and #294 append to — a textual meeting, not
+a design one.
+
+**What the session container can and cannot do, corrected.** The standing note that
+nothing on these branches runs in a session container is now too strong, and the
+correction is worth more than the note was: `random_events` and `probabilistic_model`
+install from wheels, and with `mujoco`, `casadi~=3.7.0`, `daqp`, `manifold3d`,
+`plyfile`, `urdf_parser_py` and `rustworkx` beside them, `MontessoriWorld()` builds — six
+holes, seven shapes, six landing regions — against a stub for `xacro` and a permissive
+stub for the compiled `giskardpy_bullet_bindings`, which is the one piece that genuinely
+will not build. So the world, the layouts and the goals are checkable here; the collision
+checker is not, and CI stays the authority on anything that reaches it.
