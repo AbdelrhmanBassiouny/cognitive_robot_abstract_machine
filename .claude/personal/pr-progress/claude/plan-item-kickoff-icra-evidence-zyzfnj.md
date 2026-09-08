@@ -50,30 +50,46 @@ Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278
   `[self.tracked_object]`, so the mixin restated `EventWithTrackedObjects`. It also
   made the long-term agency question translatable: `tracked_object` is a mapped
   relationship where `manipulated_bodies` was a Python property.
-- Manifest, roadmap, dashboard and PR description all current. Ten review threads
+- **A designator reports its constructor's parameters** (`40ee37485`, fifth round,
+  found by CI). Giving nine coraplex actions a `Symbol`-inheriting mixin enrolled
+  them in the class diagram the root `conftest.py` builds over every `Symbol`
+  subclass in an autouse fixture, and `Designator.fields` looked every dataclass
+  field up in `get_type_hints(cls.__init__)`. `_inference_explanation_` is
+  `init=False`, so it has no hint there: **437 errors in coraplex, 282 in
+  experiments**, every test in both, at setup.
+- **The robot is recorded already** (`8a4c57777`). The robot is a semantic
+  annotation and `World.semantic_annotations` is mapped, so `Episode.world` carries
+  it; the previous round's claim that recording the world does not answer this was
+  wrong. Now a round-trip test rather than a claim.
+- Manifest, roadmap, dashboard and PR description all current. Eleven review threads
   replied to; seven resolved.
 
 ## Outstanding
 
-1. **CI is running on the fourth round.** Each round has been confirmed or refuted
-   by it: round two failed 3 long-term tests, round three failed 2 with a different
-   error, and round four is the fix for that. Every other job has passed throughout.
-   Neither `test_long_term_questions.py` nor coraplex's suite can run in a session
-   container, so CI is what confirms both.
-2. **One thread left open**, needing the developer: whether an episode should
-   record which links were the robot's, not only the world it ran in. The other two
-   were answered in the fourth round -- coraplex got the mixin, and the held-body
-   question dissolves once `ObjectsSeen` asks the perception system, which is now
-   its own plan item.
+1. **CI is running on the fifth round.** Round four never reported on the long-term
+   questions at all: the class-diagram fixture died at setup, so all 282 experiments
+   tests errored before any of them ran. So the fourth round's krrood fix -- reading
+   a collection's members as the class the query asks for -- is still unconfirmed,
+   and this round is the first that can confirm it. Neither
+   `test_long_term_questions.py` nor coraplex's suite can run in a session container.
+2. **One thread left open**, needing the developer, and it is no longer about the
+   recording: the robot's own degree-of-freedom count. No run sets `Episode.world`
+   (the runner releases a trial's world before the trial is recorded), and the count
+   itself is not one query because `SemanticAnnotation.bodies` is a computed property
+   with no mapped path from an annotation to its entities.
 3. **Three buckets still have no long-term spelling** and control has none in
    either memory. Support-and-spatial waits on `query-routed-per-predicate`,
-   embodiment on an episode recording the robot's own links, control on
+   embodiment on a run that keeps its world, control on
    `control-constraints-and-degrees-of-freedom-queried`.
 4. **This PR now changes krrood, segmind and experiments.** That breadth is the
    finding the branch was chartered to produce, but splitting the krrood half out
    is reasonable if the developer prefers.
 
 ## Notes for whoever picks this up
+- **Inheriting `Symbol` is never a local change.** It puts the class into a
+  process-wide class diagram that the root `conftest.py` builds in an autouse
+  fixture, and into a process-wide instance graph, so the change is measured against
+  every package that imports the class rather than the one being edited.
 - **Assert the rows a query returns, not the set of them.** Every membership test
   the second round added sorted distinct names, so the duplicated rows CI caught
   could not fail any of them -- and none selected an attribute *off* a member.
