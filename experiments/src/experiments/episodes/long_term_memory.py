@@ -93,6 +93,19 @@ class LongTermMemory:
             an(entity(trial).where(trial.episode.identifier == episode_identifier))
         )
 
+    def recall_every_trial(self) -> List[RecordedTrial]:
+        """
+        Every trial the database holds, across every episode it recorded.
+
+        What the paper's tables are computed over: a table reports the whole corpus
+        rather than one run, and the trials carry the episode they belong to, so what
+        each of them ran under is reached from the trial itself.
+
+        :return: Every recorded trial, in whatever order the database returns them.
+        """
+        trial = variable(type_=RecordedTrial, domain=[])
+        return self.answer(an(entity(trial)))
+
     def report_on(
         self,
         episode_identifier: str,
