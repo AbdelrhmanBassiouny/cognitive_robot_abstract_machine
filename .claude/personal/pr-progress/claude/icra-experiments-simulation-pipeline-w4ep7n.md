@@ -1,52 +1,45 @@
-## `/plan-item-resolve icra-foundation integrated-simulation-pipeline` - the four narrowing tests
+## #265: both outstanding items closed, and #292 folded in
 
-**Done, pushed as `dae41889c` on #265's branch
-`claude/icra-experiments-simulation-pipeline-w4ep7n`** (approved in session; this
-session's own designated branch descends from `integration` and is unusable as a base,
-and the scope check leaves the touched files on no other base either).
+**State.** `0e0bacfad` on `claude/icra-experiments-simulation-pipeline-w4ep7n`, a draft,
+description rewritten to match. #292 is closed as merged. Three commits this round:
+`93cdd21c9` merges main, `7a6f8f7a9` migrates one stale `Match.variable` read,
+`0e0bacfad` merges #292.
 
-**What the resolution turned on.** Measured over all six holes rather than the square
-one, left and right separate the cube from the cylinder from no hole on this board, read
-from the camera or from the world - no hole's y lies between them. Only front-back in
-the world and up-down in the picture do, and every hole affords both. That single fact
-chose all four changes, and corrected the recorded blocker: three tests read a
-left-right direction, not two, and the fourth was the production statement rather than a
-test.
+**1. The merge conflict against main is resolved**, in the four files predicted, all
+four keeping both sides:
 
-- `..._reaches_as_far_as_the_radius_it_was_asked_for` -> triangle hole, radii 0.07/0.12
-  (cube 50.0 mm, cylinder 93.8 mm). Not 0.05: the cube stands at 50.04 mm.
-- `test_the_two_sides_of_a_hole_hold_different_pieces` -> `InFrontOf`/`Behind` on the
-  square hole (16.2 mm in front, 49.1 mm behind). One axis, where the old pair crossed two.
-- `test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen` -> `RightOf`
-  becomes `Below` (cube 18.6 mm up the picture, cylinder 45.4 mm down).
-- `test_the_demonstration_states_its_way_down_to_the_cube_alone` -> no test edit;
-  `watch_narrowing.look_for_the_cube_on_the_lid`'s `LeftOf(square_hole)` becomes
-  `Above(square_hole)`.
+- `world.py` - `memoize`'s new home `krrood.patterns.caching` beside this branch's
+  `BeliefSource` import. This is the silent breakage the roadmap warned of: left as git
+  merged it, the module imports a name its source no longer defines.
+- `mapped_variable.py` - `CallVariable._update_type_` reads a method off its owner class
+  when the child resolves to no type, and keeps this branch's `__call__`-class reading
+  otherwise. main's own `test_method_call_chains.py` passes (8/8).
+- `geometry.py` - main's `to_hex`/`from_hex`/`__hash__` beside this branch's `ColorName`;
+  main's `RED`/`PINK` classmethods dropped, since this branch's answer with those colours.
+- `test_color.py` - two files of one name, kept as one file of two sections (30 passed).
 
-All four verified end to end through `MontessoriPerceptionBackend` (9/9 checks), plus the
-sibling invariants over the demonstration statement: areas 0.517 > 0.041 > 0.023, five
-distinct labels of non-decreasing length, the camera named exactly twice.
+**2. The experiments job's blocker is in.** #292 merged whole, so the `RecordedLook`
+rename, the 12 mm hole-placement fix and the requoted narrowing millimetres are all here.
 
-**Recorded.** Blocker cleared and the outcome written into the item's notes plus a
-roadmap section; dashboard republished at
-https://claude.ai/code/artifact/26aa1240-a91c-440b-ab3a-24f59156ea62 . #265 converted
-back to draft and its description rewritten (the "Left for the developer" section had
-gone stale).
+**3. One collision main brought, which nobody predicted.** `test_relational_circuit_registry_causal.py`
+reads `query.variable`, retired by #192. Since #192 that builds an attribute expression
+rather than raising, so what fails is `random_events` asking `issubclass` of `None`, in
+another package. Standing hazard: every future merge of main can carry another, and none
+will fail where it is written - re-run the convergence's `_is_own_name_` guard trick each
+time.
 
-**Outstanding on #265, neither of them this work's and neither actioned:**
-1. **Merge conflict against `main`**, 4 files - `mapped_variable.py`, `world.py`,
-   `geometry.py`, `test_color.py`. Exactly the four #296's roadmap section predicted, and
-   it warns of a silent breakage behind them (`memoize` moved from `krrood.utils` to
-   `krrood.patterns.caching`, which #265's `world.py` still imports the old spelling of).
-   Pre-existing; resolving it is convergence work, not this item's.
-2. **The experiments job stays red** until #292 lands - the duplicate `RecordedLook`.
-   #292 is an open draft cut from this branch and targeted at it; its `76e37a70` ran
-   4 failed / 758 passed, and those four were these tests. So #292 + `dae41889c` is what
-   takes the job green.
+**Correction to the last round.** `dae41889c` said left and right separate the cube from
+the cylinder from no hole on this board. That was measured off hole bodies standing 12 mm
+from the holes the look found; placed correctly, the square hole does lie between them.
+All four direction choices still hold and none was reverted - #292 requoted the
+millimetres and replaced the reason.
 
-**Environment note worth keeping.** The roadmap's standing "nothing on these branches
-runs in a session container" is wrong for the montessori perception suite: a python3.12
-venv with the workspace sources, `random_events` editable and `casadi~=3.7.0` (3.8 breaks
-`FunctionBuffer.set_res`) runs the whole pipeline. Only `pytest` is blocked, in the
-conftest's ORM generation (`CouldNotResolveType: QPControllerConfig`, walking giskardpy),
-so the behaviours were driven from a script mirroring the test bodies.
+**Measured in the container** (`--orm-build=never`, with `pyjpt`/`matplotlib`/`flask`/`mypy`
+installed): krrood 3014 passed / 2 failed (graphviz `dot`); sdt the same 45 failures as
+pre-merge, its 45 added errors also on plain main (`iai_apartment`); experiments 684
+passed / 18 failed, all ROS or database, identical pre-merge. CI on `93cdd21c9` was 13/15
+green with exactly krrood and experiments red - the two these commits fix.
+
+**Environment note, now stronger.** `pytest` is not blocked in a session container at all:
+`--orm-build=never` skips the conftest's ORM generation. What still needs CI is the
+generation itself and anything importing ROS (`coraplex`, `giskardpy`, `segmind` suites).
