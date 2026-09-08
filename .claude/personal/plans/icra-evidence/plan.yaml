@@ -69,8 +69,29 @@ items:
   depends_on:
   - question-set-and-ground-truth
   status: not_started
-  notes: >-
-    Prioritised to the front on 2026-09-08 at the developer's direction, and the item two people can run in parallel from the day the question set is frozen: one takes the working-memory spelling over a live simulated scene, the other the long-term-memory spelling over the recorded corpus, and neither waits for the other or for a vision-language model. Every question in all six buckets, scored against ground truth, with its answer, its latency and its resource cost recorded as an episode row like any other query. It is the paper's own numbers standing alone - what the system can answer and what it cannot - and it is what the Understanding and Remembering claims are made of; Experiment A and Experiment D then layer the baselines on top of it rather than establishing it. Because it needs no external model and no credentials, it is also the fallback if the baseline arms are cut: the accuracy, latency and footprint tables exist without them.
+  notes: >
+    Prioritised to the front on 2026-09-08 at the developer's direction, and the item two people can
+    run in parallel from the day the question set is frozen: one takes the working-memory spelling
+    over a live simulated scene, the other the long-term-memory spelling over the recorded corpus,
+    and neither waits for the other or for a vision-language model. Every question in all six
+    buckets, scored against ground truth, with its answer, its latency and its resource cost
+    recorded as an episode row like any other query. It is the paper's own numbers standing alone -
+    what the system can answer and what it cannot - and it is what the Understanding and Remembering
+    claims are made of; Experiment A and Experiment D then layer the baselines on top of it rather
+    than establishing it. Because it needs no external model and no credentials, it is also the
+    fallback if the baseline arms are cut: the accuracy, latency and footprint tables exist without
+    them.
+
+    Updated 2026-09-08 from `question-set-and-ground-truth` (#295), which froze the set this item
+    scores: the long-term-memory half is thinner than the working-memory one, and three buckets have
+    no long-term spelling to answer yet. Support and spatial relations needs icra-mechanism's
+    `query-routed-per-predicate`, because the spatial relations are geometric predicates and
+    answering them from rows is a routed predicate. Embodiment reduces to the pick-up record the
+    temporal bucket already asks, unless an episode also records which links were the robot's -
+    recording the world does not answer that, since a held object hangs off a link without becoming
+    one. Control has no spelling in either memory until
+    `control-constraints-and-degrees-of-freedom-queried`. So the accuracy table this item produces
+    is over five buckets live and three recorded until those land.
   blockers:
   - >-
     Cross-plan: the long-term-memory half depends on icra-foundation's `episodes-queried-by-eql` (in_progress, PR #278) and `episode-corpus-generated-at-scale` (not_started); the working-memory half on `integrated-simulation-pipeline` (in_progress, PR #265). depends_on cannot cross a plan boundary.
