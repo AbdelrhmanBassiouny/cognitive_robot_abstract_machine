@@ -1,96 +1,74 @@
-
-# `question-set-and-ground-truth` (icra-evidence) — PR #295
-
-Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278. Reviewed
-2026-09-08 and largely rebuilt in response; the round is written up in
-`icra-evidence/roadmap.md` ("reviewed 2026-09-08").
-
-## Done
-
-- **Working-memory half rebuilt around the reviewer's direction.** Nothing is
-  handed to a question: every variable is domainless and ranges over the symbol
-  graph, what a question is about is a condition, and the source is the robot.
-  `DetectionEvent` inherits `Symbol`; agency goes through a new
-  `ManipulatesBodies` mixin; the set is read off the question subclasses.
-  **20 tests, run locally against a real twin, fixed and random order.**
-- **Two EQL defects measured, not assumed.** `exists` answers the agency shape
-  with every object that moved whether the robot acted on it or not — both
-  spellings now use a join. Selecting a collection returned association rows
-  rather than members — fixed in `_apply_relationship_join`, covered by
-  `test_selecting_a_collection_yields_its_members`.
-- **All 8 review threads replied to; 6 resolved.**
-- Manifest, roadmap, dashboard and the PR description are current.
-
-## Outstanding
-
-1. **CI has not run on the rebuild yet.** The long-term tests are marked xfail
-   (non-strict) because a membership condition over a collection still does not
-   translate to a join and I could not execute them here. If any unexpectedly
-   passes, flip it to strict.
-2. **Two threads deliberately left open**, both needing the developer's call:
-   whether a body in the gripper counts as an object the robot sees (it does not
-   any more, because `AbstractRobot.bodies` includes it), and whether an episode
-   should record which links were the robot's.
-3. **The krrood fix widened this PR** into another package. It is the finding
-   this branch was chartered to produce, but splitting it out is reasonable if
-   the developer prefers.
-
-## Notes for whoever picks this up
-
-- A clean venv on Python 3.12 runs the working-memory tests against a real twin;
-  what still needs CI is ORM generation (`rclpy`) and anything importing
-  `experiments.episodes.episode` (ROS message packages).
-- `test/experiments_test/conftest.py` regenerates every ORM interface, so a test
-  in that package cannot run locally even when it needs no generated interface.
-  Copy it out to a scratch directory with a minimal conftest providing the
-  SymbolGraph cleanup fixture.
-- The symbol graph holds instances **weakly**; a test must hold its own events.
-
 # `question-set-and-ground-truth` (icra-evidence) — PR #295
 
 Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278
-(`episodes-queried-by-eql`). Kicked off in `auto` mode; the settled plan and
-what building it found are both in `icra-evidence/roadmap.md` ("as planned" and
-"as built", 2026-09-08).
+(`episodes-queried-by-eql`). Kicked off in `auto` mode, resolved a second time on
+2026-09-08 via `/plan-item-resolve`; the rounds are written up in
+`icra-evidence/roadmap.md` ("as planned", "as built", "reviewed", "resolved").
 
 ## Done
 
-- **Working-memory half** — `experiments/questions/` with `question.py`,
-  `working_memory.py`, `question_set.py`. Thirteen questions across five
-  buckets. **20 tests, run locally against a real twin, all passing.**
+- **The question set** — `experiments/questions/` with `question.py`,
+  `working_memory.py`, `long_term_memory.py`, `question_set.py`. Thirteen
+  working-memory questions across five buckets, six long-term across three.
+  **20 working-memory tests, run locally against a real twin, all passing**, in
+  fixed and random order.
+- **Nothing is handed to a question** (first review round). Every variable is
+  domainless and ranges over the symbol graph, what a question is about is a
+  condition, and the source is the robot. `DetectionEvent` inherits `Symbol`; the
+  set is read off the question subclasses.
 - **`a96531635` on #271's own branch** — `Episode.world` and
-  `RecordedTrial.motion_statechart`, the fold `icra-foundation`'s roadmap
-  recorded on 2026-09-08 but never made. Three round-trip tests; that PR's
-  description and a comment carry the reasoning. Merged into this branch.
-- **Long-term-memory half** — `long_term_memory.py`, six questions across three
-  buckets through #278's `LongTermMemory.answer`, plus
-  `test_long_term_questions.py`. CI-only.
-- Manifest, roadmap and PR description all current; `question-set-answered-from-memory`
-  and `episodes-recorded-through-ormatic` carry notes about what changed for them.
+  `RecordedTrial.motion_statechart`, the fold `icra-foundation`'s roadmap recorded
+  but never made. Merged into this branch, so it lands wherever #271 lands.
+- **The collection-membership defect is fixed in krrood** (`ecc05af5`, second
+  round, at the developer's request on the thread — it overrode the earlier call
+  that this belonged to an EQL plan). `EQLTranslator` binds every variable to the
+  FROM element it ranges over: the owner gets an alias of its own so it is told
+  apart from members sharing its mapped base, joining a relationship is separate
+  from caching a path so two variables over one collection reach two members, and
+  a member of one collection can own the next. **krrood's ORM suite: 138 passed,
+  from 135 passed + 1 xfailed.** The seven `NEEDS_A_COLLECTION_JOIN` xfails are
+  gone.
+- **`AgentInteractionEvent` replaces the `ManipulatesBodies` mixin** in segmind
+  (second round, review thread). Every implementation returned
+  `[self.tracked_object]`, so the mixin restated `EventWithTrackedObjects`. It also
+  made the long-term agency question translatable: `tracked_object` is a mapped
+  relationship where `manipulated_bodies` was a Python property.
+- Manifest, roadmap, dashboard and PR description all current. Ten review threads
+  replied to; seven resolved.
 
 ## Outstanding
 
-1. **CI has not run yet.** Every long-term question crosses a to-many collection
-   the episode model reaches through an association table, and nothing in the
-   repository proves EQL translates a join across one — #278's own roadmap note
-   left finding out to whoever needed it first, and that is this branch.
-   `test_long_term_questions.py` is what answers it. If it fails, the shape
-   changes in one place: each question's `query`.
-2. **Three buckets have no long-term spelling** and one has none in either
-   memory. Control waits on `control-constraints-and-degrees-of-freedom-queried`
-   (its own recorded blocker); support and spatial relations over long-term
-   memory waits on `query-routed-per-predicate` (not previously recorded
-   anywhere); embodiment over long-term memory needs an episode to record which
-   links were the robot's, which nobody owns yet.
-3. **#271 is not a draft** and now carries a commit from this session. It was
-   marked ready before, so it was left ready rather than re-drafted.
+1. **CI has not run on this round.** All four checks were still `queued` at the
+   time of the push. `test_long_term_questions.py` is now expected to *pass* rather
+   than xfail, and it cannot be run in a session container, so CI is what confirms
+   the long-term questions answer end to end.
+2. **Three threads deliberately left open**, each needing the developer:
+   - whether a body in the gripper counts as an object the robot sees (it does not
+     any more, because `AbstractRobot.bodies` includes it);
+   - whether an episode should record which links were the robot's;
+   - whether coraplex's actions should gain the mixin removed from segmind here —
+     I asked rather than doing it, since it is another package's design.
+3. **Three buckets still have no long-term spelling** and control has none in
+   either memory. Support-and-spatial waits on `query-routed-per-predicate`,
+   embodiment on an episode recording the robot's own links, control on
+   `control-constraints-and-degrees-of-freedom-queried`.
+4. **This PR now changes krrood, segmind and experiments.** That breadth is the
+   finding the branch was chartered to produce, but splitting the krrood half out
+   is reasonable if the developer prefers.
 
 ## Notes for whoever picks this up
 
-- The workspace *does* install in a session container: a clean venv on Python
-  3.12, `pip install -e` each package, plus stubs for the ROS message packages.
-  What still cannot run is ORM generation (giskardpy's
-  `DebugExpressionPublisher` needs a real `rclpy`), so anything touching the
-  generated interface stays CI-only. The old "random_events needs a native
-  library" note is wrong — the failures were `arff`/`dnutils`/`antlr4` against a
-  Debian-patched setuptools.
+- A clean venv on **Python 3.12** (not 3.11 — `make_dataclass(module=...)` needs
+  3.12) with `pip install -e ./krrood pytest objgraph` runs krrood's ORM suite:
+  `pytest test/krrood_test/test_ormatic --confcutdir=test/krrood_test`. The
+  `--confcutdir` is what skips the root `conftest.py`'s ROS imports.
+- `test/krrood_test/dataset/ormatic_interface.py` is regenerated from the dataset
+  classes at conftest import, so adding a mimic class needs no manual regeneration.
+- Running the verbalization tests rewrites
+  `test/krrood_test/test_eql/test_verbalization/verbalization_results.py`; revert it
+  before committing unless the wording genuinely changed.
+- What still needs CI is ORM generation (`rclpy`) and anything importing
+  `experiments.episodes.episode` (ROS message packages).
+- `test/experiments_test/conftest.py` regenerates every ORM interface, so a test in
+  that package cannot run locally even when it needs no generated interface.
+- The symbol graph holds instances **weakly**; a test must hold its own events.
