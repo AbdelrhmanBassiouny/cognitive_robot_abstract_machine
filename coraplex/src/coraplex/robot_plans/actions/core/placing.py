@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict
+from typing_extensions import Any, Dict, Optional
 
 from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.plan_node import PlanNode
@@ -74,6 +74,16 @@ class PlaceAction(
     :func:`~semantic_digital_twin.reasoning.robot_predicates.is_body_gripped`).
     """
 
+    grasp_description: Optional[GraspDescription] = field(default=None, kw_only=True)
+    """
+    How :attr:`object_designator` is held, which is what the poses this action moves
+    through are computed from.
+
+    Optional because a place that follows its own pick-up reads the grasp off it; state
+    it when the object was picked up in a plan of its own, or the place would work from
+    a grasp that never happened.
+    """
+
     def _retract_plan(self, retract_pose: Pose) -> PlanNode:
         """
         :return: The plan that re-parents the placed object back to the world and
@@ -93,20 +103,28 @@ class PlaceAction(
         )
 
     @property
-    def _action_plan(self) -> PlanNode:
-        end_effector = ViewManager.get_arm_view(self.arm, self.robot).end_effector
+    def _how_the_object_is_held(self) -> GraspDescription:
+        """
+        :return: The grasp this action was told about, the one of the pick-up before it
+            in the same plan, or a front approach when there is neither.
+        """
+        if self.grasp_description is not None:
+            return self.grasp_description
         previous_pick = self.plan_node.get_previous_node_by_designator_type(
             PickUpAction
         )
-        previous_grasp_description = (
-            previous_pick.designator.grasp_description
-            if previous_pick
-            else GraspDescription(
-                ApproachDirection.FRONT, VerticalAlignment.NoAlignment, end_effector
-            )
+        if previous_pick is not None:
+            return previous_pick.designator.grasp_description
+        return GraspDescription(
+            ApproachDirection.FRONT,
+            VerticalAlignment.NoAlignment,
+            ViewManager.get_arm_view(self.arm, self.robot).end_effector,
         )
+
+    @property
+    def _action_plan(self) -> PlanNode:
         transport_pose, placing_pose, retract_pose = (
-            previous_grasp_description.pose_sequence(
+            self._how_the_object_is_held.pose_sequence(
                 self.target_location, self.object_designator, reverse=True
             )
         )

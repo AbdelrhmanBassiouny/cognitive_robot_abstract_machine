@@ -18,9 +18,13 @@ rather than by measuring the scene itself.
 from __future__ import annotations
 
 import math
+import os
 import random
+import tempfile
 from abc import ABC
 from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
 
 import numpy
 from typing_extensions import (
@@ -90,11 +94,19 @@ from experiments.scenarios.scenario import (
     WorldType,
 )
 from semantic_digital_twin.adapters.multi_sim import (
+    MujocoCamera,
     MujocoLight,
     MujocoSim,
     MujocoSynchronizer,
+    MultiSimSynchronizer,
+)
+from semantic_digital_twin.adapters.mujoco_video_recording import (
+    MujocoVideoRecorder,
+    RecordedVideo,
+    VideoResolution,
 )
 from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.reasoning.robot_predicates import robot_holds_body
@@ -653,6 +665,7 @@ class SortingScene:
                     reference_frame=self.world.root,
                 ),
                 THE_ARM_THAT_SORTS,
+                grasp_description=self._grasp_description,
             )
         )
 
@@ -808,6 +821,191 @@ thing for the widest piece of the set and the narrowest.
 """
 
 
+# %% the video a run is filmed as
+
+
+FRAMES_PER_SECOND = 15
+"""
+How many frames one second of a filmed run plays back as.
+"""
+
+STATE_CHANGES_PER_FRAME_OF_A_MOTION = 3
+"""
+How many changes to the world a robot's motion is filmed every frame of.
+
+A stretch of physics is filmed against the simulated clock, so it needs no such number;
+a motion is written into the world by giskard's controller at a rate of its own, and
+filming every change of it would both slow the run down and play back far slower than
+it happened.
+"""
+
+VIDEO_RESOLUTION = VideoResolution(width=640, height=480)
+"""
+How large a filmed run's frames are, in pixels.
+"""
+
+TABLE_BOUNDS = (
+    (
+        float(TABLE_POSITION.x) - TABLE_SCALE.x / 2,
+        float(TABLE_POSITION.y) - TABLE_SCALE.y / 2,
+        float(TABLE_POSITION.z) - TABLE_SCALE.z / 2,
+    ),
+    (
+        float(TABLE_POSITION.x) + TABLE_SCALE.x / 2,
+        float(TABLE_POSITION.y) + TABLE_SCALE.y / 2,
+        float(TABLE_POSITION.z) + TABLE_SCALE.z / 2,
+    ),
+)
+"""
+The lowest and highest corner of the Montessori table, in the world root frame.
+"""
+
+SCENE_CAMERA_NAME = "the camera a run is filmed by"
+"""
+The name of the camera a filmed run is watched through.
+"""
+
+DEFAULT_VIDEO_DIRECTORY_NAME = "montessori_scenario_videos"
+"""
+The directory filmed runs are written into when nothing says where they should go.
+"""
+
+
+class MontessoriEnvironmentVariable(StrEnum):
+    """
+    What the environment can be asked about a run of these scenarios.
+    """
+
+    VIDEO_DIRECTORY = "MONTESSORI_SCENARIO_VIDEO_DIRECTORY"
+    """
+    Where a filmed run writes its video.
+    """
+
+
+@dataclass
+class SceneRecording:
+    """
+    The video a run is filmed as.
+
+    A simulation is compiled against one kinematic model and cannot follow a change to
+    it, and a run changes that model whenever the robot takes hold of something. So a
+    run is filmed in more than one take: each stretch between two changes is one take,
+    and the takes are kept here and written out as one video.
+    """
+
+    world: World
+    """
+    The world being filmed.
+    """
+
+    frames_per_second: int = FRAMES_PER_SECOND
+    """
+    How many frames one second of the video plays back as.
+    """
+
+    camera: MujocoCamera = field(init=False, repr=False)
+    """
+    Where the run is watched from, attached to the world once so that a cut between two
+    takes does not also move the camera.
+    """
+
+    frames: List[numpy.ndarray] = field(init=False, default_factory=list, repr=False)
+    """
+    Everything filmed so far, in playback order.
+    """
+
+    _take: Optional[MujocoVideoRecorder] = field(init=False, default=None, repr=False)
+    """
+    The take being filmed, while one is running.
+    """
+
+    def __post_init__(self):
+        self.camera = self._camera_watching_the_scene()
+
+    def film(self) -> MujocoVideoRecorder:
+        """
+        The take running now, started if there is none.
+
+        Its simulation is the one carrying the scene, so what is filmed is the run
+        itself rather than a second simulation of it.
+        """
+        if self._take is not None:
+            return self._take
+        take = MujocoVideoRecorder(
+            world=self.world,
+            frames_per_second=self.frames_per_second,
+            capture_every_n_state_changes=STATE_CHANGES_PER_FRAME_OF_A_MOTION,
+            resolution=VIDEO_RESOLUTION,
+            camera=self.camera,
+        )
+        take.start()
+        self._take = take
+        return take
+
+    def cut(self) -> None:
+        """
+        End the take that is running, keeping what it filmed.
+        """
+        if self._take is None:
+            return
+        self.frames.extend(self._take.stop().frames)
+        self._take = None
+
+    def write(self, output_path: Path) -> Path:
+        """
+        Encode every take filmed so far as one video.
+
+        :param output_path: The file to write it to.
+        :return: The file it was written to.
+        """
+        self.cut()
+        return RecordedVideo(
+            frames=self.frames, frames_per_second=self.frames_per_second
+        ).write(output_path)
+
+    @property
+    def frame_count(self) -> int:
+        """
+        How many frames the video holds, the take running now included.
+        """
+        filmed_now = 0 if self._take is None else self._take.captured_frame_count
+        return len(self.frames) + filmed_now
+
+    @staticmethod
+    def where_videos_are_written() -> Path:
+        """
+        The directory a filmed run writes its video into, named by
+        :attr:`MontessoriEnvironmentVariable.VIDEO_DIRECTORY` or, when that says
+        nothing, a directory of its own beside whatever else this machine keeps
+        temporarily.
+        """
+        stated = os.environ.get(MontessoriEnvironmentVariable.VIDEO_DIRECTORY)
+        if stated is not None:
+            return Path(stated)
+        return Path(tempfile.gettempdir()) / DEFAULT_VIDEO_DIRECTORY_NAME
+
+    def _camera_watching_the_scene(self) -> MujocoCamera:
+        """
+        A camera framing the table everything a run does is done on, attached to the
+        world's root.
+
+        The table rather than the whole world, which also holds a floor reaching far
+        past anything a run touches.
+        """
+        watches_from = MujocoCamera.overview_pose(numpy.asarray(TABLE_BOUNDS))
+        quaternion = watches_from.to_quaternion().to_np().tolist()
+        camera = MujocoCamera(
+            name=SCENE_CAMERA_NAME,
+            body=self.world.root,
+            position=watches_from.to_position().to_np()[:3].tolist(),
+            # MuJoCo writes the scalar of a quaternion first, and Quaternion.to_np last.
+            quaternion=[quaternion[3]] + quaternion[:3],
+            resolution=[float(VIDEO_RESOLUTION.width), float(VIDEO_RESOLUTION.height)],
+        )
+        self.world.root.simulator_additional_properties.append(camera)
+        return camera
+
+
 # %% the physics the scene runs under
 
 
@@ -838,6 +1036,23 @@ on one if it happens.
 """
 
 
+@dataclass(eq=False)
+class _LetGoOfTheSimulationCallback(ModelChangeCallback):
+    """
+    Sibling callback owned by a :class:`SimulatedScene`. Lets go of the simulation the
+    moment the world's model changes, since a simulation is compiled against the model
+    as it was.
+    """
+
+    scene: SimulatedScene = field(kw_only=True)
+    """
+    The scene whose simulation is let go of.
+    """
+
+    def on_model_change(self, **kwargs) -> None:
+        self.scene.stop()
+
+
 @dataclass
 class SimulatedScene:
     """
@@ -857,10 +1072,27 @@ class SimulatedScene:
     How far one step advances it, in seconds.
     """
 
+    recording: Optional[SceneRecording] = None
+    """
+    The video the run is being filmed as, when it is being filmed.
+    """
+
     physics: Optional[MujocoSim] = field(init=False, default=None, repr=False)
     """
     The MuJoCo simulation the scene is carried in, once there is one.
     """
+
+    _let_go_of_the_simulation: Optional[_LetGoOfTheSimulationCallback] = field(
+        init=False, default=None, repr=False
+    )
+    """
+    What tells this scene that the world's model has changed under it.
+    """
+
+    def __post_init__(self):
+        self._let_go_of_the_simulation = _LetGoOfTheSimulationCallback(
+            _world=self.world, scene=self
+        )
 
     def advance(self, duration: float) -> None:
         """
@@ -868,17 +1100,34 @@ class SimulatedScene:
 
         :param duration: How long to run it for, in seconds.
         """
-        physics = self._mirror_of_the_world()
+        self._take_up_carrying_the_scene()
+        if self.recording is not None:
+            self.recording.film().advance_simulation(duration)
+            return
         for _ in range(round(duration / self.step_size)):
-            physics.simulator.step()
+            self.physics.simulator.step()
+
+    def _take_up_carrying_the_scene(self) -> None:
+        """
+        Make sure something is carrying the scene: the take a filmed run is being
+        filmed as, or a simulation mirroring the world.
+
+        A filmed run has no simulation of its own — it is carried by the one it is
+        filmed from, so what is watched is the run itself rather than a second
+        simulation of it.
+        """
+        # Building either puts the world under a root the simulation gives it, which is
+        # a change to the model of the build's own making rather than one to let go of.
+        self._let_go_of_the_simulation.pause()
+        if self.recording is None:
+            self._mirror_of_the_world()
+        else:
+            self.recording.film()
+        self._let_go_of_the_simulation.resume()
 
     def _mirror_of_the_world(self) -> MujocoSim:
         """
         The simulation mirroring the world as it stands, built if there is none.
-
-        A simulation is built against one kinematic model and cannot follow a change to
-        it, so :meth:`stop` drops the mirror and the next stretch of physics takes the
-        world as it then is.
         """
         if self.physics is not None:
             return self.physics
@@ -916,6 +1165,16 @@ class SimulatedScene:
         Stop carrying the scene, so the world is free to change the model the
         simulation was built against.
         """
+        for synchronizer in MultiSimSynchronizer.all_callbacks_of_this_type_from_world(
+            self.world
+        ):
+            # A change is notified to every callback the world had when it began, so a
+            # simulation being let go of has to be paused as well as stopped for the
+            # change under way not to reach it.
+            synchronizer.pause()
+            synchronizer.stop()
+        if self.recording is not None:
+            self.recording.cut()
         if self.physics is None:
             return
         self.physics.stop_simulation()
@@ -980,8 +1239,10 @@ class PickThePieceUp(ScenePhysicsStep):
     Have the robot take hold of a loose piece, so that from here on the piece travels
     with it.
 
-    The simulation is let go of first: a robot action re-parents what it grasps, which
-    is a change to the kinematic model the simulation was built against.
+    The scene goes on being carried while the robot reaches for it, so the reach is
+    watched as it happens; the grasp re-parents what it takes hold of, and the scene is
+    let go of there, since that is a change to the model the simulation was built
+    against.
     """
 
     category: MontessoriShapeCategory
@@ -990,7 +1251,6 @@ class PickThePieceUp(ScenePhysicsStep):
     """
 
     def perform(self, world: World) -> None:
-        self.scene.stop()
         SortingScene(world).pick_the_piece_up(self.category)
 
 
@@ -1002,6 +1262,11 @@ class PutThePieceInItsHole(ScenePhysicsStep):
 
     Nothing puts the piece through the hole: the gripper opens above it and gravity does
     the rest, so a piece that does not fit does not go in.
+
+    Carrying the piece is the one stretch of a run that cannot be simulated: a held
+    piece hangs off the gripper on the free connection it stood on the table with, and
+    a body on a free connection has to be a top-level one for MuJoCo to compile the
+    scene at all. The scene is taken up again once the piece has been let go of.
     """
 
     category: MontessoriShapeCategory
@@ -1010,7 +1275,6 @@ class PutThePieceInItsHole(ScenePhysicsStep):
     """
 
     def perform(self, world: World) -> None:
-        self.scene.stop()
         scene = SortingScene(world)
         hole = scene.hole_for(self.category).root.global_transform.to_position()
         scene.put_the_piece_down_at(
@@ -1220,6 +1484,11 @@ class MontessoriSortingScenario(
     Where the robot this scenario runs on is bolted.
     """
 
+    filmed: bool = field(kw_only=True, default=False)
+    """
+    Whether a video of the run is made while it is performed.
+    """
+
     simulation: Optional[SimulatedScene] = field(init=False, default=None)
     """
     The physics carrying the world this scenario built most recently.
@@ -1243,7 +1512,10 @@ class MontessoriSortingScenario(
         )
         self.add_what_the_script_acts_with(montessori)
         montessori.world.update_forward_kinematics()
-        self.simulation = SimulatedScene(world=montessori.world)
+        self.simulation = SimulatedScene(
+            world=montessori.world,
+            recording=(SceneRecording(world=montessori.world) if self.filmed else None),
+        )
         return montessori.world
 
     def add_what_the_script_acts_with(self, montessori: MontessoriWorld) -> None:

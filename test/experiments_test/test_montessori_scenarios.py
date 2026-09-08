@@ -9,8 +9,12 @@ rather than on Tracy, whose description is a ROS package a checkout need not hav
 
 from __future__ import annotations
 
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
 import pytest
-from typing_extensions import List
+from typing_extensions import Dict, List
 
 from experiments.montessori.pieces import KNOWN_PIECES
 from krrood.entity_query_language.factories import variable
@@ -18,8 +22,10 @@ from krrood.entity_query_language.verbalization.pipeline import verbalize_expres
 
 from experiments.montessori.scenarios import (
     CONTAINED_IN_ITS_LANDING_REGION,
+    DEFAULT_VIDEO_DIRECTORY_NAME,
     LayoutArea,
     LightingChanged,
+    MontessoriEnvironmentVariable,
     MountedRobot,
     PUSHER_NAME,
     PUSHER_RAIL_NAME,
@@ -29,6 +35,7 @@ from experiments.montessori.scenarios import (
     PiecePlacement,
     PiecePushedWhileTheRobotIsIdle,
     RobotSortsAPiece,
+    SceneRecording,
     SortingScene,
     SortingStep,
     TheSceneIsUndisturbed,
@@ -723,7 +730,150 @@ def _instantiated(scenario_class, area: LayoutArea):
     return scenario_class(**arguments)
 
 
+# %% the video a run is filmed as
+
+
+SORTED_PIECE = MontessoriShapeCategory.CUBE
+"""
+The piece the runs filmed here sort.
+"""
+
+
+@dataclass
+class AFilmedRun:
+    """
+    What one filmed run left behind.
+    """
+
+    recording: SceneRecording
+    """
+    The video it was filmed as.
+    """
+
+    frames_by_the_end_of: Dict[SortingStep, int]
+    """
+    How many frames had been filmed by the end of each of its steps.
+    """
+
+    left_the_piece_at: List[float]
+    """
+    Where the sorted piece stood when the run was over, in the world root frame.
+    """
+
+
+@pytest.fixture(scope="module")
+def a_filmed_sorting_run() -> AFilmedRun:
+    """
+    One filmed pick-and-place run, performed once and read by every test that asks about
+    a video, since filming a run renders a frame every few changes of it.
+    """
+    scenario = _sorting_run(filmed=True)
+    world = scenario.build_world()
+    frames_by_the_end_of = {}
+    for step in scenario.steps(world):
+        step.perform(world)
+        frames_by_the_end_of[step.name] = scenario.simulation.recording.frame_count
+    return AFilmedRun(
+        recording=scenario.simulation.recording,
+        frames_by_the_end_of=frames_by_the_end_of,
+        left_the_piece_at=_where_the_sorted_piece_stands(world),
+    )
+
+
+def test_every_step_that_acts_on_a_scene_is_filmed(a_filmed_sorting_run):
+    """
+    The robot's own reach is watched as well as the physics, and the video is taken up
+    again after the grasp, which no simulation the run began with could follow.
+    """
+    frames = a_filmed_sorting_run.frames_by_the_end_of
+
+    assert (
+        0
+        < frames[SortingStep.SETTLE]
+        < frames[SortingStep.PICK_UP]
+        < frames[SortingStep.PUT_DOWN]
+    )
+
+
+def test_filming_a_run_leaves_it_doing_what_it_did_unfilmed(a_filmed_sorting_run):
+    """
+    A filmed run is carried by the very simulation it is filmed from, so the film is
+    something the run is watched through rather than something done to it.
+    """
+    unfilmed = _sorting_run(filmed=False)
+    world = unfilmed.build_world()
+
+    for step in unfilmed.steps(world):
+        step.perform(world)
+
+    assert _where_the_sorted_piece_stands(world) == pytest.approx(
+        a_filmed_sorting_run.left_the_piece_at
+    )
+
+
+def test_a_filmed_run_is_written_as_one_video_where_videos_are_kept(
+    a_filmed_sorting_run,
+):
+    """
+    Written where videos of runs are kept rather than into a directory of this test's
+    own: a video nobody can find is not one worth filming.
+    """
+    output_path = a_filmed_sorting_run.recording.write(
+        SceneRecording.where_videos_are_written() / f"{RobotSortsAPiece.name}.mp4"
+    )
+
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0
+    assert (
+        len(a_filmed_sorting_run.recording.frames)
+        == a_filmed_sorting_run.frames_by_the_end_of[SortingStep.ANSWER]
+    )
+
+
+def test_videos_are_written_where_the_environment_says(monkeypatch, tmp_path):
+    monkeypatch.setenv(MontessoriEnvironmentVariable.VIDEO_DIRECTORY, str(tmp_path))
+
+    assert SceneRecording.where_videos_are_written() == tmp_path
+
+
+def test_videos_of_a_machine_that_says_nothing_are_kept_beside_its_other_temporary_files(
+    monkeypatch,
+):
+    monkeypatch.delenv(MontessoriEnvironmentVariable.VIDEO_DIRECTORY, raising=False)
+
+    assert (
+        SceneRecording.where_videos_are_written()
+        == Path(tempfile.gettempdir()) / DEFAULT_VIDEO_DIRECTORY_NAME
+    )
+
+
 # %% helpers
+
+
+def _sorting_run(filmed: bool) -> SyntheticGrasperSortsAPiece:
+    """
+    The pick-and-place run every test about a video is about.
+
+    :param filmed: Whether to film it.
+    """
+    return SyntheticGrasperSortsAPiece(
+        layout=PieceLayout.randomized(
+            seed=SEED, area=LayoutArea.on_the_table_beside_the_board()
+        ),
+        robot=mounted_arm(),
+        sorted_category=SORTED_PIECE,
+        filmed=filmed,
+    )
+
+
+def _where_the_sorted_piece_stands(world: World) -> List[float]:
+    """
+    Where the piece a filmed run sorts stands, in the world root frame.
+
+    :param world: The world the run was performed in.
+    """
+    stands_at = SortingScene(world).position_of(SORTED_PIECE)
+    return [float(stands_at.x), float(stands_at.y), float(stands_at.z)]
 
 
 def _size_of(area) -> List[float]:
