@@ -107,6 +107,26 @@ items:
   blockers:
   - >-
     Cross-plan: the long-term-memory half depends on icra-foundation's `episodes-queried-by-eql` (in_progress, PR #278) and `episode-corpus-generated-at-scale` (not_started); the working-memory half on `integrated-simulation-pipeline` (in_progress, PR #265). depends_on cannot cross a plan boundary.
+- id: objects-seen-asked-of-the-perception-system
+  title: >-
+    What the robot sees is what its perception system reports, from detectors built for what the belief state says is detectable
+  branch: null
+  pull_request_number: null
+  track: experiment-a
+  depends_on:
+  - question-set-and-ground-truth
+  status: not_started
+  notes: >-
+    Added 2026-09-08 at the developer's direction on #295's review, where `ObjectsSeen` answers from the belief state directly. It should ask the perception system instead, and the query it puts is open-ended: give me every object you can detect. The backend answers it by reading what the belief state (the symbol graph) already holds -- semantic annotations and bodies -- finding which of them carry perceptually detectable properties it has detectors for, combining those properties into a detection pipeline, running it, and returning what it found. Where it has a detector that finds whatever is in view rather than one keyed to a property (YOLO, or SAM with CLIP, or their like), it uses that and returns hypotheses: semantic annotations filled in as far as the evidence goes and no further.
+
+    That makes what the robot sees a perception result rather than a reading of what it already believes, which is what the scene bucket claims to measure. It is also the sharpest form of the knowledge-directed claim in the question set: the detectors are chosen by what the robot knows is out there, so the same question asked of a scene the robot knows nothing about is answered by the general detector alone.
+
+    Until it lands, `ObjectsSeen` keeps the implementation #295 froze -- every object in the belief state visible to the simulated camera view in MuJoCo -- which the developer asked for explicitly rather than as a placeholder nobody chose.
+
+    Recorded in this plan because that is where the question it changes lives, and because #295's review is where it was asked for. It may belong in icra-mechanism's `backend-routing` track instead, beside `backends-declare-their-capabilities` (which is where a perception backend says what it can answer) and `perception-backends-are-interchangeable`; moving it is a one-line change to `track` and the plan file it sits in.
+  blockers:
+  - >-
+    Cross-plan: needs icra-mechanism's `backends-declare-their-capabilities` for the perception backend to say which detectors it has, and `query-routed-per-predicate` for a question to reach it at all; both not_started. depends_on cannot cross a plan boundary.
 - id: experiment-a-in-simulation
   title: >-
     Experiment A run end to end in simulation: scenes, temporal scenarios, determinism, three systems, report

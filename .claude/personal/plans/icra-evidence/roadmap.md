@@ -877,3 +877,51 @@ one, and none of them selected an attribute *off* a member -- they selected the 
 The item's own note that "CI is what answers the question" was right, and the round
 before this one reported the answer before CI had given it. Assert the rows a query
 returns, not the set of them.
+### `question-set-and-ground-truth` (#295), the third review round
+
+Three asks, all acted on.
+
+**The condition combiners are read off their base classes.** `CONDITION_COMBINERS` listed
+`Where`, `AND`, `OR` and `Not`; the reviewer asked for the base classes instead, and
+`(LogicalOperator, Filter)` is exactly that set -- `Comparator` is neither, which is what
+the walk has to keep out, so the narrowing the list was doing is done by the hierarchy.
+An operator added later needs no second edit here.
+
+**coraplex's actions gained `ManipulatesBodies`.** This is the mixin the first review
+round asked for, in the package it was meant for: an event's tracked object says what was
+acted on after the fact, and nothing said it while the robot was acting. Nine actions
+carry it -- pick-up, grasp, place, open, close and the four transport composites -- and it
+normalizes the two ways they name their object, some carrying the body and others the
+semantic annotation it is rooted at.
+
+It inherits `Symbol`, and that is the part that makes it answer the developer's actual
+ask ("such that we can query the actions that the robot is performing"). Measured on a
+standalone mimic of the class shape rather than assumed:
+
+```
+variable(ManipulatesBodies, domain=[])   -> []
+variable(ManipulatesBodies)              -> ['cube', 'cylinder']
+```
+
+-- so an explicitly empty domain is an empty domain, and a domainless variable resolves
+from the graph. The same reading as `DetectionEvent` in the previous round.
+
+coraplex cannot be installed in a session container (it needs ROS), so its test is
+CI-only, like `experiments`'. What was checked here is the part that would fail at import:
+that `Symbol` mixed into a dataclass with non-default fields still constructs, which it
+does because `_inference_explanation_` is `init=False` and so takes no place in the
+generated `__init__`.
+
+**A new item: `objects-seen-asked-of-the-perception-system`.** `ObjectsSeen` answers from
+the belief state, and the developer's point is that it should ask the perception system,
+which builds a detection pipeline out of whatever the belief state says is detectable and
+returns hypotheses. He asked for it as an item of its own and for the current
+implementation to stay until it lands. Recorded in this plan because the question it
+changes lives here, with a note on the item that icra-mechanism's `backend-routing` track
+may be the better home.
+
+#### Still with the developer
+
+The degrees-of-freedom thread is unchanged: whether an episode records the robot's own
+links, not only the world's. It is the one ask on this branch that needs a decision rather
+than an implementation.
