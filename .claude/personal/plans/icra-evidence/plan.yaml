@@ -58,7 +58,7 @@ items:
   - >-
     Cross-plan: depends on icra-foundation's `scenario-domain-model` (in_progress, PR #261), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
   - >-
-    Cross-plan: the self-model and control buckets need their long-term-memory spelling from icra-foundation's `episodes-recorded-through-ormatic` (PR #271), which is where the episode gains a reference to the world it ran in and the motion statechart it ran, and from icra-mechanism's `control-reads-the-twin-as-constraints`, which is what publishes the active constraints into the twin in the first place. The working-memory spelling of the self-model bucket needs neither: the live twin already holds bodies, connections and degrees of freedom, and all of them are already ORMatic-mapped.
+    Cross-plan: the self-model and control buckets need their long-term-memory spelling from icra-foundation's `episodes-recorded-through-ormatic` (PR #271), which is where the episode gains a reference to the world it ran in and the motion statechart it ran, and from icra-mechanism's `control-constraints-and-degrees-of-freedom-queried`, which is what gives the constraints and the used degrees of freedom a name and an EQL spelling. The working-memory spelling of the self-model bucket needs neither: the live twin already holds bodies, connections and degrees of freedom, and all of them are already ORMatic-mapped.
 - id: question-set-answered-from-memory
   title: >-
     Every bucket answered through EQL over working memory and over long-term memory, before any baseline exists
