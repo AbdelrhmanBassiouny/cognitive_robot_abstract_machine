@@ -1,7 +1,7 @@
 """
 Validation of causal-query grounding against the CTU Mutagenesis dataset
 (https://relational.fel.cvut.cz/dataset/Mutagenesis), covering plan step 5:
-registering aromatic-bond count as a cause of mutagenicity and comparing naive
+registering branching-atom count as a cause of mutagenicity and comparing naive
 conditioning against backdoor adjustment.
 """
 
@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from experiments.causal_reasoning.mutagenesis.causal_query import (
-    AromaticBondCountCausalQuery,
+    BranchingAtomCountCausalQuery,
 )
 from experiments.causal_reasoning.mutagenesis.dataset import (
     fetch_mutagenesis_molecules,
@@ -34,7 +34,7 @@ requires_mutagenesis_dataset = pytest.mark.skipif(
 def test_synthetic_causal_circuit_is_support_deterministic():
     """
     Regression test, paired with the live-dataset tests below: stratifying the class
-    circuit by aromatic-bond count used to fail support-determinism verification once a
+    circuit by branching-atom count used to fail support-determinism verification once a
     partition was large and varied enough for JointProbabilityTree to split it further
     on other variables, because both grounding and verification computed marginals
     through a path that flattens nested SumUnits and erases which partition a further-
@@ -43,7 +43,7 @@ def test_synthetic_causal_circuit_is_support_deterministic():
     molecules = synthetic_mutagenesis_molecules(
         np.random.default_rng(0), molecule_count=60, atom_count=3, bond_count=4
     )
-    result = AromaticBondCountCausalQuery().run(molecules, atom_count=2, bond_count=1)
+    result = BranchingAtomCountCausalQuery().run(molecules, atom_count=2, bond_count=1)
     assert result.support_determinism_verified
 
 
@@ -57,7 +57,7 @@ def mutagenesis_molecules():
 
 @pytest.fixture(scope="module")
 def causal_query_result(mutagenesis_molecules):
-    return AromaticBondCountCausalQuery().run(mutagenesis_molecules, atom_count=2)
+    return BranchingAtomCountCausalQuery().run(mutagenesis_molecules, atom_count=2)
 
 
 @requires_mutagenesis_dataset
@@ -66,21 +66,21 @@ def test_causal_circuit_is_support_deterministic(causal_query_result):
 
 
 @requires_mutagenesis_dataset
-def test_every_distinct_aromatic_bond_count_is_reported(
+def test_every_distinct_branching_atom_count_is_reported(
     causal_query_result, mutagenesis_molecules
 ):
     """
-    Every distinct aromatic-bond-count value present in the training population must
+    Every distinct branching-atom-count value present in the training population must
     survive grounding and registration, not just the dominant one.
     """
     expected_counts = sorted(
         {
-            MutagenesisMoleculeAggregations(instance=molecule).aromatic_bond_count()
+            MutagenesisMoleculeAggregations(instance=molecule).branching_atom_count()
             for molecule in mutagenesis_molecules
         }
     )
     reported_counts = [
-        effect.aromatic_bond_count for effect in causal_query_result.effects
+        effect.branching_atom_count for effect in causal_query_result.effects
     ]
     assert reported_counts == sorted(reported_counts)
     assert len(reported_counts) == len(set(reported_counts))

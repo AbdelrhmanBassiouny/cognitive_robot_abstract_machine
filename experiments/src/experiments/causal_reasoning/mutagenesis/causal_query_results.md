@@ -1,7 +1,7 @@
 # Mutagenesis Causal Query: Results
 
 This experiment uses a relational causal circuit on the CTU Mutagenesis dataset. We
-take the 188-molecule dataset, register aromatic-bond count as a cause of
+take the 188-molecule dataset, register branching-atom count as a cause of
 mutagenicity on a circuit grounded from it, and ask what backdoor adjustment says
 once we control for the dataset's known `ind1` indicator. It follows on from fitting
 and validating the relational circuit on the full dataset (covered separately), and
@@ -10,61 +10,75 @@ it runs on the whole dataset without subsampling.
 ## What we did
 
 1. Fit a relational circuit on all 188 molecules, with the class circuit stratified by
-   aromatic-bond count so it is support-deterministic over that variable.
-2. Grounded a query for a two-atom molecule with every atom's element left
-   unspecified, so aromatic-bond count stays a variable instead of being integrated
-   out.
-3. Registered aromatic-bond count as the cause, mutagenicity as the effect, and
+   branching-atom count so it is support-deterministic over that variable.
+2. Grounded a query for a two-atom molecule with every atom's element, atom type,
+   charge and bond count left unspecified, so branching-atom count stays a variable
+   instead of being integrated out.
+3. Registered branching-atom count as the cause, mutagenicity as the effect, and
    `ind1` as the adjustment variable, trimmed the circuit to just those three, and
    verified the result is support-deterministic.
 4. Ran backdoor adjustment and compared it against naive conditioning at every
-   aromatic-bond-count value the grounded circuit's support covers.
+   branching-atom-count value the grounded circuit's support covers.
 
-Code: `causal_query.py` (`AromaticBondCountCausalQuery.run`), `dataset.py`.
+Code: `causal_query.py` (`BranchingAtomCountCausalQuery.run`), `dataset.py`,
+`domain.py` (`MutagenesisAtom.bond_count`,
+`MutagenesisMoleculeAggregations.branching_atom_count`).
 Tests: `test/causal_reasoning_test/test_causal_query.py`.
+
+## What a branching atom is
+
+The CTU dataset's `bonds` table records which two atoms each bond connects
+(`atom1_id`, `atom2_id`). Each atom's bond count, the number of bonds it
+participates in, is derived from that table when the molecule is loaded. An atom
+with three or four bonds sits at a ring-fusion or branch point in the molecular
+graph, rather than along a plain chain (one bond) or a simple ring position (two
+bonds). Branching-atom count is the number of such atoms in a molecule, so
+registering it as the cause here uses the dataset's own atom-to-atom connectivity
+directly, not just a per-atom or per-bond tally.
 
 ## The data
 
-Every one of the 188 molecules has at least one aromatic bond, and the count spans a
-wide range:
+Every one of the 188 molecules has at least one branching atom, and the count spans
+a wide range:
 
-| Aromatic bonds | Molecules | Share |
+| Branching atoms | Molecules | Share |
 |---:|---:|---:|
-| 5 | 1 | 0.5% |
-| 6 | 32 | 17.0% |
-| 10 | 11 | 5.9% |
-| 11 | 17 | 9.0% |
-| 12 | 60 | 31.9% |
-| 14 | 3 | 1.6% |
-| 15 | 4 | 2.1% |
-| 16 | 7 | 3.7% |
-| 17 | 16 | 8.5% |
-| 18 | 1 | 0.5% |
-| 19 | 21 | 11.2% |
-| 21 | 1 | 0.5% |
-| 22 | 1 | 0.5% |
-| 24 | 10 | 5.3% |
-| 26 | 2 | 1.1% |
-| 30 | 1 | 0.5% |
+| 7 | 7 | 3.7% |
+| 8 | 12 | 6.4% |
+| 9 | 12 | 6.4% |
+| 10 | 13 | 6.9% |
+| 11 | 7 | 3.7% |
+| 12 | 5 | 2.7% |
+| 13 | 16 | 8.5% |
+| 14 | 21 | 11.2% |
+| 15 | 20 | 10.6% |
+| 16 | 12 | 6.4% |
+| 17 | 19 | 10.1% |
+| 18 | 14 | 7.4% |
+| 19 | 7 | 3.7% |
+| 20 | 1 | 0.5% |
+| 21 | 15 | 8.0% |
+| 22 | 4 | 2.1% |
+| 24 | 2 | 1.1% |
+| 25 | 1 | 0.5% |
 
-## Why aromatic-bond count?
+## Why branching-atom count?
 
-Aromatic-bond count is present in every molecule and ranges from 5 to 30 across the
+Branching-atom count is present in every molecule and ranges from 7 to 25 across the
 dataset, so grounding retains a variable with real spread rather than one that is
-mostly a single dominant value. It also splits cleanly by mutagenicity: molecules
-that go on to test mutagenic average 15.3 aromatic bonds, non-mutagenic ones average
-9.1. Aromatic ring systems, especially fused polycyclic ones, are a textbook
-structural alert for genotoxicity in the mutagenesis QSAR literature, so this is not
-just a number that happens to correlate. The results below back that up: naive
-P(mutagenic) climbs steadily from 0 at the lowest aromatic counts to 1 at the
-highest.
+mostly a single dominant value. It also splits clearly by mutagenicity: molecules
+that go on to test mutagenic average 16.4 branching atoms, non-mutagenic ones
+average 10.6. Ring density and structural complexity, which branching-atom count is
+a direct proxy for, are known correlates of genotoxicity in the mutagenesis QSAR
+literature. The results below back that up: naive P(mutagenic) climbs from 0 at the
+lowest branching-atom counts to 1 at the highest.
 
 ## Why not ground this analytically instead?
 
 `GroundingMode.EXACT` grounds by enumerating the fitted circuit's own exact partition
 over the cause variable instead of Monte Carlo sampling, but only when that partition
 is already disjoint on its own; otherwise it logs a warning and falls back to
-`GroundingMode.SAMPLED`. That precondition does not hold for aromatic-bond count on
+`GroundingMode.SAMPLED`. That precondition does not hold for branching-atom count on
 this dataset: it is not, today, a split the induced tree makes on its own. `EXACT`
 grounding is not reachable yet for this experiment. `SAMPLED` grounding is not a
 fallback chosen over a working alternative; it is the mode that runs to completion
@@ -72,56 +86,59 @@ here.
 
 ## Results
 
-`P(mutagenic = True)` at each aromatic-bond-count value, naive versus
+`P(mutagenic = True)` at each branching-atom-count value, naive versus
 backdoor-adjusted for `ind1`, on the full dataset:
 
-| Aromatic bonds | Region P(aromatic bonds) | Naive P(mutagenic) | Adjusted P(mutagenic) |
+| Branching atoms | Region P(branching atoms) | Naive P(mutagenic) | Adjusted P(mutagenic) |
 |---:|---:|---:|---:|
-| 5 | 0.0053 | 0.0000 | 0.0000 |
-| 6 | 0.1702 | 0.2188 | 0.2188 |
-| 10 | 0.0585 | 0.2727 | 0.2727 |
-| 11 | 0.0904 | 0.3529 | 0.6684 |
-| 12 | 0.3191 | 0.7000 | 0.6921 |
-| 14 | 0.0160 | 1.0000 | 1.0000 |
-| 15 | 0.0213 | 1.0000 | 1.0000 |
-| 16 | 0.0372 | 1.0000 | 1.0000 |
-| 17 | 0.0851 | 1.0000 | 1.0000 |
-| 18 | 0.0053 | 1.0000 | 1.0000 |
-| 19 | 0.1117 | 1.0000 | 1.0000 |
-| 21 | 0.0053 | 1.0000 | 1.0000 |
-| 22 | 0.0053 | 1.0000 | 1.0000 |
-| 24 | 0.0532 | 1.0000 | 1.0000 |
-| 26 | 0.0106 | 1.0000 | 1.0000 |
-| 30 | 0.0053 | 1.0000 | 1.0000 |
+| 7 | 0.0372 | 0.0000 | 0.0000 |
+| 8 | 0.0638 | 0.3333 | 0.3333 |
+| 9 | 0.0638 | 0.1667 | 0.1667 |
+| 10 | 0.0691 | 0.1538 | 0.1538 |
+| 11 | 0.0372 | 0.1429 | 0.1429 |
+| 12 | 0.0266 | 0.4000 | 0.4000 |
+| 13 | 0.0851 | 0.6875 | 0.6370 |
+| 14 | 0.1117 | 0.6190 | 0.6575 |
+| 15 | 0.1064 | 0.8500 | 0.8305 |
+| 16 | 0.0638 | 0.8333 | 0.8493 |
+| 17 | 0.1011 | 1.0000 | 1.0000 |
+| 18 | 0.0745 | 1.0000 | 1.0000 |
+| 19 | 0.0372 | 1.0000 | 1.0000 |
+| 20 | 0.0053 | 1.0000 | 1.0000 |
+| 21 | 0.0798 | 1.0000 | 1.0000 |
+| 22 | 0.0213 | 1.0000 | 1.0000 |
+| 24 | 0.0106 | 1.0000 | 1.0000 |
+| 25 | 0.0053 | 1.0000 | 1.0000 |
 
-The region probabilities match the dataset's own aromatic-bond-count distribution
+The region probabilities match the dataset's own branching-atom-count distribution
 exactly, so grounding is retaining the real population, not something a Monte Carlo
 artifact would produce. The circuit passes support-determinism verification, and the
 whole thing runs end to end in well under a minute.
 
 ## Inference
 
-* **Naive P(mutagenic) rises steadily with aromatic-bond count, and it is not a small
-  effect.** It starts at 0 for the one molecule with just 5 aromatic bonds, sits
-  around 0.22 to 0.35 through the low-to-middle range, crosses 0.5 at 12 bonds, and
-  reaches a flat 1.0 for every value of 14 or above. This tracks real chemistry: more
-  aromatic ring structure is a known driver of mutagenic activity in this dataset's
-  literature, and the circuit picked that signal up directly from the data.
-* **Adjusting for `ind1` barely moves most values, but it matters where it does.** At
-  6, 10, 14 and up, naive and adjusted probabilities agree almost exactly, meaning
-  `ind1` is not doing much confounding work there. At 11 aromatic bonds the picture
-  changes: naive says 0.35 but adjusted says 0.67, because the low-`ind1` molecules at
-  that count are pulling the naive number down, and adjustment corrects for that.
-* **The values at 14 and above are a flat wall of 1.0, and that deserves a caution,
-  not a headline.** Several of those aromatic-bond-count values are supported by only
-  one or two molecules in this dataset (18, 21, 22 and 30 all have exactly one), so a
-  flat 1.0 there is a small sample reporting itself accurately, not a discovered law.
-  The steady climb from 5 through 12, backed by much larger groups (32, 60, 21
-  molecules respectively), is the part of this result worth trusting.
-* **This does not prove aromatic-bond count causes mutagenicity.** The backdoor
+* **Naive P(mutagenic) rises with branching-atom count, close to monotonically.** It
+  starts at 0 for molecules with just 7 branching atoms, moves through the 0.14 to
+  0.4 range up to 11 to 12 atoms, crosses 0.5 at 13, keeps climbing through 0.62 to
+  0.85 up to 16, and reaches a flat 1.0 for every value of 17 or above. Molecules with
+  more ring-fusion and branch points, structurally more complex and often more
+  aromatic-ring-dense, are markedly more likely to be mutagenic in this dataset.
+* **Adjusting for `ind1` barely moves most values, but it matters in the middle of
+  the range.** At 7 to 12 and at 17 and up, naive and adjusted probabilities agree
+  almost exactly, meaning `ind1` is not doing much confounding work there. Between 13
+  and 16, naive and adjusted move in opposite directions relative to each other by a
+  few points each time, for example 0.85 naive versus 0.83 adjusted at 15, showing
+  `ind1` genuinely redistributing some of the naive signal in that range.
+* **The values at 17 and above are a flat wall of 1.0, and some of them rest on very
+  few molecules.** 20, 22, 24 and 25 branching atoms are each backed by only one to
+  four molecules, so a flat 1.0 there is a small sample reporting itself accurately,
+  not a discovered law. The climb from 7 through 16, backed by much larger groups (12
+  to 21 molecules at most of those values), is the part of this result worth
+  trusting.
+* **This does not prove branching-atom count causes mutagenicity.** The backdoor
   criterion only tells you the adjustment is arithmetically sound given `ind1` as the
   full confounder set; it cannot tell you whether `ind1` actually is the full
-  confounder set for aromatic-bond count in this domain, because nothing here
+  confounder set for branching-atom count in this domain, because nothing here
   constructs or checks the underlying causal graph, and that is an assumption we are
   bringing in, not one the circuit verifies. Read this as the causal-circuit machinery
   running correctly on real, structured relational data and turning up a real,

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from typing_extensions import List
 
-from krrood.entity_query_language.factories import entity, count_range, variable
+from krrood.entity_query_language.factories import entity, count_range, or_, variable
 from krrood.parametrization.feature_extraction.aggregations import (
     AggregationStatistic,
     aggregation_statistic,
@@ -74,6 +74,15 @@ class MutagenesisAtom:
     The atom's partial charge.
     """
 
+    bond_count: int
+    """
+    Number of bonds this atom participates in.
+
+    A bond connects exactly two atoms, so this is read off the CTU dataset's ``bonds``
+    table (``atom1_id``, ``atom2_id``) when the molecule is loaded; an atom with three
+    or more bonds sits at a ring fusion or branch point in the molecular graph.
+    """
+
 
 @dataclass
 class MutagenesisBond:
@@ -82,13 +91,14 @@ class MutagenesisBond:
     own rather than an edge between two :class:`MutagenesisAtom` entries.
 
     A real bond connects exactly two atoms, and the CTU dataset's own ``bonds`` table
-    records which ones (``atom1_id``, ``atom2_id``). This class deliberately does not
-    carry that connectivity: the RSPN grounding this domain feeds fits and grounds
+    records which ones (``atom1_id``, ``atom2_id``). This class itself does not carry
+    that connectivity, since the RSPN grounding this domain feeds fits and grounds
     ``atoms`` and ``bonds`` as two independent exchangeable parts of the parent
-    molecule, so a bond referencing specific atom objects would cross that
-    independence boundary rather than just adding a field. Representing the molecule
-    as an actual atom-bond graph is a bigger, separate piece of work than this
-    experiment's grounding-a-class-level-aggregate demonstration needs.
+    molecule, and a bond referencing specific atom objects would cross that independence
+    boundary. The connectivity is not discarded, though:
+    :attr:`MutagenesisAtom.bond_count` is derived from this same ``atom1_id`` /
+    ``atom2_id`` data at load time, so each atom still carries how many bonds it
+    participates in, without either class needing to reference the other.
     """
 
     bond_type: MutagenesisBondType
@@ -152,6 +162,20 @@ class MutagenesisMoleculeAggregations(AggregationStatistic[MutagenesisMolecule])
         [result] = (
             entity(count_range(element_variable))
             .where(element_variable == MutagenesisElement.CHLORINE)
+            .tolist()
+        )
+        return result
+
+    @aggregation_statistic("atoms")
+    def branching_atom_count(self) -> int:
+        """
+        Count of atoms with three or four bonds: ring-fusion and branch points in the
+        molecular graph.
+        """
+        bond_count_variable = variable(MutagenesisAtom, self.instance.atoms).bond_count
+        [result] = (
+            entity(count_range(bond_count_variable))
+            .where(or_(bond_count_variable == 3, bond_count_variable == 4))
             .tolist()
         )
         return result

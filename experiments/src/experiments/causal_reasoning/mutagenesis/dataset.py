@@ -95,8 +95,10 @@ def fetch_mutagenesis_molecules(
     """
     Download the Mutagenesis dataset and convert it into domain objects.
 
-    Pulls the ``drugs``, ``atoms`` and ``bonds`` tables, and groups atoms and bonds by
-    their owning molecule.
+    Pulls the ``drugs``, ``atoms`` and ``bonds`` tables, groups atoms and bonds by
+    their owning molecule, and derives each atom's
+    :attr:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisAtom.bond_count`
+    from the bond table's ``atom1_id`` / ``atom2_id`` columns.
 
     :param connection: Connection details for the database.
     :return: One :class:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisMolecule`
@@ -113,12 +115,16 @@ def fetch_mutagenesis_molecules(
     finally:
         engine.dispose()
 
+    bond_count_by_atom = (
+        pd.concat([bonds["atom1_id"], bonds["atom2_id"]]).value_counts().to_dict()
+    )
     atoms_by_drug = {
         drug_id: [
             MutagenesisAtom(
                 element=MutagenesisElement(row.element),
                 atom_type=int(row.atom_type),
                 charge=float(row.charge),
+                bond_count=bond_count_by_atom.get(row.id, 0),
             )
             for row in group.itertuples()
         ]
@@ -179,6 +185,7 @@ def synthetic_mutagenesis_molecules(
                 element=element,
                 atom_type=int(random_state.integers(1, 10)),
                 charge=float(random_state.uniform(-0.5, 0.5)),
+                bond_count=int(random_state.integers(1, 5)),
             )
             for _ in range(atom_count)
         ]
