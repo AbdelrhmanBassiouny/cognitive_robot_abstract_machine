@@ -686,3 +686,99 @@ invalid YAML. Every item in this plan has such a title, so both operations fail
 for all of them. This item's manifest entry and this roadmap section were
 written by hand instead. Reported to the developer; not fixed here, since it is
 tooling on `main` and unrelated to this branch.
+
+### `question-set-and-ground-truth` (#295), reviewed 2026-09-08
+
+Eight review threads, and the substance of them was one objection: the questions
+were handed what they should have asked for. What came back from acting on it,
+and the two defects the round measured.
+
+#### Nothing is handed to a question
+
+`WorkingMemory` held the world, the robot's links, the point of view and the
+event log, and every query took a domain computed from one of them. All of it
+was unnecessary, and the reviewer named the reason: the symbol graph already
+tracks it. Measured before changing anything --
+
+```
+Body is Symbol            : True
+DegreeOfFreedom is Symbol : True
+DetectionEvent is Symbol  : False     <- the one thing missing
+variable(Body) no domain  : ['cube', 'ball']    <- resolves from the graph
+```
+
+-- so `DetectionEvent` now inherits `Symbol` and an event joins working memory
+by being made. Every variable is domainless and what a question is about is a
+condition on it. What is left of the source is the robot, which is whose memory
+it is and where its own links and its hand are read from, so
+`WorkingMemoryQuestion` is `Question[AbstractRobot, AnswerType]`.
+
+The graph holds instances **weakly**: it tracks what is alive rather than
+keeping it alive, so an event nothing holds is one the robot no longer
+remembers. Defensible as a definition of working memory, and worth knowing
+before anyone relies on it -- a test has to hold its own events.
+
+`QuestionSet` is now read off the question subclasses rather than from a list,
+with each question carrying an `asked_of(things)` classmethod saying how a scene
+fills it in. Order is written order, which is bucket order because each module
+is laid out bucket by bucket.
+
+#### `exists` is wrong here, and worse than the plan predicted
+
+`eql-existential-semantics` records that `exists` drops matching rows. Over the
+agency question's shape it does something else: three objects, the robot picked
+up and moved two, the third only moved --
+
+```
+exists-based answer : ['cube', 'ball', 'untouched']
+join-based answer   : ['cube', 'ball']
+```
+
+It returns *every* object that moved. The original test passed only because its
+scene had exactly one motion event, which is the same accident that roadmap says
+every existing `exists` test in the repository relies on. Nothing in that plan is
+implemented, so there was no fix to merge; both spellings use the plain join and
+`exists` is gone from this branch.
+
+#### The association-table hazard, answered in two halves
+
+`icra-foundation`'s note on #278 -- that nothing proves the query language
+translates a join across the association table a to-many collection is reached
+through, and that finding out belongs to whoever needs it first -- is answered,
+and the answer is in two halves. Both were reproduced in krrood's own test
+dataset, so the finding is recorded where the defect is rather than where it was
+noticed.
+
+- **Selecting a collection returned the association rows, not the members.**
+  Fixed: `_apply_relationship_join` now follows an association object through to
+  its target. `test_selecting_a_collection_yields_its_members` covers it.
+- **Membership as a condition still does not join.** Each variable translates to
+  its unaliased data access object, so an owner and a member whose classes share
+  a mapped base cannot be told apart in the ON clause. Left as a strict xfail,
+  `test_membership_in_a_collection_joins_the_members`. The fix is per-variable
+  aliasing in the translator, which is EQL work rather than this item's, and it
+  is what the long-term half now waits on.
+
+So the long-term spellings are frozen in the shape they will be asked in, with
+their answering tests expected to fail. **This item's long-term half produces no
+accuracy table until that lands**, which is a harder statement than the previous
+"thinner than the working-memory one" and is now recorded on
+`question-set-answered-from-memory` too.
+
+#### Left to the developer
+
+- **Does a body in the gripper count as an object the robot sees, or as part of
+  the robot?** `AbstractRobot.bodies` includes what the robot is holding -- 10
+  against the 9 in `MinimalRobot.bodies_of_branch` -- so `ObjectsSeen` no longer
+  lists the held cube. The test asserts that consequence rather than hiding it.
+  If it should be listed, `AbstractRobot` wants an accessor for its own links
+  that a grasp cannot widen. Raised on the review thread and left open.
+- **Should an episode record which links were the robot's?** Both the embodiment
+  bucket's long-term spelling and the robot's own degree-of-freedom count need
+  it, and recording the world does not answer it. The long-term count is
+  therefore named for what it counts -- `NumberOfDegreesOfFreedomInTheRecordedWorld` --
+  rather than claiming to be the robot's. Also raised on a thread and left open.
+- **Should `Shape` be a symbol?** `ObjectColours` selects the shapes and reads
+  the colour off them, because a variable cannot range over a shape. The fix is
+  the same one `DetectionEvent` got, but shapes are per-body geometry and it is
+  a heavier change than this item needs.
