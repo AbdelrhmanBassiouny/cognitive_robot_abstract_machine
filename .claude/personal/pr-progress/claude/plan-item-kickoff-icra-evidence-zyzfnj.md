@@ -25,9 +25,16 @@ Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278
   FROM element it ranges over: the owner gets an alias of its own so it is told
   apart from members sharing its mapped base, joining a relationship is separate
   from caching a path so two variables over one collection reach two members, and
-  a member of one collection can own the next. **krrood's ORM suite: 138 passed,
-  from 135 passed + 1 xfailed.** The seven `NEEDS_A_COLLECTION_JOIN` xfails are
-  gone.
+  a member of one collection can own the next. The seven `NEEDS_A_COLLECTION_JOIN`
+  xfails are gone.
+- **The half of that fix CI found missing** (`63b1a99e8`, third round). CI is where
+  the long-term questions actually run, and it failed three of them: the join
+  translated but the rows came back multiplied. Selecting an attribute reached
+  through a collection -- `entity(event.tracked_object)`, the shape of most
+  long-term questions -- left the table it selects from with nothing joining it, and
+  a condition relating two members was dropped as a table-level join between two
+  aliases of one class. **krrood's ORM suite: 140 passed, from 135 passed + 1
+  xfailed.**
 - **`AgentInteractionEvent` replaces the `ManipulatesBodies` mixin** in segmind
   (second round, review thread). Every implementation returned
   `[self.tracked_object]`, so the mixin restated `EventWithTrackedObjects`. It also
@@ -38,10 +45,10 @@ Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278
 
 ## Outstanding
 
-1. **CI has not run on this round.** All four checks were still `queued` at the
-   time of the push. `test_long_term_questions.py` is now expected to *pass* rather
-   than xfail, and it cannot be run in a session container, so CI is what confirms
-   the long-term questions answer end to end.
+1. **CI has not run on the third round.** It ran on the second and failed three
+   long-term question tests, which is what the third round fixes; every other job
+   passed, krrood's and segmind's included. `test_long_term_questions.py` cannot be
+   run in a session container, so CI is again what confirms it.
 2. **Three threads deliberately left open**, each needing the developer:
    - whether a body in the gripper counts as an object the robot sees (it does not
      any more, because `AbstractRobot.bodies` includes it);
@@ -57,6 +64,10 @@ Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278
    is reasonable if the developer prefers.
 
 ## Notes for whoever picks this up
+- **Assert the rows a query returns, not the set of them.** Every membership test
+  the second round added sorted distinct names, so the duplicated rows CI caught
+  could not fail any of them -- and none selected an attribute *off* a member.
+
 
 - A clean venv on **Python 3.12** (not 3.11 — `make_dataclass(module=...)` needs
   3.12) with `pip install -e ./krrood pytest objgraph` runs krrood's ORM suite:
