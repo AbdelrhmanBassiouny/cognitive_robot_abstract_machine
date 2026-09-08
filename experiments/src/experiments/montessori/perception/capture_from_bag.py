@@ -53,17 +53,17 @@ def write_capture(
     camera = RecordedCamera(
         bag=bag, reference_frame=reference_frame, camera_bag=camera_bag
     )
-    look = camera.look_at(at_fraction)
+    images = camera.image_at(at_fraction)
     capture = SceneCapture(
         name=name,
         recorded_from=bag.name,
-        color_format=look.color_format,
+        color_format=images.color_format,
         intrinsics=camera.intrinsics,
         reference_frame=reference_frame,
         reference_frame_T_camera=camera.reference_frame_T_camera,
         directory=directory,
     )
-    capture.save(look.color_payload, look.depth)
+    capture.save(images.color_payload, images.depth)
     return capture
 
 

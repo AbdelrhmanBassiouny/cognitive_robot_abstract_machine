@@ -17,7 +17,7 @@ from krrood.entity_query_language.operators.aggregators import Aggregator, Extre
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.query.query import Entity
 from krrood.entity_query_language.core.expression_structure import (
-    chain_ends_in_boolean_attribute,
+    chain_ends_in_boolean_terminal,
     chain_root,
     walk_chain,
 )
@@ -175,8 +175,8 @@ def references(expression: SymbolicExpression, subject_variable: Variable) -> bo
 def is_boolean_attribute_chain(expression: SymbolicExpression) -> bool:
     """
     :param expression: Candidate expression.
-    :return: ``True`` when *expression* is a ``MappedVariable`` chain ending in a ``bool``-typed
-        attribute.
+    :return: ``True`` when *expression* is a ``MappedVariable`` chain reaching a ``bool``,
+        through either a ``bool``-typed attribute or a ``bool``-returning method.
 
     >>> is_boolean_attribute_chain(variable(Task, []).completed)
     True
@@ -186,7 +186,7 @@ def is_boolean_attribute_chain(expression: SymbolicExpression) -> bool:
     if not isinstance(expression, MappedVariable):
         return False
     chain, _ = walk_chain(expression)
-    return chain_ends_in_boolean_attribute(chain)
+    return chain_ends_in_boolean_terminal(chain)
 
 
 def fold_shared_subject_comparisons(

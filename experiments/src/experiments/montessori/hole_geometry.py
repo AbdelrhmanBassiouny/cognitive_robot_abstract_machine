@@ -240,20 +240,20 @@ occurs twice and is numbered instead (``circular_hole_1``, ``circular_hole_2``).
 """
 
 
-def hole_names(footprints: List[HoleFootprint]) -> List[str]:
+def hole_names(categories: List[MontessoriShapeCategory]) -> List[str]:
     """
     What each of the board's holes is called, in the order they were detected.
 
-    :param footprints: The board's holes, as cut into its mesh.
+    :param categories: The shape of each hole, in that order.
     """
     circular_hole_count = 0
     names = []
-    for footprint in footprints:
-        if footprint.category is MontessoriShapeCategory.CYLINDER:
+    for category in categories:
+        if category is MontessoriShapeCategory.CYLINDER:
             circular_hole_count += 1
             names.append(f"circular_hole_{circular_hole_count}")
         else:
-            names.append(HOLE_NAME_BY_CATEGORY[footprint.category])
+            names.append(HOLE_NAME_BY_CATEGORY[category])
     return names
 
 
