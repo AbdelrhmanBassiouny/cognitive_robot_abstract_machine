@@ -2,60 +2,69 @@
 
 This session opened no pull request of its own. It brought every open
 `.claude/`-side tooling branch across #185's package move so an integration
-build can carry both sides, rebuilt, then unified the duplicate dependency
-declaration the crossing had left behind.
-
-### Plan (chosen: rebase, per your preference)
-
-Merge `claude/plan-item-kickoff-workflow-cuare2` (#185) into each open
-`.claude/`-side tooling branch, re-apply its delta inside `bastler/`, run
-`test/bastler_test`, push, and retarget the pull request's base to the move.
+build can carry both sides, rebuilt, unified the duplicate dependency
+declaration, and then finished the four items left outstanding.
 
 ### Done
 
-Crossed and pushed, each with the bastler suite green:
+Crossed and pushed, each with the bastler suite green, all bases retargeted to
+#185's branch or to their crossed parent:
 
-| pull request | tests | base |
-|---|---|---|
-| #156, #157, #184, #188, #194, #198, #199, #253, #279 | 666-712 | retargeted to #185 |
-| #207 -> #273, #277 | 703, 716, 710 | all three correct |
-| #154 -> #211 -> #260 | 909, 1157, 1175 | all three correct |
-
-Rebuild carries 6 tips of 13 (7 pull requests), from 2 of 16 (3) before.
-No skip is attributed to the move any more.
-
-**#207 and #154 are unstacked and retargeted.** You unstacked them, the base
-change then went through, and bringing each current on the moved base cut
-their diffs from 145 files to 9 and from 187 to 71 - the move no longer shows
-in either. GitHub reported both `dirty` in between; that was them sitting
-three commits behind the new base, not a real conflict.
+| pull request | tests |
+|---|---|
+| #156, #157, #184, #188, #194, #198, #199, #253, #279 | 666-712 |
+| #207 -> #273, #277 | 703, 716, 710 |
+| #154 -> #211 -> #260 | 910, 1158, 1176 |
+| #281 -> #284 -> #293 | 918, 936, 945 |
+| #282, #285, #291 (on #211) | 1184, 1160, 1161 |
 
 **The unification is done, on #207.** `.claude/hooks/requirements.txt` and
 `bastler/missing_requirements.py` are gone; `plan-size-report.sh` asks the
 `missing_dependencies` helper that `check-setup.sh` and `session-start.sh`
-already share, so `bastler/pyproject.toml` is the one declaration. 703 tests,
-mutation-checked; the removed module's coverage is already in
-`test_dependencies.py` bar one case, which was added there. #273 and #277
-restacked onto it.
+already share, so `bastler/pyproject.toml` is the one declaration.
+
+**`integration_test_command` is fixed, on #154 rather than #185.** #185's
+`bastler/stack.toml` never had the key - #154 introduces it. It names
+`test/bastler_test` with the `--confcutdir` CI's `test_bastler` job passes, and
+a contract test in `test_package_contract.py` holds the shipped command to
+naming paths this repository has, so the next relocation fails the suite rather
+than a build. 910 tests.
+
+**Every description is current.** #154's stale "the base stays `main` until
+#151 catches up" bullet is replaced by the fact: both sit on #185's move as
+siblings, and #151's head is no longer an ancestor of #154 (sixteen commits,
+four of them base merges, are outside it). The nine crossed descriptions name
+post-move paths, carry a crossing section, and state the suite count measured
+on their own head.
+
+**The whole cascade is restacked**, each branch containing its parent's head
+and no `.claude/**/*.py` left on any tip.
+
+### Worth knowing for next time
+
+- A concurrent agent crossed #284 and #291 while this session was doing the
+  same. Its #284 was better - it updated `tooling_paths` in `stack.toml`, which
+  this session's had not - so its version was taken and #293 rebuilt on it.
+  Check the remote head before pushing a crossing.
+- #293's crossing left two things git could not carry: `integration_fixtures.py`
+  importing `integration_tooling` by bare name, and `test_tooling_label.py`
+  computing `REPOSITORY_ROOT` as `parents[3]`, right at `.claude/stack/tests/`
+  and one level too high at `test/bastler_test/`. Both fixed.
+- A `git merge --no-commit` whose commit comes many steps later can lose
+  MERGE_HEAD: #293's first crossing commit carried the merged tree with one
+  parent. Re-merged with the same tree and both parents.
 
 ### Next / outstanding
 
-- #154's description still says "the base stays `main` until #151 catches
-  up" - stale since the retarget. Wants a hand edit or a full retype.
-- #156, #157, #273 are held out of the build by flaky robotics-matrix jobs;
-  `test_bastler` is green on all three.
-- Nine crossed descriptions still name pre-move paths: #156, #157, #184,
-  #188, #194, #198, #199, #253, #279. #211 and #260 got nothing either.
-- #281, #282, #285, #291 sit on #154/#211 at their pre-crossing heads and
-  need restacking.
-- `integration_test_command` in `bastler/stack.toml` still names the three
-  pre-move test directories, so every build this session ran used
-  `--no-test`. It wants the bastler suite.
-- `.gitignore` still excepts `.claude/hooks/tests/fixtures/set-up-clone/**/*.txt`,
-  a path the move deleted and no fixture needs. Left for #185, not #207.
+- #211 and #260 still have no crossing note in their descriptions. #211's is
+  ~40 KB of round-by-round history, all of it pre-move; a full retype is the
+  only way to edit it and was not worth the risk without your say-so.
 - #162 vs #151, #206/#218/#253 vs #184, #260 vs #198, #277 vs #151: the
-  remaining build skips, all ordinary pairwise collisions for
+  remaining build skips, ordinary pairwise collisions for
   `/integration-conflict-triage`.
-- #207 and #154 are out of draft. Neither was re-drafted after these pushes,
-  because a draft is excluded from every integration build - which is the
-  process this whole session was fixing. Say the word and I will draft them.
+- `.gitignore` still excepts `.claude/hooks/tests/fixtures/set-up-clone/**/*.txt`,
+  a path the move deleted and no fixture needs. Belongs to #185.
+- #207, #154, #281, #282, #284, #285, #293 are out of draft. None was
+  re-drafted after these pushes, because a draft is excluded from every
+  integration build - the process this work exists to serve. Say the word and
+  I will draft them.
