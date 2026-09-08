@@ -418,13 +418,15 @@ def test_a_region_asked_for_is_drawn_see_through(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="The pieces the twin builds are smaller than the ones perception measured "
-    "off the real board -- the cube is 22.4 mm across where KnownPiece states 30, the "
-    "cylinder 22.4 mm across against 28, the triangular prism 25.2 by 29.4 against 37 "
-    "by 32, and the rectangular prism 15.4 by 29.4 against 20 by 40 -- so at the cube's "
-    "place the cylinder's outline wins the fit and the cube is dropped. Which of the "
-    "two sizes is the real piece is the developer's call; see icra-foundation's "
-    "roadmap.md.",
+    reason="Every piece is found and then thrown away. Both detectors read all four "
+    "within a millimetre of where the twin put them, and Occupancy drops a place two "
+    "readings claim unless one leads the other by CompetingExplanations.required_lead: "
+    "the holder goes as well as the claimant. On a rendering the two agree exactly -- "
+    "cube 0.7121 against 0.7121, rectangular prism 0.6596 against 0.6596, triangular "
+    "prism 0.7480 against 0.7433 -- so only the cylinder survives. On the shipped "
+    "captures they disagree by enough for one to lead, which is why a noiseless picture "
+    "is what shows this; it is a defect of the arbitration rather than of the frame and "
+    "wants its own fix. See icra-foundation's roadmap.md.",
 )
 def test_every_piece_the_world_places_on_the_table_is_found(
     montessori_world: MontessoriWorld, simulated_frame: RgbdFrame
@@ -447,12 +449,11 @@ def test_every_piece_the_world_places_on_the_table_is_found(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Two things the twin states, neither of them the frame: the pieces it "
-    "builds are smaller than the ones perception measured off the real board, so the "
-    "cube's place is won by the cylinder's outline and the cylinder's own place is "
-    "reported twice; and the board's holes are cut through an 80 mm blank whose walls "
-    "render in the board's own colour, so a look shows no opening for the board to be "
-    "found by. See icra-foundation's roadmap.md.",
+    reason="Two things, neither of them the frame. Occupancy drops both readings of "
+    "every place the two detectors agree on too closely, which on a rendering is three "
+    "of the four pieces (see the test above); and the board's holes are cut through an "
+    "80 mm blank whose walls render in the board's own colour, so a look shows no "
+    "opening for the board to be found by. See icra-foundation's roadmap.md.",
 )
 def test_every_piece_on_the_table_is_reported_once_with_its_own_category(
     montessori_world: MontessoriWorld, simulated_frame: RgbdFrame
