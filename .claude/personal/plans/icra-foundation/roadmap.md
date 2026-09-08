@@ -1227,3 +1227,80 @@ Two things the twin would have to say for either to pass, neither of them the fr
 **Verified** in the session container, on the rebased branch: `test_montessori_simulated_camera.py`
 12 passed and 2 xfailed, `test_region_appearance.py` 4 passed, `test_mujoco_video_recording.py`
 16 passed with `CI=true`, `test_mujoco_rendering_backend.py` 4 passed, `test_mjcf.py` 10 passed.
+
+### `montessori-scenarios` (#296): the second review round, 2026-09-08
+
+Two threads on `experiments/montessori/scenarios.py`, taken in `66eefdbb9`. Both are
+about the same thing from two sides: *what a run does to its scene* and *what a goal
+reads off it* were both being written by hand instead of being asked of the twin.
+
+**The goals now ask the twin's predicates.** `ThePieceIsInItsHole` measured a distance
+and a height; it now reads `InsideOf(piece, landing_region_for(piece)) >= 0.9`. That is
+not a choice of ours twice over: `MontessoriWorld` already builds a landing region per
+hole, documented as "the `Region` a shape is checked for containment against once it has
+fallen through the hole" and sized so a shape resting on the board never registers; and
+segmind's `BaseContainmentDetector` already reads a containment as
+`InsideOf(obj, body).compute_containment_ratio() > 0.9`, with #265's `event_monitoring.py`
+registering exactly those regions as its extra candidates. Measured on a cube dropped over
+the square hole: `0.0` on the table, `0.0` while carried above the hole, `1.0` once
+through. Against the board's own body the same run reads `0.5`, which is why the region
+rather than the board is the container, and a test pins that choice.
+`ThePieceIsHeld` now asks `robot_holds_body`, so the fingers have to be around the piece.
+
+**A run is carried in MuJoCo, and `hang` is gone.** A scenario builds its world and hands
+it to a `SimulatedScene`, which mirrors it into MuJoCo and advances it by a stated stretch
+of simulated time — stepped from the scenario, not from a thread of the simulator's own,
+so a run is reproducible. Three of the four actions are now the physics doing it: settling
+is gravity (a piece stood 100 mm up returns to exactly its resting height), the push is an
+actual pusher on a rail sliding into the piece (the prism travels from `y = −0.328` to
+`y = −0.293` and ends against the pusher), and the insertion is the fall. Picking up takes
+the robot to the piece: the gripper is aimed by the midpoint of its finger tips, opened,
+driven there by `compute_inverse_kinematics`, and closed, and the piece has not moved when
+it is held.
+
+**Where the physics stops, and why it is a call rather than an omission.** Carrying a held
+piece is still scripted. Two measurements say why, and they belong to whoever picks the
+question up: a grasp held by *position-driven* fingers does not survive being simulated —
+MuJoCo resolves the penetration by ejecting the piece, and in a bare two-finger rig a cube
+at `z = 0.015` is squeezed to `0.031` and left behind on the lift; with *position
+actuators* on the same rig (`kp = 10000`, ±100 N) the same grasp rides from `0.015` to
+`0.183`. So a friction grasp needs the robot's joints actuated in the twin. The pieces for
+that exist — `Actuator` plus `MujocoActuator` express a MuJoCo position servo — but nothing
+in the workspace actuates the Montessori robot, and `MujocoSimulator` has no
+`set_actuator_value` to command one with; it has getters only. That reads like the
+robot/world setup's job or the demo's rather than a scenario module's, and the thread is
+left open asking the developer where it should live.
+
+**Two findings for whoever builds it.** Re-parenting a body while the simulation runs does
+not reach MuJoCo at all — the model was compiled with the piece on a free joint, so the
+twin says the piece hangs from the gripper while the simulation still has it on the table.
+(Coraplex's own `PickUpAction` re-attaches *after* physically closing the gripper, with
+`ReAttachNode`; that is fine as bookkeeping and cannot be the grasp.) And without actuators
+the arm sags under gravity in simulation.
+
+**The #265 question, answered the same way as the base-branch one.** The thread asked
+whether #265 was needed for any of this. Measured:
+`git grep -l 'MujocoSim\|start_simulation' origin/claude/icra-experiments-simulation-pipeline-w4ep7n -- experiments/`
+returns nothing, so #265 drives no simulation either; everything the physics needs is on
+`main`. What #265 carries that is relevant is only the landing regions' wiring into
+segmind's detector, which a goal asking `InsideOf` directly does not need.
+
+**The test dataset gains a two-fingered robot.** `SyntheticFixedArmRobot` has one revolute
+joint and no geometry, so it can neither reach the table nor give a ray-casting predicate
+finger tips to cast between. `SyntheticGraspingRobot` is a gantry arm with a pincer, from a
+URDF in the repository; the Montessori scenario tests bind it instead.
+
+**Standing hazard corrected, and this time for the whole suite.** "Nothing on these
+branches runs in a session container" is now wrong even for `pytest`. A Python 3.12 virtual
+environment with `mujoco`, `casadi~=3.7.0`, opencv, `scikit-image`, `piqp`, `transforms3d`,
+`trimesh`, `rustworkx` and the `random_events`/`probabilistic_model` wheels, plus stubs for
+`xacro` and the compiled `giskardpy_bullet_bindings` and `libegl-mesa0` for offscreen
+rendering, generates all five ORM interfaces and runs `test/experiments_test` — 380 passed,
+MuJoCo simulation included. The two failures left are ones `main` fails there too (a
+missing `vhacdx`, and a robot-spawn test). The compiled Bullet bindings remain the one
+thing that will not build. Note the interpreter: coraplex uses `type X[T] = ...`, so 3.12
+is required to import it at all.
+
+**Left open.** The `Goal`-as-`Predicate` thread from the first round is still open, waiting
+on whether that change should have landed on #261 instead; the physics thread above is open
+on the actuation question.
