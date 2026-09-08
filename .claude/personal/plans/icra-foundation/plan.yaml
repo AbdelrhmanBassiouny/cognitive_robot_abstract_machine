@@ -164,6 +164,17 @@ items:
     fix; in a container krrood runs 3014 passed with 2 graphviz failures, sdt the same 45 failures
     as before the merge with its 45 added errors also present on plain main, and experiments 684
     passed with the same 18 environment failures.
+    CI green apart from one field, 2026-09-08 (last): the main merge carried a second silent
+    rename beside query.variable, and only a full CI run could show it. main's 2664659b4 renamed
+    MotionDidNotFinish.failed_motions to unfinished_motions and followed both readers it could
+    see, each of which passes the field positionally; the reader it could not see is this branch's
+    own test_montessori_insertion_diagnosis.py, which names it by keyword and exists on no
+    ancestor of that commit, so git reported no conflict. Migrated in 06e7af3eb with the assertion
+    untouched, which is what AGENTS.md means by a rename being finished when every reader reads
+    the new name. On 0e0bacfad twenty-two of the twenty-three checks passed and this was the only
+    failure; CI on 06e7af3eb had not reported when this was written, and no check of it was armed.
+    The hazard is now three instances old and is recorded in roadmap.md as standing: every merge of main into this branch can carry a rename whose only stale reader
+    sits in a file main never touched, and none of them fails where it is written.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback

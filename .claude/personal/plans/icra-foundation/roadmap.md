@@ -1356,3 +1356,47 @@ installed beside the workspace the whole of `test/krrood_test`,
 `test/semantic_digital_twin_test` and `test/experiments_test` run. What still needs CI is
 the ORM generation itself and anything importing ROS - `test/coraplex_test`,
 `test/giskardpy_test` and `test/segmind_test` among them.
+## 2026-09-08 (last): the merge's second silent rename, and the hazard restated
+
+The main merge left `krrood` green but `experiments` red on one test, and the cause is
+the same shape as `query.variable` rather than anything the four resolved files carried.
+main's `2664659b4` renamed `MotionDidNotFinish.failed_motions` to `unfinished_motions`
+and followed both readers it could see -- `executables.py` and `test_exceptions.py`,
+each of which passes the field *positionally*, so neither line had to change. The reader
+it could not see is this branch's own `test_montessori_insertion_diagnosis.py`, which
+names the field by keyword and exists on no ancestor of that commit. Two sides, two
+different files, no conflict, and a `TypeError` eight minutes into a CI job.
+
+Migrated in `06e7af3eb`. What the test asserts -- that a motion failure is an
+informative plan failure, so the diagnosis reads `PLAN_FAILED` -- is untouched; only the
+field follows the rename, which is what AGENTS.md means by a rename being finished when
+every reader reads the new name, and is the same justification `7a6f8f7a9` was taken
+under.
+
+**So the standing hazard is restated, and it is now wider than #192.** It was recorded
+as "every branch main merges into this one from here on can carry a new reader of a name
+#192 retired". That is a special case. The general form: **every merge of main can carry
+a rename whose only stale reader sits in a file main never touched, so git reports no
+conflict and the failure surfaces nowhere near where it is written** -- for #192 in
+another package entirely, here eight minutes into a job. Three instances now: #159's
+readers at the convergence, `query.variable` at the main merge, `failed_motions` here.
+
+The cheap sweep to repeat on each merge of main, which found no fourth instance this
+time: diff the fields main removed and did not re-add over the merge base
+(`git diff $(git merge-base <merge>^1 <merge>^2)..<merge>^2` filtered to dataclass field
+lines), then grep the tree for a surviving reader of each. Eleven names came out;
+`failed_motions` was the only one with a reader left, the rest being either lines that
+merely moved within main's own source or names nothing reads. For a retired *method* or
+attribute on a class that delegates unknown names -- `Match` -- that grep is not enough
+and the `_is_own_name_` guard trick is still what finds them.
+
+**Measured.** On `0e0bacfad`, twenty-two of the twenty-three checks passed and this was
+the single failure; `krrood` was green, which is `7a6f8f7a9` confirmed. Locally the file
+runs 14 passed. The full `test/experiments_test` in a session container is no longer the
+clean comparison the earlier entries record -- the generated ORM interfaces are absent
+from this container now, so `psycopg`, `rclpy`, `rosbag2_py`, `rtree` and `vhacdx` gaps
+account for 25 failures and 11 errors, every one of them an import of something missing
+and none of them a defect. CI, which has all of it, is the authority and reported exactly
+one failure. CI on `06e7af3eb` had not reported when this was written, and per the
+standing rule no check of it was armed.
+
