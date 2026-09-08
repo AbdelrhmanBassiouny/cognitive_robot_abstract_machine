@@ -2,7 +2,7 @@ schema_version: 1
 id: icra-foundation
 title: 'ICRA experiments: one pipeline every scenario runs on'
 description: >-
-  The foot of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits' roadmap.md for why). The integrated simulation pipeline every scenario, demo and experiment stacks on, the dataclass scenario/goal/condition/perturbation/metric domain model with its runner, and every trial, event, query, answer and failure recorded through ORMatic into SQL and read back as long-term memory. icra-mechanism and icra-evidence both depend on items here; those edges could not cross the plan boundary and are recorded as blockers on their side instead (see their roadmap.md).
+  The foot of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits' roadmap.md for why). One representation every subsystem reads and writes: the integrated simulation pipeline every scenario, demo and experiment stacks on, the dataclass scenario/goal/condition/perturbation/metric domain model with its runner, and every trial, robot plan, event, query, answer and failure recorded through ORMatic into SQL and read back as long-term memory. Refocused 2026-09-08 on the shared representation rather than on perception quality (see roadmap.md): the long-term-memory track is the plan's own critical path and no longer waits on the perception lane. icra-mechanism and icra-evidence both depend on items here; those edges could not cross the plan boundary and are recorded as blockers on their side instead (see their roadmap.md).
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 252
 waves:
@@ -25,7 +25,7 @@ tracks:
   name: Episodes recorded and queried
   wave: foundation
   description: >-
-    Lane 2. Every trial, event, query, answer and failure recorded through ORMatic into SQL, in simulation and on the robot alike, and read back through the SQL backend as long-term memory.
+    Lane 2, and the programme's critical path since 2026-09-08. Every trial, robot plan, event, query, answer, failure and self-model recorded through ORMatic into SQL, in simulation and on the robot alike, generated at corpus scale headless, and read back through the SQL backend as long-term memory. Nothing in this track waits on the perception lane.
 items:
 - id: integrated-simulation-pipeline
   title: >-
@@ -145,7 +145,7 @@ items:
     Merge tracy_icra_segmind into tracy_icra. Not a fast-forward: tracy_icra has moved 20-odd commits past their merge base e034fa791, taking the knowledge-directed-perception work with it, so this is a real merge. Three conflicts, all identified 2026-09-03. experiments/requirements.txt was deleted on tracy_icra (main's convention is inline pyproject dependencies, and test_dependency_declarations tests it) and gained flask on tracy_icra_segmind, so the resolution is to keep the file deleted and declare flask in experiments/pyproject.toml. segmind/datastructures/events.py was changed on both sides (+44/-21 arriving through tracy_icra's perception merges, +104/-24 here). And tracy_experiments/pickup/pickup_demo_real.py was changed on both sides. What the branch brings: grasp_detector_nodes.py, the gripper-feedback and event- dashboard modules, its own background threaded event_monitoring.py for TracyMontessoriWorld, and a much larger detector test suite.
 - id: simulated-camera-feeds-perception
   title: >-
-    A MuJoCo camera feeds the perception pipeline the same frames the real camera does
+    A MuJoCo camera feeds every perception backend the same frames the real camera does
   branch: null
   pull_request_number: null
   track: integration
@@ -153,7 +153,7 @@ items:
   - integrated-simulation-pipeline
   status: not_started
   notes: >-
-    What makes simulation-first testing honest for perception. MujocoCamera renders colour and depth; wrap them as the RgbdFrame the pipeline reads, with intrinsics and camera pose taken from the twin, so MontessoriPerceptionBackend answers a look in simulation exactly as it does off a capture. The six real captures remain the regression set for detection; this item's tests assert that a simulated scene with the board and four pieces reports every piece once with the right category. Stated colours and finishes on the simulated objects come from the values #239 measured off the real ones.
+    One frame source every perception backend reads, which is what lets the backends be swapped without changing anything above them. MujocoCamera renders colour and depth; wrap them as the RgbdFrame the pipeline reads, with intrinsics and camera pose taken from the twin, so the detector stack, a vision-language backend and a visual-question-answering backend all answer a look in simulation exactly as they do off a capture. The six real captures remain the regression set; this item's tests assert that a simulated scene with the board and four pieces reports every piece once with the right category. Stated colours and finishes on the simulated objects come from the values #239 measured off the real ones. Refocused 2026-09-08: this item exists to make the frames available to any backend, not to improve detection - the paper claims no perception result of its own.
 - id: tracy-demo-takes-the-integrated-branch
   title: >-
     tracy_icra takes the integrated branch and the real robot runs it
@@ -225,7 +225,7 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01Kh8FEgYc4B7d1x3LXDZRvZ
   notes: >-
-    The SQL backend is one of the paper's four: the same query language over recorded episodes returns domain objects, so the temporal bucket can be answered from long-term memory ("which pieces did you pick up in the last run", "how often did the square hole fail") and the Report of every experiment is computed from the database rather than from in-process results. Tests assert that a query over a recorded episode returns the same objects the runner wrote, and that a report regenerated from the database equals the one the runner rendered.
+    The SQL backend is one backend among several answering the one query language, and long-term memory is where the paper's Remembering level is measured. Every bucket of the question set has a spelling over recorded episodes, not only the temporal one: what stood where and on which surface in an earlier episode, which pieces the robot picked up, how many joints the robot had in that episode's own self-model, what the motion was constrained by when an insertion failed, and how often the square hole failed. Domain objects come back, not rows. The Report of every experiment is computed from the database rather than from in-process results. Tests assert that a query over a recorded episode returns the same objects the runner wrote, and that a report regenerated from the database equals the one the runner rendered. Widened from the temporal bucket alone on 2026-09-08 with the question set's own widening.
 - id: episode-artifacts-recorded
   title: >-
     An episode keeps its video, its simulation data and its question-and-answer transcript beside the database
@@ -234,8 +234,31 @@ items:
   track: long-term-memory
   depends_on:
   - episodes-recorded-through-ormatic
-  - simulated-camera-feeds-perception
   status: not_started
   notes: >-
-    The rows say what happened; these are what a reader - or a vision-language model - can look at, and without them Experiment D has no baseline to compare against. The video is the frames MujocoCamera already renders for MontessoriPerceptionBackend, written per episode rather than discarded; the simulation data is the run's own files, the world it built and the plan it realized; the transcript is every question with its answer, which the episode rows already carry per query, rendered as one readable document. Artifacts sit beside the database addressed by the episode's identifier, so a row references one rather than holding it - the separation ResultsDatabase already draws between where a run records and what it records. Its own item rather than folded into episodes-recorded-through-ormatic because it needs the simulated camera, and folding it would put lane 2's foot item behind lane 1's second. Tests record a two-trial episode and read its video, its files and its transcript back from
-    the episode.
+    The rows say what happened; these are what a reader - or a vision-language model - can look at, and without them Experiment D has no baseline to compare against. The video is written by semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder, which is already on main and renders from an overview camera it attaches itself; the simulation data is the run's own files, the world it built and the plan it realized; the transcript is every question with its answer, which the episode rows already carry per query, rendered as one readable document. Artifacts sit beside the database addressed by the episode's identifier, so a row references one rather than holding it - the separation ResultsDatabase already draws between where a run records and what it records. Tests record a two-trial episode and read its video, its files and its transcript back from the episode.
+
+    Its dependency on simulated-camera-feeds-perception was removed 2026-09-08: the recorder needs a MuJoCo world, not the perception pipeline's frames, so this item and everything downstream of it - the corpus, the cross-episode question set, Experiment D - run without the perception lane having landed. That is the single edge whose removal lets long-term memory be worked in parallel by one person from the day the episode model exists.
+- id: episode-corpus-generated-at-scale
+  title: >-
+    Thousands of episodes generated headless in MuJoCo, each with its video, its plan and its event log in SQL
+  branch: null
+  pull_request_number: null
+  track: long-term-memory
+  depends_on:
+  - episodes-recorded-through-ormatic
+  - episode-artifacts-recorded
+  status: not_started
+  notes: >-
+    What makes long-term memory a corpus rather than a schema, and the item one person can carry alone from the day the episode model lands. A headless generator runs the scenarios repeatedly over seeded randomised layouts, conditions and perturbations, and records per episode: the realized coraplex Plan, the segmind event log tick by tick, the twin's state, every query with its answer and latency, the typed failure and its resolution, and the video MujocoVideoRecorder rendered. Batched the way batch_runner already batches so the process's memory growth cannot lose a finished episode, and resumable, so a run that dies is continued rather than restarted. The target is thousands of episodes rather than dozens, because Experiment D's questions are about repeats, and a corpus that holds each situation once cannot be asked whether something has happened before. How many is set by what the generator sustains overnight and is recorded rather than chosen in advance. Tests generate a small corpus and assert every episode holds all six records.
+- id: self-model-and-control-state-recorded
+  title: >-
+    The robot's own kinematic structure and the constraints its motion ran under, recorded as part of the episode
+  branch: null
+  pull_request_number: null
+  track: long-term-memory
+  depends_on:
+  - episodes-recorded-through-ormatic
+  status: not_started
+  notes: >-
+    What makes the self-model and control buckets answerable at all, in working memory and in long-term memory alike. The twin already holds the robot as bodies, connections and degrees of freedom with their limits, so "how many links do you have", "how many joints do you have" and "where is your gripper left finger" are queries over structure that already exists; this item records that structure with the episode, so the same questions can be asked of a past run whose robot may have differed. Beside it, the motion statechart the controller ran: which tasks and monitors were active, which degree-of-freedom and Cartesian constraints the quadratic program was solving under, and which monitor ended the motion. That is what turns "why did you stop" and "what were you constrained by" into queries rather than log reading. Recorded through ORMatic like the rest of the episode; giskardpy.orm exists for the generated interface to land in. Tests record one episode and read the link and joint counts and the active constraints back through the generated interface.

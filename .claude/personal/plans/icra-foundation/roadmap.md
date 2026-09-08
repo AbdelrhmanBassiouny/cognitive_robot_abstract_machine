@@ -21,19 +21,35 @@ themselves are that record and are linked.
 
 ## Why this plan exists
 
-The memo's thesis is one mechanism: the same EQL query answers a question,
-selects which backend answers each predicate, drives what the robot
-perceives, and verifies the result in the digital twin; removing knowledge
-produces failures the query predicts. Nothing before this plan owned the
-experiments, the scenario definitions, the episode recording, the capability
-routing, the physics verification, the failure taxonomy, the VLM baselines
-or the artifact — see the predecessor's history for the full survey of what
-`knowledge-directed-perception` already owned instead.
+**Restated 2026-09-08** (the original thesis sentence is kept below it, since
+every item's notes were written against it). The paper's claim is that one
+knowledge representation and one query language serve every subsystem of a
+cognitive robot architecture at once: the perception system writes into it —
+whatever the perception system is, a classical detector stack, a
+vision-language model or a visual-question-answering model — the control
+program reads it as the constraints of its optimization and reports back
+into it, the event-segmentation system moves it as things happen, working
+memory is its current state and long-term memory is its recorded history.
+Because it is one representation, one query language asks questions of all
+of them; and because the questions are answered from a database rather than
+from a model, they are answered at a fraction of the cost. `krrood` is
+KnowRob 3.0, and this is the paper that shows what the third iteration buys.
+
+The original sentence, which the mechanism items are still written against:
+the same EQL query answers a question, selects which backend answers each
+predicate, drives what the robot perceives, and verifies the result in the
+digital twin; removing knowledge produces failures the query predicts.
+
+Nothing before this plan owned the experiments, the scenario definitions,
+the episode recording, the capability routing, the physics verification, the
+failure taxonomy, the VLM baselines or the artifact — see the predecessor's
+history for the full survey of what `knowledge-directed-perception` already
+owned instead.
 
 **This wave is the foot of the whole programme.** `integrated-simulation-pipeline`,
 `scenario-domain-model` and `run-results-recorded-into-sql` can all start in
 parallel with no dependencies, and every mechanism/experiment item in
-`icra-mechanism`/`icra-evidence` stacks on one of the ten items here.
+`icra-mechanism`/`icra-evidence` stacks on one of the twelve items here.
 
 ## What the code already had, and what this wave builds on
 
@@ -594,3 +610,64 @@ are reached through association tables, and no test in this repository proves
 EQL translates a join across one; nothing here depends on that, and finding out
 belongs to whichever item first needs it. CI-only, per the standing ROS/`random_events`
 limitation.
+
+## 2026-09-08: refocused on the shared representation, and long-term memory cut loose
+
+The developer's direction, in his words: focus the plans on *"that general
+integrative aspect"* — that the same knowledge representation is used by the
+control program and by the perception system, whatever the perception system
+is, and that the control system takes the knowledge as constraints for an
+optimization task, so that questions about the control system, the
+perception system, the memory system and the temporal event segmentation are
+all asked in one query language over one representation. And: *"reduce focus
+on specific perception algorithms, that's not important anymore as we are not
+showing we have better perception."*
+
+### What changed here
+
+- **The thesis** above, restated, and the plan `description` with it.
+- **`simulated-camera-feeds-perception`** is retitled and rewritten as a
+  frame source every perception backend reads, rather than as what makes
+  perception testing honest. It exists so a backend can be swapped; it
+  claims no detection result.
+- **`episode-artifacts-recorded` lost its dependency on
+  `simulated-camera-feeds-perception`.** This is the one edge whose removal
+  changes who can work on what. The episode's video does not need the
+  perception pipeline's frames — `MujocoVideoRecorder`
+  (`semantic_digital_twin.adapters.mujoco_video_recording`) is already on
+  `main` and attaches its own overview camera to the MuJoCo world. With the
+  edge gone, the whole `long-term-memory` track — the episode model, the
+  artifacts, the corpus, the self-model and control state, and the EQL
+  querying over all of it — runs from `main` plus the episode model, with no
+  dependency on lane 1 at all. That is what makes it a track one person can
+  carry from today.
+- **Two new items** in that track. `episode-corpus-generated-at-scale` is the
+  headless generator: seeded randomised scenarios run repeatedly, each
+  episode recording its realized coraplex `Plan`, its segmind event log, the
+  twin state, every query with its answer and latency, the typed failure and
+  its resolution, and the rendered video — batched and resumable the way
+  `batch_runner` already is, targeting thousands of episodes because
+  Experiment D asks whether something has happened *before* and a corpus
+  holding each situation once cannot answer that.
+  `self-model-and-control-state-recorded` puts the robot's own kinematic
+  structure (bodies, connections, degrees of freedom and their limits) and
+  the motion statechart's active tasks, constraints and terminating monitor
+  into the episode, which is what makes the new self-model and control
+  question buckets answerable of a past run and not only of the present one.
+- **`episodes-queried-by-eql`** now answers every bucket over recorded
+  episodes, not only the temporal one.
+
+### What did not change, and why
+
+The perception lane is not cut. The demo has to see, and the classical stack
+is what the resource comparison is measured against — a cost claim needs
+something whose cost is known. What changed is that no *result* in the paper
+is a perception result, so nothing downstream of the paper's argument waits
+on the perception lane any more.
+
+### How many episodes
+
+Not fixed here. The generator's item says the target is thousands rather
+than dozens and that the actual number is whatever it sustains overnight,
+recorded rather than chosen in advance — a number picked now would be
+invented, and the corpus size is a measurement like any other.
