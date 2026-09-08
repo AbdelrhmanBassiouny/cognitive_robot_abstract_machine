@@ -257,53 +257,34 @@ class LossOfContactEvent(AbstractContactEvent):
 
 
 @dataclass
-class ManipulatesBodies(Symbol, ABC):
+class AgentInteractionEvent(EventWithTrackedObjects, ABC):
     """
-    An event in which the robot itself acts on a body rather than only observing one.
+    An event in which an agent acted on the tracked object rather than one where the
+    object was only observed.
 
-    What separates what the robot did from what merely happened around it, which is the
-    difference an agency question is about. A symbol, so that a question can ask which
-    bodies the robot acted on without naming every kind of event that acts on one.
+    What separates what the agent did from what merely happened around it, which is the
+    difference an agency question is about. The object acted on is the one the event
+    already tracks, so asking which objects an agent acted on is asking these events for
+    their :attr:`tracked_object`.
     """
-
-    @property
-    @abstractmethod
-    def manipulated_bodies(self) -> List[Body]:
-        """
-        The bodies this event acted on.
-        """
 
 
 @dataclass(unsafe_hash=True)
-class PickUpEvent(EventWithTrackedObjects, ManipulatesBodies):
+class PickUpEvent(AgentInteractionEvent):
     """
     Represents an event where an object is picked up by another object.
     """
 
-    @property
-    def manipulated_bodies(self) -> List[Body]:
-        """
-        The object that was picked up.
-        """
-        return [self.tracked_object]
-
 
 @dataclass(unsafe_hash=True)
-class PlacingEvent(EventWithTrackedObjects, ManipulatesBodies):
+class PlacingEvent(AgentInteractionEvent):
     """
     Represents an event where an object is placed on another object.
     """
 
-    @property
-    def manipulated_bodies(self) -> List[Body]:
-        """
-        The object that was placed.
-        """
-        return [self.tracked_object]
-
 
 @dataclass(unsafe_hash=True)
-class InsertionEvent(EventWithTrackedObjects, ManipulatesBodies):
+class InsertionEvent(AgentInteractionEvent):
     """
     Represents an event where an object is inserted into another object.
     """
@@ -312,13 +293,6 @@ class InsertionEvent(EventWithTrackedObjects, ManipulatesBodies):
     """
     List of objects into which the object was inserted.
     """
-
-    @property
-    def manipulated_bodies(self) -> List[Body]:
-        """
-        The object that was inserted.
-        """
-        return [self.tracked_object]
 
     @property
     def through_hole(self) -> Aperture:

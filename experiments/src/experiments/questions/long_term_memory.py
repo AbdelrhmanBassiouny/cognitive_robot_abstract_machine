@@ -25,9 +25,9 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.query.query import Query
 from segmind.datastructures.events import (
+    AgentInteractionEvent,
     DetectionEvent,
     EventWithTrackedObjects,
-    ManipulatesBodies,
     MotionEvent,
     PickUpEvent,
 )
@@ -317,15 +317,15 @@ class ObjectsTheRobotMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
         tick = variable(Tick, domain=[])
         motion = variable(MotionEvent, domain=[])
         acting_tick = variable(Tick, domain=[])
-        manipulation = variable(ManipulatesBodies, domain=[])
+        interaction = variable(AgentInteractionEvent, domain=[])
         return an(
             entity(motion.tracked_object).where(
                 trial.episode.identifier == self.episode_identifier,
                 contains(trial.ticks, tick),
                 contains(tick.events, motion),
                 contains(trial.ticks, acting_tick),
-                contains(acting_tick.events, manipulation),
-                contains(manipulation.manipulated_bodies, motion.tracked_object),
+                contains(acting_tick.events, interaction),
+                interaction.tracked_object == motion.tracked_object,
             )
         )
 
@@ -337,16 +337,15 @@ class ObjectsTheRobotMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
         :param source: The long-term memory holding what actually happened.
         """
         events = self.recorded_events(source)
-        picked_up = {
-            body
+        acted_on = {
+            event.tracked_object
             for event in events
-            if isinstance(event, ManipulatesBodies)
-            for body in event.manipulated_bodies
+            if isinstance(event, AgentInteractionEvent)
         }
         return [
             event.tracked_object
             for event in events
-            if isinstance(event, MotionEvent) and event.tracked_object in picked_up
+            if isinstance(event, MotionEvent) and event.tracked_object in acted_on
         ]
 
 

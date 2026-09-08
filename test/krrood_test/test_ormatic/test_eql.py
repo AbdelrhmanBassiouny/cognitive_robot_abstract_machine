@@ -16,6 +16,8 @@ from ..dataset.semantic_world_like_classes import (
     Container,
     MoveAction,
     GraspConfig,
+    Cabinet,
+    Drawer,
 )
 from ..dataset.ormatic_interface import (
     KRROODPositionDAO,
@@ -1302,10 +1304,12 @@ def test_entity_from_multi_hop_attribute(session, database):
     pose_low = KRROODPoseDAO(position=position_low, orientation=orientation)
     pose_high = KRROODPoseDAO(position=position_high, orientation=orientation)
     body = BodyDAO(name="TestBody", size=1)
-    session.add_all([
-        NestedActionDAO(obj=body, pose=pose_low),
-        NestedActionDAO(obj=body, pose=pose_high),
-    ])
+    session.add_all(
+        [
+            NestedActionDAO(obj=body, pose=pose_low),
+            NestedActionDAO(obj=body, pose=pose_high),
+        ]
+    )
     session.commit()
 
     a = variable(NestedAction, domain=[])
@@ -1328,8 +1332,12 @@ def test_entity_with_relationship_selected_variable(session, database):
     After the fix, GraspConfigDAO must be joined with MoveActionDAO via the FK so only
     the grasp_config linked to a high-robot_x move is returned.
     """
-    grasp_matching = GraspConfigDAO(rotate_gripper=0.3, approach_direction=0.0, manipulation_offset=0.0)
-    grasp_not_matching = GraspConfigDAO(rotate_gripper=0.9, approach_direction=0.0, manipulation_offset=0.0)
+    grasp_matching = GraspConfigDAO(
+        rotate_gripper=0.3, approach_direction=0.0, manipulation_offset=0.0
+    )
+    grasp_not_matching = GraspConfigDAO(
+        rotate_gripper=0.9, approach_direction=0.0, manipulation_offset=0.0
+    )
     session.add(grasp_matching)
     session.add(grasp_not_matching)
 
@@ -1388,13 +1396,15 @@ def test_order_by_aggregate(session, database):
     size ORDER BY COUNT(*) DESC and return rows ordered with the most-frequent size
     first.
     """
-    session.add_all([
-        BodyDAO(name="Body1", size=10),
-        BodyDAO(name="Body2", size=10),
-        BodyDAO(name="Body3", size=10),
-        BodyDAO(name="Body4", size=20),
-        BodyDAO(name="Body5", size=20),
-    ])
+    session.add_all(
+        [
+            BodyDAO(name="Body1", size=10),
+            BodyDAO(name="Body2", size=10),
+            BodyDAO(name="Body3", size=10),
+            BodyDAO(name="Body4", size=20),
+            BodyDAO(name="Body5", size=20),
+        ]
+    )
     session.commit()
 
     b = variable(type_=Body, domain=[])
@@ -1426,8 +1436,12 @@ def test_exists_in_where_clause(session, database):
 
     so only MoveActions that have an associated GraspConfig are returned.
     """
-    grasp_a = GraspConfigDAO(rotate_gripper=0.1, approach_direction=0.0, manipulation_offset=0.0)
-    grasp_b = GraspConfigDAO(rotate_gripper=0.5, approach_direction=0.0, manipulation_offset=0.0)
+    grasp_a = GraspConfigDAO(
+        rotate_gripper=0.1, approach_direction=0.0, manipulation_offset=0.0
+    )
+    grasp_b = GraspConfigDAO(
+        rotate_gripper=0.5, approach_direction=0.0, manipulation_offset=0.0
+    )
     session.add_all([grasp_a, grasp_b])
 
     move_with_grasp_a = MoveActionDAO(robot_x=1.0, robot_y=0.0, hip_rotation=0.0)
@@ -1499,12 +1513,6 @@ def test_selecting_a_collection_yields_its_members(session, database):
     ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The owner and the member are read against one another's base table: each "
-    "variable is translated to its unaliased DAO, so two variables whose classes share "
-    "a mapped base cannot be told apart in the ON clause.",
-)
 def test_membership_in_a_collection_joins_the_members(session, database):
     """
     A membership condition over a collection restricts to the members of that collection
@@ -1521,4 +1529,110 @@ def test_membership_in_a_collection_joins_the_members(session, database):
     assert sorted(row.name for row in eql_to_sql(query, session).evaluate()) == [
         "first_body",
         "second_body",
+    ]
+
+
+SMALLER_BODY_SIZE = 1
+"""
+The size of the body a query asking for the smaller of two members has to return.
+"""
+
+LARGER_BODY_SIZE = 2
+"""
+The size of the body that same query has to leave out.
+"""
+
+
+def _one_world_of_two_sizes(session) -> None:
+    """
+    Store one world holding two bodies of different sizes.
+
+    Two variables over the same collection can only be told apart by a condition
+    relating them, so the members have to differ in something that condition can read.
+
+    :param session: The session to store them through.
+    """
+    session.add(
+        to_dao(
+            World(
+                id=WORLD_UNDER_TEST,
+                bodies=[
+                    Body("smaller_body", size=SMALLER_BODY_SIZE),
+                    Body("larger_body", size=LARGER_BODY_SIZE),
+                ],
+            )
+        )
+    )
+    session.commit()
+
+
+def test_two_variables_over_one_collection_are_told_apart(session, database):
+    """
+    Two variables ranging over the same collection are separate members of it, so a
+    condition relating them compares two different rows rather than one row with itself.
+    """
+    _one_world_of_two_sizes(session)
+
+    world = variable(World, domain=[])
+    body = variable(Body, domain=[])
+    larger_body = variable(Body, domain=[])
+    query = an(
+        entity(body).where(
+            world.id == WORLD_UNDER_TEST,
+            contains(world.bodies, body),
+            contains(world.bodies, larger_body),
+            body.size < larger_body.size,
+        )
+    )
+
+    assert [row.name for row in eql_to_sql(query, session).evaluate()] == [
+        "smaller_body"
+    ]
+
+
+def _two_worlds_of_nested_collections(session) -> None:
+    """
+    Store two worlds whose views each hold a collection of their own.
+
+    A run's ticks and a tick's events are reached the same way, so a query crossing two
+    collections in turn is what a question of a recorded run translates to.
+
+    :param session: The session to store them through.
+    """
+    for world_id, drawer_name in (
+        (WORLD_UNDER_TEST, "drawer_under_test"),
+        (OTHER_WORLD, "drawer_elsewhere"),
+    ):
+        world = World(id=world_id)
+        handle = Handle(f"{drawer_name}_handle", world=world)
+        container = Container(f"{drawer_name}_container", world=world)
+        drawer = Drawer(handle, container, world=world)
+        drawer.handle = Handle(drawer_name, world=world)
+        world.bodies = [handle, container, drawer.handle]
+        world.views = [drawer, Cabinet(container, [drawer], world=world)]
+        session.add(to_dao(world))
+
+    session.commit()
+
+
+def test_membership_across_two_collections_in_turn(session, database):
+    """
+    A member of one collection is the owner of the next, so a query crossing both
+    answers from the members of the second rather than from every row of their table.
+    """
+    _two_worlds_of_nested_collections(session)
+
+    world = variable(World, domain=[])
+    cabinet = variable(Cabinet, domain=[])
+    drawer = variable(Drawer, domain=[])
+    query = an(
+        entity(drawer).where(
+            world.id == WORLD_UNDER_TEST,
+            contains(world.views, cabinet),
+            contains(cabinet.drawers, drawer),
+        )
+    )
+
+    assert [row.handle.name for row in eql_to_sql(query, session).evaluate()] == [
+        "drawer_under_test"
     ]

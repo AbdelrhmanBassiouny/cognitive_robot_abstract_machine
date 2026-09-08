@@ -25,8 +25,8 @@ from krrood.entity_query_language.predicate import symbolic_function
 from krrood.entity_query_language.query.query import Query
 from krrood.symbol_graph.symbol_graph import SymbolGraph
 from segmind.datastructures.events import (
+    AgentInteractionEvent,
     DetectionEvent,
-    ManipulatesBodies,
     MotionEvent,
     PickUpEvent,
 )
@@ -672,10 +672,10 @@ class ObjectsTheRobotMoved(WorkingMemoryQuestion[List[Body]]):
         :param source: The robot the question is put to.
         """
         motion = variable(MotionEvent)
-        manipulation = variable(ManipulatesBodies)
+        interaction = variable(AgentInteractionEvent)
         return an(
             entity(motion.tracked_object).where(
-                contains(manipulation.manipulated_bodies, motion.tracked_object)
+                interaction.tracked_object == motion.tracked_object
             )
         )
 
@@ -693,16 +693,15 @@ class ObjectsTheRobotMoved(WorkingMemoryQuestion[List[Body]]):
 
         :param source: The robot whose memory it is.
         """
-        manipulated = {
-            body
-            for event in self.remembered_events(ManipulatesBodies)
-            for body in event.manipulated_bodies
+        acted_on = {
+            event.tracked_object
+            for event in self.remembered_events(AgentInteractionEvent)
         }
         return self.distinct(
             [
                 event.tracked_object
                 for event in self.remembered_events(MotionEvent)
-                if event.tracked_object in manipulated
+                if event.tracked_object in acted_on
             ]
         )
 

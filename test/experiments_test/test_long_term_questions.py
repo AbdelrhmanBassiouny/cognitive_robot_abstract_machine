@@ -9,21 +9,10 @@ query under test -- a query checked against itself proves nothing.
 ..note:: Every question here crosses a to-many collection the episode model holds, which
     the generated interface reaches through an association table. These tests are what
     answered whether the query language translates a join across one, and the answer is
-    that it does not yet: a membership condition over a collection is read against the
-    owner's own table, which
-    ``test_membership_in_a_collection_joins_the_members`` records as a strict xfail in
-    krrood's own suite. The questions are frozen in the shape they will be asked in and
-    the tests that need that translation are expected to fail until it lands.
-"""
-
-NEEDS_A_COLLECTION_JOIN = pytest.mark.xfail(
-    reason="A membership condition over a collection does not translate to a join, so a "
-    "question reaching a run's ticks and their events answers from nothing. Recorded in "
-    "krrood as test_membership_in_a_collection_joins_the_members.",
-)
-"""
-What a question of this set cannot be answered through until the query language joins a
-collection.
+    that it does, since each variable now ranges over an element of its own:
+    ``test_membership_in_a_collection_joins_the_members`` and
+    ``test_membership_across_two_collections_in_turn`` cover the two shapes in krrood's
+    own suite.
 """
 
 from __future__ import annotations
@@ -194,7 +183,6 @@ def test_the_long_term_set_covers_the_buckets_a_recorded_run_can_be_asked_about(
 # %% scene
 
 
-@NEEDS_A_COLLECTION_JOIN
 def test_the_objects_seen_are_the_ones_the_recorded_events_name(
     recorded_episode: Episode, memory: LongTermMemory
 ):
@@ -209,7 +197,6 @@ def test_the_objects_seen_are_the_ones_the_recorded_events_name(
 # %% temporal and agency
 
 
-@NEEDS_A_COLLECTION_JOIN
 def test_the_run_recorded_that_something_moved(
     recorded_episode: Episode, memory: LongTermMemory
 ):
@@ -221,7 +208,6 @@ def test_the_run_recorded_that_something_moved(
     )
 
 
-@NEEDS_A_COLLECTION_JOIN
 def test_the_objects_that_moved_are_the_ones_the_motions_name(
     recorded_episode: Episode, memory: LongTermMemory
 ):
@@ -234,7 +220,6 @@ def test_the_objects_that_moved_are_the_ones_the_motions_name(
     }
 
 
-@NEEDS_A_COLLECTION_JOIN
 def test_only_the_object_the_run_picked_up_and_moved_is_one_it_moved_itself(
     recorded_episode: Episode, memory: LongTermMemory
 ):
@@ -245,7 +230,6 @@ def test_only_the_object_the_run_picked_up_and_moved_is_one_it_moved_itself(
     assert names(question.ask(memory)) == names(question.ground_truth(memory))
 
 
-@NEEDS_A_COLLECTION_JOIN
 def test_only_the_object_with_a_recorded_pick_up_was_picked_up(
     recorded_episode: Episode, memory: LongTermMemory
 ):
@@ -268,7 +252,6 @@ def test_only_the_object_with_a_recorded_pick_up_was_picked_up(
 # %% self-model
 
 
-@NEEDS_A_COLLECTION_JOIN
 def test_the_joints_counted_are_the_ones_the_recorded_world_held(
     recorded_episode: Episode, memory: LongTermMemory
 ):
@@ -282,7 +265,6 @@ def test_the_joints_counted_are_the_ones_the_recorded_world_held(
 # %% every question at once
 
 
-@NEEDS_A_COLLECTION_JOIN
 def test_every_question_of_the_long_term_set_answers_its_own_ground_truth(
     recorded_episode: Episode, memory: LongTermMemory
 ):
