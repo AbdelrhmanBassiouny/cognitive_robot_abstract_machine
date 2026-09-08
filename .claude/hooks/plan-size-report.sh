@@ -23,9 +23,9 @@ set -euo pipefail
 # scratch directory for the report to measure. Never checks anything out and
 # never touches your current branch or working tree.
 #
-# Requires python3 and everything the hooks' requirements.txt lists, like
-# save-plan.sh - the item count is parsed out of each manifest rather than
-# matched line by line.
+# Requires python3 and everything the package declares, like save-plan.sh -
+# the item count is parsed out of each manifest rather than matched line by
+# line.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
@@ -40,14 +40,18 @@ if ! command -v python3 > /dev/null 2>&1; then
   echo "python3 is required to parse plan manifests and render the report." >&2
   exit 1
 fi
-# Every requirement is reported, and none is named here: the hooks'
-# requirements file is where a dependency is written down, so adding one there
-# is enough for this check to start covering it.
-MISSING_REQUIREMENTS="$(python3 -m "${MISSING_REQUIREMENTS_MODULE}" \
-  "${PROJECT_ROOT}/${HOOKS_REQUIREMENTS_FILE}")"
-if [ -n "${MISSING_REQUIREMENTS}" ]; then
-  echo "Not installed: ${MISSING_REQUIREMENTS}" >&2
-  echo "Run: pip install -r ${HOOKS_REQUIREMENTS_FILE}" >&2
+# Every dependency is reported, and none is named here: the package declares
+# them, so adding one there is enough for this check to start covering it. The
+# lookup is missing_dependencies, which check-setup.sh and session-start.sh
+# also read, so all three judge the one declaration the same way.
+if [ ! -f "${BASTLER_PYPROJECT_FILE}" ]; then
+  echo "${BASTLER_PYPROJECT_FILE} is missing, so its dependencies cannot be read." >&2
+  exit 1
+fi
+MISSING_DEPENDENCIES="$(missing_dependencies)"
+if [ -n "${MISSING_DEPENDENCIES}" ]; then
+  echo "Not installed: ${MISSING_DEPENDENCIES}" >&2
+  echo "Run: pip install ${MISSING_DEPENDENCIES}" >&2
   exit 1
 fi
 

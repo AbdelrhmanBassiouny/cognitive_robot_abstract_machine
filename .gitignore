@@ -188,7 +188,3 @@ bastler/board.json
 # Tracking a generated file made every branch switch fail while a checkout held its own
 # copy, which is what git refuses to overwrite.
 **/ormatic_interface.py
-
-# The hooks' own Python dependencies, the one place they are written down and
-# the file plan-size-report.sh reports missing ones from.
-!.claude/hooks/requirements.txt
