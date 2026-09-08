@@ -1,37 +1,61 @@
 ## EdgeFitDetector / ColorBlobDetector consolidation
 
-Branch re-cut from `claude/icra-experiments-simulation-pipeline-w4ep7n` (it had been
-cut from `integration`, which carries no detector code).
+Branch `claude/detector-consolidation-analysis-rgg3xg`, re-cut from
+`claude/icra-experiments-simulation-pipeline-w4ep7n` (`integration` carries no detector
+code). Draft PR #299, based on that same branch. Base merged in at `dae41889c`.
 
-**Analysis complete, design presented, awaiting go-ahead. No source changed yet.**
+**Done and pushed.** Analysis, then the collapse, then the regression.
 
-Measured (opencv 4.11.0.86, pinned to match the convergence merge's own baseline):
+### What landed
 
-- Six captures baseline: **6 missed / 2 invented, board found 6/6**. The merge
-  (5382c1b2) recorded 6 missed / **1** invented; missed reproduces, invented does not.
-  Deterministic across runs. On opencv 5.0.0.93 (what `uv sync` resolves) it is 5/2.
-- `ColorBlobDetector` is **never chosen on any of the six captures** - `recorded_setup`
-  states neither `finish` nor `color` for the lid, so both rule terms are False and
-  every look falls to the edge fit. The captures are a guard on the edge-fit path, not
-  evidence about the consolidation.
-- Rendered matte lid (the only scene reaching both): identical category, agreement,
-  outline array and pose; only `footprint` differs (fitted outline 0.00090000 =
-  exactly 30mm sq., vs blob contour 0.00085400).
-- Cost: whole `detect()` 67.4 ms edge fit vs 65.5 ms colour blob (3%). The fit alone is
-  11.4 vs 5.7 ms but is only ~17% of the detector. The split's own 126/89 ms predates
-  d8b65443, which narrowed the edge fit's sweep to a 24 mm believed reach.
-- `EdgeFitDetector` reading a blob as `radius=0` + `YawInterval(theta, spread=0)`
-  reproduces `ColorBlobDetector` **bit for bit** (cube at 0/17/30 deg, cylinder).
-- Quarter-turn set collapses to one turn for cube and cylinder only; rect prism needs
-  2, tri prism 4. Only cube and cylinder colour-separate from the lid today.
+One detector configured twice. `PlaceOfASeenColor` states how much of a colour blob is
+taken on trust: `PlaceToSearchAround` (seeding reach, any turn) and `PlaceToScoreAt`
+(radius 0, the rectangle's four turns). `BelievedPlace.yaw` widened to a `BelievedYaw`
+so `QuarterTurns` can sit beside `YawInterval`. `ColorBlobDetector` and
+`PieceMatcher.match_at` are gone.
 
-Real defect found: `ColorBlobDetector.detect` ignores `surface_pass.expected` entirely,
-so on a matte surface a knowledge-directed expectation about a colour-separating piece
-is silently dropped. `d8b65443` added that path to the edge fit only.
+The defect it closes: `ColorBlobDetector.detect` never read `surface_pass.expected`, so
+on a matte surface a knowledge-directed expectation was silently dropped - `d8b65443`
+added that path to the edge fit alone. Proven with a failing test first, then fixed by
+the collapse itself.
 
-Next: on approval, implement the collapse (one detector; the blob becomes a tighter
-belief), add the failing test for the dropped expectation first, re-run both harnesses.
+### Measured
 
-Harnesses in scratchpad: `regression.py`, `rendered_lid2.py`, `cost.py`, `collapse.py`,
-`radius_and_turns.py`, `turns_in_general.py`, `which_detector.py`. The pytest suite
-cannot collect here (ORM generation needs ROS), as the merge commit also recorded.
+- Six captures, before and after: **6 missed / 2 invented, board 6/6**, on opencv
+  4.11.0.86. Unchanged, and it cannot change - `recorded_setup` states neither `finish`
+  nor `color` for the lid, so every look there falls to the edge fit. The captures guard
+  the edge-fit path; they are not evidence about the consolidation.
+- `5382c1b2` recorded 6 missed / **1** invented. Missed reproduces; invented does not, on
+  either opencv, before or after. Flagged in the PR, unresolved.
+- Rendered matte lid: both configurations report the same category, outline, footprint
+  and position. Footprint is now the fitted outline's for both (0.00090000 = 30 mm sq.)
+  rather than the blob contour's 0.00085400.
+- Cost, re-measured after the collapse (the tree's 89/126 ms predates `d8b65443`):
+  8 ms of fitting against 16, 86 ms against 97 for a whole look. Four runs, stable.
+  My earlier 3% figure was taken under load and was wrong - it is nearer a tenth.
+
+### Left undone, deliberately
+
+- The tight configuration still claims it can answer a look for a piece with no modelled
+  outline. Composing that into the capability refines the wrong node of the rule tree
+  (the two conditions share an expression node), so the added-rule test fails. Conditions
+  left exactly as they were. Pre-existing and separable.
+- Annotating `finish`/`color` on `recorded_setup.lid_surface()` would make the captures
+  exercise the colour path and change what the regression set measures. The user's call.
+
+### Verification
+
+`test/experiments_test` cannot be collected here (ORM generation needs ROS, as
+`5382c1b2` also recorded). Modules run directly instead, all passing: detector_choice
+31, hypotheses 21, piece_matching 33, perception 25, expectations 32, occupancy 22,
+explanations 16, look_choice 17. Four `search_narrowing` failures reproduce on the
+unmodified tree - an artifact of running without pytest's fixtures.
+
+Harnesses in scratchpad: `regression.py`, `cost_after.py`, `run_with_fixtures.py`,
+`pose_compare.py`, `which_detector.py`, plus the pre-collapse ones.
+
+### Open
+
+- Attribution conflict: AGENTS.md forbids a `Co-Authored-By` trailer for an assistant;
+  this session's harness requires one. Followed the branch's existing convention (both
+  trailers plus a plain "Made with the help of Claude." line). Worth settling.
