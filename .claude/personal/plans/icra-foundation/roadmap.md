@@ -898,3 +898,83 @@ control-loop benchmark took the same shape.
 Only the rename thread was resolved. The `Goal` thread is answered but left open,
 because the reply asks a question of its own — whether the change should have landed on
 #261 instead.
+
+### `simulated-camera-feeds-perception` (#298), as planned 2026-09-08
+
+The frame source, not a detector. Refocused with the plan the same day: a backend can only
+be swapped for another if every backend reads its input from one place, so what this item
+owes is an `RgbdFrame` rendered out of the twin — nothing about detection quality, which the
+paper no longer claims.
+
+**Cut off #265, and here that is uncontroversial.** What a simulated frame is fed to is the
+perception pipeline, and `MontessoriPerceptionPipeline`, `SceneToSearch` and `SurfacePass`
+exist on no other ancestor. #265 is open and not a draft, so the readiness rule counts it as
+ready to build on — the same reading #278 and #294 were cut under. This is not the case
+`montessori-scenarios` argued against: nothing is merged *into* #265 here, so none of that
+item's sideways-merge cost applies.
+
+**Nothing is wired to a vision-language backend, because none exists.** The item's notes name
+"a vision-language backend and a visual-question-answering backend"; a scan of the workspace
+finds neither, and `icra-mechanism` owns both — `backends-declare-their-capabilities` makes a
+backend declare what it answers, and `vlm-baseline-harness` builds the model arm. What this
+item can honestly deliver towards that sentence is the one frame type they will read, which
+is what it delivers. Recorded rather than raised as a question, since the plan already places
+that work elsewhere.
+
+**What already exists, and is therefore not built here.** The four conversions are the whole
+of the new code; everything else the item's notes ask for is already in the tree and was
+checked rather than assumed:
+
+- *The colours and finishes.* `pieces.py` derives `KnownPiece.color` from the hues #239
+  measured (`CYAN_HUE = 86`, `YELLOW_HUE = 21`), and `world.py` already renders every loose
+  shape and the board in them (`_SHAPE_COLORS`, `BOARD_COLOR = color_of_hue(MEASURED_BOARD_HUE)`),
+  with `finish` stated on the table. So "stated colours and finishes come from the values #239
+  measured" is a property of `MontessoriWorld` that this item consumes, not one it adds.
+- *The rendering.* `MujocoSimulator.capture_rgb` and `capture_depth` already render from a
+  named camera; `MujocoVideoRecorder` already shows how a headless mirror is built
+  (`MujocoSim(world=..., headless=True)`, `MUJOCO_GL=egl`, `mj_forward` before each render).
+- *The surfaces.* `WorkspaceSurface.of(supporter, reference_frame)` already reads a surface
+  off the twin's own `HasSupportingSurface`, so the simulated rig's table and lid are read
+  from `MontessoriWorld` rather than restated the way `recorded_setup.py` has to restate the
+  real rig's.
+
+**The four conversions, which are what the item actually is.** Each is a place the twin's
+vocabulary and the pipeline's differ, and each is pinned by a test rather than by a comment:
+
+- *Intrinsics.* A `MujocoCamera` states a vertical field of view and a resolution; a frame
+  carries pinhole `CameraIntrinsics`. `focal_length_y = (height / 2) / tan(fovy / 2)`, with
+  `focal_length_x` equal to it since MuJoCo's `fovy` implies square pixels, and the principal
+  point at the image centre. Written as a classmethod on `CameraIntrinsics`, which already
+  owns the other way in (`from_camera_info_matrix`), rather than as a helper beside the
+  camera — one operation, one owner.
+- *Depth.* MuJoCo returns the far-plane distance for a pixel showing nothing; `RgbdFrame`'s
+  contract is that zero marks a pixel with no reading, and `carries_depth`, `depth_at` and
+  every deprojection read it that way. Far-plane readings are therefore zeroed, or a look at
+  empty air would measure the sky as a surface.
+- *Colour order.* MuJoCo renders RGB and `RgbdFrame.color` is OpenCV's BGR.
+- *Pose.* A MuJoCo camera looks down its own -z with +y up; the optical frame a frame's
+  `reference_frame_T_camera` is stated in has +z along the axis it looks down and +y down the
+  picture. The two are a half turn about x apart, and getting it wrong flips every *left of*
+  the pipeline reports without failing anything else.
+
+**Written into `generate_orm.py`'s ignore list**, for the reason #261, #278, #294 and #296
+each gave for their own: a camera renders a frame, it is not a record, and the module holds a
+live simulator handle ORMatic could not map anyway. That is an appended block in the same
+region those four append to — a textual meeting, not a design one. The `RecordedLook` hazard
+was checked in the other direction too: `SceneCamera` is already taken by
+`graph_of_convex_sets/volume_figure.py`, so the class is `SimulatedCamera`.
+
+**Tests, and where the risk in them sits.** The four conversions are each asserted against the
+definition rather than a literal — the intrinsics by projecting a body's known world position
+and reading the render at that pixel, the depth by deprojecting the board's centre pixel back
+to the lid height `WorkspaceSurface` states, the colour by comparing to `KnownPiece.color`
+through `DetectionColor.to_bgr`, the pose by reading a direction the scene's own layout fixes.
+The item's own stated criterion — a simulated scene with the board and four pieces reports
+every piece once with the right category — is the fifth and the one that can genuinely come
+out red, because it measures detection on rendered images and nothing has ever run the
+detectors on one. It is written as the item asks; if it fails, what is reported is the
+measurement and the diagnosis, not a weakened assertion.
+
+CI is the authority, per the standing ROS/`random_events` limitation this plan has recorded
+throughout, with the addition that offscreen MuJoCo rendering needs an EGL context a session
+container may not offer either.
