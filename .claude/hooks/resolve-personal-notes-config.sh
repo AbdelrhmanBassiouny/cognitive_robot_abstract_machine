@@ -418,13 +418,6 @@ CHECK_SETUP_SCRIPT=".claude/hooks/check-setup.sh"
 # branch is missing. Defined-once for the same reason as every path above: a
 # rename otherwise has to find every message that spells it.
 CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.sh"
-# HOOKS_REQUIREMENTS_FILE / MISSING_REQUIREMENTS_MODULE: what the Python half of
-# the hooks needs, and the check that reports which of it is absent. The file is
-# the only place a hook dependency is written down, and the module is generic
-# over whichever requirements file it is handed - so plan-size-report.sh names
-# no distribution of its own.
-HOOKS_REQUIREMENTS_FILE=".claude/hooks/requirements.txt"
-MISSING_REQUIREMENTS_MODULE="bastler.missing_requirements"
 # PLAN_SIZE_BUDGET_MODULE / PLAN_SIZE_REPORT_SCRIPT / PLAN_SIZE_GATE_MODULE:
 # the budget every plan is measured against, the command that reports it, and
 # the check that refuses a save over it - same defined-once reasoning as every
