@@ -123,7 +123,7 @@ class TestPlanFailureWins:
             evidence_of(
                 bodies,
                 [picked_up(bodies)],
-                raised_exception=MotionDidNotFinish(failed_motions=[]),
+                raised_exception=MotionDidNotFinish(unfinished_motions=[]),
             )
         )
 
