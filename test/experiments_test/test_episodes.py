@@ -14,6 +14,9 @@ from coraplex.plans.plan_node import PlanNode
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.minimal_robot import MinimalRobot
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.testing import two_arm_robot_world
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from sqlalchemy import select
@@ -264,6 +267,36 @@ def test_an_episode_keeps_the_world_the_run_happened_in(experiments_database_ses
     [recorded] = session.scalars(select(EpisodeDAO)).all()
     restored: Episode = recorded.from_dao()
     assert [body.name.name for body in restored.world.bodies] == ["shape_sorter"]
+
+
+def test_the_recorded_world_names_the_robot_among_its_annotations(
+    experiments_database_session, two_arm_robot_world
+):
+    """
+    Which links were the robot's is what a question about the robot's own body needs,
+    and an annotation is what says so: the robot is a semantic annotation of the world
+    a run happened in, so the world a run recorded is what carries it.
+    """
+    session = experiments_database_session
+    (robot_root,) = [
+        entity
+        for entity in two_arm_robot_world.kinematic_structure_entities
+        if entity.parent_kinematic_structure_entity is two_arm_robot_world.root
+    ]
+    robot = MinimalRobot.from_branch_in_world(robot_root)
+    episode = sorting_episode()
+    episode.world = two_arm_robot_world
+
+    session.add(to_dao(episode))
+    session.commit()
+
+    [recorded] = session.scalars(select(EpisodeDAO)).all()
+    restored: Episode = recorded.from_dao()
+
+    [restored_robot] = restored.world.get_semantic_annotations_by_type(AbstractRobot)
+    assert [body.name.name for body in restored_robot.bodies] == [
+        body.name.name for body in robot.bodies
+    ]
 
 
 def test_a_trial_keeps_the_motion_it_ran(experiments_database_session):
