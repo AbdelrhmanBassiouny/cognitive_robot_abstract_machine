@@ -72,9 +72,14 @@ class EQLVerbalizer:
         # fold, which records this build's own mentions in the same set.
         previously_introduced_referents = set(services.referring.seen)
         if isinstance(expression, Match):
-            fragment = MatchAssembler(self._match_context(services)).assemble(
-                expression
-            )
+            # The match is itself a request, so everything it holds is inside one: a query used as
+            # a value in one of its conditions is a sub-query, and reads as a noun phrase rather
+            # than opening a second request of its own. A query root gets the same depth from its
+            # rule's ``enters_query_scope``; a match has no rule, so it is entered here.
+            with services.configuration.query_depth_scope():
+                fragment = MatchAssembler(self._match_context(services)).assemble(
+                    expression
+                )
         else:
             fragment = fold(expression, services, RULES)
         # The discourse focus per query scope, projected once from the shared plan read model; the

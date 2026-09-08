@@ -7,7 +7,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import Callable, Optional, Dict, Generator, List
+from typing_extensions import Any, Callable, Optional, Dict, Generator, List
 
 from segmind.datastructures.enums import PlayerStatus
 from segmind.episode_player import EpisodePlayer
@@ -16,29 +16,34 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from semantic_digital_twin.world_description.world_entity import Body
 
 logger = logging.getLogger(__name__)
 
 
-
 @dataclass
 class FrameData:
     """
-    A dataclass to store the frame data.
+    One frame of an episode: where things are and how the joints stand at one time.
     """
 
     time: float
     """
     The time of the frame.
     """
-    objects_data: Dict[str, float]
+    objects_data: Dict[str, Any]
     """
-    The objects data which contains the poses of the objects.
+    The objects data which contains the poses of the objects, in the form the player's
+    source states them.
     """
     frame_idx: int
     """
     The frame index.
+    """
+    joint_positions: Dict[str, float] = field(default_factory=dict)
+    """
+    The position of each joint the source states, by the joint's name.
     """
 
 
@@ -51,7 +56,9 @@ class DataPlayer(EpisodePlayer, ABC):
     Abstract class for players that play the episode from a data source.
     """
 
-    frame_callbacks: List[Callable[[float], None]] = field(default_factory=list, hash=False, compare=False)
+    frame_callbacks: List[Callable[[float], None]] = field(
+        default_factory=list, hash=False, compare=False
+    )
     """
     Callbacks that will be called every time a new frame is processed.
     """
@@ -85,7 +92,6 @@ class DataPlayer(EpisodePlayer, ABC):
         :return: the frame data generator.
         """
 
-
     def _run(self):
         """
         Starts the episode player and processes the frames, while also setting the time between frames.
@@ -108,7 +114,7 @@ class DataPlayer(EpisodePlayer, ABC):
             if is_first_frame:
                 start_time = current_time
             dt = current_time - start_time
-            self.process_objects_data(frame_data)
+            self.apply_frame(frame_data)
 
             self.ready = True
 
@@ -122,6 +128,17 @@ class DataPlayer(EpisodePlayer, ABC):
             is_first_frame = False
         self._status = PlayerStatus.STOPPED
 
+    def apply_frame(self, frame_data: FrameData):
+        """
+        Move the world to one frame: pose its objects and position its joints, notifying
+        the world once for the whole frame.
+
+        :param frame_data: The frame data.
+        """
+        with self.world.batch_state_changes():
+            self.process_objects_data(frame_data)
+            self.process_joint_positions(frame_data)
+
     def process_objects_data(self, frame_data: FrameData):
         """
         Process the objects data, by extracting and setting the poses of objects.
@@ -133,8 +150,18 @@ class DataPlayer(EpisodePlayer, ABC):
             return
         for obj in self.world.bodies_with_collision:
             if obj in objects_poses:
-                obj.parent_connection.origin = objects_poses[obj].to_homogeneous_matrix()
+                obj.parent_connection.origin = objects_poses[
+                    obj
+                ].to_homogeneous_matrix()
 
+    def process_joint_positions(self, frame_data: FrameData):
+        """
+        Position the joints the frame states.
+
+        :param frame_data: The frame data.
+        """
+        for connection, position in self.get_joint_positions(frame_data).items():
+            connection.position = position
 
     @abstractmethod
     def get_objects_poses(self, frame_data: FrameData) -> Dict[Body, Pose]:
@@ -145,6 +172,19 @@ class DataPlayer(EpisodePlayer, ABC):
         :return: The poses of the objects.
         """
         pass
+
+    def get_joint_positions(
+        self, frame_data: FrameData
+    ) -> Dict[ActiveConnection1DOF, float]:
+        """
+        Get the joint positions the frame states, for the connections of the world that
+        the source names. A source that records no joints states none.
+
+        :param frame_data: The frame data.
+        :return: The position of each named connection.
+        """
+        return {}
+
 
 @dataclass(eq=False)
 class FilePlayer(DataPlayer, ABC):

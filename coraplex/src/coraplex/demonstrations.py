@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.executors import SingleThreadedExecutor
+from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
 from typing_extensions import ClassVar, List, Type
 
@@ -96,10 +96,29 @@ class RobotDemonstrationRosSession:
         executor.add_node(node)
         session = cls(node=node, executor=executor, owns_context=owns_context)
         session.spin_thread = threading.Thread(
-            target=executor.spin, daemon=True, name=f"{node_name}-executor"
+            target=session._spin_until_the_context_ends,
+            daemon=True,
+            name=f"{node_name}-executor",
         )
         session.spin_thread.start()
         return session
+
+    def _spin_until_the_context_ends(self) -> None:
+        """
+        Deliver :attr:`node`'s callbacks until the executor is shut down, or until
+        whoever owns the ROS context ends it.
+
+        A session that borrowed somebody else's context is still spinning when that
+        owner shuts it down, which is how such a session ordinarily stops rather than a
+        state it should refuse to be in. rclpy offers no way to observe it other than
+        raising :class:`ExternalShutdownException` out of the spin, and, unlike the
+        executor's own shutdown, does not swallow it -- so an unhandled exception is
+        printed from a run that in fact succeeded.
+        """
+        try:
+            self.executor.spin()
+        except ExternalShutdownException:
+            return
 
     def fetch_world(
         self, timeout_seconds: float = WORLD_FETCH_TIMEOUT_SECONDS

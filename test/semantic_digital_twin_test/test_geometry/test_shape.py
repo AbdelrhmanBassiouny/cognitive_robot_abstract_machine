@@ -18,6 +18,7 @@ from semantic_digital_twin.world_description.geometry import (
     Mesh,
     Scale,
     Sphere,
+    SurfaceFinish,
     Texture,
 )
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
@@ -319,6 +320,57 @@ def test_textured_primitive_survives_serialization():
     assert restored == box
 
 
+# %% how a surface takes light
+
+
+SHAPE_CONSTRUCTORS = [
+    pytest.param(Box, id="box"),
+    pytest.param(Sphere, id="sphere"),
+    pytest.param(Cylinder, id="cylinder"),
+    pytest.param(Mesh.box, id="mesh"),
+]
+"""
+A no-argument callable per concrete shape class, since each reconstructs itself from
+JSON in its own way and the finish has to survive all of them.
+"""
+
+
+@pytest.mark.parametrize("build_shape", SHAPE_CONSTRUCTORS)
+def test_a_shape_states_no_finish_until_one_is_declared(build_shape):
+    """
+    An unannotated shape reports that its finish is unknown rather than defaulting to
+    one, so a reader can tell a surface nobody described from a surface described as
+    matte.
+    """
+    assert build_shape().finish is None
+
+
+@pytest.mark.parametrize("build_shape", SHAPE_CONSTRUCTORS)
+@pytest.mark.parametrize("finish", list(SurfaceFinish))
+def test_a_declared_finish_survives_serialization(build_shape, finish):
+    """
+    A shape's finish round-trips through serialization, so a receiver reads the same
+    light behaviour the sender declared.
+    """
+    shape = build_shape()
+    shape.finish = finish
+
+    restored = from_json(to_json(shape))
+
+    assert restored.finish is finish
+
+
+@pytest.mark.parametrize("build_shape", SHAPE_CONSTRUCTORS)
+def test_an_undeclared_finish_survives_serialization_as_undeclared(build_shape):
+    """
+    A shape whose finish was never declared keeps saying so after a round-trip, instead
+    of arriving with one the sender never stated.
+    """
+    restored = from_json(to_json(build_shape()))
+
+    assert restored.finish is None
+
+
 # %% the volume a shape encloses
 
 
@@ -347,6 +399,38 @@ def test_mesh_volume(tmp_path):
     mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="stl")
 
     assert mesh.volume == pytest.approx(8.0)
+
+
+# %% the surface a shape spans
+
+
+def test_box_surface_area():
+    assert Box(scale=Scale(0.5, 2.0, 3.0)).surface_area == pytest.approx(
+        2.0 * (0.5 * 2.0 + 2.0 * 3.0 + 3.0 * 0.5)
+    )
+
+
+def test_sphere_surface_area():
+    assert Sphere(radius=2.0).surface_area == pytest.approx(4.0 * math.pi * 4.0)
+
+
+def test_cylinder_surface_area():
+    """
+    A cylinder's surface follows from the circle its width spans, not from the polygon
+    its mesh approximates that circle with.
+    """
+    cylinder = Cylinder(width=2.0, height=3.0)
+
+    assert cylinder.surface_area == pytest.approx(2.0 * math.pi * (1.0 + 3.0))
+    assert cylinder.surface_area > cylinder.mesh.area
+
+
+def test_mesh_surface_area(tmp_path):
+    source = trimesh.creation.box(extents=(1.0, 2.0, 4.0))
+
+    mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="stl")
+
+    assert mesh.surface_area == pytest.approx(2.0 * (2.0 + 8.0 + 4.0))
 
 
 # %% the units a mesh file declares

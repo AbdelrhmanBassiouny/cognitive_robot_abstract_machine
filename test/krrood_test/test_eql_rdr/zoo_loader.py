@@ -1,0 +1,161 @@
+"""
+Load the UCI zoo dataset as plain :class:`Animal` instances.
+
+Returns animals with ``species=None`` (underspecified) plus the parallel list of ground-
+truth :class:`Species` targets, so the RDR can be fit and scored.
+"""
+
+from __future__ import annotations
+
+import os
+import pickle
+
+from dataclasses import dataclass
+
+from typing_extensions import List, Optional, Self, Tuple
+
+from krrood.class_diagrams.utils import get_type_hints_of_object
+
+from .animal import Animal, Species
+
+#: The 0/1-boolean trait columns of the zoo dataset (every ``Animal`` field typed
+#: ``bool``; ``legs`` is numeric and ``name``/``species`` are handled separately).
+_BOOL_FIELDS = tuple(
+    name for name, hint in get_type_hints_of_object(Animal).items() if hint is bool
+)
+
+#: Default cache location — reuses the pickles already committed for the legacy RDR tests.
+DEFAULT_CACHE_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    "test_ripple_down_rules",
+    "test_results",
+    "zoo_dataset.pkl",
+)
+
+
+def _load_cached(cache_file: str) -> Optional[dict]:
+    """
+    Load the {features, targets, ids} parts from the per-key pickle files, or None.
+    """
+    if not cache_file.endswith(".pkl"):
+        cache_file += ".pkl"
+    parts = {}
+    for key in ("features", "targets", "ids"):
+        part_file = cache_file.replace(".pkl", f"_{key}.pkl")
+        if not os.path.exists(part_file):
+            return None
+        with open(part_file, "rb") as f:
+            parts[key] = pickle.load(f)
+    return parts
+
+
+def _save_cache(dataset, cache_file: str) -> None:
+    if not cache_file.endswith(".pkl"):
+        cache_file += ".pkl"
+    parts = {
+        "features": dataset.data.features,
+        "targets": dataset.data.targets,
+        "ids": dataset.data.ids,
+    }
+    for key, value in parts.items():
+        with open(cache_file.replace(".pkl", f"_{key}.pkl"), "wb") as f:
+            pickle.dump(value, f)
+
+
+def _fetch_zoo(cache_file: Optional[str]) -> Optional[dict]:
+    """
+    Return {features, targets, ids} dataframes from cache or the UCI repo.
+    """
+    if cache_file is not None:
+        cached = _load_cached(cache_file)
+        if cached is not None:
+            return cached
+    from ucimlrepo import fetch_ucirepo
+
+    dataset = fetch_ucirepo(id=111)
+    if dataset is None or not hasattr(dataset, "data"):
+        return None
+    if cache_file is not None:
+        _save_cache(dataset, cache_file)
+    return {
+        "features": dataset.data.features,
+        "targets": dataset.data.targets,
+        "ids": dataset.data.ids,
+    }
+
+
+def load_zoo_animals(
+    cache_file: Optional[str] = DEFAULT_CACHE_FILE,
+) -> Tuple[List[Animal], List[Species]]:
+    """
+    :param cache_file: Where to cache/load the dataset; ``None`` forces a fresh fetch.
+    :return: ``(animals, targets)`` where each animal has ``species=None`` and
+        ``targets[i]`` is the ground-truth :class:`Species` for ``animals[i]``.
+        Returns ``([], [])`` if the dataset cannot be obtained.
+    """
+    try:
+        zoo = _fetch_zoo(cache_file)
+    except (ConnectionError, ImportError):
+        return [], []
+    if zoo is None:
+        return [], []
+
+    features = zoo["features"]
+    target_ids = zoo["targets"].values.flatten()
+    names = zoo["ids"].values.flatten()
+
+    animals: List[Animal] = []
+    targets: List[Species] = []
+    for index, (_, row) in enumerate(features.iterrows()):
+        animals.append(
+            Animal(
+                name=str(names[index]),
+                legs=int(row["legs"]),
+                species=None,
+                **{field: bool(row[field]) for field in _BOOL_FIELDS},
+            )
+        )
+        targets.append(Species(int(target_ids[index])))
+    return animals, targets
+
+
+@dataclass
+class ZooDataset:
+    """
+    The loaded zoo dataset: the animals and the ground-truth species they carry.
+
+    Names the two parallel lists :func:`load_zoo_animals` returns as a pair, and owns
+    the selection every test doing so was writing out for itself.
+    """
+
+    animals: List[Animal]
+    """
+    The animals, with ``species=None`` so the RDR has something to predict.
+    """
+
+    targets: List[Species]
+    """
+    The ground-truth species, in step with :attr:`animals`.
+    """
+
+    @classmethod
+    def load(cls, cache_file: Optional[str] = DEFAULT_CACHE_FILE) -> Self:
+        """
+        :param cache_file: Where the downloaded dataset is cached.
+        :return: The dataset, empty when it can neither be read nor downloaded.
+        """
+        return cls(*load_zoo_animals(cache_file))
+
+    def __len__(self) -> int:
+        return len(self.animals)
+
+    def first(self, species: Species) -> Animal:
+        """
+        :param species: The ground-truth label to look for.
+        :return: The first animal in the dataset carrying that label.
+        """
+        return next(
+            animal
+            for animal, target in zip(self.animals, self.targets)
+            if target is species
+        )

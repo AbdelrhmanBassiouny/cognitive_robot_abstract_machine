@@ -1,7 +1,8 @@
 """
 The opening verb (performative) of a verbalized query depends on the *backend* it would
 be evaluated with, not only on the query type: a generative backend reads *"Generate"*,
-a selective backend reads *"Find"*.
+a selective backend reads *"Find"*, and one that has to observe its answers reads *"Look
+for"*.
 
 With no backend the verb falls back to the query-type default (a match generates, a
 plain query finds), so all existing output is unchanged.
@@ -21,6 +22,8 @@ from krrood.entity_query_language.verbalization.pipeline import (
     verbalize_expression,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
+
+from ...dataset.backend_that_looks_at_the_world import BackendThatLooksAtTheWorld
 
 
 @dataclass
@@ -84,6 +87,16 @@ def test_query_with_selective_backend_reads_find():
     assert text.startswith("Find")
 
 
+def test_query_with_a_backend_that_observes_reads_look_for():
+    """
+    A backend that has to go and observe its answers turns a query's verb into *"Look
+    for"*, which is what tells recalling something apart from going to look at it.
+    """
+    robot = variable(Position, [])
+    text = verbalize_expression(entity(robot), backend=BackendThatLooksAtTheWorld())
+    assert text.startswith(Directive.LOOK_FOR.value.text)
+
+
 def test_directive_for_backend_maps_backend_kind_to_verb():
     """
     The resolver maps backend kind to a directive, and ``None`` to no override.
@@ -91,3 +104,4 @@ def test_directive_for_backend_maps_backend_kind_to_verb():
     assert directive_for_backend(None) is None
     assert directive_for_backend(ProbabilisticBackend()) is Directive.GENERATE
     assert directive_for_backend(EntityQueryLanguageBackend()) is Directive.FIND
+    assert directive_for_backend(BackendThatLooksAtTheWorld()) is Directive.LOOK_FOR

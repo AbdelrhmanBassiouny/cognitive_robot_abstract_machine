@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
 
-from typing_extensions import Callable, Dict, Any, Generic, TypeVar, Self, Union
+from typing_extensions import Callable, Dict, Any, Generic, TypeVar
 
 from krrood.adapters.json_serializer import list_like_classes
 
@@ -11,15 +11,18 @@ T = TypeVar("T")
 @dataclass
 class HasFactoryAndKwargs(Generic[T]):
     """
-    Mixing containing a hierarchy of factories and their keyword arguments.
+    Mixin containing a hierarchy of factories and their keyword arguments.
+
+    The attributes are underscore-wrapped because hosts of this mixin may hand their
+    public attribute namespace to the constructed type (symbolic attribute delegation).
     """
 
-    factory: Callable[..., T]
+    _factory_: Callable[..., T]
     """
     The factory function to construct `T` with the keyword arguments.
     """
 
-    kwargs: Dict[str, Any] = field(default_factory=dict, kw_only=True)
+    _kwargs_: Dict[str, Any] = field(default_factory=dict, kw_only=True)
     """
     The keyword arguments to pass to the factory.
     """
@@ -33,7 +36,7 @@ class HasFactoryAndKwargs(Generic[T]):
         :return: The constructed object.
         """
         constructed_kwargs = {}
-        for key, value in self.kwargs.items():
+        for key, value in self._kwargs_.items():
             if isinstance(value, list_like_classes):
                 constructed_kwargs[key] = type(value)(
                     self._recurse_construct_instance_and_get_value(element)
@@ -43,7 +46,7 @@ class HasFactoryAndKwargs(Generic[T]):
                 constructed_kwargs[key] = (
                     self._recurse_construct_instance_and_get_value(value)
                 )
-        return self.factory(**constructed_kwargs)
+        return self._factory_(**constructed_kwargs)
 
     def _recurse_construct_instance_and_get_value(self, value: Any):
         """
@@ -58,6 +61,6 @@ class HasFactoryAndKwargs(Generic[T]):
 
     def __deepcopy__(self, memo):
         return self.__class__(
-            self.factory,
-            kwargs={name: deepcopy(value) for name, value in self.kwargs.items()},
+            self._factory_,
+            _kwargs_={name: deepcopy(value) for name, value in self._kwargs_.items()},
         )

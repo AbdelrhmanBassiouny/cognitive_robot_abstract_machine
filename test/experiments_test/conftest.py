@@ -19,14 +19,27 @@ from importlib.resources import files
 from pathlib import Path
 
 import pytest
-from rclpy.action import get_action_names_and_types
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql.sqltypes import NullType
 
-from coraplex.demonstrations import RobotDemonstrationRosSession
-from coraplex.perception import ROBOKUDO_QUERY_ACTION_NAME
-from experiments.real_stretch_apartment_demo.demo import CEREAL_NAME
+from krrood.ormatic.utils import create_engine
 from semantic_digital_twin.semantic_annotations.semantic_annotations import CheezeIt
 
-from coraplex.testing import StandaloneProcess
+# Only the standalone-controller fixtures below need ROS, and only they are skipped
+# without it; importing them at module scope would take every test in this directory
+# down with them. The root conftest already reads a missing ROS the same way.
+try:
+    from rclpy.action import get_action_names_and_types
+    from coraplex.demonstrations import RobotDemonstrationRosSession
+    from coraplex.perception import ROBOKUDO_QUERY_ACTION_NAME
+    from coraplex.testing import StandaloneProcess
+    from experiments.real_stretch_apartment_demo.demo import CEREAL_NAME
+except ModuleNotFoundError:
+    get_action_names_and_types = None
+    RobotDemonstrationRosSession = None
+    ROBOKUDO_QUERY_ACTION_NAME = None
+    StandaloneProcess = None
+    CEREAL_NAME = None
 
 # %% standalone controller process
 
@@ -149,3 +162,33 @@ def cereal_perception_process(stretch_controller_process):
         ],
     ) as process:
         yield process
+
+
+# %% montessori results ORM session
+
+
+@pytest.fixture(scope="function")
+def montessori_results_session():
+    """
+    An in-memory SQLite session against the montessori results schema (see
+    :mod:`experiments.montessori.sorting_results`), mirroring
+    ``coraplex_testing_session`` in ``test/coraplex_test/conftest.py``.
+
+    Skips any table ORMatic could not assign a real column type to (surfaced as
+    SQLAlchemy's ``NullType``, e.g. ``EpisodePlayerDAO.rdr_viewer`` for the
+    ``RDRCaseViewer`` field it doesn't have a mapping for) rather than letting one
+    unrelated, pre-existing gap in the huge generated ``experiments`` schema stop
+    ``create_all`` from creating every other table.
+    """
+    from experiments.orm.ormatic_interface import Base
+
+    engine = create_engine("sqlite:///:memory:")
+    session = sessionmaker(engine)()
+    creatable_tables = [
+        table
+        for table in Base.metadata.tables.values()
+        if not any(isinstance(column.type, NullType) for column in table.columns)
+    ]
+    Base.metadata.create_all(bind=session.bind, tables=creatable_tables)
+    yield session
+    session.close()

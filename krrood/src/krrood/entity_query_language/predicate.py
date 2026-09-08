@@ -333,9 +333,41 @@ class SymbolicFunction(SymbolicCallable, ABC):
 
 
 @dataclass(eq=False)
-class Triple(Predicate):
+class Relation(Predicate, ABC):
     """
-    A Triple is a type predicate that represents a relation between two entities.
+    A predicate that asserts something about one thing: its subject.
+
+    Whatever else it relates that thing to is its own to declare -- one other thing for
+    a :class:`Triple`, two for a relation like *between*, none at all for a property the
+    subject has by itself. Naming the subject is what lets a statement be read as an
+    assertion about the thing it is looking for.
+    """
+
+    @property
+    @abstractmethod
+    def subject(self) -> Any:
+        """
+        The thing the relation is asserted about.
+        """
+
+    @classmethod
+    def subject_name(cls) -> str:
+        """
+        What the relation calls the thing it is asserted about, by the name of the field
+        :attr:`subject` reads.
+
+        This is what lets a statement about a thing be read as a relation asserted about
+        it, and a relation stated about nothing be asserted about one.
+        """
+        return get_accessed_attribute_name_in_return_statement_of_property(
+            cls.subject, cls
+        )
+
+
+@dataclass(eq=False)
+class Triple(Relation):
+    """
+    A Triple is a relation between two entities.
 
     To know if your predicate is a Triple or not ask yourself can I say
     "subject" "predicate_name" "object" and it makes sense? if so then
@@ -344,17 +376,20 @@ class Triple(Predicate):
 
     @property
     @abstractmethod
-    def subject(self) -> Any:
-        """
-        The subject of the predicate.
-        """
-
-    @property
-    @abstractmethod
     def object(self) -> Any:
         """
         The object of the predicate.
         """
+
+    @classmethod
+    def object_name(cls) -> str:
+        """
+        What the relation calls the one thing it relates its subject to, by the name of
+        the field :attr:`object` reads.
+        """
+        return get_accessed_attribute_name_in_return_statement_of_property(
+            cls.object, cls
+        )
 
     @classmethod
     def _verbalization_fragment_(
@@ -378,12 +413,8 @@ class Triple(Predicate):
         )
 
         words = camel_case_to_words(cls.__name__).split()
-        subject_name = get_accessed_attribute_name_in_return_statement_of_property(
-            cls.subject, cls
-        )
-        object_name = get_accessed_attribute_name_in_return_statement_of_property(
-            cls.object, cls
-        )
+        subject_name = cls.subject_name()
+        object_name = cls.object_name()
         particles = [WordFragment(text=word) for word in words[1:]]
         return clause(
             Noun(fields[subject_name]),

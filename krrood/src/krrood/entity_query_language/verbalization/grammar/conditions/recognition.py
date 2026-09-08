@@ -10,6 +10,9 @@ from krrood.symbol_graph.symbol_graph import Symbol
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
 from krrood.entity_query_language.core.variable import Literal, Variable
+from krrood.entity_query_language.verbalization.navigation_path import (
+    stands_for_its_owner,
+)
 from krrood.entity_query_language.operators.aggregators import Aggregator, Extreme
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.query.query import Entity
@@ -57,10 +60,15 @@ def single_hop_attribute(
     expression: SymbolicExpression, subject_variable: Optional[Variable]
 ) -> Optional[Attribute]:
     """
+    A hop into the field its owner is a wrapper around
+    (:func:`~…navigation_path.stands_for_its_owner`) is not a hop of its own -- the path does not
+    say it -- so a chain ending in one still names a single attribute, and it is the wrapper that is
+    named.
+
     :param expression: Candidate expression.
     :param subject_variable: The variable the attribute must be on.
-    :return: The attribute node when *expression* is exactly ``subject_variable.<attribute>``, else
-        ``None``.
+    :return: The attribute node when *expression* names exactly one attribute of
+        *subject_variable*, else ``None``.
 
     >>> robot = variable(Robot, [])
     >>> single_hop_attribute(robot.battery, robot)._attribute_name_
@@ -74,9 +82,15 @@ def single_hop_attribute(
     chain, root = walk_chain(expression)
     if not (isinstance(root, Variable) and root._id_ == subject_variable._id_):
         return None
-    if len(chain) != 1 or not isinstance(chain[0], Attribute):
+    named = [
+        node
+        for position, node in enumerate(chain)
+        if position == 0
+        or not (isinstance(node, Attribute) and stands_for_its_owner(node))
+    ]
+    if len(named) != 1 or not isinstance(named[0], Attribute):
         return None
-    return chain[0]
+    return named[0]
 
 
 def is_none_literal(expression: SymbolicExpression) -> bool:

@@ -32,7 +32,7 @@ def _cause_and_effect_query():
         orientation=a(KRROODOrientation)(x=..., y=..., z=..., w=...),
         objects=[a(SceneObject)(type=...) for _ in range(4)],
     )
-    query.causes_effect(query.variable.objects[0].type == SceneObjectType.CHAIR)
+    query.causes_effect(query._variable_.objects[0].type == SceneObjectType.CHAIR)
     return query
 
 
