@@ -213,14 +213,51 @@ items:
   - run-results-recorded-into-sql
   status: in_progress
   session: https://claude.ai/code/session_012ouWhruGFvn9D5AvPmQNRa
-  notes: >-
-    One Episode model for simulation and the robot: the scenario and condition it ran under, its trials, the segmind events seen per tick, every query asked with its per-predicate backend assignment, answer and latency, every insertion attempt with its outcome, the failure type observed and predicted, and what was done after a failure - retried, changed or abandoned. That last is what answers "how did you resolve this the last time it happened"; nothing else in the record carries it, and it was added on 2026-09-04 when Experiment D was planned. Recorded through ORMatic the way ShapeInsertionExperience and SortingIterationResult already are, and replacing both with the one model rather than standing beside them; ResultsDatabase and results_recording keep deciding where and whether a run records. The runner records as it goes, so a run that dies keeps its finished trials, following batch_runner's reasoning. Tests record a trivial episode into SQLite and read it back through the generated interface.
+  notes: >
+    One Episode model for simulation and the robot: the scenario and condition it ran under, its
+    trials, the segmind events seen per tick, every query asked with its per-predicate backend
+    assignment, answer and latency, every insertion attempt with its outcome, the failure type
+    observed and predicted, and what was done after a failure - retried, changed or abandoned. That
+    last is what answers "how did you resolve this the last time it happened"; nothing else in the
+    record carries it, and it was added on 2026-09-04 when Experiment D was planned. Recorded
+    through ORMatic the way ShapeInsertionExperience and SortingIterationResult already are, and
+    replacing both with the one model rather than standing beside them; ResultsDatabase and
+    results_recording keep deciding where and whether a run records. The runner records as it goes,
+    so a run that dies keeps its finished trials, following batch_runner's reasoning. Tests record a
+    trivial episode into SQLite and read it back through the generated interface.
 
-    Amended 2026-09-08, and it is smaller than it first looked. A separate item was written for recording the robot's kinematic structure and the constraints its motion ran under, and then folded here on the same day: the classes are already mapped, and what is missing is two references on this model, which is a file no other branch has. ORMatic maps the whole semantic_digital_twin package apart from ten ignored classes - none of them World, Body, Connection or DegreeOfFreedom - and the whole giskardpy package apart from its solvers, so MotionStatechart, its tasks and monitors and the terminal EndMotion/CancelMotion nodes are mapped too. The dependency chain already reaches both: experiments declares coraplex, coraplex declares giskardpy, giskardpy declares semantic_digital_twin. So the self-model and control buckets need no new mapping at all, and their working-memory spelling needs nothing whatever, since the live twin already holds the structure.
+    Amended 2026-09-08, and it is smaller than it first looked. A separate item was written for
+    recording the robot's kinematic structure and the constraints its motion ran under, and then
+    folded here on the same day: the classes are already mapped, and what is missing is two
+    references on this model, which is a file no other branch has. ORMatic maps the whole
+    semantic_digital_twin package apart from ten ignored classes - none of them World, Body,
+    Connection or DegreeOfFreedom - and the whole giskardpy package apart from its solvers, so
+    MotionStatechart, its tasks and monitors and the terminal EndMotion/CancelMotion nodes are
+    mapped too. The dependency chain already reaches both: experiments declares coraplex, coraplex
+    declares giskardpy, giskardpy declares semantic_digital_twin. So the self-model and control
+    buckets need no new mapping at all, and their working-memory spelling needs nothing whatever,
+    since the live twin already holds the structure.
 
-    What this model does not do is reference either. Episode carries the scenario name, execution type, condition and perturbation names, an identifier and a timestamp; InsertionAttempt carries the realized coraplex Plan, which is the robot plan and is already enough. Neither the world an episode ran in nor the motion statechart a trial ran is referenced anywhere, so "how many joints did you have", "what were you constrained by" and "why did you stop" have no long-term-memory spelling. The addition is a world reference on Episode and a statechart reference on the trial or the insertion attempt, plus the terminating node, with a test that reads the link and joint counts and the active constraints back.
+    What this model does not do is reference either. Episode carries the scenario name, execution
+    type, condition and perturbation names, an identifier and a timestamp; InsertionAttempt carries
+    the realized coraplex Plan, which is the robot plan and is already enough. Neither the world an
+    episode ran in nor the motion statechart a trial ran is referenced anywhere, so "how many joints
+    did you have", "what were you constrained by" and "why did you stop" have no long-term-memory
+    spelling. The addition is a world reference on Episode and a statechart reference on the trial
+    or the insertion attempt, plus the terminating node, with a test that reads the link and joint
+    counts and the active constraints back.
 
-    One sizing decision is the developer's and is not taken here: whether each episode stores a world of its own or references one shared robot model. A full World per episode is honest and answers a question about a run whose robot differed; at the corpus scale episode-corpus-generated-at-scale targets it may be disproportionate, and a shared reference is the alternative.
+    One sizing decision is the developer's and is not taken here: whether each episode stores a
+    world of its own or references one shared robot model. A full World per episode is honest and
+    answers a question about a run whose robot differed; at the corpus scale
+    episode-corpus-generated-at-scale targets it may be disproportionate, and a shared reference is
+    the alternative.
+
+    Updated 2026-09-08 from icra-evidence's `question-set-and-ground-truth` (#295): the fold this
+    item's roadmap recorded on 2026-09-08 has now been made on the branch. `a96531635` adds
+    `Episode.world` and `RecordedTrial.motion_statechart`, both optional and defaulting to none,
+    with three round-trip tests. Whether a corpus keeps a world per episode or shares one is
+    unchanged as the developer's open call - the field allows both.
 - id: episodes-queried-by-eql
   title: >-
     Long-term memory answered by EQL through the SQL backend, and reports read from it
