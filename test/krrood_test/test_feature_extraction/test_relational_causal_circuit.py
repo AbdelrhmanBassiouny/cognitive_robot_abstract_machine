@@ -8,6 +8,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from krrood.entity_query_language.factories import variable
+from krrood.ormatic.data_access_objects.helper import to_dao
 from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
     CausalCircuit,
 )
@@ -18,8 +20,19 @@ from probabilistic_model.probabilistic_circuit.relational.exceptions import (
     AmbiguousVariablePathError,
     VariableNotFoundError,
 )
-from probabilistic_model.probabilistic_circuit.relational.rspn import GroundingMode
-from .test_rspns import rpc, room_query_4, scenario  # noqa: F401
+from probabilistic_model.probabilistic_circuit.relational.rspn import (
+    GroundingMode,
+    RelationalProbabilisticCircuit,
+)
+from random_events.product_algebra import SimpleEvent
+from ..dataset.example_classes import SceneRoom, SceneRoomAggregations
+from .test_rspns import (  # noqa: F401
+    _room_with_chair_count,
+    correlated_room_query,
+    rpc,
+    room_query_4,
+    scenario,
+)
 
 # %% resolve_variable
 
@@ -173,3 +186,87 @@ def test_relational_causal_circuit_ground_does_not_warn_below_threshold(
             grounding_mode=GroundingMode.EXACT,
         )
     assert not any("leaf regions" in message for message in caplog.messages)
+
+
+# %% RelationalCausalCircuit.fit
+
+
+@pytest.fixture
+def many_chair_count_rooms():
+    """
+    Two large chair-count partitions (20 rooms each), with each room's continuous
+    position varied -- enough rows and variance for JointProbabilityTree to split each
+    partition further on its own, the precondition the regression test below needs.
+    """
+    rng = np.random.default_rng(0)
+    return [_room_with_chair_count(rng, 1) for _ in range(20)] + [
+        _room_with_chair_count(rng, 3) for _ in range(20)
+    ]
+
+
+def test_fit_stratifies_the_class_circuit_by_the_given_variable(many_chair_count_rooms):
+    model = RelationalProbabilisticCircuit(SceneRoom)
+    chair_count_variable = variable(SceneRoomAggregations).chair_count()
+    RelationalCausalCircuit().fit(
+        model,
+        [to_dao(room) for room in many_chair_count_rooms],
+        stratify_by=chair_count_variable,
+    )
+    resolved_chair_count = next(
+        v
+        for v in model.class_probabilistic_circuit.variables
+        if v.name == "SceneRoomAggregations.chair_count()"
+    )
+    for value in (1, 3):
+        event = SimpleEvent.from_data({resolved_chair_count: value}).as_composite_set()
+        probability = model.class_probabilistic_circuit.probability(
+            event.fill_missing_variables_pure(
+                model.class_probabilistic_circuit.variables
+            )
+        )
+        assert probability == pytest.approx(0.5, abs=0.01)
+
+
+def test_verify_support_determinism_survives_a_stratified_partitions_own_further_splits(
+    many_chair_count_rooms, correlated_room_query
+):
+    """
+    Regression test: a stratified partition's own further JointProbabilityTree splits on
+    unrelated variables (here, room position) used to make
+    ``verify_support_determinism`` fail even though the stratification itself was
+    correct.
+
+    ``CausalCircuit._check_support_disjointness`` used to compute each variable's
+    marginal via ``ProbabilisticCircuit.marginal``, whose trailing
+    ``SumUnit.simplify()`` flattens nested SumUnits together, merging a partition's own
+    further-split branches into siblings of a different partition's branches and erasing
+    which stratified value each one actually belonged to. Grounding also used to trigger
+    the same flattening on the class circuit itself, via ``_condition_class_circuit``
+    unconditionally calling ``log_conditional_in_place`` even when there was nothing to
+    condition on.
+    """
+    model = RelationalProbabilisticCircuit(SceneRoom)
+    chair_count_variable = variable(SceneRoomAggregations).chair_count()
+    relational_causal_circuit = RelationalCausalCircuit()
+    relational_causal_circuit.fit(
+        model,
+        [to_dao(room) for room in many_chair_count_rooms],
+        stratify_by=chair_count_variable,
+    )
+
+    np.random.seed(0)
+    grounded = model.ground(correlated_room_query, grounding_mode=GroundingMode.SAMPLED)
+    resolved_chair_count = next(
+        v for v in grounded.variables if v.name == "SceneRoomAggregations.chair_count()"
+    )
+    object_type_variable = next(
+        v for v in grounded.variables if v.name == "SceneRoom.objects[0].type"
+    )
+
+    causal_circuit = relational_causal_circuit.from_grounded_circuit(
+        grounded,
+        causal_variables=[resolved_chair_count],
+        effect_variables=[object_type_variable],
+        trim_to_registered_variables=True,
+    )
+    assert isinstance(causal_circuit, CausalCircuit)

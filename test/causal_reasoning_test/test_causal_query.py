@@ -1,20 +1,25 @@
 """
 Validation of causal-query grounding against the CTU Mutagenesis dataset
 (https://relational.fel.cvut.cz/dataset/Mutagenesis), covering plan step 5:
-registering chlorine count as a cause of mutagenicity and comparing naive
+registering aromatic-bond count as a cause of mutagenicity and comparing naive
 conditioning against backdoor adjustment.
 """
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from experiments.causal_reasoning.mutagenesis.causal_query import (
-    ChlorineCountCausalQuery,
+    AromaticBondCountCausalQuery,
 )
 from experiments.causal_reasoning.mutagenesis.dataset import (
     fetch_mutagenesis_molecules,
     is_mutagenesis_dataset_reachable,
+    synthetic_mutagenesis_molecules,
+)
+from experiments.causal_reasoning.mutagenesis.domain import (
+    MutagenesisMoleculeAggregations,
 )
 
 requires_mutagenesis_dataset = pytest.mark.skipif(
@@ -23,10 +28,36 @@ requires_mutagenesis_dataset = pytest.mark.skipif(
 )
 
 
+# %% synthetic-data pipeline (no network access, runs in CI)
+
+
+def test_synthetic_causal_circuit_is_support_deterministic():
+    """
+    Regression test, paired with the live-dataset tests below: stratifying the class
+    circuit by aromatic-bond count used to fail support-determinism verification once a
+    partition was large and varied enough for JointProbabilityTree to split it further
+    on other variables, because both grounding and verification computed marginals
+    through a path that flattens nested SumUnits and erases which partition a further-
+    split branch actually belongs to.
+    """
+    molecules = synthetic_mutagenesis_molecules(
+        np.random.default_rng(0), molecule_count=60, atom_count=3, bond_count=4
+    )
+    result = AromaticBondCountCausalQuery().run(molecules, atom_count=2, bond_count=1)
+    assert result.support_determinism_verified
+
+
+# %% live-dataset pipeline (real CTU Mutagenesis data, skipped without network access)
+
+
 @pytest.fixture(scope="module")
-def causal_query_result():
-    molecules = fetch_mutagenesis_molecules()
-    return ChlorineCountCausalQuery().run(molecules, atom_count=2)
+def mutagenesis_molecules():
+    return fetch_mutagenesis_molecules()
+
+
+@pytest.fixture(scope="module")
+def causal_query_result(mutagenesis_molecules):
+    return AromaticBondCountCausalQuery().run(mutagenesis_molecules, atom_count=2)
 
 
 @requires_mutagenesis_dataset
@@ -35,16 +66,25 @@ def test_causal_circuit_is_support_deterministic(causal_query_result):
 
 
 @requires_mutagenesis_dataset
-def test_every_distinct_chlorine_count_is_reported(causal_query_result):
+def test_every_distinct_aromatic_bond_count_is_reported(
+    causal_query_result, mutagenesis_molecules
+):
     """
-    ``mutagenesis_188`` has molecules with chlorine counts 0 through 5 (chlorine is
-    rare: 177 of 188 molecules have none). All six must survive grounding and
-    registration, not just the dominant one.
+    Every distinct aromatic-bond-count value present in the training population must
+    survive grounding and registration, not just the dominant one.
     """
-    reported_counts = [effect.chlorine_count for effect in causal_query_result.effects]
+    expected_counts = sorted(
+        {
+            MutagenesisMoleculeAggregations(instance=molecule).aromatic_bond_count()
+            for molecule in mutagenesis_molecules
+        }
+    )
+    reported_counts = [
+        effect.aromatic_bond_count for effect in causal_query_result.effects
+    ]
     assert reported_counts == sorted(reported_counts)
     assert len(reported_counts) == len(set(reported_counts))
-    assert reported_counts == [0, 1, 2, 3, 4, 5]
+    assert reported_counts == expected_counts
 
 
 @requires_mutagenesis_dataset

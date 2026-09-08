@@ -435,17 +435,15 @@ class CausalCircuit:
         query_variable: Variable,
     ) -> Optional[OverlappingChildSupportsViolation]:
         """
-        Check a single SumUnit, already marginalized to query_variable, for disjoint
-        children.
+        Check a single SumUnit for disjoint children, given each child's support already
+        restricted to query_variable.
 
         Returns a violation if the SumUnit splits on the variable but has at least one
         overlapping child pair. Returns None if the SumUnit does not split on the
         variable, or if all splitting children are pairwise disjoint.
 
-        :param node: The SumUnit to inspect, as it appears in the circuit already
-            marginalized to query_variable.
-        :param child_marginals: Each child's own result_of_current_query, already
-            restricted to query_variable by that marginalization.
+        :param node: The SumUnit to inspect.
+        :param child_marginals: Each child's own support, restricted to query_variable.
         :param query_variable: The query Variable being checked.
         :returns: A violation if overlapping children are detected, else None.
         """
@@ -465,34 +463,39 @@ class CausalCircuit:
         Check that for each declared query Variable, no SumUnit that splits on that
         Variable has children with overlapping marginal support.
 
-        Marginalizes the circuit down to each query Variable in turn rather than
-        computing the full joint support once: a circuit with many retained relational
-        latents can carry thousands of nodes, so restricting to one variable at a time
-        keeps each disjointness check cheap instead of growing with all of them.
+        Reads each child's own already-computed joint support off the circuit's own
+        node structure and restricts it to one query Variable at a time with a pure
+        ``Event.marginal`` projection, rather than calling
+        ``ProbabilisticCircuit.marginal`` per Variable. That circuit-level path deep-
+        copies the circuit and then simplifies it, and simplification's same-type
+        SumUnit merge flattens nested SumUnits into their parent -- which silently
+        erases exactly the branch boundaries this check exists to inspect (for
+        instance a stratified partition's own per-value branches, whenever
+        `JointProbabilityTree` gives one of those partitions further splits of its
+        own on other variables).
 
         :param all_query_variables: Union of all Variables across all query_sets.
         :returns: List of violations, empty if all split nodes are support-disjoint.
         """
         violations: List[OverlappingChildSupportsViolation] = []
+        # Computed for its side effect: populates result_of_current_query on every
+        # node of the circuit's own (unflattened) structure, read directly off each
+        # SumUnit's children in the loop below.
+        _ = self.probabilistic_circuit.support
 
-        for query_variable in all_query_variables:
-            marginal_circuit = self.probabilistic_circuit.marginal([query_variable])
-            if marginal_circuit is None:
-                continue
-            # Computed for its side effect: populates result_of_current_query on every
-            # node below, read directly off each SumUnit's children in the loop below.
-            _ = marginal_circuit.support
+        for layer in self.probabilistic_circuit.layers:
+            for node in layer:
+                if not isinstance(node, SumUnit) or len(node.subcircuits) < 2:
+                    continue
 
-            for layer in marginal_circuit.layers:
-                for node in layer:
-                    if not isinstance(node, SumUnit) or len(node.subcircuits) < 2:
+                for query_variable in all_query_variables:
+                    if query_variable not in node.variables:
                         continue
 
                     child_marginals = [
-                        child.result_of_current_query for child in node.subcircuits
+                        child.result_of_current_query.marginal([query_variable])
+                        for child in node.subcircuits
                     ]
-                    if any(marginal is None for marginal in child_marginals):
-                        continue
 
                     violation = self._check_sum_unit_for_variable(
                         node, child_marginals, query_variable

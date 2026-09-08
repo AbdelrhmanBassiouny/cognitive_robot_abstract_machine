@@ -11,6 +11,7 @@ construction.
 
 from __future__ import annotations
 
+import copy
 import logging
 import math
 from dataclasses import dataclass
@@ -302,7 +303,9 @@ class RelationalCausalCircuit:
                     causal_variables + effect_variables + adjustment_variables
                 )
             )
-            grounded_circuit = grounded_circuit.marginal(registered_variables)
+            grounded_circuit = self._restrict_to_variables(
+                grounded_circuit, registered_variables
+            )
 
         self._warn_if_adjustment_regions_are_expensive(
             grounded_circuit, adjustment_variables
@@ -316,6 +319,37 @@ class RelationalCausalCircuit:
         )
         causal_circuit.verify_support_determinism()
         return causal_circuit
+
+    @staticmethod
+    def _restrict_to_variables(
+        circuit: ProbabilisticCircuit, variables: List[Variable]
+    ) -> Optional[ProbabilisticCircuit]:
+        """
+        Restrict circuit to variables, without ``SumUnit.simplify()``'s same-type
+        merge.
+
+        Mirrors ``ProbabilisticCircuit.marginal``, minus its trailing ``simplify()``
+        call: that call flattens nested SumUnits into their parent, which leaves the
+        represented distribution unchanged but erases the branch boundaries
+        ``CausalCircuit.verify_support_determinism`` relies on -- for instance a
+        stratified partition's own per-value branches, once one of those partitions
+        picks up further splits of its own on other variables during fitting.
+
+        :param circuit: The circuit to restrict.
+        :param variables: The variables to keep.
+        :return: The restricted circuit, or ``None`` if none of ``variables`` are
+            modeled by it.
+        """
+        result = copy.deepcopy(circuit)
+        root = [
+            node.marginal(variables)
+            for layer in reversed(result.layers)
+            for node in layer
+        ][-1]
+        if root is None:
+            return None
+        result.remove_unreachable_nodes(root)
+        return result
 
     def _warn_if_adjustment_regions_are_expensive(
         self,
