@@ -61,10 +61,10 @@ def look_for_the_cube_on_the_lid(
     A direction is read from where the camera stands, so *above* means further up the
     picture rather than higher in the world. Which direction tells the two pieces on the
     lid apart is measured rather than assumed: on ``tracy_pickup_demo`` the cube stands
-    19 mm above the square hole in the picture and 25 mm above the triangle hole, while
-    the cylinder stands 45 mm below the one and 39 mm below the other. Left and right
-    tell the two apart from no hole on this board, since no hole stands between them
-    across the picture.
+    21 mm above the square hole in the picture and 27 mm above the triangle hole, while
+    the cylinder stands 43 mm below the one and 37 mm below the other. Up and down leave
+    the wider margin of the two: across the picture the cylinder stands only 7 mm from
+    the square hole.
 
     :param look: The look the statement is about, which is what says where the board
         stands; its holes are put in that look's world here so the statement can
