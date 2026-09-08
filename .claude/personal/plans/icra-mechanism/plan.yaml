@@ -22,10 +22,10 @@ tracks:
   description: >-
     Lane 2. The failure taxonomy, typing from evidence, prediction from the query result before execution, and the knowledge ablations and perturbations that produce failures on purpose.
 - id: control
-  name: Control as constrained optimization over the same knowledge
+  name: The control system answers for itself
   wave: mechanism
   description: >-
-    Lane 1. The control program reads the twin as the constraints of its optimization and reports what it is constrained by back into it, so the controller is questioned in the same language as the scene.
+    Lane 1. The control program is already dataclasses over the same world model, so it is asked what it was constrained by and which degrees of freedom it used in the same query language as the scene - a read over what the motion statechart already holds, not a change to how a motion is built.
 - id: baselines
   name: Verbalised memory and the VLM baselines
   wave: mechanism
@@ -104,7 +104,7 @@ items:
   depends_on: []
   status: not_started
   notes: >-
-    The memo's conditions as Condition instances: full; no working memory; no hole-shape knowledge (the board's holes unknown to the twin, which also needs the mesh scale 0.865 #236 measured to be in the twin first, so the full condition is honest); no degree-of-freedom limits; no pickup detection; no predicate-narrowed perception. Each condition removes one thing the action reads from the twin or the backends, so the action's code has no ablation flags of its own. A test per condition asserts the knowledge really is absent (the query that would read it fails or returns nothing).
+    The memo's conditions as Condition instances: full; no working memory; no hole-shape knowledge (the board's holes unknown to the twin, which also needs the mesh scale 0.865 #236 measured to be in the twin first, so the full condition is honest); no degree-of-freedom limits (a twin edit, since DegreeOfFreedomLimits lives on the twin's own DegreeOfFreedom and the controller reads it there); no pickup detection; no predicate-narrowed perception. Each condition removes one thing the action reads from the twin or the backends, so the action's code has no ablation flags of its own. A test per condition asserts the knowledge really is absent (the query that would read it fails or returns nothing).
   blockers:
   - >-
     Cross-plan: depends on icra-foundation's `montessori-scenarios` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
@@ -203,16 +203,22 @@ items:
   blockers:
   - >-
     Cross-plan: depends on icra-foundation's `simulated-camera-feeds-perception` (not_started), which is what gives every backend the same frames; depends_on cannot cross a plan boundary.
-- id: control-reads-the-twin-as-constraints
+- id: control-constraints-and-degrees-of-freedom-queried
   title: >-
-    The motion statechart's constraints are built from queries over the twin, and what it is constrained by is itself queryable
+    A task is asked what it is constrained by and which degrees of freedom it used, in the same query language as the scene
   branch: null
   pull_request_number: null
   track: control
   depends_on: []
   status: not_started
   notes: >-
-    The half of the thesis the plan had no item for: the control program does not receive a pose, it reads the same representation everything else reads and turns it into the constraints of an optimization. The insertion's goal pose, the hole geometry it must clear, the reachability that decides whether the pose is attainable and the degree-of-freedom limits the solver may not exceed are each an EQL query over the twin, and the resulting giskardpy tasks and monitors are built from those answers rather than from numbers written into the action. The other direction matters as much: the active tasks, the constraints the quadratic program is solving under and the monitor that ended a motion are published back into the twin, so "what are you constrained by right now" and "why did you stop" are queries in the same language as "what colour is the cube". That is what makes the no-degree-of-freedom-limits ablation a knowledge condition rather than a code branch. Tests build one insertion's statechart from queries alone and assert its constraint set changes when the queried knowledge does.
+    The control half of the thesis, and it is a read rather than a rewrite: the motion statechart is already dataclasses over the same world model, so the questions are answerable from what it holds. What the paper asks of it - what is the constraint for inserting the cube, and how does it differ from the triangle's; which degrees of freedom did the insertion use, and which did it fix or ignore; the same for the pick-up - are answered with the giskardpy constraint objects themselves, not with prose about them.
+
+    What already exists: GiskardConstraint is a dataclass carrying its name, its constrained expression, its quadratic and linear weights and its normalization factor; ConstraintCollection holds a task's equality and inequality constraints grouped by the enforcement strategy that turns them into rows of the quadratic program; every MotionStatechartNode owns one, and NodeArtifacts.constraints is its assembled shape; coraplex's executable holds the MotionStatechart a plan node ran; and a constraint's expression answers free_variables(), which is what says which of the world's DegreeOfFreedom instances it actually touches.
+
+    What is missing is only the reach and the naming. The collection and the statechart are private attributes, the executable keeps only the motion it is currently running rather than the one each plan node ran, and nothing names the degrees of freedom a task constrains as against the ones it leaves free - that has to be derived from the expressions' free variables against the world's own set. Give those a name and an EQL spelling and the bucket is answered. Tests ask the cube's insertion and the triangle's for their constraints and assert they differ in the named constraint rather than in a rendered string, and ask one insertion which degrees of freedom it used, asserting the ones it fixed are absent from the answer.
+
+    Rewritten 2026-09-08 at the developer's correction: the first version of this item had the statechart's constraints *built* from queries over the twin, which has never been implemented and is a far larger task than the week holds. Building is not what the claim needs - the representation is already shared, so questioning it is what shows that.
   blockers:
   - >-
     Cross-plan: depends on icra-foundation's `integrated-simulation-pipeline` (in_progress, PR #265); depends_on cannot cross a plan boundary.

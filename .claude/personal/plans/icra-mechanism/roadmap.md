@@ -161,23 +161,49 @@ the stronger and more interesting claim, and the one that says what the
 architecture is actually built on. The classical stack stays the default
 because the cost comparison needs something whose cost is known.
 
-### `control-reads-the-twin-as-constraints` (new, its own `control` track)
+### `control-constraints-and-degrees-of-freedom-queried` (new, its own `control` track)
 
-The half of the thesis sentence with no item behind it. The control program
-does not receive a pose: the insertion's goal pose, the hole geometry it must
-clear, the reachability that decides attainability and the degree-of-freedom
-limits the solver may not exceed are each a query over the twin, and the
-giskardpy tasks and monitors are built from those answers. The other
-direction is what makes the control system *questionable*: the active tasks,
-the constraints the quadratic program is solving under and the monitor that
-ended a motion are published back into the twin, so "what are you constrained
-by right now" and "why did you stop" are queries in the same language as
-"what colour is the cube". It is also what makes the no-degree-of-freedom-limits
-ablation a knowledge condition rather than a code branch — which
-`knowledge-ablations` already assumed and nothing implemented.
+The half of the thesis sentence with no item behind it. Its own track rather
+than a fourth item in `backend-routing`, because control is a peer of
+perception and memory in the claim, not a routing concern.
 
-Its own track rather than a fourth item in `backend-routing`, because control
-is a peer of perception and memory in the claim, not a routing concern.
+**Rewritten the same day, at the developer's correction.** The first version
+had the statechart's constraints *built* from queries over the twin — the
+goal pose, the hole geometry, reachability and the degree-of-freedom limits
+each queried, and the giskardpy tasks assembled from the answers. That has
+never been implemented here, it is a far larger task than the week holds, and
+it is not what the claim needs. In the developer's words, what was meant was
+*"just the ability to query the control system using predicates or methods or
+the model itself, because it is all the same knowledge representation" —
+"what is the constraint for inserting the cube vs the one for the triangle,
+and it gives me a giskard constraint for that task as an answer, or what
+degrees of freedom you made use of to execute the insertion task and what did
+you fix or ignore".*
+
+So the item is a **read**, and the representation is already there:
+
+- `GiskardConstraint` is a dataclass — name, the constrained expression, its
+  quadratic and linear weights, its normalization factor.
+- `ConstraintCollection` holds a task's equality and inequality constraints,
+  grouped by the enforcement strategy that turns them into rows of the
+  quadratic program.
+- Every `MotionStatechartNode` owns one; `NodeArtifacts.constraints` is the
+  assembled shape.
+- coraplex's executable holds the `MotionStatechart` a plan node ran.
+- A constraint's expression answers `free_variables()`, which is what says
+  which of the world's `DegreeOfFreedom` instances it actually touches.
+
+What is missing is the reach and the naming: the collection and the statechart
+are private attributes, the executable keeps only the motion currently
+running rather than the one each plan node ran, and nothing names the degrees
+of freedom a task constrains as against the ones it leaves free. Give those a
+name and an EQL spelling and the control bucket is answered.
+
+**One knock-on.** The old version claimed it was what made the
+no-degree-of-freedom-limits ablation a knowledge condition rather than a code
+branch. That claim did not need it: `DegreeOfFreedomLimits` already lives on
+the twin's own `DegreeOfFreedom` and the controller reads it there, so the
+ablation is a twin edit already. `knowledge-ablations` now says so.
 
 ### `physics-verification-backend` moved off the critical path
 
