@@ -951,3 +951,59 @@ until this round nothing asked a member of it for something only the subclass ha
 The degrees-of-freedom thread is unchanged: whether an episode records the robot's own
 links, not only the world's. It is the one ask on this branch that needs a decision rather
 than an implementation.
+### `question-set-and-ground-truth` (#295), the fourth review round
+
+Two asks, and one of them broke every test in two packages before it was noticed.
+
+**A mixin that inherits `Symbol` is not a local change.** The previous round gave nine
+coraplex actions `ManipulatesBodies`, which inherits `Symbol` so a query can range over
+them. The repository's root `conftest.py` builds one class diagram over
+`recursive_subclasses(Symbol)` in an autouse fixture, so those nine classes joined a graph
+every test in the repository builds -- and coraplex's `Designator.fields` read every
+dataclass field of a subclass out of `get_type_hints(cls.__init__)`. `Symbol`'s
+`_inference_explanation_` is `init=False`, so it has no hint there, and looking it up
+raised `KeyError` while the fixture was being set up: **437 errors in coraplex, 282 in
+experiments, every test in both**, and the "Examples and Demos" workflow red for the first
+time on this branch.
+
+The fix is that a designator reports the parameters its constructor takes rather than every
+field it inherits, which is what both readers of it want anyway -- a plan node printing a
+node's parameters, and an action making one query variable per parameter. Neither wants a
+field a base contributes for its own bookkeeping. Reproduced in a standalone mimic of the
+class shape first, since coraplex needs ROS and cannot run in a session container.
+
+**Three CI rounds in a row were spent on consequences of enrolling a class in `Symbol`,**
+and the reusable lesson is the one above: inheriting `Symbol` puts a class into a
+process-wide class diagram and a process-wide instance graph, so it is measured against
+every package that imports it rather than against the one being edited.
+
+#### Recording the robot: the previous round had this wrong
+
+The open thread asked whether the episode should record which links were the robot's, and
+the previous round answered that recording the world does not tell a link from a grasped
+body. That was wrong about the recording. The robot **is** a semantic annotation,
+`World.semantic_annotations` is a mapped field, and semantic_digital_twin's own
+`test_hsrb_world` already round-trips an HSRB out of the database -- so `Episode.world`
+carries every annotation including the robot. `test_the_recorded_world_names_the_robot_among_its_annotations`
+now proves it here rather than leaving it a claim.
+
+Two things still stand between that and the robot's own joint count, and both are the
+developer's calls rather than this item's work:
+
+- **No run sets `Episode.world`.** `Episode.from_run` is given only the scenario, the
+  scenario builds a world per trial, and `ScenarioRunner.run_trial` releases that world in
+  a `finally` before it constructs the `Trial` the recorder is handed. Keeping it means
+  `Trial` carrying the world it ran in and the run loop holding it past `release_world` --
+  the runner's code, and it needs the one-world-per-episode-or-per-trial decision
+  `Episode.world`'s own docstring left open.
+- **The robot's own count is not one query.** The live spelling counts the degrees of
+  freedom of active connections between two of `robot.bodies`, and
+  `SemanticAnnotation.bodies` is a Python property that walks the annotation's fields.
+  There is no mapped path from an annotation to its entities -- the
+  `WorldEntity._semantic_annotations` backreference is private and unmapped -- so over
+  recorded rows it is either a mapped relation in semantic_digital_twin or a
+  recall-then-count in Python, the way `ground_truth` already reads recorded objects.
+
+So `NumberOfDegreesOfFreedomInTheRecordedWorld` still counts the world's, which is what its
+name says.
+
