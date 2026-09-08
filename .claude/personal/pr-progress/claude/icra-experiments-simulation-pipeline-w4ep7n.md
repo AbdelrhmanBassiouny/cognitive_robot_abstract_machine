@@ -1,9 +1,18 @@
-## #265: both outstanding items closed, and #292 folded in
+## #265: both outstanding items closed, #292 folded in, CI down to one field
 
-**State.** `0e0bacfad` on `claude/icra-experiments-simulation-pipeline-w4ep7n`, a draft,
-description rewritten to match. #292 is closed as merged. Three commits this round:
+**State.** `06e7af3eb` on `claude/icra-experiments-simulation-pipeline-w4ep7n`, a draft,
+description up to date. #292 is closed as merged. Four commits this round:
 `93cdd21c9` merges main, `7a6f8f7a9` migrates one stale `Match.variable` read,
-`0e0bacfad` merges #292.
+`0e0bacfad` merges #292, `06e7af3eb` migrates one stale `failed_motions` keyword.
+
+**CI.** Twenty-two of twenty-three checks passed on `0e0bacfad`; `krrood` came green,
+confirming `7a6f8f7a9`. The single failure was `experiments`, on the renamed field that
+`06e7af3eb` fixes. CI on `06e7af3eb` had not reported when this was written, and per the
+standing rule nothing was armed to watch it -- ask, or look at the run.
+
+**Next, if anything.** Nothing outstanding that this session can act on. The
+`needs-resolution` label is still on the PR and looks like the stack tooling's, so it was
+left alone.
 
 **1. The merge conflict against main is resolved**, in the four files predicted, all
 four keeping both sides:
@@ -21,7 +30,12 @@ four keeping both sides:
 **2. The experiments job's blocker is in.** #292 merged whole, so the `RecordedLook`
 rename, the 12 mm hole-placement fix and the requoted narrowing millimetres are all here.
 
-**3. One collision main brought, which nobody predicted.** `test_relational_circuit_registry_causal.py`
+**3. Two collisions main brought, neither predicted, both #192's shape.**
+`MotionDidNotFinish.failed_motions` was renamed `unfinished_motions` by main's
+`2664659b4`, whose own two readers pass the field positionally and so never changed; this
+branch's `test_montessori_insertion_diagnosis.py` names it by keyword and exists on no
+ancestor of that commit, so git flagged nothing. Migrated in `06e7af3eb`, assertion
+untouched. And: `test_relational_circuit_registry_causal.py`
 reads `query.variable`, retired by #192. Since #192 that builds an attribute expression
 rather than raising, so what fails is `random_events` asking `issubclass` of `None`, in
 another package. Standing hazard: every future merge of main can carry another, and none
