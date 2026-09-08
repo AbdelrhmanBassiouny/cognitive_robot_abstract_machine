@@ -252,7 +252,9 @@ def _build_hole_specs(footprints: List[HoleFootprint]) -> List[_HoleSpec]:
     """
     return [
         _hole_spec_from_footprint(footprint, name)
-        for footprint, name in zip(footprints, hole_names(footprints))
+        for footprint, name in zip(
+            footprints, hole_names([footprint.category for footprint in footprints])
+        )
     ]
 
 

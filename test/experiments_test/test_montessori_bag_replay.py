@@ -37,7 +37,7 @@ The recording of the pick-up demo, which carries the transform tree as well as t
 camera.
 """
 
-LOOKS_TO_PLAY = 5
+FRAMES_TO_PLAY = 5
 """
 How many frames of the recording this test runs the pipeline on.
 
@@ -79,8 +79,8 @@ def test_the_demo_recording_plays_through_the_pipeline_into_the_windows() -> Non
         viewer=viewer,
     )
     try:
-        replay.play(limit=LOOKS_TO_PLAY)
+        replay.play(limit=FRAMES_TO_PLAY)
     finally:
         viewer.close()
-    assert len(replay.scenes) == LOOKS_TO_PLAY
+    assert len(replay.scenes) == FRAMES_TO_PLAY
     assert all(scene.board is not None for scene in replay.scenes)
