@@ -845,3 +845,35 @@ Unchanged, and both still open on their threads rather than answered here, becau
 each changes what the representation claims rather than how it is queried: whether a
 body in the gripper is an object the robot sees or part of the robot, and whether an
 episode should record which links were the robot's.
+### `question-set-and-ground-truth` (#295), what CI said about the round above
+
+The round above was reported as done on the strength of krrood's own suite. CI, which is
+where the long-term questions actually run, failed three of them: the join translated,
+but the answers came back multiplied -- nine rows where `['cube', 'cube', 'cylinder']`
+and `['cube']` were right.
+
+Two defects, both in shapes krrood's new tests did not cover, and each a failing test
+there first:
+
+- **Selecting an attribute reached through a collection.** `entity(event.tracked_object)`
+  is the shape of most long-term questions, and the variable such a chain starts from was
+  never bound to what the query selects from -- only a plain selected variable was. That
+  table then sat in the query with nothing joining it, so the answer was a row per pair of
+  the members with every row of it, and the conditions restricting the collection's owner
+  were lost with it: the reproduction returned drawers from *both* worlds, not merely too
+  many of the right one.
+- **A condition relating two members of one collection.** Dropped outright. Read as a
+  table-level join, it resolves both sides to the members' shared data access class, finds
+  that table in the query already, and reports itself handled -- a heuristic that cannot
+  tell two aliases of one class apart, which is exactly what the round above had just made
+  possible. A comparison whose sides both range over a bound element is now left to be
+  translated as the ordinary condition it is.
+
+krrood's ORM suite is 140 passed.
+
+**Why the first round missed both.** Every membership test it added asserted
+`sorted(names)` over rows whose names were distinct, so a duplicated row could not fail
+one, and none of them selected an attribute *off* a member -- they selected the member.
+The item's own note that "CI is what answers the question" was right, and the round
+before this one reported the answer before CI had given it. Assert the rows a query
+returns, not the set of them.
