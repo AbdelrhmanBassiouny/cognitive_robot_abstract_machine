@@ -262,7 +262,9 @@ def test_an_episode_keeps_the_world_the_run_happened_in(experiments_database_ses
     session.commit()
 
     [recorded] = session.scalars(select(EpisodeDAO)).all()
-    assert [body.name.name for body in recorded.world.bodies] == ["shape_sorter"]
+    assert [body.name.name for body in recorded.from_dao().world.bodies] == [
+        "shape_sorter"
+    ]
 
 
 def test_a_trial_keeps_the_motion_it_ran(experiments_database_session):
