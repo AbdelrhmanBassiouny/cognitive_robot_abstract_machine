@@ -901,6 +901,11 @@ def select_offscreen_rendering_backend() -> None:
     MuJoCo's own default where a display is present is a windowed backend, which cannot
     make a context on a machine with no display and aborts a render with no context at
     all. A backend already named is left alone, since it is the caller's own choice.
+
+    ..warning:: MuJoCo reads this variable when Python first imports it and holds to
+        what it read, so this only reaches a process that has not imported it yet. A run
+        that has to draw with no display names the backend in the environment it is
+        started from, which is what the test workflow does.
     """
     already_chosen = os.environ.get(MUJOCO_RENDERING_BACKEND_VARIABLE, "").lower()
     if already_chosen in tuple(MujocoRenderingBackend):
