@@ -146,12 +146,13 @@ items:
 - id: simulated-camera-feeds-perception
   title: >-
     A MuJoCo camera feeds every perception backend the same frames the real camera does
-  branch: null
-  pull_request_number: null
+  branch: claude/simulated-camera-feeds-perception-iba2oa
+  pull_request_number: 298
   track: integration
+  session: https://claude.ai/code/session_01XCRk6JcVY6XenXusBf2ST4
   depends_on:
   - integrated-simulation-pipeline
-  status: not_started
+  status: in_progress
   notes: >-
     One frame source every perception backend reads, which is what lets the backends be swapped without changing anything above them. MujocoCamera renders colour and depth; wrap them as the RgbdFrame the pipeline reads, with intrinsics and camera pose taken from the twin, so the detector stack, a vision-language backend and a visual-question-answering backend all answer a look in simulation exactly as they do off a capture. The six real captures remain the regression set; this item's tests assert that a simulated scene with the board and four pieces reports every piece once with the right category. Stated colours and finishes on the simulated objects come from the values #239 measured off the real ones. Refocused 2026-09-08: this item exists to make the frames available to any backend, not to improve detection - the paper claims no perception result of its own.
 - id: tracy-demo-takes-the-integrated-branch
