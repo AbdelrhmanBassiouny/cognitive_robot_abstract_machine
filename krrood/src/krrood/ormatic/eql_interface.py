@@ -700,6 +700,10 @@ class EQLTranslator:
         via :meth:`_apply_relationship_join` so that path tracking is consistent with
         subsequent WHERE clause translations that traverse the same chain.
 
+        The variable the chain starts from ranges over what the query selects from, so
+        it is bound to that element: a condition mentioning it then restricts the rows
+        the chain is read off, rather than leaving them a second unjoined table.
+
         :param attribute: The outermost :class:`Attribute` node used as selected
             variable.
         :raises NoDAOFoundForTypeError: When the root variable type has no DAO.
@@ -711,6 +715,11 @@ class EQLTranslator:
         current_dao = self._require_dao_class(base_class)
 
         self.sql_query = select(current_dao)
+
+        root_variable = self._root_variable_of(attribute)
+        if root_variable is not None:
+            self.variable_from_elements.bind(root_variable, current_dao)
+
         current_dao = self._join_attribute_chain(current_dao, attribute_names)
 
         self.sql_query = self.sql_query.with_only_columns(current_dao)
@@ -1180,7 +1189,31 @@ class EQLTranslator:
             and not isinstance(query.right, Literal)
         )
 
+        if is_equality and both_attributes and self._both_roots_are_bound(query):
+            return False
+
         return is_equality and (both_attributes or variable_and_attribute)
+
+    def _both_roots_are_bound(self, query: Comparator) -> bool:
+        """
+        Whether both sides of a comparison already range over a FROM element.
+
+        A join is what puts a table into the query, so a comparison whose sides are both
+        in it already is a condition rather than a join. Deciding otherwise reads the
+        two sides against their shared table, which cannot tell two of its aliases
+        apart.
+
+        :param query: The comparator query.
+        """
+        roots = [
+            self._root_variable_of(query.left),
+            self._root_variable_of(query.right),
+        ]
+
+        return all(
+            root is not None and self.variable_from_elements.is_bound(root)
+            for root in roots
+        )
 
     def _handle_attribute_equality_join(self, query: Comparator) -> Optional[bool]:
         """

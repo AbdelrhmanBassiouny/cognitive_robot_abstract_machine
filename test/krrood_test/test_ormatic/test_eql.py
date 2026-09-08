@@ -1636,3 +1636,84 @@ def test_membership_across_two_collections_in_turn(session, database):
     assert [row.handle.name for row in eql_to_sql(query, session).evaluate()] == [
         "drawer_under_test"
     ]
+
+
+DRAWERS_PER_CABINET = 3
+"""
+How many drawers the cabinet under test holds, so a query answering one row per drawer
+is told apart from one answering a row per pair of them.
+"""
+
+
+def _two_worlds_of_cabinets(session) -> None:
+    """
+    Store two worlds whose cabinet holds several drawers each.
+
+    :param session: The session to store them through.
+    """
+    for world_id, prefix in (
+        (WORLD_UNDER_TEST, "under_test"),
+        (OTHER_WORLD, "elsewhere"),
+    ):
+        world = World(id=world_id)
+        drawers = []
+        bodies = []
+        for index in range(DRAWERS_PER_CABINET):
+            handle = Handle(f"{prefix}_handle_{index}", world=world)
+            container = Container(f"{prefix}_container_{index}", world=world)
+            drawers.append(Drawer(handle, container, world=world))
+            bodies += [handle, container]
+        world.bodies = bodies
+        world.views = [Cabinet(bodies[1], drawers, world=world)]
+        session.add(to_dao(world))
+
+    session.commit()
+
+
+def test_an_attribute_of_a_collection_member_is_read_off_that_member(session, database):
+    """
+    Selecting an attribute reached through a collection answers once per member of that
+    collection, rather than once per pair of the members with every row of their table.
+    """
+    _two_worlds_of_cabinets(session)
+
+    world = variable(World, domain=[])
+    cabinet = variable(Cabinet, domain=[])
+    drawer = variable(Drawer, domain=[])
+    query = an(
+        entity(drawer.handle).where(
+            world.id == WORLD_UNDER_TEST,
+            contains(world.views, cabinet),
+            contains(cabinet.drawers, drawer),
+        )
+    )
+
+    assert sorted(row.name for row in eql_to_sql(query, session).evaluate()) == [
+        f"under_test_handle_{index}" for index in range(DRAWERS_PER_CABINET)
+    ]
+
+
+def test_two_members_related_by_an_attribute_restrict_each_other(session, database):
+    """
+    A condition relating an attribute of two members of one collection restricts them,
+    rather than being dropped because their rows share a table.
+    """
+    _two_worlds_of_cabinets(session)
+
+    world = variable(World, domain=[])
+    cabinet = variable(Cabinet, domain=[])
+    drawer = variable(Drawer, domain=[])
+    other_drawer = variable(Drawer, domain=[])
+    query = an(
+        entity(drawer.handle).where(
+            world.id == WORLD_UNDER_TEST,
+            contains(world.views, cabinet),
+            contains(cabinet.drawers, drawer),
+            contains(cabinet.drawers, other_drawer),
+            other_drawer.handle == drawer.handle,
+        )
+    )
+
+    assert sorted(row.name for row in eql_to_sql(query, session).evaluate()) == [
+        f"under_test_handle_{index}" for index in range(DRAWERS_PER_CABINET)
+    ]
