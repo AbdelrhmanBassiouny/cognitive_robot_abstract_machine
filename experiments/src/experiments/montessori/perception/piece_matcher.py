@@ -25,7 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import List, Sequence
+from typing_extensions import List
 
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.hypotheses import PieceHypothesis
@@ -115,34 +115,6 @@ class PieceMatcher:
             reverse=True,
         )
 
-    def match_at(
-        self,
-        edges: EdgeDistances,
-        hypothesis: PieceHypothesis,
-        angles: Sequence[float],
-    ) -> List[MatchedPiece]:
-        """
-        Fit every piece a hypothesis allows at the one place it names, best first.
-
-        Scores each candidate where it is said to stand instead of searching for where
-        it stands, which is what makes this the cheap reading of a piece something else
-        has already located. Nothing is refused here, for the reason :meth:`fits`
-        records.
-
-        :param edges: The edges seen in the plane the piece's top face stands on.
-        :param hypothesis: What is expected, and the place it is believed to stand at.
-        :param angles: The turns, in radians, it may be standing at.
-        :return: One fit per candidate the belief allows, best-fitted first.
-        """
-        return sorted(
-            (
-                self._placed(piece, edges, hypothesis.place.center, 0.0, angles)
-                for piece in hypothesis.candidates
-            ),
-            key=lambda fit: fit.outline_agreement,
-            reverse=True,
-        )
-
     def _fit(
         self, piece: KnownPiece, edges: EdgeDistances, hypothesis: PieceHypothesis
     ) -> MatchedPiece:
@@ -150,38 +122,20 @@ class PieceMatcher:
         Place and turn one piece until its outline follows the edges as closely as it
         can.
 
+        How widely that reaches is the belief's to say: a place believed exactly is
+        scored where it stands, and one believed loosely is searched around.
+
         :param piece: The piece to lay over the edges.
         :param edges: The edges seen in the plane its top face stands on.
         :param hypothesis: What is believed about where it stands.
         :return: The best placement this piece reaches.
         """
-        return self._placed(
+        placement = self.fitter.fit(
             piece,
             edges,
-            hypothesis.place.center,
-            hypothesis.place.radius,
-            hypothesis.turns_of(piece, self.fitter.coarse_angle_step),
-        )
-
-    def _placed(
-        self,
-        piece: KnownPiece,
-        edges: EdgeDistances,
-        center: PlanarPoint,
-        radius: float,
-        angles: Sequence[float],
-    ) -> MatchedPiece:
-        """
-        The best placement one piece reaches over a stretch of plane and a set of turns.
-
-        :param piece: The piece to lay over the edges.
-        :param edges: The edges seen in the plane its top face stands on.
-        :param center: Where on that plane the search is centred.
-        :param radius: How far, in metres, it may stand from that centre.
-        :param angles: The turns to try, in radians.
-        """
-        placement = self.fitter.fit(
-            piece, edges, center=center, radius=radius, angles=angles
+            center=hypothesis.place.center,
+            radius=hypothesis.place.radius,
+            angles=hypothesis.turns_of(piece, self.fitter.coarse_angle_step),
         )
         return MatchedPiece(
             piece=piece,

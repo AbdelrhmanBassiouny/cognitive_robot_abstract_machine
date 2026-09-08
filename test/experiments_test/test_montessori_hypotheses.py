@@ -11,8 +11,10 @@ import pytest
 from typing_extensions import List
 
 from experiments.montessori.perception.hypotheses import (
+    QUARTER_TURN,
     BelievedPlace,
     PieceHypothesis,
+    QuarterTurns,
     YawInterval,
 )
 from experiments.montessori.pieces import (
@@ -94,6 +96,27 @@ def test_an_interval_narrower_than_one_step_is_tried_at_its_own_centre():
     assert believed.turns(math.radians(5)) == [believed.center]
 
 
+def test_a_measured_rectangle_leaves_four_turns_open_from_the_one_it_was_measured_at():
+    believed = QuarterTurns(center=math.radians(17))
+
+    turns = believed.turns(math.radians(5))
+
+    assert len(turns) == 4
+    assert turns[0] == believed.center
+    assert gaps_between(turns) == pytest.approx([QUARTER_TURN] * 3)
+
+
+def test_the_turns_a_rectangle_leaves_open_do_not_narrow_as_the_search_turns_finer():
+    """
+    Which of the four a thing stands at is settled by the edges rather than by turning
+    more finely, since the rectangle is exact about the other three once it is right
+    about one.
+    """
+    believed = QuarterTurns(center=math.radians(17))
+
+    assert believed.turns(math.radians(5)) == believed.turns(math.radians(0.5))
+
+
 # %% where a place says it is
 
 
@@ -140,6 +163,22 @@ def test_a_piece_no_turn_changes_is_tried_at_one_turn_only():
 
     assert cylinder.rotation_period is None
     assert hypothesis.turns_of(cylinder, math.radians(6)) == [0.0]
+
+
+def test_a_piece_believed_at_a_rectangles_turns_is_tried_at_those_and_not_its_period():
+    """
+    A believed interval is the whole of what is tried, whatever shape the belief takes,
+    so a piece whose own period would sweep a quarter circle is tried at the four turns
+    a blob's rectangle left open instead.
+    """
+    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    believed = QuarterTurns(center=math.radians(17))
+    hypothesis = PieceHypothesis(
+        place=place_at(0.4, 0.1, yaw=believed), source=WHOEVER_ASKED
+    )
+    step = math.radians(6)
+
+    assert hypothesis.turns_of(cube, step) == believed.turns(step)
 
 
 def test_a_piece_believed_turned_one_way_is_tried_only_around_that_turn():
