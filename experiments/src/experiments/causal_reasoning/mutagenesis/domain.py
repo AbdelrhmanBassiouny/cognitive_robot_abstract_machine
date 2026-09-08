@@ -76,15 +76,22 @@ class MutagenesisAtom:
 
 
 @dataclass
+class MutagenesisBond:
+    """
+    One bond of a :class:`MutagenesisMolecule`.
+    """
+
+    bond_type: MutagenesisBondType
+    """
+    The bond's chemical type.
+    """
+
+
+@dataclass
 class MutagenesisMolecule:
     """
-    One molecule of the CTU Mutagenesis dataset, with its atoms as an exchangeable part.
-
-    ``double_bond_count`` and ``aromatic_bond_count`` stay class-level scalars rather
-    than a retained ``bonds`` exchangeable part alongside ``atoms``: grounding a second
-    exchangeable part together with an aggregation-derived cause variable currently
-    breaks ``CausalCircuit``'s region extraction (a separate, pre-existing bug in the
-    relational-grounding/causal-circuit pipeline, not specific to bonds).
+    One molecule of the CTU Mutagenesis dataset, with its atoms and bonds as
+    exchangeable parts.
     """
 
     indicator_1: bool
@@ -103,16 +110,6 @@ class MutagenesisMolecule:
     Energy of the molecule's lowest unoccupied molecular orbital.
     """
 
-    double_bond_count: int
-    """
-    Count of the molecule's double bonds, derived from its bond table at load time.
-    """
-
-    aromatic_bond_count: int
-    """
-    Count of the molecule's aromatic bonds, derived from its bond table at load time.
-    """
-
     mutagenic: bool
     """
     Whether the molecule is mutagenic; the dataset's prediction target.
@@ -123,11 +120,17 @@ class MutagenesisMolecule:
     The molecule's atoms.
     """
 
+    bonds: List[MutagenesisBond]
+    """
+    The molecule's bonds.
+    """
+
 
 @dataclass
 class MutagenesisMoleculeAggregations(AggregationStatistic[MutagenesisMolecule]):
     """
-    Aggregation statistics for :class:`MutagenesisMolecule` over its ``atoms`` field.
+    Aggregation statistics for :class:`MutagenesisMolecule` over its ``atoms`` and
+    ``bonds`` fields.
     """
 
     @aggregation_statistic("atoms")
@@ -139,6 +142,32 @@ class MutagenesisMoleculeAggregations(AggregationStatistic[MutagenesisMolecule])
         [result] = (
             entity(count_range(element_variable))
             .where(element_variable == MutagenesisElement.CHLORINE)
+            .tolist()
+        )
+        return result
+
+    @aggregation_statistic("bonds")
+    def double_bond_count(self) -> int:
+        """
+        Count of double bonds.
+        """
+        bond_type_variable = variable(MutagenesisBond, self.instance.bonds).bond_type
+        [result] = (
+            entity(count_range(bond_type_variable))
+            .where(bond_type_variable == MutagenesisBondType.DOUBLE)
+            .tolist()
+        )
+        return result
+
+    @aggregation_statistic("bonds")
+    def aromatic_bond_count(self) -> int:
+        """
+        Count of aromatic bonds.
+        """
+        bond_type_variable = variable(MutagenesisBond, self.instance.bonds).bond_type
+        [result] = (
+            entity(count_range(bond_type_variable))
+            .where(bond_type_variable == MutagenesisBondType.AROMATIC)
             .tolist()
         )
         return result

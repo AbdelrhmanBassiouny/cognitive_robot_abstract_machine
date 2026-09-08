@@ -17,7 +17,10 @@ import numpy as np
 import pytest
 from random_events.product_algebra import SimpleEvent
 
-from experiments.causal_reasoning.mutagenesis.domain import MutagenesisMolecule
+from experiments.causal_reasoning.mutagenesis.domain import (
+    MutagenesisMolecule,
+    MutagenesisMoleculeAggregations,
+)
 from experiments.causal_reasoning.mutagenesis.dataset import (
     fetch_mutagenesis_molecules,
     is_mutagenesis_dataset_reachable,
@@ -98,12 +101,17 @@ def _evidence_for(molecule: MutagenesisMolecule, circuit) -> dict:
     :param circuit: The circuit whose variables the evidence must be keyed on.
     :return: Mapping from each non-target variable to ``molecule``'s value for it.
     """
+    aggregations = MutagenesisMoleculeAggregations(instance=molecule)
     values_by_name = {
         "MutagenesisMolecule.indicator_1": molecule.indicator_1,
         "MutagenesisMolecule.logp": molecule.logp,
         "MutagenesisMolecule.lumo": molecule.lumo,
-        "MutagenesisMolecule.double_bond_count": molecule.double_bond_count,
-        "MutagenesisMolecule.aromatic_bond_count": molecule.aromatic_bond_count,
+        "MutagenesisMoleculeAggregations.double_bond_count()": (
+            aggregations.double_bond_count()
+        ),
+        "MutagenesisMoleculeAggregations.aromatic_bond_count()": (
+            aggregations.aromatic_bond_count()
+        ),
     }
     return {
         variable: values_by_name[variable.name]

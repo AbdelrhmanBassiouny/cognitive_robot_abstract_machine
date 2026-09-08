@@ -15,6 +15,7 @@ from typing_extensions import List
 
 from experiments.causal_reasoning.mutagenesis.domain import (
     MutagenesisAtom,
+    MutagenesisBond,
     MutagenesisMolecule,
     MutagenesisMoleculeAggregations,
 )
@@ -89,6 +90,11 @@ class MutagenesisCausalQueryResult:
     Number of atoms the grounding query specified.
     """
 
+    bond_count: int
+    """
+    Number of bonds the grounding query specified.
+    """
+
     support_determinism_verified: bool
     """
     Whether verify_support_determinism passed on the grounded circuit.
@@ -100,25 +106,26 @@ class MutagenesisCausalQueryResult:
     """
 
 
-def _build_query(atom_count: int):
+def _build_query(atom_count: int, bond_count: int):
     """
-    Build a molecule query with a fixed atom count and every atom's element left
-    unspecified, so grounding must retain chlorine count as an undetermined latent.
+    Build a molecule query with a fixed atom and bond count, every atom's element and
+    every bond's type left unspecified, so grounding must retain chlorine count as an
+    undetermined latent.
 
     :param atom_count: Number of atoms the query specifies.
+    :param bond_count: Number of bonds the query specifies.
     :return: The resolved query.
     """
     query = a(MutagenesisMolecule)(
         indicator_1=...,
         logp=...,
         lumo=...,
-        double_bond_count=...,
-        aromatic_bond_count=...,
         mutagenic=...,
         atoms=[
             a(MutagenesisAtom)(element=..., atom_type=..., charge=...)
             for _ in range(atom_count)
         ],
+        bonds=[a(MutagenesisBond)(bond_type=...) for _ in range(bond_count)],
     )
     query.resolve()
     return query
@@ -127,6 +134,7 @@ def _build_query(atom_count: int):
 def run_chlorine_count_backdoor_adjustment(
     training_molecules: List[MutagenesisMolecule],
     atom_count: int = 2,
+    bond_count: int = 1,
     random_seed: int = 0,
     monte_carlo_sample_count: int = 2000,
 ) -> MutagenesisCausalQueryResult:
@@ -148,6 +156,8 @@ def run_chlorine_count_backdoor_adjustment(
     :param atom_count: Number of atoms the grounding query specifies; every atom's
         element is left unspecified, so chlorine count stays undetermined and is
         retained rather than integrated out.
+    :param bond_count: Number of bonds the grounding query specifies; every bond's type
+        is left unspecified.
     :param random_seed: Seed applied to the global NumPy random state before grounding,
         which draws the Monte-Carlo samples that retain chlorine count. Fixing it keeps
         the result reproducible across runs.
@@ -168,7 +178,7 @@ def run_chlorine_count_backdoor_adjustment(
         stratify_class_circuit_by=CHLORINE_COUNT_VARIABLE,
     )
 
-    query = _build_query(atom_count)
+    query = _build_query(atom_count, bond_count)
     np.random.seed(random_seed)
     grounded_circuit = model.ground(query)
 
@@ -228,6 +238,7 @@ def run_chlorine_count_backdoor_adjustment(
     return MutagenesisCausalQueryResult(
         training_molecule_count=len(training_molecules),
         atom_count=atom_count,
+        bond_count=bond_count,
         support_determinism_verified=True,
         effects=effects,
     )

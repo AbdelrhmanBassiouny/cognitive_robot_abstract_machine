@@ -708,8 +708,17 @@ class SumUnit(InnerUnit):
                     # add an edge to that subcircuit
                     self.add_subcircuit(sub_subcircuit, new_weight)
 
-                # remove the old node
-                self.probabilistic_circuit.remove_node(subcircuit)
+                # detach from the now-redundant node, but only remove it once no
+                # other parent references it: Monte-Carlo grounding mounts one
+                # shared instance under every node whose local weighting agrees on
+                # it, so this SumUnit can have more than one parent -- removing it
+                # unconditionally here would delete it out from under the others.
+                if self.probabilistic_circuit.graph.has_edge(
+                    self.index, subcircuit.index
+                ):
+                    self.probabilistic_circuit.remove_edge(self, subcircuit)
+                if not self.probabilistic_circuit.in_edges(subcircuit):
+                    self.probabilistic_circuit.remove_node(subcircuit)
 
     def normalize(self):
         """
@@ -861,8 +870,18 @@ class ProductUnit(InnerUnit):
                 for sub_subcircuit in subcircuit.subcircuits:
                     self.add_subcircuit(sub_subcircuit)
 
-                # remove the now-redundant nested product unit
-                self.probabilistic_circuit.remove_node(subcircuit)
+                # detach from the now-redundant nested product unit, but only
+                # remove it once no other parent references it: Monte-Carlo
+                # grounding mounts one shared instance under every node whose
+                # local weighting agrees on it, so this ProductUnit can have more
+                # than one parent -- removing it unconditionally here would
+                # delete it out from under the others.
+                if self.probabilistic_circuit.graph.has_edge(
+                    self.index, subcircuit.index
+                ):
+                    self.probabilistic_circuit.remove_edge(self, subcircuit)
+                if not self.probabilistic_circuit.in_edges(subcircuit):
+                    self.probabilistic_circuit.remove_node(subcircuit)
 
     def sample(self, *args, **kwargs):
         """

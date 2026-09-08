@@ -19,6 +19,7 @@ from typing_extensions import List
 
 from experiments.causal_reasoning.mutagenesis.domain import (
     MutagenesisAtom,
+    MutagenesisBond,
     MutagenesisBondType,
     MutagenesisElement,
     MutagenesisMolecule,
@@ -113,11 +114,8 @@ def fetch_mutagenesis_molecules(
     """
     Download the Mutagenesis dataset and convert it into domain objects.
 
-    Pulls the ``drugs``, ``atoms`` and ``bonds`` tables, derives
-    :attr:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisMolecule.double_bond_count`
-    and
-    :attr:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisMolecule.aromatic_bond_count`
-    from the bond table, and groups atoms by their owning molecule.
+    Pulls the ``drugs``, ``atoms`` and ``bonds`` tables, and groups atoms and bonds by
+    their owning molecule.
 
     :param connection: Connection details for the database.
     :return: One :class:`~experiments.causal_reasoning.mutagenesis.domain.MutagenesisMolecule`
@@ -134,16 +132,6 @@ def fetch_mutagenesis_molecules(
     finally:
         engine.dispose()
 
-    double_bond_counts = (
-        bonds[bonds["bond_type"] == MutagenesisBondType.DOUBLE]
-        .groupby("drug_id")
-        .size()
-    )
-    aromatic_bond_counts = (
-        bonds[bonds["bond_type"] == MutagenesisBondType.AROMATIC]
-        .groupby("drug_id")
-        .size()
-    )
     atoms_by_drug = {
         drug_id: [
             MutagenesisAtom(
@@ -155,16 +143,22 @@ def fetch_mutagenesis_molecules(
         ]
         for drug_id, group in atoms.groupby("drug_id")
     }
+    bonds_by_drug = {
+        drug_id: [
+            MutagenesisBond(bond_type=MutagenesisBondType(row.bond_type))
+            for row in group.itertuples()
+        ]
+        for drug_id, group in bonds.groupby("drug_id")
+    }
 
     return [
         MutagenesisMolecule(
             indicator_1=bool(drug.ind1),
             logp=float(drug.logp),
             lumo=float(drug.lumo),
-            double_bond_count=int(double_bond_counts.get(drug.id, 0)),
-            aromatic_bond_count=int(aromatic_bond_counts.get(drug.id, 0)),
             mutagenic=bool(drug.active),
             atoms=atoms_by_drug[drug.id],
+            bonds=bonds_by_drug.get(drug.id, []),
         )
         for drug in drugs.itertuples()
     ]
@@ -174,6 +168,7 @@ def synthetic_mutagenesis_molecules(
     random_state: np.random.Generator,
     molecule_count: int = 20,
     atom_count: int = 2,
+    bond_count: int = 3,
 ) -> List[MutagenesisMolecule]:
     """
     Generate a small, network-free dataset with the same shape as
@@ -188,8 +183,10 @@ def synthetic_mutagenesis_molecules(
     :param random_state: Source of randomness for the non-causal fields.
     :param molecule_count: How many molecules to generate.
     :param atom_count: How many atoms each molecule has.
+    :param bond_count: How many bonds each molecule has.
     :return: The generated molecules.
     """
+    bond_types = list(MutagenesisBondType)
     molecules = []
     for index in range(molecule_count):
         all_chlorine = index % 2 == 0
@@ -204,15 +201,20 @@ def synthetic_mutagenesis_molecules(
             )
             for _ in range(atom_count)
         ]
+        bonds = [
+            MutagenesisBond(
+                bond_type=bond_types[random_state.integers(len(bond_types))]
+            )
+            for _ in range(bond_count)
+        ]
         molecules.append(
             MutagenesisMolecule(
                 indicator_1=bool(random_state.integers(0, 2)),
                 logp=float(random_state.uniform(0, 5)),
                 lumo=float(random_state.uniform(-3, 0)),
-                double_bond_count=int(random_state.integers(0, 3)),
-                aromatic_bond_count=int(random_state.integers(0, 5)),
                 mutagenic=all_chlorine,
                 atoms=atoms,
+                bonds=bonds,
             )
         )
     return molecules
