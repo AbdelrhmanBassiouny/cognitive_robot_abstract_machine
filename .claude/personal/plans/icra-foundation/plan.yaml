@@ -277,8 +277,31 @@ items:
   - scenario-domain-model
   - integrated-simulation-pipeline
   status: in_progress
-  notes: >-
-    Random layouts with all four pieces, partial scenes with two or three, near-ambiguous layouts with the cube and cylinder aligned in camera depth, a lighting change (a MujocoLight edit in simulation), and the four scripted temporal scenarios: static, robot pick-and-place, an external body pushing a piece while the robot is idle, and a piece in the gripper at query time. Each is a Scenario with a seeded layout so a run is reproducible, and each has a test that builds it headless and asserts its own precondition (the ambiguous layout really is aligned in depth, the in-gripper scenario really holds the piece).
+  notes: >
+    Random layouts with all four pieces, partial scenes with two or three, near-ambiguous
+    layouts with the cube and cylinder aligned in camera depth, a lighting change (a
+    MujocoLight edit in simulation), and the four scripted temporal scenarios: static,
+    robot pick-and-place, an external body pushing a piece while the robot is idle, and a
+    piece in the gripper at query time. Each is a Scenario with a seeded layout so a run
+    is reproducible, and each has a test that builds it headless and asserts its own
+    precondition (the ambiguous layout really is aligned in depth, the in-gripper scenario
+    really holds the piece).
+
+    Three review rounds as of 2026-09-08, the third at db746a949. The runs are carried in
+    MuJoCo, the robot is commanded by coraplex's PickUpAction and PlaceAction under
+    simulated_robot (giskard ticks the statechart, headless, with no ROS), and the goals
+    read InsideOf against each hole's landing region and robot_holds_body. The landing
+    region is no longer stated: MontessoriWorld measures it as the free space the hole's
+    own footprint leaves down to the table, with a graph of convex sets over the board's
+    and drawers' collision boxes, and ShapeSortingHole carries its own region so no name
+    is spelled twice. 43 tests in the module; test/experiments_test runs 386 passed.
+
+    Two questions are open on the pull request, both the developer's: whether InsideOf's
+    minimum_containment_ratio (which exists on #265, not on this base) should be ported
+    here now and meet #265 as a conflict, and whether PlaceAction should gain an optional
+    grasp_description so a place performed in its own plan knows how the thing it holds is
+    held. The Goal-as-Predicate thread from round one is also still open, asking whether
+    that change belonged on #261.
 - id: run-results-recorded-into-sql
   title: >-
     Where a run records its results, and the plan-and-events schema it records

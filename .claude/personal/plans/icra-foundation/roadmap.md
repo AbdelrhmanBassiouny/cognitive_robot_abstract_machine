@@ -1501,3 +1501,70 @@ account for 25 failures and 11 errors, every one of them an import of something 
 and none of them a defect. CI, which has all of it, is the authority and reported exactly
 one failure. CI on `06e7af3eb` had not reported when this was written, and per the
 standing rule no check of it was armed.
+
+### `montessori-scenarios` (#296): the third review round, 2026-09-08
+
+Five threads, all on `scenarios.py`, taken in `db746a949`. Three resolved, two left open
+because the reply asks rather than answers.
+
+**The robot is commanded by coraplex, and it runs headless.** Every hand-written gripper
+method is gone; `SortingScene.pick_the_piece_up` is `PickUpAction` and
+`put_the_piece_down_at` is `PlaceAction`, performed under `simulated_robot` so giskard
+compiles and ticks the motion statechart. The surprise worth carrying is that this needs
+no ROS at all: `Ros2Executor` takes `Context.ros_node = None`, and a pick-and-place is
+1.4 s in a session container. Conditions are switched off for a scripted run
+(`context.evaluate_conditions = False`) -- a coraplex precondition is about a robot that
+perceives and navigates, while a scripted scene states its preconditions as its layout.
+
+**A simulation is compiled against one kinematic model and cannot follow a change to it.**
+`PickUpAction` ends in a `ReAttachNode`, and a live MuJoCo mirror answers that re-parent
+with `free joint can only be used on top level`: the piece is still on its
+`Connection6DoF`, now below the gripper. So `SimulatedScene` builds its mirror on demand
+and `stop()` drops it; a step that commands the robot lets go first and the next stretch
+of physics mirrors the world as it then is. This is the general shape rather than an
+incident -- anything that re-parents a body has to be outside the simulation's lifetime,
+and `world.move_branch` keeps the body's own connection type, which is what makes the
+mirror refuse it.
+
+**The space under a hole is measured rather than stated.** The comment was "I don't like
+that we get the hole region by its name, this should use something like the GCS and
+bounding boxes to get the free space under the holes", and both halves are now true.
+`MontessoriWorld` builds each landing region from
+`VolumetricGraphOfBoundingBoxes.free_space_from_bounding_boxes` over the column the hole's
+own footprint cuts down to the table, with the board's and drawers' collision boxes
+subtracted (`build_bloated_obstacle_collection`, z clearance zero so the shaft is not
+shortened). It is measurable only because `_board_body` and `_drawer_body` already build
+their collision as a grid of boxes with the shafts left open. `LANDING_REGION_XY_MARGIN`
+(0.03) and `LANDING_REGION_TOP_CLEARANCE` (0.02) are deleted with it; only
+`LANDING_REGION_BOTTOM_MARGIN` survives, and its docstring already said why it is not a
+fudge -- a piece resting on the table has its lowest vertices exactly in the table's
+plane. The regions are now the openings themselves: square 32 x 32 mm, rectangular 22 x
+42, triangle 36 x 42, disk 5 x 48 (it is a slot, not a coin-shaped opening), each 85.5 mm
+tall. `ShapeSortingHole` carries its own `landing_region`, so the name is spelled once.
+
+**Two findings about grasping in this workspace**, both measured, both worth knowing
+wherever a grasp is checked next:
+
+- A tool frame is the point between the fingertips, not the palm. The mimic pincer had
+  `tool_frame = pincer_link`, so an action that takes the tool frame to a piece put the
+  fingertips 30 mm below it and the grasp closed on air.
+- `bodies_in_gripper` samples points on the two fingertip meshes and casts rays between
+  them, and a ray starting on a fingertip's own surface mostly hits that fingertip first
+  -- so `robot_holds_body` reads reliably only when the fingertips *interpenetrate* the
+  body. On a grasp whose fingers surrounded a 22.4 mm piece with 3.8 mm clear on each
+  side, 1 read in 10 found it; with the fingers shut into the piece, 10 in 10. A
+  `JointPositionList` also stops within its own tolerance (about 10 mm per joint here) of
+  the position it was given, so a gripper's `CLOSE` state has to ask for more travel than
+  a touching pose if the predicate is to read at all.
+
+**Left open, both the developer's.** Whether `InsideOf.minimum_containment_ratio` -- which
+exists on #265 and not on this base -- should be ported here now, taking a conflict with
+#265's own rewrite of `predicates.py`, or waited for. And whether `PlaceAction` should
+gain an optional `grasp_description`: it works out where to take the gripper from the
+grasp description of the pick it finds *in the same plan*, and falls back to
+`FRONT`/`NoAlignment` when there is none, so a place performed as its own scripted step
+always takes the fallback while the piece is held by a `FRONT`/`TOP` grasp. It happens not
+to matter on this board -- the piece lands at the hole's own x and y either way -- but
+that is luck rather than design. The alternative is `PickAndPlaceAction`, which puts both
+in one plan and works here too, at the cost of collapsing the run's two scripted steps
+into one.
