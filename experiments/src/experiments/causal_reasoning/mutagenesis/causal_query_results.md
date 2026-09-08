@@ -43,7 +43,7 @@ that default, and 2000 draws pushes that miss chance under 1% even for the rares
 ($(1 - 1/188)^{2000} \approx 0.005\%$) and it's the reason to read the chlorine
 counts 3-5 rows below as single-molecule anecdotes rather than statistics.
 
-## Why chlorine count?
+## Why chlorine count, and not something more common?
 
 Not because chlorine is expected to be the main driver of mutagenicity here -- the
 QSAR literature this dataset comes from already points to `ind1` as the established
@@ -53,9 +53,49 @@ an aggregate on "how many chlorine atoms does this molecule have" which is compu
 molecule's `atoms`, the exchangeable relation `RelationalProbabilisticCircuit` grounds
 per query. A flat `CausalCircuit` can register any variable that's already sitting in
 its data as a cause; this experiment is here to check whether the same pipeline works
-once the cause has to be *assembled* from a relation first. Chlorine happens to also be
-rare enough (11 of 188 molecules have any) to stress-test that assembly at the edges,
-where most of the interesting failure modes live.
+once the cause has to be *assembled* from a relation first.
+
+Chlorine being present in only 11 of 188 molecules understandably reads as an odd pick
+for that demonstration, so before writing this we actually tried registering something
+more common instead: oxygen count (every molecule has 2-9 oxygens, and it splits by
+mutagenicity more sharply than chlorine does -- mean 2.70 for non-mutagenic molecules
+versus 3.34 for mutagenic ones), nitrogen count (also present everywhere), and the two
+existing bond aggregates, `double_bond_count` and `aromatic_bond_count` (every molecule
+has both, and `aromatic_bond_count` splits by mutagenicity even more sharply than
+oxygen -- mean 9.08 versus 15.28 -- which lines up with aromatic ring systems being a
+textbook genotoxicity alert).
+
+Every one of those four alternatives fails
+`CausalCircuit.verify_support_determinism` on the grounded circuit -- not a fallback
+warning, an outright exception, the same way it would if we tried to ship a genuinely
+broken registration. Chlorine is not a stylistic choice among equals; it is, empirically,
+the only one of the five aggregates this dataset offers that the current grounding
+pipeline can register as a cause at all. The likely mechanism: `GroundingMode.SAMPLED`
+mounts one mixture branch per Monte-Carlo draw rather than deduplicating draws that land
+on the same value, so once enough draws exist to see a variable's less common values at
+all (the `2000` samples explained above), two branches can end up reporting the exact
+same retained value and are then, correctly, flagged as not pairwise disjoint.
+Chlorine's distribution -- one dominant value at 94% and a long, individually-rare tail
+-- happens not to trigger this with the fixed seed this experiment uses; oxygen,
+nitrogen, and both bond aggregates, with their real spread across a large share of the
+188 molecules, do. This reads like a genuine gap in `GroundingMode.SAMPLED`'s
+disjointness guarantee rather than anything about chlorine specifically, and is worth a
+follow-up in `probabilistic_model` rather than papering over here by picking whichever
+variable happens to survive it.
+
+## Why not ground this analytically instead?
+
+`GroundingMode.EXACT` sidesteps Monte-Carlo sampling entirely by enumerating the fitted
+circuit's own exact partition over the aggregate -- but only when
+`ExchangeablePartGrounder._undetermined_latents_partition_disjointly` finds that
+partition already disjoint; otherwise it logs a warning and falls back to `SAMPLED`
+(see `rspn.py`). We checked that precondition directly against the fitted circuit for
+chlorine count and both bond aggregates: it comes back `False` for every one of them,
+stratified by that same variable or not. None of the aggregates we tried are, today, a
+natural split feature the induced tree separates cleanly on their own, so `EXACT` is
+not actually reachable here yet -- `SAMPLED` is not a fallback we chose over a working
+alternative, it is the only grounding mode that runs to completion for this
+experiment.
 
 ## Results
 
@@ -99,5 +139,19 @@ support-determinism verification, and the whole thing runs end to end in a few s
   checks the underlying causal graph and that's an assumption we're bringing in, not one
   the circuit verifies. Read this as "the tractable-circuit backdoor machinery ran
   correctly on real, awkward, sparse relational data," not as a chemistry finding.
+
+## What would make this more interesting
+
+The genuinely interesting version of this experiment registers `ind1` itself (or
+whatever the fitted circuit's own aggregates suggest) as the cause, runs the same
+backdoor machinery, and checks whether the analytic answer for "why is a molecule
+mutagenic" agrees with what the literature already says about `ind1` -- and, further
+out, whether a circuit built this way is competitive with a plain classifier on
+held-out accuracy rather than only self-consistent. Both are real next steps, not
+implemented here: `ind1` is a flat `MutagenesisMolecule` field, not an aggregate
+grounding assembles, so registering it as a cause doesn't exercise the same
+relational-grounding pipeline this experiment is validating, and a held-out-accuracy
+comparison is a separate benchmark this dataset-and-pipeline check wasn't set up to
+run. Both are worth their own follow-up rather than folding into this one.
 
 

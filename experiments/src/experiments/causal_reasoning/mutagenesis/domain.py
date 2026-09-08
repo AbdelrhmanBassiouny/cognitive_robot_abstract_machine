@@ -78,7 +78,17 @@ class MutagenesisAtom:
 @dataclass
 class MutagenesisBond:
     """
-    One bond of a :class:`MutagenesisMolecule`.
+    One bond of a :class:`MutagenesisMolecule`, modeled as an exchangeable part on its
+    own rather than an edge between two :class:`MutagenesisAtom` entries.
+
+    A real bond connects exactly two atoms, and the CTU dataset's own ``bonds`` table
+    records which ones (``atom1_id``, ``atom2_id``). This class deliberately does not
+    carry that connectivity: the RSPN grounding this domain feeds fits and grounds
+    ``atoms`` and ``bonds`` as two independent exchangeable parts of the parent
+    molecule, so a bond referencing specific atom objects would cross that
+    independence boundary rather than just adding a field. Representing the molecule
+    as an actual atom-bond graph is a bigger, separate piece of work than this
+    experiment's grounding-a-class-level-aggregate demonstration needs.
     """
 
     bond_type: MutagenesisBondType

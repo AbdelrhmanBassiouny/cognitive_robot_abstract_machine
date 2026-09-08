@@ -12,7 +12,7 @@ from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.entity_query_language.factories import a, variable
 from krrood.ormatic.data_access_objects.helper import to_dao
 from random_events.product_algebra import SimpleEvent
-from typing_extensions import ClassVar, List
+from typing_extensions import List
 
 from experiments.causal_reasoning.mutagenesis.domain import (
     MutagenesisAtom,
@@ -99,23 +99,26 @@ class ChlorineCountCausalQuery:
     for the structural indicator ``ind1``.
     """
 
-    CHLORINE_COUNT_VARIABLE: ClassVar[MappedVariable] = variable(
-        MutagenesisMoleculeAggregations
-    ).chlorine_count()
+    CHLORINE_COUNT_VARIABLE: MappedVariable = field(
+        default_factory=lambda: variable(
+            MutagenesisMoleculeAggregations
+        ).chlorine_count()
+    )
     """
-    EQL attribute-access expression naming the chlorine-count cause variable.
+    EQL attribute-access expression naming the cause variable. Defaults to chlorine
+    count; pass a different one to register a different cause without subclassing.
     """
 
-    MUTAGENIC_VARIABLE: ClassVar[MappedVariable] = variable(
-        MutagenesisMolecule
-    ).mutagenic
+    MUTAGENIC_VARIABLE: MappedVariable = field(
+        default_factory=lambda: variable(MutagenesisMolecule).mutagenic
+    )
     """
     EQL attribute-access expression naming the mutagenicity effect variable.
     """
 
-    INDICATOR_1_VARIABLE: ClassVar[MappedVariable] = variable(
-        MutagenesisMolecule
-    ).indicator_1
+    INDICATOR_1_VARIABLE: MappedVariable = field(
+        default_factory=lambda: variable(MutagenesisMolecule).indicator_1
+    )
     """
     EQL attribute-access expression naming the ``ind1`` structural-indicator adjustment
     variable.
