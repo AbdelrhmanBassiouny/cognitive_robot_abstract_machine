@@ -10,7 +10,7 @@ name: Tooling label
 # request that grows a change to the software stops being a tooling change and the label
 # has to come back off.
 #
-# Runs unchanged in any fork: the label and the paths come from .claude/stack/stack.toml
+# Runs unchanged in any fork: the label and the paths come from the package's stack.toml
 # and the repository from the runner's own context, so no repository is named here.
 
 on:
@@ -39,6 +39,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install the bastler dependencies
+        run: |
+          set -euo pipefail
+          source .claude/hooks/resolve-personal-notes-config.sh
+          pip install "./${BASTLER_PACKAGE_DIRECTORY}"
+
       # A dispatch names no pull request, and labels every open one instead: that is how
       # a fork whose pull requests predate this workflow gets them labelled at all.
       - name: Label what the changed files say
@@ -47,5 +53,5 @@ jobs:
           PULL_REQUEST: ${{ github.event.pull_request.number }}
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          python "${STACK_DIRECTORY}/maintenance.py" label-tooling \
+          python -m "${MAINTENANCE_MODULE}" label-tooling \
             ${PULL_REQUEST:+--pull-request "${PULL_REQUEST}"}
