@@ -2646,43 +2646,140 @@ def test_several_synchronizers_leave_the_stream_of_a_world_undecided(rclpy_node)
         second.close()
 
 
-def test_deserialize_connection_with_parent_not_in_world_raises():
+def _make_simple_world_with_root(name: str) -> World:
     """
-    When a ModificationBlock contains a connection whose parent was added in an earlier
-    (already-published) block, and the receiver's world has not received that earlier
-    block, the connection's :meth:`Connection._from_json` raises
-    :class:`WorldEntityWithIDNotInKwargs` because the parent body is neither in the
-    tracker nor in the receiver's world.
+    Create a minimal world with one root body, like an STL parse result.
+    """
+    w = World(name=name)
+    root_id = uuid.UUID(hashlib.sha1(name.encode()).hexdigest()[:32])
+    root = Body(name=PrefixedName(name), id=root_id)
+    with w.modify_world():
+        w.add_body(root)
+    return w
 
-    This reproduces the scenario where separate ``modify_world`` blocks arrive at the
-    receiver in the wrong order (for example because one process has not yet received
-    the earlier block).
+
+def _merge_world_with_connection(world: World, other: World, parent: Body) -> Body:
     """
+    Merge *other* into *world* with a FixedConnection from *parent* to *other.root*,
+    mirroring the demo's ``merge_world`` + ``FixedConnection`` pattern.
+
+    :return: the root body of the merged world in *world*, so the caller can use it as
+        the parent of the next merge.
+    """
+    other_root_name = other.root.name.name
+    with world.modify_world():
+        world.merge_world(
+            other,
+            FixedConnection(parent=parent, child=other.root),
+        )
+    return world.get_kinematic_structure_entity_by_name(other_root_name)
+
+
+def test_late_joiner_misses_first_block_and_crashes_on_second(rclpy_node):
+    """
+    Reproduce the intermittent ``WorldEntityWithIDNotInKwargs`` from the
+    ``feature/cable-designator`` demo.
+
+    The demo loads several objects (cable post, cable hanger, cable) and merges
+    each into the world in a separate ``modify_world`` block. Each block's
+    root connection references the body created by the previous block. The
+    WorldSynchronizer publishes each block as a separate ROS message with
+    ``qos_profile=10`` (VOLATILE durability).
+
+    The giskard process starts independently. If its WorldSynchronizer
+    subscribes *after* the demo has already published the first block, that
+    block is lost (VOLATILE QoS does not retain messages for late joiners).
+    When the second block arrives, its connection references a body from the
+    first block that is not in the giskard's world, so deserialization raises
+    ``WorldEntityWithIDNotInKwargs`` inside ``subscription_callback``.
+
+    This test deterministically reproduces that scenario by creating the
+    receiver synchronizer *after* the first block has been published.
+    """
+    topic = f"/test_late_joiner_{uuid4().hex}"
+
     sender = World(name="sender")
-    parent = Body(name=PrefixedName("parent"))
+    sender_root = Body(name=PrefixedName("robot_root"))
     with sender.modify_world():
-        sender.add_body(parent)
+        sender.add_body(sender_root)
 
-    child = Body(name=PrefixedName("child"))
-    with sender.modify_world():
-        sender.add_body(child)
-        sender.add_connection(FixedConnection(parent=parent, child=child))
+    sender_sync = WorldSynchronizer(node=rclpy_node, _world=sender, topic_name=topic)
 
-    modification_block = ModificationBlock(
-        meta_data=MetaData(node_name="test", process_id=0),
-        modifications=sender.get_world_model_manager().model_modification_blocks[-1],
-    )
-    world_update = WorldUpdate(
-        meta_data=MetaData(node_name="test", process_id=0),
-        modification_block=modification_block,
-    )
-    serialized = json.dumps(to_json(world_update))
+    post = _make_simple_world_with_root("post")
+    post_root_in_sender = _merge_world_with_connection(sender, post, sender_root)
+
+    time.sleep(0.3)
 
     receiver = World(name="receiver")
-    tracker = WorldEntityWithIDKwargsTracker.from_world(receiver)
+    receiver_sync = WorldSynchronizer(
+        node=rclpy_node, _world=receiver, topic_name=topic
+    )
 
-    with pytest.raises(WorldEntityWithIDNotInKwargs):
-        from_json(json.loads(serialized), **tracker.create_kwargs())
+    time.sleep(0.3)
+
+    hanger = _make_simple_world_with_root("hanger")
+    _merge_world_with_connection(sender, hanger, post_root_in_sender)
+
+    time.sleep(1.0)
+
+    assert len(receiver.kinematic_structure_entities) == 0, (
+        "Receiver should not have any entities: the first block was lost "
+        "(VOLATILE QoS) and the second block's deserialization must have "
+        "failed because it references a body from the first block."
+    )
+
+    sender_sync.close()
+    receiver_sync.close()
+
+
+def test_all_blocks_received_when_subscribed_before_publishing(rclpy_node):
+    """
+    Same multi-block ``merge_world`` pattern as
+    :func:`test_late_joiner_misses_first_block_and_crashes_on_second`, but the receiver
+    subscribes *before* any blocks are published and the sender's root body is created
+    *after* the synchronizer is set up, so every block is published and received.
+
+    Together these two tests show why the demo error is flaky: the outcome
+    depends on whether the giskard's WorldSynchronizer is subscribed before or
+    after the demo publishes its first ``modify_world`` block.
+    """
+    topic = f"/test_on_time_join_{uuid4().hex}"
+
+    sender = World(name="sender")
+    receiver = World(name="receiver")
+
+    sender_sync = WorldSynchronizer(node=rclpy_node, _world=sender, topic_name=topic)
+    receiver_sync = WorldSynchronizer(
+        node=rclpy_node, _world=receiver, topic_name=topic
+    )
+
+    time.sleep(0.3)
+
+    sender_root = Body(name=PrefixedName("robot_root"))
+    with sender.modify_world():
+        sender.add_body(sender_root)
+
+    wait_for_sync_kse_and_return_ids(sender, receiver, timeout=5.0)
+
+    post = _make_simple_world_with_root("post")
+    post_root_in_sender = _merge_world_with_connection(sender, post, sender_root)
+
+    wait_for_sync_kse_and_return_ids(sender, receiver, timeout=5.0)
+
+    hanger = _make_simple_world_with_root("hanger")
+    _merge_world_with_connection(sender, hanger, post_root_in_sender)
+
+    wait_for_sync_kse_and_return_ids(sender, receiver, timeout=5.0)
+
+    sender_names = {e.name.name for e in sender.kinematic_structure_entities}
+    receiver_names = {e.name.name for e in receiver.kinematic_structure_entities}
+    assert sender_names == receiver_names, (
+        f"Receiver should have all entities from sender. "
+        f"Missing: {sender_names - receiver_names}"
+    )
+
+    sender_sync.close()
+    receiver_sync.close()
 
 
 if __name__ == "__main__":
