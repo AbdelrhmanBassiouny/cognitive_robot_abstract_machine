@@ -25,6 +25,7 @@ not one a look can be compiled from.
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 
@@ -44,10 +45,12 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Entity
+from krrood.patterns.belief_source import BeliefSource
 from typing_extensions import Optional
 
-from experiments.montessori.perception.camera import RgbdFrame
+from experiments.montessori.perception.camera import BelievedCameraPose, RgbdFrame
 from experiments.montessori.perception.exceptions import (
+    CameraTiltedFurtherThanTrusted,
     NoSurfaceFinderAnswersTheLook,
     SurfaceNotSeenWhereTheWorldPutsIt,
 )
@@ -65,6 +68,17 @@ in metres.
 Measured on Tracy's brushed steel table by the point-cloud trial this package's
 detectors were written after: the table's own points scattered about seventeen
 millimetres either side of the plane fitted through them.
+"""
+
+LARGEST_TRUSTED_TILT = math.radians(3.0)
+"""
+How far fitting the camera to a modelled surface may turn it before the disagreement
+stops reading as a pose error, in radians.
+
+Deliberately loose. It is here to refuse a disagreement that cannot be a drifted mount
+at all, not to arbitrate between a small pose error and a small model error: nothing
+measured on this setup separates those two, and which of the two is trusted is stated
+per setup rather than inferred from the fit.
 """
 
 # %% what the rules read
@@ -213,7 +227,7 @@ class MeasuredSurfaceFinder(SurfaceFinder):
             plane inside that stretch.
         """
         modelled = sought.surface
-        at_the_plane = self._points_standing_at(modelled, sought.frame)
+        at_the_plane = self.points_standing_at(modelled, sought.frame)
         if not len(at_the_plane):
             raise SurfaceNotSeenWhereTheWorldPutsIt(str(modelled.name), modelled.height)
         surface_points = self._within(
@@ -225,9 +239,9 @@ class MeasuredSurfaceFinder(SurfaceFinder):
         )
         if not len(surface_points):
             raise SurfaceNotSeenWhereTheWorldPutsIt(str(modelled.name), modelled.height)
-        return replace(modelled, region=self._reach_of(surface_points, modelled.region))
+        return replace(modelled, region=self.reach_of(surface_points, modelled.region))
 
-    def _points_standing_at(
+    def points_standing_at(
         self, modelled: WorkspaceSurface, frame: RgbdFrame
     ) -> np.ndarray:
         """
@@ -303,7 +317,7 @@ class MeasuredSurfaceFinder(SurfaceFinder):
         ]
 
     @staticmethod
-    def _reach_of(points: np.ndarray, region: WorkspaceRegion) -> WorkspaceRegion:
+    def reach_of(points: np.ndarray, region: WorkspaceRegion) -> WorkspaceRegion:
         """
         The stretch a surface's own points cover, on the modelled region's own grid.
 
@@ -329,6 +343,229 @@ class MeasuredSurfaceFinder(SurfaceFinder):
             minimum_y=minimum_y,
             maximum_y=maximum_y,
             resolution=region.resolution,
+        )
+
+
+# %% the camera turned until the picture and the model agree
+
+
+@dataclass(eq=False)
+class FittedSurfaceFinder(SurfaceFinder, BeliefSource):
+    """
+    Answers a surface by turning the camera until what it sees stands where the world
+    says it does, and keeps the turn.
+
+    A plane the world describes and a depth image of it are two accounts of one rigid
+    scene, so where they disagree one of them is wrong. This finder reads the
+    disagreement as a *pose* error and says so twice over: it answers the surface
+    measured through the corrected pose, and it holds that pose as a
+    :class:`~experiments.montessori.perception.camera.BelievedCameraPose` for the next
+    picture from the same camera.
+
+    Only the tilt is fitted. A horizontal plane fixes which way is up and nothing else
+    -- it says nothing about where along itself the camera stands, nor which way round
+    it faces -- and the one half of the model this setup is known *not* to have drifted
+    away from is the height, so a fit free to move the camera as well would spend the
+    plane's own evidence hiding a model error in a translation.
+
+    Unlike :class:`MeasuredSurfaceFinder`, the answer may reach *past* the stretch the
+    world models rather than only inside it, up to :attr:`reaches_past`. That is the
+    different contract this finder exists for: a fit that may correct where the camera
+    stands is one whose measurement may move the model, not only cut it down.
+
+    ..note:: Compared by identity, for the reason :class:`ModelledSurfaceFinder`
+        records, and because two finders holding different beliefs are not one finder.
+    """
+
+    measurement: MeasuredSurfaceFinder = field(default_factory=MeasuredSurfaceFinder)
+    """
+    Reads the surface's own points out of the depth image, which is what the plane is
+    fitted through and what its reach is then read from.
+    """
+
+    largest_trusted_tilt: float = LARGEST_TRUSTED_TILT
+    """
+    How far this fit may turn the camera before refusing, in radians.
+    """
+
+    reaches_past: float = 0.2
+    """
+    How far past the stretch the world models the surface may be found reaching, in
+    metres.
+
+    A bound rather than a suggestion: a fit allowed to move the model still may not
+    grow a table across the room out of whatever else the depth image holds at that
+    height.
+    """
+
+    believed_pose: Optional[BelievedCameraPose] = None
+    """
+    Where this finder currently believes the camera stands, or ``None`` before it has
+    fitted anything.
+    """
+
+    def capability(self, sought: SoughtSurface) -> ConditionType:
+        """
+        Any surface the world bounds to some ground, looked for in a picture that
+        carries depth: the bound says where to read, and the depth is the plane this
+        fits the camera to.
+
+        :param sought: The description to state the condition over.
+        """
+        return self.measurement.capability(sought)
+
+    def find(self, sought: SoughtSurface) -> WorkspaceSurface:
+        """
+        Turn the camera until the plane stands level, then say how far the surface
+        reaches as seen from there.
+
+        :param sought: The surface the world models, and the look it is fitted in.
+        :raises SurfaceNotSeenWhereTheWorldPutsIt: If nothing stands at the modelled
+            plane.
+        :raises CameraTiltedFurtherThanTrusted: If levelling the plane turns the camera
+            further than this setup reads as a pose error, which is a disagreement
+            about the model rather than about the pose.
+        """
+        modelled = sought.surface
+        looked_over = replace(
+            modelled, region=modelled.region.grown_by(self.reaches_past)
+        )
+        believed = self._levelled(sought, looked_over)
+        turned = self._turn_between(
+            sought.frame.reference_frame_T_camera, believed.reference_frame_T_camera
+        )
+        if turned > self.largest_trusted_tilt:
+            raise CameraTiltedFurtherThanTrusted(turned, self.largest_trusted_tilt)
+        seen_from_there = self._points_of(
+            looked_over, believed.applied_to(sought.frame)
+        )
+        self.believed_pose = believed
+        return replace(
+            modelled,
+            region=self.measurement.reach_of(seen_from_there, looked_over.region),
+        )
+
+    def _levelled(
+        self, sought: SoughtSurface, looked_over: WorkspaceSurface
+    ) -> BelievedCameraPose:
+        """
+        The pose that leaves the plane standing as level as one reading of it can say.
+
+        One reading, not a fit driven to a fixed point. A surface's own points are
+        picked out by standing within :attr:`MeasuredSurfaceFinder.scatter` of the
+        height the world states, which is a horizontal slab; cut out of a plane that
+        leans, it keeps the middle of the lean and neither end, so the plane fitted
+        through it comes back flatter than the one it was cut from. Reading again
+        through the corrected pose cuts a different slab out of a differently placed
+        cloud, and on this setup's own captures that walks rather than settles.
+
+        :param sought: The surface the world models, and the look it is fitted in.
+        :param looked_over: That surface over the stretch this fit may find it reaching.
+        :raises SurfaceNotSeenWhereTheWorldPutsIt: If nothing stands at its plane.
+        """
+        frame = (
+            sought.frame
+            if self.believed_pose is None
+            else self.believed_pose.applied_to(sought.frame)
+        )
+        points = self._points_of(looked_over, frame)
+        return BelievedCameraPose(self._turned_level(points, frame), self)
+
+    @staticmethod
+    def _turn_between(before: np.ndarray, after: np.ndarray) -> float:
+        """
+        How far one pose is turned from another, in radians.
+
+        :param before: The pose turned from, as a 4x4 homogeneous transformation.
+        :param after: The pose turned to, likewise.
+        """
+        turn = after[:3, :3] @ before[:3, :3].T
+        return float(np.arccos(np.clip((np.trace(turn) - 1.0) / 2.0, -1.0, 1.0)))
+
+    def tilt_of(self, points: np.ndarray) -> float:
+        """
+        How far the plane a set of points lies in stands away from level, in radians.
+
+        :param points: The surface's own points, shape ``(n, 3)``.
+        """
+        upwards = self._upward_normal_of(points)
+        return float(np.arccos(np.clip(upwards[2], -1.0, 1.0)))
+
+    def _points_of(self, looked_over: WorkspaceSurface, frame: RgbdFrame) -> np.ndarray:
+        """
+        The surface's own points, as one picture shows them.
+
+        :param looked_over: The surface, over the stretch this fit is allowed to find it
+            reaching.
+        :param frame: The camera data to read.
+        :raises SurfaceNotSeenWhereTheWorldPutsIt: If nothing stands at its plane.
+        :return: The points, shape ``(n, 3)``.
+        """
+        points = self.measurement.points_standing_at(looked_over, frame)
+        if not len(points):
+            raise SurfaceNotSeenWhereTheWorldPutsIt(
+                str(looked_over.name), looked_over.height
+            )
+        return points
+
+    def _turned_level(self, points: np.ndarray, frame: RgbdFrame) -> np.ndarray:
+        """
+        The camera's pose turned so that the plane its picture holds stands level.
+
+        Turned about where the camera itself stands, so the point directly under it
+        keeps the depth it was measured at and the plane keeps the height the world
+        states for it.
+
+        :param points: The surface's own points as this frame shows them, shape
+            ``(n, 3)``.
+        :param frame: The camera data they were read from.
+        :return: The corrected pose, as a 4x4 homogeneous transformation.
+        """
+        upwards = self._upward_normal_of(points)
+        corrected = np.eye(4)
+        corrected[:3, :3] = (
+            self._turning_onto_up(upwards) @ frame.reference_frame_T_camera[:3, :3]
+        )
+        corrected[:3, 3] = frame.reference_frame_T_camera[:3, 3]
+        return corrected
+
+    @staticmethod
+    def _upward_normal_of(points: np.ndarray) -> np.ndarray:
+        """
+        The unit normal of the plane a set of points lies in, pointing upwards.
+
+        :param points: The surface's own points, shape ``(n, 3)``.
+        """
+        centred = points - points.mean(axis=0)
+        _, directions = np.linalg.eigh(centred.T @ centred)
+        normal = directions[:, 0]
+        return normal if normal[2] >= 0.0 else -normal
+
+    @staticmethod
+    def _turning_onto_up(upwards: np.ndarray) -> np.ndarray:
+        """
+        The rotation taking one unit direction onto the reference frame's own up.
+
+        :param upwards: The direction to turn, as a unit vector.
+        :return: The rotation, shape ``(3, 3)``.
+        """
+        axis = np.cross(upwards, [0.0, 0.0, 1.0])
+        reach = float(np.linalg.norm(axis))
+        if reach == 0.0:
+            return np.eye(3)
+        axis = axis / reach
+        angle = float(np.arccos(np.clip(upwards[2], -1.0, 1.0)))
+        across = np.array(
+            [
+                [0.0, -axis[2], axis[1]],
+                [axis[2], 0.0, -axis[0]],
+                [-axis[1], axis[0], 0.0],
+            ]
+        )
+        return (
+            np.eye(3)
+            + math.sin(angle) * across
+            + (1.0 - math.cos(angle)) * (across @ across)
         )
 
 

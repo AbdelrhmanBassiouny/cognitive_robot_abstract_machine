@@ -6,7 +6,7 @@ intrinsics, and where the camera stood when it was taken.
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 import cv2
@@ -18,6 +18,7 @@ from experiments.montessori.perception.exceptions import (
     UndecodableCompressedImage,
     UnsupportedImageEncoding,
 )
+from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.spatial_types.math import inverse_frame
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -316,6 +317,44 @@ class RgbdFrame:
         pixels = pixels[inside]
         depths = self.depth[pixels[:, 1], pixels[:, 0]]
         return depths[depths > 0.0]
+
+
+# %% where the camera is believed to stand
+
+
+@dataclass(frozen=True, eq=False)
+class BelievedCameraPose:
+    """
+    Where the camera is believed to stand, and what says so.
+
+    A pose is a value on one :class:`RgbdFrame`, so a correction worked out from one
+    picture has nowhere to live once that picture is done with. This is that place: it
+    outlives the frame it was fitted in and is what the next frame from the same camera
+    is read through.
+
+    ..note:: Compared by identity: a belief is the say-so of one source at one time, and
+        two sources agreeing are not the same belief.
+    """
+
+    reference_frame_T_camera: np.ndarray
+    """
+    The camera's optical frame as this belief has it, in the frame detections are
+    reported in, as a 4x4 homogeneous transformation.
+    """
+
+    source: BeliefSource
+    """
+    Whose say-so this is, so what else it says can be asked of it rather than inferred
+    from a label.
+    """
+
+    def applied_to(self, frame: RgbdFrame) -> RgbdFrame:
+        """
+        The same pictures, read through this belief instead of the pose they came with.
+
+        :param frame: The camera data to read.
+        """
+        return replace(frame, reference_frame_T_camera=self.reference_frame_T_camera)
 
 
 def decode_color_image(
