@@ -641,19 +641,15 @@ showing we have better perception."*
   querying over all of it — runs from `main` plus the episode model, with no
   dependency on lane 1 at all. That is what makes it a track one person can
   carry from today.
-- **Two new items** in that track. `episode-corpus-generated-at-scale` is the
+- **One new item** in that track. `episode-corpus-generated-at-scale` is the
   headless generator: seeded randomised scenarios run repeatedly, each
   episode recording its realized coraplex `Plan`, its segmind event log, the
   twin state, every query with its answer and latency, the typed failure and
   its resolution, and the rendered video — batched and resumable the way
   `batch_runner` already is, targeting thousands of episodes because
   Experiment D asks whether something has happened *before* and a corpus
-  holding each situation once cannot answer that.
-  `self-model-and-control-state-recorded` puts the robot's own kinematic
-  structure (bodies, connections, degrees of freedom and their limits) and
-  the motion statechart's active tasks, constraints and terminating monitor
-  into the episode, which is what makes the new self-model and control
-  question buckets answerable of a past run and not only of the present one.
+  holding each situation once cannot answer that. (A second item was added
+  and then folded the same day — see "the self-model item was wrong" below.)
 - **`episodes-queried-by-eql`** now answers every bucket over recorded
   episodes, not only the temporal one.
 
@@ -671,3 +667,51 @@ Not fixed here. The generator's item says the target is thousands rather
 than dozens and that the actual number is whatever it sustains overnight,
 recorded rather than chosen in advance — a number picked now would be
 invented, and the corpus size is a measurement like any other.
+
+## 2026-09-08, later: the self-model item was wrong, and folded
+
+`self-model-and-control-state-recorded` was added earlier the same day and is
+now removed. The developer's question was the right one — *isn't that recorded
+by ORMatic by default?* — and the answer is yes.
+
+**What is already free.** `semantic_digital_twin`'s `generate_orm.py` maps the
+whole package apart from ten ignored classes, and none of them is `World`,
+`Body`, `Connection`, `DegreeOfFreedom` or `DegreeOfFreedomLimits` — so the
+robot's kinematic structure has DAOs today. `giskardpy`'s maps its whole
+package apart from `giskardpy.qp.solvers`, so `MotionStatechart`, its tasks
+and monitors and the terminal `EndMotion`/`CancelMotion` nodes are mapped too.
+The dependency chain already reaches both: `experiments` declares
+`coraplex.orm.ormatic_interface`, `coraplex` declares
+`giskardpy.orm.ormatic_interface`, and `giskardpy` declares
+`semantic_digital_twin.orm.ormatic_interface`. So an `experiments` class can
+hold either and it maps, with no generation change at all. And the
+*working-memory* spelling of the self-model bucket needs nothing whatever:
+"how many joints do you have" is a query over the live twin today.
+
+**What was actually missing**, checked against #271's own `episode.py`:
+`Episode` carries the scenario name, execution type, condition and
+perturbation names, an identifier and a timestamp; `RecordedTrial` carries
+outcome, duration, ticks, queries and insertion attempts; `InsertionAttempt`
+carries the realized coraplex `Plan` — the robot plan, already there. Neither
+the world an episode ran in nor the motion statechart a trial ran is
+referenced by any of them. That is a field or two, not an item.
+
+**So it folded into `episodes-recorded-through-ormatic` (#271)**, by the
+mechanical scope rule rather than by taste: `git ls-tree origin/main --
+experiments/src/experiments/episodes/` is empty, so #271 introduces the file
+the change would edit, and work that only modifies an unlanded pull request's
+own file is that pull request's work. This is the same shape as the
+2026-09-04 amendment that gave the model `FailureResolution`, and its notes
+now carry both references.
+
+**Left to the developer**, recorded on that item rather than decided here:
+whether each episode stores a `World` of its own or references one shared
+robot model. A world per episode answers a question about a run whose robot
+differed; at the scale `episode-corpus-generated-at-scale` targets it may be
+disproportionate.
+
+The general lesson, worth carrying: in this workspace ORMatic maps a package
+*wholesale*, so "does this need recording infrastructure" is almost always
+already answered — the real question is only ever whether anything
+*references* the mapped class. Check the ignore list and the model before
+writing an item that assumes mapping work.
