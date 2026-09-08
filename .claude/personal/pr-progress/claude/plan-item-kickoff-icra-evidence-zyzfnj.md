@@ -1,3 +1,51 @@
+
+# `question-set-and-ground-truth` (icra-evidence) — PR #295
+
+Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278. Reviewed
+2026-09-08 and largely rebuilt in response; the round is written up in
+`icra-evidence/roadmap.md` ("reviewed 2026-09-08").
+
+## Done
+
+- **Working-memory half rebuilt around the reviewer's direction.** Nothing is
+  handed to a question: every variable is domainless and ranges over the symbol
+  graph, what a question is about is a condition, and the source is the robot.
+  `DetectionEvent` inherits `Symbol`; agency goes through a new
+  `ManipulatesBodies` mixin; the set is read off the question subclasses.
+  **20 tests, run locally against a real twin, fixed and random order.**
+- **Two EQL defects measured, not assumed.** `exists` answers the agency shape
+  with every object that moved whether the robot acted on it or not — both
+  spellings now use a join. Selecting a collection returned association rows
+  rather than members — fixed in `_apply_relationship_join`, covered by
+  `test_selecting_a_collection_yields_its_members`.
+- **All 8 review threads replied to; 6 resolved.**
+- Manifest, roadmap, dashboard and the PR description are current.
+
+## Outstanding
+
+1. **CI has not run on the rebuild yet.** The long-term tests are marked xfail
+   (non-strict) because a membership condition over a collection still does not
+   translate to a join and I could not execute them here. If any unexpectedly
+   passes, flip it to strict.
+2. **Two threads deliberately left open**, both needing the developer's call:
+   whether a body in the gripper counts as an object the robot sees (it does not
+   any more, because `AbstractRobot.bodies` includes it), and whether an episode
+   should record which links were the robot's.
+3. **The krrood fix widened this PR** into another package. It is the finding
+   this branch was chartered to produce, but splitting it out is reasonable if
+   the developer prefers.
+
+## Notes for whoever picks this up
+
+- A clean venv on Python 3.12 runs the working-memory tests against a real twin;
+  what still needs CI is ORM generation (`rclpy`) and anything importing
+  `experiments.episodes.episode` (ROS message packages).
+- `test/experiments_test/conftest.py` regenerates every ORM interface, so a test
+  in that package cannot run locally even when it needs no generated interface.
+  Copy it out to a scratch directory with a minimal conftest providing the
+  SymbolGraph cleanup fixture.
+- The symbol graph holds instances **weakly**; a test must hold its own events.
+
 # `question-set-and-ground-truth` (icra-evidence) — PR #295
 
 Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278
