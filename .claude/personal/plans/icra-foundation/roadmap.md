@@ -871,3 +871,30 @@ height above the table while the viewpoint's was absolute, which cancelled in th
 equal-depth comparison the test makes and would have been wrong for anything else
 reading a depth. A test now pins the frame by asserting a built piece's lowest point
 sits exactly on the table.
+
+**The first review round, 2026-09-08, and what it changed about #261's model.** Two
+comments, both on `experiments/scenarios/scenario.py` — which is #261's file, carried
+here by the merge, not this branch's own. Taken on this branch rather than on #261
+because that is where the review was left and #261 is already promoted upstream; the
+reply says so, and says the word if he would rather it moved.
+
+`Goal` is now a krrood `Predicate`: `is_reached` is its `__call__` and each goal states
+its own `_verbalization_fragment_`. The mandatory half needs no enforcement of ours —
+`Verbalizable._verbalization_fragment_` is abstract, so a goal that omits one cannot be
+instantiated at all, which a test pins.
+
+The consequence is the part worth carrying, because it reshapes the model rather than
+one class. A predicate is called with no arguments, so its operands are its fields, so
+the world a goal judges has to be a field of it — and a goal can therefore no longer be
+one instance declared once on a scenario, since the world does not exist until the trial
+builds it. `Scenario.goal` moved from a field to a method beside `steps(world)`, the
+runner reads it through `Predicate.__bool__`, and the four scripts here lost their
+`field(init=False)`/`__post_init__` pairs. `MotionRanToItsEnd` on the migrated
+control-loop benchmark took the same shape.
+
+`Condition` became `ScenarioCondition` in the same commit, with every reader.
+`ConditionApplied` kept its name: it is the log event, not the thing.
+
+Only the rename thread was resolved. The `Goal` thread is answered but left open,
+because the reply asks a question of its own — whether the change should have landed on
+#261 instead.
