@@ -920,6 +920,32 @@ implementation to stay until it lands. Recorded in this plan because the questio
 changes lives here, with a note on the item that icra-mechanism's `backend-routing` track
 may be the better home.
 
+#### A third defect in the same fix, again found by CI
+
+The round before this one left two of the long-term questions failing, and the error was
+not the multiplied rows -- it was `MissingColumnError` on `DetectionEventDAO`.
+
+A membership bound its member to an alias of the class the *collection* is declared to
+hold. `Tick.events` holds events; the agency question asks two of them for their
+`tracked_object`, which only the events that track one have. So the variable lost the
+class it was declared over, and the column it went looking for was genuinely not on the
+element it had been bound to. A membership now aliases the members as the class its own
+variable ranges over where that is narrower, joining through it.
+
+The error hid itself while being raised: `MissingColumnError` read its columns off
+`inspect(dao_class).columns`, which an alias does not have, so building the message threw
+`AttributeError: columns` and the real failure never got printed. It goes through the
+mapper now, and has its own test, because an error that fails while reporting costs a
+whole CI round.
+
+krrood's ORM suite is 142 passed.
+
+**Both of the last two rounds were caught by CI rather than by krrood's own tests, and
+both times because the shape the questions actually use was not in the dataset.** The
+gap each time was polymorphism: a collection declared as a base class, holding members
+the query names more precisely. `World.views` is the dataset's only such collection, and
+until this round nothing asked a member of it for something only the subclass has.
+
 #### Still with the developer
 
 The degrees-of-freedom thread is unchanged: whether an episode records the robot's own
