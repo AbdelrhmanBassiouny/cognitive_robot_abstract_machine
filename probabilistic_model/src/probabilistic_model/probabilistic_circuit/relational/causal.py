@@ -16,6 +16,7 @@ import math
 from dataclasses import dataclass
 from typing_extensions import TYPE_CHECKING, List, Optional, TypeAlias, Union
 
+from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
     CausalCircuit,
     MarginalDeterminismTreeNode,
@@ -38,10 +39,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-VariableReference: TypeAlias = Union[Variable, str]
+VariableReference: TypeAlias = Union[Variable, str, MappedVariable]
 """
-A cause, effect, or adjustment variable, given either as an already-resolved
-``Variable`` or as a dotted access-path string resolved against a grounded circuit via
+A cause, effect, or adjustment variable, given as an already-resolved ``Variable``, an
+EQL attribute-access expression (e.g. ``variable(Molecule).mutagenic``, or
+``variable(MoleculeAggregations).chlorine_count()`` for an aggregation), or a dotted
+access-path string -- all resolved against a grounded circuit via
 :meth:`RelationalCausalCircuit.resolve_variable`.
 """
 
@@ -61,23 +64,30 @@ class RelationalCausalCircuit:
     """
 
     @staticmethod
-    def resolve_variable(circuit: ProbabilisticCircuit, path: str) -> Variable:
+    def resolve_variable(
+        circuit: ProbabilisticCircuit, path: Union[str, MappedVariable]
+    ) -> Variable:
         """
         Resolve a dotted access-path suffix to the Variable it names in a grounded
         circuit.
 
         Accepts either a variable's full runtime name (e.g.
-        ``"SceneRoom.objects[0].type"``) or just enough of its trailing access path to
-        be unambiguous (e.g. ``"objects[0].type"``, or ``"chair_count()"`` for an
-        aggregation latent), so callers don't need to reconstruct the class-name
-        prefixing convention grounding applies.
+        ``"SceneRoom.objects[0].type"``), just enough of its trailing access path to be
+        unambiguous (e.g. ``"objects[0].type"``, or ``"chair_count()"`` for an
+        aggregation latent), or an EQL attribute-access expression (e.g.
+        ``variable(SceneRoom).objects[0].type``) built the same way a query builds its
+        own field access -- so callers don't need to reconstruct the class-name
+        prefixing convention grounding applies, or spell it out as a string at all.
 
         :param circuit: The grounded circuit to resolve the path against.
-        :param path: The variable's full name, or an unambiguous suffix of it.
+        :param path: The variable's full name, an unambiguous suffix of it, or an EQL
+            attribute-access expression naming it.
         :return: The matching Variable.
         :raises VariableNotFoundError: If no variable's name matches.
         :raises AmbiguousVariablePathError: If more than one variable's name matches.
         """
+        if isinstance(path, MappedVariable):
+            path = path._name_
         matches = [
             variable
             for variable in circuit.variables

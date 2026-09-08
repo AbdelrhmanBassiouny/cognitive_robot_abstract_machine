@@ -12,31 +12,38 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from krrood.exceptions import DataclassException
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
 from typing_extensions import List
 
 from experiments.causal_reasoning.mutagenesis.domain import (
     MutagenesisAtom,
+    MutagenesisBondType,
     MutagenesisElement,
     MutagenesisMolecule,
 )
 
-DOUBLE_BOND_TYPE = 2
-"""
-``bonds.bond_type`` value the CTU schema records for a double bond.
-"""
 
-AROMATIC_BOND_TYPE = 7
-"""
-``bonds.bond_type`` value the CTU schema records for an aromatic bond.
-"""
-
-
-class MutagenesisDatasetUnavailableError(Exception):
+@dataclass
+class MutagenesisDatasetUnavailableError(DataclassException):
     """
     Raised when the CTU relational-dataset repository cannot be reached.
     """
+
+    reason: str
+    """
+    The underlying database error's message.
+    """
+
+    def error_message(self) -> str:
+        return f"Could not reach the CTU Mutagenesis database: {self.reason}"
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check network access to relational.fel.cvut.cz, or skip tests that "
+            "require it."
+        )
 
 
 @dataclass(frozen=True)
@@ -128,10 +135,14 @@ def fetch_mutagenesis_molecules(
         engine.dispose()
 
     double_bond_counts = (
-        bonds[bonds["bond_type"] == DOUBLE_BOND_TYPE].groupby("drug_id").size()
+        bonds[bonds["bond_type"] == MutagenesisBondType.DOUBLE]
+        .groupby("drug_id")
+        .size()
     )
     aromatic_bond_counts = (
-        bonds[bonds["bond_type"] == AROMATIC_BOND_TYPE].groupby("drug_id").size()
+        bonds[bonds["bond_type"] == MutagenesisBondType.AROMATIC]
+        .groupby("drug_id")
+        .size()
     )
     atoms_by_drug = {
         drug_id: [

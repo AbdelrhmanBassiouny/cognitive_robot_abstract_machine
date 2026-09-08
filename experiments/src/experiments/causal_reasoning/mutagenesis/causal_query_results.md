@@ -1,33 +1,44 @@
 # Mutagenesis Causal Query: Results
 
-This documents the causal-query stage of the Mutagenesis pipeline experiment:
-registering chlorine count as a cause of mutagenicity on a circuit grounded from the
-CTU Mutagenesis dataset, and comparing naive conditioning against backdoor-adjusted
-estimates. It follows on from fitting and validating the relational circuit on the
-full dataset, covered separately, and runs on the full dataset -- no subsampling.
+This is the causal-query stage of the Mutagenesis pipeline: we take the CTU
+Mutagenesis dataset, register chlorine count as a cause of mutagenicity on a circuit
+grounded from it, and ask what backdoor adjustment says once we control for the
+dataset's known `ind1` indicator. It follows on from fitting and validating the
+relational circuit on the full dataset (covered separately), and runs on the whole
+188-molecule dataset -- no subsampling.
 
-## What was done
+## Why chlorine count?
 
-1. Fitted a relational circuit on the full 188-molecule dataset, with the class
-   circuit stratified by chlorine count so it is support-deterministic over that
-   variable.
+Not because chlorine is expected to be the main driver of mutagenicity here -- the
+QSAR literature this dataset comes from already points to `ind1` as the established
+predictor, and nothing below overturns that. Chlorine count is the interesting choice
+for a different reason: it doesn't exist as a variable until a query is grounded. It's
+an aggregate -- "how many chlorine atoms does this molecule have" -- computed over each
+molecule's `atoms`, the exchangeable relation `RelationalProbabilisticCircuit` grounds
+per query. A flat `CausalCircuit` can register any variable that's already sitting in
+its data as a cause; this experiment is here to check whether the same machinery works
+once the cause has to be *assembled* from a relation first. Chlorine happens to also be
+rare enough (11 of 188 molecules have any) to stress-test that assembly at the edges,
+where most of the interesting failure modes live.
+
+## What we did
+
+1. Fit a relational circuit on all 188 molecules, with the class circuit stratified by
+   chlorine count so it's support-deterministic over that variable.
 2. Grounded a query for a two-atom molecule with every atom's element left
-   unspecified, so chlorine count is retained as a variable rather than integrated
-   out.
-3. Registered chlorine count as the cause, mutagenicity as the effect, and the
-   dataset's `ind1` structural indicator as the adjustment variable, trimmed the
-   circuit to exactly those three variables, and verified the result is
-   support-deterministic.
+   unspecified, so chlorine count stays a variable instead of being integrated out.
+3. Registered chlorine count as the cause, mutagenicity as the effect, and `ind1` as
+   the adjustment variable, trimmed the circuit to just those three, and verified the
+   result is support-deterministic.
 4. Ran backdoor adjustment and compared it against naive conditioning at every
    chlorine-count value the grounded circuit's support covers.
 
 Code: `causal_query.py` (`run_chlorine_count_backdoor_adjustment`), `dataset.py`.
 Tests: `test/causal_reasoning_test/test_causal_query.py`.
 
-## Data
+## The data
 
-The CTU Mutagenesis dataset (`mutagenesis_188`, 188 molecules, 125 mutagenic / 63
-not) has chlorine as a rare atom -- present in only 11 of 188 molecules:
+Chlorine really is rare in this dataset (188 molecules, 125 mutagenic):
 
 | Chlorine count | Molecules | Share |
 |---:|---:|---:|
@@ -38,87 +49,72 @@ not) has chlorine as a rare atom -- present in only 11 of 188 molecules:
 | 4 | 1 | 0.53% |
 | 5 | 1 | 0.53% |
 
-Training uses all 188 molecules. Retaining a chlorine-count value this rare through
-Monte-Carlo grounding needs enough draws that even the rarest value (1/188 molecules)
-is reliably sampled at least once: at the JPT default of 10 draws, a value observed
-in only 1 training row has better than a 99% chance of never being drawn. The
-experiment draws `2000` Monte-Carlo samples instead, which drops that miss chance for
-every observed value below 1% (for the rarest, $(1 - 1/188)^{2000} \approx 0.005\%$).
+This table earns its place here for two reasons, not just as color: it's the reason
+grounding needs `2000` Monte-Carlo samples rather than the JPT default of 10 -- a value
+seen in only 1 of 188 molecules has better than a 99% chance of never being drawn at
+that default, and 2000 draws pushes that miss chance under 1% even for the rarest value
+($(1 - 1/188)^{2000} \approx 0.005\%$) -- and it's the reason to read the chlorine
+counts 3-5 rows below as single-molecule anecdotes rather than statistics.
 
 ## Results
 
-`P(mutagenic = True)` at each chlorine-count value, naively conditioned versus
-backdoor-adjusted for `ind1`, on the full 188-molecule dataset:
+`P(mutagenic = True)` at each chlorine-count value, naive versus backdoor-adjusted for
+`ind1`, on the full dataset:
 
 | Chlorine count | Region P(chlorine count) | Naive P(mutagenic) | Adjusted P(mutagenic) |
 |---:|---:|---:|---:|
-| 0 | 0.9415 | 0.6893 | 0.6649 |
-| 1 | 0.0266 | 0.4000 | 0.6649 |
-| 2 | 0.0160 | 0.3333 | 0.6649 |
-| 3 | 0.0053 | 0.0000 | 0.6649 |
-| 4 | 0.0053 | 0.0000 | 0.6649 |
-| 5 | 0.0053 | 0.0000 | 0.6649 |
+| 0 | 0.9415 | 0.6893 | 0.6854 |
+| 1 | 0.0266 | 0.4000 | 0.6609 |
+| 2 | 0.0160 | 0.3333 | 0.5479 |
+| 3 | 0.0053 | 0.0000 | 0.0000 |
+| 4 | 0.0053 | 0.0000 | 0.0000 |
+| 5 | 0.0053 | 0.0000 | 0.0000 |
 
 The region probabilities match the dataset's own chlorine-count distribution exactly
-(0.9415 &asymp; 177/188, 0.0053 &asymp; 1/188), confirming grounding retained the
-real population, not an artifact of sampling. The circuit passed support-determinism
-verification, and both queries ran to completion for every chlorine-count value on
-the full dataset, end to end, in under five seconds.
+(0.9415 &asymp; 177/188, 0.0053 &asymp; 1/188), so grounding is retaining the real
+population, not something a Monte-Carlo artifact would produce. The circuit passes
+support-determinism verification, and the whole thing runs end to end in a few seconds.
 
-## Inference
+## What this actually says
 
-- **Naive conditioning shows a downward trend, but on shrinking sample sizes.**
-  P(mutagenic) falls from 0.69 at chlorine count 0 (177 molecules) to 0.0 at counts
-  3-5 (1 molecule each). Chlorine counts 3, 4 and 5 are single-molecule estimates, not
-  statistically meaningful on their own -- exactly what the region probabilities
-  above already show.
-- **Backdoor adjustment collapses to 0.6649 at every chlorine count, and that number
-  is not arbitrary: it is 125/188, the dataset's overall mutagenicity rate.** Once
-  `ind1` is adjusted for, chlorine count carries no additional information about
-  mutagenicity beyond the population base rate -- the adjustment is not returning a
-  degenerate answer, it is reporting a genuine null causal effect for this cause
-  variable given this adjustment set. This matches the QSAR literature's own framing
-  cited in the pipeline plan: `ind1` is an established strong predictor of
-  mutagenicity in this benchmark, while chlorine count is not established as a
-  primary driver on its own. The naive column's apparent downward trend is exactly
-  the kind of confound `do`-adjustment exists to correct for -- consistent with
-  `ind1` (and whatever `ind1` itself tracks structurally) being the real driver
-  behind both chlorine count and mutagenicity, not chlorine count causing anything
-  directly.
-- **This is a genuine result, not a demonstration artifact.** Every number above
-  comes from the full 188-molecule dataset with no subsampling, using the same
-  circuit-registration and backdoor-adjustment code path the rest of this package's
-  causal-circuit tests exercise.
+- **Naive conditioning looks like a downward trend, but it's mostly sample size
+  talking.** P(mutagenic) drops from 0.69 at chlorine count 0 (177 molecules) to 0.0 at
+  counts 3-5 (1 molecule each, and that one molecule happens not to be mutagenic).
+  Nothing about a sample of one supports a trend.
+- **Adjusting for `ind1` moves counts 1 and 2 up, not down, which is the opposite of
+  what a naive read of the drop above would suggest.** At chlorine=1, naive says 0.40
+  but adjusted says 0.66; at chlorine=2, naive says 0.33 but adjusted says 0.55. Both
+  chlorine=1 and chlorine=2 molecules happen to skew towards `ind1=False`, which pulls
+  their naive mutagenicity rate down since `ind1=False` molecules are less often
+  mutagenic overall -- once that's accounted for, the picture looks more like chlorine
+  count 0's own rate than the naive numbers let on. Chlorine counts 3-5 stay at exactly
+  0.0 either way: their one molecule is `ind1=True`, and the adjustment formula has
+  nothing else to average in for the missing `ind1=False` cell, so it just reports what
+  that one molecule says.
+- **This doesn't crown chlorine count a real cause of mutagenicity.** The backdoor
+  criterion only tells you the adjustment is arithmetically sound given `ind1` as the
+  full confounder set; it can't tell you whether `ind1` actually *is* the full
+  confounder set for chlorine count in this domain, because nothing here constructs or
+  checks the underlying causal graph -- that's an assumption we're bringing in, not one
+  the circuit verifies. Read this as "the tractable-circuit backdoor machinery ran
+  correctly on real, awkward, sparse relational data," not as a chemistry finding.
 
-## Comparison to published results on this dataset
+## The bug this dataset found
 
-The CTU relational-learning repository lists accuracies reported for classic
-multi-relational and ILP systems on this exact dataset
-(<https://relational.fel.cvut.cz/dataset/Mutagenesis>). These solve a different
-problem -- supervised classification of `mutagenic`, not causal effect estimation --
-so they are not a like-for-like comparison, only a scale reference for what a
-"typical" result on this data looks like:
+Writing this experiment against real, unevenly distributed data caught something a
+hand-built symmetric fixture never would have: `_add_region_for_cause_value` was
+intersecting the adjustment partition's event with the cause region's event *before*
+filling either one out to the full variable set. `intersection_with` only keeps
+variables already present on its left operand, so that order silently dropped the
+cause region's own variable from the intersection -- every cause value ended up
+averaging over the *whole* population's `ind1` split instead of the split within its
+own region, which is a distinction that only shows up in numbers when your data isn't
+symmetric enough for the two calculations to coincide by accident. Every existing test
+for this code path happened to use a confounder fixture where the true adjusted value
+is identical for every cause value, so the correct and the broken computation reported
+the same number either way -- passed for the wrong reason.
 
-| System | Reported accuracy | Task |
-|---|---:|---|
-| CrossMine | 0.912 | Supervised classification of `mutagenic` |
-| CILP++ | 0.892 | Supervised classification of `mutagenic` |
-| CrossMine (alt. configuration) | 0.893 | Supervised classification of `mutagenic` |
-| CoTReC | 0.858 | Supervised classification of `mutagenic` |
-| CrossMine (alt. configuration) | 0.857 | Supervised classification of `mutagenic` |
-| Aleph (BCP + neural net) | 0.809 | Supervised classification of `mutagenic` |
-| CrossMine (ADMA 2010) | 0.819 | Supervised classification of `mutagenic` |
-| FOIL | 0.797 | Supervised classification of `mutagenic` |
-| Aleph (kFOIL) | 0.734 | Supervised classification of `mutagenic` |
-| Aleph (Wordification) | 0.601 | Supervised classification of `mutagenic` |
-| **This package -- naive P(mutagenic \| chlorine=0)** | 0.689 | Observational, not a classifier |
-| **This package -- backdoor-adjusted P(mutagenic \| do(chlorine))** | 0.665 | Interventional estimate, all chlorine values |
-
-The predictive-accuracy validation this causal-query experiment builds on (fitting
-and validating the relational circuit, covered separately) already places this
-package's own held-out classification accuracy within that published range. The
-rows above are not accuracy figures at all -- they are the *observational* and
-*interventional* probability of mutagenicity at a single relational aggregate's
-value, a question none of the classification systems above answer, since they
-predict a label rather than estimate an effect. They are included for scale, not as
-a benchmark this package is competing on.
+Fixed in `causal_circuit.py` (`_add_region_for_cause_value`), with a regression test in
+`test_causal_circuit.py` (`CauseSpecificAdjustmentTestCase`) built specifically so the
+true adjusted probability differs by cause value and can't hide the bug the way the
+existing fixture did.

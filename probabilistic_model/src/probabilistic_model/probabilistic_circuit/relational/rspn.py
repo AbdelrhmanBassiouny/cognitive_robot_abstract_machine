@@ -20,8 +20,9 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 from sortedcontainers import SortedSet
-from typing_extensions import TYPE_CHECKING, Any, Optional, Type
+from typing_extensions import TYPE_CHECKING, Any, Optional, Type, Union
 
+from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.ormatic.data_access_objects.dao import (
     DataAccessObject,
     DataAccessObjectSchema,
@@ -732,7 +733,7 @@ class RelationalProbabilisticCircuit:
         self,
         instances: list[DataAccessObject],
         dataframe_from_parent: Optional[pd.DataFrame] = None,
-        stratify_class_circuit_by: Optional[str] = None,
+        stratify_class_circuit_by: Optional[Union[str, MappedVariable]] = None,
     ):
         """
         Fit the relational probabilistic circuit from a list of DAO instances.
@@ -746,15 +747,13 @@ class RelationalProbabilisticCircuit:
         :param dataframe_from_parent: Pre-built dataframe supplied by a parent
             ``_fit_exchangeable_part`` call. When provided, feature extraction and
             preprocessing are skipped.
-        :param stratify_class_circuit_by: Name of a class-level variable to fit
-            support-deterministically over, so it can afterward be registered as a
-            :class:`~probabilistic_model.probabilistic_circuit.causal.causal_circuit.CausalCircuit`
-            cause. A plain ``JointProbabilityTree`` fit gives no guarantee that rows
-            sharing this variable's value end up under one branch -- two rows with the
-            same value can land in different sibling leaves, which
-            ``CausalCircuit.verify_support_determinism`` then rejects. Naming the
-            variable here instead partitions the training dataframe by its exact value
-            first and fits one sub-circuit per partition (see
+        :param stratify_class_circuit_by: Name of a class-level variable to fit support-
+            deterministically over, given as a column name or an EQL attribute-access
+            expression (e.g. ``variable(Molecule).season``): every row sharing this
+            variable's value ends up under one circuit branch, rather than possibly
+            split across sibling leaves the way a plain, unconstrained fit allows.
+            Partitions the training dataframe by the variable's exact value first and
+            fits one sub-circuit per partition (see
             :meth:`_fit_stratified_class_circuit`), so every value's rows share one
             branch by construction. Leave ``None`` for the plain, unconstrained fit.
         :return:``self``, to allow chaining.
@@ -769,6 +768,8 @@ class RelationalProbabilisticCircuit:
                 annotated_variables=variables
             ).fit(class_dataframe)
         else:
+            if isinstance(stratify_class_circuit_by, MappedVariable):
+                stratify_class_circuit_by = stratify_class_circuit_by._name_
             self.class_probabilistic_circuit = self._fit_stratified_class_circuit(
                 class_dataframe, variables, stratify_class_circuit_by
             )

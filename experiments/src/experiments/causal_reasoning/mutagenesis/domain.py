@@ -9,7 +9,7 @@ fixture.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, IntEnum
 from typing_extensions import List
 
 from krrood.entity_query_language.factories import entity, count_range, variable
@@ -32,6 +32,24 @@ class MutagenesisElement(Enum):
     BROMINE = "br"
     FLUORINE = "f"
     IODINE = "i"
+
+
+class MutagenesisBondType(IntEnum):
+    """
+    ``bonds.bond_type`` value, as recorded in the CTU Mutagenesis dataset.
+
+    1, 2, 3 and 7 follow the encoding documented in the dataset's own ILP literature
+    (single, double, triple, aromatic). 4 and 5 also occur in the live table, in a
+    handful of bonds, but their chemical meaning is not documented anywhere the schema
+    exposes, so they are kept under their raw codes rather than guessed at.
+    """
+
+    SINGLE = 1
+    DOUBLE = 2
+    TRIPLE = 3
+    UNDOCUMENTED_TYPE_4 = 4
+    UNDOCUMENTED_TYPE_5 = 5
+    AROMATIC = 7
 
 
 @dataclass
@@ -61,6 +79,12 @@ class MutagenesisAtom:
 class MutagenesisMolecule:
     """
     One molecule of the CTU Mutagenesis dataset, with its atoms as an exchangeable part.
+
+    ``double_bond_count`` and ``aromatic_bond_count`` stay class-level scalars rather
+    than a retained ``bonds`` exchangeable part alongside ``atoms``: grounding a second
+    exchangeable part together with an aggregation-derived cause variable currently
+    breaks ``CausalCircuit``'s region extraction (a separate, pre-existing bug in the
+    relational-grounding/causal-circuit pipeline, not specific to bonds).
     """
 
     indicator_1: bool

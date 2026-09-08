@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from krrood.entity_query_language.factories import a
+from krrood.entity_query_language.factories import a, variable
 from krrood.ormatic.data_access_objects.helper import to_dao
 from random_events.product_algebra import SimpleEvent
 from typing_extensions import List
@@ -16,6 +16,7 @@ from typing_extensions import List
 from experiments.causal_reasoning.mutagenesis.domain import (
     MutagenesisAtom,
     MutagenesisMolecule,
+    MutagenesisMoleculeAggregations,
 )
 from probabilistic_model.probabilistic_circuit.relational.causal import (
     RelationalCausalCircuit,
@@ -24,34 +25,20 @@ from probabilistic_model.probabilistic_circuit.relational.rspn import (
     RelationalProbabilisticCircuit,
 )
 
-CHLORINE_COUNT_PATH = "chlorine_count()"
+CHLORINE_COUNT_VARIABLE = variable(MutagenesisMoleculeAggregations).chlorine_count()
 """
-Dotted access-path suffix identifying the chlorine-count cause variable in a grounded
-circuit.
-"""
-
-MUTAGENIC_PATH = "mutagenic"
-"""
-Dotted access-path suffix identifying the mutagenicity effect variable in a grounded
-circuit.
+EQL attribute-access expression naming the chlorine-count cause variable.
 """
 
-INDICATOR_1_PATH = "indicator_1"
+MUTAGENIC_VARIABLE = variable(MutagenesisMolecule).mutagenic
 """
-Dotted access-path suffix identifying the ``ind1`` structural-indicator adjustment
-variable in a grounded circuit.
+EQL attribute-access expression naming the mutagenicity effect variable.
 """
 
-DEFAULT_MONTE_CARLO_SAMPLE_COUNT = 2000
+INDICATOR_1_VARIABLE = variable(MutagenesisMolecule).indicator_1
 """
-Default number of Monte-Carlo draws grounding takes when retaining chlorine count.
-
-Chlorine is rare in the Mutagenesis dataset (about one atom in ninety), so a small
-sample count reliably retains only chlorine_count = 0: at the default JPT sample
-count of 10, a value observed in, say, 1 of 188 training molecules has better than a
-99% chance of never being drawn at all. This count is chosen so that even the
-rarest observed value has under a 1% chance of being missed (see
-``causal_query_results.md`` for the derivation).
+EQL attribute-access expression naming the ``ind1`` structural-indicator adjustment
+variable.
 """
 
 
@@ -82,7 +69,7 @@ class ChlorineCountCausalEffect:
     adjusted_probability_mutagenic: float
     """
     ``P(mutagenic = True | do(chlorine_count))``, backdoor-adjusted for
-    :data:`INDICATOR_1_PATH`.
+    :data:`INDICATOR_1_VARIABLE`.
     """
 
 
@@ -141,7 +128,7 @@ def run_chlorine_count_backdoor_adjustment(
     training_molecules: List[MutagenesisMolecule],
     atom_count: int = 2,
     random_seed: int = 0,
-    monte_carlo_sample_count: int = DEFAULT_MONTE_CARLO_SAMPLE_COUNT,
+    monte_carlo_sample_count: int = 2000,
 ) -> MutagenesisCausalQueryResult:
     """
     Fit a relational circuit, register chlorine count as a cause of mutagenicity, and
@@ -165,7 +152,12 @@ def run_chlorine_count_backdoor_adjustment(
         which draws the Monte-Carlo samples that retain chlorine count. Fixing it keeps
         the result reproducible across runs.
     :param monte_carlo_sample_count: Number of Monte-Carlo samples grounding draws when
-        retaining chlorine count. See :data:`DEFAULT_MONTE_CARLO_SAMPLE_COUNT`.
+        retaining chlorine count. Chlorine is rare in the Mutagenesis dataset (about one
+        atom in ninety), so the default is set well above what a small sample count
+        would reliably catch: at the default JPT sample count of 10, a value observed in
+        only 1 of 188 training molecules has better than a 99% chance of never being
+        drawn at all, whereas 2000 draws drops that miss chance under 1% for every
+        observed value (see ``causal_query_results.md`` for the derivation).
     :return: The fitted result, including one causal-effect row per chlorine-count value
         the grounded circuit's support covers.
     """
@@ -173,7 +165,7 @@ def run_chlorine_count_backdoor_adjustment(
     model.monte_carlo_sample_count = monte_carlo_sample_count
     model.fit(
         [to_dao(molecule) for molecule in training_molecules],
-        stratify_class_circuit_by=f"MutagenesisMoleculeAggregations.{CHLORINE_COUNT_PATH}",
+        stratify_class_circuit_by=CHLORINE_COUNT_VARIABLE,
     )
 
     query = _build_query(atom_count)
@@ -183,21 +175,21 @@ def run_chlorine_count_backdoor_adjustment(
     relational_causal_circuit = RelationalCausalCircuit()
     causal_circuit = relational_causal_circuit.from_grounded_circuit(
         grounded_circuit,
-        causal_variables=[CHLORINE_COUNT_PATH],
-        effect_variables=[MUTAGENIC_PATH],
-        adjustment_variables=[INDICATOR_1_PATH],
+        causal_variables=[CHLORINE_COUNT_VARIABLE],
+        effect_variables=[MUTAGENIC_VARIABLE],
+        adjustment_variables=[INDICATOR_1_VARIABLE],
         trim_to_registered_variables=True,
     )
 
     probabilistic_circuit = causal_circuit.probabilistic_circuit
     chlorine_count_variable = RelationalCausalCircuit.resolve_variable(
-        probabilistic_circuit, CHLORINE_COUNT_PATH
+        probabilistic_circuit, CHLORINE_COUNT_VARIABLE
     )
     mutagenic_variable = RelationalCausalCircuit.resolve_variable(
-        probabilistic_circuit, MUTAGENIC_PATH
+        probabilistic_circuit, MUTAGENIC_VARIABLE
     )
     indicator_1_variable = RelationalCausalCircuit.resolve_variable(
-        probabilistic_circuit, INDICATOR_1_PATH
+        probabilistic_circuit, INDICATOR_1_VARIABLE
     )
 
     naive_circuit = causal_circuit.backdoor_adjustment(

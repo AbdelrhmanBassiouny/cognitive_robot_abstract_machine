@@ -465,19 +465,10 @@ class CausalCircuit:
         Check that for each declared query Variable, no SumUnit that splits on that
         Variable has children with overlapping marginal support.
 
-        Marginalizes the circuit down to each query Variable in turn before computing
-        support, rather than computing the full joint support once and marginalizing
-        it per check: a circuit with several retained relational latents can carry
-        thousands of nodes, and the joint support's own representation grows with
-        every one of them even though only a handful of variables are ever queried.
-        Restricting to one variable first keeps every downstream union small, since
-        random_events.product_algebra.Event.__or__ does not shrink already-computed
-        regions back down after each union -- collapsing that growth is exactly what
-        marginalizing away the irrelevant variables first does, and it is mathematically
-        the same disjointness question: a sum unit's children are disjoint on a
-        variable set V iff they are disjoint on V after marginalizing every other
-        variable out, since marginalization cannot merge regions that a shared variable
-        assignment does not already connect.
+        Marginalizes the circuit down to each query Variable in turn rather than
+        computing the full joint support once: a circuit with many retained relational
+        latents can carry thousands of nodes, so restricting to one variable at a time
+        keeps each disjointness check cheap instead of growing with all of them.
 
         :param all_query_variables: Union of all Variables across all query_sets.
         :returns: List of violations, empty if all split nodes are support-disjoint.
@@ -782,16 +773,21 @@ class CausalCircuit:
         """
         effect_mixture = SumUnit(probabilistic_circuit=output_circuit)
         for adjustment_partition in adjustment_partitions:
-            joint_event = adjustment_partition.event.intersection_with(
-                cause_region.event
-            )
-            joint_conditioned_circuit, _ = copy.deepcopy(
-                self.probabilistic_circuit
-            ).log_truncated_in_place(
-                joint_event.fill_missing_variables_pure(
+            # Both events must be filled to the same variable set *before*
+            # intersecting: intersection_with keeps only the variables already on its
+            # left operand, so intersecting first and filling afterward silently drops
+            # whichever event's variables weren't already present on the other side --
+            # here, cause_region's variable, leaving joint_event unrestricted by it.
+            joint_event = adjustment_partition.event.fill_missing_variables_pure(
+                self.probabilistic_circuit.variables
+            ).intersection_with(
+                cause_region.event.fill_missing_variables_pure(
                     self.probabilistic_circuit.variables
                 )
             )
+            joint_conditioned_circuit, _ = copy.deepcopy(
+                self.probabilistic_circuit
+            ).log_truncated_in_place(joint_event)
             if joint_conditioned_circuit is None:
                 continue
             self._attach_weighted_marginal(
@@ -914,46 +910,19 @@ class CausalCircuit:
         Return a :class:`SupportRegion` for each structurally disjoint support region of
         variable, read from the circuit's unmarginalized joint support.
 
-        `_extract_leaf_regions_for_variable` marginalizes the joint support down to
-        variable alone first, which coalesces every disjoint per-branch range into one
-        Interval/Set-valued region -- correct as a description of variable's own
-        support, but unable to tell one SumUnit branch's region apart from another's.
-        This matters beyond region-search cosmetics: `backdoor_adjustment` builds its
-        output as one ProductUnit per region returned here, pairing each region's own
-        cause branch with its own effect branch: with the coalesced regions, a
-        multi-branch cause variable collapsed to a single ProductUnit spanning its
-        whole domain, silently discarding the cause-effect correlation each branch
-        encodes (marginal probabilities stayed correct either way, which is why this
-        went unnoticed by tests that only checked marginals). This method instead reads
-        variable's value directly off each of the joint support's own disjoint simple
-        sets, before marginalization discards which branch it came from, merging
-        branches that happen to share the same value by keeping a single entry
-        (`circuit.probability` already aggregates every contributing branch for that
-        value in one call, so no separate summation is needed). Query-set variables are
-        exactly where this separation is meaningful: support determinism (see
-        `verify_support_determinism`) guarantees SumUnit children have disjoint support
-        on them, so the regions returned here correspond to actual circuit branches
-        rather than an arbitrary decomposition.
+        Reads variable's value directly off the joint support's own disjoint simple
+        sets, rather than marginalizing down to variable alone first: marginalizing
+        first would coalesce separate SumUnit branches into one region, which
+        `backdoor_adjustment` cannot use since it builds one ProductUnit per region
+        here, pairing each region's own cause branch with its own effect branch.
+        Support determinism (see `verify_support_determinism`) guarantees these
+        branches are genuinely disjoint, so the regions returned here correspond to
+        actual circuit branches rather than an arbitrary decomposition.
 
-        Marginalizing the *circuit* first (instead of the joint support) is not a safe
-        shortcut here, unlike in `_check_support_disjointness`: two branches whose
-        query-variable ranges are merely adjacent (e.g. ``[0, 1]`` and ``[1, 2]``) union
-        into one contiguous region under plain set algebra regardless of which side
-        marginalizes first, which loses exactly the per-branch separation this method
-        exists to keep. Reading values off the full joint support's own simple sets
-        avoids that because two branches differing on *any* other variable stay
-        distinct there, even when their projections onto variable alone would merge.
-
-        Query variables with a discrete (:class:`~random_events.set.Set`) domain need
-        one further step: a single SumUnit branch can itself be a mixture over several
-        of the variable's values (unlike a continuous branch, whose own support is
-        already the atomic range a leaf distribution occupies), so
-        ``simple_region[variable]`` there is the *union* of every value with positive
-        probability in that branch, not one value. `_split_into_atomic_values` breaks
-        that union apart before grouping, so e.g. a branch giving 80% probability to
-        ``HIGH`` and 20% to ``LOW`` contributes two regions, not one spanning both --
-        the same distinction this method already makes between branches applies within
-        one branch's own mixture.
+        A discrete (:class:`~random_events.set.Set`) query variable needs one further
+        step: a single branch can itself mix several of the variable's values, so
+        `_split_into_atomic_values` splits that union into one region per value before
+        grouping.
 
         :param variable: The Variable whose disjoint support regions to extract.
         :param base_circuit: Circuit to query. Defaults to self.probabilistic_circuit.
