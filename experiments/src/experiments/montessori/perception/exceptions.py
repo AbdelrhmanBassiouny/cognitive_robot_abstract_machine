@@ -466,3 +466,46 @@ class SurfaceNotSeenWhereTheWorldPutsIt(DataclassException):
             "Point the camera at the surface, or correct the height the world puts it "
             "at, so the picture and the model describe the same scene."
         )
+
+
+# %% simulated looks
+
+
+@dataclass
+class SimulatedCameraIsNotLooking(DataclassException):
+    """
+    Raised when a frame is asked of a simulated camera that has not been started, so
+    there is no mirror of the world for it to render.
+    """
+
+    camera_name: str
+    """
+    The camera that was asked.
+    """
+
+    def error_message(self) -> str:
+        return f"The camera {self.camera_name} is not looking at anything yet."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Start the camera before asking it for a frame, or use it as a context "
+            "manager, which starts and stops it around the looks taken inside."
+        )
+
+
+@dataclass
+class SimulatedCameraIsAlreadyLooking(DataclassException):
+    """
+    Raised when a simulated camera that is already rendering is started a second time.
+    """
+
+    camera_name: str
+    """
+    The camera that was started again.
+    """
+
+    def error_message(self) -> str:
+        return f"The camera {self.camera_name} is already looking."
+
+    def suggest_correction(self) -> str:
+        return "Stop the camera before starting it again, or keep asking the one look."
