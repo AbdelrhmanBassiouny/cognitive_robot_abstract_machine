@@ -1,35 +1,49 @@
-## PR #284 - tooling label from changed files (branch: claude/ready-tooling-integration-fkd5b5, base: #281)
+## Tooling label from the changed files - PR #284 (ready)
 
-**Plan**: automate the `tooling` label #281 introduced, from a pull request's changed
-paths, so merge priority stops depending on somebody remembering to label.
+**Branch** `claude/ready-tooling-integration-fkd5b5`, based on
+`claude/integration-priority-labels` (#281).
 
-**Done**
-- `changed_paths.py`: TOOLING / SHARED / SOFTWARE per path, from stack.toml's
-  `tooling_paths` + `shared_paths`; a change is tooling when it touches the tooling and
-  nothing outside it.
-- `maintenance.py label-tooling` (both directions) + `.github/workflows/tooling-label.yml`
-  on every push to a pull request.
-- 16 tests; full tooling suite 804 passed. Draft PR #284 open, and the workflow already
-  labelled #284 itself on its first run - proven end to end.
+**This session's work** resolving the conflict with the base and checking the
+red CI. One merge commit `f9de13ed29`, pushed.
 
-**Next / outstanding (not this PR's)**
-- Bulk-label the fork's other 26 tooling pull requests: `maintenance.py label-tooling`
-  with no `--pull-request`. Not run yet - waiting on the user, it writes to ~100 PRs.
+The base had picked up #185's move of the tooling out of `.claude/stack/` into
+the `bastler` package, so the whole directory was renamed underneath this
+branch. Resolved:
+1. `changed_paths.py` and `maintenance_tooling_label.py` moved into `bastler/`,
+   `test_tooling_label.py` into `test/bastler_test/`, all on `bastler.` imports.
+2. Test reaches the root through `bastler.package_layout.REPOSITORY_ROOT`
+   instead of `Path(__file__).parents[3]`, and `test_maintenance` through a
+   relative import.
+3. Two textual conflicts, both import blocks only
+   (`maintenance_commands.py`, `maintenance_report.py`).
+4. `tooling-label.yml` installs the package and runs
+   `python -m "${MAINTENANCE_MODULE}" label-tooling`; `STACK_DIRECTORY` now
+   names only the README's directory.
+5. `stack.toml`'s `tooling_paths` comment no longer calls `bastler/` a place an
+   in-flight branch is moving the tooling to.
+6. `scripts/format_docstrings.py` run over every touched file.
 
-## Integration + stacking actions - findings, no branch yet
+**Test state** `pytest test/bastler_test --confcutdir=test/bastler_test`:
+930 passed, 5 failed. Base branch alone: 912 passed, the *same* 5 failed. All
+five start a subprocess with an interpreter that has no `bastler` installed,
+which CI does install. So the merge adds 18 passing tests and no failures.
 
-- **Integration refresh fails every scheduled run** (6 in a row). Root cause: the build
-  carries #111/#185's `.claude/` -> `bastler/` relocation, then the pipeline re-invokes
-  `.claude/stack/integration.py` from the checked-out build tree, where it no longer
-  exists. #158 / #198 (tooling pinning) are the fixes and are both skipped out of the
-  build by the same collision.
-- **Stack maintenance action fails**: its workflow runs `maintenance.py run-report`
-  with no `board --write` step, and run-report consumes board.json rather than
-  exporting one -> `board-unavailable (3)`. One-step fix, belongs on #280.
-- **Build is `tip-left-out`**: 13 ready tooling tips skipped against #111 (the
-  relocation), 1 against #206. Resolutions via stage-conflict/record-resolution live in
-  the clone's rr-cache, which no CI runner has - so they cannot fix the scheduled
-  rebuild. Reported to the user rather than attempted.
-- **Ready tooling PRs red on their own checks**: #194 (`test_the_upstream_read_is_not_
-  conditioned_on_the_promotion_label`, reproduced locally), #280 (above), #157 and #273
-  (robokudo/giskardpy matrix, green on main - flakes).
+**CI** the one red check, `Integration refresh`, is fork-wide and not this
+PR's: every run of that workflow has failed for days, on `#291`, `#293` and on
+the scheduled runs of `integration`. It checks out the *default branch* on a
+`pull_request` event but runs the *PR's* workflow file, so its
+`integration.py block-branch` call hits a main that has no such subcommand -
+exit 2, `USAGE`. Belongs to whoever owns `integration-refresh.yml`, not here.
+A push does not re-trigger it (it fires on schedule / dispatch /
+`ready_for_review` only).
+
+**Left alone deliberately**
+- The `needs-resolution` label: a maintenance pass owns setting and clearing it.
+- Draft state: #284 is ready-for-review and was most likely marked so by hand,
+  so it was not flipped back.
+- `integration_test_command` in `bastler/stack.toml` still names
+  `.claude/stack/tests`, which #185's move deleted. Pre-existing on the base,
+  not this PR's to widen into.
+
+**Knock-on** #293 is based on this branch and will need the same package move
+applied to `integration_tooling.py` and its test once this lands.
