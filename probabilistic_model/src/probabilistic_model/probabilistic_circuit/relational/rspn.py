@@ -14,15 +14,14 @@ from __future__ import annotations
 import enum
 import itertools
 import logging
-import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
 from sortedcontainers import SortedSet
-from typing_extensions import TYPE_CHECKING, Any, Optional, Type, Union
+from typing_extensions import TYPE_CHECKING, Any, Optional, Type
 
-from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.ormatic.data_access_objects.dao import (
     DataAccessObject,
     DataAccessObjectSchema,
@@ -733,7 +732,9 @@ class RelationalProbabilisticCircuit:
         self,
         instances: list[DataAccessObject],
         dataframe_from_parent: Optional[pd.DataFrame] = None,
-        stratify_class_circuit_by: Optional[Union[str, MappedVariable]] = None,
+        class_circuit_builder: Optional[
+            Callable[[pd.DataFrame, list[AnnotatedVariable]], ProbabilisticCircuit]
+        ] = None,
     ):
         """
         Fit the relational probabilistic circuit from a list of DAO instances.
@@ -747,15 +748,12 @@ class RelationalProbabilisticCircuit:
         :param dataframe_from_parent: Pre-built dataframe supplied by a parent
             ``_fit_exchangeable_part`` call. When provided, feature extraction and
             preprocessing are skipped.
-        :param stratify_class_circuit_by: Name of a class-level variable to fit support-
-            deterministically over, given as a column name or an EQL attribute-access
-            expression (e.g. ``variable(Molecule).season``): every row sharing this
-            variable's value ends up under one circuit branch, rather than possibly
-            split across sibling leaves the way a plain, unconstrained fit allows.
-            Partitions the training dataframe by the variable's exact value first and
-            fits one sub-circuit per partition (see
-            :meth:`_fit_stratified_class_circuit`), so every value's rows share one
-            branch by construction. Leave ``None`` for the plain, unconstrained fit.
+        :param class_circuit_builder: Builds the class-level circuit from the class
+            dataframe and its inferred variables, in place of the plain, unconstrained
+            ``JointProbabilityTree`` fit. Callers that need a specific circuit shape --
+            for instance one that is support-deterministic over a chosen variable --
+            supply their own builder rather than this general fit knowing about that
+            requirement. Leave ``None`` for the plain, unconstrained fit.
         :return:``self``, to allow chaining.
         """
         self.feature_extractor = FeatureExtractor.from_instances(instances)
@@ -763,15 +761,13 @@ class RelationalProbabilisticCircuit:
             self.feature_extractor, instances, dataframe_from_parent
         )
         variables = infer_variables_from_dataframe(class_dataframe)
-        if stratify_class_circuit_by is None:
+        if class_circuit_builder is None:
             self.class_probabilistic_circuit = JointProbabilityTree(
                 annotated_variables=variables
             ).fit(class_dataframe)
         else:
-            if isinstance(stratify_class_circuit_by, MappedVariable):
-                stratify_class_circuit_by = stratify_class_circuit_by._name_
-            self.class_probabilistic_circuit = self._fit_stratified_class_circuit(
-                class_dataframe, variables, stratify_class_circuit_by
+            self.class_probabilistic_circuit = class_circuit_builder(
+                class_dataframe, variables
             )
         self.schema_information = get_dao_schema(type(instances[0]))
         for collection_relationship in self.schema_information.collection_relationships:
@@ -782,46 +778,6 @@ class RelationalProbabilisticCircuit:
                 self._fit_exchangeable_part(exchangeable_part, instances)
             )
         return self
-
-    @staticmethod
-    def _fit_stratified_class_circuit(
-        class_dataframe: pd.DataFrame,
-        variables: list[AnnotatedVariable],
-        stratify_by: str,
-    ) -> ProbabilisticCircuit:
-        """
-        Fit one class circuit per distinct value of ``stratify_by``, combined under a
-        root ``SumUnit`` weighted by each value's relative frequency.
-
-        Every row of one partition shares the same ``stratify_by`` value, so that
-        variable's fitted distribution within each partition's sub-circuit is a single
-        point by construction, regardless of how the sub-circuit's own induction
-        subsequently splits on the remaining variables -- unlike fitting one
-        unconstrained tree over the whole dataframe, where two rows sharing a value can
-        still end up under different sibling leaves. This is what makes the result
-        support-deterministic over ``stratify_by``, the precondition
-        ``CausalCircuit.verify_support_determinism`` checks.
-
-        :param class_dataframe: The full class-level training dataframe.
-        :param variables: The variables inferred over the full dataframe, reused as the
-            annotation (mean, standard deviation, split thresholds) for every
-            partition's own fit.
-        :param stratify_by: Name of the column to partition the dataframe by.
-        :return: The combined circuit.
-        """
-        result = ProbabilisticCircuit()
-        root = SumUnit(probabilistic_circuit=result)
-        total_row_count = len(class_dataframe)
-        for _, partition in class_dataframe.groupby(stratify_by):
-            partition_circuit = JointProbabilityTree(annotated_variables=variables).fit(
-                partition.reset_index(drop=True)
-            )
-            node_index_map = result.mount(partition_circuit.root)
-            root.add_subcircuit(
-                node_index_map[partition_circuit.root.index],
-                math.log(len(partition) / total_row_count),
-            )
-        return result
 
     def _condition_class_circuit(
         self,

@@ -9,7 +9,7 @@ fixture.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum, IntEnum
+from enum import IntEnum, StrEnum
 from typing_extensions import List
 
 from krrood.entity_query_language.factories import entity, count_range, variable
@@ -19,7 +19,7 @@ from krrood.parametrization.feature_extraction.aggregations import (
 )
 
 
-class MutagenesisElement(Enum):
+class MutagenesisElement(StrEnum):
     """
     Chemical element of an atom, as recorded in the CTU Mutagenesis dataset.
     """

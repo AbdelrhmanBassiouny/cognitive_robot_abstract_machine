@@ -19,7 +19,7 @@ relational circuit on the full dataset (covered separately), and runs on the who
 4. Ran backdoor adjustment and compared it against naive conditioning at every
    chlorine-count value the grounded circuit's support covers.
 
-Code: `causal_query.py` (`run_chlorine_count_backdoor_adjustment`), `dataset.py`.
+Code: `causal_query.py` (`ChlorineCountCausalQuery.run`), `dataset.py`.
 Tests: `test/causal_reasoning_test/test_causal_query.py`.
 
 

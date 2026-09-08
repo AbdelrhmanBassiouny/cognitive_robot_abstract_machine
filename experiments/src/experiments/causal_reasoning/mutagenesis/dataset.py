@@ -12,7 +12,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from krrood.exceptions import DataclassException
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
 from typing_extensions import List
@@ -24,27 +23,9 @@ from experiments.causal_reasoning.mutagenesis.domain import (
     MutagenesisElement,
     MutagenesisMolecule,
 )
-
-
-@dataclass
-class MutagenesisDatasetUnavailableError(DataclassException):
-    """
-    Raised when the CTU relational-dataset repository cannot be reached.
-    """
-
-    reason: str
-    """
-    The underlying database error's message.
-    """
-
-    def error_message(self) -> str:
-        return f"Could not reach the CTU Mutagenesis database: {self.reason}"
-
-    def suggest_correction(self) -> str:
-        return (
-            "Check network access to relational.fel.cvut.cz, or skip tests that "
-            "require it."
-        )
+from experiments.causal_reasoning.mutagenesis.exceptions import (
+    MutagenesisDatasetUnavailableError,
+)
 
 
 @dataclass(frozen=True)

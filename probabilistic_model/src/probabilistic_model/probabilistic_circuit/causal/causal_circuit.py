@@ -479,6 +479,8 @@ class CausalCircuit:
             marginal_circuit = self.probabilistic_circuit.marginal([query_variable])
             if marginal_circuit is None:
                 continue
+            # Computed for its side effect: populates result_of_current_query on every
+            # node below, read directly off each SumUnit's children in the loop below.
             _ = marginal_circuit.support
 
             for layer in marginal_circuit.layers:

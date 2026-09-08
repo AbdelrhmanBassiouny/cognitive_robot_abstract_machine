@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from experiments.causal_reasoning.mutagenesis.causal_query import (
-    run_chlorine_count_backdoor_adjustment,
+    ChlorineCountCausalQuery,
 )
 from experiments.causal_reasoning.mutagenesis.dataset import (
     fetch_mutagenesis_molecules,
@@ -26,7 +26,7 @@ requires_mutagenesis_dataset = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def causal_query_result():
     molecules = fetch_mutagenesis_molecules()
-    return run_chlorine_count_backdoor_adjustment(molecules, atom_count=2)
+    return ChlorineCountCausalQuery().run(molecules, atom_count=2)
 
 
 @requires_mutagenesis_dataset
