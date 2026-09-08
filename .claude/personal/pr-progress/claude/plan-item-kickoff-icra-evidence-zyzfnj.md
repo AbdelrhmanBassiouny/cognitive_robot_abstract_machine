@@ -33,8 +33,18 @@ Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278
   through a collection -- `entity(event.tracked_object)`, the shape of most
   long-term questions -- left the table it selects from with nothing joining it, and
   a condition relating two members was dropped as a table-level join between two
-  aliases of one class. **krrood's ORM suite: 140 passed, from 135 passed + 1
-  xfailed.**
+  aliases of one class.
+- **A member is read as the class the query asks for** (`d6c1104f8`, fourth round,
+  again found by CI). `Tick.events` holds events; the agency question asks two of
+  them for their `tracked_object`, which only some events have. The member was
+  aliased as the class the collection declares, so the column really was not there.
+  `MissingColumnError` hid it by failing while being built -- it read its columns off
+  `inspect(dao_class).columns`, which an alias has none of. **krrood's ORM suite:
+  142 passed, from 135 passed + 1 xfailed.**
+- **The review's other two asks** (`0576c840b`): `CONDITION_COMBINERS` is
+  `(LogicalOperator, Filter)` rather than four names, and coraplex's actions carry
+  `ManipulatesBodies` -- the mixin the first round asked for, in the package it was
+  meant for, inheriting `Symbol` so the actions are queryable.
 - **`AgentInteractionEvent` replaces the `ManipulatesBodies` mixin** in segmind
   (second round, review thread). Every implementation returned
   `[self.tracked_object]`, so the mixin restated `EventWithTrackedObjects`. It also
@@ -45,16 +55,16 @@ Branch `claude/plan-item-kickoff-icra-evidence-zyzfnj`, cut off #278
 
 ## Outstanding
 
-1. **CI has not run on the third round.** It ran on the second and failed three
-   long-term question tests, which is what the third round fixes; every other job
-   passed, krrood's and segmind's included. `test_long_term_questions.py` cannot be
-   run in a session container, so CI is again what confirms it.
-2. **Three threads deliberately left open**, each needing the developer:
-   - whether a body in the gripper counts as an object the robot sees (it does not
-     any more, because `AbstractRobot.bodies` includes it);
-   - whether an episode should record which links were the robot's;
-   - whether coraplex's actions should gain the mixin removed from segmind here —
-     I asked rather than doing it, since it is another package's design.
+1. **CI is running on the fourth round.** Each round has been confirmed or refuted
+   by it: round two failed 3 long-term tests, round three failed 2 with a different
+   error, and round four is the fix for that. Every other job has passed throughout.
+   Neither `test_long_term_questions.py` nor coraplex's suite can run in a session
+   container, so CI is what confirms both.
+2. **One thread left open**, needing the developer: whether an episode should
+   record which links were the robot's, not only the world it ran in. The other two
+   were answered in the fourth round -- coraplex got the mixin, and the held-body
+   question dissolves once `ObjectsSeen` asks the perception system, which is now
+   its own plan item.
 3. **Three buckets still have no long-term spelling** and control has none in
    either memory. Support-and-spatial waits on `query-routed-per-predicate`,
    embodiment on an episode recording the robot's own links, control on
