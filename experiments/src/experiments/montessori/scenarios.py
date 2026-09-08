@@ -15,7 +15,26 @@ import random
 from abc import ABC
 from dataclasses import dataclass, field
 
-from typing_extensions import ClassVar, Generic, List, Optional, Sequence, Set, Tuple
+from typing_extensions import (
+    ClassVar,
+    Generic,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    TYPE_CHECKING,
+)
+
+from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Prepositions,
+)
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    Adjective,
+    clause,
+    Copula,
+    Noun,
+)
 
 from experiments.montessori.pieces import (
     KNOWN_PIECE_BY_CATEGORY,
@@ -55,6 +74,12 @@ from semantic_digital_twin.spatial_types import (
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.predicate import RenderedFields
+    from krrood.entity_query_language.verbalization.fragments.base import (
+        VerbalizationFragment,
+    )
 
 # %% the steps a sorting run is divided into
 
@@ -702,7 +727,7 @@ def hang(
 # %% what a run counts as success
 
 
-@dataclass
+@dataclass(eq=False)
 class TheSceneIsUndisturbed(Goal[World]):
     """
     Success is every piece still standing where the layout put it.
@@ -713,15 +738,19 @@ class TheSceneIsUndisturbed(Goal[World]):
     Where the pieces were put.
     """
 
-    def is_reached(self, world: World) -> bool:
-        scene = SortingScene(world)
+    def __call__(self) -> bool:
+        scene = SortingScene(self.world)
         return all(
             scene.stands_at(placement.piece.category, placement)
             for placement in self.layout.placements
         )
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        return clause(Noun(fields["world"]), Copula(), Adjective("undisturbed"))
 
-@dataclass
+
+@dataclass(eq=False)
 class ThePieceIsInItsHole(Goal[World]):
     """
     Success is one piece having gone through the board's hole for its own shape.
@@ -732,8 +761,8 @@ class ThePieceIsInItsHole(Goal[World]):
     The shape of the piece that had to be sorted.
     """
 
-    def is_reached(self, world: World) -> bool:
-        scene = SortingScene(world)
+    def __call__(self) -> bool:
+        scene = SortingScene(self.world)
         piece = scene.position_of(self.category)
         hole = scene.hole_for(self.category).root.global_transform.to_position()
         reach = KNOWN_PIECE_BY_CATEGORY[self.category].radius
@@ -741,8 +770,17 @@ class ThePieceIsInItsHole(Goal[World]):
             float(piece.x) - float(hole.x), float(piece.y) - float(hole.y)
         ) <= reach and float(piece.z) < float(hole.z)
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        return clause(
+            Noun(fields["category"]),
+            Copula(),
+            Prepositions.IN,
+            Noun.bare("its own hole"),
+        )
 
-@dataclass
+
+@dataclass(eq=False)
 class ThePieceMovedAndTheRobotDidNot(Goal[World]):
     """
     Success is one piece no longer standing where the layout put it, while every other
@@ -759,8 +797,8 @@ class ThePieceMovedAndTheRobotDidNot(Goal[World]):
     Where the pieces were put.
     """
 
-    def is_reached(self, world: World) -> bool:
-        scene = SortingScene(world)
+    def __call__(self) -> bool:
+        scene = SortingScene(self.world)
         pushed = self.layout.placement_of(self.category)
         if scene.stands_at(self.category, pushed):
             return False
@@ -770,8 +808,18 @@ class ThePieceMovedAndTheRobotDidNot(Goal[World]):
             if placement.piece.category is not self.category
         )
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        return clause(
+            Noun(fields["category"]),
+            Copula(),
+            Adjective("displaced"),
+            Prepositions.FROM,
+            Noun(fields["layout"]),
+        )
 
-@dataclass
+
+@dataclass(eq=False)
 class ThePieceIsHeld(Goal[World]):
     """
     Success is one piece hanging from the gripper at the moment the scene is asked
@@ -783,8 +831,12 @@ class ThePieceIsHeld(Goal[World]):
     The shape of the piece that had to be held.
     """
 
-    def is_reached(self, world: World) -> bool:
-        return SortingScene(world).is_held(self.category)
+    def __call__(self) -> bool:
+        return SortingScene(self.world).is_held(self.category)
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        return clause(Noun(fields["category"]), Copula(), Adjective("held"))
 
 
 # %% the change a run applies to its world
@@ -928,13 +980,13 @@ class TheSceneStandsStill(
 
     name: ClassVar[str] = "the scene stands still"
 
-    goal: Goal[World] = field(init=False, kw_only=True)
-    """
-    Success is the scene being exactly the one the layout described.
-    """
+    def goal(self, world: World) -> Goal[World]:
+        """
+        Success is the scene being exactly the one the layout described.
 
-    def __post_init__(self) -> None:
-        self.goal = TheSceneIsUndisturbed(layout=self.layout)
+        :param world: The world the trial is running in.
+        """
+        return TheSceneIsUndisturbed(world=world, layout=self.layout)
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
@@ -958,13 +1010,13 @@ class RobotSortsAPiece(
     The shape of the piece the robot sorts.
     """
 
-    goal: Goal[World] = field(init=False, kw_only=True)
-    """
-    Success is that piece having gone through its own hole.
-    """
+    def goal(self, world: World) -> Goal[World]:
+        """
+        Success is that piece having gone through its own hole.
 
-    def __post_init__(self) -> None:
-        self.goal = ThePieceIsInItsHole(category=self.sorted_category)
+        :param world: The world the trial is running in.
+        """
+        return ThePieceIsInItsHole(world=world, category=self.sorted_category)
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
@@ -993,14 +1045,14 @@ class PiecePushedWhileTheRobotIsIdle(
     The shape of the piece that is pushed.
     """
 
-    goal: Goal[World] = field(init=False, kw_only=True)
-    """
-    Success is that piece having moved and every other one having stayed.
-    """
+    def goal(self, world: World) -> Goal[World]:
+        """
+        Success is that piece having moved and every other one having stayed.
 
-    def __post_init__(self) -> None:
-        self.goal = ThePieceMovedAndTheRobotDidNot(
-            category=self.pushed_category, layout=self.layout
+        :param world: The world the trial is running in.
+        """
+        return ThePieceMovedAndTheRobotDidNot(
+            world=world, category=self.pushed_category, layout=self.layout
         )
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
@@ -1027,13 +1079,13 @@ class PieceHeldWhileTheQuestionIsAsked(
     The shape of the piece the robot holds.
     """
 
-    goal: Goal[World] = field(init=False, kw_only=True)
-    """
-    Success is that piece hanging from the gripper when the question is asked.
-    """
+    def goal(self, world: World) -> Goal[World]:
+        """
+        Success is that piece hanging from the gripper when the question is asked.
 
-    def __post_init__(self) -> None:
-        self.goal = ThePieceIsHeld(category=self.held_category)
+        :param world: The world the trial is running in.
+        """
+        return ThePieceIsHeld(world=world, category=self.held_category)
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [

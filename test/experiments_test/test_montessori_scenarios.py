@@ -13,6 +13,9 @@ import pytest
 from typing_extensions import List
 
 from experiments.montessori.pieces import KNOWN_PIECES
+from krrood.entity_query_language.factories import variable
+from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+
 from experiments.montessori.scenarios import (
     LayoutArea,
     LightingChanged,
@@ -24,6 +27,10 @@ from experiments.montessori.scenarios import (
     RobotSortsAPiece,
     SortingScene,
     SortingStep,
+    TheSceneIsUndisturbed,
+    ThePieceIsHeld,
+    ThePieceIsInItsHole,
+    ThePieceMovedAndTheRobotDidNot,
     TABLE_TOP_Z,
     TheSceneStandsStill,
     TracyHoldsAPiece,
@@ -325,6 +332,44 @@ def test_the_held_piece_run_ends_with_the_piece_hanging_from_the_gripper(area):
         step.perform(world)
 
     assert SortingScene(world).is_held(MontessoriShapeCategory.CYLINDER)
+
+
+# %% what a run counts as success
+
+
+@pytest.mark.parametrize(
+    "goal, sentence",
+    [
+        (
+            TheSceneIsUndisturbed(
+                world=variable(World, []), layout=variable(PieceLayout, [])
+            ),
+            "a World is undisturbed",
+        ),
+        (
+            ThePieceIsInItsHole(
+                world=variable(World, []), category=MontessoriShapeCategory.CUBE
+            ),
+            "CUBE is in its own hole",
+        ),
+        (
+            ThePieceMovedAndTheRobotDidNot(
+                world=variable(World, []),
+                category=MontessoriShapeCategory.CUBE,
+                layout=variable(PieceLayout, []),
+            ),
+            "CUBE is displaced from a PieceLayout",
+        ),
+        (
+            ThePieceIsHeld(
+                world=variable(World, []), category=MontessoriShapeCategory.CYLINDER
+            ),
+            "CYLINDER is held",
+        ),
+    ],
+)
+def test_every_goal_verbalizes_as_the_clause_it_states(goal, sentence):
+    assert verbalize_expression(goal) == sentence
 
 
 # %% the change a run applies to its world

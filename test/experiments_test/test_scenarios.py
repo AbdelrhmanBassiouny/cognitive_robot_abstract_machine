@@ -14,6 +14,14 @@ import pytest
 from typing_extensions import ClassVar, Sequence
 
 from coraplex.datastructures.enums import ExecutionType
+from krrood.entity_query_language.factories import variable
+from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    clause,
+    Copula,
+    Noun,
+    Adjective,
+)
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 
@@ -25,10 +33,10 @@ from experiments.experiment_definitions import (
 from experiments.scenarios.report import GoalReached, Report, TrialDuration
 from experiments.scenarios.runner import ScenarioRunner
 from experiments.scenarios.scenario import (
-    Condition,
     Goal,
     Perturbation,
     Scenario,
+    ScenarioCondition,
     ScenarioStep,
     StepName,
 )
@@ -96,22 +104,36 @@ class PerformSortingStep(ScenarioStep[RecordedWorld]):
         world.performed_steps.append(self.name)
 
 
-@dataclass
+@dataclass(eq=False)
 class PieceWasSorted(Goal[RecordedWorld]):
     """
     Success is the piece having been put down where the world said it was.
     """
 
-    def is_reached(self, world: RecordedWorld) -> bool:
+    def __call__(self) -> bool:
         return (
-            SortingStep.PUT_DOWN in world.performed_steps
-            and world.piece_pose_is_known
-            and not world.piece_was_pushed
+            SortingStep.PUT_DOWN in self.world.performed_steps
+            and self.world.piece_pose_is_known
+            and not self.world.piece_was_pushed
         )
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return clause(Noun(fields["world"]), Copula(), Adjective("sorted"))
+
+
+@dataclass(eq=False)
+class GoalWithoutAVerbalization(Goal[RecordedWorld]):
+    """
+    A goal that states no verbalization fragment, which the model refuses to build.
+    """
+
+    def __call__(self) -> bool:
+        return True
 
 
 @dataclass
-class WithoutThePiecePose(Condition[RecordedWorld]):
+class WithoutThePiecePose(ScenarioCondition[RecordedWorld]):
     """
     Takes the piece's pose out of what the world knows.
     """
@@ -138,11 +160,6 @@ class SortOnePiece(Scenario[RecordedWorld, TwoFingerGripper]):
 
     name: ClassVar[str] = "sort one piece"
 
-    goal: Goal[RecordedWorld] = field(default_factory=PieceWasSorted, kw_only=True)
-    """
-    Sorting the piece is what this scenario counts as success.
-    """
-
     built_worlds: list[RecordedWorld] = field(default_factory=list)
     """
     Every world this scenario has built, so a test can read what a trial did to it.
@@ -158,6 +175,9 @@ class SortOnePiece(Scenario[RecordedWorld, TwoFingerGripper]):
 
     def steps(self, world: RecordedWorld) -> Sequence[ScenarioStep[RecordedWorld]]:
         return [PerformSortingStep(name=step) for step in SortingStep]
+
+    def goal(self, world: RecordedWorld) -> Goal[RecordedWorld]:
+        return PieceWasSorted(world=world)
 
 
 class StepFailed(Exception):
@@ -227,6 +247,39 @@ def test_a_scenario_names_the_robot_it_runs_on():
 
 def test_a_scenario_runs_in_simulation_unless_it_says_otherwise():
     assert SortOnePiece().execution_type is ExecutionType.SIMULATED
+
+
+# %% a goal is a predicate over the world a trial finished in
+
+
+def test_a_goal_answers_whether_it_holds_when_it_is_called():
+    world = RecordedWorld()
+    world.performed_steps.append(SortingStep.PUT_DOWN)
+
+    assert PieceWasSorted(world=world)() is True
+
+
+def test_a_goal_that_does_not_hold_answers_that_it_does_not():
+    assert PieceWasSorted(world=RecordedWorld())() is False
+
+
+def test_a_goal_is_asked_about_the_world_the_trial_it_judges_ran_in():
+    scenario = SortOnePiece()
+    world = scenario.build_world()
+
+    assert scenario.goal(world).world is world
+
+
+def test_a_goal_that_states_no_verbalization_cannot_be_built():
+    with pytest.raises(TypeError):
+        GoalWithoutAVerbalization(world=RecordedWorld())
+
+
+def test_a_goal_verbalizes_as_the_clause_it_states():
+    assert (
+        verbalize_expression(PieceWasSorted(world=variable(RecordedWorld, [])))
+        == "a RecordedWorld is sorted"
+    )
 
 
 # %% running one trial

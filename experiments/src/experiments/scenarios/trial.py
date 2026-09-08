@@ -15,7 +15,11 @@ from typing_extensions import List, Tuple
 
 from coraplex.datastructures.enums import ExecutionType
 
-from experiments.scenarios.scenario import Condition, Perturbation, StepName
+from experiments.scenarios.scenario import (
+    Perturbation,
+    ScenarioCondition,
+    StepName,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +71,7 @@ class ConditionApplied(TrialLogEntry):
     A condition switched its knowledge source in the trial's world.
     """
 
-    condition: Condition
+    condition: ScenarioCondition
     """
     The condition that was applied.
     """
@@ -161,7 +165,7 @@ class Trial:
     Whether it ran in a simulator or on the robot.
     """
 
-    conditions: Tuple[Condition, ...]
+    conditions: Tuple[ScenarioCondition, ...]
     """
     The conditions that were in force.
     """
