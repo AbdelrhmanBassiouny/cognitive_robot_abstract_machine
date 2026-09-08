@@ -21,8 +21,15 @@ and in each plan's roadmap.md under its "2026-09-08" section.
   track from lane 1. That is the one edge that changes who can work on what.
 - Five items added (33 -> 38, all three plans under the 15-item cap):
   `episode-corpus-generated-at-scale`, `perception-backends-are-interchangeable`,
-  `control-reads-the-twin-as-constraints`, `question-set-answered-from-memory`,
-  `resource-cost-measured-per-system`.
+  `control-constraints-and-degrees-of-freedom-queried`,
+  `question-set-answered-from-memory`, `resource-cost-measured-per-system`.
+- The control item was rewritten the same day at the developer's second
+  correction: building statecharts from queries has never been implemented and
+  is far larger than the week holds. What was wanted is a read - ask a task for
+  its GiskardConstraint objects and for the degrees of freedom it used, fixed or
+  ignored. ConstraintCollection, NodeArtifacts.constraints and
+  Scalar.free_variables() already hold all of it; only the reach (private
+  attributes, only the current statechart kept) and the naming are missing.
 - A sixth, `self-model-and-control-state-recorded`, was added and folded the
   same day at the developer's challenge: ORMatic already maps World, Body,
   Connection, DegreeOfFreedom and the whole giskardpy motion statechart by
