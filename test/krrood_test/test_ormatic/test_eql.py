@@ -1,5 +1,6 @@
 import pytest
 
+import sqlalchemy
 from sqlalchemy import select, func, case
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import aliased
@@ -33,6 +34,7 @@ from ..dataset.ormatic_interface import (
     NestedActionDAO,
     SymbolDAO,
     WorldEntityDAO,
+    DrawerDAO,
 )
 from krrood.entity_query_language.factories import (
     entity,
@@ -55,7 +57,7 @@ from krrood.entity_query_language.factories import (
     exists,
 )
 from krrood.ormatic.data_access_objects.helper import to_dao
-from krrood.ormatic.eql_interface import eql_to_sql
+from krrood.ormatic.eql_interface import MissingColumnError, eql_to_sql
 from krrood.entity_query_language.query.query import UnificationDict
 
 
@@ -1717,3 +1719,40 @@ def test_two_members_related_by_an_attribute_restrict_each_other(session, databa
     assert sorted(row.name for row in eql_to_sql(query, session).evaluate()) == [
         f"under_test_handle_{index}" for index in range(DRAWERS_PER_CABINET)
     ]
+
+
+def test_a_member_of_a_collection_is_read_as_its_own_class(session, database):
+    """
+    A variable a membership condition binds ranges over its own class, so a condition
+    can read what that class adds to the one the collection is declared to hold.
+    """
+    _two_worlds_of_nested_collections(session)
+
+    world = variable(World, domain=[])
+    drawer = variable(Drawer, domain=[])
+    same_drawer = variable(Drawer, domain=[])
+    query = an(
+        entity(same_drawer).where(
+            world.id == WORLD_UNDER_TEST,
+            contains(world.views, drawer),
+            contains(world.views, same_drawer),
+            drawer.handle == same_drawer.handle,
+        )
+    )
+
+    assert [row.handle.name for row in eql_to_sql(query, session).evaluate()] == [
+        "drawer_under_test"
+    ]
+
+
+def test_a_missing_column_on_an_alias_still_names_the_columns_there_are():
+    """
+    The error raised for an unknown column reports what the element does hold, whether
+    it is a table or an alias of one -- an error that fails while being built hides the
+    one that was being reported.
+    """
+    error = MissingColumnError(aliased(DrawerDAO, flat=True), "no_such_column")
+
+    assert error.mapped_column_names() == sorted(
+        sqlalchemy.inspection.inspect(DrawerDAO).columns.keys()
+    )

@@ -174,7 +174,10 @@ class DAOAttributeResolutionError(AttributeResolutionError):
         """
         :return: The names of all columns mapped on the DAO class.
         """
-        return sorted(sqlalchemy.inspection.inspect(self.dao_class).columns.keys())
+        # Through the mapper, so an alias reports the columns of what it aliases
+        # rather than failing where the error is being built.
+        mapper = sqlalchemy.inspection.inspect(self.dao_class).mapper
+        return sorted(mapper.columns.keys())
 
     def mapped_relationship_names(self) -> List[str]:
         """
@@ -1522,6 +1525,13 @@ class EQLTranslator:
         :return: The condition restricting the member, or ``None`` when binding the
             member to the joined collection already says what the condition means.
         """
+        member = query.right
+        binds_the_member = (
+            isinstance(member, Variable)
+            and not isinstance(member, Attribute)
+            and not self.variable_from_elements.is_bound(member)
+        )
+
         names = self._collect_attribute_chain(query.left)
         owner_element = self._join_attribute_chain(
             self._resolve_root_element(query.left), names[:-1]
@@ -1530,14 +1540,10 @@ class EQLTranslator:
             owner_element,
             names[-1],
             self._require_relationship(owner_element, names[-1]),
+            get_dao_class(member._type_) if binds_the_member else None,
         )
-        member = query.right
 
-        if (
-            isinstance(member, Variable)
-            and not isinstance(member, Attribute)
-            and not self.variable_from_elements.is_bound(member)
-        ):
+        if binds_the_member:
             self.variable_from_elements.bind(member, member_alias)
             return None
 
@@ -1640,7 +1646,11 @@ class EQLTranslator:
         return member_alias
 
     def _join_relationship(
-        self, dao_class: type, attribute_name: str, relationship: Any
+        self,
+        dao_class: type,
+        attribute_name: str,
+        relationship: Any,
+        member_dao: Optional[type] = None,
     ) -> Any:
         """
         Join a relationship's target under an alias of its own.
@@ -1652,25 +1662,67 @@ class EQLTranslator:
         :param dao_class: The DAO class or alias the relationship is defined on.
         :param attribute_name: The relationship attribute name on that element.
         :param relationship: The SQLAlchemy relationship object.
+        :param member_dao: The class the members are read as, when that is narrower than
+            the one the collection is declared to hold.
         :return: The element holding what the relationship names.
         """
         # Resolve target DAO class and create a dedicated alias for this path
         target_dao = relationship.entity.class_
-        aliased_target = aliased(target_dao, flat=True)
+        alias_class = self._read_as(target_dao, member_dao)
+        aliased_target = aliased(alias_class, flat=True)
 
         # Relationship attribute on the source class, e.g., PoseDAO.position
         relationship_attr = getattr(dao_class, attribute_name)
 
         # Perform the join using the relationship attribute so SQLAlchemy
         # determines the ON clause, while we control aliasing of the right side
-        self.sql_query = self.sql_query.join(aliased_target, relationship_attr)
+        self.sql_query = self.sql_query.join(
+            aliased_target,
+            self._onclause(relationship_attr, alias_class, aliased_target, target_dao),
+        )
 
         # Track underlying table class as joined; alias class type differs but table is the same
         self.join_manager.add_table_join(target_dao)
 
-        return self._join_association_target(target_dao, aliased_target)
+        return self._join_association_target(target_dao, aliased_target, member_dao)
 
-    def _join_association_target(self, target_dao: type, aliased_target: Any) -> Any:
+    @staticmethod
+    def _read_as(declared: type, requested: Optional[type]) -> type:
+        """
+        The class members of a collection are read as.
+
+        A collection declares what it holds, and a variable ranging over it may name
+        something narrower; reading the members as the wider class loses whatever the
+        narrower one adds.
+
+        :param declared: The class the collection is declared to hold.
+        :param requested: The class a variable over those members names, if any.
+        """
+        if requested is None or not issubclass(requested, declared):
+            return declared
+
+        return requested
+
+    @staticmethod
+    def _onclause(
+        relationship_attr: Any, alias_class: type, aliased_target: Any, declared: type
+    ) -> Any:
+        """
+        What a join of a relationship compares, narrowed to the alias where it differs.
+
+        :param relationship_attr: The relationship attribute being joined.
+        :param alias_class: The class the target was aliased as.
+        :param aliased_target: The alias itself.
+        :param declared: The class the relationship is declared to reach.
+        """
+        if alias_class is declared:
+            return relationship_attr
+
+        return relationship_attr.of_type(aliased_target)
+
+    def _join_association_target(
+        self, target_dao: type, aliased_target: Any, member_dao: Optional[type] = None
+    ) -> Any:
         """
         Follow an association object through to the members it stands for.
 
@@ -1690,13 +1742,16 @@ class EQLTranslator:
         member_relationship = association.relationships[
             AssociationDataAccessObject.target.fget.__name__
         ]
-        member_alias = aliased(member_relationship.entity.class_, flat=True)
+        declared = member_relationship.entity.class_
+        alias_class = self._read_as(declared, member_dao)
+        member_alias = aliased(alias_class, flat=True)
+        member_attribute = getattr(aliased_target, member_relationship.key)
         self.sql_query = self.sql_query.join_from(
             aliased_target,
             member_alias,
-            getattr(aliased_target, member_relationship.key),
+            self._onclause(member_attribute, alias_class, member_alias, declared),
         )
-        self.join_manager.add_table_join(member_relationship.entity.class_)
+        self.join_manager.add_table_join(declared)
         return member_alias
 
     def _translate_exists(self, exists_node: EQLExists) -> Any:
