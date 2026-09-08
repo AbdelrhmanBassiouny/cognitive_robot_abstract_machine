@@ -7,7 +7,6 @@ from typing import List
 from typing_extensions import Optional
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from giskardpy.motion_statechart.data_types import LifeCycleValues
 from giskardpy.motion_statechart.graph_node import (
     CancelMotion,
     Goal,
@@ -31,10 +30,13 @@ from krrood.symbolic_math.symbolic_math import (
 @dataclass(repr=False, eq=False)
 class Sequence(Goal):
     """
-    Takes a list of nodes and wires their start and end conditions such that they are
-    executed in order.
+    Runs a list of nodes one after another.
 
-    Its observation is whether the last node in the sequence reached its goal.
+    Its observation turns True once the last step reached its goal, and False as soon as
+    a step ended short of its own, so a step that was given up on fails the sequence
+    rather than leaving it waiting forever.
+
+    .. note:: corresponds to the RPL's SEQ. (McDermott, Drew. A reactive plan language, 1991)
     """
 
     nodes: List[MotionStatechartNode] = field(default_factory=list, init=True)
@@ -44,20 +46,50 @@ class Sequence(Goal):
         A step ends itself once it observes its goal, which succeeds it, and the next
         step reads that verdict rather than the observation behind it, because only the
         verdict outlasts the step that reached it.
+
+        Reaching its goal is a reason to end a step on top of whatever the caller
+        already wired, not instead of it: being given up on is the only way a step ever
+        ends short of its goal, since observing false is how a step looks on its way
+        there.
         """
         self._check_has_children()
         last_node: Optional[MotionStatechartNode] = None
-        for i, node in enumerate(self.nodes):
+        for node in self.nodes:
             self.add_node(node)
             if last_node is not None:
                 node.start_condition = last_node.is_succeeded
             # A node that ends the motion has nothing left to transition to.
             if not isinstance(node, TerminalNode):
-                node.end_condition = node.observation_variable
+                node.end_condition = trinary_logic_or(
+                    node.observation_variable, node.end_condition
+                )
             last_node = node
 
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
-        return NodeArtifacts(observation=self.nodes[-1].goal_reached)
+        """
+        Report success, a failed step, or neither.
+
+        A step short of its goal has not failed, it has not arrived yet, so only a step
+        that ended without reaching its goal decides anything. The last step is read
+        through its verdict, which outlasts the step that earned it.
+        """
+        return NodeArtifacts(
+            observation=if_cases(
+                cases=[
+                    (
+                        trinary_logic_or(
+                            *[
+                                node.ended_without_reaching_its_goal
+                                for node in self.nodes
+                            ]
+                        ),
+                        Scalar.const_false(),
+                    ),
+                    (self.nodes[-1].goal_reached.is_true(), Scalar.const_true()),
+                ],
+                else_result=Scalar.const_trinary_unknown(),
+            )
+        )
 
 
 @dataclass(repr=False, eq=False)
@@ -290,13 +322,17 @@ class TryAll(Goal):
 @dataclass(repr=False, eq=False)
 class TryInOrder(Goal):
     """
-    Takes a list of nodes and tries them one after another, short-circuiting on the
-    first success.
+    Tries a list of nodes one after another, short-circuiting on the first success.
 
     The next alternative only starts once the previous one has ended without reaching
     its goal, not merely while it is still short of it. Its observation turns True as
     soon as an alternative succeeds and False only once every one of them is over, so it
     stays unknown while any of them is still being tried.
+
+    .. note:: Abandoning an alternative that stopped making progress extends the
+        construct: RPL knows no alternative timing out, only one that gives up
+        explicitly. See :attr:`give_up_after`.
+    .. note:: corresponds to the RPL's TRY-IN-ORDER. (McDermott, Drew. A reactive plan language, 1991)
     """
 
     nodes: List[MotionStatechartNode] = field(default_factory=list, init=True)
@@ -335,7 +371,7 @@ class TryInOrder(Goal):
         for node in self._alternatives:
             self.add_node(node)
             if previous_node is not None:
-                node.start_condition = self._ended_without_succeeding(previous_node)
+                node.start_condition = previous_node.is_failed_or_interrupted
             still_progressing = StillProgressing(
                 name=f"{self.name}/progress_of_{node.name}",
                 monitored_node=node,
@@ -351,33 +387,19 @@ class TryInOrder(Goal):
             previous_node = node
 
     @staticmethod
-    def _ended_without_succeeding(node: MotionStatechartNode) -> Scalar:
-        """
-        An alternative abandoned while it observed nothing decisive is of no more use
-        than one that failed outright, so both count as ended without success.
-
-        :param node: The alternative to judge.
-        :return: True once that alternative ended anywhere but at its goal.
-        """
-        return trinary_logic_or(node.is_failed, node.is_interrupted)
-
-    @staticmethod
     def _reached_its_goal(node: MotionStatechartNode) -> Scalar:
         """
         Whether an alternative is at its goal, answering false rather than unknown for
         one that was abandoned before it ever got there.
 
-        .. note:: An observation may not read a life cycle predicate, so being abandoned
-            is read off the life cycle state itself.
-
         :param node: The alternative to read.
         :return: What that alternative observes while it runs, and whether it reached
             its goal once it has ended.
         """
-        was_abandoned = Scalar(
-            node.life_cycle_variable == int(LifeCycleValues.INTERRUPTED)
+        return trinary_logic_and(
+            node.goal_reached,
+            trinary_logic_not(node.ended_without_reaching_its_goal),
         )
-        return trinary_logic_and(node.goal_reached, trinary_logic_not(was_abandoned))
 
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         """

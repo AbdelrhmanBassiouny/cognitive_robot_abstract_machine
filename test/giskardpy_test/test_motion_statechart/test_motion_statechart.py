@@ -2048,6 +2048,26 @@ class TestTemplates:
 
         assert cancel.end_condition.free_variables() == []
 
+    def test_a_sequence_keeps_an_end_condition_the_caller_wired_on_a_step(self):
+        """
+        Reaching its goal is a reason for a sequence to end a step on top of whatever
+        the caller already wired, not instead of it, because being given up on is the
+        only way a step ever ends short of its goal.
+        """
+        msc = MotionStatechart()
+        give_up_signal = CountControlCycles(control_cycles=2)
+        step = ConstFalseNode()
+        msc.add_node(Sequence(nodes=[give_up_signal, step, ConstTrueNode()]))
+        # A step may only read its siblings, and a verdict is the one thing a sibling
+        # step still answers once it has ended itself.
+        step.end_condition = give_up_signal.is_succeeded
+
+        executor = _compile_msc(msc)
+        for _ in range(4):
+            executor.tick()
+
+        assert step.life_cycle_state == LifeCycleValues.FAILED
+
     def test_parallel(self):
         msc = MotionStatechart()
         msc.add_nodes(
@@ -3267,6 +3287,61 @@ class TestGoalReached:
 
         assert sequence.observation_state == ObservationStateValues.TRUE
 
+    def test_a_sequence_fails_once_a_step_ended_short_of_its_goal(self):
+        """
+        A step that was given up on stalls the chain, so the sequence reports the
+        failure instead of waiting for a step that will never succeed.
+        """
+        msc = MotionStatechart()
+        give_up_signal = CountControlCycles(control_cycles=2)
+        step = ConstFalseNode()
+        last_step = ConstTrueNode()
+        msc.add_node(sequence := Sequence(nodes=[give_up_signal, step, last_step]))
+        step.end_condition = give_up_signal.is_succeeded
+
+        executor = _compile_msc(msc)
+        for _ in range(5):
+            executor.tick()
+
+        assert sequence.observation_state == ObservationStateValues.FALSE
+        assert last_step.life_cycle_state == LifeCycleValues.NOT_STARTED
+
+    def test_a_sequence_fails_once_its_last_step_ended_short_of_its_goal(self):
+        """
+        The last step is what the sequence reads its success off, so failing it has to
+        be answered from the same expression rather than left unknown.
+
+        The step observes nothing decisive, so the failure can only come from it having
+        ended, not from what it observed on the way.
+        """
+        msc = MotionStatechart()
+        give_up_signal = CountControlCycles(control_cycles=2)
+        last_step = NodeObservingNothingYet()
+        msc.add_node(sequence := Sequence(nodes=[give_up_signal, last_step]))
+        last_step.end_condition = give_up_signal.is_succeeded
+
+        executor = _compile_msc(msc)
+        for _ in range(5):
+            executor.tick()
+
+        assert sequence.observation_state == ObservationStateValues.FALSE
+
+    def test_a_sequence_stays_unknown_while_a_step_is_short_of_its_goal(self):
+        """
+        Being short of its goal is what a step observes on its way there, not a failure,
+        so only a step that ended without reaching it decides anything.
+        """
+        msc = MotionStatechart()
+        msc.add_node(sequence := Sequence(nodes=[ConstFalseNode(), ConstTrueNode()]))
+
+        executor = _compile_msc(msc)
+        for _ in range(5):
+            executor.tick()
+
+        assert set(msc.history.get_observation_history_of_node(sequence)) == {
+            ObservationStateValues.UNKNOWN
+        }
+
     def test_a_parallel_counts_an_ended_child_and_a_running_one(self):
         """
         A parallel ends none of its children, so a child that keeps running is judged by
@@ -3657,6 +3732,118 @@ class TestLifeCyclePredicates:
 
         with pytest.raises(SelfInStartConditionError):
             node.start_condition = node.is_failed
+
+
+# %% ending short of the goal
+
+
+class TestIsFailedOrInterrupted:
+    """
+    Tests the predicate that answers whether a node ended anywhere but at its goal,
+    which a transition condition may read where the life cycle variable is out of
+    bounds.
+    """
+
+    @staticmethod
+    def _answer(life_cycle_state: LifeCycleValues) -> ObservationStateValues:
+        """
+        :param life_cycle_state: The state to evaluate the predicate in.
+        :return: What the predicate answers.
+        """
+        node = ConstTrueNode()
+        substituted = sm.Scalar(node.is_failed_or_interrupted).substitute(
+            [node.is_failed, node.is_interrupted],
+            [
+                float(LifeCyclePredicate.IS_FAILED.truth_value(life_cycle_state)),
+                float(LifeCyclePredicate.IS_INTERRUPTED.truth_value(life_cycle_state)),
+            ],
+        )
+        return ObservationStateValues(float(substituted))
+
+    @pytest.mark.parametrize(
+        "life_cycle_state, expected",
+        [
+            (LifeCycleValues.SUCCEEDED, ObservationStateValues.FALSE),
+            (LifeCycleValues.FAILED, ObservationStateValues.TRUE),
+            (LifeCycleValues.INTERRUPTED, ObservationStateValues.TRUE),
+        ],
+    )
+    def test_every_way_of_ending_is_answered(self, life_cycle_state, expected):
+        """
+        Being cut off undecided counts as ending short of the goal just as much as being
+        judged to have failed, even though the verdict predicate alone leaves it open.
+        """
+        assert self._answer(life_cycle_state) == expected
+
+    @pytest.mark.parametrize(
+        "life_cycle_state",
+        sorted(set(LifeCycleValues) - LifeCycleValues.terminal_states()),
+    )
+    def test_a_node_that_has_not_ended_has_no_answer(self, life_cycle_state):
+        """
+        How a node will end is open while it still runs, which leaves a transition
+        reading this unfired rather than taken.
+        """
+        assert self._answer(life_cycle_state) == ObservationStateValues.UNKNOWN
+
+
+class TestEndedWithoutReachingItsGoal:
+    """
+    Tests the expression that answers whether a node ended anywhere but at its goal,
+    which an observation may read where the verdict predicates are out of bounds.
+    """
+
+    @staticmethod
+    def _answer(
+        life_cycle_state: LifeCycleValues, goal_reached: ObservationStateValues
+    ) -> ObservationStateValues:
+        """
+        :param life_cycle_state: The state to evaluate the expression in.
+        :param goal_reached: What the node has reached in that state.
+        :return: What the expression answers.
+        """
+        node = ConstTrueNode()
+        substituted = sm.Scalar(node.ended_without_reaching_its_goal).substitute(
+            [node.life_cycle_variable, node.goal_reached],
+            [float(life_cycle_state), float(goal_reached)],
+        )
+        return ObservationStateValues(float(substituted))
+
+    @pytest.mark.parametrize(
+        "life_cycle_state, expected",
+        [
+            (LifeCycleValues.SUCCEEDED, ObservationStateValues.FALSE),
+            (LifeCycleValues.FAILED, ObservationStateValues.TRUE),
+            (LifeCycleValues.INTERRUPTED, ObservationStateValues.TRUE),
+        ],
+    )
+    def test_every_way_of_ending_is_answered(self, life_cycle_state, expected):
+        """
+        Being cut off undecided is as much a way of ending short of the goal as being
+        judged to have failed, even though no verdict was reached.
+        """
+        assert (
+            self._answer(
+                life_cycle_state,
+                LifeCyclePredicate.IS_SUCCEEDED.truth_value(life_cycle_state),
+            )
+            == expected
+        )
+
+    @pytest.mark.parametrize(
+        "life_cycle_state",
+        sorted(set(LifeCycleValues) - LifeCycleValues.terminal_states()),
+    )
+    @pytest.mark.parametrize("goal_reached", list(ObservationStateValues))
+    def test_a_node_that_has_not_ended_answers_false(
+        self, life_cycle_state, goal_reached
+    ):
+        """
+        Whatever a running node has reached so far, it has not ended short of anything.
+        """
+        assert (
+            self._answer(life_cycle_state, goal_reached) == ObservationStateValues.FALSE
+        )
 
 
 class TestMaxManipulability:
