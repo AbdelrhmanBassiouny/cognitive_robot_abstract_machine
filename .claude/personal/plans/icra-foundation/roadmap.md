@@ -1124,3 +1124,55 @@ fixes against this branch and which had already been decided before this session
 manifest's own record of it is what corrected this session's stale reading of it as an
 open call. #292's `76e37a70` ran 4 failed, 758 passed, no errors, and those four were
 these tests, so #292 plus `dae41889c` is what takes the job green.
+
+## 2026-09-08 (later): the hole bodies were never the fitted centres
+
+The section above is right that the fitted layout is the one landing on the six real
+openings, and wrong about which objects it measured. `board_holes_in` never used the fit
+at all: it added the board mesh's **own, unscaled** hole offsets to the fitted board
+pose. Since #236 the board is found at `BOARD_SCALE_AGAINST_THE_MESH` = 0.865, so those
+offsets spread the holes about fifteen percent too wide. On `tracy_pickup_demo` the
+square hole body stood 12.1 mm from the hole the same look reported, the disk hole 12.7
+mm. Every hole y quoted above — 0.0182, 0.0189, 0.1053, 0.1060, 0.1960, 0.1968 — is a
+displaced body. Placed where the look found them the six stand at 0.0299, 0.0306, 0.1053,
+0.1059, 0.1838, 0.1845.
+
+**So the fact that chose every replacement was an artefact.** The square hole at 0.0299
+*does* lie between the cylinder at 0.0231 and the cube at 0.0634, so left and right do
+separate the two pieces about it; and the 1.3 mm that ruled the square hole out of the
+reach test becomes 41.2 mm against 49.4 mm. The four tests were never stating what the
+capture does not show — they were reading it from a place 12 mm off.
+
+`board_holes_in` now places each hole where the look put it, which is the one fit rather
+than a second reading of the mesh at another size; `hole_names` takes the categories it
+reads rather than the footprints it was handed, so a detection can be named by it too.
+Pushed on #292 as `73b0c1cb4`, with
+`test_montessori_recorded_setup.py::test_a_hole_body_stands_where_the_look_found_that_hole`,
+which fails on the parent at 12.1 mm and 12.7 mm. Three of the four narrowing tests come
+green from that commit alone, against the pre-`dae41889c` file.
+
+**`dae41889c` is kept, not reverted.** Its four choices all still hold once the holes
+move, and two of them read better than the originals for the reasons the section above
+gives — one axis rather than two, and the viewpoint mattering. What moved is every
+millimetre it quotes, requoted in `8b8914c74`: cube above the square hole 19 → 21 mm,
+cylinder below it 45 → 43, cube in front 16 → 19, cylinder behind 49 → 47, the two pieces
+from the triangle hole 50 and 94 → 51 and 93, cube above the triangle hole 25 → 27,
+cylinder below it 39 → 37. One claim is replaced rather than requoted:
+`look_for_the_cube_on_the_lid` said left and right tell the two apart from no hole on
+this board. Up and down are still the wider margin from the square hole — 21 and 43 mm
+against the 7 mm the cylinder stands from it across the picture — so the statement keeps
+asking for `Above`, on the honest reason rather than the artefact.
+
+**The lesson worth keeping.** Two sessions verified the fit and then measured the bodies,
+and neither noticed the two were different objects. Wherever a thing is derived twice —
+once by a fit and once from the model the fit was of — the check that they agree is the
+test to write, and it is one assertion: `board_holes_in`'s output against `board.holes`.
+
+**Standing hazard corrected once more.** `pytest` is *not* blocked in a session
+container: `CRAM_ORM_BUILD=never` skips the conftest's ORM generation, and
+`test_montessori_search_narrowing.py` then runs in 75 s. With the venv the section above
+describes, plus `objgraph`, `pytest>=7,<8` and `pytest-order`, 506 of the montessori
+suite pass; the 15 that fail are `test_montessori_orm.py` and
+`test_montessori_results_database.py`, which need the generated interfaces and a
+database, and they fail identically with any change stashed. So a montessori perception
+change can be run end to end here before it is pushed, tests and all.

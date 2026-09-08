@@ -125,6 +125,25 @@ items:
     nothing on these branches runs in a session container is wrong for the montessori perception
     suite: a python3.12 venv with casadi~=3.7.0 runs the whole pipeline, and only pytest is blocked,
     by the conftest's ORM generation.
+
+    Corrected 2026-09-08 (later), on #292: those directions were measured off the wrong objects.
+    board_holes_in never used the fit - it added the board mesh's own unscaled hole offsets to the
+    fitted board pose, so since #236's 0.865 scale the hole bodies stood about twelve millimetres
+    from the holes the same look reported (square hole 12.1 mm, disk hole 12.7 mm on
+    tracy_pickup_demo). Every hole y the entry above quotes is a displaced body; placed where the
+    look found them the square hole stands at 0.0299, between the cylinder at 0.0231 and the cube at
+    0.0634, so left and right do separate the two pieces about it and the 1.3 mm that ruled the
+    square hole out of the reach test becomes 41.2 against 49.4. The four tests were reading the
+    capture from a place 12 mm off, not stating what it does not show. Fixed by placing each hole
+    where the look put it, with a test asserting board_holes_in's output against board.holes, which
+    fails on the parent at those two distances. dae41889c is kept rather than reverted: its four
+    choices all still hold once the holes move, and its millimetres are requoted (19 to 21, 45 to
+    43, 16 to 19, 49 to 47, 50 and 94 to 51 and 93). Its one claim that does not survive - that left
+    and right tell the two apart from no hole on this board - is replaced by the honest reason for
+    the same choice: up and down leave 21 and 43 mm where the cylinder stands 7 mm from the square
+    hole across the picture. pytest is not blocked in a session container after all -
+    CRAM_ORM_BUILD=never skips the conftest's generation, the narrowing suite runs in 75 s, and 506
+    of the montessori suite pass.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback
