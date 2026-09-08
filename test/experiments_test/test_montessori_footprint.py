@@ -6,14 +6,40 @@ from __future__ import annotations
 
 import math
 
+import cv2
 import numpy as np
 import pytest
 
 from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
+    EnclosingRectangle,
     RectifiedFootprint,
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
+
+# %% the rectangle an outline fits inside
+
+
+def test_an_enclosing_rectangle_is_turned_the_way_its_longer_side_lies():
+    """
+    OpenCV names whichever of the two sides it likes, and which one that is varies with
+    its version, so the turn it reports is only meaningful once brought onto one of
+    them.
+    """
+    drawn = 17.0
+    lying_down = cv2.boxPoints(((100.0, 100.0), (40.0, 20.0), drawn)).astype(np.int32)
+    stood_up = cv2.boxPoints(((100.0, 100.0), (20.0, 40.0), drawn + 90.0)).astype(
+        np.int32
+    )
+
+    for contour in (lying_down, stood_up):
+        rectangle = EnclosingRectangle.around(contour)
+
+        assert rectangle.longer_side > rectangle.shorter_side
+        assert rectangle.yaw == pytest.approx(
+            math.radians(drawn), abs=math.radians(0.5)
+        )
+
 
 # %% measuring an outline
 

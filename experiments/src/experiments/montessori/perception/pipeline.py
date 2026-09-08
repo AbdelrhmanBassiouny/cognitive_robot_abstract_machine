@@ -54,7 +54,10 @@ from experiments.montessori.hole_geometry import BoardHoleLayout, PlacedHole
 from experiments.montessori.perception.exceptions import (
     BoardMissingFromWorld,
 )
-from experiments.montessori.perception.footprint import RectifiedFootprint
+from experiments.montessori.perception.footprint import (
+    EnclosingRectangle,
+    RectifiedFootprint,
+)
 from experiments.montessori.perception.hypotheses import (
     SEED_REACH,
     BelievedPlace,
@@ -493,12 +496,11 @@ class PlaceToScoreAt(PlaceOfASeenColor):
         :param center: Where the blob's middle falls on that surface's own plane.
         :param contour: The blob's outline, in rectified pixels.
         """
-        _, _, degrees = cv2.minAreaRect(contour)
         return BelievedPlace(
             surface=surface,
             center=center,
             radius=0.0,
-            yaw=QuarterTurns(math.radians(degrees)),
+            yaw=QuarterTurns(EnclosingRectangle.around(contour).yaw),
         )
 
     def capability(self, look: TargetOnSurface) -> ConditionType:

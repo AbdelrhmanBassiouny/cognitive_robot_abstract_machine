@@ -31,6 +31,62 @@ keeping the corners that tell a triangle from a square.
 
 
 @dataclass(frozen=True)
+class EnclosingRectangle:
+    """
+    The smallest rectangle a rectified outline fits inside.
+
+    Both what shape an outline is and which way it is turned are read off this one
+    rectangle, so which of its two sides its turn is quoted against is settled here
+    rather than wherever it happens to be measured.
+    """
+
+    shorter_side: float
+    """
+    Length of its shorter side, in rectified pixels.
+    """
+
+    longer_side: float
+    """
+    Length of its longer side, in rectified pixels.
+    """
+
+    yaw: float
+    """
+    How far round its longer side lies about the world frame's z-axis, in radians,
+    wrapped into ``[-pi/2, pi/2)``.
+    """
+
+    @property
+    def area(self) -> float:
+        """
+        Ground it covers, in rectified pixels squared.
+        """
+        return self.shorter_side * self.longer_side
+
+    @classmethod
+    def around(cls, contour: np.ndarray) -> Self:
+        """
+        Measure the smallest rectangle enclosing an OpenCV contour.
+
+        ..note:: OpenCV names whichever side it likes, so the turn it reports is brought
+            round onto the longer one.
+
+        :param contour: The contour, in rectified pixels.
+        :return: The measured rectangle.
+        """
+        _, (first_side, second_side), angle_in_degrees = cv2.minAreaRect(contour)
+        yaw = math.radians(angle_in_degrees)
+        if second_side > first_side:
+            yaw += math.pi / 2
+        shorter_side, longer_side = sorted((first_side, second_side))
+        return cls(
+            shorter_side=shorter_side,
+            longer_side=longer_side,
+            yaw=(yaw + math.pi / 2) % math.pi - math.pi / 2,
+        )
+
+
+@dataclass(frozen=True)
 class RectifiedFootprint:
     """
     The shape of one rectified outline, measured in metres about the world frame.
@@ -90,24 +146,22 @@ class RectifiedFootprint:
         :param resolution: Edge length of one rectified pixel, in metres.
         :return: The measured footprint.
         """
-        (_, _), (first_side, second_side), angle_in_degrees = cv2.minAreaRect(contour)
-        width, length = sorted(
-            (max(first_side, 1.0) * resolution, max(second_side, 1.0) * resolution)
+        rectangle = EnclosingRectangle.around(contour)
+        width, length = (
+            max(rectangle.shorter_side, 1.0) * resolution,
+            max(rectangle.longer_side, 1.0) * resolution,
         )
-        rectangle_area = first_side * second_side * resolution * resolution
+        rectangle_area = rectangle.area * resolution * resolution
         area = cv2.contourArea(contour) * resolution * resolution
         perimeter = cv2.arcLength(contour, True)
         corners = cv2.approxPolyDP(contour, _POLYGON_TOLERANCE_RATIO * perimeter, True)
-        yaw = math.radians(angle_in_degrees)
-        if second_side > first_side:
-            yaw += math.pi / 2
         return cls(
             area=area,
             width=width,
             length=length,
             fill_ratio=area / rectangle_area if rectangle_area > 0.0 else 0.0,
             corner_count=len(corners),
-            yaw=(yaw + math.pi / 2) % math.pi - math.pi / 2,
+            yaw=rectangle.yaw,
         )
 
 
