@@ -36,12 +36,25 @@ recorded; #252 asks about it.
   dataset. 37 tests in the module, five mutation-checked; `test/experiments_test`
   380 passed. Containment thread replied to and resolved; physics thread replied to and
   left open on the actuation question.
+- Review round 3 (`db746a949`): the robot is commanded by coraplex — `PickUpAction` and
+  `PlaceAction` under `simulated_robot`, giskard ticking the statechart, headless and
+  with no ROS — and every hand-written gripper method is gone. `SimulatedScene` builds
+  its MuJoCo mirror on demand and `stop()` drops it, since a grasp re-parents what it
+  holds and a compiled model cannot follow that. Each hole's landing region is measured
+  as the free space under it with a graph of convex sets, the two hand-chosen margins are
+  deleted, and `ShapeSortingHole` carries its own region. `NoSuchPieceError` and
+  `HoleHasNoLandingRegionError` replace the bare `KeyError`s. The mimic pincer gains a
+  three-axis wrist and a grasp frame between its fingertips. 43 tests in the module, six
+  mutation-checked; `test/experiments_test` 386 passed. Three threads resolved (the
+  exception, the free space, the coraplex question); two left open.
 
 ## Next
 
-- Two open threads, both waiting on the developer: whether the `Goal` change belongs on
-  #261, and where robot actuation in MuJoCo should live (nothing actuates the Montessori
-  robot today, and `MujocoSimulator` has no `set_actuator_value`).
+- Four open threads, all waiting on the developer: whether the `Goal` change belongs on
+  #261; where robot actuation in MuJoCo should live; whether `InsideOf`'s
+  `minimum_containment_ratio` (on #265, not on this base) should be ported here now and
+  meet #265 as a conflict; and whether `PlaceAction` should gain an optional
+  `grasp_description` so a place performed in its own plan knows how the piece is held.
 - CI is the authority for `control_loop_experiments`, which needs ROS to import.
 - If the developer wants `depends_on` repointed at `montessori-perception-on-main`, that
   is a one-line manifest change, waiting on his answer on #252.
