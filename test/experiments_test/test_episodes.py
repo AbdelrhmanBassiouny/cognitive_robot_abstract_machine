@@ -11,8 +11,10 @@ from __future__ import annotations
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import PlanNode
+from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from sqlalchemy import select
 
@@ -230,3 +232,70 @@ def test_the_failure_taxonomy_names_the_types_rather_than_the_episode_model():
     them.
     """
     assert list(FailureType) == []
+
+
+# %% what a question about the robot itself reaches
+
+
+def sorting_world() -> World:
+    """
+    The smallest world a run can have happened in: one body, so a recorded world can be
+    told apart from no recorded world at all.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("shape_sorter")))
+    return world
+
+
+def test_an_episode_keeps_the_world_the_run_happened_in(experiments_database_session):
+    """
+    The self-model questions are answered from the bodies, connections and degrees of
+    freedom of the world a run happened in, so the episode has to still name that world
+    after a round trip rather than only the scenario that built it.
+    """
+    session = experiments_database_session
+    episode = sorting_episode()
+    episode.world = sorting_world()
+
+    session.add(to_dao(episode))
+    session.commit()
+
+    [recorded] = session.scalars(select(EpisodeDAO)).all()
+    assert [body.name.name for body in recorded.world.bodies] == ["shape_sorter"]
+
+
+def test_a_trial_keeps_the_motion_it_ran(experiments_database_session):
+    """
+    The control questions are answered from the statechart a trial ran, so a trial that
+    ran one has to still name it after a round trip.
+    """
+    session = experiments_database_session
+    trial = RecordedTrial(
+        episode=sorting_episode(),
+        outcome=TrialOutcome.SUCCEEDED,
+        duration=12.5,
+        motion_statechart=MotionStatechart(),
+    )
+
+    session.add(to_dao(trial))
+    session.commit()
+
+    [recorded_trial] = session.scalars(select(RecordedTrialDAO)).all()
+    assert recorded_trial.motion_statechart is not None
+
+
+def test_an_episode_that_kept_no_world_round_trips_without_one(
+    experiments_database_session,
+):
+    """
+    A run that did not keep its world is a run whose self-model questions have no
+    evidence, which is a different thing from a run that failed to record.
+    """
+    session = experiments_database_session
+
+    session.add(to_dao(sorting_episode()))
+    session.commit()
+
+    [recorded] = session.scalars(select(EpisodeDAO)).all()
+    assert recorded.world is None

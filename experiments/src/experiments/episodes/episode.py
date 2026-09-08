@@ -15,7 +15,9 @@ from enum import StrEnum
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.plans.plan import Plan
+from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import DetectionEvent
+from semantic_digital_twin.world import World
 from typing_extensions import TYPE_CHECKING, List, Optional, Sequence
 
 from experiments.scenarios.trial import TrialOutcome
@@ -202,6 +204,16 @@ class RecordedTrial:
     Every insertion attempted while the trial ran, in the order they were made.
     """
 
+    motion_statechart: Optional[MotionStatechart] = None
+    """
+    The motion the trial ran, or None if it ran none.
+
+    What a question about the control program reaches: the statechart holds the tasks
+    that were active and the constraints they put on the optimization, so asking what the
+    robot was constrained by at the time is a query over this rather than over prose
+    about it.
+    """
+
     @classmethod
     def from_trial(cls, trial: Trial, episode: Episode) -> RecordedTrial:
         """
@@ -254,6 +266,21 @@ class Episode:
     recorded_at: datetime.datetime = field(default_factory=datetime.datetime.now)
     """
     When the episode began.
+    """
+
+    world: Optional[World] = None
+    """
+    The world the run happened in, or None if it was not kept.
+
+    What a question about the robot's own body reaches: the bodies, connections and
+    degrees of freedom it holds are the same ones a live question is answered from, so
+    asking how many joints the robot had is one query over a recorded world rather than
+    a second representation of it.
+
+    ..note:: One world per episode answers a question about a run whose robot differed,
+        and costs a world per episode at corpus scale. Whether a corpus keeps one each or
+        shares one is the developer's call; the field allows both, since an episode that
+        shares a world simply points at the same one.
     """
 
     @classmethod
