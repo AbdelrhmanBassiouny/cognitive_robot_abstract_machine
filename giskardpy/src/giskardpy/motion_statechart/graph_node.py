@@ -1384,6 +1384,58 @@ class MotionStatechartNode:
         """
         return self._life_cycle_predicate(LifeCyclePredicate.IS_INTERRUPTED)
 
+    @property
+    def is_failed_or_interrupted(self) -> sm.Scalar:
+        """
+        Whether this node ended anywhere but at its goal, which covers being cut off
+        undecided as much as being judged to have failed. A node that ended without a
+        verdict is of no more use than one that failed outright.
+
+        ================  =======
+        life cycle state  this
+        ================  =======
+        before it ends    unknown
+        succeeded         false
+        failed            true
+        interrupted       true
+        ================  =======
+
+        :return: True once this node ended short of its goal, unknown until it ends.
+        """
+        return sm.trinary_logic_or(self.is_failed, self.is_interrupted)
+
+    @property
+    def ended_without_reaching_its_goal(self) -> sm.Scalar:
+        """
+        Whether this node has ended anywhere but at its goal, which covers being cut off
+        undecided as much as being judged to have failed.
+
+        The same question as :attr:`is_failed_or_interrupted`, answered binary. It is
+        neither :attr:`is_failed`, which leaves an interrupted node unjudged, nor that
+        predicate pair, which has no answer before the node ends:
+
+        ================  =====
+        life cycle state  this
+        ================  =====
+        before it ends    false
+        succeeded         false
+        failed            true
+        interrupted       true
+        ================  =====
+
+        .. note:: Read off the life cycle variable rather than through the predicates,
+            because an observation may not read one. A transition condition is the other
+            way around and reads :attr:`is_failed_or_interrupted` instead, which it can
+            afford to: an unknown leaves a transition unfired, whereas an unknown case
+            guard selects its case.
+
+        :return: True once this node ended short of its goal, false before that.
+        """
+        return sm.trinary_logic_and(
+            LifeCyclePredicate.IS_TERMINATED.expression(self.life_cycle_variable),
+            self.goal_reached.is_not_true(),
+        )
+
     def formatted_name(self, quoted: bool = False) -> str:
         """
         Renders the name of this node together with all of its transition conditions.
