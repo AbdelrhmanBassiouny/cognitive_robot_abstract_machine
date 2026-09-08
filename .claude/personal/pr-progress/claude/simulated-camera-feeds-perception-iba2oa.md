@@ -3,53 +3,44 @@
 
 Branch `claude/simulated-camera-feeds-perception-iba2oa`, cut off #265
 (`claude/icra-experiments-simulation-pipeline-w4ep7n`), which is where the perception
-pipeline a frame gets fed to exists. Item recorded `in_progress`; the settled plan and its
-reasoning are in `icra-foundation/roadmap.md`'s own section for this item.
+pipeline a frame gets fed to exists. Item `in_progress`. The plan, the measurements and
+the two findings are in `icra-foundation/roadmap.md`'s sections for this item; the pull
+request description carries the same.
 
-### The plan
+### Done — the work is complete and pushed
 
-Render an `RgbdFrame` out of the twin, so every reader of that type works in simulation. Four
-conversions are the whole of it — intrinsics from the MuJoCo camera's field of view, MuJoCo's
-far-plane depth to the frame's zero-means-no-reading, RGB to OpenCV BGR, and the MuJoCo camera
-frame to the optical one (a half turn about x).
+Three commits on top of the bootstrap:
 
-1. `test/experiments_test/test_montessori_simulated_camera.py` first, per TDD — one test per
-   conversion, each asserted against the definition (the render itself, `WorkspaceSurface`'s
-   stated lid height, `KnownPiece.color`), plus the item's own criterion: a scene with the
-   board and four pieces reports every piece once with the right category.
-2. `experiments/montessori/perception/simulated_camera.py` — `SimulatedCamera`, the fourth
-   producer of `RgbdFrame` beside a capture, a rosbag and the live ROS node. Mirrors
-   `MujocoVideoRecorder`'s headless-mirror lifecycle (`start`/`stop`, `MUJOCO_GL=egl`,
-   `mj_forward` before each render).
-3. `CameraIntrinsics.of_field_of_view` on `perception/camera.py`, beside the
-   `from_camera_info_matrix` that already reads the other way in.
-4. `experiments/montessori/perception/simulated_setup.py` — the simulated rig: the pipeline
-   over a `MontessoriWorld`'s own surfaces, read through `WorkspaceSurface.of` rather than
-   restated the way `recorded_setup.py` has to restate the real one.
-5. `generate_orm.py`'s ignore list gains the new modules, same reason and same region as #261,
-   #278, #294 and #296.
+1. `select_offscreen_rendering_backend` shared between the video recorder and the new
+   camera, backends a `StrEnum`, `MUJOCO_GL` named once.
+2. `CameraIntrinsics.of_field_of_view`, beside the matrix reader that already existed.
+3. `simulated_camera.py` + `simulated_setup.py` + the tests, and both new modules added
+   to `generate_orm.py`'s ignore list.
 
-### Done
+Green: 11 passed / 1 xfailed (simulated camera), 4 passed (backend choice), 16 passed
+(video recorder, with `CI=true`, which is what actually exercises the extraction).
 
-- Branch cut, pushed, draft PR #298 opened against #265.
-- Manifest: `branch`, `pull_request_number`, `session`, `status: in_progress`; roadmap section
-  appended.
-- Research recorded in the roadmap section rather than only here: no vision-language or VQA
-  backend exists in the workspace (`icra-mechanism` owns both), the measured colours and
-  finishes are already on `MontessoriWorld`, and `capture_rgb`/`capture_depth` already exist
-  on `MujocoSimulator`.
+### Two things for the developer, both reported and neither fixed here
 
-### Next
-
-- Write the tests, then the modules, in the order above.
-- Two things only a real run can settle: whether offscreen MuJoCo rendering gets an EGL
-  context in a session container, and whether the detectors actually find four rendered pieces.
-  The second is the item's own done-criterion and is the one that can legitimately come out
-  red; report the measurement, do not weaken the test.
+- **Should a `Region` be rendered into a picture at all?** It is exported to MuJoCo as a
+  visible geom, so the board's six hole regions render as solid markers wearing the piece
+  detectors' own hues. That is why the item's stated criterion is xfailed (strictly): the
+  extra reports and the unfound board are both this one cause. Fixing it is one flag at
+  the region conversion site but changes what every viewer and every recorded video
+  shows, so it is his call.
+- **`SceneToSearch.expected_pieces` raises `KeyError`** on a world holding a shape
+  perception knows no piece for — a disk or a sphere, which `MontessoriWorld` spawns. A
+  defect of the merged tree; one root cause per branch, so it wants its own bug PR.
 
 ### Standing
 
-- Re-draft PR #298 after every push. Never subscribe to it. No scheduled check-ins.
-- Tracking-issue #252 subscription was refused by the permission classifier this session, so
-  structural changes to the plan will not arrive as events here.
+- Re-draft PR #298 after every push (it is a draft now). Never subscribe to it. No
+  scheduled check-ins.
+- Tracking-issue #252 subscription was refused by the permission classifier this session,
+  so structural plan changes will not arrive as events here.
+- Container recipe, if a later session needs it: Python **3.12** (3.11 fails first on
+  `dataclasses.make_dataclass(module=)`), workspace sources on `PYTHONPATH` minus
+  `probabilistic_model/src`, the `random_events` wheel for its compiled library, stubs
+  for `xacro` and `giskardpy_bullet_bindings`, `apt install libegl-mesa0`, and
+  `CRAM_ORM_BUILD=never` so the conftest does not try an ORM build that needs ROS.
 
