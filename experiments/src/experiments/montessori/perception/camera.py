@@ -132,6 +132,34 @@ class CameraIntrinsics:
             principal_point_y=float(matrix[1, 2]),
         )
 
+    @classmethod
+    def of_field_of_view(
+        cls, vertical_field_of_view_degrees: float, width: int, height: int
+    ) -> Self:
+        """
+        Read the intrinsics out of the angle a camera sees and the size of the picture
+        it takes, which is how a simulator states one.
+
+        The angle fixes the focal length once the picture's height is known, and the
+        pixels are square, so both focal lengths are that one. The optical axis meets
+        the picture in its middle, measured between pixel centres rather than between
+        pixel edges.
+
+        :param vertical_field_of_view_degrees: The angle the camera sees from the top of
+            the picture to its bottom.
+        :param width: Width of the picture in pixels.
+        :param height: Height of the picture in pixels.
+        """
+        focal_length = (height / 2.0) / np.tan(
+            np.radians(vertical_field_of_view_degrees) / 2.0
+        )
+        return cls(
+            focal_length_x=focal_length,
+            focal_length_y=focal_length,
+            principal_point_x=(width - 1) / 2.0,
+            principal_point_y=(height - 1) / 2.0,
+        )
+
     def to_matrix(self) -> np.ndarray:
         """
         :return: These intrinsics as a 3x3 projection matrix.
