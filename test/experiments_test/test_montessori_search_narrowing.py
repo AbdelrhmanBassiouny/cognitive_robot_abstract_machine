@@ -62,12 +62,13 @@ from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.reasoning.predicates import (
     Above,
+    Behind,
+    Below,
     Between,
     Colored,
     InFrontOf,
     InsideRegion,
     Near,
-    RightOf,
     SupportedBy,
 )
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -184,6 +185,16 @@ def square_hole(recorded_scene_world: World, capture_board) -> Body:
     """
     return board_holes_in(recorded_scene_world, capture_board)[
         HOLE_NAME_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    ]
+
+
+@pytest.fixture
+def triangle_hole(recorded_scene_world: World, capture_board) -> Body:
+    """
+    The board's triangle hole, placed in the world where this look found the board.
+    """
+    return board_holes_in(recorded_scene_world, capture_board)[
+        HOLE_NAME_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
     ]
 
 
@@ -661,10 +672,10 @@ def test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen(
     """
     Read from where the camera stands, a direction means what it means on screen.
 
-    Measured on this capture: the cube stands 28 mm above the square hole in the picture
-    and the cylinder 34 mm to its right, so *right of* leaves the cylinder and the cube
-    is told from it by *above* -- which the two of them standing on one table is what
-    makes possible, since neither is above the other in the world.
+    Measured on this capture: the cube stands 19 mm above the square hole in the picture
+    and the cylinder 45 mm below it, so *above* leaves the cube and *below* leaves the
+    cylinder -- which reading from the camera is what makes possible, since in the world
+    both stand the lid's own 15 mm above that hole and neither is above the other.
     """
     seen = capture_frame.point_of_view(recorded_scene_world.root)
 
@@ -675,7 +686,7 @@ def test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen(
     ) == [MontessoriShapeCategory.CUBE]
     assert categories_reported(
         looking_on_the_lid(
-            lid, lambda sought: RightOf(sought, square_hole, seen)
+            lid, lambda sought: Below(sought, square_hole, seen)
         ).evaluate(backend=looking_at_the_capture)
     ) == [MontessoriShapeCategory.CYLINDER]
 
@@ -687,9 +698,9 @@ def test_the_two_sides_of_a_hole_hold_different_pieces(
     lid: Body,
 ):
     """
-    Measured on this capture rather than assumed: the cube stands in front of the square
-    hole and to the robot's left of it, the cylinder behind it and to the robot's right,
-    so which direction is stated decides which of the two a look reports.
+    Measured on this capture rather than assumed: from the robot's own frame the cube
+    stands 16 mm in front of the square hole and the cylinder 49 mm behind it, so which
+    of the hole's two sides is stated decides which of the two a look reports.
     """
     seen = seen_from(recorded_scene_world)
 
@@ -700,7 +711,7 @@ def test_the_two_sides_of_a_hole_hold_different_pieces(
     ) == [MontessoriShapeCategory.CUBE]
     assert categories_reported(
         looking_on_the_lid(
-            lid, lambda sought: RightOf(sought, square_hole, seen)
+            lid, lambda sought: Behind(sought, square_hole, seen)
         ).evaluate(backend=looking_at_the_capture)
     ) == [MontessoriShapeCategory.CYLINDER]
 
@@ -727,18 +738,18 @@ def test_a_look_between_two_holes_reports_what_stands_between_them(
 
 def test_a_look_near_a_hole_reaches_as_far_as_the_radius_it_was_asked_for(
     looking_at_the_capture: MontessoriPerceptionBackend,
-    square_hole: Body,
+    triangle_hole: Body,
     lid: Body,
 ):
     """
-    The two pieces on this lid stand 35 mm and 75 mm from the square hole, so a reach
+    The two pieces on this lid stand 50 mm and 94 mm from the triangle hole, so a reach
     between the two tells them apart and one past both reports them both.
     """
     close = looking_on_the_lid(
-        lid, lambda sought: Near(sought, square_hole, radius=0.05)
+        lid, lambda sought: Near(sought, triangle_hole, radius=0.07)
     ).evaluate(backend=looking_at_the_capture)
     wider = looking_on_the_lid(
-        lid, lambda sought: Near(sought, square_hole, radius=0.10)
+        lid, lambda sought: Near(sought, triangle_hole, radius=0.12)
     ).evaluate(backend=looking_at_the_capture)
 
     assert categories_reported(close) == [MontessoriShapeCategory.CUBE]
