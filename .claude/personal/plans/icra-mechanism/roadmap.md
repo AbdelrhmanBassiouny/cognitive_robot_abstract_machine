@@ -11,24 +11,32 @@ rationale and what it cost lives in `plan-size-limits/roadmap.md`'s "Done
 roadmap is reachable in the personal-notes branch's history immediately
 before the split commit.
 
-**Every item in this plan depends on at least one item in `icra-foundation`
-or `icra-evidence`** (nine of this plan's twelve items carry a cross-plan
-`blockers` entry instead of a `depends_on` edge, since `depends_on` cannot
-cross a plan boundary — see plan.yaml). Read `icra-foundation`'s roadmap
+**Almost every item in this plan depends on at least one item in
+`icra-foundation` or `icra-evidence`** (eleven of this plan's fourteen items
+carry a cross-plan `blockers` entry instead of a `depends_on` edge, since
+`depends_on` cannot cross a plan boundary — see plan.yaml). Read `icra-foundation`'s roadmap
 first for the programme's overall "why"; this file states only what is
 specific to what this wave measures.
 
 ## Why this wave exists
 
-The memo's thesis is one mechanism: the same EQL query selects which backend
-answers each predicate, drives what the robot perceives, and verifies the
-result in the digital twin; removing knowledge produces failures the query
-predicts. This wave builds that mechanism and its supporting pieces:
-per-predicate backend routing (`backend-routing`), physics verification
-(`backend-routing`), snapshot working memory (`backend-routing`), typed and
-predicted failure with the ablations/perturbations that produce it on
-purpose (`failure`), and the verbalised-memory/VLM baselines the experiments
-compare against (`baselines`).
+**Restated 2026-09-08** — see `icra-foundation`'s roadmap for the full
+restatement. This wave builds what makes the subsystems one system:
+capability declaration in a single vocabulary and per-predicate routing
+across backends that are interchangeable behind it (`backend-routing`), a
+control program whose optimization constraints are queries over the same
+representation and whose own state is queryable in the same language
+(`control`), physics as one more answerer of the same predicates
+(`backend-routing`), the snapshot working memory the agency questions rest on
+(`backend-routing`), typed and predicted failure with the
+ablations/perturbations that produce it on purpose (`failure`), and the
+verbalised-memory/VLM baselines the experiments compare against
+(`baselines`).
+
+The original sentence, which most items here are still written against: the
+same EQL query selects which backend answers each predicate, drives what the
+robot perceives, and verifies the result in the digital twin; removing
+knowledge produces failures the query predicts.
 
 ## Structural decisions taken at creation (2026-09-03)
 
@@ -133,3 +141,62 @@ a fallback that puts every unresolved piece standing on the plane it was
 found in. Recorded here rather than on `knowledge-directed-perception`
 because the test needs a pipeline that can run a plan, and that pipeline is
 `icra-foundation`'s.
+
+## 2026-09-08: the two halves the thesis named but the plan had no item for
+
+Refocus pass across all three ICRA plans (the developer's direction is quoted
+in `icra-foundation`'s roadmap). This wave gained the two items that carry
+the integrative claim, and one existing item was moved off the critical path.
+
+### `perception-backends-are-interchangeable` (new, `backend-routing`)
+
+A vision-language and a visual-question-answering backend implement the same
+interface the detector stack implements, take the same `RgbdFrame`, declare
+capability in the same vocabulary and write the same bodies, poses and
+relations into the twin — so the routing, the control program, the event
+monitor, the episode record and the query language are all unchanged by the
+swap. The plan already had the vision-language model as a *baseline*
+(`vlm-baseline-harness`); it had nothing that made it a *backend*, which is
+the stronger and more interesting claim, and the one that says what the
+architecture is actually built on. The classical stack stays the default
+because the cost comparison needs something whose cost is known.
+
+### `control-reads-the-twin-as-constraints` (new, its own `control` track)
+
+The half of the thesis sentence with no item behind it. The control program
+does not receive a pose: the insertion's goal pose, the hole geometry it must
+clear, the reachability that decides attainability and the degree-of-freedom
+limits the solver may not exceed are each a query over the twin, and the
+giskardpy tasks and monitors are built from those answers. The other
+direction is what makes the control system *questionable*: the active tasks,
+the constraints the quadratic program is solving under and the monitor that
+ended a motion are published back into the twin, so "what are you constrained
+by right now" and "why did you stop" are queries in the same language as
+"what colour is the cube". It is also what makes the no-degree-of-freedom-limits
+ablation a knowledge condition rather than a code branch — which
+`knowledge-ablations` already assumed and nothing implemented.
+
+Its own track rather than a fourth item in `backend-routing`, because control
+is a peer of perception and memory in the claim, not a routing concern.
+
+### `physics-verification-backend` moved off the critical path
+
+Kept, reframed and demoted. Its value in the restated thesis is that physics
+is one more backend answering the same predicates from a different source —
+not that verification is a headline mechanism of its own. It is now the first
+thing cut if the week runs short, ahead of anything in the memory or control
+tracks. The memo's original cut order put Experiment B's injection half
+first; this is consistent with that, and makes it explicit at the item.
+
+### Working memory, and why it has no Bloom level
+
+`snapshot-working-memory` gained the note that it is where the agency
+questions are answered. Because the twin follows the gripper's kinematics
+while the robot acts and re-perceives only when something changed while it
+was idle, the record distinguishes *a piece the robot moved* from *a piece
+that moved on its own* — which is what "did it move, and did you move it"
+asks, and what no single image can hold. Bloom's taxonomy has no level for
+working memory; the developer's point is that this is a gap in the taxonomy
+as an account of a robot rather than a gap in the system, and the paper
+argues it rather than working around it. Recorded here because it is a claim
+about this item's mechanism, not only about the question set.
