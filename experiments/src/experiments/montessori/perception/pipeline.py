@@ -22,6 +22,7 @@ and centimetre-scale noise, far too coarse to measure a thirty millimetre piece.
 from __future__ import annotations
 
 import math
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 import cv2
@@ -53,10 +54,15 @@ from experiments.montessori.hole_geometry import BoardHoleLayout, PlacedHole
 from experiments.montessori.perception.exceptions import (
     BoardMissingFromWorld,
 )
-from experiments.montessori.perception.footprint import RectifiedFootprint
+from experiments.montessori.perception.footprint import (
+    EnclosingRectangle,
+    RectifiedFootprint,
+)
 from experiments.montessori.perception.hypotheses import (
+    SEED_REACH,
     BelievedPlace,
     PieceHypothesis,
+    QuarterTurns,
 )
 from experiments.montessori.perception.imagination import ImaginedWorld
 from experiments.montessori.perception.look_choice import (
@@ -90,6 +96,7 @@ from experiments.montessori.semantics import ShapeSortingBoard
 from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
     Color,
@@ -380,6 +387,131 @@ Area a hole in the board's lid may cover.
 The lower bound sits below the narrowest hole, the disk's five by forty-eight millimetre
 slot, and above the slivers of shadow that fall along the lid's own edges.
 """
+
+
+# %% what a seen colour says about where a piece is
+
+
+class PlaceOfASeenColor(ABC):
+    """
+    How tightly the place a colour was seen at is believed.
+
+    The blob is the same evidence either way; what differs is how much of it is taken on
+    trust, and that is a belief rather than a way of looking. Believing it loosely
+    leaves the outline fit to search around it, which is what a surface that throws a
+    piece's colour back at the camera demands; believing it exactly scores the outline
+    where the blob already puts it. Both then go through the same fit against the same
+    edges.
+    """
+
+    @abstractmethod
+    def believed(
+        self, surface: PrefixedName, center: PlanarPoint, contour: np.ndarray
+    ) -> BelievedPlace:
+        """
+        Where the piece under one colour blob is believed to be.
+
+        :param surface: What the world calls the surface the blob was seen on.
+        :param center: Where the blob's middle falls on that surface's own plane.
+        :param contour: The blob's outline, in rectified pixels.
+        """
+
+    @abstractmethod
+    def capability(self, look: TargetOnSurface) -> ConditionType:
+        """
+        The looks a detector believing a colour this tightly can answer, as a condition
+        over a look.
+
+        What a look must offer follows from how much of a blob is taken on trust, so it
+        is stated here rather than by the detector: searching around a colour needs only
+        the piece's shape, while reading a colour's own place needs the colour to be
+        there to read.
+
+        :param look: The look to state the condition over.
+        """
+
+
+@dataclass(frozen=True)
+class PlaceToSearchAround(PlaceOfASeenColor):
+    """
+    A colour says roughly where to look, and nothing about which way the piece is
+    turned.
+
+    A piece seen together with its own reflection is read at the middle of the two, and
+    its silhouette is its footprint together with its top face pushed away from the
+    point below the camera, so neither where the blob's middle falls nor which way its
+    bounding rectangle lies is the piece's own. Both are a place to start searching
+    from.
+    """
+
+    reach: float = SEED_REACH
+    """
+    How far, in metres, the piece may stand from the blob's middle.
+    """
+
+    def believed(
+        self, surface: PrefixedName, center: PlanarPoint, contour: np.ndarray
+    ) -> BelievedPlace:
+        """
+        A stretch of surface around the blob, at any turn the piece can be told apart
+        at.
+
+        :param surface: What the world calls the surface the blob was seen on.
+        :param center: Where the blob's middle falls on that surface's own plane.
+        :param contour: Ignored: nothing of the blob's shape is believed.
+        """
+        return BelievedPlace(surface=surface, center=center, radius=self.reach)
+
+    def capability(self, look: TargetOnSurface) -> ConditionType:
+        """
+        Any look for a piece whose outline is modelled: a colour worth searching around
+        need not separate cleanly, since the fit is what decides what is there.
+
+        :param look: The look to state the condition over.
+        """
+        return look.target_outline_is_known
+
+
+@dataclass(frozen=True)
+class PlaceToScoreAt(PlaceOfASeenColor):
+    """
+    A colour cut cleanly out of the surface says where the piece stands and, up to the
+    symmetry of its own bounding rectangle, which way it is turned.
+
+    There is then nothing to search for: the known outline is scored where the blob puts
+    it, at each turn the rectangle leaves open.
+    """
+
+    def believed(
+        self, surface: PrefixedName, center: PlanarPoint, contour: np.ndarray
+    ) -> BelievedPlace:
+        """
+        The one place the blob names, at the four turns its bounding rectangle leaves
+        open.
+
+        The rectification is axis-aligned and both its axes grow with the world's, so an
+        angle measured in it is a world turn unchanged.
+
+        :param surface: What the world calls the surface the blob was seen on.
+        :param center: Where the blob's middle falls on that surface's own plane.
+        :param contour: The blob's outline, in rectified pixels.
+        """
+        return BelievedPlace(
+            surface=surface,
+            center=center,
+            radius=0.0,
+            yaw=QuarterTurns(EnclosingRectangle.around(contour).yaw),
+        )
+
+    def capability(self, look: TargetOnSurface) -> ConditionType:
+        """
+        Only a look where colour separates the piece from the surface: a piece wearing
+        the surface's own colour has no blob to be read, so there is no place to score
+        at.
+
+        :param look: The look to state the condition over.
+        """
+        return look.target_separates_from_the_surface_by_color
 
 
 # %% detectors
@@ -828,10 +960,18 @@ class BoardDetector:
 class EdgeFitDetector(PieceDetector):
     """
     Finds the loose Montessori pieces by fitting their known outlines to the edges the
-    camera saw, searching for the placement that follows those edges best.
+    camera saw.
 
-    Needs nothing of the surface: an outline is fitted to edges whatever threw them, which
-    is why this is the general answer and the one a reflective table leaves standing.
+    Needs nothing of the surface: an outline is fitted to edges whatever threw them,
+    which is why this is the general answer and the one a reflective table leaves
+    standing.
+
+    How widely it searches is not fixed. What a colour blob is taken to settle is stated
+    by :attr:`place_of_a_seen_color`, so a surface that shows its pieces cleanly is read
+    at the one placement the blob names while a surface that reflects them is searched
+    around it. The two are one detector configured twice rather than two detectors,
+    because only the belief differs -- the fit, and everything that decides what is
+    reported, is the same either way.
     """
 
     matcher: PieceMatcher = field(default_factory=PieceMatcher)
@@ -849,13 +989,21 @@ class EdgeFitDetector(PieceDetector):
     Area a piece's outline may cover.
     """
 
+    place_of_a_seen_color: PlaceOfASeenColor = field(
+        default_factory=PlaceToSearchAround
+    )
+    """
+    How tightly the place a colour blob covers is believed before its outline is fitted.
+    """
+
     def capability(self, look: TargetOnSurface) -> ConditionType:
         """
-        Answers a look for a piece whose outline is modelled, on any surface.
+        The looks the way it believes a seen colour can answer, which is what
+        configuring it differently changes.
 
         :param look: The look to state the condition over.
         """
-        return look.target_outline_is_known
+        return self.place_of_a_seen_color.capability(look)
 
     def detect(self, surface_pass: SurfacePass) -> List[DetectedMontessoriShape]:
         """
@@ -938,9 +1086,10 @@ class EdgeFitDetector(PieceDetector):
                     continue
                 seen.append(
                     PieceHypothesis.of_color(
-                        place=BelievedPlace(
-                            surface=surface_pass.search.surface.name,
-                            center=orthophoto.contour_center(contour),
+                        place=self.place_of_a_seen_color.believed(
+                            surface_pass.search.surface.name,
+                            orthophoto.contour_center(contour),
+                            contour,
                         ),
                         hue=self.colors.measure_hue(
                             orthophoto, _filled(contour, orthophoto)
@@ -1021,165 +1170,6 @@ class EdgeFitDetector(PieceDetector):
             supporting_surface=surface_pass.search.surface.name,
             hypothesis=hypothesis,
         )
-
-
-@dataclass(eq=False)
-class ColorBlobDetector(PieceDetector):
-    """
-    Finds the loose Montessori pieces by cutting them out of the surface by colour and
-    reading the placement off the blob itself.
-
-    Where colour separates a piece from what it rests on, the blob already says where
-    the piece stands and roughly how it is turned, so the known outline is scored at
-    that one placement instead of being searched for. It reports the same outline
-    agreement the :class:`EdgeFitDetector` does, measured the same way, so the two can
-    be compared.
-    """
-
-    matcher: PieceMatcher = field(default_factory=PieceMatcher)
-    """
-    Scores a known piece's outline where the blob says it stands.
-    """
-
-    colors: SurfaceColors = field(default_factory=SurfaceColors)
-    """
-    How a piece separates from the surface by colour.
-    """
-
-    piece_size: SizeRange = LOOSE_PIECE_SIZE
-    """
-    Area a piece's outline may cover.
-    """
-
-    def capability(self, look: TargetOnSurface) -> ConditionType:
-        """
-        Answers a look only where colour separates the piece from the surface, since a
-        piece that shares the surface's colour has no blob to be cut out of it.
-
-        :param look: The look to state the condition over.
-        """
-        return look.target_separates_from_the_surface_by_color
-
-    def detect(self, surface_pass: SurfacePass) -> List[DetectedMontessoriShape]:
-        """
-        Find the pieces resting on one surface, from the colour they wear.
-
-        :param surface_pass: Everything this pass over this surface reads.
-        :return: One detection per recognised piece.
-        """
-        orthophoto = surface_pass.orthophoto
-        seen = surface_pass.edges.positions
-        pieces = []
-        for hue in hues_of(surface_pass.sought_pieces):
-            for contour in self.colors.outlines_wearing(
-                hue, orthophoto, surface_pass.top_orthophoto
-            ):
-                piece = self._piece_at(contour, seen, surface_pass)
-                if piece is not None:
-                    pieces.append(piece)
-        return pieces
-
-    def _piece_at(
-        self,
-        contour: np.ndarray,
-        seen: np.ndarray,
-        surface_pass: SurfacePass,
-    ) -> Optional[DetectedMontessoriShape]:
-        """
-        Recognise the piece one blob covers, scored where the blob says it stands.
-
-        The blob fixes the place and, up to its own symmetry, the turn, so the piece is
-        scored there rather than searched for -- which is the whole of why this detector
-        is cheaper than the edge fit. What is reported is settled the same way either
-        detector settles it: by comparing the accounts of the place against each other.
-
-        :param contour: The outline to read, in rectified pixels.
-        :param seen: Where the edges of the top view stand, as ``(n, 2)`` world-frame
-            points.
-        :param surface_pass: The pass over the surface the piece is looked for on.
-        :return: The piece, or None where the outline is not one of this surface's, or
-            where nothing standing there explains the edges better than the alternatives.
-        """
-        orthophoto = surface_pass.orthophoto
-        imagined = surface_pass.imagined
-        footprint = RectifiedFootprint.from_contour(
-            contour, orthophoto.region.resolution
-        )
-        if not self.piece_size.admits(footprint):
-            return None
-        if not _wholly_within(contour, orthophoto):
-            return None
-        center = orthophoto.contour_center(contour)
-        if not surface_pass.search.claims(center.x, center.y):
-            return None
-        hypothesis = PieceHypothesis.of_color(
-            place=BelievedPlace(
-                surface=surface_pass.search.surface.name,
-                center=center,
-                radius=0.0,
-            ),
-            hue=self.colors.measure_hue(orthophoto, _filled(contour, orthophoto)),
-            source=self,
-            hue_tolerance=self.hue_tolerance,
-        )
-        fitted_pieces = self.matcher.match_at(
-            surface_pass.edges, hypothesis, self._turns_of(contour)
-        )
-        if not fitted_pieces:
-            return None
-        match, *runners_up = fitted_pieces
-        outline = match.outline
-        place = PlaceInThePicture.around(
-            outline,
-            surface_pass.edges,
-            seen,
-            self.matcher.fitter.reach,
-            self.matcher.fitter.outline_spacing,
-        )
-        account = place.explained_by(outline)
-        rivals = [surface_pass.board_outlines.account_of(place)]
-        if runners_up:
-            rivals.append(place.explained_by(runners_up[0].outline))
-        if not surface_pass.explanations.is_reported(account, *rivals):
-            return None
-        height = _measure_height(
-            contour, orthophoto, surface_pass.frame, self.piece_height
-        )
-        pose = Pose.from_xyz_rpy(
-            match.center.x,
-            match.center.y,
-            orthophoto.plane_height + height / 2,
-            yaw=match.yaw,
-            reference_frame=imagined.reference_frame,
-        )
-        return DetectedMontessoriShape(
-            role_taker=imagined.spawn(match.piece, pose),
-            pose=pose,
-            footprint=footprint,
-            outline=outline,
-            category=match.piece.category,
-            height=height,
-            explanation=account,
-            supporting_surface=surface_pass.search.surface.name,
-            hypothesis=hypothesis,
-        )
-
-    @staticmethod
-    def _turns_of(contour: np.ndarray) -> List[float]:
-        """
-        The turns a blob's own bounding rectangle says its piece may stand at.
-
-        The rectangle fixes the turn only up to a quarter of a circle, since a rectangle
-        laid a quarter turn round covers the same ground, so all four are offered and
-        the edges decide between them. The rectification is axis-aligned and both its
-        axes grow with the world's, so an angle measured in it is a world turn
-        unchanged.
-
-        :param contour: The outline to read, in rectified pixels.
-        """
-        quarter_turn = math.pi / 2
-        _, _, degrees = cv2.minAreaRect(contour)
-        return [math.radians(degrees) + turn * quarter_turn for turn in range(4)]
 
 
 # %% measuring how tall a piece stands
@@ -1344,7 +1334,8 @@ class FindThePieces(SceneDetector):
 
     detector_rules: DetectorRules = field(
         default_factory=lambda: DetectorRules(
-            edge_fit=EdgeFitDetector(), color_blob=ColorBlobDetector()
+            edge_fit=EdgeFitDetector(),
+            color_blob=EdgeFitDetector(place_of_a_seen_color=PlaceToScoreAt()),
         )
     )
     """

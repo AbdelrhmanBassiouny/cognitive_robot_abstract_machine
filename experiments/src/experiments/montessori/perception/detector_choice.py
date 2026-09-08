@@ -285,7 +285,8 @@ class DetectorRules(DetectorChoice[TargetOnSurface]):
 
     edge_fit: PieceDetector
     """
-    Fits the outlines of the known pieces to the edges the camera saw.
+    Searches around each colour it saw for the placement whose outline follows the edges
+    best.
 
     The general answer: it needs nothing of the surface, only that the piece's shape is
     modelled.
@@ -293,11 +294,11 @@ class DetectorRules(DetectorChoice[TargetOnSurface]):
 
     color_blob: PieceDetector
     """
-    Cuts the piece out of the surface by colour and scores that one placement.
+    Takes each colour blob at its word and scores the known outline at the one placement
+    the blob names.
 
-    Cheaper than searching for a placement, and that is the whole of why it is
-    preferred: the edge fit works on a matte lid too, measured at 0.93 agreement on a
-    cube resting on the board.
+    The same detector as :attr:`edge_fit`, believing a seen colour more tightly rather
+    than looking a different way.
     """
 
     def underspecified_look(self) -> Match:
@@ -308,10 +309,14 @@ class DetectorRules(DetectorChoice[TargetOnSurface]):
 
     def rules_stated_at_the_start(self) -> Entity:
         """
-        Both detectors answer a look at a piece that colour separates from the surface
-        it rests on, so what tells them apart is how that surface takes light: the
-        colour blob is worth its lower cost on a matte one, measured at 89 ms against
-        126 ms on the same work, and the edge fit is the general answer everywhere else.
+        Both answer a look at a piece that colour separates from the surface it rests
+        on, so what tells them apart is how that surface takes light: a matte surface
+        shows a piece cleanly enough for its blob to be taken at its word, which halves
+        the fitting -- 8 ms against 16 ms, median of fifteen, on a cube resting on the
+        rendered lid -- and the edge fit is the general answer everywhere else.
+
+        ..note:: The fit is a part of a whole look rather than all of it, so the same
+            measurement puts the two looks at 86 ms against 97 ms.
         """
         rules = entity(self.look).where(
             and_(

@@ -5,8 +5,11 @@ surface and the piece being looked for.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 
+import cv2
+import numpy as np
 import pytest
 
 from krrood.entity_query_language.factories import ConditionType
@@ -20,6 +23,12 @@ from experiments.montessori.perception.detector_choice import (
     TargetOnSurface,
 )
 from experiments.montessori.perception.exceptions import NoDetectorAnswersTheLook
+from experiments.montessori.perception.hypotheses import (
+    SEED_REACH,
+    BelievedPlace,
+    PieceHypothesis,
+    QuarterTurns,
+)
 from experiments.montessori.perception.imagination import ImaginedWorld
 from experiments.montessori.perception.orthophoto import (
     OrthophotoProjector,
@@ -27,9 +36,10 @@ from experiments.montessori.perception.orthophoto import (
 )
 from experiments.montessori.perception.look_choice import RectifiedFrame
 from experiments.montessori.perception.pipeline import (
-    ColorBlobDetector,
     EdgeFitDetector,
     MontessoriPerceptionPipeline,
+    PlaceToScoreAt,
+    PlaceToSearchAround,
 )
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import (
@@ -41,6 +51,7 @@ from experiments.montessori.pieces import (
     KnownPiece,
     hue_distance,
 )
+from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import (
     MontessoriShapeCategory,
     ShapeSortingBoard,
@@ -53,6 +64,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import List
 
 from .dataset import montessori_scene_fixtures
+from .dataset.montessori_belief_sources import SomethingThatAskedForALook
 from .dataset.montessori_scene_renderer import (
     LID_COLOR,
     TABLE_COLOR,
@@ -195,12 +207,12 @@ def test_the_edge_fit_answers_a_look_for_a_piece_of_known_outline():
     assert EdgeFitDetector().asked_about(look).tolist()
 
 
-def test_the_color_blob_answers_only_where_colour_separates_the_target():
+def test_reading_a_colours_own_place_answers_only_where_colour_separates_the_target():
     separating, merging = (
         TargetOnSurface(_surface(color=_color_of_hue(20)), _piece_of_hue(hue))
         for hue in (20 + HUE_TOLERANCE + 1, 21)
     )
-    detector = ColorBlobDetector()
+    detector = _reading_a_colours_own_place()
 
     assert detector.asked_about(separating).tolist()
     assert not detector.asked_about(merging).tolist()
@@ -219,15 +231,72 @@ def test_a_detector_states_the_looks_it_answers_once_and_is_asked_per_look():
     assert detector.answerable_looks is stated
 
 
+# %% what a seen colour is taken to settle
+
+
+BLOB_PIXEL_ROUNDING = math.radians(0.5)
+"""
+How far the turn measured back off a blob may sit from the one it was drawn at.
+
+A blob's points are whole pixels, so the rectangle fitted back to them is a fraction of
+a degree off the one that drew them.
+"""
+
+
+def _blob_drawn_at(degrees: float) -> np.ndarray:
+    """
+    A rectangular blob lying at one turn, in rectified pixels.
+
+    :param degrees: How far round it is drawn.
+    """
+    return cv2.boxPoints(((100.0, 100.0), (40.0, 20.0), degrees)).astype(np.int32)
+
+
+def test_a_colour_to_search_around_reaches_the_seeding_distance_at_any_turn():
+    """
+    A piece read together with its own reflection is neither where its blob's middle
+    falls nor turned the way its rectangle lies, so both are only a place to start.
+    """
+    place = PlaceToSearchAround().believed(
+        _surface().name, PlanarPoint(0.5, 0.25), _blob_drawn_at(17.0)
+    )
+
+    assert place.radius == SEED_REACH
+    assert place.yaw is None
+
+
+def test_a_colour_read_for_its_own_place_fixes_it_at_its_rectangles_turn():
+    drawn = 17.0
+
+    place = PlaceToScoreAt().believed(
+        _surface().name, PlanarPoint(0.5, 0.25), _blob_drawn_at(drawn)
+    )
+
+    assert place.radius == 0.0
+    assert place.yaw == QuarterTurns(
+        pytest.approx(math.radians(drawn), abs=BLOB_PIXEL_ROUNDING)
+    )
+
+
 # %% which detector the rules choose
+
+
+def _reading_a_colours_own_place() -> EdgeFitDetector:
+    """
+    The detector configured to take a colour blob at its word, which is what the rules
+    choose on a surface that shows its pieces cleanly.
+    """
+    return EdgeFitDetector(place_of_a_seen_color=PlaceToScoreAt())
 
 
 @pytest.fixture
 def rules() -> DetectorRules:
     """
-    The rules over the two detectors this scene has.
+    The rules over the two ways of looking this scene has.
     """
-    return DetectorRules(edge_fit=EdgeFitDetector(), color_blob=ColorBlobDetector())
+    return DetectorRules(
+        edge_fit=EdgeFitDetector(), color_blob=_reading_a_colours_own_place()
+    )
 
 
 def test_a_mirror_surface_is_looked_at_by_fitting_edges(rules):
@@ -236,7 +305,7 @@ def test_a_mirror_surface_is_looked_at_by_fitting_edges(rules):
         _piece_of_hue(60),
     )
 
-    assert isinstance(rules.detector_for(look), EdgeFitDetector)
+    assert rules.detector_for(look) is rules.edge_fit
 
 
 def test_a_matte_surface_is_looked_at_by_colour_where_colour_separates(rules):
@@ -245,7 +314,7 @@ def test_a_matte_surface_is_looked_at_by_colour_where_colour_separates(rules):
         _piece_of_hue(60),
     )
 
-    assert isinstance(rules.detector_for(look), ColorBlobDetector)
+    assert rules.detector_for(look) is rules.color_blob
 
 
 def test_a_target_wearing_a_matte_surfaces_hue_falls_back_to_fitting_edges(rules):
@@ -254,13 +323,13 @@ def test_a_target_wearing_a_matte_surfaces_hue_falls_back_to_fitting_edges(rules
         _piece_of_hue(21),
     )
 
-    assert isinstance(rules.detector_for(look), EdgeFitDetector)
+    assert rules.detector_for(look) is rules.edge_fit
 
 
 def test_a_surface_of_unstated_finish_is_looked_at_by_fitting_edges(rules):
     look = TargetOnSurface(_surface(color=_color_of_hue(20)), _piece_of_hue(60))
 
-    assert isinstance(rules.detector_for(look), EdgeFitDetector)
+    assert rules.detector_for(look) is rules.edge_fit
 
 
 def test_the_rules_answer_with_a_detector_they_were_given(rules):
@@ -313,14 +382,18 @@ def test_the_rules_are_stated_over_the_look_itself(rules):
 def test_the_rules_can_be_read_as_a_tree(rules):
     """
     A tree of rules is worth having only if it can be read, so the detector chosen for
-    one look is named in the rendering of the rules that chose it.
+    one look is named in the rendering of the rules that chose it -- and two detectors
+    that differ only in how they are configured have to be told apart there.
     """
     look = TargetOnSurface(
         _surface(finish=SurfaceFinish.MATTE, color=_color_of_hue(20)),
         _piece_of_hue(60),
     )
 
-    assert type(rules.color_blob).__name__ in rules.render_tree(look)
+    rendered = rules.render_tree(look)
+
+    assert str(rules.color_blob) in rendered
+    assert str(rules.edge_fit) != str(rules.color_blob)
 
 
 # %% growing the rules while they are in use
@@ -423,46 +496,44 @@ def annotated_pipeline(
 def test_nothing_is_annotated_yet_so_every_look_falls_to_the_edge_fit(
     pipeline: MontessoriPerceptionPipeline,
 ):
+    detector_rules = pipeline.look_rules.find_the_pieces.detector_rules
     for surface in (pipeline.table, pipeline.lid):
-        [(detector, chosen_for)] = (
-            pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
-                surface, KNOWN_PIECES
-            )
-        )
-        assert isinstance(detector, EdgeFitDetector)
+        [(detector, chosen_for)] = detector_rules.detectors_for(surface, KNOWN_PIECES)
+        assert detector is detector_rules.edge_fit
         assert chosen_for == KNOWN_PIECES
 
 
 def test_a_mirror_table_is_searched_by_fitting_edges_whatever_the_piece(
     annotated_pipeline: MontessoriPerceptionPipeline,
 ):
-    [(detector, chosen_for)] = (
-        annotated_pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
-            annotated_pipeline.table, KNOWN_PIECES
-        )
+    detector_rules = annotated_pipeline.look_rules.find_the_pieces.detector_rules
+
+    [(detector, chosen_for)] = detector_rules.detectors_for(
+        annotated_pipeline.table, KNOWN_PIECES
     )
 
-    assert isinstance(detector, EdgeFitDetector)
+    assert detector is detector_rules.edge_fit
     assert chosen_for == KNOWN_PIECES
 
 
 def test_a_matte_lid_splits_the_pieces_by_whether_colour_separates_them(
     annotated_pipeline: MontessoriPerceptionPipeline,
 ):
+    detector_rules = annotated_pipeline.look_rules.find_the_pieces.detector_rules
     chosen = {
-        type(detector): {piece.hue for piece in pieces}
-        for detector, pieces in annotated_pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
+        id(detector): {piece.hue for piece in pieces}
+        for detector, pieces in detector_rules.detectors_for(
             annotated_pipeline.lid, KNOWN_PIECES
         )
     }
 
     lid_hue = LID_COLOR[0]
-    assert chosen[ColorBlobDetector] == {
+    assert chosen[id(detector_rules.color_blob)] == {
         piece.hue
         for piece in KNOWN_PIECES
         if hue_distance(piece.hue, lid_hue) > HUE_TOLERANCE
     }
-    assert chosen[EdgeFitDetector] == {
+    assert chosen[id(detector_rules.edge_fit)] == {
         piece.hue
         for piece in KNOWN_PIECES
         if hue_distance(piece.hue, lid_hue) <= HUE_TOLERANCE
@@ -487,21 +558,18 @@ def test_a_piece_on_an_annotated_lid_is_still_found_by_the_detector_chosen_for_i
     assert [piece.category for piece in on_the_lid] == [piece_on_the_lid.category]
 
 
-def test_the_colour_blob_finds_on_a_matte_lid_what_the_edge_fit_finds(
+def test_both_ways_of_looking_report_the_same_piece_on_a_matte_lid(
     annotated_pipeline: MontessoriPerceptionPipeline,
     renderer: MontessoriSceneRenderer,
     piece_on_the_lid,
 ):
     """
-    What makes the cheaper detector worth preferring: on the surface the rules choose it
-    for, it reports the same piece the general one does.
+    What makes believing a colour tightly worth preferring on the surface the rules
+    choose it for: it reports the piece the general search reports, in the same place
+    and measured the same way, because only the belief differs and the fit is shared.
     """
     frame = renderer.render([piece_on_the_lid])
-    lid = annotated_pipeline.lid
-    rectified = RectifiedFrame(
-        frame=frame, projector=OrthophotoProjector(region=lid.region)
-    )
-    search = SurfaceSearch(surface=lid)
+    detector_rules = annotated_pipeline.look_rules.find_the_pieces.detector_rules
     cyan = tuple(
         piece
         for piece in KNOWN_PIECES
@@ -509,25 +577,89 @@ def test_the_colour_blob_finds_on_a_matte_lid_what_the_edge_fit_finds(
     )
 
     found_by = {
-        type(detector): detector.detect(
-            SurfacePass(
-                orthophoto=rectified.at(lid.height),
-                top_orthophoto=rectified.at(lid.height + detector.piece_height),
-                edges=rectified.edges_at(lid.height + detector.piece_height),
-                frame=frame,
-                search=search,
-                imagined=ImaginedWorld.copied_from(None),
-                candidates=cyan,
-            )
+        id(detector): detector.detect(
+            _pass_over_the_lid(annotated_pipeline, detector, frame, candidates=cyan)
         )
-        for detector in (EdgeFitDetector(), ColorBlobDetector())
+        for detector in (detector_rules.edge_fit, detector_rules.color_blob)
     }
 
+    [searched] = found_by[id(detector_rules.edge_fit)]
+    [read_off_the_colour] = found_by[id(detector_rules.color_blob)]
     assert (
-        [piece.category for piece in found_by[ColorBlobDetector]]
-        == [piece.category for piece in found_by[EdgeFitDetector]]
-        == [piece_on_the_lid.category]
+        read_off_the_colour.category == searched.category == piece_on_the_lid.category
     )
+    assert read_off_the_colour.footprint == searched.footprint
+    assert (read_off_the_colour.outline == searched.outline).all()
+    assert (
+        read_off_the_colour.pose.to_position().to_np().tolist()
+        == searched.pose.to_position().to_np().tolist()
+    )
+
+
+def _pass_over_the_lid(
+    pipeline: MontessoriPerceptionPipeline,
+    detector: PieceDetector,
+    frame,
+    **stated,
+) -> SurfacePass:
+    """
+    One pass over the annotated lid, for a detector to be handed directly.
+
+    :param pipeline: The pipeline whose lid is being searched.
+    :param detector: The detector the pass is built for, which settles the plane its
+        edges are read in.
+    :param frame: The camera data to read.
+    :param stated: Whatever else the pass states, such as the pieces it looks for and
+        what is already believed about them.
+    """
+    lid = pipeline.lid
+    rectified = RectifiedFrame(
+        frame=frame, projector=OrthophotoProjector(region=lid.region)
+    )
+    return SurfacePass(
+        orthophoto=rectified.at(lid.height),
+        top_orthophoto=rectified.at(lid.height + detector.piece_height),
+        edges=rectified.edges_at(lid.height + detector.piece_height),
+        frame=frame,
+        search=SurfaceSearch(surface=lid),
+        imagined=ImaginedWorld.copied_from(None),
+        **stated,
+    )
+
+
+def test_a_piece_expected_on_a_matte_lid_is_found_though_no_colour_was_read(
+    annotated_pipeline: MontessoriPerceptionPipeline,
+    renderer: MontessoriSceneRenderer,
+    piece_on_the_lid,
+):
+    """
+    A pass states what is already believed to be resting on the surface, and the
+    detector the rules choose for a matte lid has to evaluate that belief: an
+    expectation is knowledge the look was handed, so a piece is found where it was
+    expected whether or not any colour was read there.
+    """
+    detector = annotated_pipeline.look_rules.find_the_pieces.detector_rules.color_blob
+    expected = PieceHypothesis(
+        place=BelievedPlace(
+            surface=annotated_pipeline.lid.name,
+            center=PlanarPoint(x=piece_on_the_lid.x, y=piece_on_the_lid.y),
+        ),
+        source=SomethingThatAskedForALook(),
+        candidates=(KNOWN_PIECE_BY_CATEGORY[piece_on_the_lid.category],),
+    )
+
+    found = detector.detect(
+        _pass_over_the_lid(
+            annotated_pipeline,
+            detector,
+            renderer.render([piece_on_the_lid]),
+            candidates=(),
+            expected=[expected],
+        )
+    )
+
+    assert [piece.category for piece in found] == [piece_on_the_lid.category]
+    assert [piece.hypothesis for piece in found] == [expected]
 
 
 # %% the world's own surfaces deciding the look

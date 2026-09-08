@@ -14,6 +14,8 @@ the look supplies the rest.
 
 from __future__ import annotations
 
+import math
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from typing_extensions import List, Optional, Self, Tuple
@@ -43,9 +45,33 @@ carries its own measure of how sure it is states its own reach instead.
 
 # %% which way a thing is believed to be turned
 
+QUARTER_TURN = math.pi / 2
+"""
+A quarter of a full turn, in radians, which is as far as a rectangle fixes the way
+whatever it bounds is turned.
+"""
+
+
+class BelievedYaw(ABC):
+    """
+    What is believed about the way a thing is turned about the world frame's z-axis.
+
+    A belief is asked for the turns worth trying rather than for its own shape, so a
+    belief that names a stretch of angles and one that names a few of them are put to a
+    search the same way.
+    """
+
+    @abstractmethod
+    def turns(self, step: float) -> List[float]:
+        """
+        The turns worth trying under this belief.
+
+        :param step: How finely to turn, in radians, where the belief leaves that open.
+        """
+
 
 @dataclass(frozen=True)
-class YawInterval:
+class YawInterval(BelievedYaw):
     """
     The turns about the world frame's z-axis a thing is believed to be within.
     """
@@ -79,6 +105,32 @@ class YawInterval:
         return [self.center + turn * step for turn in range(-steps, steps + 1)]
 
 
+@dataclass(frozen=True)
+class QuarterTurns(BelievedYaw):
+    """
+    The four turns a measured rectangle leaves open.
+
+    A rectangle laid a quarter turn round covers the same ground, so measuring one says
+    which way a thing is turned only up to a quarter of a circle, and all four are worth
+    trying.
+    """
+
+    center: float
+    """
+    The turn the rectangle was measured at, in radians.
+    """
+
+    def turns(self, step: float) -> List[float]:
+        """
+        All four turns, however finely the search would otherwise turn: which of them a
+        thing stands at is not a matter of turning more finely, since the rectangle is
+        exact about the other three once it is right about one.
+
+        :param step: Ignored.
+        """
+        return [self.center + turn * QUARTER_TURN for turn in range(4)]
+
+
 # %% where a thing is believed to be
 
 
@@ -108,7 +160,7 @@ class BelievedPlace:
     How far, in metres, from :attr:`center` it may actually be.
     """
 
-    yaw: Optional[YawInterval] = None
+    yaw: Optional[BelievedYaw] = None
     """
     Which way it is believed to be turned, or None where nothing is believed about it
     and every turn it can be told apart at is worth trying.
