@@ -27,11 +27,19 @@ from krrood.entity_query_language.query.query import (
 )
 from krrood.entity_query_language.query.operations import Where
 from krrood.entity_query_language.query.quantifiers import ResultQuantifier, An, The
-from krrood.entity_query_language.operators.core_logical_operators import AND, OR, Not
+from krrood.entity_query_language.operators.core_logical_operators import (
+    AND,
+    OR,
+    LogicalOperator,
+    Not,
+)
 from krrood.entity_query_language.operators.logical_quantifiers import (
     Exists as EQLExists,
 )
-from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.base_expressions import (
+    Filter,
+    SymbolicExpression,
+)
 from krrood.entity_query_language.core.variable import Variable, Literal
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.operators.comparator import Comparator
@@ -570,7 +578,7 @@ class JoinManager:
         return dao_class in self.joined_tables
 
 
-CONDITION_COMBINERS = (Where, AND, OR, Not)
+CONDITION_COMBINERS = (LogicalOperator, Filter)
 """
 The expressions that combine conditions rather than being one, so a walk of a condition
 tree descends through them to reach the conditions themselves.
