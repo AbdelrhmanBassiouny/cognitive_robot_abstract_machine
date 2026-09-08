@@ -729,9 +729,9 @@ same reading #278 was cut under.
 episode outside the database, where its video, its simulation data and its transcript
 are kept". The item's "a row references one rather than holding it" is therefore
 already satisfied by the parent, and this branch adds no field to the episode. Its only
-edit to a file another branch also touches is `generate_orm.py`'s ignore list, which
-#278 also appends to — two appended blocks in the same region, a textual meeting rather
-than a design one.
+edit to a file another branch also touches is `generate_orm.py`'s ignore list, which #278
+also appends to — two appended blocks in the same region, a textual meeting rather than a
+design one.
 
 New module `experiments/episodes/artifacts.py`, holding:
 
