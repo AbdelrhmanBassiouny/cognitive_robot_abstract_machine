@@ -278,3 +278,119 @@ carry:
 - Which vision-language model and provider the harness calls is still open
   (`icra-mechanism`'s roadmap carries it), and it now blocks less than it
   did: nothing in `question-set-answered-from-memory` needs an answer to it.
+
+### `question-set-and-ground-truth` (#295), as planned 2026-09-08
+
+Lane 3's foot item, and the first item of this plan to open a branch.
+
+**Cut off #278 (`episodes-queried-by-eql`), not off `main` and not off #271.**
+A question's long-term-memory spelling is an EQL query answered from the
+recorded episodes, and `LongTermMemory.answer(query)` is exactly that seam —
+one `FromDataAccessObjectState` per answer, a session opened from the
+database object it was given. Asking over a bare `Session` here would have
+been a second copy of that conversion path in a second package. #278 is open
+and not a draft, so it counts as ready to build on, the same reading #278 and
+#294 were themselves cut under; and it carries #271, #262 and #261, so both
+of this item's recorded cross-plan blockers are satisfied through it.
+
+**One `Question` class, generic over what it is asked of and what it
+answers.** The item asks for a dataclass carrying its EQL, its English, its
+answer type, its Bloom level and the inputs it structurally requires, and
+that is what it is — no second class for a question that has no spelling
+yet. `Question[SourceType, AnswerType]` inherits `SubClassSafeGeneric`, so
+`answer_type` and `source_type` are read back off the binding rather than
+kept as fields that can disagree with it. `english`, `bucket` and
+`required_facts` are fields; `query(source)` is the EQL, `ask(source)`
+evaluates it, and `ground_truth(source)` reads the same answer off the twin
+directly, never through the query under test.
+
+**The Bloom level comes from the memory, not from a field.** Two abstract
+bases bind the source: `WorkingMemoryQuestion` over a live twin and its
+segmind event log (Understanding), `LongTermMemoryQuestion` over the
+recorded episodes (Remembering). The roadmap's own definitions make the
+level a property of which memory answers, so a per-question field could only
+ever disagree with the one thing that decides it. This is also what makes
+Understanding and Remembering separately measurable on the same English
+question, which is what the two spellings are for.
+
+**`WorkingMemory` names what a live question is asked of** — the world, the
+robot in it and the events segmind has seen — rather than passing three
+arguments to every question. It is what working memory *is*;
+`icra-mechanism`'s `snapshot-working-memory` is how it is kept current, and
+that item is untouched here.
+
+Six buckets as `Bucket`, three levels as `BloomLevel`, the two spellings as
+`Memory`, the structural requirements as `RequiredFact`, and where a true
+answer comes from as `GroundTruthSource` (the twin in simulation, exact; the
+calibrated twin plus a human check on the robot). `QuestionSet` holds the
+frozen set and answers `for_bucket`/`for_memory`/`for_bloom_level`; the set
+is built by a classmethod rather than a module-level constant.
+
+#### What is spelled here, and what waits — the honest half of the freeze
+
+The item's contract is six buckets in two spellings. Not all twelve can be
+written today, and the gaps are recorded here rather than stubbed in code:
+
+| bucket | over working memory | over long-term memory |
+|---|---|---|
+| scene | spelled | spelled |
+| support and spatial relations | spelled | waits |
+| temporal and agency | spelled | spelled |
+| embodiment | spelled | spelled |
+| self-model | spelled | waits |
+| control | waits | waits |
+
+- **control, both spellings** — already recorded on the item's own blocker:
+  nothing names a task's constraints or the degrees of freedom it used until
+  `icra-mechanism`'s `control-constraints-and-degrees-of-freedom-queried`,
+  so there is no EQL to freeze, in either memory.
+- **self-model over long-term memory** — the item's blocker says this waits
+  on #271, "which is where the episode gains a reference to the world it ran
+  in and the motion statechart it ran". Checked against #271 as it stands:
+  `Episode` carries the scenario name, execution type, condition and
+  perturbation names, an identifier and a timestamp, and `RecordedTrial`
+  carries outcome, duration, ticks, queries and insertion attempts —
+  neither references a world or a statechart. The fold recorded in
+  `icra-foundation`'s roadmap on 2026-09-08 has not been implemented on that
+  branch yet, so the blocker still holds exactly as written. The
+  working-memory spelling needs none of it and is written here.
+- **support and spatial relations over long-term memory** — not previously
+  written down, and it is the one gap this plan did not already record.
+  `LeftOf`/`RightOf`/`SupportedBy` are geometric predicates evaluated over a
+  world; answering them from the SQL backend is a routed predicate, which is
+  `icra-mechanism`'s `query-routed-per-predicate`. The support half is
+  partly recoverable from recorded `SupportEvent`s, and is spelled that way
+  where the event log carries it; the view-dependent relations are not.
+
+#### The hazard this item was warned about, and is the first to meet
+
+`icra-foundation`'s roadmap records, on #278: *"The to-many collections an
+episode holds — ticks, queries, insertion attempts — are reached through
+association tables, and no test in this repository proves EQL translates a
+join across one; nothing here depends on that, and finding out belongs to
+whichever item first needs it."*
+
+This item is that item. Every long-term-memory spelling of the scene,
+temporal-and-agency and embodiment buckets reaches `RecordedTrial.ticks` and
+then `Tick.events`, which is two to-many hops. The spellings are written the
+natural way and the tests assert the answers against ground truth read off
+the recorded objects directly, so **CI is what answers the question** — the
+workspace cannot be installed in a session container (`random_events`,
+`antlr4-python3-runtime`, `arff` and `dnutils` all fail to build there), the
+same standing limitation every item of this track has recorded. If the
+translation does not hold, the finding belongs on this branch and the
+spellings change shape in one place: `LongTermMemoryQuestion.query`.
+
+#### Testing
+
+`test/experiments_test/test_questions.py`, in two halves. The working-memory
+half builds a small world of two shapes on a surface, with a robot holding
+one of them, and asks every working-memory question of it, asserting each
+answer equals the ground truth read off the twin. The long-term-memory half
+records an episode through #271's own recorder into a SQLite file — the
+shape `test_long_term_memory.py` already uses — and asks every long-term
+question of it. Both halves also assert the frozen set itself: that every
+bucket is represented, that a question's Bloom level follows its memory, and
+that `required_facts` names what the question actually reads.
+
+CI-only, per the standing ROS/`random_events` limitation.
