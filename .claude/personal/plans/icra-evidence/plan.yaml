@@ -48,7 +48,7 @@ items:
   branch: claude/plan-item-kickoff-icra-evidence-zyzfnj
   pull_request_number: 295
   track: experiment-a
-  session: https://claude.ai/code/session_01GM51hgorx4VhF62mTFsoiM
+  session: https://claude.ai/code/session_01LrEoLWVFPJUoLjAKjFPb9f
   depends_on: []
   status: in_progress
   notes: >-
@@ -57,9 +57,15 @@ items:
     The Bloom labelling is the paper's evaluation frame and it is deliberately bounded. Remembering is recall from the store; Understanding is interpreting what is already represented well enough to answer a direct question in the query language, whether spatial, temporal or logical; Applying is Experiment C. Questions that need new knowledge inferred by combining facts - what can you pick up, and why or why not - are above Understanding and are explicitly out of scope, stated as such in the paper rather than left for a reviewer to ask about. Ground truth is the twin in simulation, exact, and the calibrated twin plus a human check on the robot, stated as such. Several of these already exist as presets in the console stack's live_query_source; reuse their EQL.
 
     Reviewed 2026-09-08 and largely rebuilt in response. Nothing is handed to a question any more: every variable is domainless and ranges over the symbol graph, what a question is about is a condition, and what is left of the source is the robot itself, which is whose memory it is. `DetectionEvent` inherits `Symbol` so an event joins working memory by being made; agency is asked through a new `ManipulatesBodies` mixin rather than through `PickUpEvent` alone; and the set is read off the question subclasses, each saying how a scene fills it in, rather than from a hand-maintained list. Two defects were measured rather than assumed: `exists` answers the agency shape with every object that moved whether the robot acted on it or not - a wrong answer rather than the dropped row eql-existential-semantics predicts - so both spellings use a join; and a membership condition over a collection does not translate to a join, which is what blocks the long-term half. Selecting a collection was the other half of that and is fixed in krrood.
+
+    Resolved 2026-09-08 (second pass). Two review threads had gone unanswered since 13:25 that day and were what actually stalled the item, neither recorded here at the time. The first asked for the collection-membership defect to be fixed in the EQL-to-SQL converter rather than left as a strict xfail, which overrides the earlier call that per-variable aliasing "belongs to an EQL plan rather than to this item"; it is fixed here. The second said the `ManipulatesBodies` mixin was meant for coraplex actions rather than segmind events, because an event's tracked object is already the object acted on, and named `AgentInteractionEvent` as what segmind should carry instead.
+
+    The membership fix is per-variable aliasing after all, and it is what unblocks the long-term half: each variable now ranges over a FROM element of its own, so an owner and a member whose classes share a mapped base are told apart in the ON clause, and two variables of one class over one collection reach two of its members. So the long-term spellings are answerable rather than frozen-and-expected-to-fail, and the accuracy table this item's successor produces is no longer bounded to the working-memory half. `AgentInteractionEvent` also removes the one long-term question shape that could not translate at all: `manipulated_bodies` was a Python property, while `tracked_object` is a mapped relationship.
   blockers:
   - >-
     Cross-plan: depends on icra-foundation's `scenario-domain-model` (in_progress, PR #261), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - >-
+    Awaiting the developer on two review threads left deliberately open, neither of which blocks the branch from being reviewed: whether a body in the gripper counts as an object the robot sees or as part of the robot (`AbstractRobot.bodies` includes what the robot holds, so `ObjectsSeen` no longer lists the held cube), and whether an episode should record which links were the robot's (the embodiment bucket's long-term spelling and the robot's own degree-of-freedom count both need it, and recording the world does not answer it).
   - >-
     Cross-plan: the self-model and control buckets need their long-term-memory spelling from icra-foundation's `episodes-recorded-through-ormatic` (PR #271), which is where the episode gains a reference to the world it ran in and the motion statechart it ran, and from icra-mechanism's `control-constraints-and-degrees-of-freedom-queried`, which is what gives the constraints and the used degrees of freedom a name and an EQL spelling. The working-memory spelling of the self-model bucket needs neither: the live twin already holds bodies, connections and degrees of freedom, and all of them are already ORMatic-mapped.
 - id: question-set-answered-from-memory

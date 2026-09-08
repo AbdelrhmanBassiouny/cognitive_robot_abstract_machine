@@ -782,3 +782,66 @@ accuracy table until that lands**, which is a harder statement than the previous
   the colour off them, because a variable cannot range over a shape. The fix is
   the same one `DetectionEvent` got, but shapes are per-body geometry and it is
   a heavier change than this item needs.
+
+### `question-set-and-ground-truth` (#295), resolved 2026-09-08
+
+The item read as healthy and was not: two review threads had been open since 13:25
+that day with nothing pushed against them, and neither the item's `blockers` nor its
+`notes` said so. Both were asks, not questions.
+
+#### The converter fix the previous round had deferred
+
+`test_long_term_questions.py` carried a `NEEDS_A_COLLECTION_JOIN` xfail on seven
+tests, and the round that added it recorded the fix as "per-variable aliasing in the
+translator, which is EQL work rather than this item's". The developer asked for it
+here instead, so that call no longer holds; the fix is on this branch.
+
+It is per-variable aliasing, and the shape of it is one registry: every EQL variable
+is bound to the FROM element it ranges over, rather than every variable translating
+to its own unaliased data access object. Three things follow, each of which was a
+failing test first:
+
+- **An owner is told apart from its members.** `World` and `Body` both map under
+  `SymbolDAO`, so joining `world.bodies` produced
+  `ON SymbolDAO.database_id = <association>.source_worlddao_id` — the *body's*
+  symbol row. A collection's owner is now bound to an alias of its own, joined
+  unrestricted into the query's one FROM chain, so the ON clause names it.
+- **Two variables over one collection reach two members.** The path cache handed
+  both the single element the collection was first joined under, so a condition
+  relating them compared a row with itself and answered nothing. Joining a
+  relationship is now separate from caching a path: a membership condition always
+  joins, and only chain traversal reuses.
+- **A member of one collection owns the next.** `trial.ticks` then `tick.events` is
+  two hops through two variables, which is what every long-term question crosses;
+  `test_membership_across_two_collections_in_turn` covers it on `World.views` then
+  `Cabinet.drawers`, polymorphic in the same way `Tick.events` is.
+
+What `contains` did before, on this shape, was a SQLite `instr()` between two
+integer primary keys — string containment — with the owner never joined at all. That
+is why the answer was empty rather than wrong.
+
+krrood's ORM suite is 138 passed, from 135 passed and 1 xfailed; all three new tests
+fail on the translator as it stood and pass on the fixed one.
+
+#### `AgentInteractionEvent`, and why the mixin was the wrong shape
+
+`ManipulatesBodies` was added in the previous round so an agency question could ask
+which bodies the robot acted on. The reviewer's point is that every implementation of
+it returned `[self.tracked_object]`: an event's tracked object already *is* the object
+acted on, so the mixin restated `EventWithTrackedObjects` and the abstraction belonged
+to coraplex's actions instead. segmind now carries `AgentInteractionEvent`, an abstract
+`EventWithTrackedObjects` that `PickUpEvent`, `PlacingEvent` and `InsertionEvent`
+inherit, which also matches the vocabulary the package already uses in
+`AgentContactEvent`.
+
+It has a consequence beyond tidiness: `manipulated_bodies` was a Python property, so
+`contains(manipulation.manipulated_bodies, ...)` could never translate to SQL whatever
+the join did. Both agency questions now compare `tracked_object`, a mapped
+relationship, so the long-term agency spelling is translatable for the first time.
+
+#### Left to the developer
+
+Unchanged, and both still open on their threads rather than answered here, because
+each changes what the representation claims rather than how it is queried: whether a
+body in the gripper is an object the robot sees or part of the robot, and whether an
+episode should record which links were the robot's.
