@@ -19,10 +19,16 @@ and in each plan's roadmap.md under its "2026-09-08" section.
 - `episode-artifacts-recorded` lost its dependency on
   `simulated-camera-feeds-perception`, which frees the whole long-term-memory
   track from lane 1. That is the one edge that changes who can work on what.
-- Six items added (33 -> 39, all three plans under the 15-item cap):
-  `episode-corpus-generated-at-scale`, `self-model-and-control-state-recorded`,
-  `perception-backends-are-interchangeable`, `control-reads-the-twin-as-constraints`,
-  `question-set-answered-from-memory`, `resource-cost-measured-per-system`.
+- Five items added (33 -> 38, all three plans under the 15-item cap):
+  `episode-corpus-generated-at-scale`, `perception-backends-are-interchangeable`,
+  `control-reads-the-twin-as-constraints`, `question-set-answered-from-memory`,
+  `resource-cost-measured-per-system`.
+- A sixth, `self-model-and-control-state-recorded`, was added and folded the
+  same day at the developer's challenge: ORMatic already maps World, Body,
+  Connection, DegreeOfFreedom and the whole giskardpy motion statechart by
+  default, so all that was missing is two references on #271's own Episode
+  model - that PR's work by the scope rule, not an item. Correction recorded
+  on #252 and in icra-foundation's roadmap.
 - Question set widened to six buckets (self-model and control added), every
   bucket spelled over both working and long-term memory, each labelled by
   Bloom level.
