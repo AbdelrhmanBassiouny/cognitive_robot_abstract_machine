@@ -235,12 +235,13 @@ items:
 - id: episode-artifacts-recorded
   title: >-
     An episode keeps its video, its simulation data and its question-and-answer transcript beside the database
-  branch: null
-  pull_request_number: null
+  branch: claude/icra-foundation-episode-artifacts-nki2is
+  pull_request_number: 294
   track: long-term-memory
   depends_on:
   - episodes-recorded-through-ormatic
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_01NxGbkj8mzF2Vu5Bvyiksab
   notes: >-
     The rows say what happened; these are what a reader - or a vision-language model - can look at, and without them Experiment D has no baseline to compare against. The video is written by semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder, which is already on main and renders from an overview camera it attaches itself; the simulation data is the run's own files, the world it built and the plan it realized; the transcript is every question with its answer, which the episode rows already carry per query, rendered as one readable document. Artifacts sit beside the database addressed by the episode's identifier, so a row references one rather than holding it - the separation ResultsDatabase already draws between where a run records and what it records. Tests record a two-trial episode and read its video, its files and its transcript back from the episode.
 

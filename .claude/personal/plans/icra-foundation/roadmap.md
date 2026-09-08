@@ -715,3 +715,72 @@ The general lesson, worth carrying: in this workspace ORMatic maps a package
 already answered — the real question is only ever whether anything
 *references* the mapped class. Check the ignore list and the model before
 writing an item that assumes mapping work.
+
+### `episode-artifacts-recorded` (#294), as planned 2026-09-08
+
+Cut off #271, not off `main` and not off #278: `Episode` and `RecordedTrial` are what
+an artifact is addressed by, and they exist on no other ancestor. #278 is a sibling on
+the same parent rather than a dependency — this item does not query anything back out
+of the database. #271 is open and not a draft, so it counts as ready to build on, the
+same reading #278 was cut under.
+
+**The parent already built the reference, so `episode.py` is not touched.**
+`Episode.identifier` on #271 is documented in as many words as "what addresses this
+episode outside the database, where its video, its simulation data and its transcript
+are kept". The item's "a row references one rather than holding it" is therefore
+already satisfied by the parent, and this branch adds no field to the episode. Its only
+edit to a file another branch also touches is `generate_orm.py`'s ignore list, which
+#278 also appends to — two appended blocks in the same region, a textual meeting rather
+than a design one.
+
+New module `experiments/episodes/artifacts.py`, holding:
+
+- `ArtifactDirectory` — where every episode's artifacts are kept, resolved from an
+  environment variable with a built-in default, exactly as `ResultsDatabase` resolves
+  where the rows go. Not derived from the database URI, because the default database is
+  Postgres and has no filesystem place to sit beside; "beside the database" is a
+  relationship between two configured locations, not a path inside one.
+- `EpisodeArtifacts` — one episode's own directory, named by its identifier, with
+  `keep_video`, `keep_file` and `keep_transcript` writing into it and `video`,
+  `run_files` and `transcript` reading them back.
+- `Transcript` — the episode and the trials it is rendered from, with `render()`
+  producing the readable document. A dataclass rather than a formatting function, so
+  what a transcript is made of is named rather than assembled at the call site.
+- `EpisodeArtifact` — a `StrEnum` of the three names an episode's artifacts are kept
+  under, so no filename is spelled twice.
+
+Three decisions taken while planning it:
+
+- **The store keeps the run's files; it does not serialize a world.** The item names
+  "the run's own files, the world it built and the plan it realized" as the simulation
+  data. The realized plan is already a database row (`InsertionAttempt.plan`), and
+  whether an episode references a `World` is recorded on #271 as the developer's open
+  call. So what is added here is the keeping of files a run produced — the MuJoCo scene
+  a build already writes, among them — rather than a world serializer this item would
+  have had to invent.
+- **`recording.py` is not touched, so no run is wired to write artifacts here.** The
+  seam is `Episode.identifier`, and the writer is
+  `episode-corpus-generated-at-scale`, whose own notes already name the video
+  `MujocoVideoRecorder` rendered as one of the six records it writes. Extending
+  `EpisodeRecording` here would put a MuJoCo world in the path of this item's tests for
+  no gain and add a conflict surface with #271 and #278.
+- **`RecordedVideo` is imported under `TYPE_CHECKING` only.** Encoding is
+  `RecordedVideo.write`'s already, so this module needs the name as a type and never as
+  a runtime import — which keeps the transcript and the file-keeping usable without
+  MuJoCo present.
+
+Tests record a two-trial episode and read all three back: the video (frames encoded to
+`.mp4`, the path `RecordedVideo.write` already proves in an always-on
+`semantic_digital_twin` test), the run's own files, and the transcript, whose rendered
+text carries every query of both trials with its answer. CI-only, per the standing
+ROS/`random_events` limitation this track has recorded throughout.
+
+**A tooling defect found while bootstrapping it, left unfixed here.**
+`.claude/hooks/plan_item_bootstrap.py`'s `ITEM_FIELD_INDENT` is four spaces, while
+every `plan.yaml` in `.claude/personal/plans/` indents an item's fields by two. Its
+`open`/`record` patch therefore writes `branch`, `pull_request_number`, `status` and
+`session` one level too deep — inside the preceding folded scalar or list — and
+`save-plan.sh` rejects the result as unparseable YAML. This item's manifest fields were
+written directly instead. Unfixed on this branch because it is `.claude/` tooling and
+nothing to do with episode artifacts; it blocks every `plan-item-kickoff` and
+`plan-item-resolve` bootstrap until it is fixed.
