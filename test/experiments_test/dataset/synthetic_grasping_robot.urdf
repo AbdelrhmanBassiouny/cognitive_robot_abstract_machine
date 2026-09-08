@@ -28,6 +28,27 @@
     </inertial>
   </link>
 
+  <link name="wrist_roll_link">
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <link name="wrist_pitch_link">
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <link name="wrist_yaw_link">
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+
   <link name="pincer_link">
     <inertial>
       <mass value="0.5"/>
@@ -39,6 +60,13 @@
         <box size="0.04 0.08 0.02"/>
       </geometry>
     </collision>
+  </link>
+
+  <link name="grasp_link">
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
   </link>
 
   <link name="left_finger_link">
@@ -100,9 +128,36 @@
     <limit lower="0" upper="2" effort="100" velocity="1"/>
   </joint>
 
-  <joint name="pincer_joint" type="fixed">
+  <joint name="wrist_roll_joint" type="revolute">
     <parent link="lift_link"/>
+    <child link="wrist_roll_link"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.15" upper="3.15" effort="50" velocity="1"/>
+  </joint>
+
+  <joint name="wrist_pitch_joint" type="revolute">
+    <parent link="wrist_roll_link"/>
+    <child link="wrist_pitch_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.15" upper="3.15" effort="50" velocity="1"/>
+  </joint>
+
+  <joint name="wrist_yaw_joint" type="revolute">
+    <parent link="wrist_pitch_link"/>
+    <child link="wrist_yaw_link"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.15" upper="3.15" effort="50" velocity="1"/>
+  </joint>
+
+  <joint name="pincer_joint" type="fixed">
+    <parent link="wrist_yaw_link"/>
     <child link="pincer_link"/>
+  </joint>
+
+  <joint name="grasp_joint" type="fixed">
+    <parent link="pincer_link"/>
+    <child link="grasp_link"/>
+    <origin xyz="0 0 -0.03"/>
   </joint>
 
   <joint name="left_finger_joint" type="prismatic">
@@ -110,7 +165,7 @@
     <child link="left_finger_link"/>
     <origin xyz="0 0.04 0"/>
     <axis xyz="0 -1 0"/>
-    <limit lower="0" upper="0.035" effort="50" velocity="1"/>
+    <limit lower="0" upper="0.05" effort="50" velocity="1"/>
   </joint>
 
   <joint name="left_fingertip_joint" type="fixed">
@@ -124,7 +179,7 @@
     <child link="right_finger_link"/>
     <origin xyz="0 -0.04 0"/>
     <axis xyz="0 1 0"/>
-    <limit lower="0" upper="0.035" effort="50" velocity="1"/>
+    <limit lower="0" upper="0.05" effort="50" velocity="1"/>
   </joint>
 
   <joint name="right_fingertip_joint" type="fixed">

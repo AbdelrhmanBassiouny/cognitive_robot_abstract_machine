@@ -10,8 +10,9 @@ different scenes rather than eight scenarios.
 Every run is carried in MuJoCo (:class:`SimulatedScene`), and what a step does it does
 through the simulation: a scene comes to rest because gravity settles it, a piece is
 shoved because a body runs into it, and a piece goes through a hole because it falls
-through it. What a goal then reads it reads with the twin's own predicates rather than
-by measuring the scene itself.
+through it. What the robot does it does through coraplex's own actions, which giskard
+executes as motions. What a goal then reads it reads with the twin's own predicates
+rather than by measuring the scene itself.
 """
 
 from __future__ import annotations
@@ -44,6 +45,23 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Noun,
 )
 
+from coraplex.datastructures.dataclasses import Context
+from coraplex.datastructures.enums import (
+    ApproachDirection,
+    Arms,
+    VerticalAlignment,
+)
+from coraplex.datastructures.grasp import GraspDescription
+from coraplex.execution_environment import simulated_robot
+from coraplex.plans.factories import sequential
+from coraplex.robot_plans.actions.base import ActionDescription
+from coraplex.robot_plans.actions.core.pick_up import PickUpAction
+from coraplex.robot_plans.actions.core.placing import PlaceAction
+
+from experiments.montessori.exceptions import (
+    HoleHasNoLandingRegionError,
+    NoSuchPieceError,
+)
 from experiments.montessori.pieces import (
     KNOWN_PIECE_BY_CATEGORY,
     KNOWN_PIECES,
@@ -58,7 +76,6 @@ from experiments.montessori.semantics import (
 from experiments.montessori.world import (
     BOARD_POSITION,
     BOARD_SCALE,
-    LANDING_REGION_NAME_SUFFIX,
     TABLE_POSITION,
     TABLE_SCALE,
     MontessoriWorld,
@@ -78,7 +95,6 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoSynchronizer,
 )
 from semantic_digital_twin.adapters.urdf import URDFParser
-from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.reasoning.robot_predicates import robot_holds_body
@@ -89,7 +105,7 @@ from semantic_digital_twin.spatial_types import (
     Point3,
 )
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
-from semantic_digital_twin.spatial_types.spatial_types import Vector3
+from semantic_digital_twin.spatial_types.spatial_types import Pose, Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import PrismaticConnection
 from semantic_digital_twin.world_description.degree_of_freedom import (
@@ -115,6 +131,15 @@ The height of the Montessori table's top surface, in the world root frame.
 
 Every height in this module is measured against it rather than against the table, so a
 placement's own height and a viewpoint's are in one frame and can be subtracted.
+"""
+
+THE_ARM_THAT_SORTS = Arms.LEFT
+"""
+The arm a scripted run sorts with.
+
+Every robot these scenarios run on has one arm, and an arm is named by which side it is
+on rather than by how many there are, so a side has to be picked; which one is picked
+does not matter while there is only one.
 """
 
 SCENE_LIGHT_NAME = "scene light"
@@ -549,12 +574,12 @@ class SortingScene:
         The loose piece of the given shape.
 
         :param category: The shape to look up.
-        :raises KeyError: If the scene holds no piece of that shape.
+        :raises NoSuchPieceError: If the scene holds no piece of that shape.
         """
         for shape in self.world.get_semantic_annotations_by_type(MontessoriShape):
             if shape.shape_category is category:
                 return shape
-        raise KeyError(category)
+        raise NoSuchPieceError(category, frozenset(self.categories))
 
     def body_of(self, category: MontessoriShapeCategory) -> Body:
         """
@@ -583,80 +608,77 @@ class SortingScene:
 
     def landing_region_for(self, category: MontessoriShapeCategory) -> Region:
         """
-        The stretch of space below the hole this shape drops through, which the world
-        builds for exactly this question: a piece that fell through the hole is inside
-        it, and a piece resting on the board is not.
+        The stretch of space below the hole this shape drops through: a piece that fell
+        through the hole is inside it, and a piece resting on the board is not.
+
+        Taken from the hole itself, which carries the space measured under it when the
+        world was built.
 
         :param category: The shape to look up.
-        :raises KeyError: If the board's hole for that shape has no landing region.
+        :raises HoleHasNoLandingRegionError: If nothing was measured under that hole.
         """
-        wanted = self.hole_for(category).root.name.name + LANDING_REGION_NAME_SUFFIX
-        for region in self.world.regions:
-            if region.name.name == wanted:
-                return region
-        raise KeyError(wanted)
+        hole = self.hole_for(category)
+        if hole.landing_region is None:
+            raise HoleHasNoLandingRegionError(hole)
+        return hole.landing_region
 
-    def close_the_gripper_around(self, category: MontessoriShapeCategory) -> None:
+    def pick_the_piece_up(self, category: MontessoriShapeCategory) -> None:
         """
-        Take the robot's open gripper down onto the loose piece of the given shape and
-        shut its fingers on it.
+        Have the robot take hold of the loose piece of the given shape.
 
-        :param category: The shape to take hold of.
+        :param category: The shape to pick up.
         """
-        self._set_the_gripper_to(GripperState.OPEN)
-        self.take_the_gripper_to(self.position_of(category))
-        self._set_the_gripper_to(GripperState.CLOSE)
+        self._perform(
+            PickUpAction(
+                self.shape_of(category), THE_ARM_THAT_SORTS, self._grasp_description
+            )
+        )
 
-    def open_the_gripper(self) -> None:
-        """
-        Let go of whatever the robot is holding.
-        """
-        self._set_the_gripper_to(GripperState.OPEN)
-
-    def carry_the_held_piece_to(
+    def put_the_piece_down_at(
         self, category: MontessoriShapeCategory, destination: Point3
     ) -> None:
         """
-        Move the gripper to a place and take the piece it is holding with it.
-
-        .. note:: The piece travels because it is carried rather than because friction
-            holds it: a grasp that holds under physics needs the robot's joints driven
-            by actuators, which the twin does not give this robot. What the fingers do
-            is real -- they are around the piece, which
-            :meth:`is_held` reads -- and so is everything that happens once they open.
+        Have the robot carry the piece it is holding to a place and let go of it there.
 
         :param category: The shape of the piece being carried.
-        :param destination: Where to carry it, in the world root frame.
+        :param destination: Where to let go of it, in the world root frame.
         """
-        self.take_the_gripper_to(destination)
-        self.stand_the_piece_at(category, destination)
-
-    def take_the_gripper_to(self, destination: Point3) -> None:
-        """
-        Drive the robot's joints until the place between its finger tips is at the given
-        point.
-
-        Aimed by the finger tips rather than by the tool frame, since what has to end up
-        around a piece is the fingers; where the tool frame sits with respect to them is
-        the robot's own business.
-
-        :param destination: Where the fingers should close, in the world root frame.
-        """
-        between_the_fingers = self._between_the_finger_tips()
-        tool_frame = self.gripper.global_transform.to_position().to_np().flatten()[:3]
-        offset = tool_frame - between_the_fingers
-        target = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=float(destination.x) + float(offset[0]),
-            y=float(destination.y) + float(offset[1]),
-            z=float(destination.z) + float(offset[2]),
-            reference_frame=self.world.root,
+        self._perform(
+            PlaceAction(
+                self.body_of(category),
+                Pose.from_xyz_rpy(
+                    float(destination.x),
+                    float(destination.y),
+                    float(destination.z),
+                    reference_frame=self.world.root,
+                ),
+                THE_ARM_THAT_SORTS,
+            )
         )
-        reached = self.world.compute_inverse_kinematics(
-            root=self.world.root, tip=self.gripper, target=target
+
+    def _perform(self, action: ActionDescription) -> None:
+        """
+        Run one robot action against this scene's world.
+
+        :param action: The action to run.
+        """
+        context = Context(self.world, self.robot)
+        # The conditions a coraplex action states are about a robot that perceives and
+        # navigates; a scripted scene states its own preconditions as its layout.
+        context.evaluate_conditions = False
+        with simulated_robot:
+            sequential([action], context=context).plan.perform()
+
+    @property
+    def _grasp_description(self) -> GraspDescription:
+        """
+        How the robot takes hold of a piece: from above, since every piece here stands
+        on a table and is posted down through a hole.
+        """
+        [end_effector] = self.robot.get_end_effectors()
+        return GraspDescription(
+            ApproachDirection.FRONT, VerticalAlignment.TOP, end_effector
         )
-        with self.world.modify_world():
-            for degree_of_freedom, position in reached.items():
-                self.world.state[degree_of_freedom.id].position = position
 
     def stand_the_piece_at(
         self, category: MontessoriShapeCategory, position: Point3
@@ -674,26 +696,6 @@ class SortingScene:
             z=float(position.z),
             reference_frame=self.world.root,
         )
-
-    def _between_the_finger_tips(self) -> numpy.ndarray:
-        """
-        The point midway between the robot's two finger tips, in the world root frame.
-        """
-        [end_effector] = self.robot.get_end_effectors()
-        tips = [
-            finger.tip.global_transform.to_position().to_np().flatten()[:3]
-            for finger in end_effector.fingers
-        ]
-        return sum(tips) / len(tips)
-
-    def _set_the_gripper_to(self, state: GripperState) -> None:
-        """
-        Put the robot's gripper into one of the states it declares.
-
-        :param state: The state to put it in.
-        """
-        [end_effector] = self.robot.get_end_effectors()
-        end_effector.get_joint_state_by_type(state).apply_to(self.world)
 
     def is_held(self, category: MontessoriShapeCategory) -> bool:
         """
@@ -855,12 +857,31 @@ class SimulatedScene:
     How far one step advances it, in seconds.
     """
 
-    physics: MujocoSim = field(init=False, repr=False)
+    physics: Optional[MujocoSim] = field(init=False, default=None, repr=False)
     """
-    The MuJoCo simulation the scene is carried in.
+    The MuJoCo simulation the scene is carried in, once there is one.
     """
 
-    def __post_init__(self) -> None:
+    def advance(self, duration: float) -> None:
+        """
+        Run the simulation for the given stretch of simulated time.
+
+        :param duration: How long to run it for, in seconds.
+        """
+        physics = self._mirror_of_the_world()
+        for _ in range(round(duration / self.step_size)):
+            physics.simulator.step()
+
+    def _mirror_of_the_world(self) -> MujocoSim:
+        """
+        The simulation mirroring the world as it stands, built if there is none.
+
+        A simulation is built against one kinematic model and cannot follow a change to
+        it, so :meth:`stop` drops the mirror and the next stretch of physics takes the
+        world as it then is.
+        """
+        if self.physics is not None:
+            return self.physics
         self.physics = MujocoSim(
             world=self.world, headless=True, step_size=self.step_size
         )
@@ -870,15 +891,7 @@ class SimulatedScene:
         # Stepped from here rather than from a thread of the simulator's own, so a step
         # of a scenario ends when the physics it asked for has actually run.
         self.physics.simulator.start(simulate_in_thread=False)
-
-    def advance(self, duration: float) -> None:
-        """
-        Run the simulation for the given stretch of simulated time.
-
-        :param duration: How long to run it for, in seconds.
-        """
-        for _ in range(round(duration / self.step_size)):
-            self.physics.simulator.step()
+        return self.physics
 
     def settle(self) -> None:
         """
@@ -900,9 +913,13 @@ class SimulatedScene:
 
     def stop(self) -> None:
         """
-        Stop carrying the scene.
+        Stop carrying the scene, so the world is free to change the model the
+        simulation was built against.
         """
+        if self.physics is None:
+            return
         self.physics.stop_simulation()
+        self.physics = None
 
     def _piece_positions(self) -> Dict[MontessoriShapeCategory, numpy.ndarray]:
         """
@@ -960,14 +977,11 @@ class AskTheQuestion(ScenePhysicsStep):
 @dataclass
 class PickThePieceUp(ScenePhysicsStep):
     """
-    Close the robot's gripper around a loose piece, so that from here on the piece
-    travels with it.
+    Have the robot take hold of a loose piece, so that from here on the piece travels
+    with it.
 
-    .. note:: The closing is real -- the gripper is moved to the piece and its fingers
-        shut on it, which is what
-        :func:`~semantic_digital_twin.reasoning.robot_predicates.robot_holds_body` then
-        reads -- but the carrying is scripted rather than held by friction, and
-        :class:`CarryThePieceTo` says why.
+    The simulation is let go of first: a robot action re-parents what it grasps, which
+    is a change to the kinematic model the simulation was built against.
     """
 
     category: MontessoriShapeCategory
@@ -976,13 +990,15 @@ class PickThePieceUp(ScenePhysicsStep):
     """
 
     def perform(self, world: World) -> None:
-        SortingScene(world).close_the_gripper_around(self.category)
+        self.scene.stop()
+        SortingScene(world).pick_the_piece_up(self.category)
 
 
 @dataclass
 class PutThePieceInItsHole(ScenePhysicsStep):
     """
-    Carry a held piece over the board's hole for its own shape and let go of it.
+    Have the robot carry a held piece over the board's hole for its own shape and let go
+    of it there.
 
     Nothing puts the piece through the hole: the gripper opens above it and gravity does
     the rest, so a piece that does not fit does not go in.
@@ -994,9 +1010,10 @@ class PutThePieceInItsHole(ScenePhysicsStep):
     """
 
     def perform(self, world: World) -> None:
+        self.scene.stop()
         scene = SortingScene(world)
         hole = scene.hole_for(self.category).root.global_transform.to_position()
-        scene.carry_the_held_piece_to(
+        scene.put_the_piece_down_at(
             self.category,
             Point3(
                 float(hole.x),
@@ -1004,8 +1021,6 @@ class PutThePieceInItsHole(ScenePhysicsStep):
                 float(hole.z) + RELEASE_HEIGHT_ABOVE_THE_HOLE,
             ),
         )
-        self.scene.advance(SETTLING_WINDOW)
-        scene.open_the_gripper()
         self.scene.settle()
 
 

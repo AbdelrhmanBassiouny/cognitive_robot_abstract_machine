@@ -42,7 +42,12 @@ from experiments.montessori.scenarios import (
     TracySortsAPiece,
     TracyWatchesTheSceneStandStill,
 )
+from experiments.montessori.exceptions import (
+    HoleHasNoLandingRegionError,
+    NoSuchPieceError,
+)
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
+from experiments.montessori.world import BOARD_POSITION, BOARD_SCALE
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.scenarios.runner import ScenarioRunner
 from experiments.scenarios.trial import TrialOutcome
@@ -61,6 +66,14 @@ from .dataset.synthetic_grasping_robot import SyntheticGraspingRobot
 SEED = 20260908
 """
 The seed every layout in this module is drawn from, so a failure is reproducible.
+"""
+
+A_TENTH_OF_A_MILLIMETRE = 0.0001
+"""
+How far a place is allowed to move and still count as the same place, in metres.
+
+A grasp closes on a piece and moves it a little as it takes hold; this is what
+distinguishes that from the piece having been carried somewhere.
 """
 
 WHERE_THE_ARM_IS_BOLTED = Point3(0.25, 0.0, 0.5)
@@ -425,9 +438,11 @@ def test_the_pusher_ends_the_push_up_against_the_piece_it_shoved(area):
     assert float(piece.y) - float(pusher.y) <= reach + PUSHER_SCALE.y
 
 
-def test_picking_a_piece_up_brings_the_gripper_to_it_rather_than_it_to_the_gripper(
-    area,
-):
+def test_picking_a_piece_up_lifts_it_from_where_it_stood_rather_than_fetching_it(area):
+    """
+    The robot goes to the piece: it comes away straight up from where it stood, rather
+    than arriving at wherever the gripper happened to be.
+    """
     scenario = SyntheticGrasperHoldsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
         robot=mounted_arm(),
@@ -443,9 +458,10 @@ def test_picking_a_piece_up_brings_the_gripper_to_it_rather_than_it_to_the_gripp
 
     assert scene.is_held(MontessoriShapeCategory.CYLINDER)
     held_at = scene.position_of(MontessoriShapeCategory.CYLINDER)
-    assert (float(held_at.x), float(held_at.y), float(held_at.z)) == pytest.approx(
-        (float(stood_at.x), float(stood_at.y), float(stood_at.z))
+    assert (float(held_at.x), float(held_at.y)) == pytest.approx(
+        (float(stood_at.x), float(stood_at.y)), abs=A_TENTH_OF_A_MILLIMETRE
     )
+    assert float(held_at.z) > float(stood_at.z)
 
 
 def test_a_released_piece_is_outside_its_landing_region_until_it_has_fallen(area):
@@ -490,6 +506,105 @@ def test_the_robot_holds_nothing_before_it_has_picked_anything_up(area):
     world = scenario.build_world()
 
     assert not SortingScene(world).is_held(MontessoriShapeCategory.CYLINDER)
+
+
+def test_a_picked_up_piece_hangs_from_the_frame_the_robot_grasps_with(area):
+    """
+    A robot action takes hold of the piece, which is what re-parents it onto the
+    gripper; nothing here moves it there.
+    """
+    scenario = SyntheticGrasperHoldsAPiece(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        robot=mounted_arm(),
+        held_category=MontessoriShapeCategory.CYLINDER,
+    )
+    world = scenario.build_world()
+    scene = SortingScene(world)
+    steps = {step.name: step for step in scenario.steps(world)}
+    steps[SortingStep.SETTLE].perform(world)
+
+    steps[SortingStep.PICK_UP].perform(world)
+
+    piece = scene.body_of(MontessoriShapeCategory.CYLINDER)
+    assert piece.parent_connection.parent is scene.gripper
+
+
+# %% the space a hole drops a piece into
+
+
+def test_a_landing_region_is_no_wider_than_the_hole_it_lies_under(area):
+    """
+    It is the space the hole leaves open, so it is the hole's own opening carried down
+    rather than a stretch of table chosen around it.
+    """
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+    )
+    scene = SortingScene(scenario.build_world())
+
+    for category in scene.categories:
+        hole = scene.hole_for(category)
+        opening = _size_of(hole.root.area)
+        landing = _size_of(scene.landing_region_for(category).area)
+        assert (landing[0], landing[1]) == pytest.approx((opening[0], opening[1]))
+
+
+def test_a_landing_region_reaches_from_the_table_to_the_top_of_the_board(area):
+    """
+    The whole shaft, so a piece is inside it wherever in the shaft it came to rest, and
+    no higher, so a piece standing on the board is outside it.
+    """
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+    )
+    scene = SortingScene(scenario.build_world())
+    region = scene.landing_region_for(MontessoriShapeCategory.CUBE)
+
+    top = float(region.global_transform.to_position().z) + _size_of(region.area)[2] / 2
+
+    assert top == pytest.approx(float(BOARD_POSITION.z) + BOARD_SCALE.z / 2)
+
+
+def test_a_landing_region_is_the_one_its_own_hole_carries(area):
+    """
+    Read off the hole rather than looked up beside it, so no two spellings of a name can
+    drift apart.
+    """
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+    )
+    scene = SortingScene(scenario.build_world())
+
+    for category in scene.categories:
+        assert (
+            scene.landing_region_for(category)
+            is scene.hole_for(category).landing_region
+        )
+
+
+def test_a_hole_with_nothing_measured_under_it_says_so(area):
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+    )
+    scene = SortingScene(scenario.build_world())
+    hole = scene.hole_for(MontessoriShapeCategory.CUBE)
+    hole.landing_region = None
+
+    with pytest.raises(HoleHasNoLandingRegionError):
+        scene.landing_region_for(MontessoriShapeCategory.CUBE)
+
+
+def test_a_scene_asked_about_a_piece_it_does_not_hold_says_so(area):
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.partial(
+            seed=SEED, area=area, categories=(MontessoriShapeCategory.CUBE,)
+        ),
+        robot=mounted_arm(),
+    )
+    scene = SortingScene(scenario.build_world())
+
+    with pytest.raises(NoSuchPieceError):
+        scene.shape_of(MontessoriShapeCategory.CYLINDER)
 
 
 # %% what a run counts as success
@@ -609,6 +724,16 @@ def _instantiated(scenario_class, area: LayoutArea):
 
 
 # %% helpers
+
+
+def _size_of(area) -> List[float]:
+    """
+    How far a region's own shapes reach along each axis, in metres.
+
+    :param area: The shapes to measure.
+    """
+    bounds = area.combined_mesh.bounds
+    return [float(upper - lower) for lower, upper in zip(bounds[0], bounds[1])]
 
 
 def _how_far_the_cube_stands_from_the_cylinder(layout: PieceLayout) -> float:

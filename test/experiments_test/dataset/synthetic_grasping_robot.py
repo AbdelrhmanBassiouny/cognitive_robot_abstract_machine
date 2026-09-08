@@ -11,6 +11,7 @@ casts rays from one finger tip to the other -- has something to cast between.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,14 +43,24 @@ Local, self-contained URDF describing :class:`SyntheticGraspingRobot`, resolvabl
 without a ROS package or network access.
 """
 
-FINGER_OPENING = 0.035
+FINGERS_POINT_DOWN = Quaternion(0, -math.sqrt(0.5), 0, math.sqrt(0.5))
 """
-How far each finger travels from the pincer's open position to its closed one, in
-metres.
+Where the pincer's tool frame points, as the quarter turn about y that takes the
+canonical grasp frame's forward axis onto the direction this pincer reaches along.
 
-The two fingers start 0.08 m apart in the URDF, so closing both leaves them 0.01 m
-apart -- narrower than the narrowest Montessori piece, so a closed pincer really has
-hold of whatever stood between the fingers.
+The fingers hang below the pincer, so a grasp comes down onto a piece; without saying
+so, a top grasp would turn the fingers sideways and close them beside it.
+"""
+
+FINGER_OPENING = 0.05
+"""
+How far each finger is asked to travel from the pincer's open position to its closed
+one, in metres.
+
+The two fingers start 0.08 m apart, so this asks them to shut past each other -- what a
+real gripper is commanded to do when it squeezes, and what leaves the fingers around a
+piece rather than beside it once a motion has stopped within its own tolerance of the
+position it was given.
 """
 
 
@@ -136,11 +147,10 @@ class SyntheticPincer(
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
         world = robot_root._world
-        pincer_link = world.get_body_in_branch_by_name(robot_root, "pincer_link")
         return cls(
-            root=pincer_link,
-            tool_frame=pincer_link,
-            front_facing_orientation=Quaternion(0, 0, 0, 1),
+            root=world.get_body_in_branch_by_name(robot_root, "pincer_link"),
+            tool_frame=world.get_body_in_branch_by_name(robot_root, "grasp_link"),
+            front_facing_orientation=FINGERS_POINT_DOWN,
         )
 
 
