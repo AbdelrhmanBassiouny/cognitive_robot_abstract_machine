@@ -672,8 +672,8 @@ def test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen(
     """
     Read from where the camera stands, a direction means what it means on screen.
 
-    Measured on this capture: the cube stands 19 mm above the square hole in the picture
-    and the cylinder 45 mm below it, so *above* leaves the cube and *below* leaves the
+    Measured on this capture: the cube stands 21 mm above the square hole in the picture
+    and the cylinder 43 mm below it, so *above* leaves the cube and *below* leaves the
     cylinder -- which reading from the camera is what makes possible, since in the world
     both stand the lid's own 15 mm above that hole and neither is above the other.
     """
@@ -699,7 +699,7 @@ def test_the_two_sides_of_a_hole_hold_different_pieces(
 ):
     """
     Measured on this capture rather than assumed: from the robot's own frame the cube
-    stands 16 mm in front of the square hole and the cylinder 49 mm behind it, so which
+    stands 19 mm in front of the square hole and the cylinder 47 mm behind it, so which
     of the hole's two sides is stated decides which of the two a look reports.
     """
     seen = seen_from(recorded_scene_world)
@@ -742,7 +742,7 @@ def test_a_look_near_a_hole_reaches_as_far_as_the_radius_it_was_asked_for(
     lid: Body,
 ):
     """
-    The two pieces on this lid stand 50 mm and 94 mm from the triangle hole, so a reach
+    The two pieces on this lid stand 51 mm and 93 mm from the triangle hole, so a reach
     between the two tells them apart and one past both reports them both.
     """
     close = looking_on_the_lid(

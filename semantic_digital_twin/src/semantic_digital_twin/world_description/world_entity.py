@@ -36,7 +36,7 @@ from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospect
 from krrood.entity_query_language.predicate import Symbol
 from krrood.symbolic_math.symbolic_math import Matrix
 from krrood.utils import get_full_class_name
-from krrood.utils import memoize
+from krrood.patterns.caching import memoize
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )

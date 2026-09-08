@@ -161,7 +161,7 @@ class RecordedTransformTree:
 
 
 @dataclass(frozen=True)
-class RecordedLook:
+class RecordedImages:
     """
     One colour image a recording holds, with the depth image published closest to it.
     """
@@ -185,7 +185,7 @@ class RecordedLook:
         self, intrinsics: CameraIntrinsics, reference_frame_T_camera: np.ndarray
     ) -> RgbdFrame:
         """
-        Decode this look into the frame a pipeline runs on.
+        Decode these images into the frame a pipeline runs on.
 
         :param intrinsics: The intrinsics both images were taken with.
         :param reference_frame_T_camera: Where the camera stood.
@@ -205,7 +205,7 @@ class RecordedCamera:
     """
     The camera one recording holds: how it saw, where it stood, and what it published.
 
-    The looks are read in the order the colour images were published, each paired with
+    The images are read in the order the colour images were published, each paired with
     the newest depth image before it, which is the pairing the live node makes.
     """
 
@@ -263,7 +263,7 @@ class RecordedCamera:
             self.camera_info.header.frame_id, self.reference_frame
         )
 
-    def looks(self) -> Iterator[RecordedLook]:
+    def images(self) -> Iterator[RecordedImages]:
         """
         Every colour image the recording holds, paired with the depth taken before it.
 
@@ -280,7 +280,7 @@ class RecordedCamera:
             if topic == str(CameraTopic.COLOR):
                 if depth is not None:
                     color = deserialize_message(payload, CompressedImage)
-                    yield RecordedLook(
+                    yield RecordedImages(
                         color_payload=bytes(color.data),
                         color_format=color.format,
                         depth=depth,
@@ -300,19 +300,20 @@ class RecordedCamera:
             if topic.topic_metadata.name == str(CameraTopic.COLOR)
         )
 
-    def look_at(self, fraction: float) -> RecordedLook:
+    def image_at(self, fraction: float) -> RecordedImages:
         """
-        The look a given way through the recording, without holding the rest in memory.
+        The images a given way through the recording, without holding the rest in
+        memory.
 
-        :param fraction: How far in to take it, from 0 at the first look to 1 at the
+        :param fraction: How far in to take them, from 0 at the first pair to 1 at the
             last.
         :raises NothingRecordedOnTopic: If the recording holds no colour image that a
             depth image was published before.
         """
         wanted = max(int(self.color_image_count * fraction), 0)
-        for index, look in enumerate(self.looks()):
+        for index, images in enumerate(self.images()):
             if index >= wanted:
-                return look
+                return images
         raise NothingRecordedOnTopic(self.bag.name, str(CameraTopic.COLOR))
 
 
