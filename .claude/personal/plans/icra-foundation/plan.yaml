@@ -144,6 +144,26 @@ items:
     hole across the picture. pytest is not blocked in a session container after all -
     CRAM_ORM_BUILD=never skips the conftest's generation, the narrowing suite runs in 75 s, and 506
     of the montessori suite pass.
+
+    Merged and cleared 2026-09-08 (later still): the branch takes main and #292, and CI is down to
+    what those two carry. main met it in the four files the roadmap predicted - world.py takes
+    memoize's new home in krrood.patterns.caching beside this branch's BeliefSource import, and left
+    as it merged it would have imported memoize from a module that no longer defines it;
+    mapped_variable.py's CallVariable._update_type_ was rewritten on both sides for different cases
+    and now does both, reading a method off its owner class when the child resolves to no type and
+    keeping this branch's reading of a class defining __call__ otherwise; geometry.py keeps main's
+    to_hex/from_hex and __hash__ beside this branch's ColorName, dropping main's RED and PINK since
+    this branch's answer with the same colours; test_color.py is two files of one name, kept as one
+    file of two sections. One collision git could not flag came with it, and it is #192's shape
+    again: main's new test_relational_circuit_registry_causal.py reads query.variable, which since
+    #192 builds an attribute expression rather than raising, and what fails is random_events asking
+    issubclass of the None it resolves to. Migrated to _variable_, the same migration the
+    convergence made for #159's readers. #292 is then merged in whole, so the hole placement and the
+    requoted millimetres are on this branch and #292 is closed as merged. Measured: 13 of 15 CI jobs
+    green before these, and the two that were not are exactly krrood and experiments, which these
+    fix; in a container krrood runs 3014 passed with 2 graphviz failures, sdt the same 45 failures
+    as before the merge with its 45 added errors also present on plain main, and experiments 684
+    passed with the same 18 environment failures.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback

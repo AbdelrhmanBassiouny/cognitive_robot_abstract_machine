@@ -1304,3 +1304,55 @@ is required to import it at all.
 **Left open.** The `Goal`-as-`Predicate` thread from the first round is still open, waiting
 on whether that change should have landed on #261 instead; the physics thread above is open
 on the actuation question.
+
+## 2026-09-08, later still: main merged into #265, and #292 folded in
+
+The two things left outstanding on #265 at the end of the narrowing round are both
+closed, and the branch's CI is now down to what those two changes carry.
+
+**main met the branch in exactly the four files this roadmap predicted**, and each side
+had brought something the other needs, so all four resolutions keep both:
+
+| file | what met | resolution |
+|---|---|---|
+| `world.py` | `memoize` moved to `krrood.patterns.caching`; the branch added a `BeliefSource` import beside the old spelling | both, at the new location |
+| `mapped_variable.py` | `CallVariable._update_type_` rewritten on both sides, for different cases | reads a method off its owner class when the child resolves to no type, keeps the branch's reading of a `__call__` class otherwise |
+| `geometry.py` | main gave `Color` `to_hex`/`from_hex` and `__hash__`; the branch gave it `ColorName` and a verbalization | both; main's `RED`/`PINK` classmethods dropped as the branch's already answer with those colours |
+| `test_color.py` | two files of one name testing different things | one file of two sections |
+
+The `memoize` hazard this roadmap warned of was real and would have been silent: left as
+git merged it, `world.py` imports a name from a module that no longer defines it.
+
+**And one collision git could not flag, which is #192's shape a fourth time.** main's own
+new `test_relational_circuit_registry_causal.py` reaches a query's variable as
+`query.variable`. Since #192 that builds an attribute expression for a field called
+"variable" rather than raising, so what actually fails is `random_events` asking
+`issubclass` of the `None` type it resolves to, four tests deep and in another package.
+It is worth stating as a standing hazard rather than an incident: **every branch main
+merges into this one from here on can carry a new reader of a name #192 retired, and
+none of them will fail where they are written.** The convergence's own technique - make
+`Match._is_own_name_` refuse the retired spellings, run the suites, migrate every hit -
+is the way to find them, and is cheap enough to repeat on each merge of main.
+
+**#292 is merged into the branch**, so the duplicate `RecordedLook`, the 12 mm hole
+displacement and the requoted narrowing millimetres are all here, and #292 is closed as
+merged. Its two root causes are recorded in the item's own notes and in the section
+above.
+
+**What the numbers say.** Thirteen of fifteen CI jobs were green on the main merge alone
+(`93cdd21c9`), and the two that were not are precisely `krrood` (those four causal tests)
+and `experiments` (the duplicate `RecordedLook`) - the two the commits above fix. In a
+session container, with `--orm-build=never`: `test/krrood_test` 3014 passed and 2 failed,
+both `test_object_diagram`, which needs graphviz's `dot`;
+`test/semantic_digital_twin_test` the same 45 failures as the pre-merge branch, with its
+45 added errors also present on plain `main` for a missing `iai_apartment`;
+`test/experiments_test` 684 passed with 18 failures, every one a missing ROS package or
+database and every one identical before the merge.
+
+**The container note is now stronger than either of the earlier corrections.** `pytest`
+is not blocked here at all: `--orm-build=never` (equivalently `CRAM_ORM_BUILD=never`)
+skips the conftest's generation, and with `pyjpt`, `matplotlib`, `flask` and `mypy`
+installed beside the workspace the whole of `test/krrood_test`,
+`test/semantic_digital_twin_test` and `test/experiments_test` run. What still needs CI is
+the ORM generation itself and anything importing ROS - `test/coraplex_test`,
+`test/giskardpy_test` and `test/segmind_test` among them.
