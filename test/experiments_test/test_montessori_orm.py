@@ -8,6 +8,7 @@ exist to make succeed.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import is_dataclass
 from types import ModuleType
 
@@ -15,7 +16,7 @@ import experiments
 import experiments.montessori
 import semantic_digital_twin
 from krrood.ormatic.utils import classes_of_package
-from typing_extensions import Set, Type
+from typing_extensions import Dict, Set, Type
 
 from experiments.montessori.semantics import (
     CubeShape,
@@ -64,6 +65,21 @@ def test_no_montessori_class_shares_its_name_with_one_the_upstream_interface_map
     }
 
     assert montessori_names & upstream_names == set()
+
+
+def test_no_two_montessori_classes_share_their_name_with_each_other():
+    """
+    Two mapped classes of one name collide the same way whether the second is upstream's
+    or the package's own, and a package walking two modules is where it happens
+    unnoticed.
+    """
+    modules_declaring: Dict[str, Set[str]] = defaultdict(set)
+    for clazz in mapped_classes_of(experiments.montessori):
+        modules_declaring[clazz.__name__].add(clazz.__module__)
+
+    assert {
+        name: modules for name, modules in modules_declaring.items() if len(modules) > 1
+    } == {}
 
 
 # %% the lookup a persisted shape goes through
