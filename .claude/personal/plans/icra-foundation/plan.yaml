@@ -167,6 +167,21 @@ items:
   status: in_progress
   notes: >-
     One frame source every perception backend reads, which is what lets the backends be swapped without changing anything above them. MujocoCamera renders colour and depth; wrap them as the RgbdFrame the pipeline reads, with intrinsics and camera pose taken from the twin, so the detector stack, a vision-language backend and a visual-question-answering backend all answer a look in simulation exactly as they do off a capture. The six real captures remain the regression set; this item's tests assert that a simulated scene with the board and four pieces reports every piece once with the right category. Stated colours and finishes on the simulated objects come from the values #239 measured off the real ones. Refocused 2026-09-08: this item exists to make the frames available to any backend, not to improve detection - the paper claims no perception result of its own.
+
+    Review round 2026-09-08: the developer's answer to this item's open question was "make them
+    transparent regions and make it a toggelable thing", and that is now RegionAppearance on
+    MultiSimBuilder - a region's area drawn at a share of the opacity it states (the default
+    everywhere a world is built or a region is spawned), or not drawn at all, with
+    MujocoSim(region_appearance=...) the toggle and SimulatedCamera setting it to hidden. Taking
+    the markers out of the picture uncovered more than it fixed: the cube that
+    test_every_piece_the_world_places_on_the_table_is_found used to count stood at the board's own
+    square hole rather than at the piece, so that test was passing on an artefact and is now
+    expected-to-fail beside the item's criterion. Two things the twin would have to say for either
+    to pass, both the developer's and neither of them the frame: its pieces are 25 to 32 per cent
+    smaller than the ones pieces.py measured off the real board (cube 22.4 mm against 30, cylinder
+    22.4 against 28, triangular prism 25.2 by 29.4 against 37 by 32, rectangular prism 15.4 by 29.4
+    against 20 by 40), and its board's holes are cut through an 80 mm blank whose walls render in
+    the board's own colour, so a look shows no opening for a board to be found by.
 - id: tracy-demo-takes-the-integrated-branch
   title: >-
     tracy_icra takes the integrated branch and the real robot runs it

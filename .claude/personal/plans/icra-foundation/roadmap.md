@@ -1176,3 +1176,54 @@ suite pass; the 15 that fail are `test_montessori_orm.py` and
 `test_montessori_results_database.py`, which need the generated interfaces and a
 database, and they fail identically with any change stashed. So a montessori perception
 change can be run end to end here before it is pushed, tests and all.
+
+### The first review round on #298, 2026-09-08: a region is drawn see-through, a camera draws none
+
+The developer's answer to this item's open question, in his words: *"make them
+transparent regions and make it a toggelable thing"*.
+
+`RegionAppearance` on `MultiSimBuilder` says how much of a region a simulator draws.
+`TRANSPARENT` is a share of the opacity the region itself states (0.3 of it) and is the
+default everywhere a world is built or a region is spawned at runtime; `HIDDEN` builds
+the region's body and none of its geometry, so what the world hangs off a region still
+has a frame to hang off. The share is carried into the one place a shape becomes a geom
+rather than applied at each call site, so the builder and the spawner fade a region the
+same way and a body's own geometry is untouched. `MujocoSim(region_appearance=...)` is
+the toggle. `SimulatedCamera` sets it to `HIDDEN`, because the real camera it stands in
+for sees no volume of space -- one word to change if the picture should show them.
+
+**What the fix uncovered is worth more than the fix.** Measured on the reference scene,
+one of each piece perception knows standing on the table:
+
+| regions | reported | board |
+|---|---|---|
+| drawn solid (the old behaviour) | 8 -- two "cubes" and a "cylinder" at the board's own holes, plus the four pieces' places | not found |
+| drawn see-through | 5 | found, 6 holes |
+| not drawn (the camera's default) | 5 | not found |
+
+Reading the places rather than the counts is what settles it: with the markers drawn,
+the two `cube` reports stand at the board's holes (`-0.382, -0.093` and `-0.426,
+-0.091`), not at the cube (`-0.15, -0.13`), whose place is reported `cylinder` in all
+three columns. So `test_every_piece_the_world_places_on_the_table_is_found` was passing
+on an artefact: the cube it counted was the square hole's own marker. It is now marked
+expected-to-fail beside the item's stated criterion, strictly, and the two mark two rungs
+of one ladder -- every kind found, and every piece once with its own category.
+
+Two things the twin would have to say for either to pass, neither of them the frame:
+
+- **The pieces it builds are not the size perception measured off the real ones.** The
+  cube is 22.4 mm across where `KnownPiece` states 30, the cylinder 22.4 against 28, the
+  triangular prism 25.2 by 29.4 against 37 by 32, the rectangular prism 15.4 by 29.4
+  against 20 by 40. No outline fits well at those sizes, so which one wins a place is a
+  coin flip -- and it is why the cube's place is won by the cylinder. Which of the two
+  sizes is the real piece is the developer's call: the world's shapes are built from the
+  board's own holes, and `pieces.py` was measured off the captures.
+- **The board's holes are cut through an 80 mm blank** (`BOARD_SCALE.z`), so looking down
+  one shows 80 mm of wall lit in the board's own colour rather than the dark opening a
+  capture shows. `BoardDetector` finds a board by its openings, and a render has none.
+  This is also why the board *is* found when the regions are drawn see-through and not
+  when they are hidden: the markers were the only thing giving the holes an outline.
+
+**Verified** in the session container, on the rebased branch: `test_montessori_simulated_camera.py`
+12 passed and 2 xfailed, `test_region_appearance.py` 4 passed, `test_mujoco_video_recording.py`
+16 passed with `CI=true`, `test_mujoco_rendering_backend.py` 4 passed, `test_mjcf.py` 10 passed.
