@@ -123,6 +123,14 @@ face, so a shape merely resting on top of the board (having failed to fall throu
 never also registers as being in the landing region.
 """
 
+LANDING_REGION_NAME_SUFFIX = "_landing_region"
+"""
+Suffix a hole's landing region is named with, after the hole's own key.
+
+Written once so a reader looking a region up by name spells it the same way
+:meth:`MontessoriWorld._build_shape_sorting_board` spelled it when it built it.
+"""
+
 LANDING_REGION_BOTTOM_MARGIN = 0.005
 """
 Distance the landing region's bottom face is dropped below the table's own top
@@ -1096,7 +1104,7 @@ class MontessoriWorld:
             board.add(hole)
 
             landing_region = _landing_region(
-                _name(f"{hole_spec.key}_landing_region"),
+                _name(f"{hole_spec.key}{LANDING_REGION_NAME_SUFFIX}"),
                 hole_spec.shape,
                 landing_region_height,
             )

@@ -6,6 +6,12 @@ A scene is a :class:`PieceLayout` — which pieces stand on the table, where, an
 how far — and a run is what is then done to it. The two compose: every run here takes a
 layout, so a random scene and a near-ambiguous one are the same four scripts over
 different scenes rather than eight scenarios.
+
+Every run is carried in MuJoCo (:class:`SimulatedScene`), and what a step does it does
+through the simulation: a scene comes to rest because gravity settles it, a piece is
+shoved because a body runs into it, and a piece goes through a hole because it falls
+through it. What a goal then reads it reads with the twin's own predicates rather than
+by measuring the scene itself.
 """
 
 from __future__ import annotations
@@ -15,8 +21,10 @@ import random
 from abc import ABC
 from dataclasses import dataclass, field
 
+import numpy
 from typing_extensions import (
     ClassVar,
+    Dict,
     Generic,
     List,
     Optional,
@@ -50,6 +58,7 @@ from experiments.montessori.semantics import (
 from experiments.montessori.world import (
     BOARD_POSITION,
     BOARD_SCALE,
+    LANDING_REGION_NAME_SUFFIX,
     TABLE_POSITION,
     TABLE_SCALE,
     MontessoriWorld,
@@ -63,17 +72,33 @@ from experiments.scenarios.scenario import (
     StepName,
     WorldType,
 )
-from semantic_digital_twin.adapters.multi_sim import MujocoLight
+from semantic_digital_twin.adapters.multi_sim import (
+    MujocoLight,
+    MujocoSim,
+    MujocoSynchronizer,
+)
 from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.reasoning.predicates import InsideOf
+from semantic_digital_twin.reasoning.robot_predicates import robot_holds_body
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
 )
+from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
+from semantic_digital_twin.spatial_types.spatial_types import Vector3
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.connections import PrismaticConnection
+from semantic_digital_twin.world_description.degree_of_freedom import (
+    DegreeOfFreedom,
+    DegreeOfFreedomLimits,
+)
+from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body, Region
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.predicate import RenderedFields
@@ -556,13 +581,145 @@ class SortingScene:
         """
         return self.board.hole_for(self.shape_of(category))
 
+    def landing_region_for(self, category: MontessoriShapeCategory) -> Region:
+        """
+        The stretch of space below the hole this shape drops through, which the world
+        builds for exactly this question: a piece that fell through the hole is inside
+        it, and a piece resting on the board is not.
+
+        :param category: The shape to look up.
+        :raises KeyError: If the board's hole for that shape has no landing region.
+        """
+        wanted = self.hole_for(category).root.name.name + LANDING_REGION_NAME_SUFFIX
+        for region in self.world.regions:
+            if region.name.name == wanted:
+                return region
+        raise KeyError(wanted)
+
+    def close_the_gripper_around(self, category: MontessoriShapeCategory) -> None:
+        """
+        Take the robot's open gripper down onto the loose piece of the given shape and
+        shut its fingers on it.
+
+        :param category: The shape to take hold of.
+        """
+        self._set_the_gripper_to(GripperState.OPEN)
+        self.take_the_gripper_to(self.position_of(category))
+        self._set_the_gripper_to(GripperState.CLOSE)
+
+    def open_the_gripper(self) -> None:
+        """
+        Let go of whatever the robot is holding.
+        """
+        self._set_the_gripper_to(GripperState.OPEN)
+
+    def carry_the_held_piece_to(
+        self, category: MontessoriShapeCategory, destination: Point3
+    ) -> None:
+        """
+        Move the gripper to a place and take the piece it is holding with it.
+
+        .. note:: The piece travels because it is carried rather than because friction
+            holds it: a grasp that holds under physics needs the robot's joints driven
+            by actuators, which the twin does not give this robot. What the fingers do
+            is real -- they are around the piece, which
+            :meth:`is_held` reads -- and so is everything that happens once they open.
+
+        :param category: The shape of the piece being carried.
+        :param destination: Where to carry it, in the world root frame.
+        """
+        self.take_the_gripper_to(destination)
+        self.stand_the_piece_at(category, destination)
+
+    def take_the_gripper_to(self, destination: Point3) -> None:
+        """
+        Drive the robot's joints until the place between its finger tips is at the given
+        point.
+
+        Aimed by the finger tips rather than by the tool frame, since what has to end up
+        around a piece is the fingers; where the tool frame sits with respect to them is
+        the robot's own business.
+
+        :param destination: Where the fingers should close, in the world root frame.
+        """
+        between_the_fingers = self._between_the_finger_tips()
+        tool_frame = self.gripper.global_transform.to_position().to_np().flatten()[:3]
+        offset = tool_frame - between_the_fingers
+        target = HomogeneousTransformationMatrix.from_xyz_rpy(
+            x=float(destination.x) + float(offset[0]),
+            y=float(destination.y) + float(offset[1]),
+            z=float(destination.z) + float(offset[2]),
+            reference_frame=self.world.root,
+        )
+        reached = self.world.compute_inverse_kinematics(
+            root=self.world.root, tip=self.gripper, target=target
+        )
+        with self.world.modify_world():
+            for degree_of_freedom, position in reached.items():
+                self.world.state[degree_of_freedom.id].position = position
+
+    def stand_the_piece_at(
+        self, category: MontessoriShapeCategory, position: Point3
+    ) -> None:
+        """
+        Put the loose piece of the given shape at a place, keeping how it is turned.
+
+        :param category: The shape to move.
+        :param position: Where to put it, in the world root frame.
+        """
+        body = self.body_of(category)
+        body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+            x=float(position.x),
+            y=float(position.y),
+            z=float(position.z),
+            reference_frame=self.world.root,
+        )
+
+    def _between_the_finger_tips(self) -> numpy.ndarray:
+        """
+        The point midway between the robot's two finger tips, in the world root frame.
+        """
+        [end_effector] = self.robot.get_end_effectors()
+        tips = [
+            finger.tip.global_transform.to_position().to_np().flatten()[:3]
+            for finger in end_effector.fingers
+        ]
+        return sum(tips) / len(tips)
+
+    def _set_the_gripper_to(self, state: GripperState) -> None:
+        """
+        Put the robot's gripper into one of the states it declares.
+
+        :param state: The state to put it in.
+        """
+        [end_effector] = self.robot.get_end_effectors()
+        end_effector.get_joint_state_by_type(state).apply_to(self.world)
+
     def is_held(self, category: MontessoriShapeCategory) -> bool:
         """
-        Whether the loose piece of the given shape hangs from the gripper.
+        Whether the robot holds the loose piece of the given shape.
+
+        Asked of the robot rather than of the connection the piece hangs from, so a
+        piece counts as held when the robot's fingers are actually around it.
 
         :param category: The shape to look up.
         """
-        return self.body_of(category).parent_connection.parent is self.gripper
+        return robot_holds_body(self.robot, self.body_of(category))
+
+    def is_in_its_hole(self, category: MontessoriShapeCategory) -> bool:
+        """
+        Whether the loose piece of the given shape has gone through the board's hole for
+        its own shape.
+
+        Read as containment in that hole's landing region, which is how a containment
+        detector reads an insertion.
+
+        :param category: The shape to look up.
+        """
+        containment = InsideOf(
+            self.body_of(category), self.landing_region_for(category)
+        ).compute_containment_ratio()
+        return containment >= CONTAINED_IN_ITS_LANDING_REGION
 
     def stands_at(
         self, category: MontessoriShapeCategory, placement: PiecePlacement
@@ -581,6 +738,64 @@ class SortingScene:
         )
 
 
+RELEASE_HEIGHT_ABOVE_THE_HOLE = 0.02
+"""
+How far above a hole a carried piece is let go of, in metres.
+
+Far enough that the piece is clear of the board when the fingers open, so what puts it
+through the hole is its own fall rather than the release.
+"""
+
+PUSHER_NAME = "pusher"
+"""
+The name the body that shoves a piece stands in the scene under.
+"""
+
+PUSHER_RAIL_NAME = "pusher_rail"
+"""
+The name of the connection the pusher slides along.
+"""
+
+PUSHER_SCALE = Scale(0.02, 0.02, 0.04)
+"""
+How big the pusher is, in metres.
+
+Taller than the pieces so it meets them square on, and narrow enough to sit beside one
+without touching its neighbours.
+"""
+
+PUSHER_CLEARANCE = 0.01
+"""
+The gap left between the pusher and the piece it is going to push, in metres.
+
+The pusher starts out of contact so that the push is something it does, rather than
+something that has already happened when the scene is built.
+"""
+
+PUSHING_STEPS = 20
+"""
+How many stretches of simulation one push is driven over.
+
+The pusher is advanced a fraction of its travel at a time and the scene is simulated in
+between, so it meets the piece at a speed rather than appearing on the far side of it.
+"""
+
+PUSHING_STEP_DURATION = 0.02
+"""
+How long the scene is simulated for after each of those stretches, in seconds.
+"""
+
+CONTAINED_IN_ITS_LANDING_REGION = 0.9
+"""
+How much of a piece's own mesh must lie inside a hole's landing region for the piece to
+count as having gone through that hole.
+
+The same fraction :class:`segmind`'s containment detector requires of a containment; the
+region is sized so that a piece that fell through is wholly inside it and a piece
+anywhere else is wholly outside, so nothing here rests on where between the two the
+line is drawn.
+"""
+
 UNDISTURBED_FRACTION_OF_A_PIECE = 0.1
 """
 How far, as a fraction of a piece's own reach, it may drift and still count as standing
@@ -591,39 +806,168 @@ thing for the widest piece of the set and the narrowest.
 """
 
 
+# %% the physics the scene runs under
+
+
+SIMULATION_STEP_SIZE = 0.001
+"""
+How far one step advances the simulation carrying a scene, in seconds.
+"""
+
+STILLNESS = 0.0005
+"""
+How far a piece may travel over one settling window and still count as standing still,
+in metres.
+"""
+
+SETTLING_WINDOW = 0.05
+"""
+The stretch of simulated time stillness is measured over, in seconds.
+"""
+
+SETTLING_LIMIT = 5.0
+"""
+How long a scene is given to come to rest before it is taken as settled anyway, in
+seconds.
+
+A scene that is still moving after this is one where something is rolling or bouncing
+without end, which no scene here is built to be; the bound is what stops a run hanging
+on one if it happens.
+"""
+
+
+@dataclass
+class SimulatedScene:
+    """
+    The MuJoCo simulation carrying the scene of one trial.
+
+    Advanced by a stated stretch of simulated time rather than against the wall clock,
+    so two runs of the same scenario see the same physics.
+    """
+
+    world: World
+    """
+    The world being simulated.
+    """
+
+    step_size: float = SIMULATION_STEP_SIZE
+    """
+    How far one step advances it, in seconds.
+    """
+
+    physics: MujocoSim = field(init=False, repr=False)
+    """
+    The MuJoCo simulation the scene is carried in.
+    """
+
+    def __post_init__(self) -> None:
+        self.physics = MujocoSim(
+            world=self.world, headless=True, step_size=self.step_size
+        )
+        self.physics.synchronizer.sync_rate_hz = (
+            MujocoSynchronizer.UNTHROTTLED_SYNC_RATE_HZ
+        )
+        # Stepped from here rather than from a thread of the simulator's own, so a step
+        # of a scenario ends when the physics it asked for has actually run.
+        self.physics.simulator.start(simulate_in_thread=False)
+
+    def advance(self, duration: float) -> None:
+        """
+        Run the simulation for the given stretch of simulated time.
+
+        :param duration: How long to run it for, in seconds.
+        """
+        for _ in range(round(duration / self.step_size)):
+            self.physics.simulator.step()
+
+    def settle(self) -> None:
+        """
+        Run the simulation until nothing in the scene is moving any more, or until
+        :data:`SETTLING_LIMIT` has passed.
+        """
+        elapsed = 0.0
+        was_at = self._piece_positions()
+        while elapsed < SETTLING_LIMIT:
+            self.advance(SETTLING_WINDOW)
+            elapsed += SETTLING_WINDOW
+            now_at = self._piece_positions()
+            if all(
+                numpy.linalg.norm(now_at[category] - was_at[category]) < STILLNESS
+                for category in now_at
+            ):
+                return
+            was_at = now_at
+
+    def stop(self) -> None:
+        """
+        Stop carrying the scene.
+        """
+        self.physics.stop_simulation()
+
+    def _piece_positions(self) -> Dict[MontessoriShapeCategory, numpy.ndarray]:
+        """
+        Where every loose piece stands right now, keyed by its shape.
+        """
+        scene = SortingScene(self.world)
+        return {
+            category: scene.position_of(category).to_np().flatten()[:3]
+            for category in scene.categories
+        }
+
+
 # %% what is done to the scene
 
 
 @dataclass
-class LetTheSceneSettle(ScenarioStep[World]):
+class ScenePhysicsStep(ScenarioStep[World], ABC):
     """
-    The moment the scene is standing and nothing has acted on it yet.
-
-    It changes nothing: what it is for is to be a moment a perturbation can name, since
-    a perturbation strikes before a step rather than at a time of its own.
+    A step of a scripted run, performed on a scene that is running under physics.
     """
 
-    def perform(self, world: World) -> None:
-        pass
+    scene: SimulatedScene = field(kw_only=True)
+    """
+    The simulation carrying the scene this step acts on.
+    """
 
 
 @dataclass
-class AskTheQuestion(ScenarioStep[World]):
+class LetTheSceneSettle(ScenePhysicsStep):
+    """
+    Run the scene until it has come to rest, which is the moment before anything has
+    acted on it.
+
+    It is also the moment a perturbation can name, since a perturbation strikes before a
+    step rather than at a time of its own.
+    """
+
+    def perform(self, world: World) -> None:
+        self.scene.settle()
+
+
+@dataclass
+class AskTheQuestion(ScenePhysicsStep):
     """
     The moment the scene is asked about, which is the state every goal here is about.
 
-    Like :class:`LetTheSceneSettle` it changes nothing; a scenario ends with it so that
-    what a run is questioned on is a named moment rather than "whatever was last done".
+    A scenario ends with it so that what a run is questioned on is a named moment rather
+    than "whatever was last done"; the simulation that carried the scene stops here.
     """
 
     def perform(self, world: World) -> None:
-        pass
+        self.scene.stop()
 
 
 @dataclass
-class PickThePieceUp(ScenarioStep[World]):
+class PickThePieceUp(ScenePhysicsStep):
     """
-    Take a loose piece into the gripper, so it moves with the robot from here on.
+    Close the robot's gripper around a loose piece, so that from here on the piece
+    travels with it.
+
+    .. note:: The closing is real -- the gripper is moved to the piece and its fingers
+        shut on it, which is what
+        :func:`~semantic_digital_twin.reasoning.robot_predicates.robot_holds_body` then
+        reads -- but the carrying is scripted rather than held by friction, and
+        :class:`CarryThePieceTo` says why.
     """
 
     category: MontessoriShapeCategory
@@ -632,14 +976,16 @@ class PickThePieceUp(ScenarioStep[World]):
     """
 
     def perform(self, world: World) -> None:
-        scene = SortingScene(world)
-        hang(world, scene.body_of(self.category), scene.gripper)
+        SortingScene(world).close_the_gripper_around(self.category)
 
 
 @dataclass
-class PutThePieceInItsHole(ScenarioStep[World]):
+class PutThePieceInItsHole(ScenePhysicsStep):
     """
-    Drop a held piece through the board's hole for its own shape.
+    Carry a held piece over the board's hole for its own shape and let go of it.
+
+    Nothing puts the piece through the hole: the gripper opens above it and gravity does
+    the rest, so a piece that does not fit does not go in.
     """
 
     category: MontessoriShapeCategory
@@ -649,24 +995,27 @@ class PutThePieceInItsHole(ScenarioStep[World]):
 
     def perform(self, world: World) -> None:
         scene = SortingScene(world)
-        hole = scene.hole_for(self.category)
-        above_the_hole = hole.root.global_transform.to_position()
-        hang(
-            world,
-            scene.body_of(self.category),
-            world.root,
+        hole = scene.hole_for(self.category).root.global_transform.to_position()
+        scene.carry_the_held_piece_to(
+            self.category,
             Point3(
-                float(above_the_hole.x),
-                float(above_the_hole.y),
-                float(above_the_hole.z) - KNOWN_PIECE_BY_CATEGORY[self.category].height,
+                float(hole.x),
+                float(hole.y),
+                float(hole.z) + RELEASE_HEIGHT_ABOVE_THE_HOLE,
             ),
         )
+        self.scene.advance(SETTLING_WINDOW)
+        scene.open_the_gripper()
+        self.scene.settle()
 
 
 @dataclass
-class PushThePiece(ScenarioStep[World]):
+class PushThePiece(ScenePhysicsStep):
     """
-    Shove a loose piece sideways, as a body other than the robot would.
+    Drive the scene's pusher into a loose piece, so a body other than the robot moves it.
+
+    The piece is never moved directly: the pusher slides along its rail until it meets
+    the piece, and what happens to the piece is whatever the contact does.
     """
 
     category: MontessoriShapeCategory
@@ -675,53 +1024,13 @@ class PushThePiece(ScenarioStep[World]):
     """
 
     def perform(self, world: World) -> None:
-        scene = SortingScene(world)
-        body = scene.body_of(self.category)
-        was_at = body.global_transform.to_position()
-        piece = KNOWN_PIECE_BY_CATEGORY[self.category]
-        hang(
-            world,
-            body,
-            world.root,
-            Point3(
-                float(was_at.x),
-                float(was_at.y) + 2 * piece.radius,
-                float(was_at.z),
-            ),
-        )
-
-
-def hang(
-    world: World,
-    body: Body,
-    parent: Body,
-    position: Optional[Point3] = None,
-) -> None:
-    """
-    Move a body onto a new parent, optionally at a stated place in that parent's frame.
-
-    This is what taking a piece into the gripper and what setting one down again both
-    are: the piece stops hanging from wherever it hung and starts hanging from
-    somewhere else.
-
-    :param world: The world both bodies live in.
-    :param body: The body to re-hang.
-    :param parent: What it hangs from afterwards.
-    :param position: Where it hangs, in the parent's frame; the parent's own origin if
-        left unsaid.
-    """
-    origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        x=0.0 if position is None else float(position.x),
-        y=0.0 if position is None else float(position.y),
-        z=0.0 if position is None else float(position.z),
-    )
-    with world.modify_world():
-        world.remove_connection(body.parent_connection)
-        world.add_connection(
-            FixedConnection(
-                parent=parent, child=body, parent_T_connection_expression=origin
-            )
-        )
+        reach = KNOWN_PIECE_BY_CATEGORY[self.category].radius
+        travel = PUSHER_CLEARANCE + 2 * reach
+        rail = world.get_connection_by_name(PUSHER_RAIL_NAME)
+        for step in range(1, PUSHING_STEPS + 1):
+            rail.position = travel * step / PUSHING_STEPS
+            self.scene.advance(PUSHING_STEP_DURATION)
+        self.scene.settle()
 
 
 # %% what a run counts as success
@@ -762,13 +1071,7 @@ class ThePieceIsInItsHole(Goal[World]):
     """
 
     def __call__(self) -> bool:
-        scene = SortingScene(self.world)
-        piece = scene.position_of(self.category)
-        hole = scene.hole_for(self.category).root.global_transform.to_position()
-        reach = KNOWN_PIECE_BY_CATEGORY[self.category].radius
-        return math.hypot(
-            float(piece.x) - float(hole.x), float(piece.y) - float(hole.y)
-        ) <= reach and float(piece.z) < float(hole.z)
+        return SortingScene(self.world).is_in_its_hole(self.category)
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
@@ -822,8 +1125,7 @@ class ThePieceMovedAndTheRobotDidNot(Goal[World]):
 @dataclass(eq=False)
 class ThePieceIsHeld(Goal[World]):
     """
-    Success is one piece hanging from the gripper at the moment the scene is asked
-    about.
+    Success is the robot holding one piece at the moment the scene is asked about.
     """
 
     category: MontessoriShapeCategory
@@ -903,7 +1205,18 @@ class MontessoriSortingScenario(
     Where the robot this scenario runs on is bolted.
     """
 
+    simulation: Optional[SimulatedScene] = field(init=False, default=None)
+    """
+    The physics carrying the world this scenario built most recently.
+
+    A scenario owns it because the world it carries is the one the scenario built, and
+    because a scene has to be standing before it can be simulated: the simulator
+    compiles the scene once, so everything a run acts with has to be in it by then.
+    """
+
     def build_world(self) -> World:
+        if self.simulation is not None:
+            self.simulation.stop()
         montessori = MontessoriWorld(shapes_are_movable=True)
         self._keep_only_the_layouts_pieces(montessori)
         self._stand_the_pieces_where_the_layout_says(montessori)
@@ -913,8 +1226,18 @@ class MontessoriSortingScenario(
             self.robot.position,
             self.robot.yaw,
         )
+        self.add_what_the_script_acts_with(montessori)
         montessori.world.update_forward_kinematics()
+        self.simulation = SimulatedScene(world=montessori.world)
         return montessori.world
+
+    def add_what_the_script_acts_with(self, montessori: MontessoriWorld) -> None:
+        """
+        Put anything this scenario's script needs into the scene, beyond the board, the
+        pieces and the robot every scenario here has.
+
+        :param montessori: The scene being built.
+        """
 
     def _keep_only_the_layouts_pieces(self, montessori: MontessoriWorld) -> None:
         """
@@ -990,8 +1313,8 @@ class TheSceneStandsStill(
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
-            LetTheSceneSettle(name=SortingStep.SETTLE),
-            AskTheQuestion(name=SortingStep.ANSWER),
+            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.simulation),
+            AskTheQuestion(name=SortingStep.ANSWER, scene=self.simulation),
         ]
 
 
@@ -1020,12 +1343,18 @@ class RobotSortsAPiece(
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
-            LetTheSceneSettle(name=SortingStep.SETTLE),
-            PickThePieceUp(name=SortingStep.PICK_UP, category=self.sorted_category),
-            PutThePieceInItsHole(
-                name=SortingStep.PUT_DOWN, category=self.sorted_category
+            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.simulation),
+            PickThePieceUp(
+                name=SortingStep.PICK_UP,
+                category=self.sorted_category,
+                scene=self.simulation,
             ),
-            AskTheQuestion(name=SortingStep.ANSWER),
+            PutThePieceInItsHole(
+                name=SortingStep.PUT_DOWN,
+                category=self.sorted_category,
+                scene=self.simulation,
+            ),
+            AskTheQuestion(name=SortingStep.ANSWER, scene=self.simulation),
         ]
 
 
@@ -1045,6 +1374,48 @@ class PiecePushedWhileTheRobotIsIdle(
     The shape of the piece that is pushed.
     """
 
+    def add_what_the_script_acts_with(self, montessori: MontessoriWorld) -> None:
+        """
+        Stand the pusher on its rail beside the piece it is going to shove.
+
+        :param montessori: The scene being built.
+        """
+        world = montessori.world
+        scene = SortingScene(world)
+        stands_at = scene.position_of(self.pushed_category)
+        reach = KNOWN_PIECE_BY_CATEGORY[self.pushed_category].radius
+        pusher = Body(
+            name=PrefixedName(PUSHER_NAME),
+            collision=ShapeCollection([Box(scale=PUSHER_SCALE)]),
+        )
+        travel = DegreeOfFreedom(
+            name=PrefixedName(PUSHER_RAIL_NAME),
+            # A degree of freedom named after anything but its own connection is read as
+            # a joint mimicking another one, which this is not.
+            limits=DegreeOfFreedomLimits(lower=DerivativeMap(), upper=DerivativeMap()),
+        )
+        travel.limits.lower.position = 0.0
+        travel.limits.upper.position = PUSHER_CLEARANCE + 2 * reach
+        with world.modify_world():
+            world.add_kinematic_structure_entity(pusher)
+            world.add_degree_of_freedom(travel)
+            world.add_connection(
+                PrismaticConnection(
+                    name=PrefixedName(PUSHER_RAIL_NAME),
+                    parent=world.root,
+                    child=pusher,
+                    raw_dof=travel,
+                    axis=Vector3.Y(reference_frame=world.root),
+                    parent_T_connection_expression=(
+                        HomogeneousTransformationMatrix.from_xyz_rpy(
+                            x=float(stands_at.x),
+                            y=float(stands_at.y) - reach - PUSHER_CLEARANCE,
+                            z=TABLE_TOP_Z + PUSHER_SCALE.z / 2,
+                        )
+                    ),
+                )
+            )
+
     def goal(self, world: World) -> Goal[World]:
         """
         Success is that piece having moved and every other one having stayed.
@@ -1057,9 +1428,13 @@ class PiecePushedWhileTheRobotIsIdle(
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
-            LetTheSceneSettle(name=SortingStep.SETTLE),
-            PushThePiece(name=SortingStep.PUSH, category=self.pushed_category),
-            AskTheQuestion(name=SortingStep.ANSWER),
+            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.simulation),
+            PushThePiece(
+                name=SortingStep.PUSH,
+                category=self.pushed_category,
+                scene=self.simulation,
+            ),
+            AskTheQuestion(name=SortingStep.ANSWER, scene=self.simulation),
         ]
 
 
@@ -1081,7 +1456,7 @@ class PieceHeldWhileTheQuestionIsAsked(
 
     def goal(self, world: World) -> Goal[World]:
         """
-        Success is that piece hanging from the gripper when the question is asked.
+        Success is the robot still holding that piece when the question is asked.
 
         :param world: The world the trial is running in.
         """
@@ -1089,9 +1464,13 @@ class PieceHeldWhileTheQuestionIsAsked(
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
-            LetTheSceneSettle(name=SortingStep.SETTLE),
-            PickThePieceUp(name=SortingStep.PICK_UP, category=self.held_category),
-            AskTheQuestion(name=SortingStep.ANSWER),
+            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.simulation),
+            PickThePieceUp(
+                name=SortingStep.PICK_UP,
+                category=self.held_category,
+                scene=self.simulation,
+            ),
+            AskTheQuestion(name=SortingStep.ANSWER, scene=self.simulation),
         ]
 
 

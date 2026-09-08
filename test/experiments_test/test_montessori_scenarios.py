@@ -3,7 +3,7 @@ The Montessori sorting scenes and the scripted runs over them: that a layout pla
 pieces it names where it says, that a scene built from one really has the property it is
 built for, and that each scripted run leaves the world in the state its goal asks about.
 
-Every test here builds its world headless, on the test dataset's own fixed-arm robot
+Every test here builds its world headless, on the test dataset's own grasping robot
 rather than on Tracy, whose description is a ROS package a checkout need not have.
 """
 
@@ -17,9 +17,13 @@ from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 
 from experiments.montessori.scenarios import (
+    CONTAINED_IN_ITS_LANDING_REGION,
     LayoutArea,
     LightingChanged,
     MountedRobot,
+    PUSHER_NAME,
+    PUSHER_RAIL_NAME,
+    PUSHER_SCALE,
     PieceHeldWhileTheQuestionIsAsked,
     PieceLayout,
     PiecePlacement,
@@ -38,16 +42,19 @@ from experiments.montessori.scenarios import (
     TracySortsAPiece,
     TracyWatchesTheSceneStandStill,
 )
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.scenarios.runner import ScenarioRunner
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.adapters.multi_sim import MujocoLight
 from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.reasoning.predicates import InsideOf
+from semantic_digital_twin.world_description.connections import PrismaticConnection
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types import Point3
 from semantic_digital_twin.world import World
 
-from .dataset.synthetic_fixed_arm_robot import SyntheticFixedArmRobot
+from .dataset.synthetic_grasping_robot import SyntheticGraspingRobot
 
 # %% what every scene here is built on
 
@@ -75,35 +82,35 @@ needs one states it rather than assuming a camera the world does not yet carry.
 
 def mounted_arm() -> MountedRobot:
     """
-    The fixed-arm robot of the test dataset, bolted where every scene here bolts it.
+    The grasping robot of the test dataset, bolted where every scene here bolts it.
     """
     return MountedRobot(position=WHERE_THE_ARM_IS_BOLTED)
 
 
-class SyntheticArmSortsAPiece(RobotSortsAPiece[World, SyntheticFixedArmRobot]):
+class SyntheticGrasperSortsAPiece(RobotSortsAPiece[World, SyntheticGraspingRobot]):
     """
     The pick-and-place run, on the robot this test suite can actually build.
     """
 
 
-class SyntheticArmWatchesTheSceneStandStill(
-    TheSceneStandsStill[World, SyntheticFixedArmRobot]
+class SyntheticGrasperWatchesTheSceneStandStill(
+    TheSceneStandsStill[World, SyntheticGraspingRobot]
 ):
     """
     The static run, on the robot this test suite can actually build.
     """
 
 
-class SyntheticArmIsIdleWhileAPieceIsPushed(
-    PiecePushedWhileTheRobotIsIdle[World, SyntheticFixedArmRobot]
+class SyntheticGrasperIsIdleWhileAPieceIsPushed(
+    PiecePushedWhileTheRobotIsIdle[World, SyntheticGraspingRobot]
 ):
     """
     The external-push run, on the robot this test suite can actually build.
     """
 
 
-class SyntheticArmHoldsAPiece(
-    PieceHeldWhileTheQuestionIsAsked[World, SyntheticFixedArmRobot]
+class SyntheticGrasperHoldsAPiece(
+    PieceHeldWhileTheQuestionIsAsked[World, SyntheticGraspingRobot]
 ):
     """
     The piece-in-the-gripper run, on the robot this test suite can actually build.
@@ -205,7 +212,9 @@ def test_a_nearly_ambiguous_layout_stands_the_two_pieces_nearer_than_chance_woul
 
 def test_a_built_scene_stands_every_piece_where_its_layout_says(area):
     layout = PieceLayout.randomized(seed=SEED, area=area)
-    scenario = SyntheticArmWatchesTheSceneStandStill(layout=layout, robot=mounted_arm())
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=layout, robot=mounted_arm()
+    )
 
     world = scenario.build_world()
 
@@ -223,7 +232,9 @@ def test_a_built_scene_rests_every_piece_on_the_table_rather_than_in_it(area):
     the table's surface rather than at some height in the table's own frame.
     """
     layout = PieceLayout.randomized(seed=SEED, area=area)
-    scenario = SyntheticArmWatchesTheSceneStandStill(layout=layout, robot=mounted_arm())
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=layout, robot=mounted_arm()
+    )
 
     world = scenario.build_world()
 
@@ -242,7 +253,9 @@ def test_a_built_scene_holds_only_the_pieces_a_partial_layout_names(area):
         area=area,
         categories=(MontessoriShapeCategory.CUBE, MontessoriShapeCategory.CYLINDER),
     )
-    scenario = SyntheticArmWatchesTheSceneStandStill(layout=layout, robot=mounted_arm())
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=layout, robot=mounted_arm()
+    )
 
     world = scenario.build_world()
 
@@ -253,13 +266,13 @@ def test_a_built_scene_holds_only_the_pieces_a_partial_layout_names(area):
 
 
 def test_a_built_scene_mounts_the_robot_its_type_names(area):
-    scenario = SyntheticArmWatchesTheSceneStandStill(
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
         layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
     )
 
     world = scenario.build_world()
 
-    assert isinstance(SortingScene(world).robot, SyntheticFixedArmRobot)
+    assert isinstance(SortingScene(world).robot, SyntheticGraspingRobot)
 
 
 # %% the scripted runs
@@ -267,7 +280,9 @@ def test_a_built_scene_mounts_the_robot_its_type_names(area):
 
 def test_the_static_run_leaves_every_piece_where_the_layout_put_it(area):
     layout = PieceLayout.randomized(seed=SEED, area=area)
-    scenario = SyntheticArmWatchesTheSceneStandStill(layout=layout, robot=mounted_arm())
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=layout, robot=mounted_arm()
+    )
 
     trial = ScenarioRunner().run_trial(scenario)
 
@@ -275,7 +290,7 @@ def test_the_static_run_leaves_every_piece_where_the_layout_put_it(area):
 
 
 def test_the_static_run_performs_no_step_that_moves_anything(area):
-    scenario = SyntheticArmWatchesTheSceneStandStill(
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
         layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
     )
 
@@ -285,7 +300,7 @@ def test_the_static_run_performs_no_step_that_moves_anything(area):
 
 
 def test_the_pick_and_place_run_puts_the_piece_through_its_own_hole(area):
-    scenario = SyntheticArmSortsAPiece(
+    scenario = SyntheticGrasperSortsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
         robot=mounted_arm(),
         sorted_category=MontessoriShapeCategory.CUBE,
@@ -297,7 +312,7 @@ def test_the_pick_and_place_run_puts_the_piece_through_its_own_hole(area):
 
 
 def test_the_pushed_piece_run_moves_the_piece_and_not_the_robot(area):
-    scenario = SyntheticArmIsIdleWhileAPieceIsPushed(
+    scenario = SyntheticGrasperIsIdleWhileAPieceIsPushed(
         layout=PieceLayout.randomized(seed=SEED, area=area),
         robot=mounted_arm(),
         pushed_category=MontessoriShapeCategory.TRIANGULAR_PRISM,
@@ -309,7 +324,7 @@ def test_the_pushed_piece_run_moves_the_piece_and_not_the_robot(area):
 
 
 def test_the_held_piece_run_still_holds_the_piece_when_the_question_is_asked(area):
-    scenario = SyntheticArmHoldsAPiece(
+    scenario = SyntheticGrasperHoldsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
         robot=mounted_arm(),
         held_category=MontessoriShapeCategory.CYLINDER,
@@ -320,8 +335,8 @@ def test_the_held_piece_run_still_holds_the_piece_when_the_question_is_asked(are
     assert trial.outcome is TrialOutcome.SUCCEEDED
 
 
-def test_the_held_piece_run_ends_with_the_piece_hanging_from_the_gripper(area):
-    scenario = SyntheticArmHoldsAPiece(
+def test_the_held_piece_run_ends_with_the_robot_holding_the_piece(area):
+    scenario = SyntheticGrasperHoldsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
         robot=mounted_arm(),
         held_category=MontessoriShapeCategory.CYLINDER,
@@ -332,6 +347,149 @@ def test_the_held_piece_run_ends_with_the_piece_hanging_from_the_gripper(area):
         step.perform(world)
 
     assert SortingScene(world).is_held(MontessoriShapeCategory.CYLINDER)
+
+
+# %% the physics the scene runs under
+
+
+def test_a_piece_left_above_the_table_falls_onto_it_when_the_scene_settles(area):
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+    )
+    world = scenario.build_world()
+    scene = SortingScene(world)
+    stood_at = scene.position_of(MontessoriShapeCategory.CUBE)
+    scene.stand_the_piece_at(
+        MontessoriShapeCategory.CUBE,
+        Point3(stood_at.x, stood_at.y, float(stood_at.z) + 0.1),
+    )
+
+    scenario.simulation.settle()
+
+    rested_at = scene.position_of(MontessoriShapeCategory.CUBE)
+    assert float(rested_at.z) == pytest.approx(float(stood_at.z), abs=1e-3)
+
+
+def test_the_pushed_scene_stands_a_pusher_on_a_rail_beside_the_piece(area):
+    scenario = SyntheticGrasperIsIdleWhileAPieceIsPushed(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        robot=mounted_arm(),
+        pushed_category=MontessoriShapeCategory.TRIANGULAR_PRISM,
+    )
+
+    world = scenario.build_world()
+
+    pusher = world.get_body_by_name(PUSHER_NAME)
+    assert isinstance(
+        world.get_connection_by_name(PUSHER_RAIL_NAME), PrismaticConnection
+    )
+    piece = SortingScene(world).position_of(MontessoriShapeCategory.TRIANGULAR_PRISM)
+    stands_at = pusher.global_transform.to_position()
+    assert float(stands_at.y) < float(piece.y)
+
+
+def test_the_push_moves_the_piece_along_the_rail_the_pusher_slides_on(area):
+    scenario = SyntheticGrasperIsIdleWhileAPieceIsPushed(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        robot=mounted_arm(),
+        pushed_category=MontessoriShapeCategory.TRIANGULAR_PRISM,
+    )
+    world = scenario.build_world()
+    scene = SortingScene(world)
+    steps = {step.name: step for step in scenario.steps(world)}
+    steps[SortingStep.SETTLE].perform(world)
+    stood_at = scene.position_of(MontessoriShapeCategory.TRIANGULAR_PRISM)
+
+    steps[SortingStep.PUSH].perform(world)
+
+    shoved_to = scene.position_of(MontessoriShapeCategory.TRIANGULAR_PRISM)
+    assert float(shoved_to.y) > float(stood_at.y)
+    assert float(shoved_to.z) == pytest.approx(float(stood_at.z), abs=1e-3)
+
+
+def test_the_pusher_ends_the_push_up_against_the_piece_it_shoved(area):
+    scenario = SyntheticGrasperIsIdleWhileAPieceIsPushed(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        robot=mounted_arm(),
+        pushed_category=MontessoriShapeCategory.TRIANGULAR_PRISM,
+    )
+    world = scenario.build_world()
+    steps = {step.name: step for step in scenario.steps(world)}
+    steps[SortingStep.SETTLE].perform(world)
+    steps[SortingStep.PUSH].perform(world)
+
+    piece = SortingScene(world).position_of(MontessoriShapeCategory.TRIANGULAR_PRISM)
+    pusher = world.get_body_by_name(PUSHER_NAME).global_transform.to_position()
+
+    reach = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM].radius
+    assert float(piece.y) - float(pusher.y) <= reach + PUSHER_SCALE.y
+
+
+def test_picking_a_piece_up_brings_the_gripper_to_it_rather_than_it_to_the_gripper(
+    area,
+):
+    scenario = SyntheticGrasperHoldsAPiece(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        robot=mounted_arm(),
+        held_category=MontessoriShapeCategory.CYLINDER,
+    )
+    world = scenario.build_world()
+    scene = SortingScene(world)
+    steps = {step.name: step for step in scenario.steps(world)}
+    steps[SortingStep.SETTLE].perform(world)
+    stood_at = scene.position_of(MontessoriShapeCategory.CYLINDER)
+
+    steps[SortingStep.PICK_UP].perform(world)
+
+    assert scene.is_held(MontessoriShapeCategory.CYLINDER)
+    held_at = scene.position_of(MontessoriShapeCategory.CYLINDER)
+    assert (float(held_at.x), float(held_at.y), float(held_at.z)) == pytest.approx(
+        (float(stood_at.x), float(stood_at.y), float(stood_at.z))
+    )
+
+
+def test_a_released_piece_is_outside_its_landing_region_until_it_has_fallen(area):
+    scenario = SyntheticGrasperSortsAPiece(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        robot=mounted_arm(),
+        sorted_category=MontessoriShapeCategory.CUBE,
+    )
+    world = scenario.build_world()
+    scene = SortingScene(world)
+    steps = {step.name: step for step in scenario.steps(world)}
+    steps[SortingStep.SETTLE].perform(world)
+    steps[SortingStep.PICK_UP].perform(world)
+    carried = InsideOf(
+        scene.body_of(MontessoriShapeCategory.CUBE),
+        scene.landing_region_for(MontessoriShapeCategory.CUBE),
+    ).compute_containment_ratio()
+
+    steps[SortingStep.PUT_DOWN].perform(world)
+
+    assert carried < CONTAINED_IN_ITS_LANDING_REGION
+    assert scene.is_in_its_hole(MontessoriShapeCategory.CUBE)
+
+
+def test_a_piece_standing_on_the_table_is_not_in_its_hole(area):
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+    )
+
+    world = scenario.build_world()
+
+    assert not SortingScene(world).is_in_its_hole(MontessoriShapeCategory.CUBE)
+
+
+def test_the_robot_holds_nothing_before_it_has_picked_anything_up(area):
+    scenario = SyntheticGrasperHoldsAPiece(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        robot=mounted_arm(),
+        held_category=MontessoriShapeCategory.CYLINDER,
+    )
+
+    world = scenario.build_world()
+
+    assert not SortingScene(world).is_held(MontessoriShapeCategory.CYLINDER)
 
 
 # %% what a run counts as success
@@ -376,7 +534,7 @@ def test_every_goal_verbalizes_as_the_clause_it_states(goal, sentence):
 
 
 def test_the_lighting_change_gives_the_world_a_light_of_its_own(area):
-    scenario = SyntheticArmWatchesTheSceneStandStill(
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
         layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
     )
     world = scenario.build_world()
@@ -400,7 +558,7 @@ def test_every_trial_of_a_seeded_scenario_builds_the_same_scene(area):
     What a seed is for: two trials of one scenario stand the pieces in the same places,
     so a difference between them is the run's and never the scene's.
     """
-    scenario = SyntheticArmWatchesTheSceneStandStill(
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
         layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
     )
 

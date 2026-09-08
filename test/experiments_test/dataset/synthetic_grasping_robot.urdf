@@ -1,0 +1,135 @@
+<?xml version="1.0"?>
+<!--
+  A gantry arm carrying a two-fingered pincer, used to exercise grasping without
+  depending on a real robot's ROS package. Three sliding joints put the pincer anywhere
+  over the Montessori table; the two finger joints open and close it.
+-->
+<robot name="synthetic_grasping_robot">
+  <link name="base_link"/>
+
+  <link name="bridge_link">
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+
+  <link name="carriage_link">
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+
+  <link name="lift_link">
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+    </inertial>
+  </link>
+
+  <link name="pincer_link">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0.02"/>
+      <geometry>
+        <box size="0.04 0.08 0.02"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="left_finger_link">
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+
+  <link name="left_fingertip_link">
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+    <collision>
+      <geometry>
+        <box size="0.02 0.01 0.05"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="right_finger_link">
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+
+  <link name="right_fingertip_link">
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+    <collision>
+      <geometry>
+        <box size="0.02 0.01 0.05"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="bridge_joint" type="prismatic">
+    <parent link="base_link"/>
+    <child link="bridge_link"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-2" upper="2" effort="100" velocity="1"/>
+  </joint>
+
+  <joint name="carriage_joint" type="prismatic">
+    <parent link="bridge_link"/>
+    <child link="carriage_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2" upper="2" effort="100" velocity="1"/>
+  </joint>
+
+  <joint name="lift_joint" type="prismatic">
+    <parent link="carriage_link"/>
+    <child link="lift_link"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0" upper="2" effort="100" velocity="1"/>
+  </joint>
+
+  <joint name="pincer_joint" type="fixed">
+    <parent link="lift_link"/>
+    <child link="pincer_link"/>
+  </joint>
+
+  <joint name="left_finger_joint" type="prismatic">
+    <parent link="pincer_link"/>
+    <child link="left_finger_link"/>
+    <origin xyz="0 0.04 0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="0" upper="0.035" effort="50" velocity="1"/>
+  </joint>
+
+  <joint name="left_fingertip_joint" type="fixed">
+    <parent link="left_finger_link"/>
+    <child link="left_fingertip_link"/>
+    <origin xyz="0 0 -0.03"/>
+  </joint>
+
+  <joint name="right_finger_joint" type="prismatic">
+    <parent link="pincer_link"/>
+    <child link="right_finger_link"/>
+    <origin xyz="0 -0.04 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0" upper="0.035" effort="50" velocity="1"/>
+  </joint>
+
+  <joint name="right_fingertip_joint" type="fixed">
+    <parent link="right_finger_link"/>
+    <child link="right_fingertip_link"/>
+    <origin xyz="0 0 -0.03"/>
+  </joint>
+</robot>
