@@ -59,5 +59,7 @@ upstream_base = "main"
 # The integration branch merges every in-flight stack tip, so it is the only place a semantic
 # conflict between two branches that each pass their own checks can show up. Which suite is
 # worth running is a property of the repository rather than of the tool, so it is configurable;
-# this default is the tooling suite CI's own `test_claude_dev_tooling` job runs.
-integration_test_command = "python3 -m pytest .claude/skills/plan-dashboard/tests .claude/hooks/tests .claude/stack/tests"
+# this default is the package's own suite, run the way CI's `test_bastler` job runs it -
+# `--confcutdir` keeps pytest from walking up to the repository-root conftest, which imports the
+# robotics stack an integration build has no reason to install.
+integration_test_command = "python3 -m pytest test/bastler_test --confcutdir=test/bastler_test"
