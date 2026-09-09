@@ -1,8 +1,6 @@
-PR #305, base `claude/icra-experiments-simulation-pipeline-w4ep7n` (#265) — per the
-developer, cut off #265 directly rather than off `main`/#296, since #265 already
-carries the scenario domain model, montessori scenarios, and simulated-camera
-perception setup this item needs even though none of #261/#296/#298 are literal
-ancestors of it (#265's own convergence pass folded them in by hand).
+**PR #305 is CLOSED (unmerged) — this session's job on it is done.** Closed by the
+developer's direction. Do not reopen it or push further commits; a future session
+starts fresh per "When your PR's job ends".
 
 ## Plan
 
@@ -27,34 +25,40 @@ Four `Perturbation[World]` instances (`experiments/montessori/perturbations.py`,
   than `get_semantic_annotations_by_type`), so the look step can call them from
   `apply`/`perform`'s raw `World`.
 
-## Done so far
+## What happened
 
-- Fixed an unrelated tooling bug hit while recording this item
-  (`plan_item_bootstrap.py`'s indentation constants). The developer reviewed #305 and
-  correctly called out that this didn't belong there (own-PR/bug-label convention) —
-  **split into its own PR, #306, based on `main`, labeled `bug`**. Reverted the fix
-  commit off `claude/icra-mechanism-perturbations-k3myvm` (a "Revert ..." commit, not a
-  history rewrite, since the branch was already pushed/public). Replied to and resolved
-  the review thread; replied to the "no perturbation code yet" comment. #306 is draft,
-  untouched since.
-- Bootstrapped the branch, opened PR #305, recorded `plan.yaml` (in_progress,
-  branch/PR/session) and the roadmap section above.
-- Done: `simulated_setup.py`'s four functions now take `world: World`
-  (`beff1237a`..`b673ec883`, pushed); `test_montessori_simulated_camera.py`'s ~10 call
-  sites updated to pass `.world` through. **Not run against the real MuJoCo pipeline
-  yet** — this container's system Python has no numpy/mujoco/casadi etc.; the montessori
-  perception suite needs the same from-scratch Python 3.12 venv `snapshot-working-memory`
-  (#301) built (mujoco, casadi~=3.7.0, opencv, scikit-image, piqp, transforms3d, trimesh,
-  rustworkx, random_events/probabilistic_model from local wheels, xacro/
-  giskardpy_bullet_bindings stubs, libegl-mesa0, `MUJOCO_GL=egl`). Only `py_compile`
-  syntax-checked so far.
+- Fixed a tooling bug hit while recording this item (`plan_item_bootstrap.py`'s
+  indentation constants) — but the fix was **wrong**: it hardcoded the flush-left
+  convention (`icra-mechanism`/`icra-foundation`'s own) as universal, when at least
+  seven other plans use the opposite convention (`/plan-create`'s own 2-space
+  marker/4-space fields). Split it into its own PR (#306) per the developer's request,
+  then the developer's session found **#302** already had the *correct* fix (derive the
+  indent from the block being patched, correct for either convention) and closed both
+  #305 (this item's PR — the wrong fix was still on it via a revert commit, plus no
+  perturbation code had been written) and pointed at closing #306 too (done).
+- `simulated_setup.py`'s `world: World` signature change (real prep, not itself wrong)
+  is stranded on the now-closed #305. **Verified working** in a from-scratch venv built
+  this session via `/usr/local/bin/uv sync --extra dev` (the older `uv` on `PATH`
+  couldn't parse this repo's `pyproject.toml`) plus `apt-get install libegl1
+  libegl-mesa0` for offscreen MuJoCo rendering — `test_montessori_simulated_camera.py`
+  runs against the real pipeline in it. Building the ORM interfaces
+  (`experiments`→`coraplex`→`giskardpy`) additionally needs `rclpy` (ROS2 Jazzy), which
+  this container does not have and installing is a much larger undertaking than this
+  session attempted — CI runs this in a full `ros:jazzy` Docker image
+  (`.github/docker/Dockerfile`), which is the reproducible way to get it, not an ad-hoc
+  apt install here.
+- `plan.yaml`: `perturbations` set to `blocked` (on #302 merging), roadmap section
+  added recording all of the above. Dashboard republished.
 
-## Next
+## Next (for whichever session picks this up)
 
-- Build (or reuse, if still on disk) that scoped venv before writing anything that needs
-  to actually run — this signature change alone is UNVERIFIED beyond syntax.
-- Implement `TargetHoleMoved`, `PieceShoved` (world perturbations) with tests, TDD.
-- Build `LookAtTheScene` step + the world-registered distortion marker; implement
-  `PerceivedPoseOffset`/`DetectionRelabelled` with tests.
-- Add `instruction_for_a_person()` to `Perturbation` + `LightingChanged`.
-- Run the full montessori/scenarios/perception test suite, format docstrings, push.
+- Wait for #302 to merge, or branch from its fix directly.
+- Re-open work from `claude/icra-mechanism-perturbations-k3myvm` (still on the remote)
+  or a fresh branch off #265 — **do not** reintroduce `beff1237a`/its revert.
+- The design in roadmap.md's "`perturbations` cut off #265..." section still stands:
+  four `Perturbation[World]` instances (`TargetHoleMoved`, `PieceShoved`,
+  `PerceivedPoseOffset`, `DetectionRelabelled`), the `LookAtTheScene` step, a
+  world-registered distortion marker, `instruction_for_a_person()` on the shared base.
+  Only the implementation is outstanding — the design work does not need redoing.
+- The `simulated_setup.py` `world: World` change is worth cherry-picking or redoing
+  (it's small); it's verified working.
