@@ -89,6 +89,23 @@ class SpatialType:
     Can be None if no reference frame is required or applicable.
     """
 
+    def to_json(self) -> Dict[str, Any]:
+        """
+        The json of a spatial type, carrying the frame it is expressed in.
+
+        What the value itself looks like is left to the type, which adds it to what this
+        returns.
+
+        :raises SpatialTypeNotJsonSerializable: If the value is not a constant one, since
+            an expression means nothing to whoever reads it.
+        """
+        if not self.is_constant():
+            raise SpatialTypeNotJsonSerializable(self)
+        result = super().to_json()
+        if self.reference_frame is not None:
+            WorldEntityReference("reference_frame").write(result, self.reference_frame)
+        return result
+
     @classmethod
     def _parse_optional_frame_from_json(
         cls, data: Dict[str, Any], frame: str, **kwargs
@@ -264,11 +281,7 @@ class HomogeneousTransformationMatrix(
         return cls(transformation_matrix)
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            WorldEntityReference("reference_frame").write(result, self.reference_frame)
         if self.child_frame is not None:
             WorldEntityReference("child_frame").write(result, self.child_frame)
         result["position"] = self.to_position().to_np().tolist()
@@ -587,11 +600,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         ).to_rotation_matrix()
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            WorldEntityReference("reference_frame").write(result, self.reference_frame)
         result["quaternion"] = self.to_quaternion().to_np().tolist()
         return result
 
@@ -1062,11 +1071,7 @@ class Point3(Point):
         return result
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            WorldEntityReference("reference_frame").write(result, self.reference_frame)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -1244,11 +1249,7 @@ class Point2(Point):
         return cls(x=x, y=y, reference_frame=reference_frame)
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            WorldEntityReference("reference_frame").write(result, self.reference_frame)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -1328,11 +1329,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            WorldEntityReference("reference_frame").write(result, self.reference_frame)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -1691,11 +1688,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            WorldEntityReference("reference_frame").write(result, self.reference_frame)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -2035,11 +2028,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            WorldEntityReference("reference_frame").write(result, self.reference_frame)
         result["position"] = self.to_position().to_np().tolist()
         result["rotation"] = self.to_quaternion().to_np().tolist()
         return result
@@ -2383,11 +2372,7 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            WorldEntityReference("reference_frame").write(result, self.reference_frame)
         result["data"] = self.to_np().tolist()
         return result
 

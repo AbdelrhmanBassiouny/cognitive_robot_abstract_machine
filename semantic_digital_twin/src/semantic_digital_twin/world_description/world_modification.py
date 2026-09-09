@@ -12,7 +12,6 @@ from typing_extensions import (
 )
 
 from krrood.adapters.json_serializer import (
-    SubclassJSONSerializer,
     shallow_diff_json,
     JSONAttributeDiff,
     list_like_classes,
@@ -274,7 +273,7 @@ class RemoveDegreeOfFreedomModification(WorldModification):
 
 
 @dataclass
-class AddSemanticAnnotationModification(WorldModification, SubclassJSONSerializer):
+class AddSemanticAnnotationModification(WorldModification):
     semantic_annotation_json: JSONData
 
     @classmethod
@@ -291,16 +290,6 @@ class AddSemanticAnnotationModification(WorldModification, SubclassJSONSerialize
         world.add_semantic_annotation(
             from_json(self.semantic_annotation_json, **kwargs)
         )
-
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            **super().to_json(),
-            "semantic_annotation_json": self.semantic_annotation_json,
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(semantic_annotation_json=data["semantic_annotation_json"])
 
 
 @dataclass
@@ -429,27 +418,9 @@ class SetDofHasHardwareInterface(WorldModification):
         degree_of_freedom_ids = [dof.id for dof in dofs]
         return cls(degree_of_freedom_ids=degree_of_freedom_ids, value=kwargs["value"])
 
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            **super().to_json(),
-            "degree_of_freedom_ids": [
-                to_json(dof_id) for dof_id in self.degree_of_freedom_ids
-            ],
-            "value": self.value,
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(
-            degree_of_freedom_ids=[
-                from_json(_id) for _id in data["degree_of_freedom_ids"]
-            ],
-            value=data["value"],
-        )
-
 
 @dataclass
-class AttributeUpdateModification(WorldModification, SubclassJSONSerializer):
+class AttributeUpdateModification(WorldModification):
     """
     An update to one or more attributes of an entity in the world.
 
@@ -508,22 +479,6 @@ class AttributeUpdateModification(WorldModification, SubclassJSONSerializer):
         if isinstance(item, UUID):
             return world.get_world_entity_with_id_by_id(item)
         return item
-
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            **super().to_json(),
-            "entity_id": to_json(self.entity_id),
-            "updated_kwargs_json_list": to_json(self.updated_kwargs_json_list),
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(
-            entity_id=from_json(data["entity_id"], **kwargs),
-            updated_kwargs_json_list=from_json(
-                data["updated_kwargs_json_list"], **kwargs
-            ),
-        )
 
 
 def synchronized_attribute_modification(func):

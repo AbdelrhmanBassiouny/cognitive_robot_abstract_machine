@@ -1,10 +1,11 @@
 import unittest
+import uuid
 from copy import deepcopy
 
 import numpy as np
 import pytest
 
-from krrood.adapters.json_serializer import from_json, to_json
+from krrood.adapters.json_serializer import from_json, to_json, JSONAttributeDiff
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
@@ -35,7 +36,9 @@ from semantic_digital_twin.world_description.world_modification import (
     AddConnectionModification,
     AddDegreeOfFreedomModification,
     AddSemanticAnnotationModification,
+    AttributeUpdateModification,
     RemoveSemanticAnnotationModification,
+    SetDofHasHardwareInterface,
 )
 
 
@@ -327,3 +330,35 @@ def test_design_09_failed_atomic_modification_is_not_recorded():
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# %% json round trips
+
+
+@pytest.mark.parametrize(
+    "modification",
+    [
+        AddSemanticAnnotationModification(
+            semantic_annotation_json={"__json_type__": "a semantic annotation"}
+        ),
+        RemoveSemanticAnnotationModification(semantic_annotation_id=uuid.uuid4()),
+        SetDofHasHardwareInterface(degree_of_freedom_ids=[uuid.uuid4()], value=True),
+        AttributeUpdateModification(
+            entity_id=uuid.uuid4(),
+            updated_kwargs_json_list=[
+                JSONAttributeDiff(attribute_name="entities", removed_values=[])
+            ],
+        ),
+    ],
+)
+def test_a_modification_survives_a_json_round_trip(modification):
+    """
+    A modification travels to other processes and into the database as json, so what it
+    writes and what it reads back have to describe the same change.
+    """
+    payload = to_json(modification)
+
+    restored = from_json(payload)
+
+    assert restored == modification
+    assert to_json(restored) == payload
