@@ -36,6 +36,19 @@ recorded; #252 asks about it.
   dataset. 37 tests in the module, five mutation-checked; `test/experiments_test`
   380 passed. Containment thread replied to and resolved; physics thread replied to and
   left open on the actuation question.
+- Review round 4 (`429e335d4`): a run can be filmed while it is performed, with
+  `MujocoVideoRecorder` — `SceneRecording` films it in takes, `SimulatedScene` lets go of
+  what carries it whenever the world's model changes (a sibling `ModelChangeCallback`
+  rather than each step remembering to), and the film is made from the simulation
+  carrying the run, so a filmed run leaves the piece exactly where an unfilmed one does.
+  Videos land in `$MONTESSORI_SCENARIO_VIDEO_DIRECTORY`. `PlaceAction` gained the
+  optional `grasp_description` the third round asked about, at the developer's "do (1)",
+  with two tests in `test_graph_parsing.py`. The mimic pincer gained visual geometry and
+  the `experiments` CI job exports `MUJOCO_GL=egl`. 48 tests in the module, eight
+  mutation-checked; `test/experiments_test` 391 passed. One thread resolved (the place's
+  grasp), one answered and left open (where the demo's actuation lives), and the video
+  review — a review body rather than a thread, which is why round three missed it —
+  answered as a conversation comment.
 - Review round 3 (`db746a949`): the robot is commanded by coraplex — `PickUpAction` and
   `PlaceAction` under `simulated_robot`, giskard ticking the statechart, headless and
   with no ROS — and every hand-written gripper method is gone. `SimulatedScene` builds
@@ -50,12 +63,17 @@ recorded; #252 asks about it.
 
 ## Next
 
-- Four open threads, all waiting on the developer: whether the `Goal` change belongs on
-  #261; where robot actuation in MuJoCo should live; whether `InsideOf`'s
-  `minimum_containment_ratio` (on #265, not on this base) should be ported here now and
-  meet #265 as a conflict; and whether `PlaceAction` should gain an optional
-  `grasp_description` so a place performed in its own plan knows how the piece is held.
-- CI is the authority for `control_loop_experiments`, which needs ROS to import.
+- Three open threads, all waiting on the developer: whether the `Goal` change belongs on
+  #261; whether `InsideOf`'s `minimum_containment_ratio` (on #265, not on this base)
+  should be ported here now and meet #265 as a conflict; and where the demo's actuation
+  should live, which is now one thread rather than two — the answer to it also decides
+  whether `MontessoriSortingScenario` should be handed the world it is built on.
+- CI is the authority for `control_loop_experiments`, which needs ROS to import, and for
+  the two `PlaceAction` tests in `test_graph_parsing.py`, which need a robot description.
+- Two defects reported and not taken, each belonging in a bug pull request of its own:
+  `StateChangeCallback.stop` removes by equality, and every `Callback` of one class shares
+  an id, so two simulators of one world unregister each other; and `ReAttachNode` keeps a
+  grasped body's free connection, which no MuJoCo model can be compiled from.
 - If the developer wants `depends_on` repointed at `montessori-perception-on-main`, that
   is a one-line manifest change, waiting on his answer on #252.
 
