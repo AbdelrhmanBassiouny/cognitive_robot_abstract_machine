@@ -609,3 +609,72 @@ raise-vs-boolean refactor pattern as `EntityQueryLanguageGenerativeBackend`'s.
 The full `test/krrood_test` suite (2731 passed, 7 skipped, 0 failed) confirms this,
 superseding the smaller partial run recorded above before the `RDRBackend` gap was
 found.
+
+## 2026-09-09: `perturbations` cut off #265, and one tooling bug fixed along the way
+
+Started this morning per the branching change recorded above. Two decisions taken in
+session, and one bug found while trying to record either of them.
+
+**Base.** The item's recorded blocker names `montessori-scenarios` (#296, cross-plan,
+not mergeable into `depends_on`); live-checked and confirmed still open and unmerged
+into `main`, `integration`, or `tracy_icra`, along with `scenario-domain-model` (#261)
+and `integrated-simulation-pipeline` (#265) itself. Per the developer's direction, this
+is cut off **#265** (`claude/icra-experiments-simulation-pipeline-w4ep7n`) anyway:
+`git log`/`git grep` against #265's own tree confirm it already carries
+`experiments/scenarios/scenario.py` (`Perturbation`, `StepName`, `Scenario`),
+`experiments/montessori/scenarios.py`, and the simulated-camera perception setup
+(`simulated_camera.py`, `simulated_setup.py`) — #265's own convergence pass folded
+these in by hand rather than by merge, so none of #261/#296/#298 are literal git
+ancestors even though the content is there.
+
+**The two perception perturbations needed a real look step, and #265 already has what
+that needs.** No Montessori scenario step takes an actual perception look today — the
+`ANSWER` step reads `InsideOf` straight off the twin's ground truth. Checked before
+building anything: `simulated_setup.py`'s `camera_over_the_table`/`perception_pipeline`
+already wire a `SimulatedCamera` (renders a live RGB+depth frame from the running
+MuJoCo mirror) and a `MontessoriPerceptionPipeline` over it — the
+`simulated-camera-feeds-perception` work the manifest still lists as `not_started` is
+in fact already sitting on #265, confirmed by reading `simulated_camera.py` end to end
+rather than trusting the manifest's own status. Building on it rather than the
+`FixedScene`/`RecordedFrame`/`MontessoriPerceptionNode` sources, none of which capture a
+fresh frame from a *running* scene.
+
+**A signature change planned for `simulated_setup.py`, not yet made.** Its four
+functions take `montessori_world: MontessoriWorld` (the scene builder) rather than
+`world: World`, but nothing in their bodies uses more than `montessori_world.world` and
+`montessori_world.board` — both trivially re-derivable from `world` alone via
+`get_semantic_annotations_by_type`, the same way `SortingScene` already does it. A
+`Perturbation[World].apply(world)`/`ScenarioStep[World].perform(world)` only ever
+receives the raw `World`, never the builder, so the look step this item adds cannot
+call these functions as they stand. They have no caller outside their own test
+(`test_montessori_simulated_camera.py`), so the plan is to move the signature to
+`world: World` instead of duplicating a second camera/pipeline builder for this item
+alone, updating that test's ~10 call sites to pass `.world` through.
+
+**A tooling bug found and fixed, not part of this item's own diff.** Recording this
+item's `branch`/`pull_request_number`/`status`/`session` via
+`plan_item_bootstrap.py`'s `open` produced invalid YAML — new fields landed at 4-space
+indent under a flush-left `- id:` marker, which is not how any real `plan.yaml` in this
+repository is written (every one uses a 0-indent marker with 2-space fields).
+`save-plan.sh`'s own validation caught it before anything reached the personal-notes
+branch, so nothing here was corrupted, but the same bug would hit any concurrent
+session's `open`/`record` call whose item's title uses a folded block scalar (which is
+most of them). Root cause: `ITEM_MARKER`/`ITEM_FIELD_INDENT` in
+`plan_item_bootstrap.py` were `"  - "`/`"    "`, matching the test suite's own fixture
+but not any real file — nothing in that test suite had ever compared against an actual
+`plan.yaml`. Fixed to `"- "`/`"  "`, the fixture corrected to match, and a new test
+(`test_a_rendered_field_line_carries_the_indentation_real_plans_use`) pins the literal
+apart from the fixture so this cannot silently drift back. Filed as its own commit on
+this branch since it is infrastructure, not part of `perturbations`' own deliverable;
+worth cherry-picking onto #265/`tracy_icra` directly given it affects every session
+using these skills, not just this one.
+
+**Design, settled before writing code.** Four `Perturbation[World]` instances:
+`TargetHoleMoved` and `PieceShoved` act on the world directly (the same mechanism
+`SortingScene.stand_the_piece_at` and the existing `PushThePiece` pusher already use);
+`PerceivedPoseOffset` and `DetectionRelabelled` act on the perception result, reached
+through a small world-registered marker the new `LookAtTheScene` step reads and clears
+after taking its look, since `apply(world)` has no other channel to whatever backend a
+later step will use. Every `Perturbation` gains `instruction_for_a_person() -> str` on
+the shared base in `scenario.py` (so `LightingChanged` implements it too), per the
+item's own notes that the same instance renders a one-line real-robot instruction.
