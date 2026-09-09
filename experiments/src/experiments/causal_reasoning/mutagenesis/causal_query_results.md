@@ -167,17 +167,8 @@ own; it has no notion of "monotonic," "small sample," or "structurally complex."
   running correctly on real, structured relational data and turning up a real,
   chemically plausible signal, not as a finished causal claim.
 
-## What would make this more interesting
+## Final takeway from this experiment
 
-The next natural step is to mark `ind1` itself as the cause instead of branching-atom
-count, and see whether the analytic answer to "why is a molecule mutagenic" lines up
-with what the literature already says about `ind1`, ideally alongside a comparison
-against a plain classifier's held-out accuracy on the same data. With the query-level
-`cause`/`causes_effect` machinery this experiment now uses, that swap is one line
-(`indicator_1=cause` instead of `branching_atom_count=cause`), unlike before, when it
-would have meant a different code path entirely, since `ind1` is a flat field rather
-than an aggregate grounding has to assemble from a relation. We are not doing that
-here: it is still a different question from the one this experiment asks, and the
-classifier-accuracy comparison is a separate benchmark on its own. Both deserve to be
-built and judged on their own terms rather than folded into this one, but neither is
-blocked on new machinery anymore.
+**What it does prove:** The full pipeline works end-to-end on real, structured relational data, divided fitting, cause/confounder/causes_effect query marking, grounding through RelationalCircuitRegistry, support-determinism verification, and backdoor adjustment all produce a coherent result that matches a real chemistry signal (mutagenicity rising with branching-atom count, consistent with known QSAR correlates). That's genuine validation of the pipeline. 
+
+**What it doesn't prove:** It doesn't prove branching-atom count causes mutagenicity, that's inherent to backdoor adjustment itself (it's only as sound as the assumed confounder set), but not this pipeline gap.
