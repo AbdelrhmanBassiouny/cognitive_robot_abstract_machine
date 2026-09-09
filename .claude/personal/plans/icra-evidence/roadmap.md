@@ -1259,3 +1259,43 @@ exactly the drift the reviewer was pointing at. `figure.py`'s `scored_queries_of
 Neither half was run locally, for the same container reason as every round on this
 branch; formatting was still run, via a throwaway venv built to hold black/docformatter/
 tqdm since `uv sync` itself fails here.
+
+### `question-set-answered-from-memory` (#304), reviewed again 2026-09-09
+
+Two more comments landed on the same field minutes after the round above: "why is it
+optional? This should replace the text field as well, and be a required field", then
+"Actually, I think this must be a Role[Question], and find a clean way to solve the
+ormatic issue... maybe use `AlternativeMapping`... as a last resort".
+
+**A mechanism already in ORMatic solved it without `Role` or `AlternativeMapping`.**
+`ormatic.py` already sets `type_mappings[SubclassJSONSerializer] = JSON`, and `TypeDict`
+resolves a field's mapping by nearest inheritance distance - so any class inheriting
+`krrood.adapters.json_serializer.SubclassJSONSerializer` gets a JSON column
+automatically. `Question` now inherits it, delegating `to_json`/`_from_json` to the
+already-existing generic `DataclassJSONSerializer` (which introspects a dataclass's own
+fields and skips `ClassVar`s) - two methods, not new infrastructure, and exactly the
+reuse AGENTS.md already asks for rather than hand-writing serialization.
+
+**The round above's fix was not just less than what was asked - it was wrong.**
+Re-reading `long_term_memory.py` while investigating found `episode_identifier: str` is
+a real per-instance field on every `LongTermMemoryQuestion` (which run the question is
+about). `RecordedQuery.question_type: Optional[Type[Question]]` stored only the class,
+silently discarding that - a recorded long-term answer could not say which episode it
+was actually asked of. `question_type` is now `question: Optional[Question]` - the
+instance that was asked, not its class - which is what makes this a correctness fix, not
+only a persistence one. Verified against a standalone mimic reproducing `Question`'s
+exact shape, since this container still cannot import the full `experiments` package
+(`casadi` and the rest); two real tests added in `test_questions.py`
+(`ObjectsSeen`/`AnythingMovedInTheEpisode`) for CI to verify end to end.
+
+**One part of the ask left unresolved, flagged rather than guessed at.** Making
+`question` required and dropping `text`, as literally asked, conflicts with
+`QueryDeterminism` (`paper/queries.py`, already merged in #297): it groups *any*
+recorded query - not only ones answering a frozen-set question - by its literal `text`,
+and its own tests (`test_paper_figures.py`) exercise plain ad hoc EQL queries with no
+`Question` behind them at all. Making `question` required would mean either giving
+`Bucket`/`BloomLevel` a "not part of the frozen set" member - touching a taxonomy #295
+already froze and reviewed four rounds on - or breaking that shipped feature. Kept
+`question` optional and `text` in place; replied on the thread with the concrete
+conflict and asked which he wants, per the standing rule against resolving a thread
+whose ask was answered differently from what it asked.

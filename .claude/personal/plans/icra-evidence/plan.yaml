@@ -132,6 +132,18 @@ items:
     mapped by ORMatic's existing `TypeType` decorator - with `bucket`/`bloom_level` becoming
     read-only properties read off it, so they can no longer drift from the class that defines
     them. See roadmap's "reviewed 2026-09-09" section for the full reasoning.
+
+    Reviewed again 2026-09-09, and the class-only reference was wrong, not just less than what
+    was asked for: `LongTermMemoryQuestion` carries a real per-instance `episode_identifier`, which
+    `question_type: Type[Question]` silently discarded, so a recorded long-term answer could not
+    say which episode it was about. `RecordedQuery.question_type` is now `question: Optional[Question]`
+    - the instance, not the class - persisted by having `Question` inherit
+    `krrood.adapters.json_serializer.SubclassJSONSerializer`, which ORMatic already maps to a JSON
+    column by inheritance distance; no new column type or `AlternativeMapping` needed. Left
+    unresolved and flagged rather than guessed at: making `question` required and dropping `text`,
+    as literally asked, would conflict with `QueryDeterminism` (#297, already merged), which groups
+    any recorded query - including ones with no `Question` at all - by its literal text. See
+    roadmap's "reviewed again 2026-09-09" section.
   blockers: []
 - id: objects-seen-asked-of-the-perception-system
   title: >-
