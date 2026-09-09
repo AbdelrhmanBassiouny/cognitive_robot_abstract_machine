@@ -1988,3 +1988,87 @@ and resolved by keeping both sides: `ci_reusable.yml`'s EGL-offscreen comment (r
 name all three MuJoCo offscreen renderers rather than choosing one branch's wording) and
 `generate_orm.py`'s `ignored_classes` list. See `integrated-simulation-pipeline`'s entry
 above.
+
+## 2026-09-09, later: `tracy_icra` merged in, the LongTermMemory CI failure fixed, main merged a second time
+
+At the developer's request, `tracy_icra` was merged into `integrated-simulation-pipeline`
+(#265) ahead of `tracy-demo-takes-the-integrated-branch`, whose own job this normally
+would have been - the developer chose to bring it in now rather than wait.
+
+**Eleven conflicted files, all resolved by reading both sides rather than picking one**
+(`c719c44a9`):
+
+- `segmind/detectors/base.py` - kept this branch's typed `predicate` parameter on
+  `get_relation`; replaced the narrower `get_relation_to_holes` outright with
+  `tracy_icra`'s more general `get_relation_to_regions`, since the general primitive
+  subsumes the specific one rather than sitting beside it. Kept both `holes` and the new
+  `hole_regions` fields on `SegmindContext` - they answer different questions (which
+  apertures exist, versus which region each maps to).
+- `segmind/detectors/spatial_relation_detector_nodes.py` - adopted `tracy_icra`'s shared
+  `BaseHoleContactDetector` base for `HoleContactDetector`/`LossOfHoleContactDetector`,
+  which removes the duplicated `overlap_threshold`/`additional_candidates` fields the two
+  detectors previously each declared. Carried this branch's more specific docstring
+  content into the merged base (the measured 0.17 overlap threshold, the 5 mm marker
+  thickness) rather than losing it to `tracy_icra`'s more general prose.
+- `segmind/detectors/atomic_event_detectors_nodes.py` - the one conflict that surfaced a
+  real, pre-existing bug in **both** branches' own code, not just a design difference:
+  `MotionDetector._is_lifting` called `poses[0].to_position().z`, and `NumericPose` has no
+  `to_position` method - it is a plain dataclass whose `position` field is already a
+  `Tuple[float, float, float]`. Fixed to read `poses[0].position[2]`/`poses[-1].position[2]`
+  directly. `tracy_icra`'s new `LiftDetector`/`StopLiftDetector` were built on the same
+  broken pattern and fixed the same way, and their `Pose.from_numeric_pose(...)` calls
+  (needed because `MotionEvent.start_pose`/`current_pose` are typed `Pose`, not
+  `NumericPose`) were kept as `tracy_icra` had them.
+- `coraplex/execution_environment.py` - both sides' `ExecutionEnvironment` fields kept
+  together (`real_time_pacing`, `real_time_factor`, `prediction_horizon` and, at the time,
+  `max_ticks_per_motion_mapping`) since neither superseded the other. `max_ticks_per_motion_mapping`
+  is removed again below, once main's merge made it dead.
+
+**The LongTermMemory CI failure the developer flagged, fixed twice.** Merging #295's
+`AgentInteractionEvent` in as a second base on `PickUpEvent`/`PlacingEvent`/
+`InsertionEvent` (see the 2026-09-09 convergence entry above) broke ORMatic's
+joined-table inheritance: `wrapped_table.py`'s `_original_wrapped_for_mapping` maps a
+class to the SQL parent of the *first* already-mapped ancestor its `__mro__` reaches, and
+it only supports one parent per class. With `EventWithEffect` listed first in each
+class's bases, that first mapped ancestor was `EventWithEffect`, not
+`AgentInteractionEvent`, so a long-term-memory query for `AgentInteractionEvent` found
+none of the three event types.
+
+First fix (`0e580a146`): reorder the bases so `AgentInteractionEvent` comes first on all
+three classes. Verified in an isolated standalone class hierarchy before applying it -
+`effect()` and `isinstance(event, AgentInteractionEvent)` both hold for all three.
+
+Superseded by the developer's own, simpler fix (`12d806e20`): make `AgentInteractionEvent`
+itself extend `EventWithEffect`. An agent's action always changes what holds of the
+object, so the inheritance is true on its own terms, not just a workaround for ORMatic -
+and it means `PickUpEvent`/`InsertionEvent` need only single inheritance from
+`AgentInteractionEvent` alone, with no base ordering to get right. `PlacingEvent` keeps
+`(AgentInteractionEvent, ComesToRestEvent)`, since it specifically needs
+`ComesToRestEvent`'s effect logic, shared with plain `SupportEvent`. Verified again in
+isolation, including the negative case: `SupportEvent`, a physics event with no agent
+behind it, correctly stays outside `isinstance(..., AgentInteractionEvent)`.
+
+**A fresh conflict against `origin/main` appeared after that push.** The developer said
+yes to merging main in and resolving it now rather than leaving it. `51fc40548` merges
+it, five files:
+
+| file | what met | resolution |
+|---|---|---|
+| `coraplex/plans/executables.py` | main replaced `GiskardExecutable.max_ticks_per_motion_mapping` (a `ClassVar`) with `Context.ticks_per_motion` (a context field), per main's own `test_the_tick_budget_is_not_class_state`: *"The budget is a policy of the run, carried by its context, so two runs in one process cannot be given different budgets by class state that outlives them."* | adopted main's design in full - removed the old `ClassVar`, the `tick_limit` property and the `DEFAULT_MAX_TICKS_PER_MOTION_MAPPING` constant rather than keeping both mechanisms; kept this branch's pause-handling (`is_paused`) and real-time tick-pacing logic inside the loop, which main's side of the conflict did not carry |
+| `coraplex/execution_environment.py` | not itself conflicted, but still carried `max_ticks_per_motion_mapping`/`previous_max_ticks_per_motion_mapping` and the matching `__enter__`/`__exit__`/`__call__` wiring from the `tracy_icra` merge above | removed, to complete the same migration - `GiskardExecutable` no longer has the class attribute this file was setting |
+| `coraplex/robot_plans/actions/core/pick_up.py` | main added `allow_gripper_collision=True` to `_grasp_attempt_plan`'s closing `MoveGripperMotion`; this branch already sizes the same call's goal with `grasped_object=self.object_designator.root` | read `MoveGripperMotion`'s own class definition first to confirm the two are independent, pre-existing, complementary parameters (a collision permission and a goal-sizing hint) rather than alternatives - kept both. Also kept this branch's `if self.context.update_world_model_attachment:` guard around the trailing `ReAttachNode`, which main's side of the conflict had dropped entirely; keeping main's unconditional version would have been a silent regression |
+| `test/coraplex_test/test_plan/test_executables.py` | this branch's two tests for the old tick-budget mechanism (`test_a_motion_is_given_a_finite_tick_budget_without_being_asked_for_one`, `test_an_execution_environment_budget_replaces_the_default`) versus main's new collision-avoidance tests and `test_the_tick_budget_is_not_class_state` | dropped the two old tests (they test a mechanism that no longer exists), kept all three of main's - no duplication, since this branch had no collision-avoidance tests of its own in this file |
+| `test/coraplex_test/test_designator/test_motion_designator.py` | two independent new imports added on each side, both used later in the file (`ViewManager` on this branch, `ClosingMotion`/`OpeningMotion` on main) | kept both |
+
+One remaining reader of the retired name was a docstring rather than code:
+`experiments/tracy_experiments/trajectory_planning.py`'s `DEFAULT_MAX_TICKS` constant
+referenced `GiskardExecutable.max_ticks_per_motion_mapping` by name in its own docstring;
+repointed to `Context.ticks_per_motion`, completing the rename per AGENTS.md's "a rename
+is finished only when every reader of the old name reads the new one."
+
+**Verification.** Every file touched in this round was byte-compiled clean
+(`python3 -m py_compile`) and re-checked for stray `<<<<<<<`/`=======`/`>>>>>>>` markers
+before committing; ORMatic generation and anything importing ROS still needs a real CI
+run, which this container cannot give. CI on `51fc40548` had not reported when this was
+written; per the standing rule against scheduled checks, nothing was armed to watch it -
+ask, or look at the run directly.

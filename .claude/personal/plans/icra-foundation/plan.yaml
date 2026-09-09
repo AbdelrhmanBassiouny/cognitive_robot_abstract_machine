@@ -175,6 +175,21 @@ items:
     failure; CI on 06e7af3eb had not reported when this was written, and no check of it was armed.
     The hazard is now three instances old and is recorded in roadmap.md as standing: every merge of main into this branch can carry a rename whose only stale reader
     sits in a file main never touched, and none of them fails where it is written.
+
+    2026-09-09: tracy_icra merged in (c719c44a9) at the developer's request, ahead of
+    tracy-demo-takes-the-integrated-branch, eleven conflicted files resolved by reading both
+    sides. Found and fixed a real bug along the way, in neither branch's own version:
+    MotionDetector._is_lifting called NumericPose.to_position(), which does not exist. CI on
+    that tip showed two failing LongTermMemory tests in experiments; root cause was merging
+    #295's AgentInteractionEvent in as a second base broke ORMatic's joined-table mapping,
+    which maps to the first already-mapped MRO ancestor. Fixed per the developer's own
+    direction: AgentInteractionEvent now extends EventWithEffect directly (12d806e20),
+    verified in isolation. A fresh conflict against main then appeared; merged and resolved
+    (51fc40548), five files, adopting main's Context.ticks_per_motion design for the
+    simulated tick budget in full rather than keeping the old
+    GiskardExecutable.max_ticks_per_motion_mapping/tick_limit mechanism alongside it. Full
+    detail recorded in roadmap.md and in the PR description's own new section. Still not
+    CI-green on this tip - nothing armed to watch it, per the standing rule.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback
