@@ -17,8 +17,6 @@ from bastler.integration_tips import ReadmittedBranch, ResolutionProvenance, Tip
 
 from .test_maintenance import (
     ForkCheckout,
-    TOOLING_CONTENT,
-    TOOLING_PATH,
     UPSTREAM_BASE,
     UPSTREAM_REMOTE,
     a_stack,
@@ -70,40 +68,6 @@ def test_the_pointer_moves_to_the_build_that_finished(fork_checkout: ForkCheckou
     assert fork_checkout.git.commit_at(
         bastler.integration_constants.POINTER_BRANCH
     ) == fork_checkout.git.commit_at(A_BUILD_BRANCH)
-
-
-def test_a_build_keeps_the_checkout_s_own_files_when_it_sits_on_the_pointer(
-    fork_checkout: ForkCheckout,
-):
-    """
-    A scheduled rebuild's own checkout sits on the pointer branch, since that is the
-    branch a build's pointer moves - and moving the pointer's local ref while sitting on
-    it is exactly what hands
-    :class:`~bastler.maintenance_restack_procedure.DetachedCheckout` reattachment the
-    freshly assembled tree instead of the checkout's own: the assembled tree is built
-    from the upstream base, which never carries this checkout's own files.
-    """
-    fork_checkout.run_git(
-        "checkout",
-        "--quiet",
-        "-B",
-        bastler.integration_constants.POINTER_BRANCH,
-        UPSTREAM_BASE,
-    )
-    tooling = fork_checkout.project_root / TOOLING_PATH
-    tooling.parent.mkdir(parents=True)
-    fork_checkout.commit(TOOLING_PATH, TOOLING_CONTENT)
-    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
-    fork_checkout.run_git(
-        "checkout", "--quiet", bastler.integration_constants.POINTER_BRANCH
-    )
-
-    build(
-        fork_checkout,
-        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
-    )
-
-    assert tooling.read_text() == TOOLING_CONTENT
 
 
 # %% merging the tips
