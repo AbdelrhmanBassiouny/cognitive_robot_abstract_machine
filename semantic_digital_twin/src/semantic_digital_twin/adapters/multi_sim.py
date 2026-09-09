@@ -11,7 +11,7 @@ import trimesh
 import PIL.ImageFile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import IntEnum
+from enum import Enum, IntEnum, StrEnum
 from types import NoneType
 from typing_extensions import (
     Dict,
@@ -152,6 +152,39 @@ class GeomVisibilityAndCollisionType(IntEnum):
     """
     Undefined geometry type (variant 2).
     """
+
+
+class RegionAppearance(Enum):
+    """
+    How much of a region a simulator draws.
+
+    A region names a volume of space rather than a thing standing in it, so drawing its
+    area as ordinary geometry puts something in the picture that nothing in the world
+    holds.
+    """
+
+    TRANSPARENT = 0.3
+    """
+    Drawn see-through, so a region shows where it is without hiding what stands inside it.
+    """
+
+    HIDDEN = 0.0
+    """
+    Not drawn at all, so a camera into the simulator sees only the things the world holds.
+    """
+
+    @property
+    def opacity(self) -> float:
+        """
+        :return: The share of its own opacity a region's area keeps when it is drawn.
+        """
+        return self.value
+
+
+FULLY_OPAQUE = 1.0
+"""
+The opacity a shape is drawn at when nothing asked for it to be faded.
+"""
 
 
 @dataclass(eq=False)
@@ -474,7 +507,7 @@ class ShapeConverter(EntityConverter, ABC):
             entity.color.R,
             entity.color.G,
             entity.color.B,
-            entity.color.A,
+            entity.color.A * kwargs.get("opacity", FULLY_OPAQUE),
         )
         geom_color = [r, g, b, a]
         geom_props.update(
@@ -835,6 +868,49 @@ class MujocoActuator(SimulatorAdditionalProperty):
     mujoco.mjtGain.mjGAIN_MUSCLE:   gain_term = mju_muscleGain(…)
     mujoco.mjtGain.mjGAIN_USER:     gain_term = mjcb_act_gain(…)
     """
+
+
+class MujocoRenderingBackend(StrEnum):
+    """
+    The graphics backends MuJoCo can draw through, by the name it answers to.
+    """
+
+    EGL = "egl"
+    """
+    Draws without a window, on a machine with a graphics device but no display.
+    """
+
+    OSMESA = "osmesa"
+    """
+    Draws without a window and without a graphics device, in software.
+    """
+
+
+MUJOCO_RENDERING_BACKEND_VARIABLE = "MUJOCO_GL"
+"""
+The environment variable MuJoCo reads its backend from, which it does once, at the
+moment something first draws.
+"""
+
+
+def select_offscreen_rendering_backend() -> None:
+    """
+    Ask MuJoCo for a backend that can draw with no window, unless one was already asked
+    for.
+
+    MuJoCo's own default where a display is present is a windowed backend, which cannot
+    make a context on a machine with no display and aborts a render with no context at
+    all. A backend already named is left alone, since it is the caller's own choice.
+
+    ..warning:: MuJoCo reads this variable when Python first imports it and holds to
+        what it read, so this only reaches a process that has not imported it yet. A run
+        that has to draw with no display names the backend in the environment it is
+        started from, which is what the test workflow does.
+    """
+    already_chosen = os.environ.get(MUJOCO_RENDERING_BACKEND_VARIABLE, "").lower()
+    if already_chosen in tuple(MujocoRenderingBackend):
+        return
+    os.environ[MUJOCO_RENDERING_BACKEND_VARIABLE] = MujocoRenderingBackend.EGL
 
 
 @dataclass
@@ -1573,6 +1649,11 @@ class MultiSimBuilder(ABC):
     The world to be built.
     """
 
+    region_appearance: RegionAppearance = RegionAppearance.TRANSPARENT
+    """
+    How much of every region of the built world is drawn.
+    """
+
     _ignore_connection_types: ClassVar[Tuple[Type, ...]] = (
         FixedConnection,
         OmniDrive,
@@ -1673,9 +1754,15 @@ class MultiSimBuilder(ABC):
         :param region: The region to build.
         """
         self._build_region(region=region)
+        if self.region_appearance is RegionAppearance.HIDDEN:
+            return
         for shape in region.area:
             self._build_shape(
-                parent=region, shape=shape, is_visible=True, is_collidable=False
+                parent=region,
+                shape=shape,
+                is_visible=True,
+                is_collidable=False,
+                opacity=self.region_appearance.opacity,
             )
 
     @abstractmethod
@@ -1721,6 +1808,7 @@ class MultiSimBuilder(ABC):
         shape: Shape,
         is_visible: bool,
         is_collidable: bool,
+        opacity: float = FULLY_OPAQUE,
     ):
         """
         Builds a shape in the simulator and attaches it to its parent body or region.
@@ -1729,6 +1817,7 @@ class MultiSimBuilder(ABC):
         :param shape: The shape to build.
         :param is_visible: Whether the shape is visible.
         :param is_collidable: Whether the shape is collidable.
+        :param opacity: The share of its own opacity the shape is drawn at.
         """
         raise NotImplementedError
 
@@ -1978,9 +2067,10 @@ class MujocoBuilder(MultiSimBuilder):
         shape: Shape,
         is_visible: bool,
         is_collidable: bool,
+        opacity: float = FULLY_OPAQUE,
     ):
         geom_props = MujocoGeomConverter.convert(
-            shape, visible=is_visible, collidable=is_collidable
+            shape, visible=is_visible, collidable=is_collidable, opacity=opacity
         )
         parent_body_name = parent.name.name
         parent_body_spec = self._find_entity(
@@ -2532,6 +2622,7 @@ class KinematicStructureEntitySpawner(EntitySpawner):
         shape: Shape,
         visible: bool,
         collidable: bool,
+        opacity: float = FULLY_OPAQUE,
     ) -> bool:
         """
         Spawns a shape in the Multiverse simulator and attaches it to its parent body or region.
@@ -2541,6 +2632,7 @@ class KinematicStructureEntitySpawner(EntitySpawner):
         :param shape: The shape to spawn.
         :param visible: Whether the shape is visible.
         :param collidable: Whether the shape is collidable.
+        :param opacity: The share of its own opacity the shape is drawn at.
 
         :return: True if the shape was spawned successfully, False otherwise.
         """
@@ -2592,6 +2684,7 @@ class RegionSpawner(KinematicStructureEntitySpawner, ABC):
                 shape=shape,
                 visible=True,
                 collidable=False,
+                opacity=RegionAppearance.TRANSPARENT.opacity,
             )
             for shape in parent.area
         )
@@ -2772,9 +2865,10 @@ class MujocoKinematicStructureEntitySpawner(
         shape: Shape,
         visible: bool,
         collidable: bool,
+        opacity: float = FULLY_OPAQUE,
     ) -> bool:
         shape_props = MujocoGeomConverter.convert(
-            shape, visible=visible, collidable=collidable
+            shape, visible=visible, collidable=collidable, opacity=opacity
         )
         shape_name = shape_props.pop("name")
         result = simulator.add_entity(
@@ -3933,6 +4027,7 @@ class MultiSim(ABC):
         physically_simulated_dofs: Optional[Set[DegreeOfFreedom]] = None,
         sync_rate_hz: float = 30,
         mirror_attachments: bool = False,
+        region_appearance: RegionAppearance = RegionAppearance.TRANSPARENT,
         **kwargs,
     ):
         """
@@ -3956,8 +4051,11 @@ class MultiSim(ABC):
             mirrored into the simulator's own kinematic tree, so a grasped
             object is welded to the gripper instead of being held purely by
             contact and friction.
+        :param region_appearance: How much of every region of the world is drawn.
         """
-        self.builder_class().build_world(world=world, file_path=self.default_file_path)
+        self.builder_class(region_appearance=region_appearance).build_world(
+            world=world, file_path=self.default_file_path
+        )
         self.simulator = self.simulator_class(
             file_path=self.default_file_path,
             _headless=headless,

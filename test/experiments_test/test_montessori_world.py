@@ -15,7 +15,6 @@ from experiments.montessori.world import (
     FLOOR_Z,
     MEASURED_BOARD_HUE,
     TABLE_COLOR,
-    SHAPE_FOOTPRINT_CLEARANCE_SCALE,
     TABLE_POSITION,
     TABLE_SCALE,
     TABLE_SHAPE_ROW_X,
@@ -212,7 +211,7 @@ def test_montessori_world_creates_one_shape_per_hole_category_plus_the_sphere():
     assert len(shape_categories) == len(holes) + 1
 
 
-def test_montessori_world_pairs_each_circular_shape_with_its_own_sized_hole():
+def test_montessori_world_pairs_each_circular_shape_with_its_own_hole():
     montessori = MontessoriWorld()
     montessori.world.update_forward_kinematics()
 
@@ -222,12 +221,13 @@ def test_montessori_world_pairs_each_circular_shape_with_its_own_sized_hole():
         if shape.shape_category == MontessoriShapeCategory.CYLINDER
     ]
 
-    # the board has two circular holes of different sizes; each cylinder shape must be
-    # sized after its own hole's footprint (not a single shared, fixed size), and must
-    # resolve back to that same hole rather than to the other, differently-sized one
+    # the board has two circular holes of different sizes and this set has one cylinder
+    # piece, so both shapes are built that piece's size and either would pass through
+    # either hole: what pairs a shape with a hole is the hole it was built for, and the
+    # resolution cannot fall back on how large it is
     cross_section_sizes = {shape.cross_section_size for shape in cylinder_shapes}
     assert len(cylinder_shapes) == 2
-    assert len(cross_section_sizes) == 2
+    assert len(cross_section_sizes) == 1
 
     for shape in cylinder_shapes:
         hole = montessori.board.hole_for(shape)
@@ -263,8 +263,29 @@ def test_orientation_sensitive_shape_matches_its_holes_footprint_orientation(cat
 
     assert shape_xy.shape == hole_xy.shape
     np.testing.assert_allclose(
-        shape_xy / SHAPE_FOOTPRINT_CLEARANCE_SCALE, hole_xy, atol=1e-4
+        shape_xy / (shape.cross_section_size / hole.cross_section_size),
+        hole_xy,
+        atol=1e-4,
     )
+
+
+def test_every_loose_shape_is_built_the_size_its_piece_was_measured_to_be():
+    montessori = MontessoriWorld()
+    montessori.world.update_forward_kinematics()
+
+    measured = [
+        (shape, KNOWN_PIECE_BY_CATEGORY[shape.shape_category])
+        for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
+        if shape.shape_category in KNOWN_PIECE_BY_CATEGORY
+    ]
+
+    # every kind of piece this set contains stands on the table, at the size it was
+    # measured to be rather than at a share of the hole it drops through
+    assert {piece.category for _, piece in measured} == set(KNOWN_PIECE_BY_CATEGORY)
+    for shape, piece in measured:
+        assert shape.cross_section_size == pytest.approx(piece.cross_section_size)
+        bounds = shape.root.collision.combined_mesh.bounds
+        assert bounds[1][2] - bounds[0][2] == pytest.approx(piece.height)
 
 
 def test_montessori_world_places_loose_shapes_resting_on_the_table():

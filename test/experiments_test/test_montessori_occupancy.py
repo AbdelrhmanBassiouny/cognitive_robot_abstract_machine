@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from typing_extensions import List
+from typing_extensions import List, Optional
 
 from experiments.montessori.perception.detections import DetectedMontessoriShape
 from experiments.montessori.perception.footprint import RectifiedFootprint
@@ -36,6 +36,11 @@ The source these tests hand the beliefs behind the detections they build by hand
 PIECE_WIDTH = 0.04
 """
 Edge length, in metres, of the square outlines these tests place against one another.
+"""
+
+ROUNDED_OUTLINE_POINTS = 64
+"""
+How many points a round outline is read at, as a rectified cylinder's is.
 """
 
 
@@ -73,12 +78,29 @@ def volume_at(
     return OccupiedVolume(outline=square_at(x, y, width), bottom=bottom, top=top)
 
 
+def rounded_at(x: float, y: float, radius: float = PIECE_WIDTH / 2) -> np.ndarray:
+    """
+    A round outline centred on a position, in world-frame metres, read at as many points
+    as a rectified circle is.
+
+    :param x: Centre along the world frame's x-axis, in metres.
+    :param y: Centre along the world frame's y-axis, in metres.
+    :param radius: How far it reaches from its centre, in metres.
+    """
+    turns = np.linspace(0.0, 2 * np.pi, ROUNDED_OUTLINE_POINTS, endpoint=False)
+    return np.stack([x + radius * np.cos(turns), y + radius * np.sin(turns)], axis=1)
+
+
 def piece_at(
-    x: float, y: float, surface_height: float, explains: float
+    x: float,
+    y: float,
+    surface_height: float,
+    explains: float,
+    category: MontessoriShapeCategory = MontessoriShapeCategory.CUBE,
+    outline: Optional[np.ndarray] = None,
 ) -> DetectedMontessoriShape:
     """
-    A cube detection standing at a position, explaining its place as well as the caller
-    says.
+    A detection standing at a position, explaining its place as well as the caller says.
 
     :param x: Centre along the world frame's x-axis, in metres.
     :param y: Centre along the world frame's y-axis, in metres.
@@ -86,13 +108,15 @@ def piece_at(
     :param explains: How well its account explains the edges seen where it stands. Read
         from both sides at once, an account that is equally good on each of them is
         exactly that strong.
+    :param category: What the reading says stands there.
+    :param outline: The ground it covers, defaulting to a square around its centre.
     """
     height = 0.03
     resting_on = PrefixedName("table", "occupancy_test")
     pose = Pose.from_xyz_rpy(x, y, surface_height + height / 2)
     return DetectedMontessoriShape(
         role_taker=ImaginedWorld.copied_from(None).spawn(
-            KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE], pose
+            KNOWN_PIECE_BY_CATEGORY[category], pose
         ),
         pose=pose,
         footprint=RectifiedFootprint(
@@ -103,8 +127,8 @@ def piece_at(
             corner_count=4,
             yaw=0.0,
         ),
-        outline=square_at(x, y),
-        category=MontessoriShapeCategory.CUBE,
+        outline=square_at(x, y) if outline is None else outline,
+        category=category,
         supporting_surface=resting_on,
         height=height,
         explanation=Explanation(
@@ -309,18 +333,72 @@ def test_a_camera_that_does_not_look_down_on_a_thing_is_refused():
         lid.hides(0.88, np.array([0.41, -0.05, 0.5]))
 
 
-def test_neither_of_two_readings_of_one_place_is_reported_where_neither_leads():
+def test_neither_of_two_readings_that_disagree_about_one_place_is_reported_where_neither_leads():
     """
-    Two readings that explain one place equally well are one thing seen twice with
-    nothing to say which of them the thing is, so the place is given to neither.
+    Two readings that name different things and explain one place equally well leave
+    that place unexplained: the picture does not say which of them stands there, so
+    neither is reported.
 
     That is the same comparison that decided either was worth reporting at all, asked of
     place.
     """
     barely_ahead = piece_at(0.60, 0.20, surface_height=0.88, explains=0.52)
-    barely_behind = piece_at(0.61, 0.20, surface_height=0.88, explains=0.50)
+    barely_behind = piece_at(
+        0.61,
+        0.20,
+        surface_height=0.88,
+        explains=0.50,
+        category=MontessoriShapeCategory.CYLINDER,
+    )
 
     assert Occupancy().keep_one_detection_per_place([barely_ahead, barely_behind]) == []
+
+
+def test_two_readings_that_name_the_same_thing_report_it_once():
+    """
+    Two ways of looking that agree about what stands somewhere have read one thing
+    twice, so the better-explained reading of it is reported and the other is not.
+
+    Nothing here is for a lead to settle: neither reading contradicts the other, and
+    they are as close as two readings get on a picture clear enough for both to be
+    right.
+    """
+    barely_ahead = piece_at(0.60, 0.20, surface_height=0.88, explains=0.52)
+    barely_behind = piece_at(0.61, 0.20, surface_height=0.88, explains=0.50)
+
+    assert Occupancy().keep_one_detection_per_place([barely_ahead, barely_behind]) == [
+        barely_ahead
+    ]
+
+
+def test_two_readings_of_one_rounded_thing_a_millimetre_apart_share_its_place():
+    """
+    Two readings of one cylinder that stand a millimetre apart are read as one place,
+    the way two readings of one cube are.
+
+    A rounded outline is read at scores of points, so the step from one of its corners
+    to the next is a couple of millimetres -- small enough that measuring the ground two
+    of them share in metres answers that they share none.
+    """
+    ahead = piece_at(
+        0.60,
+        0.20,
+        surface_height=0.88,
+        explains=0.52,
+        category=MontessoriShapeCategory.CYLINDER,
+        outline=rounded_at(0.60, 0.20),
+    )
+    behind = piece_at(
+        0.601,
+        0.20,
+        surface_height=0.88,
+        explains=0.50,
+        category=MontessoriShapeCategory.CYLINDER,
+        outline=rounded_at(0.601, 0.20),
+    )
+
+    assert OccupiedVolume.of(ahead).overlaps(OccupiedVolume.of(behind))
+    assert Occupancy().keep_one_detection_per_place([ahead, behind]) == [ahead]
 
 
 def test_a_reading_that_clearly_leads_the_other_keeps_the_place():

@@ -115,6 +115,33 @@ def drawn(
     return EdgeDistances.of(Orthophoto(image=image, region=region, plane_height=0.0))
 
 
+def test_an_edge_marked_beside_the_picture_is_read_as_one_of_its_own():
+    """
+    Edges handed to a look along with the picture are read where they are marked, which
+    is how a boundary the colours do not carry is fitted to.
+    """
+    region = WorkspaceRegion(
+        minimum_x=-0.1, maximum_x=0.1, minimum_y=-0.1, maximum_y=0.1
+    )
+    blank = Orthophoto(
+        image=np.zeros(
+            (region.height_in_pixels, region.width_in_pixels, 3), dtype=np.uint8
+        ),
+        region=region,
+        plane_height=0.0,
+    )
+    down_the_middle = np.zeros(blank.image.shape[:2], dtype=np.uint8)
+    down_the_middle[:, region.width_in_pixels // 2] = 255
+
+    assert EdgeDistances.of(blank).distance_to_edge(np.array([0.0, 0.0])) > 0.0
+    assert (
+        EdgeDistances.of(blank, together_with=down_the_middle).distance_to_edge(
+            np.array([0.0, 0.0])
+        )
+        == 0.0
+    )
+
+
 def place_around(outline: np.ndarray, edges: EdgeDistances) -> PlaceInThePicture:
     """
     The place one outline stands in, in a view whose edges are known.

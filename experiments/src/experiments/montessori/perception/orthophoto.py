@@ -21,7 +21,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from typing_extensions import Any, Dict, Self, Tuple
+from typing_extensions import Any, Dict, Optional, Self, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.exceptions import (
@@ -520,6 +520,33 @@ class Orthophoto:
     Height of the rectified plane above the world frame's origin, in metres.
     """
 
+    measured_height: Optional[np.ndarray] = None
+    """
+    How high the surface seen at each pixel stands, shape ``(height, width)`` in metres
+    above the world frame's origin; NaN where the camera measured nothing there, and
+    None where the look carried no depth at all.
+    """
+
+    def opening_mask(self, drop: float) -> np.ndarray:
+        """
+        Mark where this plane is open rather than solid: the pixels the camera measured
+        a surface well below it.
+
+        Says the same thing about a hole in a rendering and in a capture, where darkness
+        says it only in the second -- a hole is dark because little light reaches into
+        it, and a rendered one is lit like the surface it is cut through.
+
+        :param drop: How far below the plane, in metres, a reading has to lie for the
+            plane to be open there.
+        :return: A ``uint8`` mask, 255 where the plane is open and 0 elsewhere.
+        """
+        if self.measured_height is None:
+            return np.zeros(self.image.shape[:2], dtype=np.uint8)
+        below = self.plane_height - np.nan_to_num(
+            self.measured_height, nan=self.plane_height
+        )
+        return (below >= drop).astype(np.uint8) * 255
+
     @cached_property
     def hue_saturation_value(self) -> np.ndarray:
         """
@@ -586,13 +613,45 @@ class OrthophotoProjector:
             metres.
         :return: The plane's top-down view.
         """
+        rectify = self.pixel_T_region(frame, plane_height) @ self.region.region_T_pixel
+        size = (self.region.width_in_pixels, self.region.height_in_pixels)
         image = cv2.warpPerspective(
-            frame.color,
-            self.pixel_T_region(frame, plane_height) @ self.region.region_T_pixel,
-            (self.region.width_in_pixels, self.region.height_in_pixels),
-            flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+            frame.color, rectify, size, flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP
         )
-        return Orthophoto(image=image, region=self.region, plane_height=plane_height)
+        return Orthophoto(
+            image=image,
+            region=self.region,
+            plane_height=plane_height,
+            measured_height=self._heights_over(frame, rectify, size),
+        )
+
+    @staticmethod
+    def _heights_over(
+        frame: RgbdFrame, rectify: np.ndarray, size: Tuple[int, int]
+    ) -> Optional[np.ndarray]:
+        """
+        What the camera measured, laid over the plane the same warp lays the colour
+        over.
+
+        Read at the nearest pixel rather than averaged between pixels: a reading either
+        side of the rim of a hole is the lid or the floor of the hole, and their mean is
+        neither.
+
+        :param frame: The camera data to read the heights of.
+        :param rectify: The homography the colour image is rectified by.
+        :param size: Width and height of the rectified view, in pixels.
+        :return: The heights, or None if the camera returned no depth at all.
+        """
+        if not frame.carries_depth:
+            return None
+        return cv2.warpPerspective(
+            frame.measured_height,
+            rectify,
+            size,
+            flags=cv2.INTER_NEAREST | cv2.WARP_INVERSE_MAP,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=float("nan"),
+        )
 
     @staticmethod
     def pixel_T_region(frame: RgbdFrame, plane_height: float) -> np.ndarray:

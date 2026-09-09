@@ -136,6 +136,14 @@ class HoleFootprint:
     points relative to :attr:`center` (as opposed to its bounding box).
     """
 
+    @property
+    def cross_section_size(self) -> float:
+        """
+        The larger of this hole's two extents, in metres: how wide a piece may be and
+        still pass through it.
+        """
+        return max(self.size.x, self.size.y)
+
     def extrude(self, thickness: float) -> trimesh.Trimesh:
         """
         Extrude this hole's true boundary polygon into a solid of the given thickness,

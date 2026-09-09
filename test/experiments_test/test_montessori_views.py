@@ -96,6 +96,144 @@ def test_a_hole_lands_at_its_own_world_position_in_the_rectified_lid(
     ) == pytest.approx(0.0, abs=0.003)
 
 
+# %% what the camera measured, and where a plane is open
+
+SURFACE_HEIGHT = 0.9
+"""
+Height, in metres, of the flat surface the frames below are built looking down at.
+"""
+
+CAMERA_HEIGHT = 1.9
+"""
+Height, in metres, the camera in those frames hangs at.
+"""
+
+OPENING_DEPTH = 0.05
+"""
+How far, in metres, below that surface the opening cut through it reaches.
+"""
+
+OPENING = WorkspaceRegion(
+    minimum_x=-0.02, maximum_x=0.02, minimum_y=-0.02, maximum_y=0.02
+)
+"""
+The patch of the surface the opening is cut through.
+"""
+
+
+def looking_down_at_an_opening(cut: bool = True) -> Tuple[RgbdFrame, WorkspaceRegion]:
+    """
+    A frame looking straight down at a flat surface with one square opening cut through
+    it, and the patch of that surface worth rectifying.
+
+    :param cut: Whether to cut the opening at all, so that a surface with none can be
+        asked the same questions.
+    """
+    intrinsics = CameraIntrinsics(
+        focal_length_x=1000.0,
+        focal_length_y=1000.0,
+        principal_point_x=200.0,
+        principal_point_y=200.0,
+    )
+    region = WorkspaceRegion(
+        minimum_x=-0.1, maximum_x=0.1, minimum_y=-0.1, maximum_y=0.1
+    )
+    depth = np.full((400, 400), CAMERA_HEIGHT - SURFACE_HEIGHT, dtype=np.float32)
+    if cut:
+        corners = np.array(
+            [
+                [OPENING.minimum_x, OPENING.minimum_y],
+                [OPENING.maximum_x, OPENING.minimum_y],
+                [OPENING.maximum_x, OPENING.maximum_y],
+                [OPENING.minimum_x, OPENING.maximum_y],
+            ]
+        )
+        pixels = np.column_stack(
+            [
+                intrinsics.principal_point_x
+                + corners[:, 0] * intrinsics.focal_length_x / depth[0, 0],
+                intrinsics.principal_point_y
+                - corners[:, 1] * intrinsics.focal_length_y / depth[0, 0],
+            ]
+        )
+        cv2.fillPoly(
+            depth,
+            [np.round(pixels).astype(np.int32)],
+            float(CAMERA_HEIGHT - SURFACE_HEIGHT + OPENING_DEPTH),
+        )
+    return (
+        RgbdFrame(
+            color=np.zeros((400, 400, 3), dtype=np.uint8),
+            depth=depth,
+            intrinsics=intrinsics,
+            reference_frame_T_camera=np.array(
+                [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, -1.0, 0.0, 0.0],
+                    [0.0, 0.0, -1.0, CAMERA_HEIGHT],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            ),
+        ),
+        region,
+    )
+
+
+def marked_at(mask: np.ndarray, region: WorkspaceRegion, x: float, y: float) -> bool:
+    """
+    Whether a mask over a rectified view marks the pixel one world position lands on.
+
+    :param mask: The mask to read.
+    :param region: The patch of the plane the view covers.
+    :param x: The position along the world frame's x-axis, in metres.
+    :param y: The position along the world frame's y-axis, in metres.
+    """
+    [[column, row]] = region.to_pixels(np.array([[x, y]]))
+    return bool(mask[int(round(row)), int(round(column))])
+
+
+def test_the_height_measured_at_a_pixel_is_where_the_surface_it_saw_stands():
+    frame, _ = looking_down_at_an_opening()
+
+    assert frame.measured_height[0, 0] == pytest.approx(SURFACE_HEIGHT)
+    assert frame.measured_height[200, 200] == pytest.approx(
+        SURFACE_HEIGHT - OPENING_DEPTH
+    )
+
+
+def test_a_pixel_the_camera_measured_nothing_at_has_no_height():
+    frame, _ = looking_down_at_an_opening()
+    frame.depth[0, 0] = 0.0
+
+    assert math.isnan(frame.measured_height[0, 0])
+
+
+def test_a_plane_is_open_where_the_camera_measured_a_surface_below_it():
+    frame, region = looking_down_at_an_opening()
+    orthophoto = OrthophotoProjector(region=region).project(frame, SURFACE_HEIGHT)
+
+    mask = orthophoto.opening_mask(OPENING_DEPTH / 2)
+
+    assert marked_at(mask, region, 0.0, 0.0)
+    assert not marked_at(mask, region, 0.07, 0.07)
+
+
+def test_a_plane_is_not_open_where_what_lies_below_it_is_nearer_than_asked_for():
+    frame, region = looking_down_at_an_opening()
+    orthophoto = OrthophotoProjector(region=region).project(frame, SURFACE_HEIGHT)
+
+    assert not orthophoto.opening_mask(OPENING_DEPTH * 2).any()
+
+
+def test_a_look_carrying_no_depth_says_nowhere_is_open():
+    frame, region = looking_down_at_an_opening(cut=False)
+    frame.depth[:] = 0.0
+    orthophoto = OrthophotoProjector(region=region).project(frame, SURFACE_HEIGHT)
+
+    assert orthophoto.measured_height is None
+    assert not orthophoto.opening_mask(OPENING_DEPTH / 2).any()
+
+
 # %% drawing the detections onto the frame
 
 

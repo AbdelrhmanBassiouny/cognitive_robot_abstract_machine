@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
+from functools import cached_property
 from enum import StrEnum
 
 import cv2
@@ -130,6 +131,34 @@ class CameraIntrinsics:
             focal_length_y=float(matrix[1, 1]),
             principal_point_x=float(matrix[0, 2]),
             principal_point_y=float(matrix[1, 2]),
+        )
+
+    @classmethod
+    def of_field_of_view(
+        cls, vertical_field_of_view_degrees: float, width: int, height: int
+    ) -> Self:
+        """
+        Read the intrinsics out of the angle a camera sees and the size of the picture
+        it takes, which is how a simulator states one.
+
+        The angle fixes the focal length once the picture's height is known, and the
+        pixels are square, so both focal lengths are that one. The optical axis meets
+        the picture in its middle, measured between pixel centres rather than between
+        pixel edges.
+
+        :param vertical_field_of_view_degrees: The angle the camera sees from the top of
+            the picture to its bottom.
+        :param width: Width of the picture in pixels.
+        :param height: Height of the picture in pixels.
+        """
+        focal_length = (height / 2.0) / np.tan(
+            np.radians(vertical_field_of_view_degrees) / 2.0
+        )
+        return cls(
+            focal_length_x=focal_length,
+            focal_length_y=focal_length,
+            principal_point_x=(width - 1) / 2.0,
+            principal_point_y=(height - 1) / 2.0,
         )
 
     def to_matrix(self) -> np.ndarray:
@@ -280,6 +309,30 @@ class RgbdFrame:
         nothing can be measured in however well the world describes it.
         """
         return bool((self.depth > 0.0).any())
+
+    @cached_property
+    def measured_height(self) -> np.ndarray:
+        """
+        How high the surface seen at each pixel stands, shape ``(height, width)`` in
+        metres above the origin of the frame poses are reported in; NaN where the sensor
+        returned no reading.
+
+        What the picture says about the shape of the scene rather than about its colour.
+        An opening cut through a surface is a place the camera measures a floor well
+        below that surface, however its walls happen to be lit -- which is what a hole
+        looks like to a camera that a shadow on the same surface does not.
+        """
+        rows, columns = np.indices(self.depth.shape)
+        points = self.intrinsics.deproject(
+            np.stack([columns.ravel(), rows.ravel()], axis=1), self.depth.ravel()
+        )
+        heights = (
+            points @ self.reference_frame_T_camera[2, :3]
+            + self.reference_frame_T_camera[2, 3]
+        )
+        return np.where(
+            self.depth > 0.0, heights.reshape(self.depth.shape), np.nan
+        ).astype(np.float32)
 
     def project(self, points: np.ndarray) -> np.ndarray:
         """
