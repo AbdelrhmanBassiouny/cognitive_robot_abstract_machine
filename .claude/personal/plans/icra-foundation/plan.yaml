@@ -296,12 +296,25 @@ items:
     and drawers' collision boxes, and ShapeSortingHole carries its own region so no name
     is spelled twice. 43 tests in the module; test/experiments_test runs 386 passed.
 
+    Fourth round 2026-09-08 at 429e335d4. A run can now be filmed while it is performed,
+    with the repository's own MujocoVideoRecorder: a SceneRecording films it in takes,
+    since a simulation is compiled against one kinematic model and a grasp re-parents the
+    piece, and SimulatedScene lets go of what carries it whenever the world's model
+    changes rather than each robot-commanding step remembering to. The film is made from
+    the simulation carrying the run, so a filmed run leaves the piece exactly where an
+    unfilmed one does. What no video can show is the carrying: while the robot holds the
+    piece the world cannot be exported to MuJoCo at all, because ReAttachNode keeps the
+    piece's free connection under the gripper. PlaceAction gained the optional
+    grasp_description the third round asked about, at the developer's "do (1)". 48 tests
+    in the module; test/experiments_test runs 391 passed.
+
     Two questions are open on the pull request, both the developer's: whether InsideOf's
     minimum_containment_ratio (which exists on #265, not on this base) should be ported
-    here now and meet #265 as a conflict, and whether PlaceAction should gain an optional
-    grasp_description so a place performed in its own plan knows how the thing it holds is
-    held. The Goal-as-Predicate thread from round one is also still open, asking whether
-    that change belonged on #261.
+    here now and meet #265 as a conflict, and where the demo's actuation should live --
+    everything that makes the tracy_icra demo work is about 1,200 lines that exist on
+    tracy_icra alone, and that demo deliberately does not use coraplex's actions, so
+    copying it here would duplicate work tracy_icra will merge. The Goal-as-Predicate
+    thread from round one is also still open, asking whether that change belonged on #261.
 - id: run-results-recorded-into-sql
   title: >-
     Where a run records its results, and the plan-and-events schema it records
