@@ -472,3 +472,31 @@ the four fields at the file's actual 2-space indent and pushing directly, per `p
 shared session tooling on `main`, unrelated to this item's own subject, and worth a
 `plan-tracking-skills` item of its own; every other in-flight kickoff that needs `apply_item_fields`
 to patch or insert a field is exposed to the same corruption until it is.
+
+### `snapshot-working-memory` built, #301: the measured threshold turned out to be a numerical floor, not a perceptual one
+
+Implemented `SnapshotWorkingMemory` per the plan above. One finding worth recording because
+it changes what "the threshold is measured in simulation first" actually produces: repeating a
+look at an *unchanging* simulated scene reproduces the same detected position to within
+floating-point noise (~1e-15 m) — MuJoCo's render is close enough to bit-for-bit deterministic
+that three standard deviations of it is a number too small to guard against anything but the
+computation's own numerical floor, not real perceptual noise.
+
+So `POSE_CHANGE_THRESHOLD_METERS` (`1e-6` m) is documented as a numerical safety margin above
+that measured floor, not a literal three-sigma figure — large enough that no repeated look ever
+crosses it on its own, and still many orders of magnitude below any real piece movement. The
+real, meaningful three-sigma figure the item's notes ask for is expected from the real robot,
+where sensor noise is not zero; that measurement still needs the robot and is not taken here.
+Recorded so a later session does not read the simulated number as if it settled the real one.
+
+Also: the matching strategy (nearest existing piece of the same `MontessoriShapeCategory`,
+greedy, one match per piece per tick) does not solve general multi-instance disambiguation —
+consistent with `coraplex.perception.Detection.apply_to`, which raises (`AmbiguousDetection`)
+rather than disambiguating a type that resolves to more than one body. Adequate for this plan's
+scenes; flagged rather than silently assumed general.
+
+Tests run against the real MuJoCo pipeline in a from-scratch Python 3.12 venv this session built
+(the container ships neither ROS nor 3.12 by default, and `random_events_lib`'s native
+extension had to be compiled locally for 3.12). All 8 new tests and the 15 in
+`test_montessori_simulated_camera.py` (checked for regressions from a shared relative import)
+pass.
