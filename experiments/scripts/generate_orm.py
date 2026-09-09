@@ -8,6 +8,7 @@ import experiments.scenarios.report
 import experiments.scenarios.runner
 import experiments.scenarios.scenario
 import experiments.scenarios.trial
+import experiments.episodes.artifacts
 import experiments.episodes.recording
 import experiments.episodes.long_term_memory
 import coraplex.orm.ormatic_interface
@@ -55,6 +56,11 @@ for episode_database_module in (
     experiments.episodes.long_term_memory,
 ):
     ignored_classes |= set(classes_of_module(episode_database_module))
+
+# an episode's artifacts are kept as files, so what this module holds is where they are
+# and how they are rendered - a path names a file rather than describing one, and the
+# transcript is a reading of queries the trials' rows already carry
+ignored_classes |= set(classes_of_module(experiments.episodes.artifacts))
 
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(
