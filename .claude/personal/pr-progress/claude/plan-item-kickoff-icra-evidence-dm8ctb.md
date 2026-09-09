@@ -149,9 +149,53 @@ since this container still can't `uv sync`); byte-compiled all four touched file
 catch syntax errors since nothing can be run here. Not run against real tests — same
 container limitation as every round on this branch.
 
+## Round 4: the developer pushed further, and found a real bug in round 3 (2026-09-09)
+
+Two new comments on `episode.py`'s `question_type` field, minutes after round 3's reply:
+"why is it optional? This should replace the text field as well, and be a required
+field", then "Actually, I think this must be a Role[Question], and find a clean way to
+solve the ormatic issue... AlternativeMapping... as a last resort".
+
+**Investigated `Role`/`AlternativeMapping`, and found a cleaner mechanism already in
+place that neither needs.** `krrood.ormatic.ormatic.py` already sets
+`type_mappings[SubclassJSONSerializer] = JSON`, and `TypeDict.__getitem__` resolves that
+by nearest inheritance distance — so any class that inherits
+`krrood.adapters.json_serializer.SubclassJSONSerializer` gets mapped to a JSON column
+automatically, with no new `AlternativeMapping` subclass or column type needed. `Question`
+now inherits it, delegating `to_json`/`_from_json` to the already-existing generic
+`DataclassJSONSerializer` (which introspects a dataclass's own fields, skipping
+`ClassVar`s) — a two-method addition, not new infrastructure.
+
+**This also fixed a real bug round 3 introduced.** Re-reading `long_term_memory.py` while
+investigating found `episode_identifier: str` is a genuine per-instance field on every
+`LongTermMemoryQuestion` (which run the question is about) — round 3's `Type[Question]`
+reference would have silently discarded it, so a recorded long-term answer couldn't say
+which episode it was actually asked of. `RecordedQuery.question_type: Optional[Type[Question]]`
+is now `question: Optional[Question]` — the instance, not the class — which is what makes
+this correct rather than merely simpler.
+
+**Left one part of the ask unresolved, flagged rather than guessed at.** Making `question`
+required and dropping `text` (as literally asked) conflicts with `QueryDeterminism`
+(`paper/queries.py`, already merged in #297): it groups *any* recorded query by `text`,
+including plain ad hoc EQL queries with no `Question` at all, and its own tests
+(`test_paper_figures.py`) exercise exactly that. Making `question` required would mean
+either giving `Bucket`/`BloomLevel` a "not part of the frozen set" member — touching a
+taxonomy #295 already froze and reviewed four rounds on — or breaking that shipped
+feature. Kept `question` optional and `text` in place; replied on the thread with the
+concrete conflict and asked which he wants, rather than picking silently.
+
+Verified the JSON round trip against a standalone mimic reproducing `Question`'s exact
+shape (`SubclassJSONSerializer` + dataclass + `ClassVar`s), since this container still
+can't import the full `experiments` package (`casadi` and friends). Added two real tests
+in `test_questions.py` against `ObjectsSeen`/`AnythingMovedInTheEpisode` for CI to verify
+end to end. Pushed `1129fd72a`; PR description updated; both new comments replied to,
+thread left **unresolved** since the answer differs from what was asked, per the
+review-comment rule.
+
 ## Next
 
-CI just re-triggered on #304 (`6f2a370f2`) — pending as of this update, not polled
-further per standing instructions. The two remaining open items are unchanged: the
-long-term list-comparison question (`values_agree`'s sorted-vs-positional disagreement),
-and the `json_msgs`/generated-ORM-interface CI failure, both left to the developer.
+CI just re-triggered on #304 (`1129fd72a`) — pending as of this update, not polled
+further per standing instructions. Open items: the long-term list-comparison question
+(`values_agree`'s sorted-vs-positional disagreement), the `json_msgs`/generated-ORM-
+interface CI failure, and now whether ad hoc queries should become `Question`s too so
+`question` can be made required — all three left to the developer.
