@@ -50,7 +50,7 @@ items:
   track: experiment-a
   session: https://claude.ai/code/session_01LrEoLWVFPJUoLjAKjFPb9f
   depends_on: []
-  status: in_progress
+  status: done
   notes: >-
     Freeze first; everything downstream is written against it. Each question is a Question dataclass carrying its EQL, its English, its answer type, the Bloom level it exercises and the inputs it structurally requires. Six buckets, widened from four on 2026-09-08 so that the control program and the robot's own body are questioned in the same language as the scene: scene (what objects do you see now, what colours are they, where are they), support and spatial relations (what surfaces are they standing on, is the cube left or right of the cylinder), temporal and agency (did anything recently move, which, did you move it, was the cube recently picked up), embodiment (is it currently in your hand), self-model (where is your gripper left finger, how many links do you have, how many joints do you have) and control (what are you constrained by right now, which task is active, why did the motion stop). Every bucket has two spellings, not only the temporal one: over working memory (the twin plus the segmind event log) and over long-term memory (the SQL backend), which is what makes Understanding and Remembering separately measurable.
 
@@ -266,7 +266,7 @@ items:
   track: release
   session: https://claude.ai/code/session_0143PRk7LAujLic5ZXN9jB35
   depends_on: []
-  status: in_progress
+  status: done
   notes: >
     The writer's item, started before any experiment has run so the first draft's tables are
     already the script's output on simulated data and the robot numbers drop in by rerunning it.

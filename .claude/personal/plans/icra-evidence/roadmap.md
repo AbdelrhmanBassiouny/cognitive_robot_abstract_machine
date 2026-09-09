@@ -1045,3 +1045,20 @@ dashboards still implement the readiness rule, so a new item cut off `tracy_icra
 names an item whose pull request is a draft will read as "not ready" when nothing is actually
 blocking it. Nothing here changes that; it is worth a `plan-tracking-skills` item if the trunk
 workflow outlives this deadline.
+
+### `question-set-and-ground-truth` (#295): merged into #265, 2026-09-09
+
+Merged into `integrated-simulation-pipeline` (#265). The one substantive conflict of this
+session's convergence was here - `segmind/datastructures/events.py`'s new
+`AgentInteractionEvent` meeting `PickUpEvent`/`PlacingEvent`/`InsertionEvent`'s existing
+`EventWithEffect`/`ComesToRestEvent` - resolved by multiple inheritance rather than by
+choosing a side, since the two are orthogonal classifications of the same event and
+`AgentInteractionEvent` adds no fields. See `integrated-simulation-pipeline`'s entry above
+for the verification.
+
+### `paper-figures-from-episodes` (#297): merged into #265, 2026-09-09
+
+Merged into `integrated-simulation-pipeline` (#265), cut off #278's tip as its own notes
+recorded. One conflict in `generate_orm.py`, purely additive (the paper-table
+`ignored_classes` loop beside the question-model one) - resolved by keeping both. See
+`integrated-simulation-pipeline`'s entry above.
