@@ -94,13 +94,23 @@ def test_causes_effect_conjunction_registers_every_effect_variable():
 
 
 def test_cause_on_an_aggregation_statistic_resolves_its_return_type():
+    """
+    The resolved name must match ``"{AggregationClass}.{method}()"``, the same
+    convention EQL's own ``variable(AggregationClass).method()`` attribute access
+    produces, not ``Assembly.component_count`` -- that is not how grounding actually
+    names this variable on the circuit, so a search variable under that name would never
+    match anything a real ``RelationalCircuitRegistry`` grounds.
+    """
     match = a(Assembly)(
         component_count=cause,
         components=[a(Component)(weight=...)],
     )
     parameters = UnderspecifiedParameters(match)
     assert len(parameters.search_cause_variables) == 1
-    assert parameters.search_cause_variables[0].name == "Assembly.component_count"
+    assert (
+        parameters.search_cause_variables[0].name
+        == "AssemblyAggregations.component_count()"
+    )
 
 
 def test_confounder_on_an_aggregation_statistic_resolves_its_return_type():
@@ -110,4 +120,7 @@ def test_confounder_on_an_aggregation_statistic_resolves_its_return_type():
     )
     parameters = UnderspecifiedParameters(match)
     assert len(parameters.search_confounder_variables) == 1
-    assert parameters.search_confounder_variables[0].name == "Assembly.component_count"
+    assert (
+        parameters.search_confounder_variables[0].name
+        == "AssemblyAggregations.component_count()"
+    )

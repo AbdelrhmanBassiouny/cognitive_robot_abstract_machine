@@ -260,7 +260,7 @@ class ExchangeablePartGrounder:
         retained_variables = (
             SortedSet(self.circuit.variables) - self.undetermined_latents
         )
-        self._restrict_circuit_to_variables(self.circuit, retained_variables)
+        self.circuit.restrict_to_variables_in_place(retained_variables)
         mounted_roots = [
             self._mount_instance_with_retained_latents(assignment)
             for assignment in sampled_assignments
@@ -315,7 +315,7 @@ class ExchangeablePartGrounder:
         retained_variables = (
             SortedSet(self.circuit.variables) - self.undetermined_latents
         )
-        self._restrict_circuit_to_variables(self.circuit, retained_variables)
+        self.circuit.restrict_to_variables_in_place(retained_variables)
 
         mounted_roots = []
         for _, latent_branch in branches:
@@ -335,33 +335,6 @@ class ExchangeablePartGrounder:
             self.product_nodes_to_extend, log_weights_per_node
         ):
             self._attach_mixture_to_node(product_node, mounted_roots, log_weights)
-
-    @staticmethod
-    def _restrict_circuit_to_variables(
-        circuit: ProbabilisticCircuit, variables: SortedSet[Variable]
-    ) -> None:
-        """
-        Restrict circuit to variables in place, without ``SumUnit.simplify()``'s same-
-        type merge.
-
-        Mirrors ``ProbabilisticCircuit.marginal_in_place``, minus its trailing
-        ``simplify()`` call: that call flattens nested SumUnits into their parent, which
-        leaves the represented distribution unchanged but can erase the branch
-        boundaries a caller further up the stack relies on -- for instance
-        ``CausalCircuit.verify_support_determinism`` inspecting whether a support-
-        deterministic class circuit's stratified partitions stay disjoint once an
-        exchangeable part is grounded onto it.
-
-        :param circuit: The circuit to restrict, mutated in place.
-        :param variables: The variables to keep.
-        """
-        root = [
-            node.marginal(variables)
-            for layer in reversed(circuit.layers)
-            for node in layer
-        ][-1]
-        if root is not None:
-            circuit.remove_unreachable_nodes(root)
 
     def _mount_instance(self, aggregation_statistics: dict[Variable, Any]) -> Unit:
         """
@@ -822,11 +795,9 @@ class RelationalProbabilisticCircuit:
         :return: The conditioned circuit and the product nodes that will be extended
             with the grounded exchangeable distribution.
         """
-        # Skipped when there is nothing to condition on (every aggregation the query
-        # leaves undetermined): log_conditional_in_place calls SumUnit.simplify()
-        # even for an empty point, unconditionally flattening nested SumUnits into
-        # their parent -- silently erasing a stratified class circuit's own per-value
-        # branches before grounding ever attaches anything to them.
+        # Skipped when there is nothing to condition on: log_conditional_in_place
+        # simplifies even for an empty point, flattening a stratified class circuit's
+        # own per-value branches before grounding attaches anything to them.
         if aggregation_statistics:
             conditioning_result, _ = circuit.log_conditional_in_place(
                 aggregation_statistics

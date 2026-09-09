@@ -1,22 +1,42 @@
 # Mutagenesis Causal Query: Results
 
 This experiment uses a relational causal circuit on the CTU Mutagenesis dataset. We
-take the 188-molecule dataset, register branching-atom count as a cause of
-mutagenicity on a circuit grounded from it, and ask what backdoor adjustment says
-once we control for the dataset's known `ind1` indicator. It follows on from fitting
-and validating the relational circuit on the full dataset (covered separately), and
-it runs on the whole dataset without subsampling.
+take the 188-molecule dataset, mark branching-atom count as a candidate cause of
+mutagenicity right in the query, and ask what backdoor adjustment says once we
+control for the dataset's known `ind1` indicator. It follows on from fitting and
+validating the relational circuit on the full dataset (covered separately), and it
+runs on the whole dataset without subsampling.
+
+The cause and effect are declared where the rest of the query is built, not
+registered afterward as a separate step:
+
+```python
+query = a(MutagenesisMolecule)(
+    indicator_1=confounder,
+    logp=..., lumo=..., mutagenic=...,
+    branching_atom_count=cause,
+    atoms=[a(MutagenesisAtom)(element=..., atom_type=..., charge=..., bond_count=...) for _ in range(2)],
+    bonds=[a(MutagenesisBond)(bond_type=...) for _ in range(1)],
+)
+query.causes_effect(query.variable.mutagenic == True)
+causal_circuit = RelationalCircuitRegistry(relational_probabilistic_circuit=model).get_model(
+    UnderspecifiedParameters(query)
+)
+```
+
+`RelationalCircuitRegistry` reads the `cause`/`confounder`/`causes_effect` markers,
+grounds the query, and returns a verified `CausalCircuit` in one call.
 
 ## What we did
 
 1. Fit a relational circuit on all 188 molecules, with the class circuit stratified by
    branching-atom count so it is support-deterministic over that variable.
-2. Grounded a query for a two-atom molecule with every atom's element, atom type,
-   charge and bond count left unspecified, so branching-atom count stays a variable
-   instead of being integrated out.
-3. Registered branching-atom count as the cause, mutagenicity as the effect, and
-   `ind1` as the adjustment variable, trimmed the circuit to just those three, and
-   verified the result is support-deterministic.
+2. Built a query for a two-atom molecule with every atom's element, atom type,
+   charge and bond count left unspecified, marking branching-atom count as the cause,
+   `ind1` as a confounder to adjust for, and mutagenicity as the effect.
+3. Resolved that query through `RelationalCircuitRegistry`, which grounds it, trims
+   the circuit to just those three variables, registers the cause and effect, and
+   verifies the result is support-deterministic.
 4. Ran backdoor adjustment and compared it against naive conditioning at every
    branching-atom-count value the grounded circuit's support covers.
 
@@ -110,12 +130,15 @@ backdoor-adjusted for `ind1`, on the full dataset:
 | 24 | 0.0106 | 1.0000 | 1.0000 |
 | 25 | 0.0053 | 1.0000 | 1.0000 |
 
-The region probabilities match the dataset's own branching-atom-count distribution
-exactly, so grounding is retaining the real population, not something a Monte Carlo
-artifact would produce. The circuit passes support-determinism verification, and the
-whole thing runs end to end in well under a minute.
+The circuit passes support-determinism verification, and the whole thing runs end to
+end in well under a minute.
 
 ## Inference
+
+The circuit itself only produces the numbers in the table above: a region
+probability and two conditional probabilities per branching-atom-count value. Every
+bullet below is our reading of those numbers, not a claim the circuit makes on its
+own; it has no notion of "monotonic," "small sample," or "structurally complex."
 
 * **Naive P(mutagenic) rises with branching-atom count, close to monotonically.** It
   starts at 0 for molecules with just 7 branching atoms, moves through the 0.14 to
@@ -146,12 +169,15 @@ whole thing runs end to end in well under a minute.
 
 ## What would make this more interesting
 
-The next natural step is to register `ind1` itself as the cause, run the same
-backdoor machinery, and see whether the analytic answer to "why is a molecule
-mutagenic" lines up with what the literature already says about `ind1`, ideally
-alongside a comparison against a plain classifier's held-out accuracy on the same
-data. We are not doing that here: `ind1` is a flat field on the molecule, not an
-aggregate that grounding has to assemble from a relation, so registering it as the
-cause would not exercise the relational-grounding pipeline this experiment exists to
-validate. That is a different, also useful, experiment, and it deserves to be built
-and judged on its own terms rather than folded into this one.
+The next natural step is to mark `ind1` itself as the cause instead of branching-atom
+count, and see whether the analytic answer to "why is a molecule mutagenic" lines up
+with what the literature already says about `ind1`, ideally alongside a comparison
+against a plain classifier's held-out accuracy on the same data. With the query-level
+`cause`/`causes_effect` machinery this experiment now uses, that swap is one line
+(`indicator_1=cause` instead of `branching_atom_count=cause`), unlike before, when it
+would have meant a different code path entirely, since `ind1` is a flat field rather
+than an aggregate grounding has to assemble from a relation. We are not doing that
+here: it is still a different question from the one this experiment asks, and the
+classifier-accuracy comparison is a separate benchmark on its own. Both deserve to be
+built and judged on their own terms rather than folded into this one, but neither is
+blocked on new machinery anymore.

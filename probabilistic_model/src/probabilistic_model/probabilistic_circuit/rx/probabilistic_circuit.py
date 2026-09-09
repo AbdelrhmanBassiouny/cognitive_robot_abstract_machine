@@ -708,11 +708,10 @@ class SumUnit(InnerUnit):
                     # add an edge to that subcircuit
                     self.add_subcircuit(sub_subcircuit, new_weight)
 
-                # detach from the now-redundant node, but only remove it once no
-                # other parent references it: Monte-Carlo grounding mounts one
-                # shared instance under every node whose local weighting agrees on
-                # it, so this SumUnit can have more than one parent -- removing it
-                # unconditionally here would delete it out from under the others.
+                # detach, but remove the node only once no other parent references
+                # it: Monte-Carlo grounding can mount one shared instance under
+                # several nodes, so removing it unconditionally would delete it out
+                # from under the others.
                 if self.probabilistic_circuit.graph.has_edge(
                     self.index, subcircuit.index
                 ):
@@ -870,12 +869,10 @@ class ProductUnit(InnerUnit):
                 for sub_subcircuit in subcircuit.subcircuits:
                     self.add_subcircuit(sub_subcircuit)
 
-                # detach from the now-redundant nested product unit, but only
-                # remove it once no other parent references it: Monte-Carlo
-                # grounding mounts one shared instance under every node whose
-                # local weighting agrees on it, so this ProductUnit can have more
-                # than one parent -- removing it unconditionally here would
-                # delete it out from under the others.
+                # detach, but remove the node only once no other parent references
+                # it: Monte-Carlo grounding can mount one shared instance under
+                # several nodes, so removing it unconditionally would delete it out
+                # from under the others.
                 if self.probabilistic_circuit.graph.has_edge(
                     self.index, subcircuit.index
                 ):
@@ -1373,6 +1370,32 @@ class ProbabilisticCircuit(ProbabilisticModel, SubclassJSONSerializer):
         else:
             return None
 
+    def restrict_to_variables_in_place(
+        self, variables: Iterable[Variable]
+    ) -> Optional[Self]:
+        """
+        Restrict the circuit to variables in place, without ``simplify()``'s same-type
+        merge.
+
+        Mirrors :meth:`marginal_in_place`, minus its trailing ``simplify()`` call: that
+        call flattens nested SumUnits into their parent, which leaves the represented
+        distribution unchanged but can erase branch boundaries a caller relies on -- for
+        instance ``CausalCircuit.verify_support_determinism`` inspecting whether a
+        support-deterministic circuit's own branches stay disjoint.
+
+        :param variables: The variables to keep.
+        :return:``self``, or ``None`` if none of ``variables`` are modeled.
+        """
+        result = [
+            node.marginal(variables)
+            for layer in reversed(self.layers)
+            for node in layer
+        ][-1]
+        if result is None:
+            return None
+        self.remove_unreachable_nodes(result)
+        return self
+
     def log_conditional_in_place(
         self, point: Dict[Variable, Any]
     ) -> Tuple[Optional[Self], float]:
@@ -1438,6 +1461,17 @@ class ProbabilisticCircuit(ProbabilisticModel, SubclassJSONSerializer):
     def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
         result = self.__deepcopy__()
         return result.marginal_in_place(variables)
+
+    def restrict_to_variables(self, variables: Iterable[Variable]) -> Optional[Self]:
+        """
+        Restrict a copy of the circuit to variables, without ``simplify()``'s same-type
+        merge. See :meth:`restrict_to_variables_in_place`.
+
+        :param variables: The variables to keep.
+        :return: The restricted copy, or ``None`` if none of ``variables`` are modeled.
+        """
+        result = self.__deepcopy__()
+        return result.restrict_to_variables_in_place(variables)
 
     def sample(self, amount: int) -> npt.NDArray:
         # initialize all results

@@ -8,9 +8,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from krrood.entity_query_language.core.mapped_variable import MappedVariable
-from krrood.entity_query_language.factories import a, variable
+from krrood.entity_query_language.factories import a, cause, confounder, variable
 from krrood.ormatic.data_access_objects.helper import to_dao
+from krrood.parametrization.model_registries import RelationalCircuitRegistry
+from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from random_events.product_algebra import SimpleEvent
 from typing_extensions import List
 
@@ -54,8 +55,8 @@ class BranchingAtomCountCausalEffect:
 
     adjusted_probability_mutagenic: float
     """
-    ``P(mutagenic = True | do(branching_atom_count))``, backdoor-adjusted for
-    :attr:`BranchingAtomCountCausalQuery.INDICATOR_1_VARIABLE`.
+    ``P(mutagenic = True | do(branching_atom_count))``, backdoor-adjusted for the
+    ``ind1`` structural indicator.
     """
 
 
@@ -94,35 +95,9 @@ class MutagenesisCausalQueryResult:
 @dataclass
 class BranchingAtomCountCausalQuery:
     """
-    Fits a relational circuit on Mutagenesis molecules, registers branching-atom count
-    as a cause of mutagenicity, and compares naive conditioning against backdoor
-    adjustment for the structural indicator ``ind1``.
-    """
-
-    BRANCHING_ATOM_COUNT_VARIABLE: MappedVariable = field(
-        default_factory=lambda: variable(
-            MutagenesisMoleculeAggregations
-        ).branching_atom_count()
-    )
-    """
-    EQL attribute-access expression naming the cause variable. Defaults to branching-
-    atom count; pass a different one to register a different cause without
-    subclassing.
-    """
-
-    MUTAGENIC_VARIABLE: MappedVariable = field(
-        default_factory=lambda: variable(MutagenesisMolecule).mutagenic
-    )
-    """
-    EQL attribute-access expression naming the mutagenicity effect variable.
-    """
-
-    INDICATOR_1_VARIABLE: MappedVariable = field(
-        default_factory=lambda: variable(MutagenesisMolecule).indicator_1
-    )
-    """
-    EQL attribute-access expression naming the ``ind1`` structural-indicator adjustment
-    variable.
+    Fits a relational circuit on Mutagenesis molecules, marks branching-atom count as
+    a candidate cause of mutagenicity in the query itself, and compares naive
+    conditioning against backdoor adjustment for the structural indicator ``ind1``.
     """
 
     def run(
@@ -134,9 +109,9 @@ class BranchingAtomCountCausalQuery:
         monte_carlo_sample_count: int = 2000,
     ) -> MutagenesisCausalQueryResult:
         """
-        Fit a relational circuit, register branching-atom count as a cause of
-        mutagenicity, and compare naive conditioning against backdoor adjustment for
-        the structural indicator ``ind1``.
+        Fit a relational circuit, mark branching-atom count as the query's cause and
+        mutagenicity as its effect, and compare naive conditioning against backdoor
+        adjustment for the structural indicator ``ind1``.
 
         Fits the class circuit stratified by branching-atom count, via
         :meth:`~probabilistic_model.probabilistic_circuit.relational.causal.RelationalCausalCircuit.fit`:
@@ -147,6 +122,13 @@ class BranchingAtomCountCausalQuery:
         partitions the training dataframe by that exact value before fitting, so every
         value's rows share one branch by construction, on the full dataset without
         subsampling it down to one row per value.
+
+        The query itself, not a separate registration call, declares what to search
+        for: ``branching_atom_count=cause`` and ``.causes_effect(mutagenic=True)``
+        mark the candidate cause and the effect right where the rest of the query is
+        built, and :class:`~krrood.parametrization.model_registries.RelationalCircuitRegistry`
+        reads those markers to ground, register and verify the resulting
+        ``CausalCircuit`` in one step.
 
         :param training_molecules: Molecules to fit the circuit on.
         :param atom_count: Number of atoms the grounding query specifies; every atom's
@@ -167,34 +149,25 @@ class BranchingAtomCountCausalQuery:
         """
         model = RelationalProbabilisticCircuit(MutagenesisMolecule)
         model.monte_carlo_sample_count = monte_carlo_sample_count
-        relational_causal_circuit = RelationalCausalCircuit()
-        relational_causal_circuit.fit(
+        branching_atom_count_variable_expression = variable(
+            MutagenesisMoleculeAggregations
+        ).branching_atom_count()
+        RelationalCausalCircuit().fit(
             model,
             [to_dao(molecule) for molecule in training_molecules],
-            stratify_by=self.BRANCHING_ATOM_COUNT_VARIABLE,
+            stratify_by=branching_atom_count_variable_expression,
         )
 
         query = self._build_query(atom_count, bond_count)
+        registry = RelationalCircuitRegistry(relational_probabilistic_circuit=model)
+
         np.random.seed(random_seed)
-        grounded_circuit = model.ground(query)
+        causal_circuit = registry.get_model(UnderspecifiedParameters(query))
 
-        causal_circuit = relational_causal_circuit.from_grounded_circuit(
-            grounded_circuit,
-            causal_variables=[self.BRANCHING_ATOM_COUNT_VARIABLE],
-            effect_variables=[self.MUTAGENIC_VARIABLE],
-            adjustment_variables=[self.INDICATOR_1_VARIABLE],
-            trim_to_registered_variables=True,
-        )
-
-        probabilistic_circuit = causal_circuit.probabilistic_circuit
-        branching_atom_count_variable = RelationalCausalCircuit.resolve_variable(
-            probabilistic_circuit, self.BRANCHING_ATOM_COUNT_VARIABLE
-        )
-        mutagenic_variable = RelationalCausalCircuit.resolve_variable(
-            probabilistic_circuit, self.MUTAGENIC_VARIABLE
-        )
+        [branching_atom_count_variable] = causal_circuit.causal_variables
+        [mutagenic_variable] = causal_circuit.effect_variables
         indicator_1_variable = RelationalCausalCircuit.resolve_variable(
-            probabilistic_circuit, self.INDICATOR_1_VARIABLE
+            causal_circuit.probabilistic_circuit, "indicator_1"
         )
 
         naive_circuit = causal_circuit.backdoor_adjustment(
@@ -251,20 +224,22 @@ class BranchingAtomCountCausalQuery:
     @staticmethod
     def _build_query(atom_count: int, bond_count: int):
         """
-        Build a molecule query with a fixed atom and bond count, every atom's element,
-        atom type, charge and bond count left unspecified, and every bond's type
-        unspecified, so grounding must retain branching-atom count as an undetermined
-        latent.
+        Build a molecule query marking branching-atom count as the cause, ``ind1`` as
+        a confounder to adjust for, and mutagenicity as the effect. Every atom's
+        element, atom type, charge and bond count are left unspecified, and every
+        bond's type is left unspecified, so grounding must retain branching-atom
+        count as an undetermined latent rather than integrating it out.
 
         :param atom_count: Number of atoms the query specifies.
         :param bond_count: Number of bonds the query specifies.
-        :return: The resolved query.
+        :return: The resolved query, with its cause and effect marked.
         """
         query = a(MutagenesisMolecule)(
-            indicator_1=...,
+            indicator_1=confounder,
             logp=...,
             lumo=...,
             mutagenic=...,
+            branching_atom_count=cause,
             atoms=[
                 a(MutagenesisAtom)(
                     element=..., atom_type=..., charge=..., bond_count=...
@@ -273,7 +248,7 @@ class BranchingAtomCountCausalQuery:
             ],
             bonds=[a(MutagenesisBond)(bond_type=...) for _ in range(bond_count)],
         )
-        query.resolve()
+        query.causes_effect(query.variable.mutagenic == True)
         return query
 
     @staticmethod

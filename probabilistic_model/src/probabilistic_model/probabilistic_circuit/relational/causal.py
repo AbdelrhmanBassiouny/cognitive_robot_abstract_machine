@@ -11,11 +11,10 @@ construction.
 
 from __future__ import annotations
 
-import copy
 import logging
 import math
 from dataclasses import dataclass
-from typing_extensions import TYPE_CHECKING, List, Optional, TypeAlias, Union
+from typing_extensions import TYPE_CHECKING, List, Optional, TypeAlias
 
 import pandas as pd
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
@@ -45,7 +44,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-VariableReference: TypeAlias = Union[Variable, str, MappedVariable]
+VariableReference: TypeAlias = Variable | str | MappedVariable
 """
 A cause, effect, or adjustment variable, given as an already-resolved ``Variable``, an
 EQL attribute-access expression (e.g. ``variable(Molecule).mutagenic``, or
@@ -71,7 +70,7 @@ class RelationalCausalCircuit:
 
     @staticmethod
     def resolve_variable(
-        circuit: ProbabilisticCircuit, path: Union[str, MappedVariable]
+        circuit: ProbabilisticCircuit, path: str | MappedVariable
     ) -> Variable:
         """
         Resolve a dotted access-path suffix to the Variable it names in a grounded
@@ -303,8 +302,8 @@ class RelationalCausalCircuit:
                     causal_variables + effect_variables + adjustment_variables
                 )
             )
-            grounded_circuit = self._restrict_to_variables(
-                grounded_circuit, registered_variables
+            grounded_circuit = grounded_circuit.restrict_to_variables(
+                registered_variables
             )
 
         self._warn_if_adjustment_regions_are_expensive(
@@ -319,37 +318,6 @@ class RelationalCausalCircuit:
         )
         causal_circuit.verify_support_determinism()
         return causal_circuit
-
-    @staticmethod
-    def _restrict_to_variables(
-        circuit: ProbabilisticCircuit, variables: List[Variable]
-    ) -> Optional[ProbabilisticCircuit]:
-        """
-        Restrict circuit to variables, without ``SumUnit.simplify()``'s same-type
-        merge.
-
-        Mirrors ``ProbabilisticCircuit.marginal``, minus its trailing ``simplify()``
-        call: that call flattens nested SumUnits into their parent, which leaves the
-        represented distribution unchanged but erases the branch boundaries
-        ``CausalCircuit.verify_support_determinism`` relies on -- for instance a
-        stratified partition's own per-value branches, once one of those partitions
-        picks up further splits of its own on other variables during fitting.
-
-        :param circuit: The circuit to restrict.
-        :param variables: The variables to keep.
-        :return: The restricted circuit, or ``None`` if none of ``variables`` are
-            modeled by it.
-        """
-        result = copy.deepcopy(circuit)
-        root = [
-            node.marginal(variables)
-            for layer in reversed(result.layers)
-            for node in layer
-        ][-1]
-        if root is None:
-            return None
-        result.remove_unreachable_nodes(root)
-        return result
 
     def _warn_if_adjustment_regions_are_expensive(
         self,

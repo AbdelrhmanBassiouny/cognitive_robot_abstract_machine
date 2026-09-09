@@ -463,16 +463,11 @@ class CausalCircuit:
         Check that for each declared query Variable, no SumUnit that splits on that
         Variable has children with overlapping marginal support.
 
-        Reads each child's own already-computed joint support off the circuit's own
-        node structure and restricts it to one query Variable at a time with a pure
-        ``Event.marginal`` projection, rather than calling
-        ``ProbabilisticCircuit.marginal`` per Variable. That circuit-level path deep-
-        copies the circuit and then simplifies it, and simplification's same-type
-        SumUnit merge flattens nested SumUnits into their parent -- which silently
-        erases exactly the branch boundaries this check exists to inspect (for
-        instance a stratified partition's own per-value branches, whenever
-        `JointProbabilityTree` gives one of those partitions further splits of its
-        own on other variables).
+        Reads each child's own already-computed joint support directly and restricts it
+        to one query Variable with a pure ``Event.marginal`` projection, rather than
+        calling ``ProbabilisticCircuit.marginal`` per Variable: that path simplifies the
+        circuit, flattening nested SumUnits and erasing exactly the branch boundaries
+        this check needs.
 
         :param all_query_variables: Union of all Variables across all query_sets.
         :returns: List of violations, empty if all split nodes are support-disjoint.
@@ -778,11 +773,9 @@ class CausalCircuit:
         """
         effect_mixture = SumUnit(probabilistic_circuit=output_circuit)
         for adjustment_partition in adjustment_partitions:
-            # Both events must be filled to the same variable set *before*
-            # intersecting: intersection_with keeps only the variables already on its
-            # left operand, so intersecting first and filling afterward silently drops
-            # whichever event's variables weren't already present on the other side --
-            # here, cause_region's variable, leaving joint_event unrestricted by it.
+            # Fill both events to the same variable set before intersecting:
+            # intersection_with keeps only variables already on its left operand, so
+            # intersecting first would silently drop cause_region's own variable.
             joint_event = adjustment_partition.event.fill_missing_variables_pure(
                 self.probabilistic_circuit.variables
             ).intersection_with(
