@@ -96,11 +96,12 @@ items:
 - id: snapshot-working-memory
   title: >-
     Working memory as a snapshot: the twin follows kinematics while acting and re-perceives only when idle and changed
-  branch: null
-  pull_request_number: null
+  branch: claude/plan-item-kickoff-icra-snapshot-f69vef
+  pull_request_number: 301
   track: backend-routing
   depends_on: []
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_018u8WnZp55ZMNsZRZizhiyk
   notes: >-
     During manipulation the grasped piece moves with the gripper through the attachment #169 restored, and perception is not consulted. When idle, a look is taken at a low rate and a piece's pose is committed only when it differs from the believed pose by more than a threshold measured as three standard deviations over a static scene. The threshold is measured in simulation first and again on the robot, both numbers recorded. Fits the frame budget the continuous node cannot: #236's layout fit costs 0.56 s per frame against the node's 0.5 s period, which is fine at idle rate. This is also where the agency questions get their answer: because the twin follows the gripper's kinematics while the robot acts and re-perceives only when something changed while it was idle, the record distinguishes a piece the robot moved from a piece that moved on its own, which is what "did it move, and did you move it" asks and what a single image cannot hold. Working memory carries no level of its own in Bloom's taxonomy, and that is the paper's point rather than a gap in it - see roadmap.md.
   blockers:
