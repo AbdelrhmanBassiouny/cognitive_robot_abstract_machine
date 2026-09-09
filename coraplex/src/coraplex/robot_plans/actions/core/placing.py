@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, Optional
+from typing_extensions import Any, Dict, List, Optional
 
 from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.plan_node import PlanNode
@@ -26,6 +26,7 @@ from coraplex.querying.predicates import GripperIsFree
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.mixins import (
+    ManipulatesBodies,
     HasGraspDetectionThreshold,
     HasTcpGoalThresholds,
     PlaceTuningParameters,
@@ -48,6 +49,7 @@ class PlaceAction(
     PlaceTuningParameters,
     HasGraspDetectionThreshold,
     HasTcpGoalThresholds,
+    ManipulatesBodies,
 ):
     """
     Places an Object at a position using an arm.
@@ -124,6 +126,13 @@ class PlaceAction(
             VerticalAlignment.NoAlignment,
             ViewManager.get_arm_view(self.arm, self.robot).end_effector,
         )
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator]
 
     @property
     def _action_plan(self) -> PlanNode:
