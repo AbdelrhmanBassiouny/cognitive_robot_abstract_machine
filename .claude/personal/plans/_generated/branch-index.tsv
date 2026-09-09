@@ -33,6 +33,7 @@ claude/plan-item-kickoff-eql-episodes-hjel80	icra-foundation
 claude/icra-foundation-episode-artifacts-nki2is	icra-foundation
 claude/backends-declare-capabilities-roscma	icra-mechanism
 claude/plan-item-kickoff-icra-snapshot-f69vef	icra-mechanism
+claude/icra-mechanism-perturbations-k3myvm	icra-mechanism
 claude/integration-priority-labels	integration-tip-selection
 claude/ready-tooling-integration-fkd5b5	integration-tip-selection
 claude/pipeline-relocation-collision-6gehio	integration-tip-selection

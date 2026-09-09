@@ -139,11 +139,12 @@ items:
 - id: perturbations
   title: >-
     Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push
-  branch: null
-  pull_request_number: null
+  branch: claude/icra-mechanism-perturbations-k3myvm
+  pull_request_number: 305
   track: failure
   depends_on: []
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_01GcNXmBZdALchQ4dctp6J32
   notes: >-
     Perturbation instances the runner applies at a named step: the target hole moved 10 cm, a fixed offset added to a reported pose, a detection relabelled as another piece, an external body pushing a piece while the robot is idle. In simulation they act on the MuJoCo world or on the perception result; on the robot the same Perturbation renders a one-line instruction to the person at the table, so the protocol is the same object. Experiment B's ~30 injected events and Experiment C's perturbation conditions are drawn from these.
   blockers:
