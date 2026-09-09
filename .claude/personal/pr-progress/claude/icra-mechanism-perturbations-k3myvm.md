@@ -29,16 +29,14 @@ Four `Perturbation[World]` instances (`experiments/montessori/perturbations.py`,
 
 ## Done so far
 
-- Fixed an unrelated tooling bug hit while recording this item:
-  `plan_item_bootstrap.py`'s `ITEM_MARKER`/`ITEM_FIELD_INDENT` didn't match any real
-  `plan.yaml`'s indentation (matched only the test fixture, which was itself wrong) —
-  `open`/`record` were producing invalid YAML that `save-plan.sh` rejected before
-  anything reached the notes branch. Fixed the constants, corrected the fixture, added
-  `test_a_rendered_field_line_carries_the_indentation_real_plans_use` to pin the real
-  convention apart from the fixture. All 156 hooks tests pass. This commit is on
-  `claude/icra-mechanism-perturbations-k3myvm` but is infrastructure, not part of
-  `perturbations`' own diff — worth cherry-picking onto #265/`tracy_icra` since it
-  affects every session using these skills.
+- Fixed an unrelated tooling bug hit while recording this item
+  (`plan_item_bootstrap.py`'s indentation constants). The developer reviewed #305 and
+  correctly called out that this didn't belong there (own-PR/bug-label convention) —
+  **split into its own PR, #306, based on `main`, labeled `bug`**. Reverted the fix
+  commit off `claude/icra-mechanism-perturbations-k3myvm` (a "Revert ..." commit, not a
+  history rewrite, since the branch was already pushed/public). Replied to and resolved
+  the review thread; replied to the "no perturbation code yet" comment. #306 is draft,
+  untouched since.
 - Bootstrapped the branch, opened PR #305, recorded `plan.yaml` (in_progress,
   branch/PR/session) and the roadmap section above.
 - Done: `simulated_setup.py`'s four functions now take `world: World`
