@@ -324,3 +324,84 @@ dashboards still implement the readiness rule, so a new item cut off `tracy_icra
 names an item whose pull request is a draft will read as "not ready" when nothing is actually
 blocking it. Nothing here changes that; it is worth a `plan-tracking-skills` item if the trunk
 workflow outlives this deadline.
+
+## 2026-09-09: `snapshot-working-memory` kicked off, based on #265 rather than `tracy_icra`
+
+Kicked off by `/plan-item-kickoff icra-mechanism snapshot-working-memory`. #301.
+
+### Base branch, decided against this item's own recorded blocker
+
+The item's `blockers` entry named `icra-foundation`'s `simulated-camera-feeds-perception`
+as `not_started`. Checked against `icra-foundation/plan.yaml` on kickoff: that item is
+actually `done` (#298, merged into #265) — the blocker text was stale, written before the
+2026-09-05 split. So the recorded dependency is not what is actually blocking this item.
+
+What is: this same day's branching change (`icra-foundation/roadmap.md`, "new work is cut
+off `tracy_icra`, and the readiness rule is retired") says every new item should now cut
+off `tracy_icra` rather than argue a base by dependency readiness. Checked directly rather
+than taken on trust: `tracy_icra` does **not** yet carry #265's content — `git merge-base
+--is-ancestor origin/claude/icra-experiments-simulation-pipeline-w4ep7n origin/tracy_icra`
+answers no, and a diff between the two branches is 630 files / 86,630 insertions, including
+`results_recording.py`, the board detector and the whole perception stack this item needs.
+The merge of #265 into `tracy_icra` is `tracy-demo-takes-the-integrated-branch`, still
+`not_started` there, gated on the robot.
+
+Put to the developer directly on this session; the answer was to base on #265. So this
+item's branch (`claude/plan-item-kickoff-icra-snapshot-f69vef`, #301) is cut from
+`claude/icra-experiments-simulation-pipeline-w4ep7n`, not from `tracy_icra` or `main`. It
+will need restacking onto `tracy_icra` once `tracy-demo-takes-the-integrated-branch` lands
+there — noted as a follow-up on this item rather than assumed away.
+
+### What already exists, checked against #265's tree before designing anything new
+
+Perception never commits a pose into the real twin today. `MontessoriPerceptionPipeline
+.detect()` returns a `MontessoriScene` whose sightings stand in `MontessoriScene.imagined`,
+a `deepcopy` (`ImaginedWorld.copied_from`) that is thrown away after a query is answered —
+"nothing here ever reaches the world it was copied from" is the module's own docstring.
+No `update_body_pose`/`commit` method exists anywhere, and nothing gates perception on
+grasp state (there is nothing yet to gate). There is also no `is_executing`/idle flag on
+`Context` or the executable, and no existing pose-noise/repeatability measurement.
+
+Attachment is already the kinematic-following half this item's notes describe: `ReAttachNode`
+reparents the grasped body onto the gripper's `tool_frame` via `world.move_branch` (pick-up)
+and back onto `world.root` on release (placing) — a plain kinematic reparent, not a separate
+boolean. `is_gripper_holding_something(gripper)` (`semantic_digital_twin/reasoning
+/robot_predicates.py`) already answers "is anything attached" the cheap, exact way that
+matches this reparenting scheme (kinematic-branch membership), rather than the ray-cast
+`is_body_gripped` predicate built for a different purpose (detecting a grasp from geometry).
+This item reuses `is_gripper_holding_something` as its idle/acting guard rather than adding
+a new state flag.
+
+The commit-a-pose-once-matched mechanism is not new either: two places in #265's tree
+already write a state-only pose onto an *existing* body the same way —
+`ImaginedWorld.spawn`'s own docstring ("a later look that finds the piece somewhere else
+writes the new placement into the connection this one built") and, generically,
+`coraplex/perception.py`'s `Detection.apply_to`, which resolves the matching annotation and
+sets `body.parent_connection.origin = detected_global_pose` outside any `world.modify_world()`
+block — placement is state, not structure. This item's commit step follows that same,
+already-established pattern rather than inventing a second way to move a body.
+
+### Matching a detection to an existing piece
+
+Neither of the two commit precedents above solves multi-instance matching in general —
+`Detection.apply_to` itself raises `AmbiguousDetection` when a semantic-annotation type
+resolves to more than one body, rather than disambiguating. This item does not solve that
+either: it matches a detection to the nearest existing piece of the same
+`MontessoriShapeCategory`, greedily, one match per piece per tick. Adequate for the scenes
+this plan measures (a handful of distinguishable pieces); recorded as a known simplification
+rather than a general solution, consistent with how the codebase already treats the
+ambiguous case elsewhere.
+
+### The threshold, and what is deferred
+
+`pose_change_threshold` is three standard deviations of position noise, measured by
+repeating a look over one static simulated scene (reusing the `montessori_world`/
+`camera_over_the_table` fixtures `test_montessori_simulated_camera.py` already uses) and
+computing the sample standard deviation. The measured number is recorded in the test itself
+once run.
+
+**Deferred, not silently dropped:** the item's own notes ask for the threshold "measured in
+simulation first and again on the robot, both numbers recorded." The robot half needs
+physical robot access this session does not have. Recorded here as outstanding rather than
+invented — whoever next has the robot records the second number against this same test's
+simulation figure.
