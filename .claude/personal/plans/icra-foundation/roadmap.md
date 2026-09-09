@@ -1758,3 +1758,62 @@ drawn see-through, so the reading no longer depends on the markers at all.
 `test_montessori_detection_on_captures.py` 57 passed and 4 xfailed, unchanged,
 `test_montessori_occupancy.py` 24 passed, `test_montessori_views.py` 31 passed,
 `test_montessori_explanations.py` 17 passed.
+
+### The fourth review round on #298, 2026-09-09: what it asks for is a plan, not a round
+
+The branch is finished as an item and stalled as a conversation. All 23 checks pass on
+`15dfd354cd`, `mergeable_state` is clean, the item's own criterion passes and both
+expected-to-fail marks came off in the third round. What holds it is two threads opened
+on `pipeline.py` after those replies, neither of them a defect, and the last comment on
+the second says in as many words: *"Maybe all these can be organized as plan items,
+Discuss with me the best course of action regarding that"*. So the round is answered by
+a proposal put to the developer rather than by a push, and this section records what was
+found rather than what was resolved.
+
+**What the two threads actually ask for.** `r3965517956` asks whether holes would be
+better found from depth and whether a second, depth-dependent hole detector should stand
+beside `BoardDetector`. It reads as unanswered but is half answered already: the third
+round made `BoardDetector` read its openings from darkness *or* from depth, each sized on
+its own. What is not answered is the *beside* -- a detector of its own rather than a
+second reading inside one, which is the same question the sibling thread asks in general
+form. `r3965555439` and its three replies are that general form, and they are one ask in
+four steps: the five stated defaults on `BoardDetector` (`hole_size`,
+`minimum_hole_count`, `minimum_hole_depth`, `minimum_lid_area`, `seed_reach`) should be
+derived from what the twin already knows about the board rather than written down; the
+concepts under them -- counting a feature on a perceived body, a hole, the area of a
+surface that may have holes -- should be raised to a meta level as predicate classes or
+as a hole/perforated-surface detector family with capabilities; a detector's capability
+should name the *fields of classes* it can answer, spelled as EQL `Attribute`s or
+`MappedVariable`s rather than as field-name strings; and a look should then be asked for
+by handing the backend an underspecified EQL `Match`, which helpers fill out from what
+the model knows about the named class, possibly as an EQL-based RDR. The same description,
+verbalized, is what a VLM or VQA would be asked.
+
+**Why none of it is this branch's.** Only the first step is even arguably a round on
+`pipeline.py`, and the developer bundled it with the rest deliberately -- deriving the
+five defaults from the board is the small case of the general mechanism, and taking it
+alone would build a Montessori-shaped answer to a question asked at the meta level. The
+remaining three steps are `icra-mechanism`'s territory as the plans already stand:
+`backends-declare-their-capabilities` is where a capability is declared, and
+`perception-backends-are-interchangeable` is where a VLM answers a look behind the same
+interface. So what the round needs is items, and which plan they belong to is the
+developer's call.
+
+**The branching change is the larger half, and it is the plan's rather than this item's.**
+The same comment states: *"I want first to merge everything now fast into 265 and then
+into tracy_icra then merge any new features into tracy_icra directly and stop basing them
+on main or on other tracks. Because I want to start recording episodes with perturbations
+in the simulation as fast as possible."* That reverses the base every in-flight item in
+all three ICRA plans was cut under, and it retires the readiness rule those cuts were
+argued from -- an open, non-draft pull request counting as ready to build on is what
+#278, #294 and this item were each cut under, and `montessori-scenarios` (#296) argued
+*against* #265 as a base on measured grounds only yesterday. Under the new direction that
+argument stops applying, because the sideways-merge cost it turned on is paid once by the
+fast merge into #265 rather than by each branch. It is recorded and asked, not applied.
+
+**One dependency reading changed while this sat.** `integrated-simulation-pipeline` (#265)
+is a draft again, so `check_dependency_readiness.py` reports `is_ready: false` for it
+where "open and not a draft" is what this item's cut off #265 was argued from. Nothing
+already built on it is affected, and the developer's own merge-everything-into-#265 plan
+is the likely reason it is a draft; noted because the same reading is what three other
+items were cut under and a later run should not read the regression as new information.
