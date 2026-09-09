@@ -111,6 +111,18 @@ items:
     (#295) landed on #265 with its long-term half fully answerable (the join-translation fix cited
     above shipped on that same branch), so this item scores the set as #295 left it rather than
     against the thinner shape described above.
+
+    Built 2026-09-09: `RecordedQuery` gained `bucket`/`bloom_level`/`answered_correctly`,
+    `QuestionSet.answer_and_record` scores every question of a set against ground truth, and two
+    new figures report the accuracy tables `paper-figures-from-episodes` (#297) left unstubbed.
+    The working-memory half is implemented and tested; the long-term half is deliberately left
+    without a test of its own, because `test_long_term_questions.py` compares a list-valued
+    answer by sorted name rather than position-by-position the way the working-memory test does,
+    and it is not yet known whether that is because the database's row order genuinely does not
+    match ground truth's or only ever a convenience. Left to the developer rather than guessed at;
+    see roadmap for the full reasoning. Neither half was run in this session's container, which
+    cannot install the workspace at all (a `uv`/`pyproject.toml` parse error unrelated to this
+    branch); CI is what verifies both.
   blockers: []
 - id: objects-seen-asked-of-the-perception-system
   title: >-

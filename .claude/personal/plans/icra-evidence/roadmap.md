@@ -1133,3 +1133,73 @@ recording one episode of two trials the way `test_long_term_questions.py` does a
 regenerated `AccuracyByBucket`/`AccuracyByBloomLevel` figures over it.
 
 Session: https://claude.ai/code/session_01CeBaw39xNxHaYphUsVzXow
+
+### `question-set-answered-from-memory` (#304), as built 2026-09-09
+
+What was implemented against the plan above, and one open question found while
+building it that stands between this and a trustworthy long-term-memory accuracy table.
+
+**Built, matching the plan exactly.** `RecordedQuery` grows `bucket`/`bloom_level`/
+`answered_correctly`, all `None` for an ordinary query. `QuestionSet.answer_and_record`
+asks every question of a set, times each with `time.perf_counter`, and scores it. Two
+new figures, `AccuracyByBucket` and `AccuracyByBloomLevel` (`experiments/paper/questions.py`),
+report the tables `paper-figures-from-episodes` (#297) left unstubbed, registered in
+`FigureSet.for_the_paper`. `generate_orm.py` gained the new module in its ignore list --
+a question is asked, not recorded, same reasoning as every other `questions`/`paper` module
+already there.
+
+**`Question.values_agree`/`matches_ground_truth`, promoted out of `test_questions.py`
+rather than duplicated.** The comparison `answer_and_record` scores against is exactly
+what `test_questions.py`'s own `answers_agree` free function already did (numeric for a
+`SpatialType`, position-by-position for a list, `==` otherwise) -- introducing the same
+logic a second time in production code would have been the exact duplication `AGENTS.md`
+rules out, so the method moved onto `Question` itself and the test file now calls it
+instead of carrying its own copy. Three of that file's own tests, and the "every question
+of the set" one, now read `question.matches_ground_truth(robot)`.
+
+**An open question, not resolved here: the long-term half compares list answers
+differently, and `values_agree` does not yet know that.** Re-reading
+`test_long_term_questions.py` closely before writing a long-term-memory test of my own
+found that its "every question at once" test does *not* use a position-by-position
+comparison for a list-valued answer -- it sorts both sides by name first
+(`names(answered) == names(true)`), and every other long-term test asserting a list
+answer does the same (`ObjectsSeenInTheEpisode`, `ObjectsThatMovedInTheEpisode`,
+`ObjectsTheRobotMovedInTheEpisode`). The working-memory half's own test never sorts.
+That is a real, already-established difference between what "correct" means for the two
+memories' list-valued answers, not an inconsistency I am choosing to invent a fix for:
+either the long-term backend's row order is not guaranteed to match ground truth's
+traversal order (in which case `values_agree`'s zip comparison would mark a right answer
+wrong whenever the database returns rows in a different but equally correct order,
+undercounting the long-term accuracy table), or the sorted comparison was only ever a
+convenience and position happens to agree too. I do not know which, and guessing would
+risk exactly the kind of scoring bug this track has already paid three CI rounds to find
+on #295 -- so this is left to the developer rather than resolved by assumption.
+
+**Consequently, no long-term-memory test of `answer_and_record` is added on this
+branch.** The method itself is memory-agnostic and already works unchanged for
+`QuestionSet.over_long_term_memory(...).answer_and_record(long_term_memory)` -- nothing
+long-term-specific was written -- but a test that can't be trusted to fail for the right
+reason is worse than no test, per the same lesson #295's own roadmap already records
+("assert the rows a query returns, not the set of them"). Whoever answers the question
+above can add the long-term counterpart test in an hour once `values_agree`'s list case
+is fixed, if it needs fixing.
+
+**Neither half was run in this session's container.** `uv sync` fails outright with a
+`pyproject.toml` parse error unrelated to this branch (`docopt-ng`'s dependency entry at
+line 72 is a table, which this container's `uv` 0.8.17 rejects as "expected a string
+containing a PEP 508 requirement") -- so the workspace could not be installed here at
+all, working-memory half included, unlike #295's own session which reported running 20
+tests against a real twin. CI is what verifies both halves on this branch; the tooling
+issue is reported here rather than fixed, since it is a pyproject.toml/`uv` version
+mismatch on the base branch and unrelated to this item.
+
+#### Testing
+
+`test/experiments_test/test_question_scoring.py`: `answer_and_record` scores every
+working-memory question of #295's own built scene, asserting each row's text/bucket/
+bloom_level/correctness against the question it came from; the two new figures are
+tested in memory the way `test_paper_figures.py` already tests every other figure,
+including that an ordinary (unscored) query is excluded from both tables. Not run
+locally, for the container reason above; CI is what verifies it.
+
+Session: https://claude.ai/code/session_01CeBaw39xNxHaYphUsVzXow
