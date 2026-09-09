@@ -1,3 +1,58 @@
+## #265: tracy_icra merged, LongTermMemory CI fix, main merged a second time
+
+**State.** `51fc40548` on `claude/icra-experiments-simulation-pipeline-w4ep7n`, a draft,
+description up to date (PR body's new section covers this round). Pushed.
+
+**What happened, in order.**
+
+1. `c719c44a9` merges `tracy_icra` in, at the developer's request, ahead of
+   `tracy-demo-takes-the-integrated-branch`. Eleven conflicted files in `segmind`'s
+   detectors and `coraplex/execution_environment.py`, all resolved by reading both
+   sides rather than picking one. Found and fixed a real bug neither branch's own
+   version caught along the way: `MotionDetector._is_lifting` called
+   `NumericPose.to_position()`, which does not exist (`NumericPose.position` is
+   already a tuple) — fixed to read `poses[...].position[2]` directly, and the new
+   `LiftDetector`/`StopLiftDetector` fixed the same way before being kept.
+2. CI on that tip showed two failing `experiments` tests under `LongTermMemory`,
+   flagged by the developer. Root cause: merging #295's `AgentInteractionEvent` in as
+   a second base on `PickUpEvent`/`PlacingEvent`/`InsertionEvent` broke ORMatic's
+   joined-table mapping, which maps a class to the SQL parent of the *first*
+   already-mapped ancestor in its MRO — with `EventWithEffect` listed first, that
+   parent was `EventWithEffect`, not `AgentInteractionEvent`. First fix (`0e580a146`)
+   reordered the bases. Superseded by the developer's own cleaner fix (`12d806e20`):
+   `AgentInteractionEvent` now extends `EventWithEffect` directly, so `PickUpEvent`/
+   `InsertionEvent` need only single inheritance from it; `PlacingEvent` keeps
+   `(AgentInteractionEvent, ComesToRestEvent)` for the physics-effect logic it shares
+   with `SupportEvent`. Verified in isolation both times.
+3. A fresh conflict against `origin/main` appeared after that push. Developer said yes
+   to merging main in and resolving it now. `51fc40548` merges it — five files:
+   `coraplex/plans/executables.py`, `coraplex/execution_environment.py` (not itself
+   conflicted but carrying the same stale mechanism),
+   `coraplex/robot_plans/actions/core/pick_up.py`,
+   `test/coraplex_test/test_plan/test_executables.py`,
+   `test/coraplex_test/test_designator/test_motion_designator.py`. The substantive
+   call: adopted main's `Context.ticks_per_motion` design in full, removing
+   `GiskardExecutable.max_ticks_per_motion_mapping`/`tick_limit`/
+   `DEFAULT_MAX_TICKS_PER_MOTION_MAPPING` entirely (main's own rationale: the budget
+   is a run policy, so it belongs on the context, not on class state that outlives
+   the run) rather than keeping both mechanisms side by side. In `pick_up.py`, kept
+   this branch's `if self.context.update_world_model_attachment:` guard around the
+   trailing `ReAttachNode` (main's side of the conflict had dropped it) while adding
+   main's `allow_gripper_collision=True` alongside this branch's existing
+   `grasped_object=...` sizing parameter — confirmed both are independent,
+   pre-existing `MoveGripperMotion` parameters, not alternatives, by reading the
+   class definition first. Repointed one stray docstring reference in
+   `experiments/tracy_experiments/trajectory_planning.py` to the new attribute name.
+   Every touched file byte-compiled clean and re-checked for stray conflict markers
+   before committing.
+
+**Not yet known.** CI has not reported on `51fc40548` yet — nothing armed to watch it,
+per the standing rule; ask, or look at the run.
+
+**Unrelated, noted but out of scope.** A robokudo test failure seen earlier in CI
+(`test_run_semdt_raytracer_ae_successfully`, object-hypothesis count 3 vs 2) — not
+touched by anything in this round, left alone.
+
 ## #265: both outstanding items closed, #292 folded in, CI down to one field
 
 **State.** `06e7af3eb` on `claude/icra-experiments-simulation-pipeline-w4ep7n`, a draft,
