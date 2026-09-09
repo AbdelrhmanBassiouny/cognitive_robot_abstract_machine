@@ -16,6 +16,11 @@ import experiments.questions.long_term_memory
 import experiments.questions.question
 import experiments.questions.question_set
 import experiments.questions.working_memory
+import experiments.paper.figure
+import experiments.paper.figure_set
+import experiments.paper.measurement
+import experiments.paper.outcomes
+import experiments.paper.queries
 import coraplex.orm.ormatic_interface
 import segmind.orm.ormatic_interface
 
@@ -81,6 +86,18 @@ for question_module in (
     experiments.questions.long_term_memory,
 ):
     ignored_classes |= set(classes_of_module(question_module))
+
+# a table of the paper is computed from what was recorded rather than recorded itself,
+# and it is regenerated whenever the database changes, so storing one would store an
+# answer next to the rows it was read off
+for paper_module in (
+    experiments.paper.figure,
+    experiments.paper.figure_set,
+    experiments.paper.measurement,
+    experiments.paper.outcomes,
+    experiments.paper.queries,
+):
+    ignored_classes |= set(classes_of_module(paper_module))
 
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(
