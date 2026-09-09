@@ -196,10 +196,37 @@ items:
   pull_request_number: 298
   track: integration
   session: https://claude.ai/code/session_01XCRk6JcVY6XenXusBf2ST4
-  blockers: []
+  blockers:
+  - >-
+      Waiting on the developer's answer to the fourth review round on #298, which he asked for in as many
+      words: "Maybe all these can be organized as plan items, Discuss with me the best course of action
+      regarding that". Two threads on experiments/src/experiments/montessori/perception/pipeline.py are
+      open, both opened 2026-09-09 after the third round's replies, and neither is a defect: r3965517956
+      asks for a separate depth-dependent hole detector beside BoardDetector, and r3965555439 (four
+      comments) asks for BoardDetector's five stated defaults -- hole_size, minimum_hole_count,
+      minimum_hole_depth, minimum_lid_area, seed_reach -- to be derived from what the twin already knows
+      about the board, and then for the hole/perforated-surface concepts to be raised to a meta level:
+      predicate classes, detector capabilities keyed on EQL Attributes or MappedVariable rather than
+      field-name strings, an underspecified EQL Match description handed to the perception backend to
+      choose detectors and pipeline from, possibly as an EQL-based RDR, and the same description
+      verbalized for a VLM or VQA. That is several pull requests of work across icra-foundation and icra-
+      mechanism, not a round on this branch, so it cannot be taken here without the plan-item decision he
+      asked to discuss. The same comment carries a branching-strategy change that is the plan's rather
+      than this item's: "I want first to merge everything now fast into 265 and then into tracy_icra then
+      merge any new features into tracy_icra directly and stop basing them on main or on other tracks.
+      Because I want to start recording episodes with perturbations in the simulation as fast as
+      possible." That reverses the base every in-flight item in all three ICRA plans was cut under and
+      would retire the readiness rule those cuts were argued from, so it is recorded here and asked rather
+      than applied. CI is not the blocker and neither is the branch: all 23 checks pass on 15dfd354cd,
+      mergeable_state is clean, the item's own criterion passes and both expected-to-fail marks are gone
+      as of the third round. Separately, the dependency integrated-simulation-pipeline (#265) has
+      regressed to open_draft, so check_dependency_readiness reports is_ready false where the "open and
+      not a draft" reading was what this item's cut off #265 was argued from. It does not block anything
+      already built on it, and the developer's own merge-into-265 plan is the likely reason it is a draft
+      again.
   depends_on:
   - integrated-simulation-pipeline
-  status: in_progress
+  status: blocked
   notes: 'One frame source every perception backend reads, which is what lets the backends be swapped
     without changing anything above them. MujocoCamera renders colour and depth; wrap them as the RgbdFrame
     the pipeline reads, with intrinsics and camera pose taken from the twin, so the detector stack, a
