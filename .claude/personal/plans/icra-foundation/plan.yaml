@@ -1,44 +1,35 @@
 schema_version: 1
 id: icra-foundation
 title: 'ICRA experiments: one pipeline every scenario runs on'
-description: 'The foot of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits''
-  roadmap.md for why). One representation every subsystem reads and writes: the integrated simulation
-  pipeline every scenario, demo and experiment stacks on, the dataclass scenario/goal/condition/perturbation/metric
-  domain model with its runner, and every trial, robot plan, event, query, answer and failure recorded
-  through ORMatic into SQL and read back as long-term memory. Refocused 2026-09-08 on the shared representation
-  rather than on perception quality (see roadmap.md): the long-term-memory track is the plan''s own critical
-  path and no longer waits on the perception lane. icra-mechanism and icra-evidence both depend on items
-  here; those edges could not cross the plan boundary and are recorded as blockers on their side instead
-  (see their roadmap.md).'
+description: >-
+  The foot of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits' roadmap.md for why). One representation every subsystem reads and writes: the integrated simulation pipeline every scenario, demo and experiment stacks on, the dataclass scenario/goal/condition/perturbation/metric domain model with its runner, and every trial, robot plan, event, query, answer and failure recorded through ORMatic into SQL and read back as long-term memory. Refocused 2026-09-08 on the shared representation rather than on perception quality (see roadmap.md): the long-term-memory track is the plan's own critical path and no longer waits on the perception lane. icra-mechanism and icra-evidence both depend on items here; those edges could not cross the plan boundary and are recorded as blockers on their side instead (see their roadmap.md).
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 252
 waves:
 - id: foundation
   name: One pipeline every scenario runs on
-  description: The integrated simulation pipeline, the scenario domain model and the episode recording.
-    Everything later stacks on these three, and all three can start today in parallel.
+  description: >-
+    The integrated simulation pipeline, the scenario domain model and the episode recording. Everything later stacks on these three, and all three can start today in parallel.
 tracks:
 - id: integration
   name: The integrated pipeline
   wave: foundation
-  description: Lane 1. One branch carrying the perception stack, the monitor stack, the predicates and
-    a simulated camera, on which the simulated demo runs the same pipeline the robot will.
+  description: >-
+    Lane 1. One branch carrying the perception stack, the monitor stack, the predicates and a simulated camera, on which the simulated demo runs the same pipeline the robot will.
 - id: scenario-model
   name: Scenarios as data
   wave: foundation
-  description: Lane 2. The dataclass domain model that describes a scenario, its goal, the knowledge conditions
-    it runs under, the perturbations applied to it and the metrics it reports, plus the runner that executes
-    it with logs and a report.
+  description: >-
+    Lane 2. The dataclass domain model that describes a scenario, its goal, the knowledge conditions it runs under, the perturbations applied to it and the metrics it reports, plus the runner that executes it with logs and a report.
 - id: long-term-memory
   name: Episodes recorded and queried
   wave: foundation
-  description: Lane 2, and the programme's critical path since 2026-09-08. Every trial, robot plan, event,
-    query, answer, failure and self-model recorded through ORMatic into SQL, in simulation and on the
-    robot alike, generated at corpus scale headless, and read back through the SQL backend as long-term
-    memory. Nothing in this track waits on the perception lane.
+  description: >-
+    Lane 2, and the programme's critical path since 2026-09-08. Every trial, robot plan, event, query, answer, failure and self-model recorded through ORMatic into SQL, in simulation and on the robot alike, generated at corpus scale headless, and read back through the SQL backend as long-term memory. Nothing in this track waits on the perception lane.
 items:
 - id: integrated-simulation-pipeline
-  title: One branch on which the simulated demo runs perception, monitor, predicates and events together
+  title: >-
+    One branch on which the simulated demo runs perception, monitor, predicates and events together
   branch: claude/icra-experiments-simulation-pipeline-w4ep7n
   pull_request_number: 265
   track: integration
@@ -46,301 +37,287 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_019Fq3evDtc4fjPpCaNceNts
   blockers:
-  - 'Cross-plan: this item merges montessori-eql-stack''s montessori_monitor_and_recording (#256) rather
-    than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was split out of #169 so this
-    plan need not take the cramera console with the monitor. As of 2026-09-03 it takes only the monitor
-    half of #256: the recording half is being cut off main as its own item, run-results-recorded-into-sql,
-    which this item merges instead. What is left of that debt here is one item: SimulationTimePacer.sleep()
-    waits on the simulation clock with no bound, so a stalled simulation blocks a tick forever. No test
-    reaches it - only the demo scripts set context.simulation_clock - but it is a real hang, and what
-    a stalled simulation should do is the developer''s call. The three coraplex failures and the hanging
-    Tracy demo this blocker used to name are fixed: the gripper round (7fa4b1936) cleared them and all
-    24 checks passed on #169''s c8bf6f05.'
-  notes: 'The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor
-    stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a grasped
-    shape behind Context.update_world_model_attachment, and the montessori world and semantics it monitors
-    - #256 imports no cramera at all), the recording half of #256 as its own branch off main (run-results-recorded-into-sql),
-    the predicate classes (#229), the perception stack tip (#238, which carries #221, #222 and #227) and
-    the hole layout fit (#236, which carries #225 and #232), the detector choice by rule (#231, 13 commits,
-    no rule-engine dependency) and #239 whole. Both standing exclusions this item''s notes used to carry
-    are reversed at the developer''s direction (2026-09-06): the whole ripple-down rules stack is in,
-    taken at its tip D-deco (#77), not the one knowledge-half commit of #239; and the whole match-query-ergonomics
-    set is in, #192 included. Resolve the known meetings once and record them in roadmap.md: #223''s RectifiedFootprint
-    rename, #231''s EdgeFitDetector rename, #244 and #229 both editing reasoning/predicates.py and geometry.py.
-    Inherits one piece of open debt from that stack, which is prerequisite work: SimulationTimePacer.sleep
-    has no bound. The demo entry point stays in #169, since franka_montessori_demo.py is bound to cramera
-    through SortingRunControl, so the headless demo this item is done by is tracy_icra''s own montessori_demo.py
-    rather than that one. Done when franka_montessori_demo and the Tracy simulated demo both sort the
-    board headless with the event monitor ticking and every test module of the merged packages collected
-    and green in CI. #192 removes Match.variable, which #159 and therefore #239, #266 and #275 read; the
-    branches merge textually clean and the reads are migrated to the underscore-sandwich API in a commit
-    of their own, so the migration reads separately from the merge.
+    - >-
+      Cross-plan: this item merges montessori-eql-stack's montessori_monitor_and_recording (#256)
+      rather than montessori_fast_inline_monitor (#169), as of 2026-09-03 - #256 was split out of
+      #169 so this plan need not take the cramera console with the monitor. As of 2026-09-03 it
+      takes only the monitor half of #256: the recording half is being cut off main as its own item,
+      run-results-recorded-into-sql, which this item merges instead. What is left of that debt here
+      is one item: SimulationTimePacer.sleep() waits on the simulation clock with no bound, so a
+      stalled simulation blocks a tick forever. No test reaches it - only the demo scripts set
+      context.simulation_clock - but it is a real hang, and what a stalled simulation should do is
+      the developer's call. The three coraplex failures and the hanging Tracy demo this blocker used
+      to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on
+      #169's c8bf6f05.
+  notes: >
+    The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor
+    stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a
+    grasped shape behind Context.update_world_model_attachment, and the montessori world and
+    semantics it monitors - #256 imports no cramera at all), the recording half of #256 as its own
+    branch off main (run-results-recorded-into-sql), the predicate classes (#229), the perception
+    stack tip (#238, which carries #221, #222 and #227) and the hole layout fit (#236, which carries
+    #225 and #232), the detector choice by rule (#231, 13 commits, no rule-engine dependency) and
+    #239 whole. Both standing exclusions this item's notes used to carry are reversed at the
+    developer's direction (2026-09-06): the whole ripple-down rules stack is in, taken at its tip
+    D-deco (#77), not the one knowledge-half commit of #239; and the whole match-query-ergonomics
+    set is in, #192 included. Resolve the known meetings once and record them in roadmap.md: #223's
+    RectifiedFootprint rename, #231's EdgeFitDetector rename, #244 and #229 both editing
+    reasoning/predicates.py and geometry.py. Inherits one piece of open debt from that stack, which
+    is prerequisite work: SimulationTimePacer.sleep has no bound. The demo entry point stays in
+    #169, since franka_montessori_demo.py is bound to cramera through SortingRunControl, so the
+    headless demo this item is done by is tracy_icra's own montessori_demo.py rather than that one.
+    Done when franka_montessori_demo and the Tracy simulated demo both sort the board headless with
+    the event monitor ticking and every test module of the merged packages collected and green in
+    CI. #192 removes Match.variable, which #159 and therefore #239, #266 and #275 read; the branches
+    merge textually clean and the reads are migrated to the underscore-sandwich API in a commit of
+    their own, so the migration reads separately from the merge.
 
-    Resolved 2026-09-06: the branch was red on a krrood defect, not on the merge. A class diagram resolved
-    a field''s annotation with the classes it holds offered as a local scope, so giskardpy''s Sequence
-    goal replaced the typing alias detector_choice.py imports and the ORM generation aborted in every
-    job that builds an interface. get_type_hints_of_object now takes those classes as a fallback for names
-    the defining modules leave unbound, which is what they were for; a krrood test reproduces the generator''s
-    failure over three classes and no ROS. What this changes about the item is its evidence, not its scope:
-    every suite number recorded for the convergence was measured in a session container with the ORM-dependent
-    modules excluded, so this item is not verified until CI collects on this branch at least once.
+    Resolved 2026-09-06: the branch was red on a krrood defect, not on the merge. A class diagram
+    resolved a field's annotation with the classes it holds offered as a local scope, so giskardpy's
+    Sequence goal replaced the typing alias detector_choice.py imports and the ORM generation
+    aborted in every job that builds an interface. get_type_hints_of_object now takes those classes
+    as a fallback for names the defining modules leave unbound, which is what they were for; a
+    krrood test reproduces the generator's failure over three classes and no ROS. What this changes
+    about the item is its evidence, not its scope: every suite number recorded for the convergence
+    was measured in a session container with the ORM-dependent modules excluded, so this item is not
+    verified until CI collects on this branch at least once.
 
-    CI collected 2026-09-06, and the wall was hiding two more defects, both this branch''s own and both
-    fixed: the generated experiments interface named collections.abc.Sequence without importing it, because
-    a relationship was rendered with the container its field declares and SurfacePass declares the abstract
-    Sequence - which SQLAlchemy could not have instrumented anyway, so a relationship is now held in a
-    collection it can build and append to, as the tuple case already was; every later import of that half-executed
-    module then collided with the association table it had already registered, which is where nine failures
-    and six collection errors came from. And InsideOf.compute_containment_ratio was kept in its older
-    mesh-and-bounding-box form over 01e454d7b''s numeric one, alone among that commit''s numeric readings,
-    against the test asserting containment builds nothing symbolic. Thirteen of fifteen jobs were green
-    before those two; what is left is the four narrowing tests, which are now a blocker of their own.
-    Resolved 2026-09-06 by #292, and this is the item''s first fully measured experiments job. The RecordedLook
-    collision is cleared by renaming recordings.py''s to RecordedImages, with RecordedCamera.looks()/look_at()
-    following as images()/image_at() and its three readers with them; step_by_step.py keeps RecordedLook.
-    Renamed rather than ignored because generate_orm''s ignored_classes would have had to grow over watch_bag
-    as well - BagReplay holds a RecordedCamera - and over every later holder of one, leaving the duplicate
-    name in place for the next class to hit; the rename is also the only one of the two a session container
-    can check, by grep rather than by running a generation it cannot run. RecordedFrame, the obvious name,
-    is already scene_source.py''s, which is part of why the namespace collided. test_montessori_orm.py
-    now asserts that no two mapped Montessori classes share a name with each other, beside the upstream
-    check it already made. Measured on CI: the parent e6c665cec runs 13 failed, 742 passed, 8 errors with
-    51 mentions of the duplicated table; #292''s 76e37a70 runs 4 failed, 758 passed, no errors and no
-    collision at all. What is left red is the four narrowing tests of the blocker above, which fail identically
-    on the parent and are untouched by this. Resolved 2026-09-08: the four narrowing tests state what
-    the corrected layout shows. Measured over all six holes, left and right separate the cube from the
-    cylinder from no hole on this board, read from the camera or from the world, so three of the four
-    needed a different pair rather than a re-measurement and the fourth was not a test change at all.
-    Which way a piece lies now pairs Above with Below on the square hole (cube 18.6 mm up the picture,
-    cylinder 45.4 mm down); the two sides of a hole pairs InFrontOf with Behind on it (cube 16.2 mm in
-    front, cylinder 49.1 mm behind), which is one axis where the old pair crossed two; the reach moves
-    to the triangle hole with radii 0.07 and 0.12 (cube 50.0 mm, cylinder 93.8 mm), the square hole separating
-    them by 1.3 mm. The demonstration test is untouched: what was wrong was watch_narrowing.look_for_the_cube_on_the_lid
-    asking for LeftOf the square hole, now Above it, and the step sequence the test asserts holds unchanged.
-    Every replacement was run end to end through MontessoriPerceptionBackend, and the sibling assertions
-    over the demonstration statement still hold - areas 0.517 > 0.041 > 0.023, five distinct labels of
-    non-decreasing length, the camera named exactly twice. Pushed as dae41889c on the item''s own branch,
-    since the scope check leaves the touched files on no other base. The roadmap''s standing hazard that
-    nothing on these branches runs in a session container is wrong for the montessori perception suite:
-    a python3.12 venv with casadi~=3.7.0 runs the whole pipeline, and only pytest is blocked, by the conftest''s
-    ORM generation.
+    CI collected 2026-09-06, and the wall was hiding two more defects, both this branch's own and
+    both fixed: the generated experiments interface named collections.abc.Sequence without importing
+    it, because a relationship was rendered with the container its field declares and SurfacePass
+    declares the abstract Sequence - which SQLAlchemy could not have instrumented anyway, so a
+    relationship is now held in a collection it can build and append to, as the tuple case already
+    was; every later import of that half-executed module then collided with the association table it
+    had already registered, which is where nine failures and six collection errors came from. And
+    InsideOf.compute_containment_ratio was kept in its older mesh-and-bounding-box form over
+    01e454d7b's numeric one, alone among that commit's numeric readings, against the test asserting
+    containment builds nothing symbolic. Thirteen of fifteen jobs were green before those two; what
+    is left is the four narrowing tests, which are now a blocker of their own.
+    Resolved 2026-09-06 by #292, and this is the item's first fully measured experiments job. The
+    RecordedLook collision is cleared by renaming recordings.py's to RecordedImages, with
+    RecordedCamera.looks()/look_at() following as images()/image_at() and its three readers with
+    them; step_by_step.py keeps RecordedLook. Renamed rather than ignored because generate_orm's
+    ignored_classes would have had to grow over watch_bag as well - BagReplay holds a RecordedCamera
+    - and over every later holder of one, leaving the duplicate name in place for the next class to
+    hit; the rename is also the only one of the two a session container can check, by grep rather
+    than by running a generation it cannot run. RecordedFrame, the obvious name, is already
+    scene_source.py's, which is part of why the namespace collided. test_montessori_orm.py now
+    asserts that no two mapped Montessori classes share a name with each other, beside the upstream
+    check it already made. Measured on CI: the parent e6c665cec runs 13 failed, 742 passed, 8 errors
+    with 51 mentions of the duplicated table; #292's 76e37a70 runs 4 failed, 758 passed, no errors
+    and no collision at all. What is left red is the four narrowing tests of the blocker above,
+    which fail identically on the parent and are untouched by this.
+    Resolved 2026-09-08: the four narrowing tests state what the corrected layout shows. Measured
+    over all six holes, left and right separate the cube from the cylinder from no hole on this
+    board, read from the camera or from the world, so three of the four needed a different pair
+    rather than a re-measurement and the fourth was not a test change at all. Which way a piece lies
+    now pairs Above with Below on the square hole (cube 18.6 mm up the picture, cylinder 45.4 mm
+    down); the two sides of a hole pairs InFrontOf with Behind on it (cube 16.2 mm in front,
+    cylinder 49.1 mm behind), which is one axis where the old pair crossed two; the reach moves to
+    the triangle hole with radii 0.07 and 0.12 (cube 50.0 mm, cylinder 93.8 mm), the square hole
+    separating them by 1.3 mm. The demonstration test is untouched: what was wrong was
+    watch_narrowing.look_for_the_cube_on_the_lid asking for LeftOf the square hole, now Above it,
+    and the step sequence the test asserts holds unchanged. Every replacement was run end to end
+    through MontessoriPerceptionBackend, and the sibling assertions over the demonstration
+    statement still hold - areas 0.517 > 0.041 > 0.023, five distinct labels of non-decreasing
+    length, the camera named exactly twice. Pushed as dae41889c on the item's own branch, since the
+    scope check leaves the touched files on no other base. The roadmap's standing hazard that
+    nothing on these branches runs in a session container is wrong for the montessori perception
+    suite: a python3.12 venv with casadi~=3.7.0 runs the whole pipeline, and only pytest is blocked,
+    by the conftest's ORM generation.
 
-    Corrected 2026-09-08 (later), on #292: those directions were measured off the wrong objects. board_holes_in
-    never used the fit - it added the board mesh''s own unscaled hole offsets to the fitted board pose,
-    so since #236''s 0.865 scale the hole bodies stood about twelve millimetres from the holes the same
-    look reported (square hole 12.1 mm, disk hole 12.7 mm on tracy_pickup_demo). Every hole y the entry
-    above quotes is a displaced body; placed where the look found them the square hole stands at 0.0299,
-    between the cylinder at 0.0231 and the cube at 0.0634, so left and right do separate the two pieces
-    about it and the 1.3 mm that ruled the square hole out of the reach test becomes 41.2 against 49.4.
-    The four tests were reading the capture from a place 12 mm off, not stating what it does not show.
-    Fixed by placing each hole where the look put it, with a test asserting board_holes_in''s output against
-    board.holes, which fails on the parent at those two distances. dae41889c is kept rather than reverted:
-    its four choices all still hold once the holes move, and its millimetres are requoted (19 to 21, 45
-    to 43, 16 to 19, 49 to 47, 50 and 94 to 51 and 93). Its one claim that does not survive - that left
-    and right tell the two apart from no hole on this board - is replaced by the honest reason for the
-    same choice: up and down leave 21 and 43 mm where the cylinder stands 7 mm from the square hole across
-    the picture. pytest is not blocked in a session container after all - CRAM_ORM_BUILD=never skips the
-    conftest''s generation, the narrowing suite runs in 75 s, and 506 of the montessori suite pass.
+    Corrected 2026-09-08 (later), on #292: those directions were measured off the wrong objects.
+    board_holes_in never used the fit - it added the board mesh's own unscaled hole offsets to the
+    fitted board pose, so since #236's 0.865 scale the hole bodies stood about twelve millimetres
+    from the holes the same look reported (square hole 12.1 mm, disk hole 12.7 mm on
+    tracy_pickup_demo). Every hole y the entry above quotes is a displaced body; placed where the
+    look found them the square hole stands at 0.0299, between the cylinder at 0.0231 and the cube at
+    0.0634, so left and right do separate the two pieces about it and the 1.3 mm that ruled the
+    square hole out of the reach test becomes 41.2 against 49.4. The four tests were reading the
+    capture from a place 12 mm off, not stating what it does not show. Fixed by placing each hole
+    where the look put it, with a test asserting board_holes_in's output against board.holes, which
+    fails on the parent at those two distances. dae41889c is kept rather than reverted: its four
+    choices all still hold once the holes move, and its millimetres are requoted (19 to 21, 45 to
+    43, 16 to 19, 49 to 47, 50 and 94 to 51 and 93). Its one claim that does not survive - that left
+    and right tell the two apart from no hole on this board - is replaced by the honest reason for
+    the same choice: up and down leave 21 and 43 mm where the cylinder stands 7 mm from the square
+    hole across the picture. pytest is not blocked in a session container after all -
+    CRAM_ORM_BUILD=never skips the conftest's generation, the narrowing suite runs in 75 s, and 506
+    of the montessori suite pass.
 
-    Merged and cleared 2026-09-08 (later still): the branch takes main and #292, and CI is down to what
-    those two carry. main met it in the four files the roadmap predicted - world.py takes memoize''s new
-    home in krrood.patterns.caching beside this branch''s BeliefSource import, and left as it merged it
-    would have imported memoize from a module that no longer defines it; mapped_variable.py''s CallVariable._update_type_
-    was rewritten on both sides for different cases and now does both, reading a method off its owner
-    class when the child resolves to no type and keeping this branch''s reading of a class defining __call__
-    otherwise; geometry.py keeps main''s to_hex/from_hex and __hash__ beside this branch''s ColorName,
-    dropping main''s RED and PINK since this branch''s answer with the same colours; test_color.py is
-    two files of one name, kept as one file of two sections. One collision git could not flag came with
-    it, and it is #192''s shape again: main''s new test_relational_circuit_registry_causal.py reads query.variable,
-    which since #192 builds an attribute expression rather than raising, and what fails is random_events
-    asking issubclass of the None it resolves to. Migrated to _variable_, the same migration the convergence
-    made for #159''s readers. #292 is then merged in whole, so the hole placement and the requoted millimetres
-    are on this branch and #292 is closed as merged. Measured: 13 of 15 CI jobs green before these, and
-    the two that were not are exactly krrood and experiments, which these fix; in a container krrood runs
-    3014 passed with 2 graphviz failures, sdt the same 45 failures as before the merge with its 45 added
-    errors also present on plain main, and experiments 684 passed with the same 18 environment failures.
-    CI green apart from one field, 2026-09-08 (last): the main merge carried a second silent rename beside
-    query.variable, and only a full CI run could show it. main''s 2664659b4 renamed MotionDidNotFinish.failed_motions
-    to unfinished_motions and followed both readers it could see, each of which passes the field positionally;
-    the reader it could not see is this branch''s own test_montessori_insertion_diagnosis.py, which names
-    it by keyword and exists on no ancestor of that commit, so git reported no conflict. Migrated in 06e7af3eb
-    with the assertion untouched, which is what AGENTS.md means by a rename being finished when every
-    reader reads the new name. On 0e0bacfad twenty-two of the twenty-three checks passed and this was
-    the only failure; CI on 06e7af3eb had not reported when this was written, and no check of it was armed.
-    The hazard is now three instances old and is recorded in roadmap.md as standing: every merge of main
-    into this branch can carry a rename whose only stale reader sits in a file main never touched, and
-    none of them fails where it is written.
-
-    '
+    Merged and cleared 2026-09-08 (later still): the branch takes main and #292, and CI is down to
+    what those two carry. main met it in the four files the roadmap predicted - world.py takes
+    memoize's new home in krrood.patterns.caching beside this branch's BeliefSource import, and left
+    as it merged it would have imported memoize from a module that no longer defines it;
+    mapped_variable.py's CallVariable._update_type_ was rewritten on both sides for different cases
+    and now does both, reading a method off its owner class when the child resolves to no type and
+    keeping this branch's reading of a class defining __call__ otherwise; geometry.py keeps main's
+    to_hex/from_hex and __hash__ beside this branch's ColorName, dropping main's RED and PINK since
+    this branch's answer with the same colours; test_color.py is two files of one name, kept as one
+    file of two sections. One collision git could not flag came with it, and it is #192's shape
+    again: main's new test_relational_circuit_registry_causal.py reads query.variable, which since
+    #192 builds an attribute expression rather than raising, and what fails is random_events asking
+    issubclass of the None it resolves to. Migrated to _variable_, the same migration the
+    convergence made for #159's readers. #292 is then merged in whole, so the hole placement and the
+    requoted millimetres are on this branch and #292 is closed as merged. Measured: 13 of 15 CI jobs
+    green before these, and the two that were not are exactly krrood and experiments, which these
+    fix; in a container krrood runs 3014 passed with 2 graphviz failures, sdt the same 45 failures
+    as before the merge with its 45 added errors also present on plain main, and experiments 684
+    passed with the same 18 environment failures.
+    CI green apart from one field, 2026-09-08 (last): the main merge carried a second silent
+    rename beside query.variable, and only a full CI run could show it. main's 2664659b4 renamed
+    MotionDidNotFinish.failed_motions to unfinished_motions and followed both readers it could
+    see, each of which passes the field positionally; the reader it could not see is this branch's
+    own test_montessori_insertion_diagnosis.py, which names it by keyword and exists on no
+    ancestor of that commit, so git reported no conflict. Migrated in 06e7af3eb with the assertion
+    untouched, which is what AGENTS.md means by a rename being finished when every reader reads
+    the new name. On 0e0bacfad twenty-two of the twenty-three checks passed and this was the only
+    failure; CI on 06e7af3eb had not reported when this was written, and no check of it was armed.
+    The hazard is now three instances old and is recorded in roadmap.md as standing: every merge of main into this branch can carry a rename whose only stale reader
+    sits in a file main never touched, and none of them fails where it is written.
 - id: segmind-detectors-on-the-demo-branch
-  title: The demo branch takes its own segmind detectors, grasp events and gripper feedback
+  title: >-
+    The demo branch takes its own segmind detectors, grasp events and gripper feedback
   branch: tracy_icra
   pull_request_number: null
   track: integration
   depends_on: []
   status: done
   session: https://claude.ai/code/session_016LPo74ksuCPpkqgpvpz7eY
-  notes: 'Merge tracy_icra_segmind into tracy_icra. Not a fast-forward: tracy_icra has moved 20-odd commits
-    past their merge base e034fa791, taking the knowledge-directed-perception work with it, so this is
-    a real merge. Three conflicts, all identified 2026-09-03. experiments/requirements.txt was deleted
-    on tracy_icra (main''s convention is inline pyproject dependencies, and test_dependency_declarations
-    tests it) and gained flask on tracy_icra_segmind, so the resolution is to keep the file deleted and
-    declare flask in experiments/pyproject.toml. segmind/datastructures/events.py was changed on both
-    sides (+44/-21 arriving through tracy_icra''s perception merges, +104/-24 here). And tracy_experiments/pickup/pickup_demo_real.py
-    was changed on both sides. What the branch brings: grasp_detector_nodes.py, the gripper-feedback and
-    event- dashboard modules, its own background threaded event_monitoring.py for TracyMontessoriWorld,
-    and a much larger detector test suite.'
+  notes: >-
+    Merge tracy_icra_segmind into tracy_icra. Not a fast-forward: tracy_icra has moved 20-odd commits past their merge base e034fa791, taking the knowledge-directed-perception work with it, so this is a real merge. Three conflicts, all identified 2026-09-03. experiments/requirements.txt was deleted on tracy_icra (main's convention is inline pyproject dependencies, and test_dependency_declarations tests it) and gained flask on tracy_icra_segmind, so the resolution is to keep the file deleted and declare flask in experiments/pyproject.toml. segmind/datastructures/events.py was changed on both sides (+44/-21 arriving through tracy_icra's perception merges, +104/-24 here). And tracy_experiments/pickup/pickup_demo_real.py was changed on both sides. What the branch brings: grasp_detector_nodes.py, the gripper-feedback and event- dashboard modules, its own background threaded event_monitoring.py for TracyMontessoriWorld, and a much larger detector test suite.
 - id: simulated-camera-feeds-perception
-  title: A MuJoCo camera feeds every perception backend the same frames the real camera does
+  title: >-
+    A MuJoCo camera feeds every perception backend the same frames the real camera does
   branch: claude/simulated-camera-feeds-perception-iba2oa
   pull_request_number: 298
   track: integration
   session: https://claude.ai/code/session_01XCRk6JcVY6XenXusBf2ST4
   blockers:
-  - >-
-      Waiting on the developer's answer to the fourth review round on #298, which he asked for in as many
-      words: "Maybe all these can be organized as plan items, Discuss with me the best course of action
-      regarding that". Two threads on experiments/src/experiments/montessori/perception/pipeline.py are
-      open, both opened 2026-09-09 after the third round's replies, and neither is a defect: r3965517956
-      asks for a separate depth-dependent hole detector beside BoardDetector, and r3965555439 (four
-      comments) asks for BoardDetector's five stated defaults -- hole_size, minimum_hole_count,
-      minimum_hole_depth, minimum_lid_area, seed_reach -- to be derived from what the twin already knows
-      about the board, and then for the hole/perforated-surface concepts to be raised to a meta level:
+    - >-
+      Waiting on the developer's answer to the fourth review round on #298, which he asked for in as
+      many words: "Maybe all these can be organized as plan items, Discuss with me the best course
+      of action regarding that". Two threads on
+      experiments/src/experiments/montessori/perception/pipeline.py are open, both opened 2026-09-09
+      after the third round's replies, and neither is a defect: r3965517956 asks for a separate
+      depth-dependent hole detector beside BoardDetector, and r3965555439 (four comments) asks for
+      BoardDetector's five stated defaults -- hole_size, minimum_hole_count, minimum_hole_depth,
+      minimum_lid_area, seed_reach -- to be derived from what the twin already knows about the
+      board, and then for the hole/perforated-surface concepts to be raised to a meta level:
       predicate classes, detector capabilities keyed on EQL Attributes or MappedVariable rather than
-      field-name strings, an underspecified EQL Match description handed to the perception backend to
-      choose detectors and pipeline from, possibly as an EQL-based RDR, and the same description
-      verbalized for a VLM or VQA. That is several pull requests of work across icra-foundation and icra-
-      mechanism, not a round on this branch, so it cannot be taken here without the plan-item decision he
-      asked to discuss. The same comment carries a branching-strategy change that is the plan's rather
-      than this item's: "I want first to merge everything now fast into 265 and then into tracy_icra then
-      merge any new features into tracy_icra directly and stop basing them on main or on other tracks.
-      Because I want to start recording episodes with perturbations in the simulation as fast as
-      possible." That reverses the base every in-flight item in all three ICRA plans was cut under and
-      would retire the readiness rule those cuts were argued from, so it is recorded here and asked rather
-      than applied. CI is not the blocker and neither is the branch: all 23 checks pass on 15dfd354cd,
-      mergeable_state is clean, the item's own criterion passes and both expected-to-fail marks are gone
-      as of the third round. Separately, the dependency integrated-simulation-pipeline (#265) has
-      regressed to open_draft, so check_dependency_readiness reports is_ready false where the "open and
-      not a draft" reading was what this item's cut off #265 was argued from. It does not block anything
-      already built on it, and the developer's own merge-into-265 plan is the likely reason it is a draft
-      again.
+      field-name strings, an underspecified EQL Match description handed to the perception backend
+      to choose detectors and pipeline from, possibly as an EQL-based RDR, and the same description
+      verbalized for a VLM or VQA. That is several pull requests of work across icra-foundation and
+      icra-mechanism, not a round on this branch, so it cannot be taken here without the plan-item
+      decision he asked to discuss.
+
+      The same comment carries a branching-strategy change that is the plan's rather than this
+      item's: "I want first to merge everything now fast into 265 and then into tracy_icra then
+      merge any new features into tracy_icra directly and stop basing them on main or on other
+      tracks. Because I want to start recording episodes with perturbations in the simulation as
+      fast as possible." That reverses the base every in-flight item in all three ICRA plans was cut
+      under and would retire the readiness rule those cuts were argued from, so it is recorded here
+      and asked rather than applied.
+
+      CI is not the blocker and neither is the branch: all 23 checks pass on 15dfd354cd,
+      mergeable_state is clean, the item's own criterion passes and both expected-to-fail marks are
+      gone as of the third round. Separately, the dependency integrated-simulation-pipeline (#265)
+      has regressed to open_draft, so check_dependency_readiness reports is_ready false where the
+      "open and not a draft" reading was what this item's cut off #265 was argued from. It does not
+      block anything already built on it, and the developer's own merge-into-265 plan is the likely
+      reason it is a draft again.
   depends_on:
   - integrated-simulation-pipeline
   status: blocked
-  notes: 'One frame source every perception backend reads, which is what lets the backends be swapped
-    without changing anything above them. MujocoCamera renders colour and depth; wrap them as the RgbdFrame
-    the pipeline reads, with intrinsics and camera pose taken from the twin, so the detector stack, a
-    vision-language backend and a visual-question-answering backend all answer a look in simulation exactly
-    as they do off a capture. The six real captures remain the regression set; this item''s tests assert
-    that a simulated scene with the board and four pieces reports every piece once with the right category.
-    Stated colours and finishes on the simulated objects come from the values #239 measured off the real
-    ones. Refocused 2026-09-08: this item exists to make the frames available to any backend, not to improve
-    detection - the paper claims no perception result of its own.
+  notes: >-
+    One frame source every perception backend reads, which is what lets the backends be swapped without changing anything above them. MujocoCamera renders colour and depth; wrap them as the RgbdFrame the pipeline reads, with intrinsics and camera pose taken from the twin, so the detector stack, a vision-language backend and a visual-question-answering backend all answer a look in simulation exactly as they do off a capture. The six real captures remain the regression set; this item's tests assert that a simulated scene with the board and four pieces reports every piece once with the right category. Stated colours and finishes on the simulated objects come from the values #239 measured off the real ones. Refocused 2026-09-08: this item exists to make the frames available to any backend, not to improve detection - the paper claims no perception result of its own.
 
-    Review round 2026-09-08: the developer''s answer to this item''s open question was "make them transparent
-    regions and make it a toggelable thing", and that is now RegionAppearance on MultiSimBuilder - a region''s
-    area drawn at a share of the opacity it states (the default everywhere a world is built or a region
-    is spawned), or not drawn at all, with MujocoSim(region_appearance=...) the toggle and SimulatedCamera
-    setting it to hidden. Taking the markers out of the picture uncovered more than it fixed: the cube
-    that test_every_piece_the_world_places_on_the_table_is_found used to count stood at the board''s own
-    square hole rather than at the piece, so that test was passing on an artefact and is now expected-to-fail
-    beside the item''s criterion. Two things the twin would have to say for either to pass, both the developer''s
-    and neither of them the frame: its pieces are 25 to 32 per cent smaller than the ones pieces.py measured
-    off the real board (cube 22.4 mm against 30, cylinder 22.4 against 28, triangular prism 25.2 by 29.4
-    against 37 by 32, rectangular prism 15.4 by 29.4 against 20 by 40), and its board''s holes are cut
-    through an 80 mm blank whose walls render in the board''s own colour, so a look shows no opening for
-    a board to be found by.
+    Review round 2026-09-08: the developer's answer to this item's open question was "make them
+    transparent regions and make it a toggelable thing", and that is now RegionAppearance on
+    MultiSimBuilder - a region's area drawn at a share of the opacity it states (the default
+    everywhere a world is built or a region is spawned), or not drawn at all, with
+    MujocoSim(region_appearance=...) the toggle and SimulatedCamera setting it to hidden. Taking
+    the markers out of the picture uncovered more than it fixed: the cube that
+    test_every_piece_the_world_places_on_the_table_is_found used to count stood at the board's own
+    square hole rather than at the piece, so that test was passing on an artefact and is now
+    expected-to-fail beside the item's criterion. Two things the twin would have to say for either
+    to pass, both the developer's and neither of them the frame: its pieces are 25 to 32 per cent
+    smaller than the ones pieces.py measured off the real board (cube 22.4 mm against 30, cylinder
+    22.4 against 28, triangular prism 25.2 by 29.4 against 37 by 32, rectangular prism 15.4 by 29.4
+    against 20 by 40), and its board's holes are cut through an 80 mm blank whose walls render in
+    the board's own colour, so a look shows no opening for a board to be found by.
 
-    Second review round 2026-09-08: "scale the objects to the known pieces, and remove the marker boarders,
-    this should look like the real thing for the camera". The marker half needed nothing - SimulatedCamera
-    already hides them, and the comment settles the first round''s open question about that default. The
-    size half changed the world: a loose shape was built as a fixed 0.7 of the hole it drops through,
-    and pieces.py already says the hole is the wrong source, so the size now comes from KnownPiece and
-    only the cross-section from the hole - cube 30.0 mm, both cylinders 28.0, rectangular prism 21.0 by
-    40.0, triangular prism 31.7 by 37.0, all 30.0 tall. One scale for both axes, because per-axis scaling
-    squashes the triangle (the hole''s points along +x and the measured piece''s along +y) and building
-    from KnownPiece.outline would put a piece in its own frame rather than its hole''s, which is what
-    lets it be released unrotated. Reported and not settled: clearance goes from 0.70 everywhere to 0.70-0.95,
-    tightest on the rectangular prism, and the 0.7 it replaces was tuned against insertion pass rates,
-    so a sorting run is what would confirm it and no session container can run one.
+    Second review round 2026-09-08: "scale the objects to the known pieces, and remove the marker
+    boarders, this should look like the real thing for the camera". The marker half needed nothing
+    - SimulatedCamera already hides them, and the comment settles the first round's open question
+    about that default. The size half changed the world: a loose shape was built as a fixed 0.7 of
+    the hole it drops through, and pieces.py already says the hole is the wrong source, so the size
+    now comes from KnownPiece and only the cross-section from the hole - cube 30.0 mm, both
+    cylinders 28.0, rectangular prism 21.0 by 40.0, triangular prism 31.7 by 37.0, all 30.0 tall.
+    One scale for both axes, because per-axis scaling squashes the triangle (the hole's points
+    along +x and the measured piece's along +y) and building from KnownPiece.outline would put a
+    piece in its own frame rather than its hole's, which is what lets it be released unrotated.
+    Reported and not settled: clearance goes from 0.70 everywhere to 0.70-0.95, tightest on the
+    rectangular prism, and the 0.7 it replaces was tuned against insertion pass rates, so a sorting
+    run is what would confirm it and no session container can run one.
 
-    What that uncovered is the item''s third bug for someone else: with the pieces at their measured sizes
-    both detectors read all four within a millimetre of where the twin put them, each with its own category,
-    and then Occupancy drops both readings of every place they agree on too closely - cube 0.7121 against
-    0.7121, rectangular prism 0.6596 against 0.6596, triangular prism 0.7480 against 0.7433, all inside
-    CompetingExplanations.required_lead - so only the cylinder is reported. The same two detectors disagree
-    enough on tracy_pickup_demo for all four to come back once each, so a noiseless picture is what shows
-    it, which is one of the things a simulated frame source is for. It belongs in occupancy.py on its
-    own branch. Both marks stay strict and name it.
+    What that uncovered is the item's third bug for someone else: with the pieces at their measured
+    sizes both detectors read all four within a millimetre of where the twin put them, each with its
+    own category, and then Occupancy drops both readings of every place they agree on too closely -
+    cube 0.7121 against 0.7121, rectangular prism 0.6596 against 0.6596, triangular prism 0.7480
+    against 0.7433, all inside CompetingExplanations.required_lead - so only the cylinder is
+    reported. The same two detectors disagree enough on tracy_pickup_demo for all four to come back
+    once each, so a noiseless picture is what shows it, which is one of the things a simulated frame
+    source is for. It belongs in occupancy.py on its own branch. Both marks stay strict and name it.
 
-    CI: the experiments job now exports MUJOCO_GL=egl, which is what the gladLoadGL failures were. MuJoCo
-    fixes its backend when Python imports it, so select_offscreen_rendering_backend() cannot reach either
-    of its callers - main''s own shape, inherited when the four lines left MujocoVideoRecorder.start -
-    and only the environment a run starts from can choose it. The job''s other failures were the base''s
-    duplicate RecordedLook, which this branch takes the base''s merge of.
+    CI: the experiments job now exports MUJOCO_GL=egl, which is what the gladLoadGL failures were.
+    MuJoCo fixes its backend when Python imports it, so select_offscreen_rendering_backend() cannot
+    reach either of its callers - main's own shape, inherited when the four lines left
+    MujocoVideoRecorder.start - and only the environment a run starts from can choose it. The job's
+    other failures were the base's duplicate RecordedLook, which this branch takes the base's merge
+    of.
 
-    Third review round 2026-09-08: "you can generate a depth image in mujoco right? ... which gets you
-    the holes using depth" and, of the arbitration, "we need to find a solution for this issue". Both
-    marks are off and the item''s own criterion passes - all four pieces reported once each with their
-    own categories, within a millimetre of where the twin put them, and the board found with its six holes.
-    The depth had been rendered since the first commit and nothing read it: RgbdFrame.measured_height,
-    Orthophoto.measured_height and Orthophoto.opening_mask are new, and BoardDetector reads its openings
-    from darkness or from depth, each sized on its own before the two are put together - Otsu splits a
-    surface in two whether or not anything is cut through it, and a plane stated above the surface actually
-    lying in it is measured below along the whole of that surface, so either left whole swallows what
-    the other found. A hole is ten millimetres deep rather than the eighty the second round''s note claimed:
-    the mesh is cut clean through, but the drawers stand directly under the lid, so a look down a hole
-    measures a drawer. The seed was already right (-0.401, 0.001 against the twin''s -0.400, 0.000) and
-    the fit was not, turning the layout ten degrees off, so the rim of an opening the colours do not carry
-    is now an edge as well (EdgeDistances.of(..., together_with=...)); that lands every hole on the hole
-    of its own category, worst 5.4 mm and median 1.2 mm. The captures cannot change and it is measured
-    rather than argued: their depth contributes zero hole-sized openings on all six, and their suite runs
-    57 passed and 4 xfailed as before.
+    Third review round 2026-09-08: "you can generate a depth image in mujoco right? ... which
+    gets you the holes using depth" and, of the arbitration, "we need to find a solution for
+    this issue". Both marks are off and the item's own criterion passes - all four pieces
+    reported once each with their own categories, within a millimetre of where the twin put
+    them, and the board found with its six holes. The depth had been rendered since the first
+    commit and nothing read it: RgbdFrame.measured_height, Orthophoto.measured_height and
+    Orthophoto.opening_mask are new, and BoardDetector reads its openings from darkness or from
+    depth, each sized on its own before the two are put together - Otsu splits a surface in two
+    whether or not anything is cut through it, and a plane stated above the surface actually
+    lying in it is measured below along the whole of that surface, so either left whole
+    swallows what the other found. A hole is ten millimetres deep rather than the eighty the
+    second round's note claimed: the mesh is cut clean through, but the drawers stand directly
+    under the lid, so a look down a hole measures a drawer. The seed was already right
+    (-0.401, 0.001 against the twin's -0.400, 0.000) and the fit was not, turning the layout ten
+    degrees off, so the rim of an opening the colours do not carry is now an edge as well
+    (EdgeDistances.of(..., together_with=...)); that lands every hole on the hole of its own
+    category, worst 5.4 mm and median 1.2 mm. The captures cannot change and it is measured
+    rather than argued: their depth contributes zero hole-sized openings on all six, and their
+    suite runs 57 passed and 4 xfailed as before.
 
-    Occupancy carried two defects, and the second is the larger. keep_one_detection_per_place dropped
-    both readings of a place unless one led, so two ways of looking that agree annihilated; only a reading
-    that names something else can take a place from its holder now. Underneath it, OccupiedVolume.shared_area
-    measured in metres, and OpenCV''s convex intersection answers zero once the step from one outline
-    point to the next falls below about four thousandths of a unit - so two readings of one cylinder a
-    millimetre apart, whose rectified outline is a 64-gon of 14 mm radius, were measured to share no ground
-    at all and both were reported. Squares of 40 mm sides were never affected, which is why every test
-    in test_montessori_occupancy.py passed. The outlines are intersected in millimetres now. One existing
-    test stated the rule the developer asked to change and is restated rather than deleted: its two readings
-    were both cubes and are now a cube and a cylinder, since disagreement is the case it means.
+    Occupancy carried two defects, and the second is the larger.
+    keep_one_detection_per_place dropped both readings of a place unless one led, so two ways of
+    looking that agree annihilated; only a reading that names something else can take a place
+    from its holder now. Underneath it, OccupiedVolume.shared_area measured in metres, and
+    OpenCV's convex intersection answers zero once the step from one outline point to the next
+    falls below about four thousandths of a unit - so two readings of one cylinder a millimetre
+    apart, whose rectified outline is a 64-gon of 14 mm radius, were measured to share no ground
+    at all and both were reported. Squares of 40 mm sides were never affected, which is why
+    every test in test_montessori_occupancy.py passed. The outlines are intersected in
+    millimetres now. One existing test stated the rule the developer asked to change and is
+    restated rather than deleted: its two readings were both cubes and are now a cube and a
+    cylinder, since disagreement is the case it means.
 
-    Reported and not acted on: the shipped captures'' own depth puts the board''s top surface at 0.879
-    where recorded_setup states its lid at 0.960, and a piece resting on the lid measures the same height
-    as a piece on the table, so either those stated planes or the captures'' depth extrinsics are wrong.
-    Moving a stated plane moves every rectification in the package, so it is the developer''s call rather
-    than this branch''s.
-
-
-    Fourth review round resolved 2026-09-09, by a decision rather than a push: the branch is finished
-    and
-
-    merges into #265 as it stands. CI is green on 15dfd354cd (23 of 23), mergeable_state is clean, the
-
-    item''s own criterion passes and both expected-to-fail marks came off in the third round, so nothing
-
-    in the two threads that stalled it was a defect in this branch. What they asked for -- BoardDetector''s
-
-    five stated defaults derived from the board the twin holds, holes and perforated surfaces raised to
-
-    predicates, a capability naming fields of classes as EQL Attributes or MappedVariables, a description
-
-    filled out from the model and handed to the backend to choose detectors from -- is icra-mechanism''s,
-
-    and is tracked there as the new item holes-answered-as-predicates plus an amendment to
-
-    backends-declare-their-capabilities. The size of that ask was cut by more than half by checking the
-
-    merged tree first: PerceptionDetector.capability, the EQLSingleClassRDR DetectorChoice and
-
-    SceneRequest already exist here through #275 and #77, so the architecture the round describes is the
-
-    one this stack already chose.'
+    Reported and not acted on: the shipped captures' own depth puts the board's top surface at
+    0.879 where recorded_setup states its lid at 0.960, and a piece resting on the lid measures
+    the same height as a piece on the table, so either those stated planes or the captures'
+    depth extrinsics are wrong. Moving a stated plane moves every rectification in the package,
+    so it is the developer's call rather than this branch's.
 - id: tracy-demo-takes-the-integrated-branch
-  title: tracy_icra takes the integrated branch and the real robot runs it
+  title: >-
+    tracy_icra takes the integrated branch and the real robot runs it
   branch: null
   pull_request_number: null
   track: integration
@@ -348,33 +325,22 @@ items:
   - integrated-simulation-pipeline
   - simulated-camera-feeds-perception
   status: not_started
-  notes: The bridge to the robot, and the one item on this plan that needs the robot before any experiment
-    does. Merge the integrated branch into tracy_icra, run the demo on the UR10 with the live camera,
-    and keep a capture of the run. This is knowledge-directed-perception's demo-runs-on-grounded-perception
-    in that plan's words; it is tracked here because the branch it runs is this plan's. From then on every
-    later merge into tracy_icra is a merge of the integrated branch, never of individual stacks. Record
-    the transform tree and joint states with the camera in every take from now on; five of the six existing
-    recordings hold no robot state and cannot supply a history.
+  notes: >-
+    The bridge to the robot, and the one item on this plan that needs the robot before any experiment does. Merge the integrated branch into tracy_icra, run the demo on the UR10 with the live camera, and keep a capture of the run. This is knowledge-directed-perception's demo-runs-on-grounded-perception in that plan's words; it is tracked here because the branch it runs is this plan's. From then on every later merge into tracy_icra is a merge of the integrated branch, never of individual stacks. Record the transform tree and joint states with the camera in every take from now on; five of the six existing recordings hold no robot state and cannot supply a history.
 - id: scenario-domain-model
-  title: Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports
+  title: >-
+    Scenarios, goals, conditions, perturbations and metrics as dataclasses, with a runner that reports
   branch: claude/icra-experiments-scenario-domain-n7zwpr
   pull_request_number: 261
   track: scenario-model
   depends_on: []
   status: in_progress
   session: https://claude.ai/code/session_01Y2R5PzHHiVS7EvnAZ1J2yc
-  notes: 'The meta level the developer asked for: a Scenario names how to build its world and which robot
-    and execution kind (simulated or real) it runs on; a Goal names what counts as success; a Condition
-    names one knowledge source switched on or off; a Perturbation names a change applied to the world
-    at a step; a Metric names one number read off a finished Trial; a Report gathers metrics over trials
-    with confidence intervals. A ScenarioRunner executes trials, writes structured logs and renders the
-    report. Generalise what exists rather than adding a third shape: control_loop_experiments.scenarios
-    already has BenchmarkScenario and ScenarioRunner, and experiment_definitions has ExperimentResult,
-    ExperimentsTable and TypstRenderer; the new model subsumes both and the old ones migrate onto it.
-    Concrete scenarios subclass or instantiate these, never re-describe them. Fully unit-tested against
-    a trivial scenario that needs no simulator, so the model''s tests run everywhere.'
+  notes: >-
+    The meta level the developer asked for: a Scenario names how to build its world and which robot and execution kind (simulated or real) it runs on; a Goal names what counts as success; a Condition names one knowledge source switched on or off; a Perturbation names a change applied to the world at a step; a Metric names one number read off a finished Trial; a Report gathers metrics over trials with confidence intervals. A ScenarioRunner executes trials, writes structured logs and renders the report. Generalise what exists rather than adding a third shape: control_loop_experiments.scenarios already has BenchmarkScenario and ScenarioRunner, and experiment_definitions has ExperimentResult, ExperimentsTable and TypstRenderer; the new model subsumes both and the old ones migrate onto it. Concrete scenarios subclass or instantiate these, never re-describe them. Fully unit-tested against a trivial scenario that needs no simulator, so the model's tests run everywhere.
 - id: montessori-scenarios
-  title: The memo's scenes and scripted scenarios as Scenario instances that run in simulation
+  title: >-
+    The memo's scenes and scripted scenarios as Scenario instances that run in simulation
   branch: claude/plan-item-kickoff-icra-montessori-3roc2d
   pull_request_number: 296
   track: scenario-model
@@ -383,86 +349,59 @@ items:
   - scenario-domain-model
   - integrated-simulation-pipeline
   status: in_progress
-  notes: 'Random layouts with all four pieces, partial scenes with two or three, near-ambiguous layouts
-    with the cube and cylinder aligned in camera depth, a lighting change (a MujocoLight edit in simulation),
-    and the four scripted temporal scenarios: static, robot pick-and-place, an external body pushing a
-    piece while the robot is idle, and a piece in the gripper at query time. Each is a Scenario with a
-    seeded layout so a run is reproducible, and each has a test that builds it headless and asserts its
-    own precondition (the ambiguous layout really is aligned in depth, the in-gripper scenario really
-    holds the piece).
+  notes: >
+    Random layouts with all four pieces, partial scenes with two or three, near-ambiguous
+    layouts with the cube and cylinder aligned in camera depth, a lighting change (a
+    MujocoLight edit in simulation), and the four scripted temporal scenarios: static,
+    robot pick-and-place, an external body pushing a piece while the robot is idle, and a
+    piece in the gripper at query time. Each is a Scenario with a seeded layout so a run
+    is reproducible, and each has a test that builds it headless and asserts its own
+    precondition (the ambiguous layout really is aligned in depth, the in-gripper scenario
+    really holds the piece).
 
-    Three review rounds as of 2026-09-08, the third at db746a949. The runs are carried in MuJoCo, the
-    robot is commanded by coraplex''s PickUpAction and PlaceAction under simulated_robot (giskard ticks
-    the statechart, headless, with no ROS), and the goals read InsideOf against each hole''s landing region
-    and robot_holds_body. The landing region is no longer stated: MontessoriWorld measures it as the free
-    space the hole''s own footprint leaves down to the table, with a graph of convex sets over the board''s
-    and drawers'' collision boxes, and ShapeSortingHole carries its own region so no name is spelled twice.
-    43 tests in the module; test/experiments_test runs 386 passed.
+    Three review rounds as of 2026-09-08, the third at db746a949. The runs are carried in
+    MuJoCo, the robot is commanded by coraplex's PickUpAction and PlaceAction under
+    simulated_robot (giskard ticks the statechart, headless, with no ROS), and the goals
+    read InsideOf against each hole's landing region and robot_holds_body. The landing
+    region is no longer stated: MontessoriWorld measures it as the free space the hole's
+    own footprint leaves down to the table, with a graph of convex sets over the board's
+    and drawers' collision boxes, and ShapeSortingHole carries its own region so no name
+    is spelled twice. 43 tests in the module; test/experiments_test runs 386 passed.
 
-    Fourth round 2026-09-08 at 429e335d4. A run can now be filmed while it is performed, with the repository''s
-    own MujocoVideoRecorder: a SceneRecording films it in takes, since a simulation is compiled against
-    one kinematic model and a grasp re-parents the piece, and SimulatedScene lets go of what carries it
-    whenever the world''s model changes rather than each robot-commanding step remembering to. The film
-    is made from the simulation carrying the run, so a filmed run leaves the piece exactly where an unfilmed
-    one does. What no video can show is the carrying: while the robot holds the piece the world cannot
-    be exported to MuJoCo at all, because ReAttachNode keeps the piece''s free connection under the gripper.
-    PlaceAction gained the optional grasp_description the third round asked about, at the developer''s
-    "do (1)". 48 tests in the module; test/experiments_test runs 391 passed.
+    Fourth round 2026-09-08 at 429e335d4. A run can now be filmed while it is performed,
+    with the repository's own MujocoVideoRecorder: a SceneRecording films it in takes,
+    since a simulation is compiled against one kinematic model and a grasp re-parents the
+    piece, and SimulatedScene lets go of what carries it whenever the world's model
+    changes rather than each robot-commanding step remembering to. The film is made from
+    the simulation carrying the run, so a filmed run leaves the piece exactly where an
+    unfilmed one does. What no video can show is the carrying: while the robot holds the
+    piece the world cannot be exported to MuJoCo at all, because ReAttachNode keeps the
+    piece's free connection under the gripper. PlaceAction gained the optional
+    grasp_description the third round asked about, at the developer's "do (1)". 48 tests
+    in the module; test/experiments_test runs 391 passed.
 
-    Fifth round 2026-09-09 at e9d730a3a. The developer answered the fourth round''s open question with "do
-    (1)": a scenario is built on the scene it is given rather than on a MontessoriWorld of its own.
-    MontessoriWorldBuilder is what a scenario is handed and BoardOnItsOwnTable is this package''s, so a
-    demo''s scene is a second implementation beside it rather than an edit here. MountedRobot moved onto the
-    builder, and that is what makes the seam usable rather than nominal: in the demo''s case parsing the
-    robot, deciding where it is bolted and building the board around it are one decision -- parse_tracy
-    strips the actuators a merged robot cannot carry, tracy_table_mount_position reads both the mount and
-    the table height off that parsed world, and TracyMontessoriWorld needs that height before it can place
-    the board. The table a piece rests on and the pusher''s rail read the given scene''s table_top_z rather
-    than the module constant, and resting_height_of is the builder''s method rather than a free function.
-    tracy_icra''s ~1,200 lines of actuation stay where they live; tracy-demo-takes-the-integrated-branch is
-    where they meet these scenarios. 51 tests in the module; test/experiments_test runs 380 passed, the rest
-    being this container''s own ROS failures.
-
-    No thread of the developer''s is open as of that round: the minimum_containment_ratio and Goal-as-
-    Predicate threads are both resolved, and the actuation thread is answered and resolved. One thing is
-    named rather than built, on the thread and here -- the layout''s own geometry (LayoutArea,
-    PiecePlacement.standing_height) is still measured against this module''s TABLE_TOP_Z, so a scene on
-    another table also needs its layout stated in that frame; it is the layout''s frame rather than the
-    scene''s, and what a demo''s layout wants is the developer''s to say. Note also the branching change
-    recorded on simulated-camera-feeds-perception the same day -- merge everything into #265, then into
-    tracy_icra, and base new work on tracy_icra -- which retires the measured argument this branch was cut
-    under, though nothing about what is built here changes with it.
-
-    '
+    Two questions are open on the pull request, both the developer's: whether InsideOf's
+    minimum_containment_ratio (which exists on #265, not on this base) should be ported
+    here now and meet #265 as a conflict, and where the demo's actuation should live --
+    everything that makes the tracy_icra demo work is about 1,200 lines that exist on
+    tracy_icra alone, and that demo deliberately does not use coraplex's actions, so
+    copying it here would duplicate work tracy_icra will merge. The Goal-as-Predicate
+    thread from round one is also still open, asking whether that change belonged on #261.
 - id: run-results-recorded-into-sql
-  title: Where a run records its results, and the plan-and-events schema it records
+  title: >-
+    Where a run records its results, and the plan-and-events schema it records
   branch: claude/montessori-results-recording-jnrgfy
   pull_request_number: 262
   track: long-term-memory
   depends_on: []
   status: in_progress
   session: https://claude.ai/code/session_01Hye1f4d5KoNGxtFtWF3XV7
-  notes: 'Cut the recording half of montessori-eql-stack''s montessori_monitor_and_recording (#256) as
-    a pull request of its own, off main. Three modules and about 700 lines: results_database.py resolves
-    where a run records and reports whether that database can be reached and written to, results_recording.py
-    records best effort so a database problem cannot lose a finished run, and sorting_results.py is the
-    schema itself - a realized coraplex Plan plus the segmind DetectionEvents detected inside it. With
-    them, the three lines that make the recording possible at all: the experiments ORM interface declares
-    segmind, generate_orm imports segmind.orm.ormatic_interface, and experiments/pyproject declares the
-    dependency. Plus experiments/montessori/__init__.py, without which pkgutil skips the directory and
-    the generator is never offered SortingIterationResult. Off main rather than off tracy_icra or #256,
-    and this is what makes it small: experiments/montessori does not exist on main at all, so the branch
-    creates the directory holding only these modules, and nothing it needs is newer than main. The rest
-    of #256 stays where it is - the simulated world, semantics, hole geometry, sorting progress and insertion
-    diagnosis are another demo''s, and its event monitor is one tracy_icra_segmind already has its own
-    of. The Footprint collision is deferred, not avoided: experiments/montessori/perception/footprint.py
-    and semantic_digital_twin...graph_of_convex_sets/plotting.py both declare a Footprint, so the moment
-    this branch''s __init__.py sits over tracy_icra''s perception package the generator emits two FootprintDAO
-    classes and SQLAlchemy refuses the mapping. knowledge-directed-perception''s montessori-classes-in-the-orm
-    (#223) already renames the perception one to RectifiedFootprint; whichever branch first puts the two
-    together takes that rename.'
+  notes: >-
+    Cut the recording half of montessori-eql-stack's montessori_monitor_and_recording (#256) as a pull request of its own, off main. Three modules and about 700 lines: results_database.py resolves where a run records and reports whether that database can be reached and written to, results_recording.py records best effort so a database problem cannot lose a finished run, and sorting_results.py is the schema itself - a realized coraplex Plan plus the segmind DetectionEvents detected inside it. With them, the three lines that make the recording possible at all: the experiments ORM interface declares segmind, generate_orm imports segmind.orm.ormatic_interface, and experiments/pyproject declares the dependency. Plus experiments/montessori/__init__.py, without which pkgutil skips the directory and the generator is never offered SortingIterationResult. Off main rather than off tracy_icra or #256, and this is what makes it small: experiments/montessori does not exist on main at all, so the branch
+    creates the directory holding only these modules, and nothing it needs is newer than main. The rest of #256 stays where it is - the simulated world, semantics, hole geometry, sorting progress and insertion diagnosis are another demo's, and its event monitor is one tracy_icra_segmind already has its own of. The Footprint collision is deferred, not avoided: experiments/montessori/perception/footprint.py and semantic_digital_twin...graph_of_convex_sets/plotting.py both declare a Footprint, so the moment this branch's __init__.py sits over tracy_icra's perception package the generator emits two FootprintDAO classes and SQLAlchemy refuses the mapping. knowledge-directed-perception's montessori-classes-in-the-orm (#223) already renames the perception one to RectifiedFootprint; whichever branch first puts the two together takes that rename.
 - id: episodes-recorded-through-ormatic
-  title: Every trial, event, query, answer and failure recorded through ORMatic into SQL
+  title: >-
+    Every trial, event, query, answer and failure recorded through ORMatic into SQL
   branch: claude/icra-experiments-ormatic-episodes-ib9lr3
   pull_request_number: 271
   track: long-term-memory
@@ -471,51 +410,54 @@ items:
   - run-results-recorded-into-sql
   status: in_progress
   session: https://claude.ai/code/session_012ouWhruGFvn9D5AvPmQNRa
-  notes: 'One Episode model for simulation and the robot: the scenario and condition it ran under, its
-    trials, the segmind events seen per tick, every query asked with its per-predicate backend assignment,
-    answer and latency, every insertion attempt with its outcome, the failure type observed and predicted,
-    and what was done after a failure - retried, changed or abandoned. That last is what answers "how
-    did you resolve this the last time it happened"; nothing else in the record carries it, and it was
-    added on 2026-09-04 when Experiment D was planned. Recorded through ORMatic the way ShapeInsertionExperience
-    and SortingIterationResult already are, and replacing both with the one model rather than standing
-    beside them; ResultsDatabase and results_recording keep deciding where and whether a run records.
-    The runner records as it goes, so a run that dies keeps its finished trials, following batch_runner''s
-    reasoning. Tests record a trivial episode into SQLite and read it back through the generated interface.
+  notes: >
+    One Episode model for simulation and the robot: the scenario and condition it ran under, its
+    trials, the segmind events seen per tick, every query asked with its per-predicate backend
+    assignment, answer and latency, every insertion attempt with its outcome, the failure type
+    observed and predicted, and what was done after a failure - retried, changed or abandoned. That
+    last is what answers "how did you resolve this the last time it happened"; nothing else in the
+    record carries it, and it was added on 2026-09-04 when Experiment D was planned. Recorded
+    through ORMatic the way ShapeInsertionExperience and SortingIterationResult already are, and
+    replacing both with the one model rather than standing beside them; ResultsDatabase and
+    results_recording keep deciding where and whether a run records. The runner records as it goes,
+    so a run that dies keeps its finished trials, following batch_runner's reasoning. Tests record a
+    trivial episode into SQLite and read it back through the generated interface.
 
-    Amended 2026-09-08, and it is smaller than it first looked. A separate item was written for recording
-    the robot''s kinematic structure and the constraints its motion ran under, and then folded here on
-    the same day: the classes are already mapped, and what is missing is two references on this model,
-    which is a file no other branch has. ORMatic maps the whole semantic_digital_twin package apart from
-    ten ignored classes - none of them World, Body, Connection or DegreeOfFreedom - and the whole giskardpy
-    package apart from its solvers, so MotionStatechart, its tasks and monitors and the terminal EndMotion/CancelMotion
-    nodes are mapped too. The dependency chain already reaches both: experiments declares coraplex, coraplex
-    declares giskardpy, giskardpy declares semantic_digital_twin. So the self-model and control buckets
-    need no new mapping at all, and their working-memory spelling needs nothing whatever, since the live
-    twin already holds the structure.
+    Amended 2026-09-08, and it is smaller than it first looked. A separate item was written for
+    recording the robot's kinematic structure and the constraints its motion ran under, and then
+    folded here on the same day: the classes are already mapped, and what is missing is two
+    references on this model, which is a file no other branch has. ORMatic maps the whole
+    semantic_digital_twin package apart from ten ignored classes - none of them World, Body,
+    Connection or DegreeOfFreedom - and the whole giskardpy package apart from its solvers, so
+    MotionStatechart, its tasks and monitors and the terminal EndMotion/CancelMotion nodes are
+    mapped too. The dependency chain already reaches both: experiments declares coraplex, coraplex
+    declares giskardpy, giskardpy declares semantic_digital_twin. So the self-model and control
+    buckets need no new mapping at all, and their working-memory spelling needs nothing whatever,
+    since the live twin already holds the structure.
 
-    What this model does not do is reference either. Episode carries the scenario name, execution type,
-    condition and perturbation names, an identifier and a timestamp; InsertionAttempt carries the realized
-    coraplex Plan, which is the robot plan and is already enough. Neither the world an episode ran in
-    nor the motion statechart a trial ran is referenced anywhere, so "how many joints did you have", "what
-    were you constrained by" and "why did you stop" have no long-term-memory spelling. The addition is
-    a world reference on Episode and a statechart reference on the trial or the insertion attempt, plus
-    the terminating node, with a test that reads the link and joint counts and the active constraints
-    back.
+    What this model does not do is reference either. Episode carries the scenario name, execution
+    type, condition and perturbation names, an identifier and a timestamp; InsertionAttempt carries
+    the realized coraplex Plan, which is the robot plan and is already enough. Neither the world an
+    episode ran in nor the motion statechart a trial ran is referenced anywhere, so "how many joints
+    did you have", "what were you constrained by" and "why did you stop" have no long-term-memory
+    spelling. The addition is a world reference on Episode and a statechart reference on the trial
+    or the insertion attempt, plus the terminating node, with a test that reads the link and joint
+    counts and the active constraints back.
 
-    One sizing decision is the developer''s and is not taken here: whether each episode stores a world
-    of its own or references one shared robot model. A full World per episode is honest and answers a
-    question about a run whose robot differed; at the corpus scale episode-corpus-generated-at-scale targets
-    it may be disproportionate, and a shared reference is the alternative.
+    One sizing decision is the developer's and is not taken here: whether each episode stores a
+    world of its own or references one shared robot model. A full World per episode is honest and
+    answers a question about a run whose robot differed; at the corpus scale
+    episode-corpus-generated-at-scale targets it may be disproportionate, and a shared reference is
+    the alternative.
 
-    Updated 2026-09-08 from icra-evidence''s `question-set-and-ground-truth` (#295): the fold this item''s
-    roadmap recorded on 2026-09-08 has now been made on the branch. `a96531635` adds `Episode.world` and
-    `RecordedTrial.motion_statechart`, both optional and defaulting to none, with three round-trip tests.
-    Whether a corpus keeps a world per episode or shares one is unchanged as the developer''s open call
-    - the field allows both.
-
-    '
+    Updated 2026-09-08 from icra-evidence's `question-set-and-ground-truth` (#295): the fold this
+    item's roadmap recorded on 2026-09-08 has now been made on the branch. `a96531635` adds
+    `Episode.world` and `RecordedTrial.motion_statechart`, both optional and defaulting to none,
+    with three round-trip tests. Whether a corpus keeps a world per episode or shares one is
+    unchanged as the developer's open call - the field allows both.
 - id: episodes-queried-by-eql
-  title: Long-term memory answered by EQL through the SQL backend, and reports read from it
+  title: >-
+    Long-term memory answered by EQL through the SQL backend, and reports read from it
   branch: claude/plan-item-kickoff-eql-episodes-hjel80
   pull_request_number: 278
   track: long-term-memory
@@ -523,19 +465,11 @@ items:
   - episodes-recorded-through-ormatic
   status: in_progress
   session: https://claude.ai/code/session_01Kh8FEgYc4B7d1x3LXDZRvZ
-  notes: 'The SQL backend is one backend among several answering the one query language, and long-term
-    memory is where the paper''s Remembering level is measured. Every bucket of the question set has a
-    spelling over recorded episodes, not only the temporal one: what stood where and on which surface
-    in an earlier episode, which pieces the robot picked up, how many joints the robot had in that episode''s
-    own self-model, what the motion was constrained by when an insertion failed, and how often the square
-    hole failed. Domain objects come back, not rows. The Report of every experiment is computed from the
-    database rather than from in-process results. Tests assert that a query over a recorded episode returns
-    the same objects the runner wrote, and that a report regenerated from the database equals the one
-    the runner rendered. Widened from the temporal bucket alone on 2026-09-08 with the question set''s
-    own widening.'
+  notes: >-
+    The SQL backend is one backend among several answering the one query language, and long-term memory is where the paper's Remembering level is measured. Every bucket of the question set has a spelling over recorded episodes, not only the temporal one: what stood where and on which surface in an earlier episode, which pieces the robot picked up, how many joints the robot had in that episode's own self-model, what the motion was constrained by when an insertion failed, and how often the square hole failed. Domain objects come back, not rows. The Report of every experiment is computed from the database rather than from in-process results. Tests assert that a query over a recorded episode returns the same objects the runner wrote, and that a report regenerated from the database equals the one the runner rendered. Widened from the temporal bucket alone on 2026-09-08 with the question set's own widening.
 - id: episode-artifacts-recorded
-  title: An episode keeps its video, its simulation data and its question-and-answer transcript beside
-    the database
+  title: >-
+    An episode keeps its video, its simulation data and its question-and-answer transcript beside the database
   branch: claude/icra-foundation-episode-artifacts-nki2is
   pull_request_number: 294
   track: long-term-memory
@@ -543,24 +477,13 @@ items:
   - episodes-recorded-through-ormatic
   status: in_progress
   session: https://claude.ai/code/session_01NxGbkj8mzF2Vu5Bvyiksab
-  notes: 'The rows say what happened; these are what a reader - or a vision-language model - can look
-    at, and without them Experiment D has no baseline to compare against. The video is written by semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder,
-    which is already on main and renders from an overview camera it attaches itself; the simulation data
-    is the run''s own files, the world it built and the plan it realized; the transcript is every question
-    with its answer, which the episode rows already carry per query, rendered as one readable document.
-    Artifacts sit beside the database addressed by the episode''s identifier, so a row references one
-    rather than holding it - the separation ResultsDatabase already draws between where a run records
-    and what it records. Tests record a two-trial episode and read its video, its files and its transcript
-    back from the episode.
+  notes: >-
+    The rows say what happened; these are what a reader - or a vision-language model - can look at, and without them Experiment D has no baseline to compare against. The video is written by semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder, which is already on main and renders from an overview camera it attaches itself; the simulation data is the run's own files, the world it built and the plan it realized; the transcript is every question with its answer, which the episode rows already carry per query, rendered as one readable document. Artifacts sit beside the database addressed by the episode's identifier, so a row references one rather than holding it - the separation ResultsDatabase already draws between where a run records and what it records. Tests record a two-trial episode and read its video, its files and its transcript back from the episode.
 
-    Its dependency on simulated-camera-feeds-perception was removed 2026-09-08: the recorder needs a MuJoCo
-    world, not the perception pipeline''s frames, so this item and everything downstream of it - the corpus,
-    the cross-episode question set, Experiment D - run without the perception lane having landed. That
-    is the single edge whose removal lets long-term memory be worked in parallel by one person from the
-    day the episode model exists.'
+    Its dependency on simulated-camera-feeds-perception was removed 2026-09-08: the recorder needs a MuJoCo world, not the perception pipeline's frames, so this item and everything downstream of it - the corpus, the cross-episode question set, Experiment D - run without the perception lane having landed. That is the single edge whose removal lets long-term memory be worked in parallel by one person from the day the episode model exists.
 - id: episode-corpus-generated-at-scale
-  title: Thousands of episodes generated headless in MuJoCo, each with its video, its plan and its event
-    log in SQL
+  title: >-
+    Thousands of episodes generated headless in MuJoCo, each with its video, its plan and its event log in SQL
   branch: null
   pull_request_number: null
   track: long-term-memory
@@ -568,14 +491,5 @@ items:
   - episodes-recorded-through-ormatic
   - episode-artifacts-recorded
   status: not_started
-  notes: 'What makes long-term memory a corpus rather than a schema, and the item one person can carry
-    alone from the day the episode model lands. A headless generator runs the scenarios repeatedly over
-    seeded randomised layouts, conditions and perturbations, and records per episode: the realized coraplex
-    Plan, the segmind event log tick by tick, the twin''s state, every query with its answer and latency,
-    the typed failure and its resolution, and the video MujocoVideoRecorder rendered. Batched the way
-    batch_runner already batches so the process''s memory growth cannot lose a finished episode, and resumable,
-    so a run that dies is continued rather than restarted. The target is thousands of episodes rather
-    than dozens, because Experiment D''s questions are about repeats, and a corpus that holds each situation
-    once cannot be asked whether something has happened before. How many is set by what the generator
-    sustains overnight and is recorded rather than chosen in advance. Tests generate a small corpus and
-    assert every episode holds all six records.'
+  notes: >-
+    What makes long-term memory a corpus rather than a schema, and the item one person can carry alone from the day the episode model lands. A headless generator runs the scenarios repeatedly over seeded randomised layouts, conditions and perturbations, and records per episode: the realized coraplex Plan, the segmind event log tick by tick, the twin's state, every query with its answer and latency, the typed failure and its resolution, and the video MujocoVideoRecorder rendered. Batched the way batch_runner already batches so the process's memory growth cannot lose a finished episode, and resumable, so a run that dies is continued rather than restarted. The target is thousands of episodes rather than dozens, because Experiment D's questions are about repeats, and a corpus that holds each situation once cannot be asked whether something has happened before. How many is set by what the generator sustains overnight and is recorded rather than chosen in advance. Tests generate a small corpus and assert every episode holds all six records.

@@ -1897,14 +1897,3 @@ mutation: building a `MontessoriWorld` inline again fails the one that says the 
 happens in the scene the builder built, reading the resting height off `TABLE_TOP_Z`
 again fails the one that says a piece stands on the given scene's table, and bolting the
 robot at a fixed position fails the one that says the scene decides where it stands.
-
-### The manifest lost `simulated-camera-feeds-perception`'s blocker, 2026-09-09
-
-Recorded because it is the third stale-save on this account's plans, and the first on this
-plan. The `blocked` status and the whole blocker text that #298's own session wrote at
-`19ff031c` were gone again at `85853d65` ten minutes later, in a commit that also re-flowed
-all 820 lines of the manifest -- the signature of a load-mutate-dump round trip over a copy
-loaded before that write, which is exactly what `plan_item_bootstrap.py`'s own note says not
-to do. Nothing about #298 changed in between. Restored here verbatim from `19ff031c`, status
-included, by the `montessori-scenarios` session that noticed the drift while saving its own
-round.
