@@ -64,9 +64,50 @@ unchanged for the long-term half.
   parse error unrelated to this branch (`docopt-ng`'s dependency entry, a table `uv`
   0.8.17 rejects). Neither half could be installed, so CI is what verifies this branch.
 
+## Round 2: reviews + failing CI (2026-09-09)
+
+The developer reviewed and left two threads, and CI on the first push failed broadly
+(dozens of tests, not obviously mine).
+
+**CI root-caused to #265 itself, fixed there, not papered over here.** The dominant
+failure (`AttributeError: 'GiskardExecutable' object has no attribute 'is_paused'`) hit
+every test that actually executes a simulated motion, across `coraplex_test` and
+`experiments_test` — nothing I touched. Traced it: `is_paused`/`is_interrupted` existed
+on `tracy_icra`'s own `GiskardExecutable` (delegating to each motion mapping's
+`PlanNode.is_paused`/`is_interrupted`) but were silently dropped when tracy_icra merged
+into #265 — `main` never had them at all, so this wasn't a main-merge casualty either.
+Restored both properties + a unit test (`test_is_paused_reflects_a_paused_motion_mapping`,
+`test_is_interrupted_reflects_an_interrupted_motion_mapping`) directly on
+`claude/icra-experiments-simulation-pipeline-w4ep7n` (`b4397c229`), pushed, then merged
+that commit into this branch (`7eecb81a3`) so #304's own CI picks it up too.
+
+**A second, separate CI failure left unfixed and flagged, not guessed at:**
+`test_orm_generation.py::test_generation_needs_no_ros_message_package` fails because
+`giskardpy.orm.ormatic_interface` (a *generated* file — AGENTS.md forbids touching these
+directly) now pulls in `giskardpy.middleware.ros2.control_loop` →
+`feedback_publisher.py` → `json_msgs.action`, which is exactly the ROS message import
+this test exists to prove generation doesn't need. Pre-existing on #265, unrelated to
+either my item or the `is_paused` fix (same traceback before and after). Not attempted —
+AGENTS.md says consult the developer rather than dig into generated ORM internals.
+
+**Reviews**: replied to both threads.
+- `question_set.py`'s "can't RecordQuery be a Role for a Question" — couldn't find the
+  sibling question class in `experiments/scenarios` the developer meant; asked which one.
+  Also raised a concrete blocker either way: `RecordedQuery` must survive a database
+  round-trip after the `Question` that produced it is gone, and `Question` is explicitly
+  excluded from ORM mapping (`generate_orm.py`'s own ignore list) for exactly that reason
+  — a `Role[Question]` holds a live reference to its role taker, so it can't be what
+  persists. Left open, no code change.
+- `test_question_scoring.py`'s "why is the query a string?? / the second field 'cube'?" —
+  fair; those were arbitrary inline literals. Fixed by reusing `test_paper_figures.py`'s
+  already-named `WHAT_IS_ON_THE_TABLE`/`TWIN_BACKEND` constants everywhere this test built
+  an "ordinary query" placeholder (three spots). Pushed (`b156d3af1`), thread resolved.
+
 ## Next
 
-Wait for CI. If it's green on the working-memory half, this item's committed scope is
-done pending the open question above. If the developer answers that question, add the
-long-term counterpart test (fixing `values_agree`'s list case first if it needs fixing) —
-straightforward once decided, since the harness itself needs no long-term-specific code.
+CI just re-triggered on both #265 (`b4397c229`) and #304 (`b156d3af1`, now based on it) —
+pending as of this update, not polled further per standing instructions. If green on the
+working-memory half, this item's committed scope is done pending the two open items above
+(the Role/sibling-class question, and whoever answers the long-term list-comparison
+question). The `json_msgs`/generated-ORM-interface failure is the developer's to look at;
+not something to keep chasing here.
