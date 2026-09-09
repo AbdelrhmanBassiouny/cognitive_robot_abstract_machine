@@ -226,8 +226,7 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
             try:
                 deserialized_message = from_json(content, **tracker.create_kwargs())
             except WorldEntityWithIDNotInKwargs as unknown_entity:
-                # Re-raised rather than handled: an update about entities this world never
-                # received cannot be applied, and only its wording is worth improving.
+                # More concrete exception for synchronizer
                 raise WorldUpdateReferencesUnknownEntityError(
                     publisher=from_json(content[MessageField.META_DATA]),
                     entity_id=unknown_entity.world_entity_id,
