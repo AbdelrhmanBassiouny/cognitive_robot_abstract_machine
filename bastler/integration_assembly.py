@@ -198,6 +198,8 @@ def build_integration(
     """
     selection = select_for_build(stack, plans)
     tips = tips_of(stack, plans)
+    invoking_branch = git.checked_out_branch()
+    invoking_commit = git.commit_at("HEAD")
     with DetachedCheckout.of(git), RestackWorktree.added_to(git) as assembling:
         build = IntegrationBuild(
             git=dataclasses.replace(
@@ -216,6 +218,15 @@ def build_integration(
                 included.append(tip.name)
         git.run("branch", "--force", POINTER_BRANCH, build_branch)
         tests_passed = run_tests(test_command, build.git.working_directory)
+    if invoking_branch == POINTER_BRANCH:
+        # Moving the pointer's local ref just above, while this checkout was on the
+        # pointer branch itself - which is where a scheduled rebuild's always is - is
+        # what DetachedCheckout's own reattachment above just followed: it checked
+        # POINTER_BRANCH back out by name, and that name now resolves to the tree this
+        # call assembled - the upstream base plus each tip, never this checkout's own
+        # files. Only the ref was meant to move; the checkout's files were not, so they
+        # are put back here, detached at the commit this call found them at.
+        git.run("checkout", "--quiet", "--detach", invoking_commit)
     reached = branches_carried_by(stack, included)
     return IntegrationReport(
         build_branch=build_branch,
