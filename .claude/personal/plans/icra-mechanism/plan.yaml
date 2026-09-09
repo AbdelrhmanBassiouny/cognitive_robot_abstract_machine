@@ -40,8 +40,34 @@ items:
   track: backend-routing
   depends_on: []
   status: not_started
-  notes: >-
-    The capability table the memo publishes, as code rather than a table written by hand, and the joint the whole architecture turns on: QueryBackend gains capability(), the same shape #231 gave detectors, stating the predicate and statement forms the backend answers and the precondition on the knowledge state under which it answers them. Every kind of answerer declares in that one vocabulary - the native twin backend for a body already believed in, a perception backend for a pose that has to be looked at, the SQL backend for anything about a past episode, physics for a derived physical fact, the motion statechart for what the controller is currently constrained by, and a vision-language or visual-question-answering backend for whatever it claims to answer. That last is what makes the vision-language model a backend rather than only a baseline, and it is why the declaration is a capability rather than a class name. Rendering the declarations is what prints the paper's table. Tests pin one declaration per backend against a statement it accepts and one it refuses.
+  notes: >
+    The capability table the memo publishes, as code rather than a table written by hand, and the
+    joint the whole architecture turns on: QueryBackend gains capability(), the same shape #231 gave
+    detectors, stating the predicate and statement forms the backend answers and the precondition on
+    the knowledge state under which it answers them. Every kind of answerer declares in that one
+    vocabulary - the native twin backend for a body already believed in, a perception backend for a
+    pose that has to be looked at, the SQL backend for anything about a past episode, physics for a
+    derived physical fact, the motion statechart for what the controller is currently constrained
+    by, and a vision-language or visual-question-answering backend for whatever it claims to answer.
+    That last is what makes the vision-language model a backend rather than only a baseline, and it
+    is why the declaration is a capability rather than a class name. Rendering the declarations is
+    what prints the paper's table. Tests pin one declaration per backend against a statement it
+    accepts and one it refuses.
+
+    Amended 2026-09-09, from the fourth review round on icra-foundation's #298, and it is narrower
+    than it sounds because the detector half already exists. PerceptionDetector.capability(look)
+    already states what a detector answers as an entity-query-language condition, DetectorChoice is
+    already an EQLSingleClassRDR over the underspecified statement "a look whose detector is to be
+    worked out", and AttributeEqualityToLiteral.read_from already reads an equality about the
+    selected variable's own attribute back out of a condition -- all three on #265 through #275 and
+    #77. What this item takes on top of raising that shape from detectors to every query backend is
+    two things the developer asked for in as many words: a capability that names "specific fields of
+    specific classes as well, and this can be specified using EQL Attributes or MappedVariable in
+    general instead of writing a field string name", so a backend answers "I can supply at least
+    that field" against a description that says which field it wants; and the helper that fills an
+    underspecified description out from the model, so that an asker naming a class -- his example is
+    a MontessoriBoard -- has the features the twin already knows about one added to the description
+    before any backend is chosen. Nothing does that second one today.
   blockers:
   - >-
     Cross-plan: depends on icra-foundation's `integrated-simulation-pipeline` (in_progress, PR #265), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
