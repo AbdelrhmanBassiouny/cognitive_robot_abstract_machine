@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 
 import casadi as ca
 import numpy as np
@@ -65,6 +65,21 @@ class _ConstantMatrixParts(ca.SX, Enum):
 
 
 @dataclass(eq=False, repr=False)
+class SpatialFrameKey(StrEnum):
+    """
+    The entities a spatial type is expressed against.
+
+    Both halves of the serialization name the entity the same way, so the name lives
+    here rather than at every place that reads or writes one.
+    """
+
+    REFERENCE = "reference_frame"
+    """The entity a value is given relative to."""
+
+    CHILD = "child_frame"
+    """The entity a transformation points at."""
+
+
 class SpatialType:
     """
     Provides functionality to associate a reference frame with an object.
@@ -103,18 +118,20 @@ class SpatialType:
             raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
         if self.reference_frame is not None:
-            WorldEntityReference("reference_frame").write(result, self.reference_frame)
+            WorldEntityReference(SpatialFrameKey.REFERENCE).write(
+                result, self.reference_frame
+            )
         return result
 
     @classmethod
     def _parse_optional_frame_from_json(
-        cls, data: Dict[str, Any], frame: str, **kwargs
+        cls, data: Dict[str, Any], frame: SpatialFrameKey, **kwargs
     ) -> Optional[KinematicStructureEntity]:
         """
         Resolve a kinematic structure entity a serialized spatial type refers to.
 
         :param data: parsed JSON data
-        :param frame: what the spatial type calls the entity, e.g. ``reference_frame``
+        :param frame: which of its frames the spatial type is asked for
         :param kwargs: addition kwargs of _from_json
         :return: None if the spatial type refers to no such entity.
         :raises WorldEntityWithIDNotInKwargs: If nothing known carries that id.
@@ -242,10 +259,10 @@ class HomogeneousTransformationMatrix(
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, frame="reference_frame", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         child_frame = cls._parse_optional_frame_from_json(
-            data, frame="child_frame", **kwargs
+            data, frame=SpatialFrameKey.CHILD, **kwargs
         )
         return cls.from_xyz_quaternion(
             *data["position"][:3],
@@ -284,7 +301,7 @@ class HomogeneousTransformationMatrix(
     def to_json(self) -> Dict[str, Any]:
         result = super().to_json()
         if self.child_frame is not None:
-            WorldEntityReference("child_frame").write(result, self.child_frame)
+            WorldEntityReference(SpatialFrameKey.CHILD).write(result, self.child_frame)
         result["position"] = self.to_position().to_np().tolist()
         result["rotation"] = self.to_quaternion().to_np().tolist()
         return result
@@ -593,7 +610,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, frame="reference_frame", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return Quaternion.from_iterable(
             data["quaternion"],
@@ -1038,7 +1055,7 @@ class Point3(Point):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, frame="reference_frame", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls.from_iterable(
             data["data"][:3],
@@ -1244,7 +1261,7 @@ class Point2(Point):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, frame="reference_frame", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         x, y = data["data"][:2]
         return cls(x=x, y=y, reference_frame=reference_frame)
@@ -1322,7 +1339,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, frame="reference_frame", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls.from_iterable(
             data["data"][:3],
@@ -1681,7 +1698,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, frame="reference_frame", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls.from_iterable(
             data["data"],
@@ -2033,7 +2050,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, frame="reference_frame", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls.from_xyz_quaternion(
             *data["position"][:3],
@@ -2376,7 +2393,7 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, frame="reference_frame", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls(
             x=data["data"][0],
