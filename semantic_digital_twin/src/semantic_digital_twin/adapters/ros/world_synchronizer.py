@@ -403,40 +403,8 @@ class ModelReloadSynchronizer(Synchronizer):
             WorldMappingDAO.database_id == msg.primary_key
         )
         new_world = self.session.scalars(query).one().from_dao()
-        self._replace_world(new_world)
+        self._world._replace_with(new_world)
         self.record_applied(msg)
-
-    def _replace_world(self, new_world: World):
-        """
-        Replaces the current world with a new one, updating all relevant attributes.
-        This method modifies the existing world state, kinematic structure, degrees of
-        freedom, and semantic annotation based on the `new_world` provided.
-
-        If you encounter any issues with references to dead objects, it is most likely
-        due to this method not doing everything needed.
-
-        :param new_world: The new world instance to replace the current world.
-        """
-        model_change_callbacks = list(
-            self._world.get_world_model_manager().model_change_callbacks
-        )
-        state_change_callbacks = list(self._world.state.state_change_callbacks)
-        # Clearing drops everyone who listens to the world, which is what keeps the
-        # reloaded model from being published back to the process it came from. It ends
-        # its own modification, because the emptied world only reads as empty once that
-        # modification is over, and the merge asks for the root of the world.
-        with self._world._world_lock:
-            with self._world.modify_world():
-                self._world.clear()
-            with self._world.modify_world():
-                self._world.merge_world(new_world)
-            self._world.get_world_model_manager().model_change_callbacks.extend(
-                model_change_callbacks
-            )
-            self._world.state.state_change_callbacks.extend(state_change_callbacks)
-            # The world they listen to is a different one now, so they are told about it
-            # once without it leaving this process.
-            self._world._notify_model_change(publish_changes=False)
 
 
 @dataclass(eq=False)
