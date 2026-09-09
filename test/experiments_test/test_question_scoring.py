@@ -11,7 +11,15 @@ from experiments.questions.question import BloomLevel, Bucket
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
-from .test_paper_figures import NO_ABLATION, episode, query, rows_of, trial
+from .test_paper_figures import (
+    NO_ABLATION,
+    TWIN_BACKEND,
+    WHAT_IS_ON_THE_TABLE,
+    episode,
+    query,
+    rows_of,
+    trial,
+)
 from .test_questions import QuestionedScene, robot, scene
 
 # %% scoring a question set against a memory
@@ -37,7 +45,7 @@ def test_an_ordinary_query_carries_no_bucket_or_bloom_level():
     :meth:`~experiments.questions.question_set.QuestionSet.answer_and_record`, is not
     mistaken for a scored question.
     """
-    ordinary = query("an(entity(body))", "cube", 0.1)
+    ordinary = query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.1, TWIN_BACKEND)
 
     assert ordinary.bucket is None
     assert ordinary.bloom_level is None
@@ -82,7 +90,7 @@ def scored_corpus() -> list[RecordedTrial]:
                     bloom_level=BloomLevel.REMEMBERING,
                     answered_correctly=True,
                 ),
-                query("an(entity(body))", "cube, cylinder", 0.1),
+                query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.1, TWIN_BACKEND),
             ],
         )
     ]
@@ -113,7 +121,9 @@ def test_accuracy_by_bloom_level_reports_only_scored_levels_in_taxonomy_order():
 def test_a_score_with_nothing_scored_is_left_out():
     without_scored_questions = [
         trial(
-            episode(NO_ABLATION), TrialOutcome.SUCCEEDED, queries=[query("q", "a", 0.1)]
+            episode(NO_ABLATION),
+            TrialOutcome.SUCCEEDED,
+            queries=[query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.1, TWIN_BACKEND)],
         )
     ]
 
