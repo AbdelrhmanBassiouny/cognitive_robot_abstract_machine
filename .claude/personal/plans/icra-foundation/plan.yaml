@@ -193,8 +193,7 @@ items:
   pull_request_number: 298
   track: integration
   session: https://claude.ai/code/session_01XCRk6JcVY6XenXusBf2ST4
-  blockers:
-    - ""
+  blockers: []
   depends_on:
   - integrated-simulation-pipeline
   status: in_progress
