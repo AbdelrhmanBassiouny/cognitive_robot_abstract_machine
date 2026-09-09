@@ -407,6 +407,41 @@ items:
     same day -- merge everything into #265, then into tracy_icra, and cut new work off tracy_icra --
     retires the measured argument this branch was cut under, though nothing about what is built here
     changes with it.
+- id: simulated-tracy-demo-runs-scenarios
+  title: >-
+    The simulated Tracy world becomes a MontessoriWorldBuilder, so montessori-scenarios' scripted
+    runs execute on it headless, with no robot needed
+  branch: tracy_icra
+  pull_request_number: null
+  track: scenario-model
+  depends_on:
+  - montessori-scenarios
+  status: not_started
+  notes: >-
+    The seam montessori-scenarios (#296) left closed, named in its own fifth-round notes: "tracy_icra's
+    ~1,200 lines of actuation stay where they live; tracy-demo-takes-the-integrated-branch is where
+    they meet these scenarios." Checked directly against the merged tree: TracyWatchesTheSceneStandStill,
+    TracySortsAPiece, TracyIsIdleWhileAPieceIsPushed and TracyHoldsAPiece already exist and bind the
+    robot type to Tracy, but the only MontessoriWorldBuilder implementation is this package's own
+    BoardOnItsOwnTable, which mounts a robot generically (URDFParser.from_file(robot_type.get_ros_file_path())
+    at a stated MountedRobot position) rather than through tracy_icra's own TracyMontessoriWorld,
+    whose mount position is derived from the parsed, actuator-stripped robot itself
+    (parse_tracy/tracy_table_mount_position). So today those four Tracy scenario classes run against
+    a generic mount, not the demo's own geometry - there is no TracyMontessoriWorldBuilder(MontessoriWorldBuilder)
+    bridging the two. This item writes that adapter, so the scripted runs execute headless in MuJoCo
+    on the Tracy demo's actual board/table/mount, with no ROS and no physical robot required.
+    Deliberately not the same item as tracy-demo-takes-the-integrated-branch: that one is the bridge to
+    the physical UR10 with a live camera and explicitly needs the robot before it can start; this one
+    needs neither, and is what directly answers the developer's own stated priority on 2026-09-09
+    ("I want to start recording episodes with perturbations in the simulation as fast as possible") -
+    it is the one piece still missing between the landed scenario/episode machinery and actually
+    recording Tracy-demo episodes in simulation. Cut off tracy_icra directly per the 2026-09-09
+    branching change (new work no longer bases on an unlanded pull request); depends_on names the
+    logical prerequisite (montessori-scenarios, done) rather than a base-branch readiness argument.
+    Carrying a held piece through the simulation is itself still open per montessori-scenarios'
+    own fourth-round finding (a position-driven grasp does not survive being simulated without
+    actuators the Montessori robot does not have wired) - this item inherits that limitation rather
+    than resolving it, and TracyHoldsAPiece is scoped accordingly until it is.
 - id: run-results-recorded-into-sql
   title: >-
     Where a run records its results, and the plan-and-events schema it records

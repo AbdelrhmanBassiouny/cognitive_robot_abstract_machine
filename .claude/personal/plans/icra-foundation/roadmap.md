@@ -2072,3 +2072,53 @@ before committing; ORMatic generation and anything importing ROS still needs a r
 run, which this container cannot give. CI on `51fc40548` had not reported when this was
 written; per the standing rule against scheduled checks, nothing was armed to watch it -
 ask, or look at the run directly.
+
+## 2026-09-09 (later still): the Tracy demo has scenario classes, but no world to run them on
+
+Asked directly: does the simulated Tracy demo have `Scenario`s of its own yet? Checked
+against the merged tree (`origin/claude/icra-experiments-simulation-pipeline-w4ep7n` at
+`51fc40548`) rather than assumed from the roadmap's own prose, since `montessori-scenarios`'
+fifth-round notes describe an intent ("the demo's scenarios bind Tracy") that could have
+outrun what was actually pushed.
+
+**Half of it is there.** `experiments/montessori/scenarios.py` does define
+`TracyWatchesTheSceneStandStill`, `TracySortsAPiece`, `TracyIsIdleWhileAPieceIsPushed` and
+`TracyHoldsAPiece` - each the corresponding generic scenario bound to `Tracy` as its robot
+type. That much matches the fifth round's description exactly.
+
+**The other half is the gap the fifth round itself named and left open.** A
+`MontessoriSortingScenario` is handed a `MontessoriWorldBuilder`, and the only concrete one
+in the package is `BoardOnItsOwnTable` - which mounts *any* robot type generically
+(`URDFParser.from_file(robot_type.get_ros_file_path())` at a stated `MountedRobot`
+position), not through `tracy_icra`'s own `TracyMontessoriWorld`, whose mount position is
+derived from the demo's actual parsed, actuator-stripped robot
+(`parse_tracy`/`tracy_table_mount_position`). So instantiating one of the four `Tracy...`
+scenario classes today runs it against a generic mount, not the Tracy demo's own board and
+table geometry - there is no `TracyMontessoriWorldBuilder(MontessoriWorldBuilder)`
+bridging the two. This is exactly what that round's own words flagged and deferred:
+*"tracy_icra's ~1,200 lines of actuation stay where they live;
+tracy-demo-takes-the-integrated-branch is where they meet these scenarios."*
+
+**That deferral pointed at the wrong item, though - not a wrong fact, a wrong address.**
+`tracy-demo-takes-the-integrated-branch` is the bridge to the *physical* UR10 with a live
+camera, and its own notes say plainly it "needs the robot before any experiment does." The
+world-builder adapter needs neither ROS nor a robot - it is pure MuJoCo, headless, exactly
+the kind of thing this session container can build and check. Conflating the two would have
+made the simulation-only work wait on hardware access it does not need.
+
+**Added as its own item, `simulated-tracy-demo-runs-scenarios`, in `scenario-model`** (not
+`integration`, since it continues `montessori-scenarios`' own left-open seam rather than
+the perception/monitor merge lineage). It depends only on `montessori-scenarios` (done);
+per the 2026-09-09 branching change above, it is cut off `tracy_icra` directly rather than
+argued ready by an unlanded pull request's open/draft state. It is also the one piece
+directly answering the developer's own stated priority from the same day, on #298's fourth
+review round: *"I want to start recording episodes with perturbations in the simulation as
+fast as possible."* The scenario domain model, the episode recording and querying, and the
+scripted Montessori scenarios are all already `done`; this adapter is what is left before
+any of it can be pointed at the actual Tracy demo world rather than at a generic stand-in.
+
+**Inherits rather than resolves montessori-scenarios' own open finding**: a held piece is
+still carried by script, not by simulated grasp, because a position-driven gripper does not
+survive being simulated without joint actuators the Montessori robot does not have wired.
+`TracyHoldsAPiece` is scoped to that limitation until whoever answers that thread's
+open question (in `montessori-scenarios`' fourth round) resolves it.
