@@ -359,3 +359,44 @@ def test_a_query_with_no_attribute_to_complete_is_refused(animals: List[Animal])
 
     with pytest.raises(QueryIsNotAMatch):
         entity(variable(Animal, animals)).evaluate(backend=backend)
+
+
+# %% what the backend declares it can answer
+
+
+def test_the_backend_answers_a_match_naming_one_attribute_to_infer(
+    animals: List[Animal],
+):
+    backend = RDRBackend()
+
+    query = an(Animal)(milk=True, species=...).from_(animals)
+
+    assert backend.capability(query) is True
+
+
+def test_the_backend_refuses_a_statement_that_is_not_a_match(animals: List[Animal]):
+    backend = RDRBackend()
+
+    query = entity(variable(Animal, animals))
+
+    assert backend.capability(query) is False
+
+
+def test_the_backend_refuses_a_match_with_no_attribute_to_infer(
+    animals: List[Animal],
+):
+    backend = RDRBackend()
+
+    query = an(Animal)(milk=True).from_(animals)
+
+    assert backend.capability(query) is False
+
+
+def test_the_backend_refuses_a_match_naming_more_than_one_attribute_to_infer(
+    animals: List[Animal],
+):
+    backend = RDRBackend()
+
+    query = an(Animal)(species=..., legs=...).from_(animals)
+
+    assert backend.capability(query) is False
