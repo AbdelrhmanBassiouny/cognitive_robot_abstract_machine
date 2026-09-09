@@ -41,12 +41,21 @@ Four `Perturbation[World]` instances (`experiments/montessori/perturbations.py`,
   affects every session using these skills.
 - Bootstrapped the branch, opened PR #305, recorded `plan.yaml` (in_progress,
   branch/PR/session) and the roadmap section above.
+- Done: `simulated_setup.py`'s four functions now take `world: World`
+  (`beff1237a`..`b673ec883`, pushed); `test_montessori_simulated_camera.py`'s ~10 call
+  sites updated to pass `.world` through. **Not run against the real MuJoCo pipeline
+  yet** — this container's system Python has no numpy/mujoco/casadi etc.; the montessori
+  perception suite needs the same from-scratch Python 3.12 venv `snapshot-working-memory`
+  (#301) built (mujoco, casadi~=3.7.0, opencv, scikit-image, piqp, transforms3d, trimesh,
+  rustworkx, random_events/probabilistic_model from local wheels, xacro/
+  giskardpy_bullet_bindings stubs, libegl-mesa0, `MUJOCO_GL=egl`). Only `py_compile`
+  syntax-checked so far.
 
 ## Next
 
+- Build (or reuse, if still on disk) that scoped venv before writing anything that needs
+  to actually run — this signature change alone is UNVERIFIED beyond syntax.
 - Implement `TargetHoleMoved`, `PieceShoved` (world perturbations) with tests, TDD.
-- Change `simulated_setup.py`'s four functions to take `world: World`; update
-  `test_montessori_simulated_camera.py`'s ~10 call sites.
 - Build `LookAtTheScene` step + the world-registered distortion marker; implement
   `PerceivedPoseOffset`/`DetectionRelabelled` with tests.
 - Add `instruction_for_a_person()` to `Perturbation` + `LightingChanged`.
