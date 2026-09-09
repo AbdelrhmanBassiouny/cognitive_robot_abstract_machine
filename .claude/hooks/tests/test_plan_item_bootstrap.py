@@ -557,21 +557,9 @@ def test_a_rendered_field_line_matches_how_a_real_manifest_writes_it():
     assert manifest_line(ManifestKey.TRACK, "a-track") in PLAN_MANIFEST
 
 
-NARROWLY_INDENTED_MANIFEST = """\
-schema_version: 1
-id: narrow-plan
-title: "A plan whose items are not indented the way /plan-create writes them"
-default_repository: an-owner/a-repository
-tracking_issue: 1
-items:
-- id: an-item
-  title: "An item indented two spaces, not four"
-  branch: null
-  pull_request_number: null
-  track: a-track
-  depends_on: []
-  status: not_started
-"""
+NARROWLY_INDENTED_MANIFEST = (
+    FIXTURES_DIRECTORY / "narrowly-indented-plan.yaml"
+).read_text()
 """
 A manifest predating this module's own formatting convention: its items list has no
 indent before the ``-`` and its fields sit two spaces in, not the four
@@ -595,9 +583,9 @@ def test_patching_a_field_matches_the_items_own_indentation_rather_than_a_fixed_
         {ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value},
     )
 
-    item = yaml.safe_load(patched)["items"][0]
-    assert item["status"] == ItemStatus.IN_PROGRESS.value
-    assert item["title"] == "An item indented two spaces, not four"
+    item = yaml.safe_load(patched)[ManifestKey.ITEMS.key][0]
+    assert item[ManifestKey.STATUS.key] == ItemStatus.IN_PROGRESS.value
+    assert item[ManifestKey.TITLE.key] == "An item indented two spaces, not four"
 
 
 def test_a_key_quotes_its_own_value_when_its_style_says_to():
