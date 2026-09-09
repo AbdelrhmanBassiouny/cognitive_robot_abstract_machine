@@ -13,9 +13,9 @@ from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from experiments.experiment_definitions import DEFAULT_CONFIDENCE_LEVEL
 from experiments.scenarios.report import Metric, Report
 from experiments.scenarios.scenario import (
-    Condition,
     Perturbation,
     Scenario,
+    ScenarioCondition,
     ScenarioStep,
     WorldType,
 )
@@ -63,7 +63,7 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
     def run(
         self,
         scenario: ScenarioType,
-        conditions: Sequence[Condition[WorldType]] = (),
+        conditions: Sequence[ScenarioCondition[WorldType]] = (),
         perturbations: Sequence[Perturbation[WorldType]] = (),
     ) -> Report:
         """
@@ -88,7 +88,7 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
     def run_trial(
         self,
         scenario: ScenarioType,
-        conditions: Sequence[Condition[WorldType]] = (),
+        conditions: Sequence[ScenarioCondition[WorldType]] = (),
         perturbations: Sequence[Perturbation[WorldType]] = (),
     ) -> Trial:
         """
@@ -128,9 +128,7 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
                 self.perform_step(scenario, step, world)
                 log.record(StepPerformed(moment=log.elapsed_seconds, step=step.name))
             outcome = (
-                TrialOutcome.SUCCEEDED
-                if scenario.goal.is_reached(world)
-                else TrialOutcome.FAILED
+                TrialOutcome.SUCCEEDED if scenario.goal(world) else TrialOutcome.FAILED
             )
             duration = log.elapsed_seconds
             log.record(TrialFinished(moment=duration, outcome=outcome))

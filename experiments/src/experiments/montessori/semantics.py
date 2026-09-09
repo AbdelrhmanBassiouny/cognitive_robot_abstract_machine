@@ -28,6 +28,7 @@ from semantic_digital_twin.semantic_annotations.part_whole import (
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
+from semantic_digital_twin.world_description.world_entity import Region
 
 
 class MontessoriShapeCategory(StrEnum):
@@ -95,9 +96,9 @@ class MontessoriShape(HasRootBody):
     @property
     def cross_section_size(self) -> float:
         """
-        The larger of this shape's own local ``(x, y)`` footprint extents: the
-        practical diameter or width a hole must be at least as large as for this shape
-        to actually pass through it (see :meth:`fits_through`).
+        The larger of this shape's own local ``(x, y)`` footprint extents: the practical
+        diameter or width a hole must be at least as large as for this shape to actually
+        pass through it (see :meth:`fits_through`).
         """
         bounds = self.root.collision.combined_mesh.bounds
         return float(max(bounds[1][0] - bounds[0][0], bounds[1][1] - bounds[0][1]))
@@ -106,8 +107,8 @@ class MontessoriShape(HasRootBody):
         """
         Whether this shape can actually pass through ``hole``.
 
-        Matching :attr:`shape_category` is necessary but not sufficient once more
-        than one hole shares a category (e.g. the board's two circular holes are both
+        Matching :attr:`shape_category` is necessary but not sufficient once more than
+        one hole shares a category (e.g. the board's two circular holes are both
         :attr:`MontessoriShapeCategory.CYLINDER`, but sized differently), so this also
         requires this shape to be no larger than ``hole``.
 
@@ -146,9 +147,9 @@ class DiskShape(MontessoriShape):
     """
     A loose disk-shaped Montessori piece: a flat coin whose matching hole is a narrow
     slot rather than a coin-shaped opening (see
-    :func:`~experiments.montessori.hole_geometry._classify_hole_shape`), so unlike
-    every other shape it must be tipped onto its edge to fit through, not just hover
-    above it flat.
+    :func:`~experiments.montessori.hole_geometry._classify_hole_shape`), so unlike every
+    other shape it must be tipped onto its edge to fit through, not just hover above it
+    flat.
     """
 
     @classproperty
@@ -159,11 +160,11 @@ class DiskShape(MontessoriShape):
         self, hole: ShapeSortingHole, horizontal_offset: Point3, hover_height: float
     ) -> Pose:
         """
-        Overrides :meth:`MontessoriShape.insertion_pose_relative_to_hole`: a disk
-        lying flat presents its full diameter to the hole's narrow slot and cannot
-        pass through it, so this rotates the disk a quarter turn about the hole's
-        local y-axis, presenting its thin edge (matching the slot's narrow width)
-        instead of its flat face.
+        Overrides :meth:`MontessoriShape.insertion_pose_relative_to_hole`: a disk lying
+        flat presents its full diameter to the hole's narrow slot and cannot pass
+        through it, so this rotates the disk a quarter turn about the hole's local
+        y-axis, presenting its thin edge (matching the slot's narrow width) instead of
+        its flat face.
         """
         return Pose.from_xyz_rpy(
             horizontal_offset.x,
@@ -245,6 +246,15 @@ class ShapeSortingHole(Aperture):
     :attr:`MontessoriShape.shape_category` to decide which pieces fit through it.
     """
 
+    landing_region: Optional[Region] = field(kw_only=True, default=None)
+    """
+    The space under this hole, which a shape that has gone through it is inside and a
+    shape resting on the board is not.
+
+    Optional because a hole can be described without one -- a hole detected in a camera
+    image has no space measured under it.
+    """
+
     @property
     def cross_section_size(self) -> float:
         """
@@ -306,7 +316,8 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
         fitting_holes = [
             hole
             for hole in self.apertures
-            if isinstance(hole, ShapeSortingHole) and montessori_shape.fits_through(hole)
+            if isinstance(hole, ShapeSortingHole)
+            and montessori_shape.fits_through(hole)
         ]
         if not fitting_holes:
             raise NoMatchingHoleError(montessori_shape, self)

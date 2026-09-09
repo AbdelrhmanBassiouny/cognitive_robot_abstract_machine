@@ -6,12 +6,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING
+from typing_extensions import FrozenSet, TYPE_CHECKING
 
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
-    from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
+    from experiments.montessori.semantics import (
+        MontessoriShape,
+        MontessoriShapeCategory,
+        ShapeSortingBoard,
+        ShapeSortingHole,
+    )
 
 
 @dataclass
@@ -40,3 +45,51 @@ class NoMatchingHoleError(DataclassException):
 
     def suggest_correction(self) -> str:
         return ""
+
+
+@dataclass
+class NoSuchPieceError(DataclassException):
+    """
+    Raised when a scene is asked about a loose piece of a shape it does not hold.
+    """
+
+    shape_category: MontessoriShapeCategory
+    """
+    The shape that was asked about.
+    """
+
+    standing_in_the_scene: FrozenSet[MontessoriShapeCategory]
+    """
+    The shapes the scene does hold a piece of.
+    """
+
+    def error_message(self) -> str:
+        holds = ", ".join(sorted(str(each) for each in self.standing_in_the_scene))
+        return f"No piece of shape {self.shape_category} stands in this scene; it holds {holds}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Name a shape the scene's layout places, or build the scene from a layout "
+            "that places this one."
+        )
+
+
+@dataclass
+class HoleHasNoLandingRegionError(DataclassException):
+    """
+    Raised when the space under a hole is asked for and that hole was never measured.
+    """
+
+    hole: ShapeSortingHole
+    """
+    The hole with no space measured under it.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.hole.name} has no landing region, so nothing can be inside it."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Take the hole from a world that measured the space under it, which "
+            "MontessoriWorld does when it builds its board."
+        )
