@@ -369,13 +369,29 @@ items:
     grasp_description the third round asked about, at the developer's "do (1)". 48 tests
     in the module; test/experiments_test runs 391 passed.
 
-    Two questions are open on the pull request, both the developer's: whether InsideOf's
-    minimum_containment_ratio (which exists on #265, not on this base) should be ported
-    here now and meet #265 as a conflict, and where the demo's actuation should live --
-    everything that makes the tracy_icra demo work is about 1,200 lines that exist on
-    tracy_icra alone, and that demo deliberately does not use coraplex's actions, so
-    copying it here would duplicate work tracy_icra will merge. The Goal-as-Predicate
-    thread from round one is also still open, asking whether that change belonged on #261.
+    Fifth round 2026-09-09 at e9d730a3a. The developer answered the fourth round's open question with "do
+    (1)": a scenario is built on the scene it is given rather than on a MontessoriWorld of its own.
+    MontessoriWorldBuilder is what a scenario is handed and BoardOnItsOwnTable is this package's, so a
+    demo's scene is a second implementation beside it rather than an edit here. MountedRobot moved onto
+    the builder, and that is what makes the seam usable rather than nominal: in the demo's case parsing
+    the robot, deciding where it is bolted and building the board around it are one decision --
+    parse_tracy strips the actuators a merged robot cannot carry, tracy_table_mount_position reads both
+    the mount and the table height off that parsed world, and TracyMontessoriWorld needs that height
+    before it can place the board. The table a piece rests on and the pusher's rail read the given scene's
+    table_top_z rather than the module constant, and resting_height_of is the builder's method rather than
+    a free function. tracy_icra's ~1,200 lines of actuation stay where they live; tracy-demo-takes-the-
+    integrated-branch is where they meet these scenarios. 51 tests in the module; test/experiments_test
+    runs 380 passed, the rest being this container's own ROS failures.
+
+    No thread of the developer's is open as of that round: the minimum_containment_ratio and Goal-as-
+    Predicate threads are both resolved, and the actuation thread is answered and resolved. One thing is
+    named rather than built, on the thread and here -- the layout's own geometry (LayoutArea,
+    PiecePlacement.standing_height) is still measured against this module's TABLE_TOP_Z, so a scene on
+    another table also needs its layout stated in that frame; it is the layout's frame rather than the
+    scene's, and what a demo's layout wants is the developer's to say. The branching change recorded the
+    same day -- merge everything into #265, then into tracy_icra, and cut new work off tracy_icra --
+    retires the measured argument this branch was cut under, though nothing about what is built here
+    changes with it.
 - id: run-results-recorded-into-sql
   title: >-
     Where a run records its results, and the plan-and-events schema it records
