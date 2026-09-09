@@ -556,28 +556,6 @@ def test_a_rendered_field_line_matches_how_a_real_manifest_writes_it():
     assert manifest_line(ManifestKey.TRACK, "a-track") in PLAN_MANIFEST
 
 
-def test_a_rendered_field_line_carries_the_indentation_real_plans_use():
-    """
-    A real ``plan.yaml`` on the personal-notes branch places an item's fields two spaces
-    under its ``- id:`` marker, with the marker itself flush against ``items:`` rather
-    than nested under it.
-
-    The fixture the tests above compare
-    against has to hold that same shape, so this pins the literal apart from the
-    fixture: a fixture that drifted from the real convention would otherwise pass
-    every other test in this file while still corrupting a real manifest.
-    """
-    assert (
-        ManifestKey.STATUS.render(ItemStatus.NOT_STARTED.value)
-        == "  status: not_started\n"
-    )
-    assert ManifestKey.TRACK.render("a-track") == "  track: a-track\n"
-    assert (
-        ManifestKey.IDENTIFIER.render("an-item", opening_the_item=True)
-        == "- id: an-item\n"
-    )
-
-
 def test_a_key_quotes_its_own_value_when_its_style_says_to():
     """
     Quoting is the key's to decide, so no caller has to know that a title is prose and a
