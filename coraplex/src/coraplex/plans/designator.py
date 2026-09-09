@@ -57,17 +57,24 @@ class Designator:
     @property
     def fields(cls) -> List[Field]:
         """
-        The fields of this action, returns only the fields defined in the class and not
-        inherit fields of parents.
+        The fields this designator is described by.
 
-        :return: The fields of this action
+        Neither a field the base declares nor one the constructor does not take says
+        anything about what this designator was asked for, and a base mixed in for
+        something other than description brings fields of its own.
+
+        :return: The parameters this designator carries
         """
-        self_fields = list(fields(cls))
-        [self_fields.remove(parent_field) for parent_field in fields(Designator)]
+        declared_by_the_base = fields(Designator)
+        parameters = [
+            own_field
+            for own_field in fields(cls)
+            if own_field.init and own_field not in declared_by_the_base
+        ]
         type_hints = cls.get_type_hints()
-        for field in self_fields:
-            field.type = type_hints[field.name]
-        return self_fields
+        for parameter in parameters:
+            parameter.type = type_hints[parameter.name]
+        return parameters
 
     @property
     def designator_parameter(self) -> Dict[str, Any]:

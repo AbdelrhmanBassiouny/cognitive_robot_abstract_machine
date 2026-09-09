@@ -15,8 +15,9 @@ from sqlalchemy import (
     case,
     not_ as sa_not,
     exists as sqlalchemy_exists,
+    true,
 )
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from krrood.entity_query_language.query.query import (
     Query,
@@ -26,11 +27,19 @@ from krrood.entity_query_language.query.query import (
 )
 from krrood.entity_query_language.query.operations import Where
 from krrood.entity_query_language.query.quantifiers import ResultQuantifier, An, The
-from krrood.entity_query_language.operators.core_logical_operators import AND, OR, Not
+from krrood.entity_query_language.operators.core_logical_operators import (
+    AND,
+    OR,
+    LogicalOperator,
+    Not,
+)
 from krrood.entity_query_language.operators.logical_quantifiers import (
     Exists as EQLExists,
 )
-from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.base_expressions import (
+    Filter,
+    SymbolicExpression,
+)
 from krrood.entity_query_language.core.variable import Variable, Literal
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.operators.comparator import Comparator
@@ -46,6 +55,7 @@ from krrood.entity_query_language.operators.aggregators import (
 
 from krrood.entity_query_language.operators.conditionals import CaseWhen
 from krrood.exceptions import DataclassException
+from krrood.ormatic.data_access_objects.dao import AssociationDataAccessObject
 from krrood.ormatic.data_access_objects.helper import get_dao_class
 from krrood.ormatic.exceptions import (
     NoDAOFoundForTypeError,
@@ -164,7 +174,10 @@ class DAOAttributeResolutionError(AttributeResolutionError):
         """
         :return: The names of all columns mapped on the DAO class.
         """
-        return sorted(sqlalchemy.inspection.inspect(self.dao_class).columns.keys())
+        # Through the mapper, so an alias reports the columns of what it aliases
+        # rather than failing where the error is being built.
+        mapper = sqlalchemy.inspection.inspect(self.dao_class).mapper
+        return sorted(mapper.columns.keys())
 
     def mapped_relationship_names(self) -> List[str]:
         """
@@ -568,6 +581,57 @@ class JoinManager:
         return dao_class in self.joined_tables
 
 
+CONDITION_COMBINERS = (LogicalOperator, Filter)
+"""
+The expressions that combine conditions rather than being one, so a walk of a condition
+tree descends through them to reach the conditions themselves.
+"""
+
+
+@dataclass
+class VariableFromElements:
+    """
+    Which FROM element each variable of a query ranges over.
+
+    Two variables of one class are two different things a query asks about, so each
+    needs an element of its own for a condition relating them to compare two rows rather
+    than one row with itself.
+    """
+
+    elements_by_variable_identity: dict[int, Any] = field(default_factory=dict)
+    """
+    The element registered for each variable, keyed by that variable's identity.
+
+    ..note:: Keyed by identity because a variable's ``==`` builds a comparator rather
+        than answering whether two variables are the same one.
+    """
+
+    def bind(self, variable: Variable, element: Any) -> None:
+        """
+        Record which FROM element a variable ranges over.
+
+        :param variable: The variable to bind.
+        :param element: The table or alias holding the rows it ranges over.
+        """
+        self.elements_by_variable_identity[id(variable)] = element
+
+    def is_bound(self, variable: Variable) -> bool:
+        """
+        Whether a variable already ranges over a known element.
+
+        :param variable: The variable to look up.
+        """
+        return id(variable) in self.elements_by_variable_identity
+
+    def resolve(self, variable: Variable) -> Any:
+        """
+        The FROM element a variable ranges over.
+
+        :param variable: The variable to look up.
+        """
+        return self.elements_by_variable_identity.get(id(variable))
+
+
 @dataclass
 class EQLTranslator:
     """
@@ -579,6 +643,9 @@ class EQLTranslator:
 
     sql_query: Optional[Select] = None
     join_manager: JoinManager = field(default_factory=JoinManager)
+    variable_from_elements: VariableFromElements = field(
+        default_factory=VariableFromElements
+    )
 
     @property
     def quantifier_type(self) -> Type[ResultQuantifier]:
@@ -630,7 +697,9 @@ class EQLTranslator:
         if isinstance(selected, Attribute):
             self._translate_entity_from_attribute(selected)
         else:
-            self.sql_query = select(self._require_dao_class(selected._type_))
+            selected_dao = self._require_dao_class(selected._type_)
+            self.variable_from_elements.bind(selected, selected_dao)
+            self.sql_query = select(selected_dao)
         self._apply_clauses()
 
     def _translate_entity_from_attribute(self, attribute: Attribute) -> None:
@@ -642,6 +711,10 @@ class EQLTranslator:
         via :meth:`_apply_relationship_join` so that path tracking is consistent with
         subsequent WHERE clause translations that traverse the same chain.
 
+        The variable the chain starts from ranges over what the query selects from, so
+        it is bound to that element: a condition mentioning it then restricts the rows
+        the chain is read off, rather than leaving them a second unjoined table.
+
         :param attribute: The outermost :class:`Attribute` node used as selected
             variable.
         :raises NoDAOFoundForTypeError: When the root variable type has no DAO.
@@ -652,18 +725,50 @@ class EQLTranslator:
         base_class = self._extract_base_class(attribute)
         current_dao = self._require_dao_class(base_class)
 
-        rel_resolver = RelationshipResolver()
         self.sql_query = select(current_dao)
 
-        for attr_name in attribute_names:
-            mapper = sqlalchemy.inspection.inspect(current_dao)
-            relationship = rel_resolver._find_relationship(mapper, attr_name)
-            if relationship is None:
-                raise MissingRelationshipError(current_dao, attr_name)
-            alias = self._apply_relationship_join(current_dao, attr_name, relationship)
-            current_dao = alias or relationship.entity.class_
+        root_variable = self._root_variable_of(attribute)
+        if root_variable is not None:
+            self.variable_from_elements.bind(root_variable, current_dao)
+
+        current_dao = self._join_attribute_chain(current_dao, attribute_names)
 
         self.sql_query = self.sql_query.with_only_columns(current_dao)
+
+    def _join_attribute_chain(self, root_element: Any, names: List[str]) -> Any:
+        """
+        Join every hop of an attribute chain, returning what the last hop yields.
+
+        :param root_element: The table or alias the chain starts from.
+        :param names: The attribute names to follow, from the root outward.
+        :return: The element holding what the last hop names.
+        :raises MissingRelationshipError: When a hop is not a relationship.
+        """
+        current_element = root_element
+
+        for name in names:
+            relationship = self._require_relationship(current_element, name)
+            alias = self._apply_relationship_join(current_element, name, relationship)
+            current_element = alias or relationship.entity.class_
+
+        return current_element
+
+    @staticmethod
+    def _require_relationship(element: Any, attribute_name: str) -> Any:
+        """
+        The relationship an element's attribute names.
+
+        :param element: The table or alias the attribute is read on.
+        :param attribute_name: The name of the attribute.
+        :raises MissingRelationshipError: When the attribute is not a relationship.
+        """
+        mapper = sqlalchemy.inspection.inspect(element)
+        relationship = RelationshipResolver()._find_relationship(mapper, attribute_name)
+
+        if relationship is None:
+            raise MissingRelationshipError(element, attribute_name)
+
+        return relationship
 
     def _translate_set_of(self) -> None:
         """
@@ -782,6 +887,7 @@ class EQLTranslator:
         Apply WHERE, GROUP BY, HAVING, ORDER BY and LIMIT to the SQL query.
         """
         if self.eql_query._where_expression_ is not None:
+            self._bind_collection_owners(self.eql_query._where_expression_)
             conditions = self.translate_query(self.eql_query._where_expression_)
             if conditions is not None:
                 self.sql_query = self.sql_query.where(conditions)
@@ -817,6 +923,66 @@ class EQLTranslator:
 
         if self.eql_query._distinct_on:
             self.sql_query = self.sql_query.distinct()
+
+    def _bind_collection_owners(self, condition: Any) -> None:
+        """
+        Give every variable whose collection is asked about an element of its own.
+
+        An owner read against the table its members inherit cannot be told apart from
+        them in the ON clause, so it needs an alias rather than the bare table. This
+        runs before any condition is translated, so a condition mentioning the owner
+        reads the same element the join does whichever order the two were written in.
+
+        :param condition: The condition tree to search for membership over a collection.
+        """
+        for node in self._collect_conditions(condition):
+            if not isinstance(node, Comparator) or not self._is_collection_membership(
+                node
+            ):
+                continue
+
+            owner = self._root_variable_of(node.left)
+            if owner is None or self.variable_from_elements.is_bound(owner):
+                continue
+
+            owner_dao = get_dao_class(owner._type_)
+            if owner_dao is None:
+                continue
+
+            owner_alias = aliased(owner_dao, flat=True)
+            # Joined unrestricted: what restricts the owner is the query's own
+            # conditions, and joining it keeps one FROM chain rather than leaving it a
+            # second one the members' chain has no join condition against.
+            self.sql_query = self.sql_query.join(owner_alias, true())
+            self.variable_from_elements.bind(owner, owner_alias)
+
+    def _collect_conditions(self, condition: Any) -> List[Any]:
+        """
+        Every condition a tree of logical operators combines, the operators aside.
+
+        :param condition: The root of the condition tree.
+        """
+        if not isinstance(condition, CONDITION_COMBINERS):
+            return [condition]
+
+        collected = []
+        for child in self._extract_logical_children(condition):
+            collected.extend(self._collect_conditions(child))
+        return collected
+
+    @staticmethod
+    def _root_variable_of(attribute: Any) -> Optional[Variable]:
+        """
+        The variable an attribute chain is rooted at.
+
+        :param attribute: The outermost attribute of the chain.
+        :return: The variable at its root, or ``None`` when it is not rooted at one.
+        """
+        root = attribute
+        while isinstance(root, Attribute):
+            root = root._child_
+
+        return root if isinstance(root, Variable) else None
 
     def evaluate(self) -> List[Any]:
         """
@@ -993,6 +1159,9 @@ class EQLTranslator:
             if join_result is not None:
                 return None
 
+        if self._is_collection_membership(query):
+            return self._translate_collection_membership(query)
+
         left = self._translate_comparator_operand(query.left)
         right = self._translate_comparator_operand(query.right)
 
@@ -1031,7 +1200,31 @@ class EQLTranslator:
             and not isinstance(query.right, Literal)
         )
 
+        if is_equality and both_attributes and self._both_roots_are_bound(query):
+            return False
+
         return is_equality and (both_attributes or variable_and_attribute)
+
+    def _both_roots_are_bound(self, query: Comparator) -> bool:
+        """
+        Whether both sides of a comparison already range over a FROM element.
+
+        A join is what puts a table into the query, so a comparison whose sides are both
+        in it already is a condition rather than a join. Deciding otherwise reads the
+        two sides against their shared table, which cannot tell two of its aliases
+        apart.
+
+        :param query: The comparator query.
+        """
+        roots = [
+            self._root_variable_of(query.left),
+            self._root_variable_of(query.right),
+        ]
+
+        return all(
+            root is not None and self.variable_from_elements.is_bound(root)
+            for root in roots
+        )
 
     def _handle_attribute_equality_join(self, query: Comparator) -> Optional[bool]:
         """
@@ -1198,6 +1391,8 @@ class EQLTranslator:
             return extractor.extract_from_literal(operand)
 
         if isinstance(operand, Variable):
+            if self.variable_from_elements.is_bound(operand):
+                return self.variable_from_elements.resolve(operand).database_id
             variable_dao = get_dao_class(operand._type_)
             if variable_dao is not None:
                 return variable_dao.database_id
@@ -1250,14 +1445,109 @@ class EQLTranslator:
         :return: SQLAlchemy column expression
         """
         attribute_names = self._collect_attribute_chain(query)
-        base_class = self._extract_base_class(query)
+        root_element = self._resolve_root_element(query)
 
+        return self._walk_attribute_chain(root_element, attribute_names)
+
+    def _resolve_root_element(self, attribute: Attribute) -> Any:
+        """
+        The FROM element the root of an attribute chain ranges over.
+
+        :param attribute: The outermost attribute of the chain.
+        :raises AttributeChainRootHasNoTypeError: When the root has no type to map.
+        """
+        root = self._root_variable_of(attribute)
+
+        if root is not None and self.variable_from_elements.is_bound(root):
+            return self.variable_from_elements.resolve(root)
+
+        base_class = self._extract_base_class(attribute)
         if base_class is None:
-            raise AttributeChainRootHasNoTypeError(query)
+            raise AttributeChainRootHasNoTypeError(attribute)
 
-        current_dao = self._require_dao_class(base_class)
+        return self._require_dao_class(base_class)
 
-        return self._walk_attribute_chain(current_dao, attribute_names)
+    def _collection_relationship_of(self, attribute: Attribute) -> Any:
+        """
+        The mapped collection an attribute chain ends in, if it ends in one.
+
+        :param attribute: The outermost attribute of the chain.
+        :return: The relationship the last hop names, or ``None`` when the chain does
+            not end in a collection.
+        """
+        base_class = self._extract_base_class(attribute)
+        if base_class is None:
+            return None
+
+        current_dao = get_dao_class(base_class)
+        if current_dao is None:
+            return None
+
+        rel_resolver = RelationshipResolver()
+        relationship = None
+
+        for name in self._collect_attribute_chain(attribute):
+            mapper = sqlalchemy.inspection.inspect(current_dao)
+            relationship = rel_resolver._find_relationship(mapper, name)
+            if relationship is None:
+                return None
+            current_dao = relationship.entity.class_
+
+        if relationship is None or not relationship.uselist:
+            return None
+
+        return relationship
+
+    def _is_collection_membership(self, query: Comparator) -> bool:
+        """
+        Whether a comparator asks that something be a member of a mapped collection.
+
+        :param query: The comparator query.
+        """
+        if query.operation.__name__ not in ("contains", "in_"):
+            return False
+
+        if not isinstance(query.left, Attribute) or isinstance(query.right, Literal):
+            return False
+
+        return self._collection_relationship_of(query.left) is not None
+
+    def _translate_collection_membership(self, query: Comparator) -> Optional[Any]:
+        """
+        Translate a membership condition over a mapped collection into a join.
+
+        The collection is joined from the element its owner ranges over, following an
+        association object through to the members it stands for. A variable that does
+        not range over anything yet is then bound to what the join yields, so every
+        later mention of it reads the members rather than its own table.
+
+        :param query: The comparator query.
+        :return: The condition restricting the member, or ``None`` when binding the
+            member to the joined collection already says what the condition means.
+        """
+        member = query.right
+        binds_the_member = (
+            isinstance(member, Variable)
+            and not isinstance(member, Attribute)
+            and not self.variable_from_elements.is_bound(member)
+        )
+
+        names = self._collect_attribute_chain(query.left)
+        owner_element = self._join_attribute_chain(
+            self._resolve_root_element(query.left), names[:-1]
+        )
+        member_alias = self._join_relationship(
+            owner_element,
+            names[-1],
+            self._require_relationship(owner_element, names[-1]),
+            get_dao_class(member._type_) if binds_the_member else None,
+        )
+
+        if binds_the_member:
+            self.variable_from_elements.bind(member, member_alias)
+            return None
+
+        return member_alias.database_id == self._translate_comparator_operand(member)
 
     def _collect_attribute_chain(self, query: Attribute) -> List[str]:
         """
@@ -1347,25 +1637,122 @@ class EQLTranslator:
             # Return the existing alias so downstream uses the same FROM element
             return self.join_manager.get_alias_for_path(dao_class, attribute_name)
 
+        member_alias = self._join_relationship(dao_class, attribute_name, relationship)
+
+        # Record the logical path against the element the members actually live in, so a
+        # later traversal of the same path resolves to the same FROM element
+        self.join_manager.add_path_join(dao_class, attribute_name, member_alias)
+
+        return member_alias
+
+    def _join_relationship(
+        self,
+        dao_class: type,
+        attribute_name: str,
+        relationship: Any,
+        member_dao: Optional[type] = None,
+    ) -> Any:
+        """
+        Join a relationship's target under an alias of its own.
+
+        Joins whatever the query already joins, so two variables ranging over one
+        collection each reach a member of it rather than sharing the single element that
+        collection's path was first joined under.
+
+        :param dao_class: The DAO class or alias the relationship is defined on.
+        :param attribute_name: The relationship attribute name on that element.
+        :param relationship: The SQLAlchemy relationship object.
+        :param member_dao: The class the members are read as, when that is narrower than
+            the one the collection is declared to hold.
+        :return: The element holding what the relationship names.
+        """
         # Resolve target DAO class and create a dedicated alias for this path
         target_dao = relationship.entity.class_
-        from sqlalchemy.orm import aliased
-
-        aliased_target = aliased(target_dao, flat=True)
+        alias_class = self._read_as(target_dao, member_dao)
+        aliased_target = aliased(alias_class, flat=True)
 
         # Relationship attribute on the source class, e.g., PoseDAO.position
         relationship_attr = getattr(dao_class, attribute_name)
 
         # Perform the join using the relationship attribute so SQLAlchemy
         # determines the ON clause, while we control aliasing of the right side
-        self.sql_query = self.sql_query.join(aliased_target, relationship_attr)
+        self.sql_query = self.sql_query.join(
+            aliased_target,
+            self._onclause(relationship_attr, alias_class, aliased_target, target_dao),
+        )
 
-        # Record both the logical path and the table as joined to avoid duplicates
-        self.join_manager.add_path_join(dao_class, attribute_name, aliased_target)
         # Track underlying table class as joined; alias class type differs but table is the same
         self.join_manager.add_table_join(target_dao)
 
-        return aliased_target
+        return self._join_association_target(target_dao, aliased_target, member_dao)
+
+    @staticmethod
+    def _read_as(declared: type, requested: Optional[type]) -> type:
+        """
+        The class members of a collection are read as.
+
+        A collection declares what it holds, and a variable ranging over it may name
+        something narrower; reading the members as the wider class loses whatever the
+        narrower one adds.
+
+        :param declared: The class the collection is declared to hold.
+        :param requested: The class a variable over those members names, if any.
+        """
+        if requested is None or not issubclass(requested, declared):
+            return declared
+
+        return requested
+
+    @staticmethod
+    def _onclause(
+        relationship_attr: Any, alias_class: type, aliased_target: Any, declared: type
+    ) -> Any:
+        """
+        What a join of a relationship compares, narrowed to the alias where it differs.
+
+        :param relationship_attr: The relationship attribute being joined.
+        :param alias_class: The class the target was aliased as.
+        :param aliased_target: The alias itself.
+        :param declared: The class the relationship is declared to reach.
+        """
+        if alias_class is declared:
+            return relationship_attr
+
+        return relationship_attr.of_type(aliased_target)
+
+    def _join_association_target(
+        self, target_dao: type, aliased_target: Any, member_dao: Optional[type] = None
+    ) -> Any:
+        """
+        Follow an association object through to the members it stands for.
+
+        A collection whose members may repeat is mapped as an association object rather
+        than a plain secondary table, so joining the relationship alone reaches the rows
+        that record the membership instead of the members themselves.
+
+        :param target_dao: The DAO class the relationship points at.
+        :param aliased_target: The alias that class was joined under.
+        :return: The alias holding the members, which is the given one where the
+            relationship already points at them.
+        """
+        if not issubclass(target_dao, AssociationDataAccessObject):
+            return aliased_target
+
+        association = sqlalchemy.inspection.inspect(target_dao)
+        member_relationship = association.relationships[
+            AssociationDataAccessObject.target.fget.__name__
+        ]
+        declared = member_relationship.entity.class_
+        alias_class = self._read_as(declared, member_dao)
+        member_alias = aliased(alias_class, flat=True)
+        member_attribute = getattr(aliased_target, member_relationship.key)
+        self.sql_query = self.sql_query.join_from(
+            aliased_target,
+            member_alias,
+            self._onclause(member_attribute, alias_class, member_alias, declared),
+        )
+        self.join_manager.add_table_join(declared)
+        return member_alias
 
     def _translate_exists(self, exists_node: EQLExists) -> Any:
         """

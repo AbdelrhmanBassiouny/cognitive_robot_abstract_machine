@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import List
 
-from typing_extensions import Optional, Any
+from typing_extensions import Optional, Any, List
 
 from krrood.entity_query_language.factories import (
     a,
@@ -32,11 +32,12 @@ from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from coraplex.robot_plans.mixins import ManipulatesBodies
 from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass
-class TransportAction(ActionDescription):
+class TransportAction(ActionDescription, ManipulatesBodies):
     """
     Transports an object to a position using an arm.
     """
@@ -96,6 +97,13 @@ class TransportAction(ActionDescription):
             ),
             OpenAction(handle, self.arm),
         ]
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator.root]
 
     @property
     def _action_plan(self) -> PlanNode:
@@ -163,7 +171,7 @@ class TransportAction(ActionDescription):
 
 
 @dataclass
-class PickAndPlaceAction(ActionDescription):
+class PickAndPlaceAction(ActionDescription, ManipulatesBodies):
     """
     Transports an object to a position using an arm without moving the base of
     the robot.
@@ -189,6 +197,13 @@ class PickAndPlaceAction(ActionDescription):
     """
 
     @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator.root]
+
+    @property
     def _action_plan(self) -> PlanNode:
         return sequential(
             [
@@ -208,7 +223,7 @@ class PickAndPlaceAction(ActionDescription):
 
 
 @dataclass
-class MoveAndPlaceAction(ActionDescription):
+class MoveAndPlaceAction(ActionDescription, ManipulatesBodies):
     """
     Navigate to `standing_position`, then turn towards the target and place the
     object.
@@ -237,6 +252,13 @@ class MoveAndPlaceAction(ActionDescription):
     """
 
     @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator]
+
+    @property
     def _action_plan(self) -> PlanNode:
         return sequential(
             [
@@ -248,7 +270,7 @@ class MoveAndPlaceAction(ActionDescription):
 
 
 @dataclass
-class MoveAndPickUpAction(ActionDescription):
+class MoveAndPickUpAction(ActionDescription, ManipulatesBodies):
     """
     Navigate to `standing_position`, then turn towards the object and pick it
     up.
@@ -275,6 +297,13 @@ class MoveAndPickUpAction(ActionDescription):
     """
     Keep the joint states of the robot the same during the navigation.
     """
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator.root]
 
     @property
     def _action_plan(self) -> PlanNode:
