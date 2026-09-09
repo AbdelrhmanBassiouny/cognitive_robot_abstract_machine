@@ -157,7 +157,7 @@ class QuestionSet:
                     answer=str(answer),
                     latency=latency,
                     moment=asked_at - batch_started_at,
-                    question_type=type(question),
+                    question=question,
                     answered_correctly=question.values_agree(
                         answer, question.ground_truth(source)
                     ),

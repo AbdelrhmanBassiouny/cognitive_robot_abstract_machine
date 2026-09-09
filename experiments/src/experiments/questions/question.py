@@ -16,6 +16,10 @@ from enum import StrEnum
 
 import numpy as np
 from coraplex.datastructures.enums import ExecutionType
+from krrood.adapters.json_serializer import (
+    DataclassJSONSerializer,
+    SubclassJSONSerializer,
+)
 from krrood.entity_query_language.query.query import Query
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -25,7 +29,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world_description.world_entity import Body
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
-from typing_extensions import Any, ClassVar, Generic, List, Tuple, TypeVar
+from typing_extensions import Any, ClassVar, Dict, Generic, List, Tuple, TypeVar
 
 # %% what a question is about, and what answering it exercises
 
@@ -135,12 +139,18 @@ What a question answers with.
 
 
 @dataclass
-class Question(Generic[SourceType, AnswerType], SubClassSafeGeneric, ABC):
+class Question(
+    SubclassJSONSerializer, Generic[SourceType, AnswerType], SubClassSafeGeneric, ABC
+):
     """
     One question of the frozen set, asked of one memory.
 
     ..note:: The memory a question is asked of is its bound source type, and the level it
         exercises follows from that memory rather than being stated per question.
+
+    ..note:: Inherits :class:`~krrood.adapters.json_serializer.SubclassJSONSerializer` so
+        a specific question instance - not only which subclass it is - can be persisted
+        as the question that produced a scored, recorded query.
     """
 
     bucket: ClassVar[Bucket]
@@ -259,6 +269,19 @@ class Question(Generic[SourceType, AnswerType], SubClassSafeGeneric, ABC):
                 cls.values_agree(one, other) for one, other in zip(answered, true)
             )
         return answered == true
+
+    def to_json(self) -> Dict[str, Any]:
+        """
+        Serialize this question's own fields, which is what a recorded, scored query
+        needs to keep - not only which subclass answered it, but which instance, since a
+        long-term-memory question's own fields (which episode it is about) are part of
+        what it asked.
+        """
+        return DataclassJSONSerializer.to_json(self)
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Question:
+        return DataclassJSONSerializer.from_json(data, clazz=cls, **kwargs)
 
 
 # %% what a scene fills in

@@ -18,7 +18,7 @@ from coraplex.plans.plan import Plan
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.world import World
-from typing_extensions import TYPE_CHECKING, List, Optional, Sequence, Type
+from typing_extensions import TYPE_CHECKING, List, Optional, Sequence
 
 from experiments.questions.question import BloomLevel, Bucket, Question
 from experiments.scenarios.trial import TrialOutcome
@@ -127,11 +127,13 @@ class RecordedQuery:
     Which backend answered each predicate of the query.
     """
 
-    question_type: Optional[Type[Question]] = None
+    question: Optional[Question] = None
     """
     The question of the frozen set this query answers, or None if it is an ordinary
-    query. Carries the bucket and the level of Bloom's taxonomy the question is scored
-    under, read off the class rather than duplicated here.
+    query. The instance that was actually asked, not only its class: a long-term-memory
+    question's own fields (which episode it is about) are part of what it asked, and
+    ``Question`` is a :class:`~krrood.adapters.json_serializer.SubclassJSONSerializer` so
+    this round-trips through the database as JSON.
     """
 
     answered_correctly: Optional[bool] = None
@@ -146,7 +148,7 @@ class RecordedQuery:
         The kind of thing this query asks about, or None if it does not answer a
         question of the frozen set.
         """
-        return self.question_type.bucket if self.question_type else None
+        return self.question.bucket if self.question else None
 
     @property
     def bloom_level(self) -> Optional[BloomLevel]:
@@ -154,7 +156,7 @@ class RecordedQuery:
         The level of Bloom's taxonomy this query exercises, or None if it does not
         answer a question of the frozen set.
         """
-        return self.question_type.bloom_level if self.question_type else None
+        return self.question.bloom_level if self.question else None
 
 
 @dataclass

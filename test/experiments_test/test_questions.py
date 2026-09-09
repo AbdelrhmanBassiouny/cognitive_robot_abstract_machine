@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
+from krrood.adapters.json_serializer import from_json, to_json
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -40,6 +41,7 @@ from experiments.questions.question import (
 )
 from experiments.questions.question import QuestionedThings
 from experiments.questions.question_set import QuestionSet
+from experiments.questions.long_term_memory import AnythingMovedInTheEpisode
 from experiments.questions.working_memory import (
     AnythingMoved,
     HeldInTheHand,
@@ -56,6 +58,7 @@ from experiments.questions.working_memory import (
     SideOfAnotherObject,
     SupportingSurfaces,
 )
+from krrood.adapters.json_serializer import from_json, to_json
 
 TABLE_COLOUR = Color(0.5, 0.3, 0.1)
 """
@@ -440,3 +443,29 @@ def test_every_question_of_the_set_answers_its_own_ground_truth(
 def test_every_question_of_the_set_reads_as_a_question(scene: QuestionedScene):
     for question in scene.question_set.questions:
         assert question.english.endswith("?")
+
+
+# %% persisted as the question actually asked, not only its class
+
+
+def test_a_question_with_no_fields_of_its_own_round_trips_by_class_alone():
+    """
+    A working-memory question typically adds nothing beyond its class, so persisting it
+    is persisting which subclass it is.
+    """
+    restored = from_json(to_json(ObjectsSeen()))
+
+    assert type(restored) is ObjectsSeen
+
+
+def test_a_question_with_its_own_fields_round_trips_with_them():
+    """
+    A long-term-memory question's own fields are part of what it asked - here, which
+    episode - so persisting only the class would lose it.
+    """
+    asked = AnythingMovedInTheEpisode(episode_identifier="episode-42")
+
+    restored = from_json(to_json(asked))
+
+    assert type(restored) is AnythingMovedInTheEpisode
+    assert restored.episode_identifier == "episode-42"

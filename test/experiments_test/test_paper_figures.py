@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 from coraplex.datastructures.enums import ExecutionType
-from typing_extensions import Type
 
 from experiments.episodes.episode import (
     AnsweredPredicate,
@@ -144,7 +143,7 @@ def query(
     answer: str,
     latency: float,
     *backends: str,
-    question_type: Type[Question] | None = None,
+    question: Question | None = None,
     answered_correctly: bool | None = None,
 ) -> RecordedQuery:
     """
@@ -154,9 +153,9 @@ def query(
     :param answer: The answer as it was rendered.
     :param latency: Seconds the query took to answer.
     :param backends: The backend each of its predicates was routed to.
-    :param question_type: The question of the frozen set this query answers, if it
-        answers one. Carries its bucket and Bloom level, rather than the caller naming
-        them separately and risking the two drifting apart.
+    :param question: The question of the frozen set this query answers, if it answers
+        one - the instance that was actually asked, carrying its bucket and Bloom level,
+        rather than the caller naming them separately and risking the two drifting apart.
     :param answered_correctly: Whether this query's answer matched ground truth, if it
         answers a question of the frozen set.
     """
@@ -165,7 +164,7 @@ def query(
         answer=answer,
         latency=latency,
         moment=1.0,
-        question_type=question_type,
+        question=question,
         answered_correctly=answered_correctly,
         answered_predicates=[
             AnsweredPredicate(predicate_name="supported_by", backend_name=backend)
