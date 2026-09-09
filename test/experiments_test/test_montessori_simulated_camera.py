@@ -447,13 +447,71 @@ def test_every_piece_the_world_places_on_the_table_is_found(
     assert reported >= {piece.shape_category for piece in pieces_in(montessori_world)}
 
 
+HOLE_PLACING_TOLERANCE = 0.006
+"""
+How far, in metres, a hole seen in a rendering may stand from the one the twin cut.
+
+The layout is fitted as one piece, so every hole is placed by all six at once and none
+of them is placed on its own: measured on this scene the worst of the six lands 5.4 mm
+from the hole it was cut for and the middle of them 1.2 mm.
+"""
+
+
+def holes_cut_in(montessori_world: MontessoriWorld) -> List[ShapeSortingHole]:
+    """
+    Every hole the twin cut through the board's lid.
+
+    :param montessori_world: The world to read.
+    """
+    return list(
+        montessori_world.world.get_semantic_annotations_by_type(ShapeSortingHole)
+    )
+
+
+def test_the_board_is_found_by_the_holes_the_camera_measures_through_it(
+    montessori_world: MontessoriWorld, simulated_frame: RgbdFrame
+) -> None:
+    """
+    A look at the simulated scene finds the board, and puts every hole where the twin
+    cut the hole of that same category.
+
+    Nothing the picture's own colours carry says where they are: a rendered hole's walls
+    are lit like the lid they are cut through, where a real one falls into shadow. What
+    a look has of them there is what the camera measured -- the drawer under the lid,
+    ten millimetres down.
+    """
+    scene = RecordedFrame(
+        pipeline=perception_pipeline(montessori_world), frame=simulated_frame
+    ).scene()
+    cut = holes_cut_in(montessori_world)
+
+    assert scene.board is not None
+    assert len(scene.board.holes) == len(cut)
+    for seen in scene.board.holes:
+        middle = np.asarray(seen.outline, dtype=float).mean(axis=0)
+        nearest = min(cut, key=lambda hole: distance_to(hole, middle))
+        assert seen.category is nearest.shape_category
+        assert distance_to(nearest, middle) < HOLE_PLACING_TOLERANCE
+
+
+def distance_to(hole: ShapeSortingHole, middle: np.ndarray) -> float:
+    """
+    How far a place on the lid lies from a hole the twin cut, in metres.
+
+    :param hole: The hole the twin cut.
+    :param middle: The place, as a world-frame ``(x, y)`` point.
+    """
+    position = hole.root.global_transform.to_position()
+    return float(
+        np.linalg.norm(np.array([float(position.x), float(position.y)]) - middle)
+    )
+
+
 @pytest.mark.xfail(
     strict=True,
-    reason="Two things, neither of them the frame. Occupancy drops both readings of "
-    "every place the two detectors agree on too closely, which on a rendering is three "
-    "of the four pieces (see the test above); and the board's holes are cut through an "
-    "80 mm blank whose walls render in the board's own colour, so a look shows no "
-    "opening for the board to be found by. See icra-foundation's roadmap.md.",
+    reason="Occupancy drops both readings of every place the two detectors agree on too "
+    "closely, which on a rendering is three of the four pieces (see the test above). "
+    "See icra-foundation's roadmap.md.",
 )
 def test_every_piece_on_the_table_is_reported_once_with_its_own_category(
     montessori_world: MontessoriWorld, simulated_frame: RgbdFrame

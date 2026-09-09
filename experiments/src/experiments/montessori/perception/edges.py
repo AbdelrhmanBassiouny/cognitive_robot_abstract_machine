@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
+from typing_extensions import Optional
 
 from experiments.montessori.perception.orthophoto import Orthophoto, WorkspaceRegion
 
@@ -63,7 +64,9 @@ class EdgeDistances:
     """
 
     @classmethod
-    def of(cls, orthophoto: Orthophoto) -> EdgeDistances:
+    def of(
+        cls, orthophoto: Orthophoto, together_with: Optional[np.ndarray] = None
+    ) -> EdgeDistances:
         """
         Find the edges in a rectified view and measure the distance to them.
 
@@ -74,6 +77,8 @@ class EdgeDistances:
         all in a brightness image.
 
         :param orthophoto: The rectified view to read.
+        :param together_with: Edges the picture's own colours do not carry, as a
+            ``uint8`` mask 255 along one, to be read as edges beside them.
         """
         smoothed = cv2.GaussianBlur(
             orthophoto.image, (SMOOTHING_WIDTH, SMOOTHING_WIDTH), 0
@@ -83,6 +88,8 @@ class EdgeDistances:
             edges = np.maximum(
                 edges, cv2.Canny(channel, WEAK_EDGE_STEP, STRONG_EDGE_STEP)
             )
+        if together_with is not None:
+            edges = np.maximum(edges, together_with)
         return cls(
             distances=cv2.distanceTransform(255 - edges, cv2.DIST_L2, 3)
             * orthophoto.region.resolution,

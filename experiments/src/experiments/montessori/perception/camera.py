@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
+from functools import cached_property
 from enum import StrEnum
 
 import cv2
@@ -308,6 +309,30 @@ class RgbdFrame:
         nothing can be measured in however well the world describes it.
         """
         return bool((self.depth > 0.0).any())
+
+    @cached_property
+    def measured_height(self) -> np.ndarray:
+        """
+        How high the surface seen at each pixel stands, shape ``(height, width)`` in
+        metres above the origin of the frame poses are reported in; NaN where the sensor
+        returned no reading.
+
+        What the picture says about the shape of the scene rather than about its colour.
+        An opening cut through a surface is a place the camera measures a floor well
+        below that surface, however its walls happen to be lit -- which is what a hole
+        looks like to a camera that a shadow on the same surface does not.
+        """
+        rows, columns = np.indices(self.depth.shape)
+        points = self.intrinsics.deproject(
+            np.stack([columns.ravel(), rows.ravel()], axis=1), self.depth.ravel()
+        )
+        heights = (
+            points @ self.reference_frame_T_camera[2, :3]
+            + self.reference_frame_T_camera[2, 3]
+        )
+        return np.where(
+            self.depth > 0.0, heights.reshape(self.depth.shape), np.nan
+        ).astype(np.float32)
 
     def project(self, points: np.ndarray) -> np.ndarray:
         """

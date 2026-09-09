@@ -16,7 +16,11 @@ coloured reflection of every piece back at the camera, so a coloured region is o
 a place worth searching. Which piece stands there is settled by fitting the pieces this
 set contains to the edges seen around that place. Depth is asked how tall a piece stands
 and usually cannot say: the same reflections leave the depth image with large dropouts
-and centimetre-scale noise, far too coarse to measure a thirty millimetre piece.
+and centimetre-scale noise, far too coarse to measure a thirty millimetre piece. It is
+also asked whether a surface is open where it looks solid, which is a step down of a
+centimetre to the drawer under the board's lid: a rendering answers that exactly and a
+capture of this table does not, so the darkness of a hole is read beside its depth rather
+than replaced by it.
 """
 
 from __future__ import annotations
@@ -382,6 +386,61 @@ slot, and above the slivers of shadow that fall along the lid's own edges.
 """
 
 
+# %% what a look found cut through a surface
+
+
+@dataclass(frozen=True)
+class PerforatedSurface:
+    """
+    One surface in view and the hole-sized openings found in it.
+    """
+
+    dark: np.ndarray
+    """
+    Mask of the openings the picture shows as dark patches, 255 inside one and 0
+    elsewhere.
+    """
+
+    hollow: np.ndarray
+    """
+    Mask of the openings the camera measured a floor well below, 255 inside one and 0
+    elsewhere.
+    """
+
+    middles: List[PlanarPoint]
+    """
+    Where each opening that could lie on one board stands, in world coordinates.
+    """
+
+    @property
+    def middle(self) -> PlanarPoint:
+        """
+        Roughly where the board stands, which is where its openings put it.
+        """
+        middle = np.array([(patch.x, patch.y) for patch in self.middles]).mean(axis=0)
+        return PlanarPoint(float(middle[0]), float(middle[1]))
+
+    @property
+    def rims(self) -> np.ndarray:
+        """
+        Mask of the rim of every opening the picture's own colours do not show, 255
+        along one and 0 elsewhere.
+
+        A surface ends at the rim of an opening cut through it, so a rim is an edge of
+        the picture however alike its two sides are coloured. In a rendering they are
+        exactly alike -- a hole's walls are lit like the lid they are cut through -- and
+        the layout has nothing else there to be fitted to. A rim that is dark on one
+        side is already an edge the picture carries, and drawing a second one over it
+        would weigh that rim against the rest of the picture differently.
+        """
+        contours, _ = cv2.findContours(
+            self.hollow & ~self.dark, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        rims = np.zeros_like(self.hollow)
+        cv2.drawContours(rims, contours, -1, 255, 1)
+        return rims
+
+
 # %% detectors
 
 
@@ -393,10 +452,13 @@ class BoardDetector:
 
     The board is picked out by the holes themselves rather than by being the largest
     thing in view: an arm reaching over the table is both larger and just as strongly
-    coloured, but only the board is a surface with several openings cut through it.
+    coloured, but only the board is a surface with several openings cut through it. An
+    opening reads as a dark patch or as a patch the camera measured a floor well below,
+    and either will do: a real hole falls into shadow, and a rendered one is lit like
+    the surface it is cut through but is just as deep.
 
     What those openings are is then settled by fitting the board's whole known layout
-    over them at once, rather than by measuring each dark patch and deciding from its
+    over them at once, rather than by measuring each patch and deciding from its
     proportions what shape it is. The patches only say roughly where to start.
     """
 
@@ -448,7 +510,7 @@ class BoardDetector:
 
     hole_size: SizeRange = HOLE_SIZE
     """
-    Area a dark patch may cover and still be worth taking as a hole to start from.
+    Area a patch may cover and still be worth taking as a hole to start from.
     """
 
     minimum_hole_count: int = 3
@@ -456,23 +518,36 @@ class BoardDetector:
     How many holes a surface must have cut through it to be taken for the board.
     """
 
+    minimum_hole_depth: float = 0.005
+    """
+    How far, in metres, the camera must measure below a surface before it is taken to be
+    open there rather than solid.
+
+    Half the way down to what a hole in this board opens onto, which is the drawer under
+    the lid rather than the table: measured in the twin, the drawer's top stands ten
+    millimetres below the lid the holes are cut through. A hole is that shallow to a
+    camera whatever the board is made of, which is why a look also reads its darkness --
+    a depth image with the centimetre-scale noise the shipped captures carry says
+    nothing at ten millimetres, and a rendered one says it exactly.
+    """
+
     minimum_lid_area: float = 0.01
     """
     Area, in square metres, a surface must cover before its holes are looked for.
 
     The board's lid covers about three hundred square centimetres; this keeps the search
-    off the loose pieces, whose own shading would otherwise split into hole-sized dark
+    off the loose pieces, whose own shading would otherwise split into hole-sized
     patches.
     """
 
     seed_reach: float = 0.04
     """
-    How far, in metres, the fit may move the board from where the dark patches put it.
+    How far, in metres, the fit may move the board from where the openings put it.
 
-    The patches are whatever the lighting made dark and are not the holes, so their
-    middle is only ever a place to start: measured on the shipped captures they lie
-    within about ten millimetres of the board's true centre, and this leaves room for
-    several times that.
+    The patches are whatever the lighting made dark or the depth found hollow and are
+    not the holes, so their middle is only ever a place to start: measured on the
+    shipped captures they lie within about ten millimetres of the board's true centre,
+    and this leaves room for several times that.
     """
 
     def detect(
@@ -485,13 +560,17 @@ class BoardDetector:
 
         :param orthophoto: The rectified view of the lid's plane.
         :param reference_frame: Frame the resulting poses are expressed in.
-        :return: The board and its holes, or None if no surface in view had enough dark
-            patches cut through it to be a board.
+        :return: The board and its holes, or None if no surface in view had enough
+            openings cut through it to be a board.
         """
-        seed = self._seed_from_dark_patches(orthophoto)
-        if seed is None:
+        perforated = self._perforations_in(orthophoto)
+        if perforated is None:
             return None
-        placement = self._fit(self.layout, EdgeDistances.of(orthophoto), seed)
+        placement = self._fit(
+            self.layout,
+            EdgeDistances.of(orthophoto, together_with=perforated.rims),
+            perforated.middle,
+        )
         return self._board_at(placement, orthophoto, reference_frame)
 
     def measure_scale(
@@ -516,23 +595,16 @@ class BoardDetector:
         :return: The size that best explains the openings, or None if no surface in view
             carried enough of them to measure against.
         """
-        seed = self._seed_from_dark_patches(orthophoto)
-        if seed is None:
+        perforated = self._perforations_in(orthophoto)
+        if perforated is None:
             return None
-        openings = np.array(
-            [
-                (patch.x, patch.y)
-                for patch in self._board_sized_cluster(
-                    self._dark_patches_within(
-                        self._most_coloured_surface(orthophoto), orthophoto
-                    )
-                )
-            ]
-        )
-        edges = EdgeDistances.of(orthophoto)
+        openings = np.array([(patch.x, patch.y) for patch in perforated.middles])
+        edges = EdgeDistances.of(orthophoto, together_with=perforated.rims)
         return min(
             candidates,
-            key=lambda scale: self._gap_to_openings(scale, edges, seed, openings),
+            key=lambda scale: self._gap_to_openings(
+                scale, edges, perforated.middle, openings
+            ),
         )
 
     def _gap_to_openings(
@@ -606,29 +678,26 @@ class BoardDetector:
             ),
         )
 
-    def _seed_from_dark_patches(self, orthophoto: Orthophoto) -> Optional[PlanarPoint]:
+    def _perforations_in(self, orthophoto: Orthophoto) -> Optional[PerforatedSurface]:
         """
-        Roughly where in view the board stands, from the hole-sized dark patches on the
-        most perforated surface.
+        The openings of whichever surface in view carries the most of them.
 
-        Which patch is which hole is not asked, and neither is whether a patch is a hole
-        at all: the layout fit answers both, and a middle is all it needs to start from.
+        Which opening is which hole is not asked, and neither is whether an opening is a
+        hole at all: the layout fit answers both, and where they stand is all it needs
+        to start from.
 
         :param orthophoto: The rectified view of the lid's plane.
-        :return: The middle of the largest board-sized group of patches, or None if no
-            surface in view carried enough of them.
+        :return: That surface's openings, or None if no surface in view carried enough
+            of them to be a board.
         """
-        best: List[PlanarPoint] = []
+        best: Optional[PerforatedSurface] = None
         for contour in self._surfaces_large_enough_to_be_a_lid(orthophoto):
-            patches = self._board_sized_cluster(
-                self._dark_patches_within(contour, orthophoto)
-            )
-            if len(patches) > len(best):
-                best = patches
-        if len(best) < self.minimum_hole_count:
+            found = self._openings_within(contour, orthophoto)
+            if best is None or len(found.middles) > len(best.middles):
+                best = found
+        if best is None or len(best.middles) < self.minimum_hole_count:
             return None
-        middle = np.array([(patch.x, patch.y) for patch in best]).mean(axis=0)
-        return PlanarPoint(float(middle[0]), float(middle[1]))
+        return best
 
     def _surfaces_large_enough_to_be_a_lid(
         self, orthophoto: Orthophoto
@@ -650,43 +719,85 @@ class BoardDetector:
             >= self.minimum_lid_area
         ]
 
-    def _most_coloured_surface(self, orthophoto: Orthophoto) -> np.ndarray:
-        """
-        The largest surface in view that could be the board's lid.
-
-        :param orthophoto: The rectified view of the lid's plane.
-        :return: Its contour, in rectified pixels.
-        """
-        return max(
-            self._surfaces_large_enough_to_be_a_lid(orthophoto),
-            key=lambda contour: RectifiedFootprint.from_contour(
-                contour, orthophoto.region.resolution
-            ).area,
-        )
-
-    def _dark_patches_within(
+    def _openings_within(
         self, surface: np.ndarray, orthophoto: Orthophoto
-    ) -> List[PlanarPoint]:
+    ) -> PerforatedSurface:
         """
-        Where the hole-sized dark patches on one candidate surface lie.
+        The hole-sized openings in one candidate surface, read from its darkness and
+        from its depth alike.
 
-        The surface is filled in first, so that a patch is a dark spot within a solid
+        The surface is filled in first, so that an opening is a patch within a solid
         region rather than a gap that the surface's own outline has to enclose; a hole
         broken open at the board's edge would otherwise be missed entirely.
 
         :param surface: The candidate surface's own contour, in rectified pixels.
         :param orthophoto: The rectified view it was found in.
-        :return: The middle of each patch that could be a hole, in world coordinates.
+        :return: The surface's openings, and where the ones that could lie on one board
+            stand.
         """
         region = _filled(surface, orthophoto)
         # Left unopened on purpose: the narrowest hole on the board is five millimetres
         # across, which the speckle-removing kernel would eat entirely. Slivers are
         # rejected by area instead, in :attr:`hole_size`.
-        dark = self.colors.dark_mask(orthophoto, region)
-        contours, _ = cv2.findContours(dark, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        dark = self._hole_sized_parts(
+            self.colors.dark_mask(orthophoto, region), orthophoto
+        )
+        hollow = self._hole_sized_parts(
+            orthophoto.opening_mask(self.minimum_hole_depth) & region, orthophoto
+        )
+        return PerforatedSurface(
+            dark=dark,
+            hollow=hollow,
+            middles=self._board_sized_cluster(
+                self._middles_of(dark | hollow, orthophoto)
+            ),
+        )
 
+    def _middles_of(
+        self, openings: np.ndarray, orthophoto: Orthophoto
+    ) -> List[PlanarPoint]:
+        """
+        Where each of a surface's openings stands.
+
+        :param openings: Mask of the openings, 255 inside one and 0 elsewhere.
+        :param orthophoto: The rectified view they were found in.
+        :return: The middle of each, in world coordinates.
+        """
         return [
             orthophoto.contour_center(contour)
+            for contour in self._hole_sized(openings, orthophoto)
+        ]
+
+    def _hole_sized_parts(self, mask: np.ndarray, orthophoto: Orthophoto) -> np.ndarray:
+        """
+        A mask with only the parts of it a hole's size left standing.
+
+        Each way of reading an opening is sized before the two are put together, because
+        each also marks something that is not a hole at all and marks it far larger than
+        one: the split by brightness always divides a surface in two whether or not
+        anything is cut through it, and a plane stated above the surface actually lying
+        in it is measured below along the whole of that surface. Either left whole
+        swallows what the other found.
+
+        :param mask: The mask to read, 255 where it marks something and 0 elsewhere.
+        :param orthophoto: The rectified view it was read in.
+        :return: A ``uint8`` mask, 255 on the hole-sized parts and 0 elsewhere.
+        """
+        parts = np.zeros_like(mask)
+        cv2.drawContours(parts, self._hole_sized(mask, orthophoto), -1, 255, cv2.FILLED)
+        return parts
+
+    def _hole_sized(self, mask: np.ndarray, orthophoto: Orthophoto) -> List[np.ndarray]:
+        """
+        Those parts of a mask that cover as much ground as a hole does.
+
+        :param mask: The mask to read, 255 where it marks something and 0 elsewhere.
+        :param orthophoto: The rectified view it was read in.
+        :return: Their contours, in rectified pixels.
+        """
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return [
+            contour
             for contour in contours
             if self.hole_size.admits(
                 RectifiedFootprint.from_contour(contour, orthophoto.region.resolution)
@@ -697,11 +808,11 @@ class BoardDetector:
         """
         Keep only the patches that could lie on one board.
 
-        A surface that has merged with an arm reaching over the table carries dark
-        patches scattered far beyond any board, so they are grouped by how close
-        together they lie and only the largest group that still fits on a board is kept.
+        A surface that has merged with an arm reaching over the table carries patches
+        scattered far beyond any board, so they are grouped by how close together they
+        lie and only the largest group that still fits on a board is kept.
 
-        :param patches: Every hole-sized dark patch found on one surface.
+        :param patches: Every hole-sized patch found on one surface.
         :return: The largest group of them that fits within one board's lid.
         """
         if not patches:
@@ -721,7 +832,7 @@ class BoardDetector:
         long as the group still fits on a single lid.
 
         :param seed: World-frame ``(x, y)`` of the patch to grow from.
-        :param patches: Every hole-sized dark patch found on one surface.
+        :param patches: Every hole-sized patch found on one surface.
         :param centers: Those patches' world-frame ``(x, y)``, in the same order.
         :return: The grown group.
         """
