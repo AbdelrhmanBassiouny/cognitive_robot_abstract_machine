@@ -13,7 +13,7 @@ from coraplex.plans.failures import PlanFailure
 if TYPE_CHECKING:
     from coraplex.plans.designator import Designator
     from coraplex.robot_plans.actions.base import ActionDescription
-    from semantic_digital_twin.robots.robot_parts import AbstractRobot
+    from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
     from semantic_digital_twin.world_description.world_entity import (
         KinematicStructureEntity,
         SemanticAnnotation,
@@ -166,10 +166,18 @@ class ConditionNotSatisfied(PlanFailure):
 @dataclass
 class MotionDidNotFinish(PlanFailure):
 
-    failed_motions: List[MotionStatechartNode]
+    unfinished_motions: List[MotionStatechartNode]
+    """
+    The nodes that did not succeed, whether they failed, were interrupted or never
+    ended.
+    """
 
     def error_message(self) -> str:
-        return f"Motion did not finish, following motions failed: {self.failed_motions}"
+        reports = ", ".join(
+            f"{motion.unique_name} ({motion.life_cycle_state.name})"
+            for motion in self.unfinished_motions
+        )
+        return f"Motion did not finish, following motions did not succeed: {reports}"
 
     def suggest_correction(self) -> str:
         return ""
@@ -316,3 +324,44 @@ class PerceptionSourceUnavailable(PerceptionException):
 
     def suggest_correction(self) -> str:
         return "start the perception pipeline before running the plan."
+
+
+@dataclass
+class NotOnASingleLevelException(DataclassException):
+    """
+    Raised when an entity is detected to be on None or multiple levels at the same time.
+    """
+
+    message: str
+
+    def error_message(self) -> str:
+        return self.message
+
+    def suggest_correction(self) -> str:
+        return f"Move the robot to a recognized level"
+
+
+@dataclass
+class BodyIsNotHeld(DataclassException):
+    """
+    Raised when a grasp should be read off a body that no end effector is holding.
+    """
+
+    body: KinematicStructureEntity
+    """
+    The body that was expected to be held.
+    """
+
+    end_effector: EndEffector
+    """
+    The end effector that was expected to hold it.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"'{self.body.name}' is not held by '{self.end_effector.name}', so there is "
+            f"no grasp to read from the world."
+        )
+
+    def suggest_correction(self) -> str:
+        return "pick the body up before reading its grasp."

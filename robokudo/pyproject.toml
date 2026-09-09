@@ -36,6 +36,8 @@ dependencies = [
     "pooch",
     "krrood",
     "semantic_digital_twin",
+    "transformers",
+    "faiss-cpu"
 ]
 
 [project.urls]
@@ -48,6 +50,12 @@ include = ["robokudo*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "robokudo._version.__version__"}
+
+[dependency-groups]
+workspace = [
+    "krrood",
+    "semantic_digital_twin",
+]
 
 [project.optional-dependencies]
 dev = [

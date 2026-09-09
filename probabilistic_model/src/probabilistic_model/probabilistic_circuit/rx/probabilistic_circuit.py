@@ -286,7 +286,7 @@ class LeafUnit(Unit):
 
     @property
     def leaves(self) -> List[LeafUnit]:
-        return []
+        return [self]
 
     def log_likelihood(self, events: npt.NDArray):
         self.result_of_current_query = self.distribution.log_likelihood(events)
@@ -560,7 +560,7 @@ class SumUnit(InnerUnit):
     def mount_with_interaction_terms(
         self, other: Self, interaction_model: ProbabilisticModel
     ):
-        """
+        r"""
         Create a distribution that factorizes as follows:
 
         .. math::
@@ -857,9 +857,12 @@ class ProductUnit(InnerUnit):
                 # type hinting
                 subcircuit: Self
 
-                # mount the children of that circuit directly
+                # mount the children of that circuit directly onto this one
                 for sub_subcircuit in subcircuit.subcircuits:
-                    subcircuit.add_subcircuit(sub_subcircuit)
+                    self.add_subcircuit(sub_subcircuit)
+
+                # remove the now-redundant nested product unit
+                self.probabilistic_circuit.remove_node(subcircuit)
 
     def sample(self, *args, **kwargs):
         """
@@ -1580,6 +1583,27 @@ class ProbabilisticCircuit(ProbabilisticModel, SubclassJSONSerializer):
         :param new_variables: The new variables to set.
         """
         self.root.update_variables(new_variables)
+
+    def rename_variables_with_prefix(
+        self, prefix: str, excluded_variables: Iterable[Variable] = ()
+    ) -> None:
+        """
+        Rename each variable in this circuit to include ``prefix`` as a namespace.
+
+        Produces names of the form ``"{prefix}.{variable.name}"``. Variables in
+        ``excluded_variables`` are left unchanged.
+
+        :param prefix: String prefix to prepend to every variable name.
+        :param excluded_variables: Variables that should keep their current names.
+        """
+        variable_renames = {
+            variable: type(variable)(
+                f"{prefix}.{variable.name}", domain=variable.domain
+            )
+            for variable in self.variables
+            if variable not in excluded_variables
+        }
+        self.update_variables(variable_renames)
 
     def is_deterministic(self) -> bool:
         """

@@ -15,11 +15,10 @@ from typing_extensions import get_args, get_origin, Any
 
 from krrood import logger
 from krrood.class_diagrams.utils import resolve_type, get_type_hints_of_object
+from krrood.patterns.caching import clear_memoization_cache, memoize
 from krrood.utils import (
     module_and_class_name,
     own_dataclass_fields,
-    memoize,
-    clear_memoization_cache,
     T,
 )
 
@@ -443,7 +442,8 @@ class ClassDiagram:
             if is_dataclass(get_origin(clazz)):
                 generics.append(clazz)
                 clazz = get_origin(clazz)
-            self.add_node(WrappedClass(clazz=clazz))
+            # pass the bare class so add_node() dedupes it against classes/generics
+            self.add_node(clazz)
         self._create_nodes_for_specialized_generic_type_hints(generics)
         self._create_all_relations()
 
@@ -1131,8 +1131,8 @@ class ClassDiagram:
     def clear(self):
         self._dependency_graph.clear()
         # ``role_chain_starting_from_node`` and ``to_subdiagram_without_inherited_associations`` are
-        # memoized on this instance, so clearing its ``__memo__`` invalidates them once the graph
-        # changes. The per-association ``get_original_source_instance_...`` memo is scoped to each
+        # memoized on this instance, so clearing its cache invalidates them once the graph changes.
+        # The per-association ``get_original_source_instance_...`` memo is scoped to each
         # association instance and is dropped with the graph, so it needs no explicit clearing.
         clear_memoization_cache(self)
 

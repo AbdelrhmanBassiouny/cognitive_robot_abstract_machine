@@ -5,21 +5,17 @@ from dataclasses import dataclass, field
 
 from typing_extensions import (
     Optional,
-    Any,
     TYPE_CHECKING,
-    ClassVar,
     List,
     Type,
 )
 
+from coraplex.plans.plan_entity import PlanEntity
 from krrood.entity_query_language.backends import (
     QueryBackend,
     EntityQueryLanguageGenerativeBackend,
 )
-from krrood.class_diagrams.mocking import MockedClass, MockedModule
-from krrood.utils import memoize
-from coraplex.plans.plan import Plan
-from coraplex.plans.plan_entity import PlanEntity
+from krrood.patterns.caching import memoize
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
 if TYPE_CHECKING:
@@ -122,6 +118,14 @@ class Context(PlanEntity):
     thresholds unset.
     """
 
+    ticks_per_motion: int = 2000
+    """
+    How many ticks each motion of a chart may take before the run gives up on it.
+
+    Also the budget a reachability check gives the same motions, so a pose is not
+    rejected for running out of time sooner than the run that would perform it.
+    """
+
     def __post_init__(self):
         self.debug = self._debug
 
@@ -152,7 +156,7 @@ class Context(PlanEntity):
 
         Memoized (not ``functools.cached_property``) so the cached wrapper, which
         holds a reference to :attr:`world`, can be invalidated explicitly via
-        :func:`krrood.utils.clear_memoization_cache` if the world it was built for is
+        :func:`krrood.patterns.caching.clear_memoization_cache` if the world it was built for is
         ever replaced.
         """
         from giskardpy.middleware.ros2.python_interface import GiskardWrapper

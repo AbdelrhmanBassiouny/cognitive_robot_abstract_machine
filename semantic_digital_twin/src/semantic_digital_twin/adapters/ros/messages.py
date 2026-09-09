@@ -2,7 +2,7 @@ import uuid
 from abc import ABC
 from dataclasses import dataclass, field
 from enum import StrEnum
-from krrood.utils import memoize
+from krrood.patterns.caching import memoize
 from uuid import UUID
 
 from typing_extensions import Dict, Any, Self, List, Optional

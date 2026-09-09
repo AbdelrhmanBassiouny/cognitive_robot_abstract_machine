@@ -39,25 +39,37 @@ class Open(Goal):
 
     goal_joint_state: Optional[float] = field(default=None, kw_only=True)
     """
-    Goal state for the container.
+    Goal state for the mechanism.
 
-    default is maximum joint state.
+    default is the limit this goal drives towards.
     """
 
-    weight: float = field(
+    mechanism_weight: float = field(
+        default=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE, kw_only=True
+    )
+    """
+    Weight of the goal driving the degree of freedom of the mechanism.
+
+    Below collision avoidance, because following a mechanism contorts the arm against
+    whatever is around it, and at a higher weight the solver buys the trajectory by
+    pushing the arm through what is in its way.
+    """
+
+    grasp_weight: float = field(
         default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
     )
+    """
+    Weight of the goal keeping the end effector fixed relative to the grasped part.
+
+    Above collision avoidance, because at a lower weight the solver buys clearance by
+    letting the end effector drift off the grasped part, and the two move independently.
+    """
 
     def expand(self, context: MotionStatechartContext) -> None:
         self.connection = self.environment_link.get_first_parent_connection_of_type(
             ActiveConnection1DOF
         )
-
-        max_position = self.connection.dof.limits.upper.position
-        if self.goal_joint_state is None:
-            self.goal_joint_state = max_position
-        else:
-            self.goal_joint_state = min(max_position, self.goal_joint_state)
+        self.goal_joint_state = self._reachable_goal_joint_state()
 
         self.add_nodes(
             [
@@ -66,23 +78,38 @@ class Open(Goal):
                     goal_state=JointState.from_mapping(
                         {self.connection: self.goal_joint_state}
                     ),
-                    weight=self.weight,
+                    weight=self.mechanism_weight,
                 ),
                 CartesianPose(
                     name="hold handle",
                     root_link=self.environment_link,
                     tip_link=self.tip_link,
                     goal_pose=Pose(reference_frame=self.tip_link),
-                    weight=self.weight,
+                    weight=self.grasp_weight,
                 ),
             ]
         )
 
+    def _reachable_goal_joint_state(self) -> float:
+        """
+        :return: The commanded goal state, clamped to the limit this goal drives towards.
+        """
+        limit = self.connection.dof.limits.upper.position
+        if self.goal_joint_state is None:
+            return limit
+        return min(limit, self.goal_joint_state)
+
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
+        """
+        Build an observation that is True once both the degree of freedom and the grip
+        on the grasped part reached their goals.
+
+        This goal ends neither of them, so a part that keeps running is judged by what
+        it observes now and stops counting once it drifts away from its goal again. A
+        part something *else* ended keeps counting, because its verdict outlasts it.
+        """
         return NodeArtifacts(
-            observation=trinary_logic_and(
-                *[node.observation_variable for node in self.nodes]
-            )
+            observation=trinary_logic_and(*[node.goal_reached for node in self.nodes])
         )
 
 
@@ -97,60 +124,8 @@ class Close(Open):
     :class:`ActiveConnection1DOF`, e.g. drawers, doors, or screw caps.
     """
 
-    tip_link: KinematicStructureEntity = field(kw_only=True)
-    """
-    End effector that is grasping the handle.
-    """
-
-    environment_link: KinematicStructureEntity = field(kw_only=True)
-    """
-    Name of the handle that was grasped.
-    """
-
-    goal_joint_state: Optional[float] = field(default=None, kw_only=True)
-    """
-    Goal state for the mechanism.
-
-    default is minimum joint state.
-    """
-
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
-
-    def expand(self, context: MotionStatechartContext) -> None:
-        self.connection = self.environment_link.get_first_parent_connection_of_type(
-            ActiveConnection1DOF
-        )
-
-        min_position = self.connection.dof.limits.lower.position
+    def _reachable_goal_joint_state(self) -> float:
+        limit = self.connection.dof.limits.lower.position
         if self.goal_joint_state is None:
-            self.goal_joint_state = min_position
-        else:
-            self.goal_joint_state = max(min_position, self.goal_joint_state)
-
-        self.add_nodes(
-            [
-                JointPositionList(
-                    name="hinge goal",
-                    goal_state=JointState.from_mapping(
-                        {self.connection: self.goal_joint_state}
-                    ),
-                    weight=self.weight,
-                ),
-                CartesianPose(
-                    name="hold handle",
-                    root_link=self.environment_link,
-                    tip_link=self.tip_link,
-                    goal_pose=Pose(reference_frame=self.tip_link),
-                    weight=self.weight,
-                ),
-            ]
-        )
-
-    def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
-        return NodeArtifacts(
-            observation=trinary_logic_and(
-                *[node.observation_variable for node in self.nodes]
-            )
-        )
+            return limit
+        return max(limit, self.goal_joint_state)

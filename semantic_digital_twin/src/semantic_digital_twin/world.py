@@ -8,8 +8,9 @@ import threading
 import uuid
 from contextlib import contextmanager
 from copy import deepcopy, copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from functools import wraps, cached_property
+from itertools import chain
 from uuid import UUID
 
 import numpy as np
@@ -36,7 +37,7 @@ from typing_extensions import Type, Set
 
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
-from krrood.utils import memoize, clear_memoization_cache
+from krrood.patterns.caching import memoize, clear_memoization_cache
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.collision_checking.collision_manager import CollisionManager
 from semantic_digital_twin.collision_checking.pybullet_collision_detector import (
@@ -50,6 +51,7 @@ from semantic_digital_twin.exceptions import (
     AlreadyBelongsToAWorldError,
     MissingWorldModificationContextError,
     WorldEntityWithIDNotFoundError,
+    WorldEntityWithIDBelongsToAnotherWorld,
     MissingReferenceFrameError,
     MismatchingPublishChangesAttribute,
     AtomicWorldModificationNotAtomic,
@@ -59,6 +61,8 @@ from semantic_digital_twin.exceptions import (
     WorldContainsOrphanedDegreeOfFreedom,
     BrokenWorldModificationHistoryError,
     MismatchingWorld,
+    InsufficientModificationHistoryError,
+    InvalidRollbackVersionError,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
@@ -128,6 +132,8 @@ logger = logging.getLogger("semantic_digital_twin")
 GenericSemanticAnnotation = TypeVar(
     "GenericSemanticAnnotation", bound=SemanticAnnotation
 )
+
+RelocatableType = TypeVar("RelocatableType")
 
 FunctionStack = List[Tuple[Callable, Dict[str, Any]]]
 
@@ -1592,15 +1598,89 @@ class World(HasSimulatorProperties):
         return self._get_world_entity_by_hash(hash(id))
 
     def get_world_entity_with_id_by_id(self, id: UUID) -> WorldEntityWithID:
-        result = [
-            v
-            for v in self._world_entity_hash_table.values()
-            if isinstance(v, WorldEntityWithID) and v.id == id
-        ]
-        if len(result) == 0:
-            raise WorldEntityWithIDNotFoundError(id)
-        else:
-            return result[0]
+        """
+        Find this world's entity with the given id.
+
+        .. note:: Semantic annotations are searched in :attr:`semantic_annotations`
+            rather than in the hash table. Their hash describes their content instead
+            of their id, so annotations of the same type over the same kinematic
+            structure entities share one table key and all but the last one added are
+            missing from it.
+
+        :param id: The id of the entity to find.
+        :return: The entity of this world carrying that id.
+        :raises WorldEntityWithIDNotFoundError: If this world holds no such entity.
+        """
+        for entity in chain(
+            self._world_entity_hash_table.values(), self.semantic_annotations
+        ):
+            if isinstance(entity, WorldEntityWithID) and entity.id == id:
+                return entity
+        raise WorldEntityWithIDNotFoundError(id)
+
+    def rebind_world_entities(self, obj: RelocatableType) -> RelocatableType:
+        """
+        Replace every world entity reachable from `obj` with this world's own instance
+        of it.
+
+        `obj` is typically built against a different `World`, for example the one this
+        world was :func:`~copy.deepcopy`'d from, whose bodies and connections this world
+        rebuilt as separate objects. Reading through such a foreign reference is
+        harmless, since execution reads and writes whichever world its context points
+        at, but modifying the model is not: `move_branch` and its kind require the
+        entities they are given to belong to the world being modified.
+
+        Walks `obj` recursively through dataclass fields, list like classes and dict values.
+        A :class:`~semantic_digital_twin.world_description.world_entity.WorldEntityWithID`
+        is looked up here by its id and a
+        :class:`~semantic_digital_twin.world_description.world_entity.Connection`, which
+        has no id, by its rebound parent and child. Anything else is deep-copied, so
+        `obj` and the result never share mutable state.
+
+        An entity this world does not contain is left as it is: it is not this world's
+        state to rebind, and leaving it behaves exactly as not rebinding at all.
+
+        .. note:: An ``init=False`` field a dataclass derives from its other fields in
+            `__post_init__` is carried over as originally computed, not recomputed from
+            the rebound values.
+
+        :param obj: The object to rebind, or a value containing world entities.
+        :return: An equivalent, independent copy of `obj` referring to this world.
+        :raises WorldEntityWithIDBelongsToAnotherWorld: If this world's lookup answers with an
+            entity that reports belonging elsewhere, rather than letting it fail later
+            wherever it ends up being used.
+        """
+        if isinstance(obj, WorldEntityWithID):
+            try:
+                found = self.get_world_entity_with_id_by_id(obj.id)
+            except WorldEntityWithIDNotFoundError:
+                return obj
+            if found._world is not self:
+                raise WorldEntityWithIDBelongsToAnotherWorld(
+                    world=self, world_entity=found
+                )
+            return found
+        if isinstance(obj, Connection):
+            parent, child = self.rebind_world_entities(
+                obj.parent
+            ), self.rebind_world_entities(obj.child)
+            if parent is obj.parent or child is obj.child:
+                return obj
+            return self.get_connection(parent, child)
+        if isinstance(obj, list_like_classes):
+            return type(obj)(self.rebind_world_entities(item) for item in obj)
+        if isinstance(obj, dict):
+            return {
+                key: self.rebind_world_entities(value) for key, value in obj.items()
+            }
+        if is_dataclass(obj) and not isinstance(obj, type):
+            result = deepcopy(obj)
+            for f in fields(obj):
+                setattr(
+                    result, f.name, self.rebind_world_entities(getattr(obj, f.name))
+                )
+            return result
+        return deepcopy(obj)
 
     def get_kinematic_structure_entity_by_id(
         self, id: UUID
@@ -1635,6 +1715,30 @@ class World(HasSimulatorProperties):
         return (
             semantic_annotation._world == self
             and semantic_annotation in self.semantic_annotations
+        )
+
+    def get_semantic_annotation_equal_to(
+        self, semantic_annotation: SemanticAnnotation
+    ) -> Optional[SemanticAnnotation]:
+        """
+        The annotation this world holds that describes the same thing, if it holds one.
+
+        An annotation is equal to another when it is of the same type and refers to the
+        same entities, so an annotation built separately can stand for one the world
+        already holds. Use this before adding a freshly built annotation, and wire up
+        the result rather than the argument, or the wiring lands on an annotation the
+        world does not hold.
+
+        :param semantic_annotation: The annotation to look for an equal of.
+        :return: The equal annotation this world holds, or ``None`` when it holds none.
+        """
+        return next(
+            (
+                held_annotation
+                for held_annotation in self.semantic_annotations
+                if held_annotation == semantic_annotation
+            ),
+            None,
         )
 
     def is_body_in_world(self, body: Body) -> bool:
@@ -2612,6 +2716,60 @@ class World(HasSimulatorProperties):
 
     def get_world_model_manager(self) -> WorldModelManager:
         return self._model_manager
+
+    def rollback_modification_blocks(
+        self, count: int = 1
+    ) -> List[WorldModelModificationBlock]:
+        """
+        Revert the most recently completed modification blocks, restoring the world to
+        the state it was in before they were applied.
+
+        Reverting a block is itself recorded as a new modification block (see
+        :meth:`WorldModification.revert`), so the history retains a full account of what
+        happened, including the rollback.
+
+        :param count: How many of the most recently completed modification blocks to
+            revert, starting with the most recent.
+        :return: The modification blocks that were rolled back, most recent first.
+        :raises InsufficientModificationHistoryError: If the history contains fewer than
+            ``count`` completed modification blocks.
+        """
+        model_modification_blocks = self._model_manager.model_modification_blocks
+        if count > len(model_modification_blocks):
+            raise InsufficientModificationHistoryError(
+                world=self,
+                requested_count=count,
+                available_count=len(model_modification_blocks),
+            )
+        # count == 0 has to be handled explicitly: model_modification_blocks[-0:] is
+        # model_modification_blocks[0:], i.e. the whole list, not an empty slice.
+        blocks_to_roll_back = (
+            list(reversed(model_modification_blocks[-count:])) if count else []
+        )
+        for block in blocks_to_roll_back:
+            with self.modify_world():
+                block.revert(self)
+        return blocks_to_roll_back
+
+    def rollback_to_version(self, version: int) -> List[WorldModelModificationBlock]:
+        """
+        Roll back the world's modification history to the given version, undoing every
+        modification block completed since.
+
+        :param version: The target :attr:`WorldModelManager.version` to roll back to,
+            e.g. taken from an earlier :attr:`WorldModelManager.revision`.
+        :return: The modification blocks that were rolled back, most recent first.
+        :raises InvalidRollbackVersionError: If ``version`` is not a version the world
+            has already reached.
+        """
+        current_version = self._model_manager.version
+        if not 0 <= version <= current_version:
+            raise InvalidRollbackVersionError(
+                world=self,
+                target_version=version,
+                current_version=current_version,
+            )
+        return self.rollback_modification_blocks(current_version - version)
 
     @cached_property
     def ray_tracer(self) -> RayTracer:
