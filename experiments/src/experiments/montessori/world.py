@@ -42,6 +42,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Drawer,
     Floor,
     Handle,
+    SemanticEnvironmentAnnotation,
     Table,
 )
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
@@ -59,8 +60,15 @@ from semantic_digital_twin.world_description.geometry import (
     Scale,
     Shape,
     Sphere,
+    VolumetricBoundingBox,
 )
-from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
+    VolumetricGraphOfBoundingBoxes,
+)
+from semantic_digital_twin.world_description.shape_collection import (
+    BoundingBoxCollection,
+    ShapeCollection,
+)
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
 NAME_PREFIX = "montessori"
@@ -108,19 +116,9 @@ BOARD_COLOR = Color.BEIGE()
 DRAWER_SCALE = Scale(0.09, 0.08, 0.06)
 HANDLE_SCALE = Scale(0.03, 0.015, 0.015)
 
-LANDING_REGION_XY_MARGIN = 0.03
+LANDING_REGION_NAME_SUFFIX = "_landing_region"
 """
-Margin added on every side of a hole's own footprint size when sizing the
-:class:`Region` a shape is checked for containment against once it has fallen through
-that hole (see :meth:`MontessoriWorld._build_shape_sorting_board`); comfortably
-tolerates placement/settling inaccuracy.
-"""
-
-LANDING_REGION_TOP_CLEARANCE = 0.02
-"""
-Distance kept below the board's top surface when sizing a hole's landing region's top
-face, so a shape merely resting on top of the board (having failed to fall through)
-never also registers as being in the landing region.
+Suffix a hole's landing region is named with, after the hole's own key.
 """
 
 LANDING_REGION_BOTTOM_MARGIN = 0.005
@@ -616,38 +614,58 @@ def _hole_marker_shape(footprint: HoleFootprint, color: Color) -> Mesh:
     return marker
 
 
-def _landing_region_height(table_top_z: float, board_top_z: float) -> float:
+def _open_space_under(
+    hole: ShapeSortingHole, table_top_z: float, board_top_z: float
+) -> VolumetricBoundingBox:
     """
-    Height of a hole's landing region: ``board_top_z``, minus
-    :data:`LANDING_REGION_TOP_CLEARANCE`, down to :data:`LANDING_REGION_BOTTOM_MARGIN`
-    below ``table_top_z``.
+    Measure the space a shape falls into once it has gone through ``hole``: the column
+    the hole's own footprint cuts down to the surface the board stands on, less whatever
+    the board and its drawers leave standing in it.
 
-    A shape that has fallen all the way through a hole comes to rest directly on the
-    surface carrying the board, inside the open shaft the hole cuts through the board's
-    full thickness; a shape that never fell through instead rests on the board's own top
-    surface, well above this range.
+    Read off the world's collision geometry rather than stated, so a hole whose shaft is
+    obstructed reports the space that is actually open rather than the space the board
+    was meant to leave.
 
-    Takes the two surfaces' heights as parameters (rather than reading
-    :const:`TABLE_POSITION`/:const:`TABLE_SCALE`/:const:`BOARD_POSITION` directly) so
-    :mod:`~experiments.montessori.world2`'s differently-positioned board and stand can
-    reuse this unchanged.
-
+    :param hole: The hole to measure under; already spawned, along with everything that
+        could stand in its way.
     :param table_top_z: Height of the surface the board sits on (a table, a stand, ...).
     :param board_top_z: Height of the board's own top surface.
     """
-    return (
-        board_top_z
-        - LANDING_REGION_TOP_CLEARANCE
-        - (table_top_z - LANDING_REGION_BOTTOM_MARGIN)
+    world = hole.root._world
+    footprint = hole.root.area.combined_mesh.bounds
+    centre = hole.root.global_transform.to_position().to_np().flatten()
+    column = BoundingBoxCollection(
+        shapes=[
+            VolumetricBoundingBox(
+                min_x=float(centre[0]) + float(footprint[0][0]),
+                min_y=float(centre[1]) + float(footprint[0][1]),
+                min_z=table_top_z,
+                max_x=float(centre[0]) + float(footprint[1][0]),
+                max_y=float(centre[1]) + float(footprint[1][1]),
+                max_z=board_top_z,
+                origin=HomogeneousTransformationMatrix(reference_frame=world.root),
+            )
+        ],
+        reference_frame=world.root,
     )
+    standing_in_the_way = SemanticEnvironmentAnnotation(
+        root=world.root, _world=world
+    ).build_bloated_obstacle_collection(column, obstacle_height_clearance=0.0)
+    open_space = BoundingBoxCollection.from_event(
+        VolumetricBoundingBox,
+        reference_frame=world.root,
+        event=VolumetricGraphOfBoundingBoxes.free_space_from_bounding_boxes(
+            standing_in_the_way, column.event
+        ),
+    ).bounding_box()
+    open_space.enlarge(min_z=LANDING_REGION_BOTTOM_MARGIN)
+    return open_space
 
 
-def _landing_region(
-    name: PrefixedName, footprint: HoleFootprint, height: float
-) -> Region:
+def _landing_region(name: PrefixedName, open_space: VolumetricBoundingBox) -> Region:
     """
     Build the :class:`Region` a shape is checked for containment against once it has
-    fallen through the hole ``footprint`` describes.
+    fallen through a hole.
 
     A hole's own thin, flush-with-the-top marker region (see :func:`_hole_marker_shape`)
     cannot serve this purpose: it only ever brushes a passing shape's mesh for an
@@ -656,36 +674,9 @@ def _landing_region(
     from "now resting below it" apart.
 
     :param name: Name of the resulting region.
-    :param footprint: The hole this landing region belongs to; sized after its
-        bounding box plus :data:`LANDING_REGION_XY_MARGIN` on every side.
-    :param height: This region's extent along z; see :func:`_landing_region_height`.
+    :param open_space: The space under that hole; see :func:`_open_space_under`.
     """
-    box = Box(
-        scale=Scale(
-            footprint.size.x + 2 * LANDING_REGION_XY_MARGIN,
-            footprint.size.y + 2 * LANDING_REGION_XY_MARGIN,
-            height,
-        )
-    )
-    return Region(name=name, area=ShapeCollection([box]))
-
-
-def _landing_region_position(
-    hole_position: Point3, table_top_z: float, height: float
-) -> Point3:
-    """
-    Position, in the world root frame, a hole's landing region (see
-    :func:`_landing_region`) must be placed at so it spans from
-    :data:`LANDING_REGION_BOTTOM_MARGIN` below ``table_top_z`` up to
-    :data:`LANDING_REGION_TOP_CLEARANCE` below the board's top surface.
-
-    :param hole_position: The matching hole's own position (shares its ``x``, ``y``).
-    :param table_top_z: Height of the surface the board sits on; see
-        :func:`_landing_region_height`.
-    :param height: The landing region's height; see :func:`_landing_region_height`.
-    """
-    region_bottom_z = table_top_z - LANDING_REGION_BOTTOM_MARGIN
-    return Point3(hole_position.x, hole_position.y, region_bottom_z + height / 2)
+    return Region(name=name, area=ShapeCollection([Box(scale=open_space.scale)]))
 
 
 def _shape_body(
@@ -1074,9 +1065,7 @@ class MontessoriWorld:
         )
         self._spawn(board, BOARD_POSITION)
 
-        table_top_z = float(TABLE_POSITION.z) + TABLE_SCALE.z / 2
-        board_top_z = float(BOARD_POSITION.z) + BOARD_SCALE.z / 2
-        landing_region_height = _landing_region_height(table_top_z, board_top_z)
+        holes_by_key: Dict[str, ShapeSortingHole] = {}
         for hole_spec in _HOLES:
             hole = ShapeSortingHole(
                 name=_name(hole_spec.key),
@@ -1094,19 +1083,7 @@ class MontessoriWorld:
             )
             self._spawn(hole, hole_spec.position)
             board.add(hole)
-
-            landing_region = _landing_region(
-                _name(f"{hole_spec.key}_landing_region"),
-                hole_spec.shape,
-                landing_region_height,
-            )
-            self._spawn_region(
-                landing_region,
-                _landing_region_position(
-                    hole_spec.position, table_top_z, landing_region_height
-                ),
-            )
-            self.landing_regions[hole_spec.key] = landing_region
+            holes_by_key[hole_spec.key] = hole
 
         for index, drawer_position in enumerate(_DRAWER_POSITIONS, start=1):
             drawer = Drawer(
@@ -1138,7 +1115,36 @@ class MontessoriWorld:
             self._spawn(handle, handle_position)
             drawer.add(handle)
 
+        self._give_every_hole_its_landing_region(holes_by_key)
         return board
+
+    def _give_every_hole_its_landing_region(
+        self, holes_by_key: Dict[str, ShapeSortingHole]
+    ) -> None:
+        """
+        Measure the space under each hole and spawn the :class:`Region` a shape that has
+        fallen through that hole is checked for containment against.
+
+        Done once the board and its drawers stand, since what the space under a hole is
+        depends on them, and before the loose shapes are placed, so that a shape already
+        standing in a shaft cannot shrink it.
+
+        :param holes_by_key: The board's holes, keyed by their own key.
+        """
+        table_top_z = float(TABLE_POSITION.z) + TABLE_SCALE.z / 2
+        board_top_z = float(BOARD_POSITION.z) + BOARD_SCALE.z / 2
+        self.world.update_forward_kinematics()
+        open_spaces = {
+            key: _open_space_under(hole, table_top_z, board_top_z)
+            for key, hole in holes_by_key.items()
+        }
+        for key, open_space in open_spaces.items():
+            landing_region = _landing_region(
+                _name(f"{key}{LANDING_REGION_NAME_SUFFIX}"), open_space
+            )
+            self._spawn_region(landing_region, open_space.center)
+            holes_by_key[key].landing_region = landing_region
+            self.landing_regions[key] = landing_region
 
     def _build_shapes(self) -> None:
         categories = [hole_spec.category for hole_spec in _HOLES] + [

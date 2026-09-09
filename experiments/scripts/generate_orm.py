@@ -4,6 +4,11 @@ from pathlib import Path
 import experiments
 import experiments.control_loop_experiments.benchmark
 import experiments.control_loop_experiments.scenarios
+import experiments.montessori.scenarios
+import experiments.scenarios.report
+import experiments.scenarios.runner
+import experiments.scenarios.scenario
+import experiments.scenarios.trial
 import coraplex.orm.ormatic_interface
 
 from krrood.ormatic.ormatic import ORMatic
@@ -18,6 +23,22 @@ ignored_classes |= set(
 ignored_classes |= set(
     classes_of_module(experiments.control_loop_experiments.control_loop_profiler)
 )
+
+# the scenario domain model describes how an experiment is run rather than what it
+# recorded; what of a trial becomes a mapped record is decided where episodes are
+# recorded, not here
+for scenario_model_module in (
+    experiments.scenarios.scenario,
+    experiments.scenarios.trial,
+    experiments.scenarios.report,
+    experiments.scenarios.runner,
+):
+    ignored_classes |= set(classes_of_module(scenario_model_module))
+
+# the Montessori scenes and scripts are the same kind of description one level down:
+# they say how a sorting run is set up and what is done to it, and what a run then
+# recorded is the episode model's, not theirs
+ignored_classes |= set(classes_of_module(experiments.montessori.scenarios))
 
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(
