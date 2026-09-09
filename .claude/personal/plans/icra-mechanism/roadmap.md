@@ -500,3 +500,112 @@ Tests run against the real MuJoCo pipeline in a from-scratch Python 3.12 venv th
 extension had to be compiled locally for 3.12). All 8 new tests and the 15 in
 `test_montessori_simulated_camera.py` (checked for regressions from a shared relative import)
 pass.
+
+## 2026-09-09: `backends-declare-their-capabilities` implemented, scope corrected against the real code
+
+### `capability()`, generalized differently than first sketched
+
+The kickoff plan above (recorded before implementation) said tests would follow
+`detectors_that_state_what_they_answer.py`'s mimic-dataset pattern. Checked against the
+actual code before writing anything: `QueryBackend`'s own concrete subclasses
+(`EntityQueryLanguageBackend`, `SQLAlchemyBackend`, `EntityQueryLanguageGenerativeBackend`,
+`ProbabilisticBackend`) all live in `krrood` itself, unlike the real perception detectors
+(`BoardDetector` etc.), which live in `experiments` and are why detector tests need a mimic.
+So capability is tested directly against the real backend classes, in a new
+`test/krrood_test/test_eql/test_backend_capabilities.py` -- no mimic needed, and simpler
+than planned.
+
+`QueryBackend.capability(self, statement: Evaluable) -> ConditionType` takes the whole
+statement (the same object `evaluate()` is put), not a bound type parameter the way
+`PerceptionDetector[LookT]` binds one `Look` subtype: a backend answers many different
+classes, so the generalization is in the method's signature rather than in generic
+binding. Every concrete condition mirrors a check the backend already enforced
+implicitly, turned into a declared, queryable capability rather than invented from
+nothing:
+
+- `SelectiveBackend`/`GenerativeBackend` each gained a concrete `capability()` at the
+  base level, matching the guard clause their own `evaluate()` already raises on
+  (`SelectiveBackendCannotResolveEllipsisMatch` / `GenerativeBackendQueryIsNotUnderspecifiedVariable`).
+  `EntityQueryLanguageBackend` needs no override -- it has no further restriction of its
+  own.
+- `SQLAlchemyBackend` narrows further: `super().capability(statement) and get_dao_class(selected_type(statement)) is not None`
+  -- answers only what ormatic mapped a table for. `get_dao_class` is the existing
+  public helper (`krrood.ormatic.data_access_objects.helper`), never the generated
+  `ormatic_interface.py`, per `AGENTS.md`. `selected_type()` is a new small helper: a
+  `Match` carries its selection on `_variable_`, a `Query` on `selected_variable` --
+  different accessor names on the two statement kinds (confirmed by reading
+  `eql_interface.py`'s own `EQLTranslator`, which branches the same way), so this reads
+  each correctly rather than assuming one name works for both.
+- `EntityQueryLanguageGenerativeBackend` narrows further: every leaf the match leaves
+  fully unspecified must be enum-typed. The existing `_check_attribute_match_is_suitable_for_generation`
+  (which raises) is refactored into a boolean `_attribute_match_is_suitable_for_generation`
+  that both `capability()` and the raising check now call, rather than duplicating the
+  condition.
+- `ProbabilisticBackend` narrows differently: reuses its own existing
+  `_bare_average_selection` helper to state the same three-way dispatch `evaluate()`
+  itself makes (a `ProbabilisticQuery`, a bare `average(...)`, or falls through to the
+  generative check) as a capability, rather than re-deriving it.
+- `PerceptionBackend` needed no code at all -- it inherits `GenerativeBackend.capability()`
+  directly, since it adds no further structural restriction of its own at the abstract
+  level (its concrete subclasses, which do, live in `experiments` and are a later item's
+  subject).
+
+### Field-level capability, built on `capability()` rather than beside it
+
+`backend_supplies(backend: QueryBackend, field: Attribute) -> bool` answers "can you
+supply at least this field" for an EQL `Attribute`/`MappedVariable` rather than a field
+name string, per the amendment. Reuses `capability()` itself rather than adding parallel
+machinery: builds `a(field._chain_root_._type_)(**{field._attribute_name_: ...})` -- an
+otherwise-underspecified statement over the field's own class, wanting only that field --
+and puts it to `capability()`. Tested against `EntityQueryLanguageGenerativeBackend`,
+whose enum-vs-non-enum condition gives two fields with different answers over the same
+class (`EnumAction.enum` supplied, `EnumAction.obj` refused).
+
+### Deferred, not silently dropped: the underspecified-description-fill helper
+
+The amendment's second half -- "the helper that fills an underspecified description out
+from the model, so that an asker naming a class (the developer's example: `a(MontessoriBoard)`)
+has the features the twin already knows about one added to the description before any
+backend is chosen" -- is not built in this PR. The item's own notes call this out as
+genuinely new ("Nothing does that second one today"), and what "the model" refers to here
+is itself not settled by anything read on this session: a candidate is
+`krrood.parametrization.model_registries.ModelRegistry`, which resolves match statements
+to probabilistic models and is the only thing in `krrood` already called "the model" in
+this area, but nothing checked here confirms that registry is what the developer meant,
+or that it exposes "every feature known about a class" independent of an already-built
+match. Rather than guess and build the wrong helper, this is left for a follow-up rather
+than invented under uncertainty -- consistent with `AGENTS.md`'s "ask the developer
+instead of inventing the reason" for exactly this kind of unresolved design call.
+
+### Verified
+
+`test/krrood_test/test_eql/test_backend_capabilities.py` (new, 15 tests) plus the full
+`test/krrood_test` suite (minus three modules that already fail to collect in a
+scoped-`krrood`-only environment for reasons unrelated to this change -- missing `mypy`,
+a rustworkx-visualization module, and a symbolic-math module -- confirmed pre-existing
+against the unmodified tree before this PR's changes) run clean under a scoped venv built
+from this branch (`krrood` installed editable, plus the workspace's own local
+`random_events`/`probabilistic_model` rather than their PyPI releases, since the PyPI
+`probabilistic_model` lacks a submodule this tree's code imports).
+
+### One more `QueryBackend` subclass found and given a `capability()`
+
+A repo-wide grep for every `QueryBackend`/`SelectiveBackend`/`GenerativeBackend`
+subclass (not just the ones in `backends.py`) turned up exactly one more:
+`krrood.entity_query_language.rdr.backend.RDRBackend`. Adding an `@abstractmethod`
+without it broke instantiation everywhere `RDRBackend` is used -- confirmed the hard
+way: the first full-suite run after adding the abstract method failed 22 tests, all but
+2 of them `RDRBackend`'s own (the remaining 2, `test_object_diagram.py`, are unrelated
+-- this sandbox has no `dot`/Graphviz binary on `PATH`, confirmed pre-existing).
+
+`RDRBackend.capability()` mirrors the precondition `UnderspecifiedMatch` already
+enforces when a query is actually answered (exactly one `...` attribute to infer, of a
+type a single-class RDR can conclude one value for), reusing it via a new
+`UnderspecifiedMatch.names_one_supported_inference_target()` -- the same
+raise-vs-boolean refactor pattern as `EntityQueryLanguageGenerativeBackend`'s.
+
+### Verified, corrected
+
+The full `test/krrood_test` suite (2731 passed, 7 skipped, 0 failed) confirms this,
+superseding the smaller partial run recorded above before the `RDRBackend` gap was
+found.
