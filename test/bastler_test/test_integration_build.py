@@ -65,6 +65,26 @@ def carry_the_pipeline_on_the_base(fork_checkout: ForkCheckout) -> None:
     fork_checkout.run_git("fetch", "--quiet", UPSTREAM_REMOTE)
 
 
+def carry_the_pipeline_on_the_pointer(fork_checkout: ForkCheckout) -> None:
+    """
+    Give the pointer branch a real copy of the pipeline, matching a scheduled rebuild's
+    own checkout - which sits on the pointer branch, and never on the upstream base,
+    which does not carry the pipeline at all.
+
+    :param fork_checkout: The checkout to commit the pipeline onto.
+    """
+    fork_checkout.run_git(
+        "checkout",
+        "--quiet",
+        "-B",
+        bastler.integration_constants.POINTER_BRANCH,
+        UPSTREAM_BASE,
+    )
+    write_into(fork_checkout.project_root, the_pipeline_this_checkout_carries())
+    fork_checkout.run_git("add", "--all")
+    fork_checkout.run_git("commit", "--quiet", "-m", "carry the pipeline")
+
+
 def branch_that_relocates_the_pipeline_away(fork_checkout: ForkCheckout) -> None:
     """
     Publish :data:`RELOCATES_THE_PIPELINE` as a tip whose own commit removes every
@@ -114,6 +134,32 @@ def test_the_pointer_moves_to_the_build_that_finished(fork_checkout: ForkCheckou
     assert fork_checkout.git.commit_at(
         bastler.integration_constants.POINTER_BRANCH
     ) == fork_checkout.git.commit_at(A_BUILD_BRANCH)
+
+
+def test_a_build_keeps_the_checkout_s_own_files_when_it_sits_on_the_pointer(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A scheduled rebuild's own checkout sits on the pointer branch, since that is the
+    branch a build's pointer moves. The upstream base never carries the pipeline at
+    all, so a build that reaches no tip restoring it assembles a tree with none of it -
+    which the refusal above does not catch, since nothing here takes the pipeline out
+    of a tree that had it; the tree simply never had it. Moving the pointer's local ref
+    while sitting on it is what hands :class:`maintenance.DetachedCheckout`'s
+    reattachment that tree instead of the checkout's own.
+    """
+    carry_the_pipeline_on_the_pointer(fork_checkout)
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
+    fork_checkout.run_git(
+        "checkout", "--quiet", bastler.integration_constants.POINTER_BRANCH
+    )
+
+    build(
+        fork_checkout,
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
+    )
+
+    assert pipeline_carried_by(fork_checkout.git, "HEAD").can_rebuild
 
 
 # %% merging the tips
