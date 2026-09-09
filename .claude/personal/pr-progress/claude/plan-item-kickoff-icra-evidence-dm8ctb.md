@@ -103,11 +103,55 @@ AGENTS.md says consult the developer rather than dig into generated ORM internal
   already-named `WHAT_IS_ON_THE_TABLE`/`TWIN_BACKEND` constants everywhere this test built
   an "ordinary query" placeholder (three spots). Pushed (`b156d3af1`), thread resolved.
 
+## Round 3: the Role thread resolved for real, and a schema change (2026-09-09)
+
+The developer replied to both round-2 threads with the actual answer, and both landed on
+the same design change.
+
+**The sibling class was `Question` itself.** He pointed at `question.py` line 136 in
+#265's diff — inside `Question`'s own field block — and clarified: not `Role[Question]`
+(an instance), but "a reference field to the question class that is meant here, not the
+instance." Same ask came independently on `test_paper_figures.py`'s `query()` helper:
+"take the actual Question object... or the Question SubClass? I guess a class object is
+serializable or recordable, right?"
+
+**Both answered by one change.** `RecordedQuery.bucket`/`bloom_level` (two separate
+persisted fields) are replaced by `question_type: Optional[Type[Question]]` — the class
+object itself. `bucket`/`bloom_level` are now read-only properties reading
+`question_type.bucket`/`.bloom_level` (both `ClassVar`s on `Question`), so they can never
+disagree with the class that defines them. Storing a class reference is not new
+machinery: ORMatic's `TypeType` decorator (`krrood/ormatic/custom_types.py`) already
+stores a `Type[X]` field as `module.ClassName` and resolves it back, wired into
+`type_mappings` for bare `type`/`Type` regardless of `X`, and already exercised
+end-to-end by `KRROODPositionTypeWrapper.position_type: Type[KRROODPosition]` in
+krrood's own `test_ormatic/test_interface.py` — so this needed no new ORM support,
+just using what was already there.
+
+`question_set.py`'s `answer_and_record` now passes `question_type=type(question)`
+instead of `bucket=question.bucket, bloom_level=question.bloom_level`.
+`test_paper_figures.py`'s `query()` helper takes `question_type: Type[Question] | None`
+instead of separate `bucket=`/`bloom_level=` kwargs; `text` stays a separate parameter
+since `english` is an abstract *instance* property (some questions need instance state,
+like `AnythingMovedInTheEpisode.episode_identifier`, to render it), so there's no
+class-level text to read without constructing one. `test_question_scoring.py`'s scored
+corpus now references real classes (`ObjectsSeen`, `ObjectColours`,
+`AnythingMovedInTheEpisode`) instead of independently-chosen bucket/level combinations
+that could drift from them — exactly what the reviewer was pointing at.
+
+`figure.py`'s `scored_queries_of` and `paper/questions.py`'s two figures needed no
+changes at all: they read `query.bucket`/`query.bloom_level`, which now resolve through
+the properties transparently.
+
+Pushed (`6f2a370f2`); PR description updated to describe `question_type` in place of the
+old two-field description; both threads replied to and resolved. Formatted with
+`scripts/format_docstrings.py` (had to build a throwaway venv for black/docformatter/tqdm
+since this container still can't `uv sync`); byte-compiled all four touched files to
+catch syntax errors since nothing can be run here. Not run against real tests — same
+container limitation as every round on this branch.
+
 ## Next
 
-CI just re-triggered on both #265 (`b4397c229`) and #304 (`b156d3af1`, now based on it) —
-pending as of this update, not polled further per standing instructions. If green on the
-working-memory half, this item's committed scope is done pending the two open items above
-(the Role/sibling-class question, and whoever answers the long-term list-comparison
-question). The `json_msgs`/generated-ORM-interface failure is the developer's to look at;
-not something to keep chasing here.
+CI just re-triggered on #304 (`6f2a370f2`) — pending as of this update, not polled
+further per standing instructions. The two remaining open items are unchanged: the
+long-term list-comparison question (`values_agree`'s sorted-vs-positional disagreement),
+and the `json_msgs`/generated-ORM-interface CI failure, both left to the developer.
