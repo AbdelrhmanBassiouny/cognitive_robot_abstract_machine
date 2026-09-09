@@ -227,5 +227,47 @@ items:
   title: "A hole is a predicate any surface can be asked about, and the board detector states no number of its own"
   branch: null
   track: backend-routing
+  blockers:
+    - >-
+      Cross-plan: needs icra-foundation's integrated-simulation-pipeline (#265), which carries the
+      detector stack and BoardDetector, and reads on the frames simulated-camera-feeds-perception
+      (#298) renders; depends_on cannot cross a plan boundary. Both are expected to be merged into
+      #265 and then into tracy_icra before this starts, per the branching change of 2026-09-09, so
+      this item is cut off tracy_icra rather than off either of them.
+  notes: >
+    Raised by the fourth review round on icra-foundation's simulated-camera-feeds-perception (#298),
+    2026-09-09, in the developer's words: he does not want BoardDetector's stated defaults at all --
+    "I want it knowledge dependent and calculable" -- and names the concepts under them as the real
+    subject: "counting a specific feature on a percieved body, Hole related features and mechanisms,
+    Area of a surface that may have holes", to be raised "to a meta level, maybe as predicates
+    classes for each or as a generalization of a Hole and a Surface with Holes or without Holes
+    detectors with capabilities".
+
+    Two halves, and the second is what makes the first honest. A hole and a perforated surface
+    become things any body can be asked about -- predicates beside the ones semantic_digital_twin
+    already carries -- rather than knowledge living inside one Montessori detector; and the
+    detectors that answer them are a family, so the one that reads a surface's colour and the one
+    that reads its depth stand beside each other rather than being two branches inside
+    BoardDetector.detect. That second detector is the sibling ask on the same round (r3965517956):
+    the depth is already read, but inside BoardDetector rather than by a detector of its own.
+
+    With those in place BoardDetector states no number of its own. All five of today's defaults are
+    calculable from what the twin already holds about the board: minimum_hole_count is the layout's
+    own hole count, hole_size the holes' own footprints, minimum_lid_area the board's own lid, and
+    minimum_hole_depth the lid-to-drawer gap #298 measured (10 mm -- drawers at z 0.553 with
+    DRAWER_SCALE.z 0.06, tops at 0.583 against a lid at 0.593). seed_reach is the one that is
+    genuinely about the search rather than about the board and may honestly stay a parameter.
+
+    Much less new machinery than the round assumed, and it was checked rather than taken on trust:
+    PerceptionDetector.capability(look) already states what a detector answers as an
+    entity-query-language condition, DetectorChoice is already an EQLSingleClassRDR over the
+    underspecified statement "a look whose detector is to be worked out", and SceneRequest is
+    already that statement. All three are on #265 by way of #275 and #77. So what this item adds is
+    the predicates and the detector family that answers them, not a selection mechanism.
+
+    Tests assert the predicates against the twin rather than against a picture -- a board the twin
+    cut six holes in answers six, a plain table answers none -- and then that a look at a rendered
+    scene and a look at tracy_pickup_demo both find the board with BoardDetector stating no number
+    of its own.
   depends_on: []
   status: not_started
