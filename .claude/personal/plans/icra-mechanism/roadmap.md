@@ -286,3 +286,41 @@ The vision-language half of the round needs nothing new. `perception-backends-ar
 already has a vision-language backend answering a look behind the same interface and into the same
 twin, and `vlm-baseline-harness` builds the model arm; verbalising an underspecified description is
 what those two read.
+
+## 2026-09-09: new work is cut off `tracy_icra`, and the readiness rule is retired
+
+The developer's direction, on #298 and in his words: *"I want first to merge everything now fast into
+265 and then into tracy_icra then merge any new features into tracy_icra directly and stop basing
+them on main or on other tracks. Because I want to start recording episodes with perturbations in the
+simulation as fast as possible."* Applied to all three ICRA plans on 2026-09-09 and recorded on
+tracking issue #252.
+
+**The sequence it sets.** Every in-flight branch merges into #265; #265 merges into `tracy_icra`;
+from then on a new item is cut off `tracy_icra` and merges back into it. `tracy_icra` becomes the one
+trunk this programme works on, which is what `tracy-demo-takes-the-integrated-branch` already said
+about every later merge -- *"from then on every later merge into tracy_icra is a merge of the
+integrated branch, never of individual stacks"* -- now brought forward and widened to new work as
+well.
+
+**What it retires.** The readiness rule -- an open, non-draft pull request counts as ready to build
+on -- was the whole basis on which #278, #294, #296 and #298 each argued their base, and it exists to
+let work stack before its parent lands. Cutting off a trunk instead removes the question: there is no
+parent pull request to be ready or not. New items therefore record no `depends_on`-driven base
+argument at all; they say `tracy_icra`.
+
+**What it does not change.** No branch already in flight is repointed. Repointing is a merge rather
+than a bookkeeping change, and every one of them is about to be merged into #265 regardless, so
+moving their recorded bases now would cost conflicts to reach the same tree. Their roadmap entries
+keep the bases they were actually cut from, which is what a later reader needs.
+
+**One argument it settles retrospectively.** `montessori-scenarios` (#296) argued the day before, and
+measured, that basing on #265 was the sideways merge the convergence pass had ruled out -- seven
+branches merged *into* #265, never into each other, so as not to pay the same conflict set twice.
+That reasoning stands for what it was, and stops applying here: the fast merge into #265 pays that
+conflict set once, deliberately, and everything after it is cut off a trunk that already carries it.
+
+**A tooling divergence, flagged rather than fixed.** `check_dependency_readiness.py` and the
+dashboards still implement the readiness rule, so a new item cut off `tracy_icra` whose `depends_on`
+names an item whose pull request is a draft will read as "not ready" when nothing is actually
+blocking it. Nothing here changes that; it is worth a `plan-tracking-skills` item if the trunk
+workflow outlives this deadline.
