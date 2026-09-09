@@ -154,14 +154,13 @@ def cereal_perception_process(stretch_controller_process):
         yield process
 
 
-# %% montessori results ORM session
+# %% experiments ORM session
 
 
 @pytest.fixture(scope="function")
-def montessori_results_session():
+def experiments_database_session():
     """
-    An in-memory SQLite session against the montessori results schema (see
-    :mod:`experiments.montessori.sorting_results`), mirroring
+    An in-memory SQLite session against the generated ``experiments`` schema, mirroring
     ``coraplex_testing_session`` in ``test/coraplex_test/conftest.py``.
 
     Skips any table ORMatic could not assign a real column type to (surfaced as
