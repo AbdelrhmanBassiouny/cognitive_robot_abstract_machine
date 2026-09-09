@@ -452,7 +452,7 @@ class LossOfContactEvent(AbstractContactEvent):
 
 
 @dataclass
-class AgentInteractionEvent(EventWithTrackedObjects, ABC):
+class AgentInteractionEvent(EventWithEffect, ABC):
     """
     An event in which an agent acted on the tracked object rather than one where the
     object was only observed.
@@ -461,6 +461,12 @@ class AgentInteractionEvent(EventWithTrackedObjects, ABC):
     difference an agency question is about. The object acted on is the one the event
     already tracks, so asking which objects an agent acted on is asking these events for
     their :attr:`tracked_object`.
+
+    Extends :class:`EventWithEffect` rather than :class:`EventWithTrackedObjects`
+    directly: an agent's action always changes what holds of the object, and a single
+    inheritance chain is what lets ORMatic map :class:`PickUpEvent` and
+    :class:`InsertionEvent` without the two-parent joined-table ambiguity multiple
+    inheritance from unrelated bases would otherwise create.
     """
 
 
@@ -489,14 +495,9 @@ class LossOfGraspEvent(EventWithTrackedObjects):
 
 
 @dataclass(unsafe_hash=True)
-class PickUpEvent(AgentInteractionEvent, EventWithEffect):
+class PickUpEvent(AgentInteractionEvent):
     """
     Represents an event where an object is picked up by another object.
-
-    Declares :class:`AgentInteractionEvent` before :class:`EventWithEffect`: ORMatic
-    maps a class to the joined-table parent of the first mapped ancestor its MRO
-    reaches, so this order is what lets a query for ``AgentInteractionEvent`` over the
-    SQL backend actually find pick-up rows.
     """
 
     def effect(self) -> Effect:
@@ -514,16 +515,21 @@ class PlacingEvent(AgentInteractionEvent, ComesToRestEvent):
     """
     Represents an event where an object is placed on another object.
 
-    See :class:`PickUpEvent` for why :class:`AgentInteractionEvent` comes first.
+    Inherits :class:`ComesToRestEvent` too, for its :meth:`~ComesToRestEvent.effect`:
+    unlike :class:`PickUpEvent`/:class:`InsertionEvent`, placing an object has the same
+    physical effect whether or not an agent caused it, so that effect lives on
+    :class:`ComesToRestEvent` and is shared with plain :class:`SupportEvent` rather than
+    being an :class:`AgentInteractionEvent` of its own. :class:`AgentInteractionEvent` is
+    listed first so ORMatic - which maps a class to the joined-table parent of the first
+    mapped ancestor its MRO reaches - still lets a query for ``AgentInteractionEvent``
+    find placement rows.
     """
 
 
 @dataclass(unsafe_hash=True)
-class InsertionEvent(AgentInteractionEvent, EventWithEffect):
+class InsertionEvent(AgentInteractionEvent):
     """
     Represents an event where an object is inserted into another object.
-
-    See :class:`PickUpEvent` for why :class:`AgentInteractionEvent` comes first.
     """
 
     inserted_into_objects: List[KinematicStructureEntity] = field(default_factory=list)
