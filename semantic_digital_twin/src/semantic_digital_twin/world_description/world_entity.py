@@ -6,7 +6,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, Field
 from dataclasses import fields
 from functools import cached_property
 from functools import cached_property
@@ -894,34 +894,37 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
         self.parent_T_connection_expression.reference_frame = self.parent
         self.connection_T_child_expression.child_frame = self.child
 
+    @classmethod
+    def _serialized_fields(cls) -> List[Field]:
+        """
+        The fields a connection carries in its json.
+
+        Everything its constructor takes, since that is what makes the connection what
+        it is; what it computes from those is left out and computed again when it is
+        read.
+        """
+        return [field_ for field_ in fields(cls) if field_.init]
+
     def to_json(self) -> Dict[str, Any]:
         result = super().to_json()
-        result["name"] = to_json(self.name)
-        WorldEntityReference("parent").write(result, self.parent)
-        WorldEntityReference("child").write(result, self.child)
-        result["parent_T_connection_expression"] = to_json(
-            self.parent_T_connection_expression
-        )
-        result["connection_T_child_expression"] = to_json(
-            self.connection_T_child_expression
-        )
+        for field_ in self._serialized_fields():
+            value = getattr(self, field_.name)
+            if isinstance(value, WorldEntityWithID):
+                WorldEntityReference(field_.name).write(result, value)
+            else:
+                result[field_.name] = to_json(value)
         return result
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        parent = WorldEntityReference("parent").resolve(data, **kwargs)
-        child = WorldEntityReference("child").resolve(data, **kwargs)
-        return cls(
-            name=from_json(data["name"]),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-        )
+        arguments = {}
+        for field_ in cls._serialized_fields():
+            reference = WorldEntityReference(field_.name)
+            if reference.id_key in data:
+                arguments[field_.name] = reference.resolve(data, **kwargs)
+            elif field_.name in data:
+                arguments[field_.name] = from_json(data[field_.name], **kwargs)
+        return cls(**arguments)
 
     @property
     def origin_expression(self) -> HomogeneousTransformationMatrix:

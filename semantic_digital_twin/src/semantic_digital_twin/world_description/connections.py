@@ -6,9 +6,8 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 import numpy as np
-from typing_extensions import TYPE_CHECKING, Union, Optional, Dict, Any, Self
+from typing_extensions import TYPE_CHECKING, Union, Optional, Self
 
-from krrood.adapters.json_serializer import from_json
 from semantic_digital_twin.world_description.connection_properties import JointDynamics
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
@@ -17,9 +16,6 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 from semantic_digital_twin.world_description.world_entity import (
     Connection,
     KinematicStructureEntity,
-)
-from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
-    WorldEntityReference,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.types import NpMatrix4x4
@@ -158,35 +154,6 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
     """
     Dynamic properties of the joint.
     """
-
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        result["axis"] = self.axis.to_np().tolist()
-        result["multiplier"] = self.multiplier
-        result["offset"] = self.offset
-        WorldEntityReference("dof").write(result, self.raw_dof)
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        parent = WorldEntityReference("parent").resolve(data, **kwargs)
-        child = WorldEntityReference("child").resolve(data, **kwargs)
-        raw_dof = WorldEntityReference("dof").resolve(data, **kwargs)
-        return cls(
-            name=from_json(data["name"]),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            axis=Vector3.from_iterable(data["axis"]),
-            multiplier=data["multiplier"],
-            offset=data["offset"],
-            raw_dof=raw_dof,
-        )
 
     @classmethod
     def create_with_dofs(
@@ -485,33 +452,6 @@ class ScrewConnection(ActiveConnection1DOF):
         )
         return connection
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        result["screw_pitch"] = self.screw_pitch
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        parent = WorldEntityReference("parent").resolve(data, **kwargs)
-        child = WorldEntityReference("child").resolve(data, **kwargs)
-        raw_dof = WorldEntityReference("dof").resolve(data, **kwargs)
-        return cls(
-            name=from_json(data["name"]),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            axis=Vector3.from_iterable(data["axis"]),
-            multiplier=data["multiplier"],
-            offset=data["offset"],
-            raw_dof=raw_dof,
-            screw_pitch=data["screw_pitch"],
-        )
-
     def copy_for_world(self, world: World):
         (
             other_parent,
@@ -587,40 +527,6 @@ class Connection6DoF(Connection):
     Rotation of child KinematicStructureEntity with respect to parent
     KinematicStructureEntity represented as a quaternion.
     """
-
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        WorldEntityReference("x").write(result, self.x)
-        WorldEntityReference("y").write(result, self.y)
-        WorldEntityReference("z").write(result, self.z)
-        WorldEntityReference("qx").write(result, self.qx)
-        WorldEntityReference("qy").write(result, self.qy)
-        WorldEntityReference("qz").write(result, self.qz)
-        WorldEntityReference("qw").write(result, self.qw)
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        parent = WorldEntityReference("parent").resolve(data, **kwargs)
-        child = WorldEntityReference("child").resolve(data, **kwargs)
-        return cls(
-            name=from_json(data["name"]),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            x=WorldEntityReference("x").resolve(data, **kwargs),
-            y=WorldEntityReference("y").resolve(data, **kwargs),
-            z=WorldEntityReference("z").resolve(data, **kwargs),
-            qx=WorldEntityReference("qx").resolve(data, **kwargs),
-            qy=WorldEntityReference("qy").resolve(data, **kwargs),
-            qz=WorldEntityReference("qz").resolve(data, **kwargs),
-            qw=WorldEntityReference("qw").resolve(data, **kwargs),
-        )
 
     def add_to_world(self, world: World):
         super().add_to_world(world)
@@ -850,40 +756,6 @@ class OmniDrive(WheeledDrive):
     yaw: DegreeOfFreedom = field(kw_only=True)
     x_velocity: DegreeOfFreedom = field(kw_only=True)
     y_velocity: DegreeOfFreedom = field(kw_only=True)
-
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        WorldEntityReference("x").write(result, self.x)
-        WorldEntityReference("y").write(result, self.y)
-        WorldEntityReference("roll").write(result, self.roll)
-        WorldEntityReference("pitch").write(result, self.pitch)
-        WorldEntityReference("yaw").write(result, self.yaw)
-        WorldEntityReference("x_velocity").write(result, self.x_velocity)
-        WorldEntityReference("y_velocity").write(result, self.y_velocity)
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        parent = WorldEntityReference("parent").resolve(data, **kwargs)
-        child = WorldEntityReference("child").resolve(data, **kwargs)
-        return cls(
-            name=from_json(data["name"], **kwargs),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            x=WorldEntityReference("x").resolve(data, **kwargs),
-            y=WorldEntityReference("y").resolve(data, **kwargs),
-            roll=WorldEntityReference("roll").resolve(data, **kwargs),
-            pitch=WorldEntityReference("pitch").resolve(data, **kwargs),
-            yaw=WorldEntityReference("yaw").resolve(data, **kwargs),
-            x_velocity=WorldEntityReference("x_velocity").resolve(data, **kwargs),
-            y_velocity=WorldEntityReference("y_velocity").resolve(data, **kwargs),
-        )
 
     def add_to_world(self, world: World):
         super().add_to_world(world)
@@ -1136,38 +1008,6 @@ class DifferentialDrive(WheeledDrive):
 
     Represented with respect to the child frame.
     """
-
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        WorldEntityReference("x").write(result, self.x)
-        WorldEntityReference("y").write(result, self.y)
-        WorldEntityReference("roll").write(result, self.roll)
-        WorldEntityReference("pitch").write(result, self.pitch)
-        WorldEntityReference("yaw").write(result, self.yaw)
-        WorldEntityReference("x_velocity").write(result, self.x_velocity)
-        return result
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        parent = WorldEntityReference("parent").resolve(data, **kwargs)
-        child = WorldEntityReference("child").resolve(data, **kwargs)
-        return cls(
-            name=from_json(data["name"], **kwargs),
-            parent=parent,
-            child=child,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_json(
-                data["parent_T_connection_expression"], **kwargs
-            ),
-            connection_T_child_expression=from_json(
-                data["connection_T_child_expression"], **kwargs
-            ),
-            x=WorldEntityReference("x").resolve(data, **kwargs),
-            y=WorldEntityReference("y").resolve(data, **kwargs),
-            roll=WorldEntityReference("roll").resolve(data, **kwargs),
-            pitch=WorldEntityReference("pitch").resolve(data, **kwargs),
-            yaw=WorldEntityReference("yaw").resolve(data, **kwargs),
-            x_velocity=WorldEntityReference("x_velocity").resolve(data, **kwargs),
-        )
 
     def add_to_world(self, world: World):
         super().add_to_world(world)
