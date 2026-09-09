@@ -12,6 +12,7 @@ from typing_extensions import (
 )
 
 from krrood.adapters.json_serializer import (
+    SubclassJSONSerializer,
     shallow_diff_json,
     JSONAttributeDiff,
     list_like_classes,
@@ -273,7 +274,7 @@ class RemoveDegreeOfFreedomModification(WorldModification):
 
 
 @dataclass
-class AddSemanticAnnotationModification(WorldModification):
+class AddSemanticAnnotationModification(WorldModification, SubclassJSONSerializer):
     semantic_annotation_json: JSONData
 
     @classmethod
@@ -290,6 +291,19 @@ class AddSemanticAnnotationModification(WorldModification):
         world.add_semantic_annotation(
             from_json(self.semantic_annotation_json, **kwargs)
         )
+
+    # Written by hand rather than from the fields: the annotation stays json until
+    # :meth:`apply` builds it against the world it is applied to, which the generic
+    # serialization would rob it of by building it while reading the modification.
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            **super().to_json(),
+            "semantic_annotation_json": self.semantic_annotation_json,
+        }
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(semantic_annotation_json=data["semantic_annotation_json"])
 
 
 @dataclass
@@ -420,7 +434,7 @@ class SetDofHasHardwareInterface(WorldModification):
 
 
 @dataclass
-class AttributeUpdateModification(WorldModification):
+class AttributeUpdateModification(WorldModification, SubclassJSONSerializer):
     """
     An update to one or more attributes of an entity in the world.
 
@@ -479,6 +493,25 @@ class AttributeUpdateModification(WorldModification):
         if isinstance(item, UUID):
             return world.get_world_entity_with_id_by_id(item)
         return item
+
+    # Written by hand rather than from the fields: the values an attribute gained and
+    # lost stay json until :meth:`apply` builds them against the world it is applied to,
+    # which the generic serialization would rob them of.
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            **super().to_json(),
+            "entity_id": to_json(self.entity_id),
+            "updated_kwargs_json_list": to_json(self.updated_kwargs_json_list),
+        }
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(
+            entity_id=from_json(data["entity_id"], **kwargs),
+            updated_kwargs_json_list=from_json(
+                data["updated_kwargs_json_list"], **kwargs
+            ),
+        )
 
 
 def synchronized_attribute_modification(func):
