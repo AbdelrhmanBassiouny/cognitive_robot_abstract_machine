@@ -1897,3 +1897,94 @@ mutation: building a `MontessoriWorld` inline again fails the one that says the 
 happens in the scene the builder built, reading the resting height off `TABLE_TOP_Z`
 again fails the one that says a piece stands on the given scene's table, and bolting the
 robot at a fixed position fails the one that says the scene decides where it stands.
+
+### `integrated-simulation-pipeline` (#265): the fast convergence, 2026-09-09
+
+Applying the developer's direction from #298's fourth round (*"merge everything now fast
+into 265 and then into tracy_icra"*, see the entry above): every in-flight branch across
+`icra-foundation` and `icra-evidence` that still had one is now merged into this branch,
+each at its own tip and never sideways, matching the 2026-09-06 convergence's own rule.
+
+Nine merges, in dependency order: `simulated-camera-feeds-perception` (#298),
+`scenario-domain-model` (#261), `run-results-recorded-into-sql` (#262),
+`episodes-recorded-through-ormatic` (#271), `episodes-queried-by-eql` (#278),
+`episode-artifacts-recorded` (#294), `montessori-scenarios` (#296),
+`question-set-and-ground-truth` (#295), `paper-figures-from-episodes` (#297). Each is
+recorded on its own item below.
+
+Every merge but three was conflict-free. The three that conflicted were each resolved by
+keeping both sides rather than picking one - `generate_orm.py`'s `ignored_classes`
+additions are independent per branch and compose by concatenation, and the same was true
+of `ci_reusable.yml`'s EGL-offscreen comment (rewritten once to name all three MuJoCo
+offscreen renderers instead of choosing one branch's wording) and `placing.py`'s typing
+import. The one substantive conflict was `segmind/datastructures/events.py`:
+`question-set-and-ground-truth` (#295) introduces `AgentInteractionEvent` as a marker for
+"the agent acted on the tracked object", and this branch already carries
+`EventWithEffect`/`ComesToRestEvent` on `PickUpEvent`/`PlacingEvent`/`InsertionEvent` for
+the physics effect each one causes - taking either side whole would have dropped one of
+the two. `AgentInteractionEvent` declares no fields of its own, so each event class now
+inherits both bases; verified in isolation with an equivalent class hierarchy that the
+MRO composes cleanly and `effect()` and `isinstance(event, AgentInteractionEvent)` both
+hold for all three.
+
+Every changed and merged file was byte-compiled; no stale reader of a retired module
+(`montessori.results_recording`, `montessori.sorting_results`, both replaced by
+`episodes.episode`/`episodes.recording` in #271) was found by grep. CI has not yet run on
+this session's tip - the full workspace needs ROS and cannot be collected in this
+container - so this is not verified the way #292 and the main-merge above were: it is
+compile-clean and conflict-resolution-reasoned, not CI-green.
+
+Left for the developer, per the same comment's direction: merging this branch into
+`tracy_icra` and running the demo on the UR10 is `tracy-demo-takes-the-integrated-branch`,
+a separate item that names the robot as a dependency this session does not have. Nothing
+here does that merge or starts new work off `tracy_icra`.
+
+### `simulated-camera-feeds-perception` (#298): merged into #265, 2026-09-09
+
+Merged whole into `integrated-simulation-pipeline` (#265) as the fourth review round
+concluded it was ready to: all 23 checks green on `15dfd354cd`, `mergeable_state` clean,
+the item's own criterion passing. No conflicts. See `integrated-simulation-pipeline`'s own
+entry above for the session-wide convergence this was the first step of. The branch's own
+open questions from that round - the depth-dependent hole detector and the meta-level
+capability description - are not this item's; they are `icra-mechanism`'s, per that
+round's own conclusion.
+
+### `scenario-domain-model` (#261): merged into #265, 2026-09-09
+
+Merged into `integrated-simulation-pipeline` (#265). One conflict in `generate_orm.py`,
+purely additive (this branch's scenario-model `ignored_classes` loop beside #298's
+simulated-camera one already on the branch) - resolved by keeping both. See
+`integrated-simulation-pipeline`'s entry above.
+
+### `run-results-recorded-into-sql` (#262): merged into #265, 2026-09-09
+
+Merged into `integrated-simulation-pipeline` (#265), conflict-free. Its bulk
+(`results_recording.py`, `sorting_results.py`) was already on the trunk through earlier
+merges; what this brought was the `ResultsDatabase` naming fix (the board rather than the
+robot) made since. See `integrated-simulation-pipeline`'s entry above.
+
+### `episodes-recorded-through-ormatic` (#271): merged into #265, 2026-09-09
+
+Merged into `integrated-simulation-pipeline` (#265), conflict-free. Retires
+`montessori/results_recording.py` and `montessori/sorting_results.py` in favour of the one
+`Episode` model (`episodes/episode.py`, `episodes/recording.py`); grep confirms no reader
+of either retired module survives on the merged tree. See
+`integrated-simulation-pipeline`'s entry above.
+
+### `episodes-queried-by-eql` (#278): merged into #265, 2026-09-09
+
+Merged into `integrated-simulation-pipeline` (#265), conflict-free. See
+`integrated-simulation-pipeline`'s entry above.
+
+### `episode-artifacts-recorded` (#294): merged into #265, 2026-09-09
+
+Merged into `integrated-simulation-pipeline` (#265), conflict-free, purely additive
+(`episodes/artifacts.py`). See `integrated-simulation-pipeline`'s entry above.
+
+### `montessori-scenarios` (#296): merged into #265, 2026-09-09
+
+Merged into `integrated-simulation-pipeline` (#265). Two conflicts, both purely additive
+and resolved by keeping both sides: `ci_reusable.yml`'s EGL-offscreen comment (rewritten to
+name all three MuJoCo offscreen renderers rather than choosing one branch's wording) and
+`generate_orm.py`'s `ignored_classes` list. See `integrated-simulation-pipeline`'s entry
+above.
