@@ -489,9 +489,14 @@ class LossOfGraspEvent(EventWithTrackedObjects):
 
 
 @dataclass(unsafe_hash=True)
-class PickUpEvent(EventWithEffect, AgentInteractionEvent):
+class PickUpEvent(AgentInteractionEvent, EventWithEffect):
     """
     Represents an event where an object is picked up by another object.
+
+    Declares :class:`AgentInteractionEvent` before :class:`EventWithEffect`: ORMatic
+    maps a class to the joined-table parent of the first mapped ancestor its MRO
+    reaches, so this order is what lets a query for ``AgentInteractionEvent`` over the
+    SQL backend actually find pick-up rows.
     """
 
     def effect(self) -> Effect:
@@ -505,16 +510,20 @@ class PickUpEvent(EventWithEffect, AgentInteractionEvent):
 
 
 @dataclass(unsafe_hash=True)
-class PlacingEvent(ComesToRestEvent, AgentInteractionEvent):
+class PlacingEvent(AgentInteractionEvent, ComesToRestEvent):
     """
     Represents an event where an object is placed on another object.
+
+    See :class:`PickUpEvent` for why :class:`AgentInteractionEvent` comes first.
     """
 
 
 @dataclass(unsafe_hash=True)
-class InsertionEvent(EventWithEffect, AgentInteractionEvent):
+class InsertionEvent(AgentInteractionEvent, EventWithEffect):
     """
     Represents an event where an object is inserted into another object.
+
+    See :class:`PickUpEvent` for why :class:`AgentInteractionEvent` comes first.
     """
 
     inserted_into_objects: List[KinematicStructureEntity] = field(default_factory=list)
