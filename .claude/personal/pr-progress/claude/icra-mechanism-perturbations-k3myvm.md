@@ -1,0 +1,53 @@
+PR #305, base `claude/icra-experiments-simulation-pipeline-w4ep7n` (#265) — per the
+developer, cut off #265 directly rather than off `main`/#296, since #265 already
+carries the scenario domain model, montessori scenarios, and simulated-camera
+perception setup this item needs even though none of #261/#296/#298 are literal
+ancestors of it (#265's own convergence pass folded them in by hand).
+
+## Plan
+
+Four `Perturbation[World]` instances (`experiments/montessori/perturbations.py`, new):
+- `TargetHoleMoved` — world-state perturbation, same mechanism as
+  `SortingScene.stand_the_piece_at`.
+- `PieceShoved` — world-state perturbation, reuses the existing `PushThePiece` pusher.
+- `PerceivedPoseOffset` / `DetectionRelabelled` — perception-result perturbations. No
+  Montessori scenario step takes an actual look today (`ANSWER` reads `InsideOf`
+  ground truth directly), so this item adds a `LookAtTheScene` step built on #265's
+  own `simulated_setup.py` (`camera_over_the_table`/`perception_pipeline`, confirmed
+  already live-capture-capable — `simulated-camera-feeds-perception` is further along
+  than the manifest's `not_started` suggests). The two perception perturbations write a
+  small world-registered distortion marker `LookAtTheScene` reads and clears, since
+  `apply(world)` has no other channel to reach whatever backend a later step uses.
+- Every `Perturbation` gains `instruction_for_a_person() -> str` on the shared base in
+  `experiments/scenarios/scenario.py` (`LightingChanged` implements it too), per the
+  item's own notes about the real-robot protocol.
+- `simulated_setup.py`'s `table_surface`/`lid_surface`/`camera_over_the_table`/
+  `perception_pipeline` move from taking `montessori_world: MontessoriWorld` to
+  `world: World` (no caller outside their own test; nothing in their bodies needs more
+  than `get_semantic_annotations_by_type`), so the look step can call them from
+  `apply`/`perform`'s raw `World`.
+
+## Done so far
+
+- Fixed an unrelated tooling bug hit while recording this item:
+  `plan_item_bootstrap.py`'s `ITEM_MARKER`/`ITEM_FIELD_INDENT` didn't match any real
+  `plan.yaml`'s indentation (matched only the test fixture, which was itself wrong) —
+  `open`/`record` were producing invalid YAML that `save-plan.sh` rejected before
+  anything reached the notes branch. Fixed the constants, corrected the fixture, added
+  `test_a_rendered_field_line_carries_the_indentation_real_plans_use` to pin the real
+  convention apart from the fixture. All 156 hooks tests pass. This commit is on
+  `claude/icra-mechanism-perturbations-k3myvm` but is infrastructure, not part of
+  `perturbations`' own diff — worth cherry-picking onto #265/`tracy_icra` since it
+  affects every session using these skills.
+- Bootstrapped the branch, opened PR #305, recorded `plan.yaml` (in_progress,
+  branch/PR/session) and the roadmap section above.
+
+## Next
+
+- Implement `TargetHoleMoved`, `PieceShoved` (world perturbations) with tests, TDD.
+- Change `simulated_setup.py`'s four functions to take `world: World`; update
+  `test_montessori_simulated_camera.py`'s ~10 call sites.
+- Build `LookAtTheScene` step + the world-registered distortion marker; implement
+  `PerceivedPoseOffset`/`DetectionRelabelled` with tests.
+- Add `instruction_for_a_person()` to `Perturbation` + `LightingChanged`.
+- Run the full montessori/scenarios/perception test suite, format docstrings, push.
