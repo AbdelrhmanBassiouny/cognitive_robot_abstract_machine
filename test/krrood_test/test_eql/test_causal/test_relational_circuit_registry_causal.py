@@ -160,7 +160,7 @@ def test_cause_on_an_aggregation_statistic_grounds_through_the_registry():
     RelationalCausalCircuit().fit(
         model,
         [to_dao(room) for room in rooms],
-        stratify_by=chair_count_variable,
+        stratify_by=chair_count_variable._name_,
     )
 
     query = a(SceneRoom)(

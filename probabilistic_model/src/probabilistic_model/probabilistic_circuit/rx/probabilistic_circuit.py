@@ -869,10 +869,6 @@ class ProductUnit(InnerUnit):
                 for sub_subcircuit in subcircuit.subcircuits:
                     self.add_subcircuit(sub_subcircuit)
 
-                # detach, but remove the node only once no other parent references
-                # it: Monte-Carlo grounding can mount one shared instance under
-                # several nodes, so removing it unconditionally would delete it out
-                # from under the others.
                 if self.probabilistic_circuit.graph.has_edge(
                     self.index, subcircuit.index
                 ):
@@ -1358,17 +1354,11 @@ class ProbabilisticCircuit(ProbabilisticModel, SubclassJSONSerializer):
         return result.log_truncated_in_place(event, singleton_allowed)
 
     def marginal_in_place(self, variables: Iterable[Variable]) -> Optional[Self]:
-        result = [
-            node.marginal(variables)
-            for layer in reversed(self.layers)
-            for node in layer
-        ][-1]
-        if result is not None:
-            self.remove_unreachable_nodes(result)
-            self.simplify()
-            return self
-        else:
+        result = self.restrict_to_variables_in_place(variables)
+        if result is None:
             return None
+        self.simplify()
+        return self
 
     def restrict_to_variables_in_place(
         self, variables: Iterable[Variable]
@@ -1377,8 +1367,8 @@ class ProbabilisticCircuit(ProbabilisticModel, SubclassJSONSerializer):
         Restrict the circuit to variables in place, without ``simplify()``'s same-type
         merge.
 
-        Mirrors :meth:`marginal_in_place`, minus its trailing ``simplify()`` call: that
-        call flattens nested SumUnits into their parent, which leaves the represented
+        :meth:`marginal_in_place` is this plus a trailing ``simplify()`` call: that call
+        flattens nested SumUnits into their parent, which leaves the represented
         distribution unchanged but can erase branch boundaries a caller relies on -- for
         instance ``CausalCircuit.verify_support_determinism`` inspecting whether a
         support-deterministic circuit's own branches stay disjoint.
@@ -1459,8 +1449,11 @@ class ProbabilisticCircuit(ProbabilisticModel, SubclassJSONSerializer):
         return result.log_conditional_in_place(point)
 
     def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
-        result = self.__deepcopy__()
-        return result.marginal_in_place(variables)
+        result = self.restrict_to_variables(variables)
+        if result is None:
+            return None
+        result.simplify()
+        return result
 
     def restrict_to_variables(self, variables: Iterable[Variable]) -> Optional[Self]:
         """

@@ -128,7 +128,7 @@ class RelationalCausalCircuit:
         self,
         relational_probabilistic_circuit: RelationalProbabilisticCircuit,
         instances: List[DataAccessObject],
-        stratify_by: VariableReference,
+        stratify_by: str,
         dataframe_from_parent: Optional[pd.DataFrame] = None,
     ) -> RelationalProbabilisticCircuit:
         """
@@ -145,22 +145,20 @@ class RelationalCausalCircuit:
 
         :param relational_probabilistic_circuit: The circuit to fit, in place.
         :param instances: Training instances; all must share the same DAO class.
-        :param stratify_by: Class-level variable to partition the training dataframe
-            by, as an EQL attribute-access expression or a dotted access-path string.
+        :param stratify_by: Name of the class-level dataframe column to partition the
+            training data by -- an EQL attribute-access expression's own ``._name_``,
+            or the equivalent dotted access-path string.
         :param dataframe_from_parent: Forwarded to
             ``RelationalProbabilisticCircuit.fit``.
         :return: ``relational_probabilistic_circuit``, fitted, to allow chaining.
         """
-        if isinstance(stratify_by, MappedVariable):
-            stratify_by = stratify_by._name_
+        relational_probabilistic_circuit.class_circuit_builder = (
+            lambda class_dataframe, variables: self._fit_stratified_class_circuit(
+                class_dataframe, variables, stratify_by
+            )
+        )
         return relational_probabilistic_circuit.fit(
-            instances,
-            dataframe_from_parent=dataframe_from_parent,
-            class_circuit_builder=(
-                lambda class_dataframe, variables: self._fit_stratified_class_circuit(
-                    class_dataframe, variables, stratify_by
-                )
-            ),
+            instances, dataframe_from_parent=dataframe_from_parent
         )
 
     @staticmethod

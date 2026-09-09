@@ -592,6 +592,19 @@ class RelationalProbabilisticCircuit:
     Must be a positive integer.
     """
 
+    class_circuit_builder: Optional[
+        Callable[[pd.DataFrame, list[AnnotatedVariable]], ProbabilisticCircuit]
+    ] = None
+    """
+    Builds the class-level circuit from the class dataframe and its inferred variables,
+    in place of ``fit``'s plain, unconstrained ``JointProbabilityTree`` fit.
+
+    Set this before calling ``fit`` when a specific circuit shape is needed -- for
+    instance one that is support-deterministic over a chosen variable -- rather than
+    ``fit`` knowing about that requirement itself. Leave ``None`` for the plain,
+    unconstrained fit.
+    """
+
     schema_information: Optional[DataAccessObjectSchema] = field(
         init=False, default=None
     )
@@ -732,28 +745,19 @@ class RelationalProbabilisticCircuit:
         self,
         instances: list[DataAccessObject],
         dataframe_from_parent: Optional[pd.DataFrame] = None,
-        class_circuit_builder: Optional[
-            Callable[[pd.DataFrame, list[AnnotatedVariable]], ProbabilisticCircuit]
-        ] = None,
     ):
         """
         Fit the relational probabilistic circuit from a list of DAO instances.
 
         Builds a ``FeatureExtractor``, trains a ``JointProbabilityTree`` on the class-
-        level features, and then recursively fits one
-        ``ExchangeableDistributionTemplate`` per exchangeable part discovered in the
-        schema.
+        level features (or runs :attr:`class_circuit_builder` instead, if set), and then
+        recursively fits one ``ExchangeableDistributionTemplate`` per exchangeable part
+        discovered in the schema.
 
         :param instances: Training instances; all must share the same DAO class.
         :param dataframe_from_parent: Pre-built dataframe supplied by a parent
             ``_fit_exchangeable_part`` call. When provided, feature extraction and
             preprocessing are skipped.
-        :param class_circuit_builder: Builds the class-level circuit from the class
-            dataframe and its inferred variables, in place of the plain, unconstrained
-            ``JointProbabilityTree`` fit. Callers that need a specific circuit shape --
-            for instance one that is support-deterministic over a chosen variable --
-            supply their own builder rather than this general fit knowing about that
-            requirement. Leave ``None`` for the plain, unconstrained fit.
         :return:``self``, to allow chaining.
         """
         self.feature_extractor = FeatureExtractor.from_instances(instances)
@@ -761,12 +765,12 @@ class RelationalProbabilisticCircuit:
             self.feature_extractor, instances, dataframe_from_parent
         )
         variables = infer_variables_from_dataframe(class_dataframe)
-        if class_circuit_builder is None:
+        if self.class_circuit_builder is None:
             self.class_probabilistic_circuit = JointProbabilityTree(
                 annotated_variables=variables
             ).fit(class_dataframe)
         else:
-            self.class_probabilistic_circuit = class_circuit_builder(
+            self.class_probabilistic_circuit = self.class_circuit_builder(
                 class_dataframe, variables
             )
         self.schema_information = get_dao_schema(type(instances[0]))

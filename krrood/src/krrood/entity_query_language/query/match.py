@@ -534,53 +534,6 @@ class Match(
             CausesEffect(and_(*conditions), cause_attributes=cause_attributes)
         )
 
-    def construct_instance(self):
-        """
-        Construct a python object from this match, excluding keyword arguments that.
-
-        name an aggregation statistic rather than a literal field of :attr:`factory`
-        -- for instance one marked ``cause``/``confounder`` on an aggregate rather
-        than a field (see :meth:`causes_effect`). Those name a statistic this match's
-        grounding computes separately, not a constructor parameter.
-
-        ..note:: This method may work with ellipsis, but it's not guaranteed to work
-            with all types.
-
-        :return: The constructed object.
-        """
-        # local import: aggregations.py imports from this package, so a module-level
-        # import here would be circular.
-        from krrood.parametrization.feature_extraction.aggregations import (
-            AggregationStatistic,
-            get_aggregation_class,
-        )
-
-        aggregation_class = get_aggregation_class(self.type)
-        aggregation_names = (
-            {
-                function.__name__
-                for ancestor in aggregation_class.__mro__
-                if issubclass(ancestor, AggregationStatistic)
-                for functions in ancestor.aggregation_registry.values()
-                for function in functions
-            }
-            if aggregation_class is not None
-            else set()
-        )
-        if not aggregation_names.intersection(self.kwargs):
-            return super().construct_instance()
-
-        original_kwargs = self.kwargs
-        self.kwargs = {
-            key: value
-            for key, value in original_kwargs.items()
-            if key not in aggregation_names
-        }
-        try:
-            return super().construct_instance()
-        finally:
-            self.kwargs = original_kwargs
-
     def from_(self, domain: DomainType) -> Self:
         """
         Range the match over ``domain`` instead of over all instances of its type.

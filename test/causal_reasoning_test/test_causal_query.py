@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from experiments.causal_reasoning.mutagenesis.causal_query import (
+    BranchingAtomCountCausalEffect,
     BranchingAtomCountCausalQuery,
 )
 from experiments.causal_reasoning.mutagenesis.dataset import (
@@ -19,6 +20,9 @@ from experiments.causal_reasoning.mutagenesis.dataset import (
     synthetic_mutagenesis_molecules,
 )
 from experiments.causal_reasoning.mutagenesis.domain import (
+    MutagenesisAtom,
+    MutagenesisElement,
+    MutagenesisMolecule,
     MutagenesisMoleculeAggregations,
 )
 
@@ -45,6 +49,67 @@ def test_synthetic_causal_circuit_is_support_deterministic():
     )
     result = BranchingAtomCountCausalQuery().run(molecules, atom_count=2, bond_count=1)
     assert result.support_determinism_verified
+
+
+def _molecule_with_branching_atom_count(
+    branching_atom_count: int, mutagenic: bool
+) -> MutagenesisMolecule:
+    atoms = [
+        MutagenesisAtom(
+            element=MutagenesisElement.CARBON, atom_type=1, charge=0.0, bond_count=3
+        )
+        for _ in range(branching_atom_count)
+    ] + [
+        MutagenesisAtom(
+            element=MutagenesisElement.CARBON, atom_type=1, charge=0.0, bond_count=1
+        )
+    ]
+    return MutagenesisMolecule(
+        indicator_1=False,
+        logp=0.0,
+        lumo=0.0,
+        mutagenic=mutagenic,
+        atoms=atoms,
+        bonds=[],
+    )
+
+
+def test_classify_by_branching_atom_count_counts_matches_and_mismatches():
+    """
+    Predicts mutagenic exactly when the branching-atom count's naive probability is
+    above one half, then tallies the result against each molecule's actual label.
+    """
+    effects = [
+        BranchingAtomCountCausalEffect(
+            branching_atom_count=1,
+            region_probability=0.5,
+            naive_probability_mutagenic=0.2,
+            adjusted_probability_mutagenic=0.2,
+        ),
+        BranchingAtomCountCausalEffect(
+            branching_atom_count=5,
+            region_probability=0.5,
+            naive_probability_mutagenic=0.8,
+            adjusted_probability_mutagenic=0.8,
+        ),
+    ]
+    molecules = [
+        _molecule_with_branching_atom_count(1, mutagenic=False),
+        _molecule_with_branching_atom_count(1, mutagenic=True),
+        _molecule_with_branching_atom_count(5, mutagenic=True),
+        _molecule_with_branching_atom_count(5, mutagenic=False),
+    ]
+
+    confusion_matrix = BranchingAtomCountCausalQuery.classify_by_branching_atom_count(
+        molecules, effects
+    )
+
+    assert confusion_matrix.true_negative == 1
+    assert confusion_matrix.false_negative == 1
+    assert confusion_matrix.true_positive == 1
+    assert confusion_matrix.false_positive == 1
+    assert confusion_matrix.total == 4
+    assert confusion_matrix.accuracy == pytest.approx(0.5)
 
 
 # %% live-dataset pipeline (real CTU Mutagenesis data, skipped without network access)
@@ -98,3 +163,13 @@ def test_effect_probabilities_are_valid_probabilities(causal_query_result):
     for effect in causal_query_result.effects:
         assert 0.0 <= effect.naive_probability_mutagenic <= 1.0
         assert 0.0 <= effect.adjusted_probability_mutagenic <= 1.0
+
+
+@requires_mutagenesis_dataset
+def test_confusion_matrix_covers_every_molecule(
+    causal_query_result, mutagenesis_molecules
+):
+    confusion_matrix = BranchingAtomCountCausalQuery.classify_by_branching_atom_count(
+        mutagenesis_molecules, causal_query_result.effects
+    )
+    assert confusion_matrix.total == len(mutagenesis_molecules)

@@ -210,7 +210,7 @@ def test_fit_stratifies_the_class_circuit_by_the_given_variable(many_chair_count
     RelationalCausalCircuit().fit(
         model,
         [to_dao(room) for room in many_chair_count_rooms],
-        stratify_by=chair_count_variable,
+        stratify_by=chair_count_variable._name_,
     )
     resolved_chair_count = next(
         v
@@ -251,7 +251,7 @@ def test_verify_support_determinism_survives_a_stratified_partitions_own_further
     relational_causal_circuit.fit(
         model,
         [to_dao(room) for room in many_chair_count_rooms],
-        stratify_by=chair_count_variable,
+        stratify_by=chair_count_variable._name_,
     )
 
     np.random.seed(0)

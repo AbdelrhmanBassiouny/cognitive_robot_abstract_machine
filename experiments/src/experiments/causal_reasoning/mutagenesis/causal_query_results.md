@@ -133,39 +133,16 @@ backdoor-adjusted for `ind1`, on the full dataset:
 The circuit passes support-determinism verification, and the whole thing runs end to
 end in well under a minute.
 
-## Inference
+For reference, thresholding the naive P(mutagenic) column at one half turns
+branching-atom count into a plain classifier. Its confusion matrix against the
+actual labels, on the same 188 molecules:
 
-The circuit itself only produces the numbers in the table above: a region
-probability and two conditional probabilities per branching-atom-count value. Every
-bullet below is our reading of those numbers, not a claim the circuit makes on its
-own; it has no notion of "monotonic," "small sample," or "structurally complex."
+| | Predicted mutagenic | Predicted non-mutagenic |
+|---|---:|---:|
+| Actually mutagenic | 114 | 11 |
+| Actually non-mutagenic | 18 | 45 |
 
-* **Naive P(mutagenic) rises with branching-atom count, close to monotonically.** It
-  starts at 0 for molecules with just 7 branching atoms, moves through the 0.14 to
-  0.4 range up to 11 to 12 atoms, crosses 0.5 at 13, keeps climbing through 0.62 to
-  0.85 up to 16, and reaches a flat 1.0 for every value of 17 or above. Molecules with
-  more ring-fusion and branch points, structurally more complex and often more
-  aromatic-ring-dense, are markedly more likely to be mutagenic in this dataset.
-* **Adjusting for `ind1` barely moves most values, but it matters in the middle of
-  the range.** At 7 to 12 and at 17 and up, naive and adjusted probabilities agree
-  almost exactly, meaning `ind1` is not doing much confounding work there. Between 13
-  and 16, naive and adjusted move in opposite directions relative to each other by a
-  few points each time, for example 0.85 naive versus 0.83 adjusted at 15, showing
-  `ind1` genuinely redistributing some of the naive signal in that range.
-* **The values at 17 and above are a flat wall of 1.0, and some of them rest on very
-  few molecules.** 20, 22, 24 and 25 branching atoms are each backed by only one to
-  four molecules, so a flat 1.0 there is a small sample reporting itself accurately,
-  not a discovered law. The climb from 7 through 16, backed by much larger groups (12
-  to 21 molecules at most of those values), is the part of this result worth
-  trusting.
-* **This does not prove branching-atom count causes mutagenicity.** The backdoor
-  criterion only tells you the adjustment is arithmetically sound given `ind1` as the
-  full confounder set; it cannot tell you whether `ind1` actually is the full
-  confounder set for branching-atom count in this domain, because nothing here
-  constructs or checks the underlying causal graph, and that is an assumption we are
-  bringing in, not one the circuit verifies. Read this as the causal-circuit machinery
-  running correctly on real, structured relational data and turning up a real,
-  chemically plausible signal, not as a finished causal claim.
+That is 159 correct out of 188, 84.6% accuracy, from branching-atom count alone.
 
 ## Final takeway from this experiment
 
