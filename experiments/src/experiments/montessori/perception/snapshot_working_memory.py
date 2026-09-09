@@ -18,6 +18,7 @@ from typing_extensions import List, Optional
 
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
+from krrood.patterns.role import Role
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 
@@ -45,22 +46,23 @@ no such measurement.
 """
 
 
-@dataclass(frozen=True)
-class PerceivedPose:
+@dataclass(eq=False)
+class PerceivedPose(Role[Pose]):
     """
     A loose piece as one look reported it, narrowed to what deciding whether it moved
     needs.
+
+    A role of the pose one look reported, the same pattern
+    :class:`~experiments.montessori.perception.detections.DetectedMontessoriShape`
+    already uses for a sighting: the perceived :class:`Pose` is the role taker, reached
+    through :attr:`~krrood.patterns.role.Role.role_taker`, and this role adds only what
+    matching needs on top of it.
     """
 
-    category: MontessoriShapeCategory
+    category: MontessoriShapeCategory = field(kw_only=True)
     """
     The kind of piece perception recognised, matched against a believed piece of the
     same kind.
-    """
-
-    pose: Pose
-    """
-    Where it was seen.
     """
 
 
@@ -72,7 +74,7 @@ def perceived_poses_of(scene: MontessoriScene) -> List[PerceivedPose]:
     :return: One entry per piece the look found.
     """
     return [
-        PerceivedPose(category=shape.category, pose=shape.pose)
+        PerceivedPose(category=shape.category, role_taker=shape.pose)
         for shape in scene.shapes
     ]
 
@@ -167,8 +169,8 @@ class SnapshotWorkingMemory:
             if piece is None:
                 continue
             matched.add(piece)
-            if self._has_moved(piece, perceived.pose):
-                self._commit(piece, perceived.pose)
+            if self._has_moved(piece, perceived.role_taker):
+                self._commit(piece, perceived.role_taker)
                 committed.append(piece)
         return committed
 
@@ -196,7 +198,7 @@ class SnapshotWorkingMemory:
         ]
         if not candidates:
             return None
-        target = self._position_of(perceived.pose)
+        target = self._position_of(perceived.role_taker)
         return min(
             candidates,
             key=lambda piece: float(

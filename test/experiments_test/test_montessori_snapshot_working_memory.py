@@ -101,7 +101,7 @@ def test_tick_commits_nothing_while_not_idle(
     far_away = pose_at(montessori_world, original_position + np.array([0.5, 0.0, 0.0]))
     memory = memory_of(
         montessori_world,
-        [PerceivedPose(category=some_piece.shape_category, pose=far_away)],
+        [PerceivedPose(category=some_piece.shape_category, role_taker=far_away)],
         is_idle=False,
     )
 
@@ -179,7 +179,7 @@ def test_a_change_smaller_than_the_threshold_is_not_committed(
     )
     memory = memory_of(
         montessori_world,
-        [PerceivedPose(category=some_piece.shape_category, pose=barely_moved)],
+        [PerceivedPose(category=some_piece.shape_category, role_taker=barely_moved)],
         pose_change_threshold=0.01,
     )
 
@@ -199,7 +199,7 @@ def test_a_change_larger_than_the_threshold_is_committed(
     moved = pose_at(montessori_world, original_position + offset)
     memory = memory_of(
         montessori_world,
-        [PerceivedPose(category=some_piece.shape_category, pose=moved)],
+        [PerceivedPose(category=some_piece.shape_category, role_taker=moved)],
         pose_change_threshold=0.01,
     )
 
@@ -241,7 +241,8 @@ def test_a_detection_is_committed_to_the_nearest_piece_of_its_own_kind(
         montessori_world,
         [
             PerceivedPose(
-                category=category, pose=pose_at(montessori_world, detected_position)
+                category=category,
+                role_taker=pose_at(montessori_world, detected_position),
             )
         ],
         pose_change_threshold=0.01,
@@ -275,10 +276,10 @@ def test_two_detections_of_the_same_kind_each_match_a_different_piece(
         montessori_world,
         [
             PerceivedPose(
-                category=category, pose=pose_at(montessori_world, first_offset)
+                category=category, role_taker=pose_at(montessori_world, first_offset)
             ),
             PerceivedPose(
-                category=category, pose=pose_at(montessori_world, second_offset)
+                category=category, role_taker=pose_at(montessori_world, second_offset)
             ),
         ],
         pose_change_threshold=0.01,
