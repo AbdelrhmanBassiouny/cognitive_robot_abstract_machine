@@ -20,7 +20,7 @@ from experiments.montessori.perception.pipeline import (
 )
 from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from experiments.montessori.perception.surfaces import WorkspaceSurface
-from experiments.montessori.world import MontessoriWorld
+from experiments.montessori.semantics import ShapeSortingBoard
 from semantic_digital_twin.adapters.multi_sim import MujocoCamera
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -29,6 +29,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     RotationMatrix,
     Vector3,
 )
+from semantic_digital_twin.world import World
 
 # %% the camera, as the real one stands
 
@@ -75,7 +76,7 @@ the same thing.
 """
 
 
-def camera_over_the_table(montessori_world: MontessoriWorld) -> SimulatedCamera:
+def camera_over_the_table(world: World) -> SimulatedCamera:
     """
     A camera looking down at the middle of the table this world sets its scene on.
 
@@ -83,20 +84,20 @@ def camera_over_the_table(montessori_world: MontessoriWorld) -> SimulatedCamera:
     the point of a simulated look is that a backend answers it the way it answers a
     real one, which a viewpoint nothing was ever measured from would not test.
 
-    :param montessori_world: The world the camera is added to and looks at.
+    :param world: The world the camera is added to and looks at.
     :return: The camera, already attached to the world and ready to be started.
     """
-    table = table_surface(montessori_world)
+    table = table_surface(world)
     looking_at = Point3(
         x=(table.region.minimum_x + table.region.maximum_x) / 2.0,
         y=(table.region.minimum_y + table.region.maximum_y) / 2.0,
         z=table.height,
     )
-    return looking_down_at(montessori_world, looking_at)
+    return looking_down_at(world, looking_at)
 
 
 def looking_down_at(
-    montessori_world: MontessoriWorld,
+    world: World,
     target: Point3,
     height_above_the_target: float = CAMERA_HEIGHT_ABOVE_THE_TABLE,
 ) -> SimulatedCamera:
@@ -107,12 +108,11 @@ def looking_down_at(
     negative y and its downward direction the world's negative x, so a relation read off
     a simulated look reads the way the same relation reads off a capture.
 
-    :param montessori_world: The world the camera is added to.
+    :param world: The world the camera is added to.
     :param target: The spot the camera looks at, in the world root's frame.
     :param height_above_the_target: How far above that spot the camera hangs, in metres.
     :return: The camera, already attached to the world.
     """
-    world = montessori_world.world
     root_R_camera = RotationMatrix.from_vectors(
         x=Vector3(0.0, -1.0, 0.0), z=Vector3(0.0, 0.0, 1.0)
     )
@@ -143,19 +143,19 @@ def looking_down_at(
 # %% the surfaces a look is answered over
 
 
-def table_surface(montessori_world: MontessoriWorld) -> WorkspaceSurface:
+def table_surface(world: World) -> WorkspaceSurface:
     """
     The table the scene is set on, measured of the world's own body for it.
 
-    :param montessori_world: The world the scene stands in.
+    :param world: The world the scene stands in.
     """
     return WorkspaceSurface.of(
-        montessori_world.world.get_semantic_annotations_by_type(Table)[0],
-        montessori_world.world.root,
+        world.get_semantic_annotations_by_type(Table)[0],
+        world.root,
     )
 
 
-def lid_surface(montessori_world: MontessoriWorld) -> WorkspaceSurface:
+def lid_surface(world: World) -> WorkspaceSurface:
     """
     The board's lid, the second surface pieces rest on.
 
@@ -163,10 +163,11 @@ def lid_surface(montessori_world: MontessoriWorld) -> WorkspaceSurface:
     one picture onto both planes and is bounded by where the camera can see rather than
     by how far the board reaches.
 
-    :param montessori_world: The world the scene stands in.
+    :param world: The world the scene stands in.
     """
-    measured = WorkspaceSurface.of(montessori_world.board, montessori_world.world.root)
-    return replace(measured, region=table_surface(montessori_world).region)
+    board = world.get_semantic_annotations_by_type(ShapeSortingBoard)[0]
+    measured = WorkspaceSurface.of(board, world.root)
+    return replace(measured, region=table_surface(world).region)
 
 
 def board_detector() -> BoardDetector:
@@ -178,18 +179,15 @@ def board_detector() -> BoardDetector:
     )
 
 
-def perception_pipeline(
-    montessori_world: MontessoriWorld,
-) -> MontessoriPerceptionPipeline:
+def perception_pipeline(world: World) -> MontessoriPerceptionPipeline:
     """
     The pipeline that reads a look at this simulated scene.
 
-    :param montessori_world: The world the look is taken of and reported in.
+    :param world: The world the look is taken of and reported in.
     """
-    world = montessori_world.world
     return MontessoriPerceptionPipeline(
-        table=table_surface(montessori_world),
-        lid=lid_surface(montessori_world),
+        table=table_surface(world),
+        lid=lid_surface(world),
         look_rules=default_look_rules(board_detector=board_detector()),
         reference_frame=world.root,
         world=world,
