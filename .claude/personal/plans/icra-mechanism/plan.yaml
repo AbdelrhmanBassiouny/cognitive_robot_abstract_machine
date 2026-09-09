@@ -35,11 +35,12 @@ items:
 - id: backends-declare-their-capabilities
   title: >-
     Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin
-  branch: null
-  pull_request_number: null
+  branch: claude/backends-declare-capabilities-roscma
+  pull_request_number: 303
   track: backend-routing
   depends_on: []
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_015KwEoJ9rBZHtB8LYBxbD7v
   notes: >
     The capability table the memo publishes, as code rather than a table written by hand, and the
     joint the whole architecture turns on: QueryBackend gains capability(), the same shape #231 gave

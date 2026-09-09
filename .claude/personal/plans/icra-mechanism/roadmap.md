@@ -405,3 +405,70 @@ simulation first and again on the robot, both numbers recorded." The robot half 
 physical robot access this session does not have. Recorded here as outstanding rather than
 invented — whoever next has the robot records the second number against this same test's
 simulation figure.
+
+## 2026-09-09: `backends-declare-their-capabilities` kicked off, based on #265 rather than `tracy_icra`
+
+Kicked off by `/plan-item-kickoff icra-mechanism backends-declare-their-capabilities`. #303.
+
+### Base branch, same precedent as `snapshot-working-memory`
+
+Checked directly rather than assumed: `git merge-base --is-ancestor
+origin/claude/icra-experiments-simulation-pipeline-w4ep7n origin/tracy_icra` still answers no
+(630 files / 86,630 insertions apart), so `tracy_icra` does not yet carry what this item needs —
+`PerceptionDetector.capability`, `DetectorChoice`, `AttributeEqualityToLiteral.read_from` and
+`QueryBackend` itself, all confirmed present on #265's tree. Same situation `snapshot-working-memory`
+(#301) hit the same day, same answer: based on `claude/icra-experiments-simulation-pipeline-w4ep7n`
+(#265), not `tracy_icra`. Will need restacking onto `tracy_icra` once
+`tracy-demo-takes-the-integrated-branch` lands there.
+
+### What already exists, checked against #265's tree before designing anything new
+
+`krrood/src/krrood/entity_query_language/backends.py` already carries every piece the item's notes
+point at: `AttributeEqualityToLiteral.read_from` reads an equality about the selected variable's own
+attribute out of a condition; `QueryBackend` is the base class every backend already extends
+(`SelectiveBackend`/`GenerativeBackend`, and concretely `EntityQueryLanguageBackend`,
+`SQLAlchemyBackend`, `EntityQueryLanguageGenerativeBackend`, `ProbabilisticBackend`,
+`PerceptionBackend`); and `PerceptionDetector.capability(look) -> ConditionType` /
+`DetectorChoice` are the exact shape the item's notes say to raise from detectors to every backend.
+None of `physics`, `motion-statechart` or `vision-language` backends exist yet — those are
+`physics-verification-backend`, `control-constraints-and-degrees-of-freedom-queried` and
+`perception-backends-are-interchangeable`, all of which depend on this item rather than the other
+way round, so this item declares capability only for the backends already in the tree.
+
+### Scope, as amended 2026-09-09 on #298's fourth round
+
+Three parts, matching the amendment recorded in plan.yaml's notes:
+
+1. `QueryBackend.capability()`, the same shape as `PerceptionDetector.capability(look)`: a method
+   taking the thing being asked about and returning an EQL condition, rather than making
+   `QueryBackend` generic over one bound type the way `PerceptionDetector[LookT]` is — a backend
+   answers many different classes, not one `Look` subtype, so the generalization is in the method's
+   signature (any `Selectable`), not in binding the class itself to a type parameter.
+2. Field-level capability: a capability may name a specific field of a specific class as an EQL
+   `Attribute`/`MappedVariable`, read back the way `AttributeEqualityToLiteral.read_from` already
+   reads an attribute equality, rather than as a field-name string.
+3. The underspecified-description helper: given a statement naming only a class (the developer's own
+   example, `a(MontessoriBoard)`), add the features the twin already knows about that class to the
+   description before a backend is chosen. Nothing does this today.
+
+Tests pin one declaration per backend already in the tree against a statement it accepts and one it
+refuses, following `detectors_that_state_what_they_answer.py`'s mimic-dataset pattern (a
+`krrood`-only mimic in `test/krrood_test/dataset/`, per `AGENTS.md`'s self-containment rule for
+`krrood`).
+
+### Tooling bug found while recording this item, worked around rather than fixed here
+
+`plan_item_bootstrap.py`'s `apply_item_fields` hardcodes `ITEM_FIELD_INDENT = "    "` (4 spaces)
+and `ITEM_MARKER = "  - "` (2-space marker), matching `plans/README.md`'s schema example — but
+every actual `plan.yaml` in this repo, this one included, uses 0-indent `- id:` markers with
+2-space field indent instead. Patching or inserting a field through the script therefore
+over-indents the written line, and where a folded (`>-`/`>`) field's body sits immediately above
+the patched line, YAML reads the over-indented line as a continuation of that body rather than a
+new key — reproduced here: patching `branch`/`pull_request_number`/`status` and inserting `session`
+on this item corrupted the manifest (`while parsing a block mapping`, `expected <block end>`) every
+time, confirmed by comparing byte-identical inputs across three runs. Worked around by hand-patching
+the four fields at the file's actual 2-space indent and pushing directly, per `plans/README.md`'s
+"Editing an existing plan" section, rather than through `open`/`record`. Not fixed here — it is
+shared session tooling on `main`, unrelated to this item's own subject, and worth a
+`plan-tracking-skills` item of its own; every other in-flight kickoff that needs `apply_item_fields`
+to patch or insert a field is exposed to the same corruption until it is.
