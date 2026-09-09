@@ -1855,3 +1855,45 @@ dashboards still implement the readiness rule, so a new item cut off `tracy_icra
 names an item whose pull request is a draft will read as "not ready" when nothing is actually
 blocking it. Nothing here changes that; it is worth a `plan-tracking-skills` item if the trunk
 workflow outlives this deadline.
+
+### `montessori-scenarios` (#296): the fifth review round, 2026-09-09
+
+One thread, and the answer to the question the fourth round left with the developer:
+*where should the demo's actuation live, and how do the scenarios reach the demo?* —
+**do (1)**. Option (1) was to open the one seam that was still closed and leave
+`tracy_icra`'s actuation where it lives, so that
+`tracy-demo-takes-the-integrated-branch` is where the demo's world, its actuators and
+these scenarios meet.
+
+**A scenario is built on the scene it is given.** `MontessoriSortingScenario` no longer
+constructs a `MontessoriWorld`: it is handed a `MontessoriWorldBuilder` and asks it for
+a fresh scene per trial. `BoardOnItsOwnTable` is this package's own — the board on the
+table `MontessoriWorld` stands it on — and a demo's is a second implementation rather
+than an edit here.
+
+**Where the robot is bolted moved with it**, onto `BoardOnItsOwnTable`, and that is the
+part worth recording, because it is what makes the seam usable rather than nominal.
+Mounting is not separable from building the scene in the demo's case: `parse_tracy`
+strips the actuators an already-parsed robot cannot be merged with,
+`tracy_table_mount_position` reads both the mount and the table height off that parsed
+world, and `TracyMontessoriWorld` needs the table height to place the board at all. A
+seam that let a demo choose the world but kept the parse and the mount here would have
+left the demo unable to use it.
+
+**And the table a piece rests on is the given scene's**, not the module's constant:
+`MontessoriWorldBuilder` states its own `table_top_z`, `resting_height_of` moves onto it
+from a free function, and the pusher's rail reads it too. Left as it was, a scene whose
+table stood elsewhere would have had its pieces placed at this table's height and its
+pusher sliding at that height as well.
+
+**What is still this table's**, and is named rather than built: `LayoutArea` and
+`PiecePlacement.standing_height` measure against the module's `TABLE_TOP_Z`, so a scene
+on another table also needs its layout stated in that frame. It is a layout's own frame
+rather than the scene's, the demo does not need it to run a scenario, and inventing it
+now would be a second guess at what a demo's layout wants.
+
+51 tests in the module. The three new ones were written first and each was checked by
+mutation: building a `MontessoriWorld` inline again fails the one that says the run
+happens in the scene the builder built, reading the resting height off `TABLE_TOP_Z`
+again fails the one that says a piece stands on the given scene's table, and bolting the
+robot at a fixed position fails the one that says the scene decides where it stands.
