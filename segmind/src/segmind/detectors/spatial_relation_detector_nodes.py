@@ -11,12 +11,23 @@ from segmind.datastructures.events import (
     SupportEvent,
     LossOfSupportEvent,
     ContainmentEvent,
-    LossOfContainmentEvent, ContactEvent, LossOfContactEvent, InsertionEvent,
+    LossOfContainmentEvent,
+    ContactEvent,
+    LossOfContactEvent,
+    InsertionEvent,
 )
 
-from semantic_digital_twin.reasoning.predicates import is_supported_by, is_body_in_region, InsideOf
+from semantic_digital_twin.reasoning.predicates import (
+    is_supported_by,
+    is_body_in_region,
+    InsideOf,
+)
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
-from semantic_digital_twin.world_description.world_entity import Body, KinematicStructureEntity, Region
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    KinematicStructureEntity,
+    Region,
+)
 
 from segmind.detectors.base import AbstractDetector, SegmindContext
 
@@ -34,10 +45,12 @@ signal without being so low that mesh-boundary noise trips it.
 
 
 @dataclass(eq=False, repr=False)
-class HoleContactDetector(AbstractDetector):
+class BaseHoleContactDetector(AbstractDetector):
     """
-    Detects when a tracked object's volume starts overlapping one of the scene's
-    registered holes (:attr:`SegmindContext.holes`).
+    Abstract base class for hole-contact-based detectors.
+
+    Provides shared functionality for checking which of the scene's registered holes
+    (:attr:`SegmindContext.hole_regions`) a tracked object currently overlaps.
 
     A hole (:class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture`)
     is rooted in a virtual :class:`~semantic_digital_twin.world_description.world_entity.Region`,
@@ -65,13 +78,50 @@ class HoleContactDetector(AbstractDetector):
     taller region built around the same hole (e.g. spanning its opening's full
     thickness) gives a much larger window during which a real fall is actually caught.
     A match against the extra region is still recorded against that hole's own root
-    (see :meth:`~segmind.detectors.base.AbstractDetector.get_relation_to_holes`), so
-    :class:`InsertionDetector` needs no change. Defaults to none, so every existing
-    caller's behaviour is unchanged.
+    (see :meth:`get_touching_hole_roots`), so :class:`InsertionDetector` needs no
+    change. Defaults to none, so every existing caller's behaviour is unchanged.
+    """
+
+    def get_touching_hole_roots(
+        self, segmind_context: SegmindContext, tracked_objects: List[Body]
+    ) -> Dict[Body, Set[Region]]:
+        """
+        Which hole roots each tracked object currently overlaps.
+
+        :param segmind_context: The shared SegmindContext holding the registered holes.
+        :param tracked_objects: Bodies that should be checked.
+        :return: Mapping of body -> overlapping hole root regions.
+        """
+        touching: Dict[Body, Set[Region]] = {}
+        for aperture, hole_root in segmind_context.hole_regions.items():
+            candidates = [hole_root]
+            extra_candidate = self.additional_candidates.get(aperture)
+            if extra_candidate is not None:
+                candidates.append(extra_candidate)
+
+            for obj in self.get_relation_to_regions(
+                tracked_objects,
+                candidates,
+                lambda obj, region: is_body_in_region(obj, region)
+                > self.overlap_threshold,
+            ):
+                touching.setdefault(obj, set()).add(hole_root)
+
+        return touching
+
+
+@dataclass(eq=False, repr=False)
+class HoleContactDetector(BaseHoleContactDetector):
+    """
+    Detects when a tracked object's volume starts overlapping one of the scene's
+    registered holes.
     """
 
     def update_context_and_events(
-        self, context: MotionStatechartContext, segmind_context: SegmindContext, tracked_objects: List[Body]
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        tracked_objects: List[Body],
     ) -> List[DetectionEvent]:
         """
         Detects newly established overlaps between tracked objects and holes.
@@ -81,50 +131,40 @@ class HoleContactDetector(AbstractDetector):
         :param tracked_objects: Bodies that should be evaluated for new hole contacts.
         :return: List of ContactEvent objects representing newly detected hole contacts.
         """
-        events = []
         latest_hole_contacts = segmind_context.latest_hole_contacts
-        new_contact_pairs = self.get_relation_to_holes(
-            segmind_context,
-            tracked_objects,
-            lambda obj, hole_region: is_body_in_region(obj, hole_region) > self.overlap_threshold,
-            additional_candidates=self.additional_candidates,
-        )
-        for obj, holes in new_contact_pairs.items():
+        touching = self.get_touching_hole_roots(segmind_context, tracked_objects)
+
+        events = []
+        for obj, holes in touching.items():
             new_contacts = (
-                holes if obj not in latest_hole_contacts else holes - latest_hole_contacts[obj]
+                holes
+                if obj not in latest_hole_contacts
+                else holes - latest_hole_contacts[obj]
             )
             if new_contacts:
                 latest_hole_contacts.setdefault(obj, set()).update(new_contacts)
                 events.extend(
-                    [ContactEvent(tracked_object=obj, with_object=hole_region) for hole_region in new_contacts]
+                    [
+                        ContactEvent(tracked_object=obj, with_object=hole_root)
+                        for hole_root in new_contacts
+                    ]
                 )
 
         return events
 
 
 @dataclass(eq=False, repr=False)
-class LossOfHoleContactDetector(AbstractDetector):
+class LossOfHoleContactDetector(BaseHoleContactDetector):
     """
     Detects when a tracked object stops overlapping a hole it was previously touching
     (see :class:`HoleContactDetector`).
     """
 
-    overlap_threshold: float = HOLE_CONTACT_OVERLAP_THRESHOLD
-    """
-    The minimum overlap fraction (see :data:`HOLE_CONTACT_OVERLAP_THRESHOLD`) for a
-    tracked object to still be considered touching a hole.
-    """
-
-    additional_candidates: Dict[Aperture, Region] = field(default_factory=dict)
-    """
-    An extra region checked alongside a given hole's own root; see
-    :attr:`HoleContactDetector.additional_candidates`. Must match what the paired
-    :class:`HoleContactDetector` was given, so a contact recorded against one of them
-    can also be recognized as lost.
-    """
-
     def update_context_and_events(
-        self, context: MotionStatechartContext, segmind_context: SegmindContext, tracked_objects: List[Body]
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        tracked_objects: List[Body],
     ) -> List[DetectionEvent]:
         """
         Detects when previously overlapping hole contacts are no longer present.
@@ -134,17 +174,14 @@ class LossOfHoleContactDetector(AbstractDetector):
         :param tracked_objects: Bodies that should be evaluated for lost hole contacts.
         :return: List of LossOfContactEvent objects representing lost hole contacts.
         """
-        new_contact_pairs = self.get_relation_to_holes(
-            segmind_context,
-            tracked_objects,
-            lambda obj, hole_region: is_body_in_region(obj, hole_region) > self.overlap_threshold,
-            additional_candidates=self.additional_candidates,
-        )
+        still_touching = self.get_touching_hole_roots(segmind_context, tracked_objects)
 
         events = []
         for obj, holes in list(segmind_context.latest_hole_contacts.items()):
             loss_contacts = (
-                holes.copy() if obj not in new_contact_pairs else holes - new_contact_pairs[obj]
+                holes.copy()
+                if obj not in still_touching
+                else holes - still_touching[obj]
             )
             if loss_contacts:
                 segmind_context.latest_hole_contacts[obj] -= loss_contacts
@@ -153,8 +190,8 @@ class LossOfHoleContactDetector(AbstractDetector):
 
                 events.extend(
                     [
-                        LossOfContactEvent(tracked_object=obj, with_object=hole_region)
-                        for hole_region in loss_contacts
+                        LossOfContactEvent(tracked_object=obj, with_object=hole_root)
+                        for hole_root in loss_contacts
                     ]
                 )
 
@@ -174,7 +211,10 @@ class SupportDetector(AbstractDetector):
     """
 
     def update_context_and_events(
-        self, context:MotionStatechartContext, segmind_context:SegmindContext, objects_to_check: List[Body]
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        objects_to_check: List[Body],
     ) -> List[DetectionEvent]:
         """
         Detects newly established support relationships.
@@ -187,7 +227,9 @@ class SupportDetector(AbstractDetector):
 
         events = []
         latest_support = segmind_context.latest_support
-        new_support_pairs = self.get_relation(context, objects_to_check, is_supported_by)
+        new_support_pairs = self.get_relation(
+            context, objects_to_check, is_supported_by
+        )
         for body, support in new_support_pairs.items():
             new_supports = (
                 support
@@ -220,7 +262,10 @@ class LossOfSupportDetector(AbstractDetector):
     """
 
     def update_context_and_events(
-        self,context:MotionStatechartContext, segmind_context:SegmindContext , objects_to_check: List[Body]
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        objects_to_check: List[Body],
     ) -> List[DetectionEvent]:
         """
         Detects when previously existing support relationships are lost.
@@ -233,7 +278,9 @@ class LossOfSupportDetector(AbstractDetector):
 
         events = []
         latest_support = segmind_context.latest_support
-        new_support_pairs = self.get_relation(context, objects_to_check, is_supported_by)
+        new_support_pairs = self.get_relation(
+            context, objects_to_check, is_supported_by
+        )
 
         for body, support in list(latest_support.items()):
             loss_supports = support - new_support_pairs.get(body, set())
@@ -273,13 +320,13 @@ class BaseContainmentDetector(AbstractDetector):
 
     ``bodies_with_collision`` only ever holds real, collidable ``Body`` entities; a
     caller that also wants containment checked against a virtual ``Region`` (e.g. a
-    hole's own root, or a scene-specific volume such as the pocket a shape settles
-    into once it has fallen through a hole) passes it here instead. Defaults to empty,
-    so every existing caller's behaviour is unchanged.
+    hole's own root, or a scene-specific volume such as the pocket a shape settles into
+    once it has fallen through a hole) passes it here instead. Defaults to empty, so
+    every existing caller's behaviour is unchanged.
     """
 
     def get_containment_pairs(
-        self,context:MotionStatechartContext, tracked_objects: List[Body]
+        self, context: MotionStatechartContext, tracked_objects: List[Body]
     ) -> Dict[Body, Set[Body]]:
         """
         Computes support relationships.
@@ -288,18 +335,23 @@ class BaseContainmentDetector(AbstractDetector):
         :return: Mapping of body → supporting bodies.
         """
         containment_pairs: Dict[Body, Set[Body]] = {}
-        candidates = list(context.world.bodies_with_collision) + self.additional_candidates
+        candidates = (
+            list(context.world.bodies_with_collision) + self.additional_candidates
+        )
 
         for obj in tracked_objects:
             containers = {
-                candidate for candidate in candidates
+                candidate
+                for candidate in candidates
                 if obj is not candidate
-                   and InsideOf(obj, candidate).compute_containment_ratio() > self.containment_threshold
+                and InsideOf(obj, candidate).compute_containment_ratio()
+                > self.containment_threshold
             }
             if containers:
                 containment_pairs[obj] = containers
 
         return containment_pairs
+
 
 @dataclass(eq=False, repr=False)
 class ContainmentDetector(BaseContainmentDetector):
@@ -313,7 +365,10 @@ class ContainmentDetector(BaseContainmentDetector):
     """
 
     def update_context_and_events(
-        self, context:MotionStatechartContext, segmind_context:SegmindContext, objects_to_check: List[Body]
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        objects_to_check: List[Body],
     ) -> List[DetectionEvent]:
         """
         Updates the tracking context with new containment relationships and generates
@@ -357,8 +412,12 @@ class LossOfContainmentDetector(BaseContainmentDetector):
     verification and context management.
 
     """
+
     def update_context_and_events(
-        self, context:MotionStatechartContext, segmind_context:SegmindContext, objects_to_check: List[Body]
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        objects_to_check: List[Body],
     ) -> List[DetectionEvent]:
         """
         Updates the context with the latest containment pairs and generates events for
@@ -396,7 +455,6 @@ class LossOfContainmentDetector(BaseContainmentDetector):
         return events
 
 
-
 @dataclass(eq=False, repr=False)
 class InsertionDetector(AbstractDetector):
     """
@@ -414,7 +472,12 @@ class InsertionDetector(AbstractDetector):
     The threshold for the time difference between two events to be considered an insertion.
     """
 
-    def update_context_and_events(self, context:MotionStatechartContext, segmind_context:SegmindContext, tracked_objs: List[Body]) -> List[DetectionEvent]:
+    def update_context_and_events(
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        tracked_objs: List[Body],
+    ) -> List[DetectionEvent]:
         """
         Updates context and processes tracked objects to generate a list of events.
 
@@ -430,10 +493,25 @@ class InsertionDetector(AbstractDetector):
         :return List of InsertionEvent objects representing detected insertions.
         """
         events = []
-        hole_by_root = {hole.root: hole for hole in segmind_context.holes}
-        contact_events = [i for i in segmind_context.logger.get_events() if isinstance(i, ContactEvent)]
-        contact_events_with_holes = [i for i in contact_events if i.with_object in hole_by_root]
-        containment_event = [i for i in segmind_context.logger.get_events() if isinstance(i, ContainmentEvent)]
+        hole_by_root = {
+            hole_root: aperture
+            for aperture, hole_root in segmind_context.hole_regions.items()
+        }
+        contact_events = [
+            i
+            for i in segmind_context.logger.get_events()
+            if isinstance(i, ContactEvent)
+        ]
+        contact_events_with_holes = [
+            i
+            for i in contact_events
+            if i.with_object in segmind_context.holes or i.with_object in hole_by_root
+        ]
+        containment_event = [
+            i
+            for i in segmind_context.logger.get_events()
+            if isinstance(i, ContainmentEvent)
+        ]
 
         by_object = defaultdict(list)
         for i in contact_events_with_holes:
@@ -455,7 +533,7 @@ class InsertionDetector(AbstractDetector):
                         tracked_object=i.tracked_object,
                         with_object=i.with_object,
                         inserted_into_objects=[j.with_object],
-                        through_hole=hole_by_root[i.with_object],
+                        through_hole=hole_by_root.get(i.with_object),
                     )
                 )
                 break

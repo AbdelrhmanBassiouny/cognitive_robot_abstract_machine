@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
+
+from typing_extensions import Optional
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.plans.executables import (
@@ -48,6 +49,32 @@ class ExecutionEnvironment:
     ahead of where it has actually, physically settled.
     """
 
+    real_time_factor: Optional[float] = None
+    """
+    Multiple of real (wall-clock) time to pace :meth:`GiskardExecutable
+    ._execute_simulation`'s tick loop to. ``None`` (the default) ticks as fast as the
+    QP solver allows.
+    """
+
+    prediction_horizon: Optional[int] = None
+    """
+    Overrides :py:attr:`~pycram.plans.executables.GiskardExecutable
+    .prediction_horizon` for this environment. ``None`` (the default) leaves it at
+    whatever it already was, i.e. every existing robot's tuned value.
+    """
+
+    max_ticks_per_motion_mapping: Optional[int] = None
+    """
+    Per-motion tick budget applied to every motion state chart created within this
+    environment. ``None`` (the default) leaves
+    :py:attr:`~coraplex.plans.executables.GiskardExecutable.max_ticks_per_motion_mapping`
+    unchanged.
+
+    Worth setting whenever ``real_time_pacing`` is on: a paced tick sleeps for a full
+    control period, so the default budget takes tens of seconds per motion mapping to
+    give up on a stuck motion.
+    """
+
     previous_type: ExecutionType = field(init=False, default=None)
     """
     Type of the execution environment before setting it, used for nested environments.
@@ -59,22 +86,20 @@ class ExecutionEnvironment:
     environments.
     """
 
-    max_ticks_per_motion_mapping: Optional[int] = None
-    """
-    Per-motion tick budget applied to every motion state chart created within
-    this environment. ``None`` leaves
-    :py:attr:`~coraplex.plans.executables.GiskardExecutable.max_ticks_per_motion_mapping`
-    unchanged.
-
-    Worth setting whenever ``real_time_pacing`` is on: a paced tick sleeps for a full
-    control period, so the default budget takes tens of seconds per motion mapping to
-    give up on a stuck motion.
-    """
-
     previous_real_time_pacing: bool = field(init=False, default=False)
     """
     Real-time pacing setting before entering this environment, used for nested
     environments.
+    """
+
+    previous_real_time_factor: Optional[float] = field(init=False, default=None)
+    """
+    Real time factor before entering this environment, used for nested environments.
+    """
+
+    previous_prediction_horizon: int = field(init=False, default=None)
+    """
+    Prediction horizon before entering this environment, used for nested environments.
     """
 
     previous_max_ticks_per_motion_mapping: int = field(
@@ -87,19 +112,28 @@ class ExecutionEnvironment:
     def __enter__(self):
         """
         Entering function for 'with' scope, saves the previously set
-        :py:attr:`~pycram.plans.executables.GiskardExecutable.execution_type` and
-        :py:attr:`~pycram.plans.executables.GiskardExecutable.collision_avoidance` and
-        sets them to the values of this environment.
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.execution_type`,
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.collision_avoidance`,
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.real_time_pacing`,
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.real_time_factor`,
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.prediction_horizon`, and
+        :py:attr:`~pycram.plans.executables.GiskardExecutable
+        .max_ticks_per_motion_mapping` and sets them to the values of this environment.
         """
         self.previous_type = GiskardExecutable.execution_type
         self.previous_collision_avoidance = GiskardExecutable.collision_avoidance
         self.previous_real_time_pacing = GiskardExecutable.real_time_pacing
+        self.previous_real_time_factor = GiskardExecutable.real_time_factor
+        self.previous_prediction_horizon = GiskardExecutable.prediction_horizon
         self.previous_max_ticks_per_motion_mapping = (
             GiskardExecutable.max_ticks_per_motion_mapping
         )
         GiskardExecutable.execution_type = self.execution_type
         GiskardExecutable.collision_avoidance = self.collision_avoidance
         GiskardExecutable.real_time_pacing = self.real_time_pacing
+        GiskardExecutable.real_time_factor = self.real_time_factor
+        if self.prediction_horizon is not None:
+            GiskardExecutable.prediction_horizon = self.prediction_horizon
         if self.max_ticks_per_motion_mapping is not None:
             GiskardExecutable.max_ticks_per_motion_mapping = (
                 self.max_ticks_per_motion_mapping
@@ -108,23 +142,39 @@ class ExecutionEnvironment:
     def __exit__(self, _type, value, traceback):
         """
         Exit method for the 'with' scope, restores the
-        :py:attr:`~pycram.plans.executables.GiskardExecutable.execution_type` and
-        :py:attr:`~pycram.plans.executables.GiskardExecutable.collision_avoidance` to
-        the previously used values.
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.execution_type`,
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.collision_avoidance`,
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.real_time_pacing`,
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.real_time_factor`,
+        :py:attr:`~pycram.plans.executables.GiskardExecutable.prediction_horizon`, and
+        :py:attr:`~pycram.plans.executables.GiskardExecutable
+        .max_ticks_per_motion_mapping` to the previously used values.
         """
         GiskardExecutable.execution_type = self.previous_type
         GiskardExecutable.collision_avoidance = self.previous_collision_avoidance
         GiskardExecutable.real_time_pacing = self.previous_real_time_pacing
+        GiskardExecutable.real_time_factor = self.previous_real_time_factor
+        GiskardExecutable.prediction_horizon = self.previous_prediction_horizon
         GiskardExecutable.max_ticks_per_motion_mapping = (
             self.previous_max_ticks_per_motion_mapping
         )
 
-    def __call__(self, collision_avoidance: bool = False):
+    def __call__(
+        self,
+        collision_avoidance: bool = False,
+        real_time_factor: Optional[float] = None,
+        prediction_horizon: Optional[int] = None,
+        max_ticks_per_motion_mapping: Optional[int] = None,
+    ):
         """
         Configure the environment for use as a context manager, allowing ``with
-        simulated_robot(collision_avoidance=True):``.
+        simulated_robot(collision_avoidance=True, real_time_factor=1.0,
+        prediction_horizon=20):``.
         """
         self.collision_avoidance = collision_avoidance
+        self.real_time_factor = real_time_factor
+        self.prediction_horizon = prediction_horizon
+        self.max_ticks_per_motion_mapping = max_ticks_per_motion_mapping
         return self
 
 

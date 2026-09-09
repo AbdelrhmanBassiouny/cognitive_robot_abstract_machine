@@ -11,9 +11,11 @@ from krrood.symbolic_math.symbolic_math import Scalar
 from segmind.datastructures.events import (
     DetectionEvent,
     ContactEvent,
+    LiftEvent,
     LossOfContactEvent,
     TranslationEvent,
     RotationEvent,
+    StopLiftEvent,
     StopTranslationEvent,
     StopRotationEvent,
 )
@@ -223,6 +225,19 @@ class MotionDetector(AbstractDetector):
         """
         return poses[0].rotational_error(poses[-1]) > self.rotation_threshold
 
+    def _is_lifting(self, poses: List[NumericPose]) -> bool:
+        """
+        Determines whether an object is moving upward by evaluating the change in its Z
+        position between the first and the last recorded pose of the window.
+
+        :param poses: The pose window of the body, oldest first.
+        :return: True if the object's Z position rose by more than
+            :attr:`distance_threshold`, False otherwise.
+        """
+        z_start = poses[0].position[2]
+        z_end = poses[-1].position[2]
+        return (z_end - z_start) > self.distance_threshold
+
 
 @dataclass(eq=False, repr=False)
 class TranslationDetector(MotionDetector):
@@ -380,5 +395,88 @@ class StopRotationDetector(MotionDetector):
         )
 
         context.latest_rotation_events.pop(obj, None)
+
+        return stop_event
+
+
+@dataclass(eq=False, repr=False)
+class LiftDetector(MotionDetector):
+    """
+    Detector for lift events.
+
+    Triggers a LiftEvent when a grasped object starts moving upward along the Z axis.
+    """
+
+    def _check_and_trigger_event(
+        self, context: SegmindContext, obj: Body, poses: List[NumericPose]
+    ) -> Optional[DetectionEvent]:
+        """
+        Triggers a LiftEvent when a currently grasped object starts moving upward.
+
+        No event is triggered while the object is not currently grasped (see
+        ``SegmindContext.latest_grasp``, populated by
+        :class:`~segmind.detectors.grasp_detector_nodes.GraspDetector`), while it is not
+        moving upward, or while a lift event for it is already active.
+
+        :param context: The shared SegmindContext containing the information required to track events.
+        :param obj: The object being monitored for lifting.
+        :param poses: The pose window of ``obj``, oldest first.
+        :return: A LiftEvent if the object started being lifted, otherwise None.
+        """
+        if obj not in context.latest_grasp:
+            return None
+
+        if not self._is_lifting(poses):
+            return None
+
+        if context.latest_lift_events.get(obj) is not None:
+            return None
+
+        new_event = LiftEvent(
+            tracked_object=obj,
+            start_pose=Pose.from_numeric_pose(poses[0], obj),
+            current_pose=Pose.from_numeric_pose(poses[-1], obj),
+        )
+
+        context.latest_lift_events[obj] = new_event
+        return new_event
+
+
+@dataclass(eq=False, repr=False)
+class StopLiftDetector(MotionDetector):
+    """
+    Detector for stop lift events.
+
+    Triggers a StopLiftEvent when an object that was being lifted stops moving upward.
+    """
+
+    def _check_and_trigger_event(
+        self, context: SegmindContext, obj: Body, poses: List[NumericPose]
+    ) -> Optional[DetectionEvent]:
+        """
+        Triggers a StopLiftEvent when an object that was being lifted stops rising.
+
+        Requires an active lift event, which is created by the :class:`LiftDetector`.
+
+        :param context: The shared SegmindContext containing the information required to
+            track events.
+        :param obj: The object to check for lifting.
+        :param poses: The pose window of ``obj``, oldest first.
+        :return: A StopLiftEvent if the object stopped being lifted, otherwise None.
+        """
+        if self._is_lifting(poses):
+            return None
+
+        latest_lift_event = context.latest_lift_events.get(obj)
+        if latest_lift_event is None:
+            return None
+
+        stop_event = StopLiftEvent(
+            tracked_object=obj,
+            start_pose=latest_lift_event.start_pose,
+            current_pose=Pose.from_numeric_pose(poses[-1], obj),
+        )
+
+        context.latest_lift_events.pop(obj, None)
 
         return stop_event

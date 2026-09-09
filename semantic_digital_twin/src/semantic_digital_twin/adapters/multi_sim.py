@@ -19,6 +19,7 @@ from typing_extensions import (
     Any,
     ClassVar,
     Iterator,
+    Set,
     Type,
     Optional,
     Set,
@@ -83,6 +84,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.mixin import SimulatorAdditionalProperty
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_modification import (
     AddKinematicStructureEntityModification,
     AddActuatorModification,
@@ -642,7 +644,18 @@ class Connection1DOFConverter(ConnectionConverter, ABC):
         px, py, pz, qw, qx, qy, qz = cas_pose_to_list(child_T_connection_transform)
         joint_pos = [px, py, pz]
         joint_quat = [qw, qx, qy, qz]
-        joint_range = [dof.limits.lower.position, dof.limits.upper.position]
+        # entity.dof (not the raw dof) applies this connection's own multiplier/offset,
+        # including swapping lower/upper for a negative multiplier: a mimic connection's
+        # own compiled joint range must be expressed in its own displayed value, not the
+        # shared raw dof's, or a negative-multiplier mimic (e.g. a gripper's own second
+        # finger, or any other -1-multiplier joint) gets a range that can never
+        # simultaneously satisfy both its own limit and the equality constraint tying it
+        # to the raw dof except at the single point where both ranges touch (0 here) --
+        # confirmed directly: every one of a Robotiq gripper's mimic joints compiled to
+        # the same [0, 0.8] range regardless of sign, making the whole linkage unable to
+        # move away from 0 no matter how hard its actuator pushed.
+        adjusted_limits = entity.dof.limits
+        joint_range = [adjusted_limits.lower.position, adjusted_limits.upper.position]
         if any([r is None for r in joint_range]):
             joint_range = [0, 0]
         joint_props.update(
@@ -1287,10 +1300,24 @@ class MujocoGeom(SimulatorAdditionalProperty):
 
     friction: List[float] = field(default_factory=lambda: [1, 0.005, 0.0001])
     """
-    Contact friction parameters for dynamically generated contact pairs. 
-    The first number is the sliding friction, acting along both axes of the tangent plane. 
-    The second number is the torsional friction, acting around the contact normal. 
-    The third number is the rolling friction, acting around both axes of the tangent plane. 
+    Contact friction parameters for dynamically generated contact pairs.
+    The first number is the sliding friction, acting along both axes of the tangent plane.
+    The second number is the torsional friction, acting around the contact normal.
+    The third number is the rolling friction, acting around both axes of the tangent plane.
+    """
+
+    contype: int = 1
+    """
+    Bitmask enabling contact generation for this geom as the acting side of a pair: a
+    contact between geoms A and B is generated only if ``A.contype & B.conaffinity`` or
+    ``B.contype & A.conaffinity`` is nonzero. Matches MuJoCo's own default of 1, so a
+    geom with no other bit set behaves exactly as if this were never specified.
+    """
+
+    conaffinity: int = 1
+    """
+    Bitmask enabling contact generation for this geom as the receiving side of a pair;
+    see :attr:`contype`. Matches MuJoCo's own default of 1.
     """
 
 
@@ -1436,7 +1463,7 @@ class MujocoCylinderConverter(MujocoGeomConverter, CylinderConverter):
         shape_props.update(
             MujocoGeomConverter._post_convert(self, entity, shape_props, **kwargs)
         )
-        shape_props.update({"size": [entity.width / 2, entity.height, 0.0]})
+        shape_props.update({"size": [entity.width / 2, entity.height / 2, 0.0]})
         return shape_props
 
 
@@ -1896,8 +1923,19 @@ class MujocoBuilder(MultiSimBuilder):
         self.spec = mujoco.MjSpec()
         self.spec.modelname = "scene"
         self.spec.compiler.degree = 0
+        # MuJoCo's own auto-sizing (njmax=-1) has been observed to under-allocate by
+        # as little as one row ("mj_makeConstraint: nefc under-allocation") on a world
+        # with two arms' worth of self-collision-excluded geometry plus a couple of
+        # loose bodies -- a fatal, unrecoverable crash of the simulator's own stepping
+        # thread. A fixed, generous ceiling costs a small, one-time memory reservation
+        # and is never smaller than auto-sizing's own estimate for any scene this
+        # repository currently builds.
+        self.spec.njmax = 2000
         self._thickened_mesh_paths = {}
 
+    def _end_build(self, file_path: str):
+        self._build_equalities()
+        self._build_tendons()
     def _end_build(self, file_path: str):
         self._build_equalities()
         self._build_tendons()
@@ -1931,65 +1969,24 @@ class MujocoBuilder(MultiSimBuilder):
         key_element.set("time", "0")
         qpos = self._compute_keyframe_qpos(compiled_model)
         key_element.set("qpos", " ".join(map(str, qpos)))
-        ctrl = self._compute_keyframe_ctrl(compiled_model, qpos)
+        # Every actuated DOF needs a matching `ctrl=` setpoint in the keyframe:
+        # MuJoCo defaults an unset `ctrl` to 0, so a position-servo actuator
+        # would immediately start pulling its joint toward 0 rad the instant
+        # physics steps, regardless of the pose baked into `qpos` above.
+        ctrl = [0.0] * compiled_model.nu
+        for actuator in self.world.actuators:
+            actuator_id = mujoco.mj_name2id(
+                compiled_model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator.name.name
+            )
+            if actuator_id == -1:
+                continue
+            position = self.world.state[actuator.dofs[0].id].position
+            ctrl[actuator_id] = MujocoSynchronizer._ctrl_for_position(
+                actuator, position
+            )
         if ctrl:
             key_element.set("ctrl", " ".join(map(str, ctrl)))
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
-
-    def _compute_keyframe_ctrl(
-        self, compiled_model: mujoco.MjModel, qpos: List[float]
-    ) -> List[float]:
-        """
-        Builds the ``home`` keyframe's ctrl vector: the control value that
-        holds every position-servo actuator at the pose ``qpos`` describes.
-
-        Without this the keyframe sets qpos but leaves ctrl at MuJoCo's
-        default of all zeros, so a position servo whose home pose is not
-        itself zero is commanded straight back to zero the moment the
-        simulation starts -- the robot visibly snaps out of its home pose and
-        then stiffly holds the wrong one, fighting whatever qpos said.
-
-        Each setpoint is solved from MuJoCo's affine actuator equation
-        ``force = gainprm[0]*ctrl + biasprm[0] + biasprm[1]*length +
-        biasprm[2]*velocity`` for zero force at zero velocity, i.e.
-        ``ctrl = -(biasprm[0] + biasprm[1]*length) / gainprm[0]`` -- the same
-        relation MujocoSynchronizer._ctrl_for_position uses to keep ctrl
-        aligned with a commanded position at runtime.
-
-        ``length`` is the actuator's transmission length at the home pose,
-        which MuJoCo is asked to compute rather than assumed to equal the
-        joint position: that keeps this correct for tendon transmissions
-        (e.g. a gripper remapping finger travel onto a different control
-        range) as well as for direct joint ones.
-
-        Actuators that are not affine position servos get 0, MuJoCo's
-        neutral "no command".
-        """
-        if compiled_model.nu == 0:
-            return []
-        data = mujoco.MjData(compiled_model)
-        data.qpos[:] = qpos
-        # Populates data.actuator_length for every transmission type.
-        mujoco.mj_forward(compiled_model, data)
-
-        ctrl = []
-        for actuator_id in range(compiled_model.nu):
-            gain0 = compiled_model.actuator_gainprm[actuator_id][0]
-            bias0, bias1 = compiled_model.actuator_biasprm[actuator_id][:2]
-            is_position_servo = (
-                compiled_model.actuator_biastype[actuator_id]
-                == mujoco.mjtBias.mjBIAS_AFFINE
-                and gain0 != 0.0
-            )
-            if not is_position_servo:
-                ctrl.append(0.0)
-                continue
-            value = -(bias0 + bias1 * data.actuator_length[actuator_id]) / gain0
-            if compiled_model.actuator_ctrllimited[actuator_id]:
-                lower, upper = compiled_model.actuator_ctrlrange[actuator_id]
-                value = min(max(value, lower), upper)
-            ctrl.append(float(value))
-        return ctrl
 
     def _compute_keyframe_qpos(self, compiled_model: mujoco.MjModel) -> List[float]:
         """
@@ -2101,6 +2098,8 @@ class MujocoBuilder(MultiSimBuilder):
                 geom_props["solimp"] = mujoco_geom.solver_impedance
                 geom_props["solref"] = mujoco_geom.solver_reference
                 geom_props["friction"] = mujoco_geom.friction
+                geom_props["contype"] = mujoco_geom.contype
+                geom_props["conaffinity"] = mujoco_geom.conaffinity
                 break
         geom_spec = parent_body_spec.add_geom(**geom_props)
         if geom_spec.type == mujoco.mjtGeom.mjGEOM_BOX and geom_spec.size[2] == 0:
@@ -3533,10 +3532,14 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         post-step state rather than a mixture of poses from either side of an
         ``mj_step`` running on the physics thread.
 
+        ``renderer.lock()`` is taken alongside it: a non-headless viewer
+        renders on its own native thread, which reads the live model and data
+        independently of anything on the Python side.
+
         :return: Whether any connection was read.
         """
         changed = False
-        with self.simulator._model_lock:
+        with self.simulator._model_lock, self.simulator.renderer.lock():
             for joint_backed in self._joint_backed_connections():
                 connection = joint_backed.connection
                 match connection:
@@ -3566,12 +3569,16 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         ``_world_lock`` to match the order ``modify_world`` already
         establishes.
 
+        ``renderer.lock()`` is taken alongside it: a non-headless viewer
+        renders on its own native thread, which reads the live model and data
+        independently of anything on the Python side.
+
         :param positions: The current ``world.state`` positions.
         :param previous_positions: The positions as of the last notification,
             used to find what changed. Must be the same length as ``positions``.
         """
         state_index = self._world.state._index
-        with self.simulator._model_lock:
+        with self.simulator._model_lock, self.simulator.renderer.lock():
             for joint_backed in self._joint_backed_connections():
                 connection = joint_backed.connection
                 match connection:
@@ -4044,9 +4051,11 @@ class MultiSim(ABC):
             the simulator's actuator/contact model rather than kinematically
             teleported every tick (e.g. a gripper's fingers, to let real
             contact/friction hold a grasped object).
-        :param sync_rate_hz: Wall-clock rate at which the simulator's actual
-            positions are read back into world.state (see
-            MultiSimSynchronizer._sim_to_world).
+        :param sync_rate_hz: Wall-clock rate at which physically_simulated_dofs'
+            actual, physics-driven positions are read back into world.state (see
+            MujocoSynchronizer._sim_to_world). Should comfortably exceed the
+            control loop's own tick rate so it isn't planning against stale
+            feedback of where those DOFs have actually settled.
         :param mirror_attachments: Whether AttachNode/DetachNode re-parents are
             mirrored into the simulator's own kinematic tree, so a grasped
             object is welded to the gripper instead of being held purely by

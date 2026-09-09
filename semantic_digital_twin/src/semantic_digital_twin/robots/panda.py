@@ -26,7 +26,8 @@ from semantic_digital_twin.world_description.world_entity import (
 @dataclass(eq=False)
 class PandaLeftFinger(Finger):
     """
-    The Panda's fingers have no separate fingertip link, so root and tip are the same body.
+    The Panda's fingers have no separate fingertip link, so root and tip are the same
+    body.
     """
 
     def setup_hardware_interfaces(self):
@@ -120,7 +121,15 @@ class PandaArm(Arm[PandaGripper]):
             mapping=dict(
                 zip(
                     connections,
-                    [0.0, -0.785398163, 0.0, -2.35619449, 0.0, 1.57079632679, 0.785398163397],
+                    [
+                        0.0,
+                        -0.785398163,
+                        0.0,
+                        -2.35619449,
+                        0.0,
+                        1.57079632679,
+                        0.785398163397,
+                    ],
                 )
             ),
             state_type=StaticJointState.PARK,
@@ -140,7 +149,7 @@ class PandaArm(Arm[PandaGripper]):
 @dataclass(eq=False)
 class Panda(AbstractRobot, HasOneArm[PandaArm]):
     """
-    The Franka Emika Panda arm, as used in the stacking demo. https://franka.de/
+    The `Franka Emika Panda <https://franka.de/>`_ arm, as used in the stacking demo.
     """
 
     @classmethod
@@ -165,3 +174,57 @@ class Panda(AbstractRobot, HasOneArm[PandaArm]):
         vel_limits[self._world.get_connection_by_name("/finger_joint1")] = 0.2
         vel_limits[self._world.get_connection_by_name("/finger_joint2")] = 0.2
         self.tighten_dof_velocity_limits_of_1dof_connections(new_limits=vel_limits)
+
+    def _setup_acceleration_limits(self):
+        """
+        Sets up the arm joints' acceleration limits, from Franka's published Panda joint
+        limits (``joint_limits.yaml`` in ``franka_ros``/``libfranka``).
+
+        The finger joints are left unset -- Franka does not publish an acceleration
+        limit for the gripper.
+        """
+        accel_limits = {
+            "joint1": 15.0,
+            "joint2": 7.5,
+            "joint3": 10.0,
+            "joint4": 12.5,
+            "joint5": 15.0,
+            "joint6": 20.0,
+            "joint7": 20.0,
+        }
+        self.tighten_dof_acceleration_limits_of_1dof_connections(
+            new_limits=defaultdict(
+                lambda: None,
+                {
+                    self._world.get_connection_by_name(name): limit
+                    for name, limit in accel_limits.items()
+                },
+            )
+        )
+
+    def _setup_jerk_limits(self):
+        """
+        Sets up the arm joints' jerk limits, from Franka's published Panda joint limits
+        (``joint_limits.yaml`` in ``franka_ros``/``libfranka``).
+
+        The finger joints are left unset -- Franka does not publish a jerk limit for the
+        gripper.
+        """
+        jerk_limits = {
+            "joint1": 7500.0,
+            "joint2": 3750.0,
+            "joint3": 5000.0,
+            "joint4": 6250.0,
+            "joint5": 7500.0,
+            "joint6": 10000.0,
+            "joint7": 10000.0,
+        }
+        self.tighten_dof_jerk_limits_of_1dof_connections(
+            new_limits=defaultdict(
+                lambda: None,
+                {
+                    self._world.get_connection_by_name(name): limit
+                    for name, limit in jerk_limits.items()
+                },
+            )
+        )

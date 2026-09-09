@@ -4,11 +4,19 @@ from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Set, List, Any, Callable
 
-from giskardpy.motion_statechart.context import MotionStatechartContext, ContextExtension
+from giskardpy.motion_statechart.context import (
+    MotionStatechartContext,
+    ContextExtension,
+)
 from giskardpy.motion_statechart.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode, NodeArtifacts
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from segmind.datastructures.events import MotionEvent, DetectionEvent, RotationEvent
+from segmind.datastructures.events import (
+    MotionEvent,
+    DetectionEvent,
+    LiftEvent,
+    RotationEvent,
+)
 from segmind.datastructures.object_tracker import ObjectTrackerFactory
 from segmind.event_logger import EventLogger
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
@@ -66,6 +74,21 @@ class SegmindContext(ContextExtension):
     Dictionary mapping each body to its currently active rotation event, if any.
     """
 
+    latest_lift_events: Dict[Body, LiftEvent] = field(default_factory=dict)
+    """
+    Dictionary mapping each body to its currently active lift event, if any.
+    """
+
+    latest_grasp: Set[Body] = field(default_factory=set)
+    """
+    Bodies currently considered grasped (in contact with both of a gripper's fingers and
+    close to its tool center point; see
+    :class:`~segmind.detectors.grasp_detector_nodes.GraspDetector`).
+
+    Read by :class:`~segmind.detectors.atomic_event_detectors_nodes.LiftDetector` to
+    gate lifting on the object actually being held, not just moving upward on its own.
+    """
+
     logger: EventLogger = field(default_factory=EventLogger)
     """
     The event logger used to record detected events.
@@ -81,15 +104,25 @@ class SegmindContext(ContextExtension):
     List of bodies that can be considered holes
     """
 
+    hole_regions: Dict[Aperture, Region] = field(default_factory=dict)
+    """
+    Every :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture`
+    in the world, mapped to its own :class:`Region` root.
+
+    Unlike :attr:`holes` (populated by matching plain :class:`Body` names), an aperture's
+    root is a virtual :class:`Region`, never registered with the world's collision
+    manager, so it needs its own registry checked by :class:`~segmind.detectors.spatial_relation_detector_nodes.HoleContactDetector`
+    and friends instead of ``context.world.bodies_with_collision``.
+    """
+
     latest_hole_contacts: Dict[Body, Set[Region]] = field(default_factory=dict)
     """
-    Dictionary mapping each body to the set of hole Regions (see :attr:`holes`) it is
-    currently overlapping.
+    Dictionary mapping each body to the set of hole regions (see :attr:`hole_regions`) it
+    is currently overlapping.
 
-    Kept separate from :attr:`latest_contact_bodies` rather than reused for it: an
-    aperture's root is a virtual ``Region``, never seen by the world's collision
-    manager, so it is detected by a different (mesh-overlap) check than real
-    body-body :attr:`latest_contact_bodies`, and mixing the two would make
+    Kept separate from :attr:`latest_contact_bodies` rather than reused for it: a hole
+    region is detected by a different (mesh-overlap) check than real body-body
+    :attr:`latest_contact_bodies`, and mixing the two would make
     :class:`~segmind.detectors.atomic_event_detectors_nodes.LossOfContactDetector`
     (which only ever recomputes real contact) immediately -- and incorrectly -- drop
     every hole entry the very next tick.
@@ -105,6 +138,7 @@ class SegmindContext(ContextExtension):
     The object tracker registry.    
     """
 
+
 @dataclass(repr=False, eq=False)
 class AbstractDetector(MotionStatechartNode, ABC):
     """
@@ -117,7 +151,9 @@ class AbstractDetector(MotionStatechartNode, ABC):
     If None, all trackable objects in the world are checked.
     """
 
-    def on_tick(self, context: MotionStatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(
+        self, context: MotionStatechartContext
+    ) -> Optional[ObservationStateValues]:
         """
         Executes one update cycle of the detector.
 
@@ -140,9 +176,13 @@ class AbstractDetector(MotionStatechartNode, ABC):
                 if type(body.parent_connection) is Connection6DoF
             ]
         )
-        events = self.update_context_and_events(context, segmind_context_extension, objects_to_check)
+        events = self.update_context_and_events(
+            context, segmind_context_extension, objects_to_check
+        )
         for e in events:
-            segmind_context_extension.logger.log_event(e, segmind_context_extension.tracker_registry)
+            segmind_context_extension.logger.log_event(
+                e, segmind_context_extension.tracker_registry
+            )
         return ObservationStateValues.TRUE if events else ObservationStateValues.FALSE
 
 
@@ -171,47 +211,39 @@ class AbstractDetector(MotionStatechartNode, ABC):
                     related_bodies.setdefault(obj, set()).add(body)
         return related_bodies
 
-    def get_relation_to_holes(
+    def get_relation_to_regions(
         self,
-        segmind_context: SegmindContext,
         tracked_objects: List[Body],
+        regions: List[Region],
         predicate: Callable[[Body, Region], bool],
-        additional_candidates: Optional[Dict[Aperture, Region]] = None,
     ) -> Dict[Body, Set[Region]]:
         """
-        Like :meth:`get_relation`, but checked against each hole's own ``Region`` root
-        (:attr:`SegmindContext.holes`) instead of ``context.world.bodies_with_collision``.
+        Like :meth:`get_relation`, but checked against a caller-supplied list of regions
+        instead of ``context.world.bodies_with_collision``.
 
-        A hole is a virtual :class:`~semantic_digital_twin.world_description.world_entity.Region`,
-        never registered with the world's collision manager, so it is never among
-        ``bodies_with_collision`` and needs its own candidate set.
+        A :class:`Region` (e.g. a hole's own root) is never registered with the world's
+        collision manager, so it is never among ``bodies_with_collision`` and needs its
+        candidates supplied directly.
 
-        :param segmind_context: The shared SegmindContext holding the detected holes.
-        :param tracked_objects: List of bodies to check for a relation to a hole.
-        :param predicate: Function that returns true if a body and a Region are related.
-        :param additional_candidates: An extra region checked alongside a given hole's
-            own root, keyed by that hole, e.g. a scene-specific volume built around it
-            for a more reliable check than that hole's own (possibly very thin) root
-            region gives on its own. A match against the extra region is still recorded
-            against that hole's own root, not the extra region, so callers matching on
-            a hole's identity (e.g. :class:`~segmind.detectors.spatial_relation_detector_nodes.InsertionDetector`)
-            need no change. Defaults to none, so every existing caller's behaviour is
-            unchanged.
-        :return: Dictionary mapping bodies to sets of related hole root regions.
+        :param tracked_objects: List of bodies to check for a relation to a region.
+        :param regions: The regions to check each tracked object against.
+        :param predicate: Function that returns true if a body and a region are related.
+        :return: Dictionary mapping bodies to sets of related regions.
         """
-        additional_candidates = additional_candidates or {}
         related_regions: Dict[Body, Set[Region]] = {}
         for obj in tracked_objects:
-            for hole in segmind_context.holes:
-                candidates = [hole.root]
-                if hole in additional_candidates:
-                    candidates.append(additional_candidates[hole])
-                if any(predicate(obj, candidate) for candidate in candidates):
-                    related_regions.setdefault(obj, set()).add(hole.root)
+            for region in regions:
+                if predicate(obj, region):
+                    related_regions.setdefault(obj, set()).add(region)
         return related_regions
 
     @abstractmethod
-    def update_context_and_events(self, context:MotionStatechartContext, segmind_context:SegmindContext, tracked_objects: List[Body]) -> List[DetectionEvent]:
+    def update_context_and_events(
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        tracked_objects: List[Body],
+    ) -> List[DetectionEvent]:
         """
         Core detection logic that updates the internal state and identifies new events.
 

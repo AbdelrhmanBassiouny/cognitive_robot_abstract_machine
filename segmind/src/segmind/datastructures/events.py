@@ -359,6 +359,24 @@ class StopRotationEvent(MotionEvent):
     ...
 
 
+@dataclass(init=False, unsafe_hash=True)
+class LiftEvent(MotionEvent):
+    """
+    Represents an event where a grasped object starts moving upward along the Z axis.
+    """
+
+    ...
+
+
+@dataclass(init=False, unsafe_hash=True)
+class StopLiftEvent(MotionEvent):
+    """
+    Represents an event where a lifted object stops moving upward.
+    """
+
+    ...
+
+
 @dataclass(unsafe_hash=True)
 class AbstractContactEvent(EventWithTrackedObjects, ABC):
     """
@@ -447,6 +465,30 @@ class AgentInteractionEvent(EventWithTrackedObjects, ABC):
 
 
 @dataclass(unsafe_hash=True)
+class GraspEvent(EventWithTrackedObjects):
+    """
+    Represents an event where an object starts being held by a gripper: in contact with
+    both of the gripper's fingers, and close to its tool center point.
+
+    :attr:`~EventWithTrackedObjects.with_object` is the gripper's own tool center point
+    body (its ``tool_frame``), not either finger individually.
+    """
+
+    ...
+
+
+@dataclass(unsafe_hash=True)
+class LossOfGraspEvent(EventWithTrackedObjects):
+    """
+    Represents an event where an object previously held by a gripper (see
+    :class:`GraspEvent`) is no longer in contact with both of its fingers and close to
+    its tool center point.
+    """
+
+    ...
+
+
+@dataclass(unsafe_hash=True)
 class PickUpEvent(EventWithEffect, AgentInteractionEvent):
     """
     Represents an event where an object is picked up by another object.
@@ -490,7 +532,7 @@ class InsertionEvent(EventWithEffect, AgentInteractionEvent):
     was detected passing through.
 
     Set directly by the detector that builds this event, which already has the
-    aperture in hand (via ``SegmindContext.holes``) rather than derived from
+    aperture in hand (via ``SegmindContext.hole_regions``) rather than derived from
     ``with_object`` here: a hole's root is a virtual ``Region``, not a ``Body``, and has
     no reliable way to look its owning annotation back up on its own.
     """
