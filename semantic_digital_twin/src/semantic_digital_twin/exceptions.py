@@ -23,6 +23,7 @@ from semantic_digital_twin.datastructures.definitions import JointStateType
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
 if TYPE_CHECKING:
+    from semantic_digital_twin.adapters.ros.messages import MetaData
     from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
     from semantic_digital_twin.robots.robot_parts import (
         AbstractRobot,
@@ -859,6 +860,76 @@ class WorldHasNoSynchronizerError(UsageError):
 
 
 @dataclass
+class SynchronizerNotConnectedError(UsageError):
+    """
+    Raised when a synchronizer was created but its topic never became usable, so that
+    whatever it publishes would be dropped.
+    """
+
+    topic_name: str
+    """
+    The topic the synchronizer publishes on and listens to.
+    """
+
+    timeout: float
+    """
+    The seconds that were spent waiting for the topic.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The synchronizer of '{self.topic_name}' did not reach a single subscriber "
+            f"within {self.timeout}s, not even its own."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Check that the ros node of the synchronizer is alive and its middleware is running."
+
+
+@dataclass
+class WorldUpdateReferencesUnknownEntityError(UsageError):
+    """
+    Raised when an update refers to an entity this world never received, which leaves
+    everything the missing update carried out of reach.
+    """
+
+    publisher: MetaData
+    """
+    The synchronizer whose update could not be applied.
+    """
+
+    entity_id: UUID
+    """
+    The entity the update refers to.
+
+    Only its id is known, because the update that created it never arrived.
+    """
+
+    entity_name: Optional[PrefixedName]
+    """
+    The name the update calls that entity, or ``None`` where it carries none.
+    """
+
+    def error_message(self) -> str:
+        named_entity = (
+            f"'{self.entity_name}' ({self.entity_id})"
+            if self.entity_name is not None
+            else f"'{self.entity_id}'"
+        )
+        return (
+            f"The update of '{self.publisher.node_name}' refers to the entity "
+            f"{named_entity}, which this world never received."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Create the synchronizer of a world before modifying that world: changes made "
+            "before it exists reach nobody, and every later change that builds on them "
+            "cannot be applied."
+        )
+
+
+@dataclass
 class WorldHasMultipleSynchronizersError(UsageError):
     """
     Raised when the synchronizer of a world is asked for, but several of them publish
@@ -1243,12 +1314,26 @@ class SpatialTypeNotJsonSerializable(NotJsonSerializable):
 @dataclass
 class WorldEntityWithIDNotInKwargs(JSONSerializationError):
     world_entity_id: UUID
+    """
+    The entity that was asked for.
+    """
+
+    world_entity_name: Optional[PrefixedName] = None
+    """
+    The name the reference to that entity went by when it was written.
+
+    Says which entity is meant where the id alone says nothing. ``None`` where the
+    reference carries no name, and never used to look an entity up: the id is its
+    identity.
+    """
 
     def error_message(self) -> str:
-        return (
-            f"World entity '{self.world_entity_id}' is not in the kwargs of the "
-            f"method that created it."
+        named_entity = (
+            f"World entity '{self.world_entity_name}' ({self.world_entity_id})"
+            if self.world_entity_name is not None
+            else f"World entity '{self.world_entity_id}'"
         )
+        return f"{named_entity} is not in the kwargs of the method that created it."
 
     def suggest_correction(self) -> str:
         return ""

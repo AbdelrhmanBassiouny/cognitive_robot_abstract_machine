@@ -38,6 +38,7 @@ from krrood.symbolic_math.symbolic_math import Matrix
 from krrood.utils import get_full_class_name
 from krrood.utils import memoize
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
+    WorldEntityReference,
     WorldEntityWithIDKwargsTracker,
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
@@ -896,8 +897,8 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
     def to_json(self) -> Dict[str, Any]:
         result = super().to_json()
         result["name"] = to_json(self.name)
-        result["parent_id"] = to_json(self.parent.id)
-        result["child_id"] = to_json(self.child.id)
+        WorldEntityReference("parent").write(result, self.parent)
+        WorldEntityReference("child").write(result, self.child)
         result["parent_T_connection_expression"] = to_json(
             self.parent_T_connection_expression
         )
@@ -908,9 +909,8 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
+        parent = WorldEntityReference("parent").resolve(data, **kwargs)
+        child = WorldEntityReference("child").resolve(data, **kwargs)
         return cls(
             name=from_json(data["name"]),
             parent=parent,

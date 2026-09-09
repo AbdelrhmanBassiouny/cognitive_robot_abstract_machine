@@ -8,7 +8,7 @@ from uuid import UUID
 import numpy as np
 from typing_extensions import TYPE_CHECKING, Union, Optional, Dict, Any, Self
 
-from krrood.adapters.json_serializer import from_json, to_json
+from krrood.adapters.json_serializer import from_json
 from semantic_digital_twin.world_description.connection_properties import JointDynamics
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
@@ -19,7 +19,7 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
-    WorldEntityWithIDKwargsTracker,
+    WorldEntityReference,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.types import NpMatrix4x4
@@ -164,15 +164,14 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
         result["axis"] = self.axis.to_np().tolist()
         result["multiplier"] = self.multiplier
         result["offset"] = self.offset
-        result["dof_id"] = to_json(self.raw_dof.id)
+        WorldEntityReference("dof").write(result, self.raw_dof)
         return result
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
-        raw_dof = tracker.get_world_entity_with_id(id=from_json(data["dof_id"]))
+        parent = WorldEntityReference("parent").resolve(data, **kwargs)
+        child = WorldEntityReference("child").resolve(data, **kwargs)
+        raw_dof = WorldEntityReference("dof").resolve(data, **kwargs)
         return cls(
             name=from_json(data["name"]),
             parent=parent,
@@ -493,10 +492,9 @@ class ScrewConnection(ActiveConnection1DOF):
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
-        raw_dof = tracker.get_world_entity_with_id(id=from_json(data["dof_id"]))
+        parent = WorldEntityReference("parent").resolve(data, **kwargs)
+        child = WorldEntityReference("child").resolve(data, **kwargs)
+        raw_dof = WorldEntityReference("dof").resolve(data, **kwargs)
         return cls(
             name=from_json(data["name"]),
             parent=parent,
@@ -592,20 +590,19 @@ class Connection6DoF(Connection):
 
     def to_json(self) -> Dict[str, Any]:
         result = super().to_json()
-        result["x_id"] = to_json(self.x.id)
-        result["y_id"] = to_json(self.y.id)
-        result["z_id"] = to_json(self.z.id)
-        result["qx_id"] = to_json(self.qx.id)
-        result["qy_id"] = to_json(self.qy.id)
-        result["qz_id"] = to_json(self.qz.id)
-        result["qw_id"] = to_json(self.qw.id)
+        WorldEntityReference("x").write(result, self.x)
+        WorldEntityReference("y").write(result, self.y)
+        WorldEntityReference("z").write(result, self.z)
+        WorldEntityReference("qx").write(result, self.qx)
+        WorldEntityReference("qy").write(result, self.qy)
+        WorldEntityReference("qz").write(result, self.qz)
+        WorldEntityReference("qw").write(result, self.qw)
         return result
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
+        parent = WorldEntityReference("parent").resolve(data, **kwargs)
+        child = WorldEntityReference("child").resolve(data, **kwargs)
         return cls(
             name=from_json(data["name"]),
             parent=parent,
@@ -616,13 +613,13 @@ class Connection6DoF(Connection):
             connection_T_child_expression=from_json(
                 data["connection_T_child_expression"], **kwargs
             ),
-            x=tracker.get_world_entity_with_id(id=from_json(data["x_id"])),
-            y=tracker.get_world_entity_with_id(id=from_json(data["y_id"])),
-            z=tracker.get_world_entity_with_id(id=from_json(data["z_id"])),
-            qx=tracker.get_world_entity_with_id(id=from_json(data["qx_id"])),
-            qy=tracker.get_world_entity_with_id(id=from_json(data["qy_id"])),
-            qz=tracker.get_world_entity_with_id(id=from_json(data["qz_id"])),
-            qw=tracker.get_world_entity_with_id(id=from_json(data["qw_id"])),
+            x=WorldEntityReference("x").resolve(data, **kwargs),
+            y=WorldEntityReference("y").resolve(data, **kwargs),
+            z=WorldEntityReference("z").resolve(data, **kwargs),
+            qx=WorldEntityReference("qx").resolve(data, **kwargs),
+            qy=WorldEntityReference("qy").resolve(data, **kwargs),
+            qz=WorldEntityReference("qz").resolve(data, **kwargs),
+            qw=WorldEntityReference("qw").resolve(data, **kwargs),
         )
 
     def add_to_world(self, world: World):
@@ -856,20 +853,19 @@ class OmniDrive(WheeledDrive):
 
     def to_json(self) -> Dict[str, Any]:
         result = super().to_json()
-        result["x_id"] = to_json(self.x.id)
-        result["y_id"] = to_json(self.y.id)
-        result["roll_id"] = to_json(self.roll.id)
-        result["pitch_id"] = to_json(self.pitch.id)
-        result["yaw_id"] = to_json(self.yaw.id)
-        result["x_velocity_id"] = to_json(self.x_velocity.id)
-        result["y_velocity_id"] = to_json(self.y_velocity.id)
+        WorldEntityReference("x").write(result, self.x)
+        WorldEntityReference("y").write(result, self.y)
+        WorldEntityReference("roll").write(result, self.roll)
+        WorldEntityReference("pitch").write(result, self.pitch)
+        WorldEntityReference("yaw").write(result, self.yaw)
+        WorldEntityReference("x_velocity").write(result, self.x_velocity)
+        WorldEntityReference("y_velocity").write(result, self.y_velocity)
         return result
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
+        parent = WorldEntityReference("parent").resolve(data, **kwargs)
+        child = WorldEntityReference("child").resolve(data, **kwargs)
         return cls(
             name=from_json(data["name"], **kwargs),
             parent=parent,
@@ -880,17 +876,13 @@ class OmniDrive(WheeledDrive):
             connection_T_child_expression=from_json(
                 data["connection_T_child_expression"], **kwargs
             ),
-            x=tracker.get_world_entity_with_id(from_json(data["x_id"])),
-            y=tracker.get_world_entity_with_id(from_json(data["y_id"])),
-            roll=tracker.get_world_entity_with_id(from_json(data["roll_id"])),
-            pitch=tracker.get_world_entity_with_id(from_json(data["pitch_id"])),
-            yaw=tracker.get_world_entity_with_id(from_json(data["yaw_id"])),
-            x_velocity=tracker.get_world_entity_with_id(
-                from_json(data["x_velocity_id"])
-            ),
-            y_velocity=tracker.get_world_entity_with_id(
-                from_json(data["y_velocity_id"])
-            ),
+            x=WorldEntityReference("x").resolve(data, **kwargs),
+            y=WorldEntityReference("y").resolve(data, **kwargs),
+            roll=WorldEntityReference("roll").resolve(data, **kwargs),
+            pitch=WorldEntityReference("pitch").resolve(data, **kwargs),
+            yaw=WorldEntityReference("yaw").resolve(data, **kwargs),
+            x_velocity=WorldEntityReference("x_velocity").resolve(data, **kwargs),
+            y_velocity=WorldEntityReference("y_velocity").resolve(data, **kwargs),
         )
 
     def add_to_world(self, world: World):
@@ -1147,19 +1139,18 @@ class DifferentialDrive(WheeledDrive):
 
     def to_json(self) -> Dict[str, Any]:
         result = super().to_json()
-        result["x_id"] = to_json(self.x.id)
-        result["y_id"] = to_json(self.y.id)
-        result["roll_id"] = to_json(self.roll.id)
-        result["pitch_id"] = to_json(self.pitch.id)
-        result["yaw_id"] = to_json(self.yaw.id)
-        result["x_velocity_id"] = to_json(self.x_velocity.id)
+        WorldEntityReference("x").write(result, self.x)
+        WorldEntityReference("y").write(result, self.y)
+        WorldEntityReference("roll").write(result, self.roll)
+        WorldEntityReference("pitch").write(result, self.pitch)
+        WorldEntityReference("yaw").write(result, self.yaw)
+        WorldEntityReference("x_velocity").write(result, self.x_velocity)
         return result
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
-        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
+        parent = WorldEntityReference("parent").resolve(data, **kwargs)
+        child = WorldEntityReference("child").resolve(data, **kwargs)
         return cls(
             name=from_json(data["name"], **kwargs),
             parent=parent,
@@ -1170,14 +1161,12 @@ class DifferentialDrive(WheeledDrive):
             connection_T_child_expression=from_json(
                 data["connection_T_child_expression"], **kwargs
             ),
-            x=tracker.get_world_entity_with_id(from_json(data["x_id"])),
-            y=tracker.get_world_entity_with_id(from_json(data["y_id"])),
-            roll=tracker.get_world_entity_with_id(from_json(data["roll_id"])),
-            pitch=tracker.get_world_entity_with_id(from_json(data["pitch_id"])),
-            yaw=tracker.get_world_entity_with_id(from_json(data["yaw_id"])),
-            x_velocity=tracker.get_world_entity_with_id(
-                from_json(data["x_velocity_id"])
-            ),
+            x=WorldEntityReference("x").resolve(data, **kwargs),
+            y=WorldEntityReference("y").resolve(data, **kwargs),
+            roll=WorldEntityReference("roll").resolve(data, **kwargs),
+            pitch=WorldEntityReference("pitch").resolve(data, **kwargs),
+            yaw=WorldEntityReference("yaw").resolve(data, **kwargs),
+            x_velocity=WorldEntityReference("x_velocity").resolve(data, **kwargs),
         )
 
     def add_to_world(self, world: World):

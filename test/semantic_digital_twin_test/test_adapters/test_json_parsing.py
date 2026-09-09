@@ -140,8 +140,49 @@ def test_KinematicStructureEntityNotInKwargs2():
     point = Point3(1, 2, 3, reference_frame=body)
     json_data = point.to_json()
     tracker = WorldEntityWithIDKwargsTracker.from_world(World())
-    with pytest.raises(WorldEntityWithIDNotInKwargs):
+    with pytest.raises(WorldEntityWithIDNotInKwargs) as raised:
         Point3.from_json(json_data, **tracker.create_kwargs())
+
+    assert raised.value.world_entity_id == body.id
+    assert raised.value.world_entity_name == body.name
+
+
+def test_an_entity_a_reference_cannot_be_resolved_to_is_named():
+    """
+    A reference says which entity it means, so that a world missing that entity reports
+    more than an id nobody can look up.
+    """
+    parent = Body(name=PrefixedName("cable_post"))
+    child = Body(name=PrefixedName("cable_hanger"))
+    connection = FixedConnection(parent=parent, child=child)
+    json_data = connection.to_json()
+
+    tracker = WorldEntityWithIDKwargsTracker.from_world(World())
+    tracker.add_world_entity_with_id(child)
+    with pytest.raises(WorldEntityWithIDNotInKwargs) as raised:
+        FixedConnection.from_json(json_data, **tracker.create_kwargs())
+
+    assert raised.value.world_entity_id == parent.id
+    assert raised.value.world_entity_name == parent.name
+
+
+def test_a_reference_resolves_to_the_entity_it_names():
+    """
+    The name a reference carries is context for a reader; the entity itself is still
+    found through the id it was written with.
+    """
+    parent = Body(name=PrefixedName("cable_post"))
+    child = Body(name=PrefixedName("cable_hanger"))
+    connection = FixedConnection(parent=parent, child=child)
+    json_data = connection.to_json()
+
+    tracker = WorldEntityWithIDKwargsTracker.from_world(World())
+    tracker.add_world_entity_with_id(parent)
+    tracker.add_world_entity_with_id(child)
+    parsed_connection = FixedConnection.from_json(json_data, **tracker.create_kwargs())
+
+    assert parsed_connection.parent is parent
+    assert parsed_connection.child is child
 
 
 def test_vector3_json_serialization_with_expression():

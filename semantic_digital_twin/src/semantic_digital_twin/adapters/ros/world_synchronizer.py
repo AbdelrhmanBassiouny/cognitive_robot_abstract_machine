@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -21,6 +22,7 @@ from sqlalchemy.orm import Session
 from krrood.adapters.json_serializer import from_json, to_json
 from krrood.ormatic.data_access_objects.helper import to_dao
 from semantic_digital_twin.adapters.ros.messages import (
+    MessageField,
     MetaData,
     WorldStateUpdate,
     Message,
@@ -37,6 +39,9 @@ from semantic_digital_twin.callbacks.callback import (
     ModelChangeCallback,
 )
 from semantic_digital_twin.exceptions import (
+    SynchronizerNotConnectedError,
+    WorldEntityWithIDNotInKwargs,
+    WorldUpdateReferencesUnknownEntityError,
     MissingPublishChangesKWARG,
     ApplyMissedMessagesWhileWorldIsBeingModifiedError,
     StateUpdateContainsUnknownDegreesOfFreedomError,
@@ -98,6 +103,21 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
     The topic name of the publisher and subscriber.
     """
 
+    connection_timeout: float = 5.0
+    """
+    Seconds to wait for the topic of this synchronizer to become usable.
+    """
+
+    discovery_settle_time: float = 0.2
+    """
+    Seconds without a subscriber appearing before the topic counts as connected.
+    """
+
+    discovery_poll_interval: float = 0.02
+    """
+    Seconds between two looks at the subscribers of the topic while connecting.
+    """
+
     publisher: Optional[Publisher] = field(init=False, default=None)
     """
     The publisher used to publish the world state.
@@ -145,6 +165,39 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
         self.publisher = self.node.create_publisher(
             std_msgs.msg.String, topic=self.topic_name, qos_profile=10
         )
+        self.wait_until_connected()
+
+    def wait_until_connected(self) -> None:
+        """
+        Block until what this synchronizer publishes reaches the processes that already
+        listen on its topic.
+
+        A publisher drops what it sends to subscribers it has not discovered yet, so a
+        world that is modified right after its synchronizer was created would keep those
+        changes to itself. Ros names no moment at which every process is known, so this
+        waits for the subscribers it can see to be matched and for no further one to
+        turn up.
+
+        :raises SynchronizerNotConnectedError: If not even the subscriber of this
+            synchronizer itself was matched in time.
+        """
+        deadline = time.monotonic() + self.connection_timeout
+        subscriber_count = self.publisher.get_subscription_count()
+        settled_since = time.monotonic()
+        while time.monotonic() < deadline:
+            current_count = self.publisher.get_subscription_count()
+            if current_count != subscriber_count:
+                subscriber_count = current_count
+                settled_since = time.monotonic()
+            elif (
+                current_count > 0
+                and time.monotonic() - settled_since >= self.discovery_settle_time
+            ):
+                return
+            time.sleep(self.discovery_poll_interval)
+        raise SynchronizerNotConnectedError(
+            topic_name=self.topic_name, timeout=self.connection_timeout
+        )
 
     @cached_property
     def meta_data(self) -> MetaData:
@@ -167,11 +220,19 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
         :param message: The incoming ROS string message containing a serialized
             synchronization message.
         """
+        content = json.loads(message.data)
         with self._world._world_lock:
             tracker = WorldEntityWithIDKwargsTracker.from_world(self._world)
-            deserialized_message = from_json(
-                json.loads(message.data), **tracker.create_kwargs()
-            )
+            try:
+                deserialized_message = from_json(content, **tracker.create_kwargs())
+            except WorldEntityWithIDNotInKwargs as unknown_entity:
+                # Re-raised rather than handled: an update about entities this world never
+                # received cannot be applied, and only its wording is worth improving.
+                raise WorldUpdateReferencesUnknownEntityError(
+                    publisher=from_json(content[MessageField.META_DATA]),
+                    entity_id=unknown_entity.world_entity_id,
+                    entity_name=unknown_entity.world_entity_name,
+                ) from unknown_entity
 
             if deserialized_message.meta_data == self.meta_data:
                 return
@@ -342,7 +403,6 @@ class ModelReloadSynchronizer(Synchronizer):
         )
         new_world = self.session.scalars(query).one().from_dao()
         self._replace_world(new_world)
-        self._world._notify_model_change(publish_changes=False)
         self.record_applied(msg)
 
     def _replace_world(self, new_world: World):
@@ -356,8 +416,26 @@ class ModelReloadSynchronizer(Synchronizer):
 
         :param new_world: The new world instance to replace the current world.
         """
-        self._world.clear()
-        self._world.merge_world(new_world)
+        model_change_callbacks = list(
+            self._world.get_world_model_manager().model_change_callbacks
+        )
+        state_change_callbacks = list(self._world.state.state_change_callbacks)
+        # Clearing drops everyone who listens to the world, which is what keeps the
+        # reloaded model from being published back to the process it came from. It ends
+        # its own modification, because the emptied world only reads as empty once that
+        # modification is over, and the merge asks for the root of the world.
+        with self._world._world_lock:
+            with self._world.modify_world():
+                self._world.clear()
+            with self._world.modify_world():
+                self._world.merge_world(new_world)
+            self._world.get_world_model_manager().model_change_callbacks.extend(
+                model_change_callbacks
+            )
+            self._world.state.state_change_callbacks.extend(state_change_callbacks)
+            # The world they listen to is a different one now, so they are told about it
+            # once without it leaving this process.
+            self._world._notify_model_change(publish_changes=False)
 
 
 @dataclass(eq=False)
