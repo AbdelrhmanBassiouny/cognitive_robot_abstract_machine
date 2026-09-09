@@ -395,13 +395,13 @@ class PublisherWithAppearingSubscribers:
 
 def connect_with_appearing_subscribers(
     synchronizer: WorldSynchronizer, subscriber_counts: List[int]
-) -> float:
+) -> timedelta:
     """
     Let a synchronizer connect against subscribers that appear as given.
 
     :param synchronizer: The synchronizer whose connecting is exercised.
     :param subscriber_counts: What each look at the topic reports.
-    :return: The seconds spent connecting.
+    :return: The time spent connecting.
     """
     ros_publisher = synchronizer.publisher
     synchronizer.publisher = PublisherWithAppearingSubscribers(
@@ -410,7 +410,7 @@ def connect_with_appearing_subscribers(
     started_at = time.monotonic()
     try:
         synchronizer.wait_until_connected()
-        return time.monotonic() - started_at
+        return timedelta(seconds=time.monotonic() - started_at)
     finally:
         synchronizer.publisher = ros_publisher
 
@@ -426,7 +426,7 @@ def test_a_synchronizer_waits_until_no_further_subscriber_appears(rclpy_node):
         node=rclpy_node,
         _world=world,
         topic_name=unique_topic("waits_for_subscribers"),
-        discovery_settle_time=0.3,
+        discovery_settle_time=timedelta(seconds=0.3),
     )
 
     try:
@@ -451,7 +451,7 @@ def test_a_synchronizer_that_reaches_no_subscriber_at_all_says_so(rclpy_node):
         node=rclpy_node,
         _world=world,
         topic_name=unique_topic("reaches_no_subscriber"),
-        connection_timeout=0.3,
+        connection_timeout=timedelta(seconds=0.3),
     )
 
     try:

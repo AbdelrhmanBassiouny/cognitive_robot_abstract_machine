@@ -1,6 +1,7 @@
 from __future__ import annotations, absolute_import
 
 from dataclasses import dataclass, field, Field
+from datetime import timedelta
 from pathlib import Path
 from typing import Dict, Set
 from uuid import UUID
@@ -1020,15 +1021,15 @@ class SynchronizerNotConnectedError(UsageError):
     The topic the synchronizer publishes on and listens to.
     """
 
-    timeout: float
+    timeout: timedelta
     """
-    The seconds that were spent waiting for the topic.
+    The time that was spent waiting for the topic.
     """
 
     def error_message(self) -> str:
         return (
             f"The synchronizer of '{self.topic_name}' did not reach a single subscriber "
-            f"within {self.timeout}s, not even its own."
+            f"within {self.timeout.total_seconds()}s, not even its own."
         )
 
     def suggest_correction(self) -> str:

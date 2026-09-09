@@ -64,7 +64,6 @@ class _ConstantMatrixParts(ca.SX, Enum):
     """
 
 
-@dataclass(eq=False, repr=False)
 class SpatialFrameKey(StrEnum):
     """
     The entities a spatial type is expressed against.
@@ -80,6 +79,7 @@ class SpatialFrameKey(StrEnum):
     """The entity a transformation points at."""
 
 
+@dataclass(eq=False, repr=False)
 class SpatialType:
     """
     Provides functionality to associate a reference frame with an object.

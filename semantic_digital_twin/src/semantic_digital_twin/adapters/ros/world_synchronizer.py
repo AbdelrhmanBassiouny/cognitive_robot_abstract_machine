@@ -6,6 +6,7 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import cached_property
 from typing import ClassVar, Optional, Type, List, Dict
 from uuid import UUID
@@ -103,19 +104,19 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
     The topic name of the publisher and subscriber.
     """
 
-    connection_timeout: float = 5.0
+    connection_timeout: timedelta = timedelta(seconds=5)
     """
-    Seconds to wait for the topic of this synchronizer to become usable.
-    """
-
-    discovery_settle_time: float = 0.2
-    """
-    Seconds without a subscriber appearing before the topic counts as connected.
+    How long to wait for the topic of this synchronizer to become usable.
     """
 
-    discovery_poll_interval: float = 0.02
+    discovery_settle_time: timedelta = timedelta(seconds=0.2)
     """
-    Seconds between two looks at the subscribers of the topic while connecting.
+    How long no subscriber may appear before the topic counts as connected.
+    """
+
+    discovery_poll_interval: timedelta = timedelta(seconds=0.02)
+    """
+    How long to wait between two looks at the subscribers of the topic while connecting.
     """
 
     publisher: Optional[Publisher] = field(init=False, default=None)
@@ -181,7 +182,7 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
         :raises SynchronizerNotConnectedError: If not even the subscriber of this
             synchronizer itself was matched in time.
         """
-        deadline = time.monotonic() + self.connection_timeout
+        deadline = time.monotonic() + self.connection_timeout.total_seconds()
         subscriber_count = self.publisher.get_subscription_count()
         settled_since = time.monotonic()
         while time.monotonic() < deadline:
@@ -191,10 +192,11 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
                 settled_since = time.monotonic()
             elif (
                 current_count > 0
-                and time.monotonic() - settled_since >= self.discovery_settle_time
+                and time.monotonic() - settled_since
+                >= self.discovery_settle_time.total_seconds()
             ):
                 return
-            time.sleep(self.discovery_poll_interval)
+            time.sleep(self.discovery_poll_interval.total_seconds())
         raise SynchronizerNotConnectedError(
             topic_name=self.topic_name, timeout=self.connection_timeout
         )
