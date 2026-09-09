@@ -64,7 +64,7 @@ Giskard tick rate used both to plan (scratch world) and to pace trajectory playb
 DEFAULT_MAX_TICKS = 2000
 """
 Tick budget a single plan gets before giving up, matching
-:attr:`~coraplex.plans.executables.GiskardExecutable.max_ticks_per_motion_mapping`'s own
+:attr:`~coraplex.datastructures.dataclasses.Context.ticks_per_motion`'s own
 kinematic-motion default -- planning always runs kinematically (see this module's own
 docstring), regardless of whether the executing arm is physically simulated.
 """

@@ -16,6 +16,7 @@ from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     ExternalCollisionAvoidance,
+    SelfCollisionAvoidance,
 )
 from giskardpy.motion_statechart.graph_node import CancelMotion
 from giskardpy.motion_statechart.graph_node import EndMotion, Goal, Task
@@ -72,12 +73,6 @@ class Executable:
             executable.execute()
 
 
-DEFAULT_MAX_TICKS_PER_MOTION_MAPPING: int = 2000
-"""
-Ticks a single motion mapping is given before the simulated tick loop gives up on it.
-"""
-
-
 @dataclass
 class GiskardExecutable(Executable):
     """
@@ -131,9 +126,14 @@ class GiskardExecutable(Executable):
 
     collision_avoidance: ClassVar[bool] = False
     """
-    Whether an :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCo
-    llisionAvoidance` is added to the motion state chart, managed by
+    Whether the robot avoids colliding with its surroundings and with itself, managed by
     :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+
+    Adds an
+    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCollisionAvoidance`
+    and a
+    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.SelfCollisionAvoidance`
+    to the motion state chart.
     """
 
     real_time_pacing: ClassVar[bool] = False
@@ -164,21 +164,6 @@ class GiskardExecutable(Executable):
     within it) - raising it for everyone regressed other robots' plans in testing.
     """
 
-    max_ticks_per_motion_mapping: ClassVar[int] = DEFAULT_MAX_TICKS_PER_MOTION_MAPPING
-    """
-    Per-motion tick budget for :meth:`_execute_simulation`'s tick loop, managed by
-    :py:class:`pycram.motion_executor.ExecutionEnvironment`.
-
-    A motion that never reaches its end monitor gives up after
-    :attr:`tick_limit` ticks and raises :class:`MotionDidNotFinish`, so it can
-    never run forever.
-
-    Matters most together with ``real_time_pacing``: a paced tick sleeps for a
-    full control period, so the default budget is ~40 s of wall clock *per
-    mapping* before a stuck motion gives up, during which the robot simply
-    appears frozen. Keep it low when pacing is on.
-    """
-
     _current_motion_state_chart: MotionStatechart = field(init=False, default=None)
     """
     The motion state chart this executable most recently compiled, for a future caller
@@ -203,6 +188,7 @@ class GiskardExecutable(Executable):
         end_trigger = self.root_node.goal_reached
         if GiskardExecutable.collision_avoidance:
             self.motion_state_chart.add_node(ExternalCollisionAvoidance())
+            self.motion_state_chart.add_node(SelfCollisionAvoidance())
 
         end_motion = EndMotion()
         end_motion.start_condition = end_trigger
@@ -308,16 +294,6 @@ class GiskardExecutable(Executable):
             return RealTimePacer()
         return NoPacing()
 
-    @property
-    def tick_limit(self) -> int:
-        """
-        Ticks the simulated loop gives this executable's motions in total before it
-        gives up on them.
-        """
-        return (
-            len(self.motion_mappings) * GiskardExecutable.max_ticks_per_motion_mapping
-        )
-
     def _execute_simulation(self) -> None:
         """
         Compiles the motion state chart and ticks it in the world of the context until
@@ -350,7 +326,7 @@ class GiskardExecutable(Executable):
         )
 
         counter = 0
-        while counter < self.tick_limit:
+        while counter < len(self.motion_mappings) * self.context.ticks_per_motion:
             # Interrupting and pausing are handled inside the motion state chart by
             # per-task monitors (see motion_state_chart): an interrupt ends the
             # motion via EndMotion, a pause holds the active task via its
