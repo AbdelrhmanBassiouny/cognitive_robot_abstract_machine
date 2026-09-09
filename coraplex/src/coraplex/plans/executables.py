@@ -145,11 +145,12 @@ class GiskardExecutable(Executable):
 
     real_time_factor: ClassVar[Optional[float]] = None
     """
-    Paces :meth:`_execute_simulation`'s tick loop to run no faster than this multiple
-    of real (wall-clock) time, managed by
-    :py:class:`pycram.motion_executor.ExecutionEnvironment`. ``None`` (the default)
-    ticks as fast as the QP solver allows, which is what every existing test relies on;
-    set this only for demos meant to be watched.
+    Paces :meth:`_execute_simulation`'s tick loop to run no faster than this multiple of
+    real (wall-clock) time, managed by
+    :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+
+    ``None`` (the default) ticks as fast as the QP solver allows, which is what every
+    existing test relies on; set this only for demos meant to be watched.
     """
 
     prediction_horizon: ClassVar[int] = 4
@@ -258,6 +259,14 @@ class GiskardExecutable(Executable):
             action=action_node.__class__,
             condition=condition_node.condition,
         )
+
+    @property
+    def is_interrupted(self) -> bool:
+        return any(node.is_interrupted for node in self.motion_mappings)
+
+    @property
+    def is_paused(self) -> bool:
+        return any(node.is_paused for node in self.motion_mappings)
 
     def execute(self) -> None:
         """
