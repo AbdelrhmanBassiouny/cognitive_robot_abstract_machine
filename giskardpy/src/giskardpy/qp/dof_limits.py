@@ -312,7 +312,7 @@ class DegreeOfFreedomLimitProfiler:
         time_step: float,
         prediction_horizon: int,
         solver_class: type[QPSolver],
-    ) -> tuple[sm.Vector, sm.Vector]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Solves an MPC that drives the degree of freedom from full velocity to rest,
         returning the nominal velocity and acceleration braking profiles.
@@ -343,8 +343,8 @@ class DegreeOfFreedomLimitProfiler:
 
     def _directional_velocity_bound(
         self,
-        velocity_profile: sm.Vector,
-        acceleration_profile: sm.Vector,
+        velocity_profile: np.ndarray,
+        acceleration_profile: np.ndarray,
         position_error: sm.Scalar,
         jerk_limit: float,
         velocity_limit: float,

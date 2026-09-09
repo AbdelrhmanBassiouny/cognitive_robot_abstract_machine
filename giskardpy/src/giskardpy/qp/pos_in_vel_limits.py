@@ -10,10 +10,34 @@ from krrood.symbolic_math.symbolic_math import (
     substitution_cache,
 )
 
+NEGLIGIBLE_VELOCITY = 1e-4
+"""
+Velocity below which a degree of freedom counts as being at rest.
+
+Sits above the absolute tolerance of every solver the controller can be configured with,
+and far below the smallest velocity a braking profile genuinely contains.
+"""
+
+
+def zero_negligible_velocities(velocity_profile: np.ndarray) -> np.ndarray:
+    """
+    Returns a copy of a braking profile in which every velocity below
+    :data:`NEGLIGIBLE_VELOCITY` is exactly zero.
+
+    A profile that brakes to a standstill ends at rest, while one computed numerically ends
+    at the solver's tolerance instead. Those leftovers become velocity bounds that are a hair
+    apart rather than identical, which no interior point method can resolve.
+
+    :param velocity_profile: Velocity values over the prediction horizon.
+    """
+    at_rest = copy(velocity_profile)
+    at_rest[at_rest < NEGLIGIBLE_VELOCITY] = 0.0
+    return at_rest
+
 
 def shifted_velocity_profile(
-    velocity_profile: Vector,
-    acceleration_profile: Vector,
+    velocity_profile: np.ndarray,
+    acceleration_profile: np.ndarray,
     distance: Scalar,
     delta_time: float,
 ) -> Tuple[Vector, Vector]:
@@ -24,14 +48,14 @@ def shifted_velocity_profile(
     Selects how far into the braking profile the motion already is by comparing the remaining
     ``distance`` against the distance covered by progressively truncated tails of the profile.
 
-    :param velocity_profile: Velocity values over the prediction horizon; negative values are clamped to zero.
+    :param velocity_profile: Velocity values over the prediction horizon; velocities below
+        :data:`NEGLIGIBLE_VELOCITY` are treated as rest.
     :param acceleration_profile: Acceleration values matching ``velocity_profile``.
     :param distance: Remaining distance that determines how much of the profile is shifted out.
     :param delta_time: Duration of a single time step.
     :return: The shifted velocity profile and the shifted acceleration profile.
     """
-    velocity_profile = copy(velocity_profile)
-    velocity_profile[velocity_profile < 0] = 0
+    velocity_profile = zero_negligible_velocities(velocity_profile)
     velocity_if_cases = []
     acceleration_if_cases = []
     for x in range(len(velocity_profile) - 1, -1, -1):
