@@ -15,9 +15,8 @@ from krrood.entity_query_language.factories import (
     ConditionType,
 )
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import Arms
+from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
 from coraplex.datastructures.grasp import GraspDescription
-from coraplex.exceptions import BodyIsNotHeld
 from coraplex.plans.factories import sequential
 from coraplex.querying.predicates import GripperIsFree
 from coraplex.robot_plans.actions.base import ActionDescription
@@ -100,7 +99,8 @@ class PlaceAction(
         ground truth and needs no earlier action to have recorded it. A plan is built
         before it runs, though, so an action plan built ahead of the pick-up that fills
         the gripper has nothing to measure yet; the grasp that pick-up intends is used
-        then.
+        then. Falls back to a generic front, unaligned grasp when neither is available,
+        so a plan can still be built for an object not actually picked up anywhere.
 
         :param end_effector: The end effector holding the object.
         :return: The grasp the object is held in.
@@ -116,9 +116,11 @@ class PlaceAction(
         previous_pick = self.plan_node.get_previous_node_by_designator_type(
             PickUpAction
         )
-        if previous_pick is None:
-            raise BodyIsNotHeld(self.object_designator, end_effector)
-        return previous_pick.designator.grasp_description
+        if previous_pick is not None:
+            return previous_pick.designator.grasp_description
+        return GraspDescription(
+            ApproachDirection.FRONT, VerticalAlignment.NoAlignment, end_effector
+        )
 
     @property
     def _action_plan(self) -> PlanNode:
