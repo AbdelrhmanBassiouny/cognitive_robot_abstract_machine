@@ -87,12 +87,12 @@ Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shel
 the same tooling; a test holds the two equal so the mirror cannot drift.
 """
 
-ITEM_FIELD_INDENT = "    "
+ITEM_FIELD_INDENT = "  "
 """
 The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
 """
 
-ITEM_MARKER = "  - "
+ITEM_MARKER = "- "
 """
 What opens an item block, the list marker its first field sits behind.
 """
