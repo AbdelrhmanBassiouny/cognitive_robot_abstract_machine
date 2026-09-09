@@ -5,7 +5,9 @@ scenario domain model.
 A scene is a :class:`PieceLayout` — which pieces stand on the table, where, and turned
 how far — and a run is what is then done to it. The two compose: every run here takes a
 layout, so a random scene and a near-ambiguous one are the same four scripts over
-different scenes rather than eight scenarios.
+different scenes rather than eight scenarios. What the layout stands its pieces in is a
+:class:`MontessoriWorldBuilder` the scenario is given, so the same scripts run on the
+board this package builds and on the one a demo brings with it.
 
 Every run is carried in MuJoCo (:class:`SimulatedScene`), and what a step does it does
 through the simulation: a scene comes to rest because gravity settles it, a piece is
@@ -21,7 +23,7 @@ import math
 import os
 import random
 import tempfile
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -36,6 +38,7 @@ from typing_extensions import (
     Sequence,
     Set,
     Tuple,
+    Type,
     TYPE_CHECKING,
 )
 
@@ -1438,7 +1441,7 @@ class LightingChanged(Perturbation[World]):
         )
 
 
-# %% the scenarios themselves
+# %% the scene a run is set in
 
 
 @dataclass
@@ -1463,12 +1466,91 @@ class MountedRobot:
 
 
 @dataclass
+class MontessoriWorldBuilder(ABC):
+    """
+    What builds the Montessori scene a trial is run in, and says how high the table it
+    stands its pieces on is.
+
+    A scenario is handed one rather than building a scene of its own, so the same
+    scripts run on the scene this package builds and on the one a demo brings with it —
+    a board standing on the robot's own table, whose height is known only once that
+    robot is mounted.
+    """
+
+    @abstractmethod
+    def build(self, robot_type: Type[AbstractRobot]) -> MontessoriWorld:
+        """
+        Build a fresh scene with a robot of the given type mounted in it.
+
+        Asked once per trial rather than a built scene being handed round, so two trials
+        of one scenario are two scenes. The loose pieces have to be movable
+        (:attr:`~experiments.montessori.world.MontessoriWorld.shapes_are_movable`),
+        since the runs pick them up.
+
+        :param robot_type: The robot the scenario runs on, as its own binding names it.
+        """
+
+    @property
+    @abstractmethod
+    def table_top_z(self) -> float:
+        """
+        The height of the surface this scene's loose pieces stand on, in the world root
+        frame.
+        """
+
+    def resting_height_of(self, body: Body) -> float:
+        """
+        The height at which a loose piece's own origin sits when it rests on this
+        scene's table.
+
+        Read off the body's own geometry rather than stated, so a piece whose mesh is
+        built around a different point still rests on the surface rather than in it or
+        above it.
+
+        :param body: The piece's body.
+        """
+        lowest_point_of_the_body = float(body.collision.combined_mesh.bounds[0][2])
+        return self.table_top_z - lowest_point_of_the_body
+
+
+@dataclass
+class BoardOnItsOwnTable(MontessoriWorldBuilder):
+    """
+    The scene this package builds itself: the board on the table
+    :class:`~experiments.montessori.world.MontessoriWorld` stands it on, with the robot
+    bolted in front of it.
+    """
+
+    robot: MountedRobot = field(kw_only=True)
+    """
+    Where the robot is bolted in the scene.
+    """
+
+    def build(self, robot_type: Type[AbstractRobot]) -> MontessoriWorld:
+        montessori = MontessoriWorld(shapes_are_movable=True)
+        montessori.mount_stationary_robot(
+            robot_type,
+            URDFParser.from_file(robot_type.get_ros_file_path()).parse(),
+            self.robot.position,
+            self.robot.yaw,
+        )
+        return montessori
+
+    @property
+    def table_top_z(self) -> float:
+        return TABLE_TOP_Z
+
+
+# %% the scenarios themselves
+
+
+@dataclass
 class MontessoriSortingScenario(
     Scenario[WorldType, RobotType], Generic[WorldType, RobotType], ABC
 ):
     """
-    A scene of the Montessori sorting task: the board on its table, the pieces its
-    layout stands, and a robot bolted in front of them.
+    A run of the Montessori sorting task: the scene it is given, the pieces its layout
+    stands in that scene, and the robot the scene bolts in it.
 
     What each concrete scenario adds is the script — which steps are performed on the
     scene and what its goal then asks about it.
@@ -1479,9 +1561,9 @@ class MontessoriSortingScenario(
     Which pieces stand in the scene and where.
     """
 
-    robot: MountedRobot = field(kw_only=True)
+    world_builder: MontessoriWorldBuilder = field(kw_only=True)
     """
-    Where the robot this scenario runs on is bolted.
+    What builds the scene each trial of this scenario is run in.
     """
 
     filmed: bool = field(kw_only=True, default=False)
@@ -1501,15 +1583,9 @@ class MontessoriSortingScenario(
     def build_world(self) -> World:
         if self.simulation is not None:
             self.simulation.stop()
-        montessori = MontessoriWorld(shapes_are_movable=True)
+        montessori = self.world_builder.build(self.robot_type)
         self._keep_only_the_layouts_pieces(montessori)
         self._stand_the_pieces_where_the_layout_says(montessori)
-        montessori.mount_stationary_robot(
-            self.robot_type,
-            URDFParser.from_file(self.robot_type.get_ros_file_path()).parse(),
-            self.robot.position,
-            self.robot.yaw,
-        )
         self.add_what_the_script_acts_with(montessori)
         montessori.world.update_forward_kinematics()
         self.simulation = SimulatedScene(
@@ -1559,25 +1635,11 @@ class MontessoriSortingScenario(
                 HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=placement.x,
                     y=placement.y,
-                    z=resting_height_of(body),
+                    z=self.world_builder.resting_height_of(body),
                     yaw=placement.yaw,
                     reference_frame=montessori.world.root,
                 )
             )
-
-
-def resting_height_of(body: Body) -> float:
-    """
-    The height, in the world root frame, at which a loose piece's own origin sits when
-    the piece rests on the Montessori table.
-
-    Read off the body's own geometry rather than stated, so a piece whose mesh is built
-    around a different point still rests on the surface rather than in it or above it.
-
-    :param body: The piece's body.
-    """
-    lowest_point_of_the_body = float(body.collision.combined_mesh.bounds[0][2])
-    return TABLE_TOP_Z - lowest_point_of_the_body
 
 
 @dataclass
@@ -1697,7 +1759,7 @@ class PiecePushedWhileTheRobotIsIdle(
                         HomogeneousTransformationMatrix.from_xyz_rpy(
                             x=float(stands_at.x),
                             y=float(stands_at.y) - reach - PUSHER_CLEARANCE,
-                            z=TABLE_TOP_Z + PUSHER_SCALE.z / 2,
+                            z=self.world_builder.table_top_z + PUSHER_SCALE.z / 2,
                         )
                     ),
                 )

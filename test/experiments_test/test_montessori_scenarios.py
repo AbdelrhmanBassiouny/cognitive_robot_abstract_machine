@@ -10,17 +10,18 @@ rather than on Tracy, whose description is a ROS package a checkout need not hav
 from __future__ import annotations
 
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from typing_extensions import Dict, List
+from typing_extensions import Dict, List, Type
 
 from experiments.montessori.pieces import KNOWN_PIECES
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 
 from experiments.montessori.scenarios import (
+    BoardOnItsOwnTable,
     CONTAINED_IN_ITS_LANDING_REGION,
     DEFAULT_VIDEO_DIRECTORY_NAME,
     LayoutArea,
@@ -54,13 +55,18 @@ from experiments.montessori.exceptions import (
     NoSuchPieceError,
 )
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
-from experiments.montessori.world import BOARD_POSITION, BOARD_SCALE
+from experiments.montessori.world import (
+    BOARD_POSITION,
+    BOARD_SCALE,
+    MontessoriWorld,
+)
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.scenarios.runner import ScenarioRunner
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.adapters.multi_sim import MujocoLight
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.reasoning.predicates import InsideOf
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.connections import PrismaticConnection
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types import Point3
@@ -91,6 +97,24 @@ The same place :mod:`test_montessori_world` bolts it: on the near side of the Mo
 table, at the table's own working height.
 """
 
+HOW_FAR_ASIDE_THE_ARM_IS_BOLTED_INSTEAD = 0.1
+"""
+How far from where every scene here bolts the arm the one scene that bolts it elsewhere
+puts it, in metres.
+
+Any distance the arm could not have drifted serves; a tenth of a metre is one it could
+not.
+"""
+
+HOW_MUCH_HIGHER_ANOTHER_SCENES_TABLE_STANDS = 0.1
+"""
+How far above this package's own table the scene a test brings of its own stands its
+pieces, in metres.
+
+Any height a piece would visibly stand off this table serves; a tenth of a metre is far
+enough that a piece stood at the wrong one could not be read as rounding.
+"""
+
 WHERE_THE_CAMERA_LOOKS_FROM = Point3(0.6, 0.0, 1.2)
 """
 The viewpoint the near-ambiguous layout is ambiguous from.
@@ -105,6 +129,47 @@ def mounted_arm() -> MountedRobot:
     The grasping robot of the test dataset, bolted where every scene here bolts it.
     """
     return MountedRobot(position=WHERE_THE_ARM_IS_BOLTED)
+
+
+def board_and_the_arm() -> BoardOnItsOwnTable:
+    """
+    The scene every run here is set in: the board on the table this package builds, with
+    the grasping robot bolted in front of it.
+    """
+    return BoardOnItsOwnTable(robot=mounted_arm())
+
+
+@dataclass
+class WorldBuilderThatKeepsWhatItBuilt(BoardOnItsOwnTable):
+    """
+    A scene builder that hands back every scene it built, so a test can say whether a
+    scenario ran in one of them or in a scene of its own.
+    """
+
+    built: List[MontessoriWorld] = field(default_factory=list)
+    """
+    Every scene this has been asked for, in the order it was asked for them.
+    """
+
+    def build(self, robot_type: Type[AbstractRobot]) -> MontessoriWorld:
+        built = super().build(robot_type)
+        self.built.append(built)
+        return built
+
+
+@dataclass
+class WorldBuilderWhoseTableStandsHigher(BoardOnItsOwnTable):
+    """
+    A scene builder that stands its pieces higher than this package's own table does,
+    which is the difference a scene brought from elsewhere makes.
+
+    The table it builds is unchanged; what differs is the height it says its pieces
+    stand at, since that is what a scenario has to read rather than assume.
+    """
+
+    @property
+    def table_top_z(self) -> float:
+        return TABLE_TOP_Z + HOW_MUCH_HIGHER_ANOTHER_SCENES_TABLE_STANDS
 
 
 class SyntheticGrasperSortsAPiece(RobotSortsAPiece[World, SyntheticGraspingRobot]):
@@ -233,7 +298,7 @@ def test_a_nearly_ambiguous_layout_stands_the_two_pieces_nearer_than_chance_woul
 def test_a_built_scene_stands_every_piece_where_its_layout_says(area):
     layout = PieceLayout.randomized(seed=SEED, area=area)
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=layout, robot=mounted_arm()
+        layout=layout, world_builder=board_and_the_arm()
     )
 
     world = scenario.build_world()
@@ -253,7 +318,7 @@ def test_a_built_scene_rests_every_piece_on_the_table_rather_than_in_it(area):
     """
     layout = PieceLayout.randomized(seed=SEED, area=area)
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=layout, robot=mounted_arm()
+        layout=layout, world_builder=board_and_the_arm()
     )
 
     world = scenario.build_world()
@@ -274,7 +339,7 @@ def test_a_built_scene_holds_only_the_pieces_a_partial_layout_names(area):
         categories=(MontessoriShapeCategory.CUBE, MontessoriShapeCategory.CYLINDER),
     )
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=layout, robot=mounted_arm()
+        layout=layout, world_builder=board_and_the_arm()
     )
 
     world = scenario.build_world()
@@ -287,12 +352,67 @@ def test_a_built_scene_holds_only_the_pieces_a_partial_layout_names(area):
 
 def test_a_built_scene_mounts_the_robot_its_type_names(area):
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
 
     world = scenario.build_world()
 
     assert isinstance(SortingScene(world).robot, SyntheticGraspingRobot)
+
+
+# %% the scene a scenario is given
+
+
+def test_a_scenario_runs_in_the_scene_the_builder_it_was_given_built(area):
+    builder = WorldBuilderThatKeepsWhatItBuilt(robot=mounted_arm())
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area), world_builder=builder
+    )
+
+    world = scenario.build_world()
+
+    assert [built.world for built in builder.built] == [world]
+
+
+def test_a_scenario_stands_its_pieces_on_the_table_the_scene_it_was_given_says(area):
+    builder = WorldBuilderWhoseTableStandsHigher(robot=mounted_arm())
+    layout = PieceLayout.randomized(seed=SEED, area=area)
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=layout, world_builder=builder
+    )
+
+    world = scenario.build_world()
+
+    scene = SortingScene(world)
+    for placement in layout.placements:
+        standing_on = (
+            scene.body_of(placement.piece.category)
+            .collision.as_bounding_box_collection_in_frame(world.root)
+            .bounding_box()
+        )
+        assert float(standing_on.min_z) == pytest.approx(builder.table_top_z)
+
+
+def test_a_scenario_bolts_its_robot_where_the_scene_it_was_given_says(area):
+    bolted_elsewhere = MountedRobot(
+        position=Point3(
+            float(WHERE_THE_ARM_IS_BOLTED.x) + HOW_FAR_ASIDE_THE_ARM_IS_BOLTED_INSTEAD,
+            float(WHERE_THE_ARM_IS_BOLTED.y) + HOW_FAR_ASIDE_THE_ARM_IS_BOLTED_INSTEAD,
+            float(WHERE_THE_ARM_IS_BOLTED.z),
+        )
+    )
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=BoardOnItsOwnTable(robot=bolted_elsewhere),
+    )
+
+    world = scenario.build_world()
+
+    stands_at = SortingScene(world).robot.root.global_transform.to_position()
+    assert float(stands_at.x) == pytest.approx(float(bolted_elsewhere.position.x))
+    assert float(stands_at.y) == pytest.approx(float(bolted_elsewhere.position.y))
+    assert float(stands_at.z) == pytest.approx(float(bolted_elsewhere.position.z))
 
 
 # %% the scripted runs
@@ -301,7 +421,7 @@ def test_a_built_scene_mounts_the_robot_its_type_names(area):
 def test_the_static_run_leaves_every_piece_where_the_layout_put_it(area):
     layout = PieceLayout.randomized(seed=SEED, area=area)
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=layout, robot=mounted_arm()
+        layout=layout, world_builder=board_and_the_arm()
     )
 
     trial = ScenarioRunner().run_trial(scenario)
@@ -311,7 +431,8 @@ def test_the_static_run_leaves_every_piece_where_the_layout_put_it(area):
 
 def test_the_static_run_performs_no_step_that_moves_anything(area):
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
 
     steps = scenario.steps(scenario.build_world())
@@ -322,7 +443,7 @@ def test_the_static_run_performs_no_step_that_moves_anything(area):
 def test_the_pick_and_place_run_puts_the_piece_through_its_own_hole(area):
     scenario = SyntheticGrasperSortsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         sorted_category=MontessoriShapeCategory.CUBE,
     )
 
@@ -334,7 +455,7 @@ def test_the_pick_and_place_run_puts_the_piece_through_its_own_hole(area):
 def test_the_pushed_piece_run_moves_the_piece_and_not_the_robot(area):
     scenario = SyntheticGrasperIsIdleWhileAPieceIsPushed(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         pushed_category=MontessoriShapeCategory.TRIANGULAR_PRISM,
     )
 
@@ -346,7 +467,7 @@ def test_the_pushed_piece_run_moves_the_piece_and_not_the_robot(area):
 def test_the_held_piece_run_still_holds_the_piece_when_the_question_is_asked(area):
     scenario = SyntheticGrasperHoldsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         held_category=MontessoriShapeCategory.CYLINDER,
     )
 
@@ -358,7 +479,7 @@ def test_the_held_piece_run_still_holds_the_piece_when_the_question_is_asked(are
 def test_the_held_piece_run_ends_with_the_robot_holding_the_piece(area):
     scenario = SyntheticGrasperHoldsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         held_category=MontessoriShapeCategory.CYLINDER,
     )
     world = scenario.build_world()
@@ -374,7 +495,8 @@ def test_the_held_piece_run_ends_with_the_robot_holding_the_piece(area):
 
 def test_a_piece_left_above_the_table_falls_onto_it_when_the_scene_settles(area):
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
     world = scenario.build_world()
     scene = SortingScene(world)
@@ -393,7 +515,7 @@ def test_a_piece_left_above_the_table_falls_onto_it_when_the_scene_settles(area)
 def test_the_pushed_scene_stands_a_pusher_on_a_rail_beside_the_piece(area):
     scenario = SyntheticGrasperIsIdleWhileAPieceIsPushed(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         pushed_category=MontessoriShapeCategory.TRIANGULAR_PRISM,
     )
 
@@ -411,7 +533,7 @@ def test_the_pushed_scene_stands_a_pusher_on_a_rail_beside_the_piece(area):
 def test_the_push_moves_the_piece_along_the_rail_the_pusher_slides_on(area):
     scenario = SyntheticGrasperIsIdleWhileAPieceIsPushed(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         pushed_category=MontessoriShapeCategory.TRIANGULAR_PRISM,
     )
     world = scenario.build_world()
@@ -430,7 +552,7 @@ def test_the_push_moves_the_piece_along_the_rail_the_pusher_slides_on(area):
 def test_the_pusher_ends_the_push_up_against_the_piece_it_shoved(area):
     scenario = SyntheticGrasperIsIdleWhileAPieceIsPushed(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         pushed_category=MontessoriShapeCategory.TRIANGULAR_PRISM,
     )
     world = scenario.build_world()
@@ -452,7 +574,7 @@ def test_picking_a_piece_up_lifts_it_from_where_it_stood_rather_than_fetching_it
     """
     scenario = SyntheticGrasperHoldsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         held_category=MontessoriShapeCategory.CYLINDER,
     )
     world = scenario.build_world()
@@ -474,7 +596,7 @@ def test_picking_a_piece_up_lifts_it_from_where_it_stood_rather_than_fetching_it
 def test_a_released_piece_is_outside_its_landing_region_until_it_has_fallen(area):
     scenario = SyntheticGrasperSortsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         sorted_category=MontessoriShapeCategory.CUBE,
     )
     world = scenario.build_world()
@@ -495,7 +617,8 @@ def test_a_released_piece_is_outside_its_landing_region_until_it_has_fallen(area
 
 def test_a_piece_standing_on_the_table_is_not_in_its_hole(area):
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
 
     world = scenario.build_world()
@@ -506,7 +629,7 @@ def test_a_piece_standing_on_the_table_is_not_in_its_hole(area):
 def test_the_robot_holds_nothing_before_it_has_picked_anything_up(area):
     scenario = SyntheticGrasperHoldsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         held_category=MontessoriShapeCategory.CYLINDER,
     )
 
@@ -522,7 +645,7 @@ def test_a_picked_up_piece_hangs_from_the_frame_the_robot_grasps_with(area):
     """
     scenario = SyntheticGrasperHoldsAPiece(
         layout=PieceLayout.randomized(seed=SEED, area=area),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         held_category=MontessoriShapeCategory.CYLINDER,
     )
     world = scenario.build_world()
@@ -545,7 +668,8 @@ def test_a_landing_region_is_no_wider_than_the_hole_it_lies_under(area):
     rather than a stretch of table chosen around it.
     """
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
     scene = SortingScene(scenario.build_world())
 
@@ -562,7 +686,8 @@ def test_a_landing_region_reaches_from_the_table_to_the_top_of_the_board(area):
     no higher, so a piece standing on the board is outside it.
     """
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
     scene = SortingScene(scenario.build_world())
     region = scene.landing_region_for(MontessoriShapeCategory.CUBE)
@@ -578,7 +703,8 @@ def test_a_landing_region_is_the_one_its_own_hole_carries(area):
     drift apart.
     """
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
     scene = SortingScene(scenario.build_world())
 
@@ -591,7 +717,8 @@ def test_a_landing_region_is_the_one_its_own_hole_carries(area):
 
 def test_a_hole_with_nothing_measured_under_it_says_so(area):
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
     scene = SortingScene(scenario.build_world())
     hole = scene.hole_for(MontessoriShapeCategory.CUBE)
@@ -606,7 +733,7 @@ def test_a_scene_asked_about_a_piece_it_does_not_hold_says_so(area):
         layout=PieceLayout.partial(
             seed=SEED, area=area, categories=(MontessoriShapeCategory.CUBE,)
         ),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
     )
     scene = SortingScene(scenario.build_world())
 
@@ -657,7 +784,8 @@ def test_every_goal_verbalizes_as_the_clause_it_states(goal, sentence):
 
 def test_the_lighting_change_gives_the_world_a_light_of_its_own(area):
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
     world = scenario.build_world()
 
@@ -681,7 +809,8 @@ def test_every_trial_of_a_seeded_scenario_builds_the_same_scene(area):
     so a difference between them is the run's and never the scene's.
     """
     scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area), robot=mounted_arm()
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
     )
 
     first = SortingScene(scenario.build_world())
@@ -722,7 +851,7 @@ def _instantiated(scenario_class, area: LayoutArea):
     """
     arguments = {
         "layout": PieceLayout.randomized(seed=SEED, area=area),
-        "robot": mounted_arm(),
+        "world_builder": board_and_the_arm(),
     }
     for field_name in ("sorted_category", "pushed_category", "held_category"):
         if field_name in scenario_class.__dataclass_fields__:
@@ -860,7 +989,7 @@ def _sorting_run(filmed: bool) -> SyntheticGrasperSortsAPiece:
         layout=PieceLayout.randomized(
             seed=SEED, area=LayoutArea.on_the_table_beside_the_board()
         ),
-        robot=mounted_arm(),
+        world_builder=board_and_the_arm(),
         sorted_category=SORTED_PIECE,
         filmed=filmed,
     )
