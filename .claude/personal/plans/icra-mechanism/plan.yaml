@@ -222,3 +222,10 @@ items:
   blockers:
   - >-
     Cross-plan: depends on icra-foundation's `integrated-simulation-pipeline` (in_progress, PR #265); depends_on cannot cross a plan boundary.
+
+- id: holes-answered-as-predicates
+  title: "A hole is a predicate any surface can be asked about, and the board detector states no number of its own"
+  branch: null
+  track: backend-routing
+  depends_on: []
+  status: not_started

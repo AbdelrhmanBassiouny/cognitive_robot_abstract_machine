@@ -226,3 +226,63 @@ working memory; the developer's point is that this is a gap in the taxonomy
 as an account of a robot rather than a gap in the system, and the paper
 argues it rather than working around it. Recorded here because it is a claim
 about this item's mechanism, not only about the question set.
+
+## 2026-09-09: the fourth round on #298 lands here, as one item and one amendment
+
+The developer's fourth review round on `icra-foundation`'s `simulated-camera-feeds-perception`
+(#298) was not about that branch. Its four comments ask for `BoardDetector`'s stated defaults to be
+derived rather than written down, for holes and perforated surfaces to become concepts at a meta
+level, for a detector's capability to name *fields of classes* as entity-query-language `Attribute`s
+or `MappedVariable`s rather than field-name strings, and for a look to be asked for by handing the
+backend an underspecified `Match` that helpers fill out from what the model knows -- possibly as an
+EQL-based ripple-down rule tree. The last comment asks for exactly this: *"Maybe all these can be
+organized as plan items, Discuss with me the best course of action regarding that"*.
+
+### What already exists, which is most of it
+
+Checked in the merged tree rather than assumed, and it changes the size of the ask by more than half:
+
+- **`PerceptionDetector.capability(look) -> ConditionType`** already states what a detector can
+  answer *as an entity-query-language condition*, so that one statement both decides a look and
+  becomes a rule in the tree choosing among the detectors that can answer it. A detector is never
+  chosen for a look it declared it cannot answer.
+- **`DetectorChoice` is already the EQL-based ripple-down rule tree** the round suggests --
+  `krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`, built from the underspecified
+  statement *"a look whose detector is to be worked out"*, and live: `add_rule` grows it while it is
+  in use.
+- **`SceneRequest(Look)`** is already the underspecified description -- the kind of thing sought, the
+  surface, the placement relations, the colour, each a narrowing rather than a promise.
+- **`AttributeEqualityToLiteral.read_from`** already reads an equality about the selected variable's
+  own attribute back out of a condition, which is the reading half of "EQL Attributes instead of a
+  field string name".
+
+All four arrived on #265 through #275 (`a-look-is-described-by-a-match`) and the ripple-down stack
+(#77). So the architecture the round describes is the one this stack already chose, and writing four
+items for it would have duplicated work already merged. That is the finding worth carrying: **check
+the convergence's own merges before sizing anything that sounds like new perception machinery.**
+
+### So it is one new item and one amendment, not four items
+
+`holes-answered-as-predicates` is the genuinely new work: holes and perforated surfaces as predicates
+any body can be asked about, the detector family that answers them (the colour-reading one and the
+depth-reading one standing beside each other rather than as two branches inside `BoardDetector`), and
+`BoardDetector` stating no number of its own once all five of its defaults are read off the board the
+twin already holds.
+
+`backends-declare-their-capabilities` takes the rest as an amendment rather than a second item,
+because a capability naming a field of a class is that item's own subject at finer grain -- its notes
+already say `QueryBackend` gains `capability()`, "the same shape #231 gave detectors". Added to it:
+the field-level spelling, and the helper that fills an underspecified description out from what the
+model knows about the class named in it.
+
+**Why an amendment rather than the second item the developer picked.** `plan-size-limits`' budget is
+15 items per plan, and this plan stood at 14; two new items would have made 16, breaching the cap
+that `icra-experiments` was split into three plans to satisfy -- at real cost, days earlier. The
+split is by what the work is rather than by the cap, and it happens to fit: one genuinely new
+subject, one refinement of an item that already owns it. Reverting to two items is a one-line
+manifest change if the cap is judged the lesser constraint.
+
+The vision-language half of the round needs nothing new. `perception-backends-are-interchangeable`
+already has a vision-language backend answering a look behind the same interface and into the same
+twin, and `vlm-baseline-harness` builds the model arm; verbalising an underspecified description is
+what those two read.
