@@ -678,3 +678,40 @@ after taking its look, since `apply(world)` has no other channel to whatever bac
 later step will use. Every `Perturbation` gains `instruction_for_a_person() -> str` on
 the shared base in `scenario.py` (so `LightingChanged` implements it too), per the
 item's own notes that the same instance renders a one-line real-robot instruction.
+
+## 2026-09-09: `perturbations`' PR #305 closed unmerged — the tooling fix it carried was itself wrong
+
+Closed by the developer's direction, comment left on #305. Two findings, not one.
+
+**The indentation fix on this branch was wrong, and a better one already existed.** `beff1237a`
+("Fix `plan_item_bootstrap.py`'s item-field indentation to match real `plan.yaml` files") assumed
+every real manifest uses the flush-left `- id:` / 2-space-field convention `icra-mechanism` and
+`icra-foundation` happen to use, and hardcoded that as the module's constants. It does not: at
+least seven other plans (`eql-performatives`, `dag-facade-hardening`, `eql-existential-semantics`,
+`integration-tip-selection`, `match-query-ergonomics`, `montessori-eql-stack`, `plan-size-limits`)
+use `/plan-create`'s own newer convention, a 2-space marker with 4-space fields — the exact
+convention the original code assumed, and the one `beff1237a` broke instead of the one it fixed.
+**`#302`**, filed independently while kicking off `snapshot-working-memory` the same day, has the
+actually correct fix: `apply_item_fields` now derives the field indent from the block being
+patched (`existing_field_indent`) rather than assuming either convention, so it is correct for
+manifests written either way. `#306` (this session's split-out bug-fix PR, based on `main`,
+`bug`-labeled) carries the same wrong, hardcoded fix as `beff1237a` and is being closed as a
+duplicate superseded by #302, per the developer's request.
+
+**No perturbation code was ever written on #305.** Everything pushed there was the (wrong) tooling
+fix and the `simulated_setup.py` signature change (`world: World` instead of `montessori_world:
+MontessoriWorld`) — real prep, uncontested, but not the item's own deliverable. The developer
+called this out directly on the PR before closing it.
+
+**What a fresh session should do.** Wait for #302 to merge (or branch from its fix directly if
+urgent), then re-open work on this item from `claude/icra-mechanism-perturbations-k3myvm` (still on
+the remote, not deleted) or a fresh branch off the same base (`#265`,
+`claude/icra-experiments-simulation-pipeline-w4ep7n`) — dropping `beff1237a`/its revert entirely
+from the history rather than reintroducing it. The design already settled above (four
+`Perturbation[World]` instances, the `LookAtTheScene` step, the world-registered distortion
+marker, `instruction_for_a_person()`) still stands and does not need re-deriving; only the actual
+implementation is outstanding. The `simulated_setup.py` signature change was verified against the
+real MuJoCo pipeline in a from-scratch Python 3.12 venv built this session (`uv sync --extra dev`
+under `/usr/local/bin/uv` — the older `uv` on `PATH` couldn't parse this repo's `pyproject.toml`;
+`libegl1`/`libegl-mesa0` needed installing for offscreen rendering) — worth reusing rather than
+rebuilding from scratch, though a fresh session's container will not have it.
