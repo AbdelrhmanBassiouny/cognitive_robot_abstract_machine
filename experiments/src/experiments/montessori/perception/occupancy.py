@@ -31,6 +31,19 @@ from experiments.montessori.perception.explanations import CompetingExplanations
 
 # %% the space one thing takes up
 
+OUTLINE_UNIT = 0.001
+"""
+The unit, in metres, an outline is measured in to be laid over another.
+
+OpenCV's convex intersection holds to a tolerance of its own rather than to one taken
+from what it is handed, and answers that two outlines share no ground at all once the
+step from one of their corners to the next falls below about four thousandths of a unit.
+A cylinder's rectified outline is read at scores of points around a fourteen millimetre
+radius, so in metres its steps are that small and two readings of one cylinder a
+millimetre apart are measured to stand in different places. In millimetres they are
+measured to share what they plainly share.
+"""
+
 
 @dataclass(frozen=True)
 class OccupiedVolume:
@@ -72,7 +85,7 @@ class OccupiedVolume:
         """
         Area the outline encloses, in square metres.
         """
-        return float(cv2.contourArea(self._polygon))
+        return float(cv2.contourArea(self._polygon)) * OUTLINE_UNIT**2
 
     def shared_area(self, other: OccupiedVolume) -> float:
         """
@@ -81,7 +94,7 @@ class OccupiedVolume:
         :param other: The volume to measure against.
         """
         shared, _ = cv2.intersectConvexConvex(self._polygon, other._polygon)
-        return float(shared)
+        return float(shared) * OUTLINE_UNIT**2
 
     def overlaps(self, other: OccupiedVolume) -> bool:
         """
@@ -129,9 +142,14 @@ class OccupiedVolume:
     @property
     def _polygon(self) -> np.ndarray:
         """
-        The outline in the shape OpenCV's polygon operations take.
+        The outline in the shape OpenCV's polygon operations take, and in the unit they
+        are answered reliably in.
         """
-        return np.asarray(self.outline, dtype=np.float32).reshape(-1, 1, 2)
+        return (
+            (np.asarray(self.outline, dtype=float) / OUTLINE_UNIT)
+            .astype(np.float32)
+            .reshape(-1, 1, 2)
+        )
 
 
 # %% who holds which place
@@ -176,11 +194,11 @@ class Occupancy:
         The detections that each stand somewhere nothing else does.
 
         Places go to the account that explains its own place best, and one is given away
-        only where that account clearly leads the next one claiming it: two readings of
-        one thing are one thing seen twice, and where neither explanation leads the other
-        the picture does not say which of them is the thing, so neither is reported. That
-        is the same comparison that decided a fit was worth reporting at all, asked of
-        place instead of of evidence.
+        only where the reading claiming it names something else and explains it as well:
+        two readings that disagree about what stands somewhere, neither of which the
+        picture prefers, leave that place unexplained, so neither is reported. Two that
+        name the same thing are that thing read twice, and the second confirms the first
+        rather than contesting it.
 
         :param detections: Everything the look found, in the order it found it.
         :return: Those of them left, in the order they were offered.
@@ -199,13 +217,13 @@ class Occupancy:
                 index for index, held in enumerate(volumes) if volume.overlaps(held)
             ]
             if claimants:
-                self._drop_whichever_does_not_lead(detection, claimants, kept, volumes)
+                self._settle_a_contested_place(detection, claimants, kept, volumes)
                 continue
             kept.append(detection)
             volumes.append(volume)
         return [detection for detection in detections if detection in kept]
 
-    def _drop_whichever_does_not_lead(
+    def _settle_a_contested_place(
         self,
         detection: DetectedMontessoriShape,
         claimants: List[int],
@@ -213,12 +231,16 @@ class Occupancy:
         volumes: List[OccupiedVolume],
     ) -> None:
         """
-        Give up a place already held where what holds it does not clearly explain it
-        better than the reading now claiming it.
+        Give up a place already held where the reading now claiming it names something
+        else and the holder does not clearly explain the place better.
 
         The claimant is never reported either way: it was offered the place second
         because it explains it less well, so the question is only whether the holder
-        explains it well enough to keep it.
+        keeps it. It keeps it against a reading that names what it names, because a
+        second reading of one thing is that thing read again -- which is what two ways
+        of looking do on a picture clear enough for both to be right, and there is
+        nothing there for a lead to settle. What costs the holder its place is a reading
+        that says something else stands there and explains the place as well as it does.
 
         :param detection: The reading now claiming the place.
         :param claimants: Where in *kept* the readings already holding it stand.
@@ -226,6 +248,8 @@ class Occupancy:
         :param volumes: The places they hold, kept alongside them.
         """
         for index in reversed(claimants):
+            if kept[index].category is detection.category:
+                continue
             if not self.explanations.leads(
                 kept[index].explanation, detection.explanation
             ):

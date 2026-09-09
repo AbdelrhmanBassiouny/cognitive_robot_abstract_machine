@@ -416,18 +416,6 @@ def test_a_region_asked_for_is_drawn_see_through(
 # %% what the perception stack makes of a rendered look
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Every piece is found and then thrown away. Both detectors read all four "
-    "within a millimetre of where the twin put them, and Occupancy drops a place two "
-    "readings claim unless one leads the other by CompetingExplanations.required_lead: "
-    "the holder goes as well as the claimant. On a rendering the two agree exactly -- "
-    "cube 0.7121 against 0.7121, rectangular prism 0.6596 against 0.6596, triangular "
-    "prism 0.7480 against 0.7433 -- so only the cylinder survives. On the shipped "
-    "captures they disagree by enough for one to lead, which is why a noiseless picture "
-    "is what shows this; it is a defect of the arbitration rather than of the frame and "
-    "wants its own fix. See icra-foundation's roadmap.md.",
-)
 def test_every_piece_the_world_places_on_the_table_is_found(
     montessori_world: MontessoriWorld, simulated_frame: RgbdFrame
 ) -> None:
@@ -507,12 +495,6 @@ def distance_to(hole: ShapeSortingHole, middle: np.ndarray) -> float:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Occupancy drops both readings of every place the two detectors agree on too "
-    "closely, which on a rendering is three of the four pieces (see the test above). "
-    "See icra-foundation's roadmap.md.",
-)
 def test_every_piece_on_the_table_is_reported_once_with_its_own_category(
     montessori_world: MontessoriWorld, simulated_frame: RgbdFrame
 ) -> None:
