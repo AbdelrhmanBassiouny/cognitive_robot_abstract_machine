@@ -157,8 +157,7 @@ class QuestionSet:
                     answer=str(answer),
                     latency=latency,
                     moment=asked_at - batch_started_at,
-                    bucket=question.bucket,
-                    bloom_level=question.bloom_level,
+                    question_type=type(question),
                     answered_correctly=question.values_agree(
                         answer, question.ground_truth(source)
                     ),

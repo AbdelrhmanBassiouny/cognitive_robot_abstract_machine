@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from experiments.episodes.episode import RecordedTrial
 from experiments.paper.figure import FigureName
+from experiments.questions.long_term_memory import AnythingMovedInTheEpisode
 from experiments.questions.question import BloomLevel, Bucket
+from experiments.questions.working_memory import ObjectColours, ObjectsSeen
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
@@ -33,6 +35,7 @@ def test_answer_and_record_scores_every_question_of_the_set(
     assert len(recorded) == len(scene.question_set.questions)
     for question, row in zip(scene.question_set.questions, recorded):
         assert row.text == question.english
+        assert row.question_type is type(question)
         assert row.bucket is question.bucket
         assert row.bloom_level is question.bloom_level
         assert row.answered_correctly is True
@@ -47,6 +50,7 @@ def test_an_ordinary_query_carries_no_bucket_or_bloom_level():
     """
     ordinary = query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.1, TWIN_BACKEND)
 
+    assert ordinary.question_type is None
     assert ordinary.bucket is None
     assert ordinary.bloom_level is None
     assert ordinary.answered_correctly is None
@@ -67,27 +71,24 @@ def scored_corpus() -> list[RecordedTrial]:
             TrialOutcome.SUCCEEDED,
             queries=[
                 query(
-                    "What objects do you see?",
+                    "What objects do you see now?",
                     "cube, cylinder",
                     0.1,
-                    bucket=Bucket.SCENE,
-                    bloom_level=BloomLevel.UNDERSTANDING,
+                    question_type=ObjectsSeen,
                     answered_correctly=True,
                 ),
                 query(
                     "What colours are they?",
                     "red, blue",
                     0.1,
-                    bucket=Bucket.SCENE,
-                    bloom_level=BloomLevel.UNDERSTANDING,
+                    question_type=ObjectColours,
                     answered_correctly=False,
                 ),
                 query(
-                    "Did any object recently move?",
+                    "Did any object move in the episode?",
                     "cube",
                     0.1,
-                    bucket=Bucket.TEMPORAL_AND_AGENCY,
-                    bloom_level=BloomLevel.REMEMBERING,
+                    question_type=AnythingMovedInTheEpisode,
                     answered_correctly=True,
                 ),
                 query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.1, TWIN_BACKEND),

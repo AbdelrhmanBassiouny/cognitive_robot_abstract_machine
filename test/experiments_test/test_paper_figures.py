@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 from coraplex.datastructures.enums import ExecutionType
+from typing_extensions import Type
 
 from experiments.episodes.episode import (
     AnsweredPredicate,
@@ -25,7 +26,7 @@ from experiments.paper.figure_set import FigureSet
 from experiments.paper.measurement import RunConditions
 from experiments.paper.outcomes import ConditionOutcome, PredictionScore
 from experiments.paper.queries import BackendLatency
-from experiments.questions.question import BloomLevel, Bucket
+from experiments.questions.question import Question
 from experiments.scenarios.trial import TrialOutcome
 
 from .test_episodes import SortingFailureType, minimal_plan
@@ -143,8 +144,7 @@ def query(
     answer: str,
     latency: float,
     *backends: str,
-    bucket: Bucket | None = None,
-    bloom_level: BloomLevel | None = None,
+    question_type: Type[Question] | None = None,
     answered_correctly: bool | None = None,
 ) -> RecordedQuery:
     """
@@ -154,10 +154,9 @@ def query(
     :param answer: The answer as it was rendered.
     :param latency: Seconds the query took to answer.
     :param backends: The backend each of its predicates was routed to.
-    :param bucket: The kind of thing this query asks about, if it answers a question of
-        the frozen set.
-    :param bloom_level: The level of Bloom's taxonomy this query exercises, if it
-        answers a question of the frozen set.
+    :param question_type: The question of the frozen set this query answers, if it
+        answers one. Carries its bucket and Bloom level, rather than the caller naming
+        them separately and risking the two drifting apart.
     :param answered_correctly: Whether this query's answer matched ground truth, if it
         answers a question of the frozen set.
     """
@@ -166,8 +165,7 @@ def query(
         answer=answer,
         latency=latency,
         moment=1.0,
-        bucket=bucket,
-        bloom_level=bloom_level,
+        question_type=question_type,
         answered_correctly=answered_correctly,
         answered_predicates=[
             AnsweredPredicate(predicate_name="supported_by", backend_name=backend)

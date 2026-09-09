@@ -18,9 +18,9 @@ from coraplex.plans.plan import Plan
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.world import World
-from typing_extensions import TYPE_CHECKING, List, Optional, Sequence
+from typing_extensions import TYPE_CHECKING, List, Optional, Sequence, Type
 
-from experiments.questions.question import BloomLevel, Bucket
+from experiments.questions.question import BloomLevel, Bucket, Question
 from experiments.scenarios.trial import TrialOutcome
 
 if TYPE_CHECKING:
@@ -127,16 +127,11 @@ class RecordedQuery:
     Which backend answered each predicate of the query.
     """
 
-    bucket: Optional[Bucket] = None
+    question_type: Optional[Type[Question]] = None
     """
-    The kind of thing this query asks about, or None if it does not answer a question of
-    the frozen set.
-    """
-
-    bloom_level: Optional[BloomLevel] = None
-    """
-    The level of Bloom's taxonomy this query exercises, or None if it does not answer a
-    question of the frozen set.
+    The question of the frozen set this query answers, or None if it is an ordinary
+    query. Carries the bucket and the level of Bloom's taxonomy the question is scored
+    under, read off the class rather than duplicated here.
     """
 
     answered_correctly: Optional[bool] = None
@@ -144,6 +139,22 @@ class RecordedQuery:
     Whether this query's answer matched ground truth, or None if it does not answer a
     question of the frozen set.
     """
+
+    @property
+    def bucket(self) -> Optional[Bucket]:
+        """
+        The kind of thing this query asks about, or None if it does not answer a
+        question of the frozen set.
+        """
+        return self.question_type.bucket if self.question_type else None
+
+    @property
+    def bloom_level(self) -> Optional[BloomLevel]:
+        """
+        The level of Bloom's taxonomy this query exercises, or None if it does not
+        answer a question of the frozen set.
+        """
+        return self.question_type.bloom_level if self.question_type else None
 
 
 @dataclass
