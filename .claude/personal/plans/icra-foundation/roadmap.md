@@ -1568,6 +1568,87 @@ to matter on this board -- the piece lands at the hole's own x and y either way 
 that is luck rather than design. The alternative is `PickAndPlaceAction`, which puts both
 in one plan and works here too, at the cost of collapsing the run's two scripted steps
 into one.
+
+### `montessori-scenarios` (#296): the fourth review round, 2026-09-08
+
+Two threads and one review comment. The review comment — *generate MuJoCo videos of the
+tests, use the video/recording tool we have for MuJoCo in this repository* — is the one
+the third round missed: it is a review's own body rather than a comment on a line, so it
+never appeared among the pull request's review threads. Worth carrying as a process
+note: a round is not read until the reviews themselves are read, not only their threads.
+
+**A run is filmed with `MujocoVideoRecorder`, in takes.** A scenario built with
+`filmed=True` carries a `SceneRecording`; the takes are written out as one video, into
+`$MONTESSORI_SCENARIO_VIDEO_DIRECTORY` or a directory of its own beside the machine's
+other temporary files. It has to be takes rather than one stretch for the reason this
+branch keeps meeting: a simulation is compiled against one kinematic model, and a grasp
+re-parents the piece. So `SimulatedScene` now lets go of what carries it whenever the
+world's *model* changes — a sibling `ModelChangeCallback` — rather than each
+robot-commanding step remembering to let go first, and the recording is cut and taken up
+again at the same moments.
+
+**The film is made from the simulation carrying the run**, not a second one beside it, so
+filming cannot change what it films: a filmed and an unfilmed sorting run leave the cube
+at the same place to the last digit, and a test pins it. It costs 11 s against 2.6 s, all
+of it rendering (about 100 ms a frame in software, and near enough independent of
+resolution — 115 ms at 640 × 480 against 96 ms at 320 × 240 — so the only lever is fewer
+frames). The video is 15 frames a second, with a motion filmed every third change to the
+world, since a motion has no simulated clock to be paced against.
+
+**What no video can show is the carrying**, and that is a finding rather than an
+omission. While the robot holds the piece the world cannot be exported to MuJoCo at all:
+`ReAttachNode` goes through `world.move_branch`, which keeps the moved body's own
+connection type, so the piece's `Connection6DoF` ends up under the gripper and the model
+is refused — *free joint can only be used on top level*.
+`World.move_branch_with_fixed_connection` is the alternative and a held body being fixed
+to the hand is the truer statement, but which connection an attach makes is coraplex's
+decision, so it is asked rather than taken.
+
+**Three mechanical findings, all measured, none of them this item's to fix:**
+
+- **Building a MuJoCo mirror is itself a change to the world's model** — `build_world`
+  opens a `modify_world` block to put the world under a root of the simulation's own — so
+  anything that reacts to a model change by dropping its mirror has to be deaf while it
+  builds one.
+- **A change already under way reaches every callback the world had when it began**
+  (`update_model_version_and_notify_callbacks` iterates a copy), so a simulation being let
+  go of mid-notification has to be *paused* as well as stopped, or its spawner still runs
+  against the model it can no longer follow.
+- **A callback that stops itself can unregister another one.** Every `Callback` is a
+  `WorldEntityWithClassBasedID`, so all instances of one class share an id and compare
+  equal, and `StateChangeCallback.stop`'s `remove(self)` takes whichever instance was
+  registered *first*. Two MuJoCo mirrors of one world — a recorder beside a simulation —
+  therefore break each other on stop, and the next state change raises `AttributeError:
+  'NoneType' object has no attribute 'previous_world_state_data'` inside
+  `MultiSimSynchronizer._on_state_change`. A one-line fix in `semantic_digital_twin`
+  (remove by identity), so it belongs in a bug pull request of its own; the design here
+  avoids it by never having two mirrors at once.
+
+**`PlaceAction` gained an optional `grasp_description`**, the developer having answered
+the third round's question with *do (1)*. One kw-only field defaulting to none, and
+today's search-then-fallback is what it falls back to, so no existing caller changes.
+Measured on this board: told the `FRONT`/`TOP` grasp the piece is actually held by,
+all three poses the place takes the tool frame to change by a rotation. Two tests in
+`test_graph_parsing.py` state it against the definition rather than against a pose — told
+plans like found, and told wins over the pick-up before it — and, like the rest of
+`test/coraplex_test`, they are CI's to run.
+
+**Where the demo's actuation should live is still the developer's**, and the answer now
+has the measurements it needed. Everything that makes `montessori_demo_mujoco.py` work —
+`equipment.py`'s servos and gravity compensation, `real_time_simulation.py`'s `command`,
+the `PickUpActionMujoco`/`PlaceActionMujoco` pair, `grasp_contact.py`, and
+`MujocoSimulator.set_actuator_control` — is about 1,200 lines living on `tracy_icra` and
+on no ancestor of this branch (`git ls-tree origin/main -- .../tracy_experiments/` is
+empty). And that pair deliberately does *not* use coraplex's actions: its own docstring
+records that a Giskard closed loop ticking live against the world races
+`MujocoSynchronizer`'s physics-thread sync, so it plans against a scratch copy and plays
+trajectories back through actuators, holding by friction and never attaching. That is the
+opposite of what the third round asked for and got. The scenarios themselves are already
+the demo's — generic in their robot, with the `Tracy…` bindings in the module — and the
+one seam still closed is that `MontessoriSortingScenario` builds its own
+`MontessoriWorld` rather than being handed the demo's `TracyMontessoriWorld`, which is
+not on this base either. Three ways forward are on the thread; none was taken unasked.
+
 ### The third review round on #298, 2026-09-08: a hole is measured rather than seen, and agreement stops annihilating
 
 Two comments, both on the two expected-to-fail marks: *"you can generate a depth image
@@ -1677,4 +1758,3 @@ drawn see-through, so the reading no longer depends on the markers at all.
 `test_montessori_detection_on_captures.py` 57 passed and 4 xfailed, unchanged,
 `test_montessori_occupancy.py` 24 passed, `test_montessori_views.py` 31 passed,
 `test_montessori_explanations.py` 17 passed.
-
