@@ -243,6 +243,45 @@ items:
     MujocoVideoRecorder.start - and only the environment a run starts from can choose it. The job's
     other failures were the base's duplicate RecordedLook, which this branch takes the base's merge
     of.
+
+    Third review round 2026-09-08: "you can generate a depth image in mujoco right? ... which
+    gets you the holes using depth" and, of the arbitration, "we need to find a solution for
+    this issue". Both marks are off and the item's own criterion passes - all four pieces
+    reported once each with their own categories, within a millimetre of where the twin put
+    them, and the board found with its six holes. The depth had been rendered since the first
+    commit and nothing read it: RgbdFrame.measured_height, Orthophoto.measured_height and
+    Orthophoto.opening_mask are new, and BoardDetector reads its openings from darkness or from
+    depth, each sized on its own before the two are put together - Otsu splits a surface in two
+    whether or not anything is cut through it, and a plane stated above the surface actually
+    lying in it is measured below along the whole of that surface, so either left whole
+    swallows what the other found. A hole is ten millimetres deep rather than the eighty the
+    second round's note claimed: the mesh is cut clean through, but the drawers stand directly
+    under the lid, so a look down a hole measures a drawer. The seed was already right
+    (-0.401, 0.001 against the twin's -0.400, 0.000) and the fit was not, turning the layout ten
+    degrees off, so the rim of an opening the colours do not carry is now an edge as well
+    (EdgeDistances.of(..., together_with=...)); that lands every hole on the hole of its own
+    category, worst 5.4 mm and median 1.2 mm. The captures cannot change and it is measured
+    rather than argued: their depth contributes zero hole-sized openings on all six, and their
+    suite runs 57 passed and 4 xfailed as before.
+
+    Occupancy carried two defects, and the second is the larger.
+    keep_one_detection_per_place dropped both readings of a place unless one led, so two ways of
+    looking that agree annihilated; only a reading that names something else can take a place
+    from its holder now. Underneath it, OccupiedVolume.shared_area measured in metres, and
+    OpenCV's convex intersection answers zero once the step from one outline point to the next
+    falls below about four thousandths of a unit - so two readings of one cylinder a millimetre
+    apart, whose rectified outline is a 64-gon of 14 mm radius, were measured to share no ground
+    at all and both were reported. Squares of 40 mm sides were never affected, which is why
+    every test in test_montessori_occupancy.py passed. The outlines are intersected in
+    millimetres now. One existing test stated the rule the developer asked to change and is
+    restated rather than deleted: its two readings were both cubes and are now a cube and a
+    cylinder, since disagreement is the case it means.
+
+    Reported and not acted on: the shipped captures' own depth puts the board's top surface at
+    0.879 where recorded_setup states its lid at 0.960, and a piece resting on the lid measures
+    the same height as a piece on the table, so either those stated planes or the captures'
+    depth extrinsics are wrong. Moving a stated plane moves every rectification in the package,
+    so it is the developer's call rather than this branch's.
 - id: tracy-demo-takes-the-integrated-branch
   title: >-
     tracy_icra takes the integrated branch and the real robot runs it
@@ -296,25 +335,12 @@ items:
     and drawers' collision boxes, and ShapeSortingHole carries its own region so no name
     is spelled twice. 43 tests in the module; test/experiments_test runs 386 passed.
 
-    Fourth round 2026-09-08 at 429e335d4. A run can now be filmed while it is performed,
-    with the repository's own MujocoVideoRecorder: a SceneRecording films it in takes,
-    since a simulation is compiled against one kinematic model and a grasp re-parents the
-    piece, and SimulatedScene lets go of what carries it whenever the world's model
-    changes rather than each robot-commanding step remembering to. The film is made from
-    the simulation carrying the run, so a filmed run leaves the piece exactly where an
-    unfilmed one does. What no video can show is the carrying: while the robot holds the
-    piece the world cannot be exported to MuJoCo at all, because ReAttachNode keeps the
-    piece's free connection under the gripper. PlaceAction gained the optional
-    grasp_description the third round asked about, at the developer's "do (1)". 48 tests
-    in the module; test/experiments_test runs 391 passed.
-
     Two questions are open on the pull request, both the developer's: whether InsideOf's
     minimum_containment_ratio (which exists on #265, not on this base) should be ported
-    here now and meet #265 as a conflict, and where the demo's actuation should live --
-    everything that makes the tracy_icra demo work is about 1,200 lines that exist on
-    tracy_icra alone, and that demo deliberately does not use coraplex's actions, so
-    copying it here would duplicate work tracy_icra will merge. The Goal-as-Predicate
-    thread from round one is also still open, asking whether that change belonged on #261.
+    here now and meet #265 as a conflict, and whether PlaceAction should gain an optional
+    grasp_description so a place performed in its own plan knows how the thing it holds is
+    held. The Goal-as-Predicate thread from round one is also still open, asking whether
+    that change belonged on #261.
 - id: run-results-recorded-into-sql
   title: >-
     Where a run records its results, and the plan-and-events schema it records

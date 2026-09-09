@@ -1568,84 +1568,113 @@ to matter on this board -- the piece lands at the hole's own x and y either way 
 that is luck rather than design. The alternative is `PickAndPlaceAction`, which puts both
 in one plan and works here too, at the cost of collapsing the run's two scripted steps
 into one.
+### The third review round on #298, 2026-09-08: a hole is measured rather than seen, and agreement stops annihilating
 
-### `montessori-scenarios` (#296): the fourth review round, 2026-09-08
+Two comments, both on the two expected-to-fail marks: *"you can generate a depth image
+in mujoco right? see the best way of doing that, which gets you the holes using depth.
+Also for the detectors agreeeing on both then dropping, we need to find a solution for
+that"*, and *"we need to find a solution for this issue"*. Both marks are gone: the
+item's own criterion passes, and so does the rung below it.
 
-Two threads and one review comment. The review comment — *generate MuJoCo videos of the
-tests, use the video/recording tool we have for MuJoCo in this repository* — is the one
-the third round missed: it is a review's own body rather than a comment on a line, so it
-never appeared among the pull request's review threads. Worth carrying as a process
-note: a round is not read until the reviews themselves are read, not only their threads.
+#### The depth was already rendered; nothing read it
 
-**A run is filmed with `MujocoVideoRecorder`, in takes.** A scenario built with
-`filmed=True` carries a `SceneRecording`; the takes are written out as one video, into
-`$MONTESSORI_SCENARIO_VIDEO_DIRECTORY` or a directory of its own beside the machine's
-other temporary files. It has to be takes rather than one stretch for the reason this
-branch keeps meeting: a simulation is compiled against one kinematic model, and a grasp
-re-parents the piece. So `SimulatedScene` now lets go of what carries it whenever the
-world's *model* changes — a sibling `ModelChangeCallback` — rather than each
-robot-commanding step remembering to let go first, and the recording is cut and taken up
-again at the same moments.
+`SimulatedCamera` has answered with depth since its first commit -- what a look did with
+it was measure how tall a piece stands, and nothing else. Three pieces were missing:
 
-**The film is made from the simulation carrying the run**, not a second one beside it, so
-filming cannot change what it films: a filmed and an unfilmed sorting run leave the cube
-at the same place to the last digit, and a test pins it. It costs 11 s against 2.6 s, all
-of it rendering (about 100 ms a frame in software, and near enough independent of
-resolution — 115 ms at 640 × 480 against 96 ms at 320 × 240 — so the only lever is fewer
-frames). The video is 15 frames a second, with a motion filmed every third change to the
-world, since a motion has no simulated clock to be paced against.
+- `RgbdFrame.measured_height` -- how high the surface seen at each pixel stands, in the
+  frame poses are reported in, NaN where the sensor returned nothing.
+- `Orthophoto.measured_height`, laid over a plane by the same warp as the colour and read
+  at the nearest pixel rather than averaged (a reading either side of a rim is the lid or
+  the floor of the hole, and their mean is neither), and `opening_mask(drop)`, the pixels
+  the camera measured a surface at least that far below the plane.
+- `BoardDetector` reads its openings from darkness **or** from depth, each sized on its
+  own before the two are put together. That last is not tidiness: Otsu always splits a
+  surface in two whether or not anything is cut through it, and a plane stated above the
+  surface actually lying in it is measured below along the whole of that surface -- one
+  gap the size of the surface, which is an opening in nothing. Either left whole swallows
+  what the other found, and on the shipped captures the second one would have swallowed
+  the board.
 
-**What no video can show is the carrying**, and that is a finding rather than an
-omission. While the robot holds the piece the world cannot be exported to MuJoCo at all:
-`ReAttachNode` goes through `world.move_branch`, which keeps the moved body's own
-connection type, so the piece's `Connection6DoF` ends up under the gripper and the model
-is refused — *free joint can only be used on top level*.
-`World.move_branch_with_fixed_connection` is the alternative and a held body being fixed
-to the hand is the truer statement, but which connection an attach makes is coraplex's
-decision, so it is asked rather than taken.
+**A hole is ten millimetres deep, not eighty.** The second round's note that the twin's
+holes are "cut through an 80 mm blank" is wrong about what a camera sees: the mesh is cut
+clean through, but the drawers sit directly under the lid (`_DRAWER_POSITIONS` at
+z=0.553, `DRAWER_SCALE.z` 0.06, so their tops stand at 0.583 against a lid at 0.593), so
+a look down a hole measures the drawer ten millimetres below. `minimum_hole_depth` is
+half of that. It is also why the first round's *"a look shows no opening for the board to
+be found by"* was only half right -- there is no opening in the *colours*, and there is a
+plain one in the depth.
 
-**Three mechanical findings, all measured, none of them this item's to fix:**
+#### The seed was never the problem; the fit was
 
-- **Building a MuJoCo mirror is itself a change to the world's model** — `build_world`
-  opens a `modify_world` block to put the world under a root of the simulation's own — so
-  anything that reacts to a model change by dropping its mirror has to be deaf while it
-  builds one.
-- **A change already under way reaches every callback the world had when it began**
-  (`update_model_version_and_notify_callbacks` iterates a copy), so a simulation being let
-  go of mid-notification has to be *paused* as well as stopped, or its spawner still runs
-  against the model it can no longer follow.
-- **A callback that stops itself can unregister another one.** Every `Callback` is a
-  `WorldEntityWithClassBasedID`, so all instances of one class share an id and compare
-  equal, and `StateChangeCallback.stop`'s `remove(self)` takes whichever instance was
-  registered *first*. Two MuJoCo mirrors of one world — a recorder beside a simulation —
-  therefore break each other on stop, and the next state change raises `AttributeError:
-  'NoneType' object has no attribute 'previous_world_state_data'` inside
-  `MultiSimSynchronizer._on_state_change`. A one-line fix in `semantic_digital_twin`
-  (remove by identity), so it belongs in a bug pull request of its own; the design here
-  avoids it by never having two mirrors at once.
+With the openings read from depth the seed landed at (-0.401, 0.0013) against the twin's
+own (-0.400, 0.000) -- and the fit then turned the layout **ten degrees** off and moved
+it 17 mm, because a rendered hole's walls are lit like the lid and the layout had nothing
+in the picture to grip. So a rim is now an edge: `EdgeDistances.of(orthophoto,
+together_with=...)`, given the rims of the openings the colours do *not* carry (a rim
+that is dark on one side is already an edge the picture holds, and drawing a second one
+over it would weigh that rim against the rest of the picture differently).
 
-**`PlaceAction` gained an optional `grasp_description`**, the developer having answered
-the third round's question with *do (1)*. One kw-only field defaulting to none, and
-today's search-then-fallback is what it falls back to, so no existing caller changes.
-Measured on this board: told the `FRONT`/`TOP` grasp the piece is actually held by,
-all three poses the place takes the tool frame to change by a rotation. Two tests in
-`test_graph_parsing.py` state it against the definition rather than against a pose — told
-plans like found, and told wins over the pick-up before it — and, like the rest of
-`test/coraplex_test`, they are CI's to run.
+| the layout fitted to | centre | turn | each hole against the one the twin cut |
+|---|---|---|---|
+| the colours alone | (-0.417, -0.002) | -10.0 deg | worst 32.0 mm, median 14.9 mm, and the cube's hole matched to a cylinder's |
+| the colours and the rims | (-0.400, -0.001) | 0.0 deg | worst 5.4 mm, median 1.2 mm, every hole on its own category |
 
-**Where the demo's actuation should live is still the developer's**, and the answer now
-has the measurements it needed. Everything that makes `montessori_demo_mujoco.py` work —
-`equipment.py`'s servos and gravity compensation, `real_time_simulation.py`'s `command`,
-the `PickUpActionMujoco`/`PlaceActionMujoco` pair, `grasp_contact.py`, and
-`MujocoSimulator.set_actuator_control` — is about 1,200 lines living on `tracy_icra` and
-on no ancestor of this branch (`git ls-tree origin/main -- .../tracy_experiments/` is
-empty). And that pair deliberately does *not* use coraplex's actions: its own docstring
-records that a Giskard closed loop ticking live against the world races
-`MujocoSynchronizer`'s physics-thread sync, so it plans against a scratch copy and plays
-trajectories back through actuators, holding by friction and never attaching. That is the
-opposite of what the third round asked for and got. The scenarios themselves are already
-the demo's — generic in their robot, with the `Tracy…` bindings in the module — and the
-one seam still closed is that `MontessoriSortingScenario` builds its own
-`MontessoriWorld` rather than being handed the demo's `TracyMontessoriWorld`, which is
-not on this base either. Three ways forward are on the thread; none was taken unasked.
+**The captures cannot change, and that is measured rather than argued**: on all six, the
+depth contributes *zero* hole-sized openings, so the openings are the same dark patches as
+before and the rims are empty. `test_montessori_detection_on_captures.py` runs 57 passed
+and 4 xfailed, as it did.
+
+#### What the captures' own depth says, which is worth the developer's eye
+
+Reading it was the first time anything in this package had. It does not resolve a hole,
+and it disagrees with the rig the setup states:
+
+- The board's top surface measures at **0.879**, where `recorded_setup` states its lid at
+  **0.960** -- 81 mm out, and the table's own stated 0.880 is measured correctly at 0.879.
+- A piece resting on the lid measures 0.896 and a piece on the table 0.895. If the lid
+  stood 80 mm above the table those two would differ by 80 mm.
+- Inside a hole's own outline, 40 to 85 per cent of pixels carry no reading at all, and
+  what is measured lies within 12 mm of the board's own surface -- sometimes above it.
+- A bare patch of table scatters 14 mm from end to end.
+
+So either `LID_HEIGHT` and `TABLE_HEIGHT` or the captures' depth extrinsics are wrong,
+and `pipeline.py`'s own module docstring -- *centimetre-scale noise, far too coarse to
+measure a thirty millimetre piece* -- is if anything generous. Not touched here: the
+board is found on all six captures by its darkness, and moving a stated plane moves every
+rectification in the package.
+
+#### Occupancy: two defects, and the second is the larger
+
+The first is the one the round two note named: `keep_one_detection_per_place` drops both
+readings of a place unless one leads, so two ways of looking that agree annihilate. Now
+only a reading that names *something else* can take a place from its holder -- two
+readings that name the same thing are that thing read twice, and there is nothing there
+for a lead to settle.
+
+The second was under it and is worse. `OccupiedVolume.shared_area` measures in metres,
+and OpenCV's convex intersection holds to a tolerance of its own: it answers zero once
+the step from one outline point to the next falls below about four thousandths of a unit.
+Measured over regular polygons of a 14 mm radius offset by one millimetre, in metres: a
+16-gon intersects, a 24-gon answers zero, a 64-gon -- which is what a rectified cylinder's
+outline is -- answers zero. So **two readings of one cylinder a millimetre apart were
+measured to share no ground at all**, and both were reported. Squares of 40 mm sides were
+never affected, which is why every test in `test_montessori_occupancy.py` passed: they are
+all built out of squares. The outlines are now intersected in millimetres.
+
+One existing test stated the rule the developer asked to change, so it is restated rather
+than deleted: `test_neither_of_two_readings_of_one_place_is_reported_where_neither_leads`
+built both readings as cubes, and now builds one cube and one cylinder, since disagreement
+is the case it means. Two tests are added beside it -- that two readings naming one thing
+report it once, and that two readings of one rounded thing a millimetre apart are read as
+one place.
+
+**Measured on the reference scene**, one of each piece perception knows on the table: all
+four reported once each with their own categories, each within a millimetre of where the
+twin put it, and the board found with its six holes. The same numbers with the regions
+drawn see-through, so the reading no longer depends on the markers at all.
+
+**Verified**: `test_montessori_simulated_camera.py` 15 passed (was 12 passed, 2 xfailed),
+`test_montessori_detection_on_captures.py` 57 passed and 4 xfailed, unchanged,
+`test_montessori_occupancy.py` 24 passed, `test_montessori_views.py` 31 passed,
+`test_montessori_explanations.py` 17 passed.
 
