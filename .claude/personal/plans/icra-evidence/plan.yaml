@@ -73,12 +73,13 @@ items:
 - id: question-set-answered-from-memory
   title: >-
     Every bucket answered through EQL over working memory and over long-term memory, before any baseline exists
-  branch: null
-  pull_request_number: null
+  branch: claude/plan-item-kickoff-icra-evidence-dm8ctb
+  pull_request_number: 304
   track: experiment-a
+  session: https://claude.ai/code/session_01CeBaw39xNxHaYphUsVzXow
   depends_on:
   - question-set-and-ground-truth
-  status: not_started
+  status: in_progress
   notes: >
     Prioritised to the front on 2026-09-08 at the developer's direction, and the item two people can
     run in parallel from the day the question set is frozen: one takes the working-memory spelling
@@ -104,9 +105,13 @@ items:
     is over five buckets live and three recorded until those land.
 
     Updated again 2026-09-08 after #295's review round, and the long-term half is not merely thinner but currently unanswerable: every long-term question reaches a run's ticks and their events through a to-many collection, and a membership condition over a collection does not translate to a join - each variable translates to its unaliased data access object, so an owner and a member whose classes share a mapped base cannot be told apart in the ON clause. #295 fixes the other half (selecting a collection now returns its members rather than the association rows) and records this one as a strict xfail in krrood's own suite; the fix is per-variable aliasing in the translator and belongs to an EQL plan. Until it lands this item's long-term half produces no accuracy table at all, so the working-memory half is the whole of what two people can run in parallel today.
-  blockers:
-  - >-
-    Cross-plan: the long-term-memory half depends on icra-foundation's `episodes-queried-by-eql` (in_progress, PR #278) and `episode-corpus-generated-at-scale` (not_started); the working-memory half on `integrated-simulation-pipeline` (in_progress, PR #265). depends_on cannot cross a plan boundary.
+
+    Kicked off 2026-09-09 as #304, cut off #265 directly rather than argued through depends_on
+    (see roadmap for why `tracy_icra` could not be the base yet). `question-set-and-ground-truth`
+    (#295) landed on #265 with its long-term half fully answerable (the join-translation fix cited
+    above shipped on that same branch), so this item scores the set as #295 left it rather than
+    against the thinner shape described above.
+  blockers: []
 - id: objects-seen-asked-of-the-perception-system
   title: >-
     What the robot sees is what its perception system reports, from detectors built for what the belief state says is detectable

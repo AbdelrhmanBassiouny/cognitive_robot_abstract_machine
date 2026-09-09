@@ -1062,3 +1062,74 @@ Merged into `integrated-simulation-pipeline` (#265), cut off #278's tip as its o
 recorded. One conflict in `generate_orm.py`, purely additive (the paper-table
 `ignored_classes` loop beside the question-model one) - resolved by keeping both. See
 `integrated-simulation-pipeline`'s entry above.
+
+### `question-set-answered-from-memory` (#304), as planned 2026-09-09
+
+Lane 3's second item to open a branch, kicked off in `auto` mode.
+
+**Cut off #265 (`claude/icra-experiments-simulation-pipeline-w4ep7n`), not off `tracy_icra`.**
+Today's structural change above says new work is cut off `tracy_icra`. Checked before cutting
+anything: `git merge-base --is-ancestor origin/tracy_icra origin/pr265` holds and the reverse does
+not, so `tracy_icra` is an ancestor of #265 rather than the other way round — the merge of #265
+into `tracy_icra` (`tracy-demo-takes-the-integrated-branch`, `icra-foundation`, not_started, needs
+the robot) has not happened yet. Basing on `tracy_icra` today would start this item with none of
+`question-set-and-ground-truth`'s (#295) frozen `Question`/`QuestionSet`/`LongTermMemory` machinery,
+which landed on #265. Put to the developer before cutting the branch: confirmed #265 already
+carries everything `tracy_icra` does, so building on #265 loses nothing and gains the dependency.
+This branch will need rebasing onto `tracy_icra` once that merge lands, the ordinary cost of a
+stacked branch whose parent hasn't reached the trunk yet.
+
+**What #295 already built, and what is genuinely left.** #295 froze `Question`, `QuestionSet`,
+`WorkingMemoryQuestion`/`LongTermMemoryQuestion`, `LongTermMemory.answer`, and proved (through three
+CI rounds) that the long-term half translates. What it did not build is anything that *scores* an
+answer against ground truth and *records* the outcome — every existing test asserts equality
+directly in Python and throws the result away. This item is that harness, plus what
+`paper-figures-from-episodes` (#297) left unstubbed: "the figure the accuracy tables need is a
+`PaperFigure` subclass, and adding it belongs to the item that adds the column it reads."
+
+**One class, extended rather than duplicated.** `RecordedQuery` (`episodes/episode.py`) grows three
+optional fields — `bucket`, `bloom_level`, `answered_correctly` — `None` for an ordinary query and
+set for one answering a question of the frozen set. The item's own notes say a question's answer is
+"recorded as an episode row like any other query," which is a second `RecordedQuery`-shaped class
+would contradict — one name, one operation, per `AGENTS.md`.
+
+**`QuestionSet.answer_and_record(source)`** asks every question of the set, times each with
+`time.perf_counter`, compares its answer against `ground_truth(source)` and returns the scored rows.
+Compared as sets after `Question.distinct`, not as ordered lists — a question's own order is not
+something `ground_truth` commits to, and `distinct` already exists for exactly the "one row per
+witness" accounting `Question`'s own docstring describes. Recorded here as a design call rather than
+assumed silently.
+
+**Two new figures**, `AccuracyByBucket` and `AccuracyByBloomLevel` in a new `paper/questions.py`,
+built the way `QueryDeterminism` measures agreement: `self.indicators` over the rows that carry a
+bucket/level, skipping the `None` ones an ordinary query would have. Two new `FigureName` members,
+registered in `FigureSet.for_the_paper`.
+
+**Both halves scored, not one.** The working-memory half against the scene #295's `test_questions.py`
+already builds (a two-arm robot, a table, a cube and a cylinder on it, a second cube in hand); the
+long-term half against one recorded episode through `open_recording`/`ResultsDatabase`, the shape
+#295's `test_long_term_questions.py` already builds. CI-only for the long-term half, per the standing
+ROS/generated-ORM limitation this track has carried throughout.
+
+**Two blockers cleared as stale, one corrected.** The item's recorded blocker named
+`episodes-queried-by-eql` (#278) as `in_progress` — it merged into #265 on 2026-09-09 (see the fast
+convergence above), and this item is cut from that same base, so the dependency is satisfied through
+it rather than argued as a `depends_on` edge. `episode-corpus-generated-at-scale` (not_started) is
+not actually needed: this item scores the frozen set against one scene and one recorded episode, the
+same scale #295's own tests already run at, not a corpus at scale. `integrated-simulation-pipeline`
+(#265) is what this item is cut from, so it is satisfied by the base rather than a separate edge.
+
+**Left as #295 left it, out of scope here.** The control bucket (both spellings), spatial relations
+over long-term memory, and embodiment over long-term memory / the robot's own long-term
+degree-of-freedom count have no spelling to score yet; the accuracy tables report what exists rather
+than stub the rest.
+
+#### Testing
+
+TDD throughout: a failing test proving `answer_and_record` produces a scored `RecordedQuery` before
+the method exists, and a failing test per new figure before it exists. `test_questions_answered_from_memory.py`
+for the working-memory half, run locally against a real twin; a long-term counterpart CI-only,
+recording one episode of two trials the way `test_long_term_questions.py` does and asserting the
+regenerated `AccuracyByBucket`/`AccuracyByBloomLevel` figures over it.
+
+Session: https://claude.ai/code/session_01CeBaw39xNxHaYphUsVzXow
