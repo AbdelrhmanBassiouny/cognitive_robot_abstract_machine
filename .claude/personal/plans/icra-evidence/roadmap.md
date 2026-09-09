@@ -1203,3 +1203,59 @@ including that an ordinary (unscored) query is excluded from both tables. Not ru
 locally, for the container reason above; CI is what verifies it.
 
 Session: https://claude.ai/code/session_01CeBaw39xNxHaYphUsVzXow
+
+### `question-set-answered-from-memory` (#304), reviewed 2026-09-09
+
+Two rounds: CI came back broadly red on the first push, and the developer left two
+review threads. Both are resolved.
+
+**CI's dominant failure was #265's, not this item's, and was fixed there.** Nearly every
+test that executes a simulated motion failed with `AttributeError:
+'GiskardExecutable' object has no attribute 'is_paused'`. Traced to `tracy_icra`'s own
+`GiskardExecutable` having `is_paused`/`is_interrupted` (delegating to each motion
+mapping's `PlanNode`) that were silently dropped when tracy_icra merged into #265 -
+`main` never had them either, so it was not a main-merge casualty. Restored on
+`claude/icra-experiments-simulation-pipeline-w4ep7n` directly, with a unit test, and
+merged into this branch so #304's own CI picks it up too; see
+`integrated-simulation-pipeline`'s own roadmap entry for that fix. A second, unrelated
+failure (`test_generation_needs_no_ros_message_package`, caused by a *generated*
+`ormatic_interface.py` file pulling in a ROS message import) is pre-existing on #265 and
+left to the developer, per `AGENTS.md`'s rule against touching generated ORM files.
+
+**Both review threads asked the same thing: a reference to the `Question` class, not a
+duplicated field.** One on `question_set.py`'s `RecordedQuery` construction ("can't
+RecordQuery be a Role for a Question... or a reference field to the question class...
+not the instance"), pointing at `Question`'s own field block in #265's diff as the
+"sibling class" meant; one on `test_paper_figures.py`'s `query()` helper ("take the
+actual Question object... or the Question SubClass? I guess a class object is
+serializable or recordable, right?"). Not a `Role[Question]`: a role holds a live
+reference to its role taker, and a `Question` instance does not survive past the process
+that asked it, which is exactly why `generate_orm.py`'s ignore list excludes `Question`
+from ORM mapping in the first place.
+
+**`RecordedQuery.bucket`/`bloom_level` (two persisted fields) are replaced by
+`question_type: Optional[Type[Question]]`** - the class object itself, not an instance.
+`bucket` and `bloom_level` are now read-only properties reading
+`question_type.bucket`/`question_type.bloom_level`, both `ClassVar`s already on
+`Question`, so the two can no longer be given independently and drift apart. This needed
+no new ORM machinery: ORMatic's `TypeType` decorator (`krrood/ormatic/custom_types.py`)
+already stores any `Type[X]` field as `module.ClassName` and resolves it back, wired
+into `type_mappings` for bare `type`/`Type` regardless of `X`, and already exercised
+end-to-end by `KRROODPositionTypeWrapper.position_type: Type[KRROODPosition]` in
+krrood's own `test_ormatic/test_interface.py`.
+
+`question_set.py`'s `answer_and_record` passes `question_type=type(question)`.
+`test_paper_figures.py`'s `query()` helper takes `question_type: Type[Question] | None`
+instead of separate `bucket=`/`bloom_level=` keywords; `text` stays a separate parameter,
+since `english` is an abstract *instance* property (`AnythingMovedInTheEpisode` needs its
+own `episode_identifier` to render it), so there is no class-level text to read without
+constructing one. `test_question_scoring.py`'s scored corpus now references the real
+classes it was standing in for (`ObjectsSeen`, `ObjectColours`,
+`AnythingMovedInTheEpisode`) instead of independently-chosen bucket/level combinations -
+exactly the drift the reviewer was pointing at. `figure.py`'s `scored_queries_of` and
+`paper/questions.py`'s two figures needed no change: both read `query.bucket`/
+`query.bloom_level`, which now resolve through the properties transparently.
+
+Neither half was run locally, for the same container reason as every round on this
+branch; formatting was still run, via a throwaway venv built to hold black/docformatter/
+tqdm since `uv sync` itself fails here.

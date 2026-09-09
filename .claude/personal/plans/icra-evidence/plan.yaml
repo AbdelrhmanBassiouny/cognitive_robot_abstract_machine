@@ -123,6 +123,15 @@ items:
     see roadmap for the full reasoning. Neither half was run in this session's container, which
     cannot install the workspace at all (a `uv`/`pyproject.toml` parse error unrelated to this
     branch); CI is what verifies both.
+
+    Reviewed 2026-09-09. CI's dominant failure was root-caused to #265 itself (a
+    `GiskardExecutable.is_paused`/`is_interrupted` pair lost in tracy_icra's merge into #265, not
+    this item's diff) and fixed there, not on this branch; see `integrated-simulation-pipeline`'s
+    own entry for that fix. On review, `RecordedQuery.bucket`/`bloom_level` were replaced with
+    `question_type: Optional[Type[Question]]` - a reference to the `Question` subclass itself,
+    mapped by ORMatic's existing `TypeType` decorator - with `bucket`/`bloom_level` becoming
+    read-only properties read off it, so they can no longer drift from the class that defines
+    them. See roadmap's "reviewed 2026-09-09" section for the full reasoning.
   blockers: []
 - id: objects-seen-asked-of-the-perception-system
   title: >-
