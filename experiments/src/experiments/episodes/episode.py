@@ -20,6 +20,7 @@ from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.world import World
 from typing_extensions import TYPE_CHECKING, List, Optional, Sequence
 
+from experiments.questions.question import BloomLevel, Bucket
 from experiments.scenarios.trial import TrialOutcome
 
 if TYPE_CHECKING:
@@ -124,6 +125,24 @@ class RecordedQuery:
     answered_predicates: List[AnsweredPredicate] = field(default_factory=list)
     """
     Which backend answered each predicate of the query.
+    """
+
+    bucket: Optional[Bucket] = None
+    """
+    The kind of thing this query asks about, or None if it does not answer a question of
+    the frozen set.
+    """
+
+    bloom_level: Optional[BloomLevel] = None
+    """
+    The level of Bloom's taxonomy this query exercises, or None if it does not answer a
+    question of the frozen set.
+    """
+
+    answered_correctly: Optional[bool] = None
+    """
+    Whether this query's answer matched ground truth, or None if it does not answer a
+    question of the frozen set.
     """
 
 

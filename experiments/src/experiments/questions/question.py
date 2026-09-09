@@ -14,11 +14,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
 
+import numpy as np
 from coraplex.datastructures.enums import ExecutionType
 from krrood.entity_query_language.query.query import Query
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
+    SpatialType,
 )
 from semantic_digital_twin.world_description.world_entity import Body
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
@@ -229,6 +231,34 @@ class Question(Generic[SourceType, AnswerType], SubClassSafeGeneric, ABC):
         :param answered: What the query found.
         """
         return list(dict.fromkeys(answered))
+
+    def matches_ground_truth(self, source: SourceType) -> bool:
+        """
+        Whether this question's answer agrees with ground truth.
+
+        A spatial answer is compared numerically rather than by identity, since two
+        poses standing for the same place are two objects and the twin's own equality
+        says so; a list is compared position by position, each element the same way.
+
+        :param source: The memory the question is put to.
+        """
+        return self.values_agree(self.ask(source), self.ground_truth(source))
+
+    @classmethod
+    def values_agree(cls, answered: Any, true: Any) -> bool:
+        """
+        Whether one answered value and its true counterpart are the same thing.
+
+        :param answered: What a question answered, or one element of it.
+        :param true: What the representation actually holds, or one element of it.
+        """
+        if isinstance(answered, SpatialType):
+            return np.allclose(answered.to_np(), true.to_np())
+        if isinstance(answered, list):
+            return len(answered) == len(true) and all(
+                cls.values_agree(one, other) for one, other in zip(answered, true)
+            )
+        return answered == true
 
 
 # %% what a scene fills in

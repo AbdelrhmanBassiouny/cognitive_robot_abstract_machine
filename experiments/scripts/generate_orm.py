@@ -20,6 +20,7 @@ import experiments.paper.figure_set
 import experiments.paper.measurement
 import experiments.paper.outcomes
 import experiments.paper.queries
+import experiments.paper.questions
 import coraplex.orm.ormatic_interface
 import segmind.orm.ormatic_interface
 
@@ -89,6 +90,7 @@ for paper_module in (
     experiments.paper.measurement,
     experiments.paper.outcomes,
     experiments.paper.queries,
+    experiments.paper.questions,
 ):
     ignored_classes |= set(classes_of_module(paper_module))
 
