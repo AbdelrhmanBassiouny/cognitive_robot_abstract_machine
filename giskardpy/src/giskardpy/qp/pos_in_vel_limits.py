@@ -1,6 +1,7 @@
 from copy import copy
 
 import numpy as np
+import numpy.typing as npt
 from typing_extensions import Tuple, List
 
 import krrood.symbolic_math.symbolic_math as sm
@@ -12,8 +13,8 @@ from krrood.symbolic_math.symbolic_math import (
 
 
 def zero_negligible_velocities(
-    velocity_profile: np.ndarray, negligible_velocity=1e-4
-) -> np.ndarray:
+    velocity_profile: npt.NDArray, negligible_velocity=1e-4
+) -> npt.NDArray:
     """
     Returns a copy of a braking profile in which every velocity below
     negligible_velocity is exactly zero.
@@ -34,8 +35,8 @@ def zero_negligible_velocities(
 
 
 def shifted_velocity_profile(
-    velocity_profile: np.ndarray,
-    acceleration_profile: np.ndarray,
+    velocity_profile: npt.NDArray,
+    acceleration_profile: npt.NDArray,
     distance: Scalar,
     delta_time: float,
 ) -> Tuple[Vector, Vector]:
