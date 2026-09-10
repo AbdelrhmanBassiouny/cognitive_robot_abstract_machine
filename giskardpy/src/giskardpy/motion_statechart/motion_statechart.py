@@ -1198,7 +1198,8 @@ class MotionStatechart(SubclassJSONSerializer):
         """
         Reconstructs a motion statechart from its JSON representation, as produced by
         :meth:`to_json`: first all nodes, then their transition conditions, then
-        goal/child parent links.
+        goal/child parent links. A goal that serializes its own nodes already holds
+        them, so it is not handed them a second time.
 
         :param data: The JSON dict.
         :param kwargs: Forwarded to :func:`~krrood.adapters.json_serializer.from_json`
@@ -1216,10 +1217,10 @@ class MotionStatechart(SubclassJSONSerializer):
             )
             transition.owner._set_transition(transition)
         for node in motion_statechart.nodes:
-            if node.parent_node_index is not None:
-                parent_node = motion_statechart.get_node_by_index(
-                    node.parent_node_index
-                )
+            if node.parent_node_index is None:
+                continue
+            parent_node = motion_statechart.get_node_by_index(node.parent_node_index)
+            if node not in parent_node.nodes:
                 parent_node.nodes.append(node)
         return motion_statechart
 

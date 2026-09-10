@@ -501,6 +501,49 @@ def test_node_referenced_by_another_node_is_one_instance_after_json_round_trip()
     )
 
 
+def test_child_added_to_goal_is_its_child_once_after_json_round_trip():
+    """
+    A child added to a goal before compilation is a child of the deserialized goal once.
+    """
+    msc = MotionStatechart()
+    msc.add_node(sequence := Sequence())
+    sequence.add_node(child := ConstTrueNode())
+    msc.add_node(EndMotion.when_true(sequence))
+
+    new_json_data = json.loads(json.dumps(msc.to_json()))
+
+    msc_copy = MotionStatechart.from_json(new_json_data)
+    sequence_copy = msc_copy.get_node_by_index(sequence.index)
+    assert [node.name for node in sequence_copy.nodes] == [child.name]
+
+
+def test_children_of_compiled_goal_are_its_children_once_after_json_round_trip():
+    """
+    Compiling adds the children of a goal to the motion statechart while the goal keeps
+    them in its own node list, and each is still a child of the deserialized goal once.
+    """
+    msc = MotionStatechart()
+    msc.add_node(
+        sequence := Sequence(nodes=[ConstTrueNode(name="a"), ConstTrueNode(name="b")])
+    )
+    msc.add_node(EndMotion.when_true(sequence))
+    executor = Executor(
+        context=MotionStatechartContext(
+            world=World(),
+            qp_controller_config=QPControllerConfig.create_with_simulation_defaults(),
+        )
+    )
+    executor.compile(motion_statechart=msc)
+
+    new_json_data = json.loads(json.dumps(msc.to_json()))
+
+    msc_copy = MotionStatechart.from_json(new_json_data)
+    sequence_copy = msc_copy.get_node_by_index(sequence.index)
+    assert sequence_copy.nodes == [
+        msc_copy.get_node_by_index(node.index) for node in sequence.nodes
+    ]
+
+
 def test_nested_sequence_goal_json_round_trip_compilation():
     """
     A statechart with nested goals watched by a progress monitor can be deserialized and

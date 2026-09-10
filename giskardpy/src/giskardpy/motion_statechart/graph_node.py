@@ -1676,9 +1676,13 @@ class Goal(MotionStatechartNode):
         :param context: The context that contains data that can be used to expand this goal.
         """
 
-    def add_node(self, node: MotionStatechartNode) -> None:
+    def _add_child_to_motion_statechart(self, node: MotionStatechartNode) -> None:
         """
-        Adds a node to this goal and the motion statechart this goal belongs to.
+        Adds a node to this goal and to the motion statechart this goal belongs to.
+
+        .. note:: Call this from :meth:`expand`: the children of a goal join the motion
+            statechart while it is compiled, so that before that they are serialized
+            only once, inside their goal.
 
         :param node: The node to add as a child of this goal.
         """
@@ -1729,14 +1733,17 @@ class Goal(MotionStatechartNode):
         if node.belongs_to_motion_statechart() and node.parent_node != self:
             raise NodeAlreadyBelongsToDifferentNodeError(node=self, new_node=node)
 
-    def add_nodes(self, nodes: List[MotionStatechartNode]) -> None:
+    def _add_children_to_motion_statechart(
+        self, nodes: List[MotionStatechartNode]
+    ) -> None:
         """
-        Adds multiple nodes to this goal and the motion statechart this goal belongs to.
+        Adds multiple nodes to this goal and to the motion statechart this goal belongs
+        to, see :meth:`_add_child_to_motion_statechart`.
 
         :param nodes: The nodes to add as children of this goal.
         """
         for node in nodes:
-            self.add_node(node)
+            self._add_child_to_motion_statechart(node)
 
 
 @dataclass(eq=False, repr=False)
