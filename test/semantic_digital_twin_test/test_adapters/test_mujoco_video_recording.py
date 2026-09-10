@@ -222,7 +222,7 @@ def test_many_short_advances_still_respect_the_configured_frame_rate(ray_test_wo
 
     recorder.start()
     try:
-        step_size = recorder.multi_sim.simulator.step_size
+        step_size = recorder._multi_sim.simulator.step_size
         short_call_duration = step_size * 5
         number_of_calls = 200
         for _ in range(number_of_calls):
