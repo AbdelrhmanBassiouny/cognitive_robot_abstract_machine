@@ -363,10 +363,10 @@ def _causal_circuit_for(model):
     GroundingMode.SAMPLED/EXACT causal-registration test below exercises.
     """
     chair_count_variable = next(
-        v for v in model.variables if v.name == "SceneRoomAggregations.chair_count()"
+        variable for variable in model.variables if variable.name == "SceneRoomAggregations.chair_count()"
     )
     object_type_variable = next(
-        v for v in model.variables if v.name == "SceneRoom.objects[0].type"
+        variable for variable in model.variables if variable.name == "SceneRoom.objects[0].type"
     )
     tree = MarginalDeterminismTreeNode.from_causal_graph(
         [chair_count_variable], [object_type_variable]
@@ -559,10 +559,10 @@ def test_exact_grounding_preserves_correlation_with_the_retained_latent(
         correlated_room_query, grounding_mode=GroundingMode.EXACT
     )
     chair_count_variable = next(
-        v for v in grounded.variables if v.name == "SceneRoomAggregations.chair_count()"
+        variable for variable in grounded.variables if variable.name == "SceneRoomAggregations.chair_count()"
     )
     object_type_variable = next(
-        v for v in grounded.variables if v.name == "SceneRoom.objects[0].type"
+        variable for variable in grounded.variables if variable.name == "SceneRoom.objects[0].type"
     )
 
     tree = MarginalDeterminismTreeNode.from_causal_graph(
