@@ -10,16 +10,10 @@ from krrood.symbolic_math.symbolic_math import (
     substitution_cache,
 )
 
-NEGLIGIBLE_VELOCITY = 1e-4
-"""
-Velocity below which a degree of freedom counts as being at rest.
 
-Sits above the absolute tolerance of every solver the controller can be configured with,
-and far below the smallest velocity a braking profile genuinely contains.
-"""
-
-
-def zero_negligible_velocities(velocity_profile: np.ndarray) -> np.ndarray:
+def zero_negligible_velocities(
+    velocity_profile: np.ndarray, negligible_velocity=1e-4
+) -> np.ndarray:
     """
     Returns a copy of a braking profile in which every velocity below
     :data:`NEGLIGIBLE_VELOCITY` is exactly zero.
@@ -29,9 +23,12 @@ def zero_negligible_velocities(velocity_profile: np.ndarray) -> np.ndarray:
     apart rather than identical, which no interior point method can resolve.
 
     :param velocity_profile: Velocity values over the prediction horizon.
+    :param negligible_velocity: Velocity below which a velocity is considered to be at rest.
+                Sits above the absolute tolerance of every solver the controller can be configured with,
+                and far below the smallest velocity a braking profile genuinely contains.
     """
     at_rest = copy(velocity_profile)
-    at_rest[at_rest < NEGLIGIBLE_VELOCITY] = 0.0
+    at_rest[at_rest < negligible_velocity] = 0.0
     return at_rest
 
 
