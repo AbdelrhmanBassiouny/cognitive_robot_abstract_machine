@@ -46,8 +46,7 @@ def shifted_velocity_profile(
     Selects how far into the braking profile the motion already is by comparing the remaining
     ``distance`` against the distance covered by progressively truncated tails of the profile.
 
-    :param velocity_profile: Velocity values over the prediction horizon; velocities below
-        :data:`NEGLIGIBLE_VELOCITY` are treated as rest.
+    :param velocity_profile: Velocity values over the prediction horizon; low velocities are treated as rest.
     :param acceleration_profile: Acceleration values matching ``velocity_profile``.
     :param distance: Remaining distance that determines how much of the profile is shifted out.
     :param delta_time: Duration of a single time step.
