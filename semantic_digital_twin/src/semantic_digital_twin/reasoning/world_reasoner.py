@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from os.path import dirname
 
-from typing_extensions import Optional, List, Dict, Any, Type, Callable, ClassVar
+from typing_extensions import Optional, List, Dict, Any, ClassVar
 
+from semantic_digital_twin.semantic_annotations.mixins import HasMechanicalJoint
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
 from semantic_digital_twin.reasoning.reasoner import CaseReasoner
@@ -80,32 +81,24 @@ class WorldReasoner:
                 setattr(self.world, attr_name, attr_value)
             else:
                 for semantic_annotation in attr_value:
-                    self.world.add_semantic_annotation_recursively(semantic_annotation)
+                    self._hold_in_world(semantic_annotation)
 
-    def fit_semantic_annotations(
-        self,
-        required_semantic_annotations: List[Type[SemanticAnnotation]],
-        update_existing_semantic_annotations: bool = False,
-        world_factory: Optional[Callable] = None,
-        scenario: Optional[Callable] = None,
-    ) -> None:
+    def _hold_in_world(self, semantic_annotation: SemanticAnnotation) -> None:
         """
-        Fit the world RDR to the required semantic annotation types.
+        Give the world the inferred annotation, and the joint that already moves it.
 
-        :param required_semantic_annotations: A list of semantic annotation types that
-            the RDR should be fitted to.
-        :param update_existing_semantic_annotations: If True, existing semantic
-            annotations will be updated with new rules, else they will be skipped.
-        :param world_factory: Optional callable that can be used to recreate the world
-            object.
-        :param scenario: Optional callable that represents the test method or scenario
-            that is being executed.
+        An inferred annotation the world already holds an equal of is dropped in favour
+        of the one the world holds, so that reasoning over a world that was annotated
+        before does not store a second copy of what it recognises, and so that the joint
+        is given to the annotation everything else refers to.
+
+        :param semantic_annotation: The annotation a rule inferred.
         """
-        self.reasoner.fit_attribute(
-            "semantic_annotations",
-            required_semantic_annotations,
-            False,
-            update_existing_rules=update_existing_semantic_annotations,
-            case_factory=world_factory,
-            scenario=scenario,
+        annotation_in_world = self.world.get_semantic_annotation_equal_to(
+            semantic_annotation
         )
+        if annotation_in_world is None:
+            self.world.add_semantic_annotation_recursively(semantic_annotation)
+            annotation_in_world = semantic_annotation
+        if isinstance(annotation_in_world, HasMechanicalJoint):
+            annotation_in_world.create_default_mechanical_joint()

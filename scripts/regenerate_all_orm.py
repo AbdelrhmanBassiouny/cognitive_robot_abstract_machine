@@ -1,44 +1,33 @@
-from pathlib import Path
-import subprocess
-import sys
+"""
+Regenerate the ORM interfaces of every package that has one.
+
+Runnable from any working directory: the interfaces are resolved relative to the
+installed :mod:`cognitive_robot_abstract_machine` package.
+"""
+
+from __future__ import annotations
+
+import argparse
+
+from cognitive_robot_abstract_machine.orm_interfaces import WORKSPACE_ORM_INTERFACES
 
 
-def regenerate(generate_orm_path: Path) -> None:
+def main() -> None:
     """
-    Runs the provided generate_orm.py file in a subprocess.
+    Build every ORM interface of this repository anew.
     """
-    generate_orm = generate_orm_path.resolve()
-    folder = generate_orm.parent
-
-    if generate_orm.name != "generate_orm.py":
-        raise ValueError(f"Expected a generate_orm.py file, got: {generate_orm}")
-
-    if not generate_orm.exists():
-        raise FileNotFoundError(f"Generator not found: {generate_orm}")
-
-    subprocess.run(
-        [sys.executable, str(generate_orm)],
-        cwd=folder,
-        check=True,
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help=(
+            "Let the generators write their own logging to the terminal, in place of the progress bar, to follow what a build does."
+        ),
     )
+    arguments = parser.parse_args()
+
+    WORKSPACE_ORM_INTERFACES.regenerate(show_generator_output=arguments.debug)
 
 
-def clear_file(file_path: Path) -> None:
-    """
-    Deletes the contents of a file without deleting the file itself.
-    """
-    path = file_path.resolve()
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {path}")
-    path.write_text("", encoding="utf-8")
-
-
-clear_file(
-    Path("../semantic_digital_twin/src/semantic_digital_twin/orm/ormatic_interface.py")
-)
-clear_file(Path("../coraplex/src/coraplex/orm/ormatic_interface.py"))
-clear_file(Path("../experiments/src/experiments/orm/ormatic_interface.py"))
-
-regenerate(Path("../semantic_digital_twin/scripts/generate_orm.py"))
-regenerate(Path("../coraplex/scripts/generate_orm.py"))
-regenerate(Path("../experiments/scripts/generate_orm.py"))
+if __name__ == "__main__":
+    main()

@@ -7,7 +7,7 @@ from typing import Optional, List, Deque, Tuple, Dict, Any
 import numpy as np
 import numpy.typing as npt
 import random_events
-from random_events.interval import closed, closed_open, SimpleInterval, Bound
+from random_events.interval import closed, closed_open, reals, SimpleInterval, Bound
 from random_events.product_algebra import SimpleEvent, Event
 from random_events.variable import Continuous
 from typing_extensions import Self
@@ -155,23 +155,33 @@ class InductionStep:
         """
         Create a uniform distribution from the datapoint at `begin_index` to the datapoint at `end_index`.
 
+        The piece touching the globally first or last datapoint of the induction is
+        built unbounded on that side and then intersected with
+        :attr:`NygaInduction.support`, so that widening the support to absorb float
+        instabilities - or narrowing it to stay clear of a sibling distribution
+        elsewhere in a larger circuit - is expressed entirely through that one
+        interval rather than through a separate adjustment step.
+
         :param begin_index: The index of the first datapoint.
         :param end_index: The index of the last datapoint.
         """
-        if end_index == len(self.data):
-            interval = SimpleInterval.from_data(
-                self.left_connecting_point_from_index(begin_index),
-                self.right_connecting_point(),
-                Bound.CLOSED,
-                Bound.CLOSED,
-            )
-        else:
-            interval = SimpleInterval.from_data(
-                self.left_connecting_point_from_index(begin_index),
-                self.right_connecting_point_from_index(end_index),
-                Bound.CLOSED,
-                Bound.OPEN,
-            )
+        is_last_piece = end_index == len(self.data)
+
+        lower = (
+            -float("inf")
+            if begin_index == 0
+            else self.left_connecting_point_from_index(begin_index)
+        )
+        upper = (
+            float("inf")
+            if is_last_piece
+            else self.right_connecting_point_from_index(end_index)
+        )
+
+        interval = SimpleInterval.from_data(
+            lower, upper, Bound.CLOSED, Bound.CLOSED if is_last_piece else Bound.OPEN
+        )
+        interval = interval.intersection_with(self.nyga_induction.support)
         return UniformDistribution(variable=self.variable, interval=interval)
 
     def sum_weights_from_indices(self, begin_index: int, end_index: int) -> float:
@@ -201,6 +211,37 @@ class InductionStep:
         """
         return self.sum_log_weights_from_indices(self.begin_index, self.end_index)
 
+    def _vectorized_log_likelihood_of_split_side(
+        self,
+        split_indices: npt.NDArray,
+        split_values: npt.NDArray,
+        connecting_point: float,
+        is_left: bool,
+    ) -> npt.NDArray:
+        """
+        Log likelihood of one side of a candidate split, evaluated for every candidate
+        split index of :meth:`compute_best_split` at once. Which side is being evaluated
+        is passed in directly (`is_left`) rather than inferred from the data, since
+        :meth:`compute_best_split` already knows it statically: every `split_value` lies
+        to the right of the left connecting point and to the left of the right
+        connecting point.
+        """
+        begin, end = (
+            (self.begin_index, split_indices)
+            if is_left
+            else (split_indices, self.end_index)
+        )
+        number_of_samples = end - begin
+        log_density = np.log(np.abs(split_values - connecting_point))
+        log_weight_sum_of_split = np.log(self.sum_weights_from_indices(begin, end))
+        sum_of_log_weights = self.sum_log_weights_from_indices(begin, end)
+        log_weight_sum = np.log(self.total_weights)
+
+        return (
+            number_of_samples * (log_weight_sum_of_split - log_weight_sum - log_density)
+            + sum_of_log_weights
+        )
+
     def compute_best_split(self) -> Tuple[float, Optional[int]]:
         """
         Compute the best split of the data.
@@ -208,38 +249,37 @@ class InductionStep:
         The best split of the data is computed by evaluating the log likelihood of every possible split and memorizing
         the best one.
 
+        This evaluates every candidate split at once via
+        :meth:`_vectorized_log_likelihood_of_split_side` instead of a per-candidate
+        Python loop, since that loop is the dominant cost of :meth:`NygaInduction.fit`
+        on large datasets.
+
         :return: The maximum log likelihood and the best split index.
         """
 
-        # initialize the maximum likelihood and the best split index
-        maximum_log_likelihood = -float("inf")
-        best_split_index = None
+        first_split_index = self.begin_index + self.min_samples_per_quantile
+        last_split_index = self.end_index - self.min_samples_per_quantile + 1
 
-        # calculate the connecting points
-        right_connecting_point = self.right_connecting_point()
-        left_connecting_point = self.left_connecting_point()
+        # empty candidate range: too few samples to leave min_samples_per_quantile on
+        # both sides of any split (e.g. this step's own segment is already that small)
+        if first_split_index >= last_split_index:
+            return -float("inf"), None
 
-        # for every possible splitting index
-        for split_index in range(
-            self.begin_index + self.min_samples_per_quantile,
-            self.end_index - self.min_samples_per_quantile + 1,
-        ):
+        split_indices = np.arange(first_split_index, last_split_index)
+        split_values = (
+            self.data[split_indices - 1] + self.data[split_indices]
+        ) / 2
 
-            # calculate log likelihoods
-            log_likelihood_left = self.log_likelihood_of_split_side(
-                split_index, left_connecting_point
-            )
-            log_likelihood_right = self.log_likelihood_of_split_side(
-                split_index, right_connecting_point
-            )
-            log_likelihood = log_likelihood_left + log_likelihood_right
+        left_hand_side = self._vectorized_log_likelihood_of_split_side(
+            split_indices, split_values, self.left_connecting_point(), is_left=True
+        )
+        right_hand_side = self._vectorized_log_likelihood_of_split_side(
+            split_indices, split_values, self.right_connecting_point(), is_left=False
+        )
 
-            # update the maximum likelihood and the best split index
-            if log_likelihood > maximum_log_likelihood:
-                maximum_log_likelihood = log_likelihood
-                best_split_index = split_index
-
-        return maximum_log_likelihood, best_split_index
+        log_likelihoods = left_hand_side + right_hand_side
+        best = int(np.argmax(log_likelihoods))
+        return float(log_likelihoods[best]), int(split_indices[best])
 
     def log_likelihood_without_split(self) -> float:
         """
@@ -251,58 +291,6 @@ class InductionStep:
             self.right_connecting_point() - self.left_connecting_point()
         )
         return self.sum_log_weights() + (self.number_of_samples * log_density)
-
-    def log_likelihood_of_split_side(
-        self, split_index: int, connecting_point: float
-    ) -> float:
-        """
-        Calculate the log likelihood of a split side.
-
-        This method automatically determines if this is the left or right side of the split.
-
-        :param split_index: The index of the split.
-        :param connecting_point: The connecting point.
-
-        :return: The log likelihood of the split.
-        """
-
-        # calculate the split value
-        split_value = (self.data[split_index - 1] + self.data[split_index]) / 2
-
-        # calculate the log density
-        density = split_value - connecting_point
-        is_left = density > 0
-        log_density = np.log(np.abs(density))
-
-        # calculate the log of the weight of this partition in the sum node
-        log_weight_sum_of_split = (
-            np.log(self.sum_weights_from_indices(self.begin_index, split_index))
-            if is_left
-            else np.log(self.sum_weights_from_indices(split_index, self.end_index))
-        )
-
-        # calculate the log of the sum of the log_weights of both partitions
-        log_weight_sum = np.log(self.total_weights)
-
-        # calculate the number of samples in this partition
-        number_of_samples = (
-            split_index - self.begin_index if is_left else self.end_index - split_index
-        )
-
-        # calculate the sum of the logarithmic log_weights of the samples in this partition
-        sum_of_log_weights_of_samples = (
-            self.sum_log_weights_from_indices(self.begin_index, split_index)
-            if is_left
-            else self.sum_log_weights_from_indices(split_index, self.end_index)
-        )
-
-        # add the terms together
-        log_likelihood = (
-            number_of_samples * (log_weight_sum_of_split - log_weight_sum - log_density)
-            + sum_of_log_weights_of_samples
-        )
-
-        return log_likelihood
 
     def construct_left_induction_step(self, split_index: int) -> Self:
         """
@@ -372,7 +360,8 @@ class InductionStep:
             # mount a uniform distribution
             distribution = self.create_uniform_distribution()
 
-            self.nyga_induction.probabilistic_circuit.root.add_subcircuit(
+            # root_unit instead of probabilistic_circuit.root, which is O(graph size)
+            self.nyga_induction.root_unit.add_subcircuit(
                 UnivariateContinuousLeaf(
                     distribution,
                     probabilistic_circuit=self.nyga_induction.probabilistic_circuit,
@@ -411,11 +400,31 @@ class NygaInduction:
     float precision.
     """
 
+    support: SimpleInterval = field(default_factory=lambda: reals().simple_sets[0])
+    """
+    The allowed span of the distribution's support. Every uniform piece the induction
+    creates is intersected with this interval, so a sibling distribution for the same
+    variable elsewhere in a larger circuit (e.g. another leaf of a
+    :class:`~probabilistic_model.learning.jpt.jpt.JointProbabilityTree`) can be kept
+    from being overlapped by simply narrowing this interval instead of it.
+
+    Defaults to the entire real line; :meth:`fit` always narrows it further to at
+    most the data's own range widened by `tolerance_at_extremes` on both sides.
+    """
+
     probabilistic_circuit: ProbabilisticCircuit = field(
         init=False, default_factory=ProbabilisticCircuit, compare=False
     )
     """
     The probabilistic circuit to mount the distribution into.
+    """
+
+    root_unit: Optional[SumUnit] = field(init=False, default=None, compare=False)
+    """
+    Direct reference to the circuit's root SumUnit, set once in :meth:`fit`. Leaves are
+    attached through this instead of ``probabilistic_circuit.root`` to avoid that
+    property's O(graph size) rescan on every attach (see the note in
+    :meth:`InductionStep.induce`).
     """
 
     def fit(
@@ -447,6 +456,16 @@ class NygaInduction:
 
             return self.probabilistic_circuit
 
+        # narrow the support to at most the data's own range widened by tolerance_at_extremes
+        self.support = self.support.intersection_with(
+            SimpleInterval.from_data(
+                sorted_unique_data[0] - self.tolerance_at_extremes,
+                sorted_unique_data[-1] + self.tolerance_at_extremes,
+                Bound.CLOSED,
+                Bound.CLOSED,
+            )
+        )
+
         # if the log_weights are not given
         if weights is None:
             weights = counts
@@ -459,7 +478,7 @@ class NygaInduction:
         cumulative_weights = np.insert(cumulative_weights, 0, 0)
 
         # create the root
-        SumUnit(probabilistic_circuit=self.probabilistic_circuit)
+        self.root_unit = SumUnit(probabilistic_circuit=self.probabilistic_circuit)
 
         # construct the initial induction step
         initial_induction_step = InductionStep(
@@ -483,31 +502,7 @@ class NygaInduction:
             induction_steps.extend(new_induction_steps)
 
         self.probabilistic_circuit.normalize()
-        self.adjust_extreme_points()
         return self.probabilistic_circuit
-
-    def adjust_extreme_points(self):
-        """
-        Applies `epsilon_at_extremes` to the support of the distribution.
-        """
-        # skip if this distribution is a dirac delta distribution
-        if len(self.probabilistic_circuit.nodes()) == 1:
-            return
-
-        # get the left most side of the distribution
-        lowest_leaf = min(
-            self.probabilistic_circuit.leaves,
-            key=lambda leaf: leaf.distribution.interval.lower,
-        )
-
-        lowest_leaf.distribution.interval.lower -= self.tolerance_at_extremes
-
-        highest_leaf = max(
-            self.probabilistic_circuit.leaves,
-            key=lambda leaf: leaf.distribution.interval.upper,
-        )
-
-        highest_leaf.distribution.interval.upper += self.tolerance_at_extremes
 
     def empty_copy(self) -> Self:
         return self.__class__(

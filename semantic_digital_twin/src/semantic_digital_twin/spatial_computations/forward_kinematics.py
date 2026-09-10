@@ -1,20 +1,19 @@
 from __future__ import absolute_import, annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 from uuid import UUID
 
 import numpy as np
 import rustworkx.visit
-from typing_extensions import List
 
+from krrood.patterns.caching import copy_memoize, memoize, clear_memoization_cache
 from krrood.symbolic_math.symbolic_math import (
+    CasadiLock,
     CompiledFunction,
     Matrix,
     VariableParameters,
-    FloatVariable,
 )
-from krrood.utils import copy_memoize, memoize, clear_memoization_cache
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.datastructures.types import NpMatrix4x4
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -23,6 +22,9 @@ from semantic_digital_twin.world_description.world_entity import (
     Connection,
     KinematicStructureEntity,
 )
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.world import ModelRevision
 
 
 @dataclass(eq=False)
@@ -61,6 +63,16 @@ class ForwardKinematicsManager(ModelChangeCallback):
 
     body_id_to_all_fk_index: Dict[UUID, int] = field(init=False, repr=False)
 
+    compiled_revision: Optional[ModelRevision] = field(
+        init=False, default=None, repr=False
+    )
+    """
+    The kinematic structure the current expressions were compiled against.
+
+    ``None`` until the first compilation. Lets :meth:`matches_world_structure` tell a
+    stale set of expressions from an up-to-date one.
+    """
+
     def on_model_change(self, **kwargs):
         if len(self._world.kinematic_structure_entities) == 0:
             return
@@ -68,6 +80,18 @@ class ForwardKinematicsManager(ModelChangeCallback):
         clear_memoization_cache(self)
         self.compile()
         self.recompute()  # we need to recompute because other model updaters might need fk.
+        self.compiled_revision = self._world.get_world_model_manager().revision
+
+    @property
+    def matches_world_structure(self) -> bool:
+        """
+        :return: Whether the compiled expressions still describe the world's kinematic
+            structure, i.e. whether recompiling them would produce the same result.
+        """
+        return (
+            self.compiled_revision is not None
+            and self.compiled_revision == self._world.get_world_model_manager().revision
+        )
 
     def update_root_T_kse_expression_cache(self):
         self.root_T_kse_expression_cache = {
@@ -127,16 +151,17 @@ class ForwardKinematicsManager(ModelChangeCallback):
         """
         if root == self._world.root:
             return self.root_T_kse_expression_cache[tip.id]
-        fk = HomogeneousTransformationMatrix()
         root_chain, tip_chain = self._world.compute_split_chain_of_connections(
             root, tip
         )
-        connection: Connection
-        for connection in root_chain:
-            tip_T_root = connection.origin_expression.inverse()
-            fk = fk.dot(tip_T_root)
-        for connection in tip_chain:
-            fk = fk.dot(connection.origin_expression)
+        with CasadiLock():
+            fk = HomogeneousTransformationMatrix()
+            connection: Connection
+            for connection in root_chain:
+                tip_T_root = connection.origin_expression.inverse()
+                fk = fk.dot(tip_T_root)
+            for connection in tip_chain:
+                fk = fk.dot(connection.origin_expression)
         fk.reference_frame = root
         fk.child_frame = tip
         return fk

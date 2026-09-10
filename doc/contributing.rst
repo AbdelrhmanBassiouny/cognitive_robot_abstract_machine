@@ -11,6 +11,26 @@ install pre-commit hooks:
   sudo apt install pre-commit
   pre-commit install
 
+``ormatic_interface.py`` files are generated and never reviewed, so the repository
+ignores them rather than tracking them: git never proposes them for staging -- not
+even with ``git add -A`` -- and never has to overwrite your generated copy to switch
+branches. Run ``python scripts/regenerate_all_orm.py`` to build them, which a fresh
+clone needs before it can persist anything and a changed mapped datastructure needs
+again; CI generates them the same way for its tests.
+
+A test run builds them for itself, and a build takes about a minute, so by default it
+only pays for one when the checkout has not built its interfaces since the sources they
+are generated from changed. ``--orm-build`` overrides that:
+
+.. code:: bash
+
+  pytest --orm-build=auto     # the default: build only what the sources have outrun
+  pytest --orm-build=always   # build every run, whatever the checkout holds
+  pytest --orm-build=never    # build nothing, and read whatever the checkout holds
+
+Runs that state no choice on their command line take one from ``CRAM_ORM_BUILD``, which
+is how a shell or a CI job sets the default for every run it starts.
+
 If you have any questions or feedback, consider submitting a `GitHub
 Issue <https://github.com/cram2/cognitive_robot_abstract_machine/issues>`__.
 

@@ -4,6 +4,7 @@ import logging
 from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
+from typing import cast
 
 from typing_extensions import (
     Callable,
@@ -36,10 +37,12 @@ try:
     )
 except ImportError:
     VizMarkerPublisher = None
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidExternalCollisions,
     AllowSelfCollisions,
 )
+from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
@@ -74,6 +77,12 @@ class Location(Iterable[Pose]):
     Validators that are used to check if a generated pose is valid.
     """
 
+    standing_violated_distance: float = 0.05
+    """
+    How close in meters the robot may come to its surroundings at a candidate pose
+    before that pose counts as in collision.
+    """
+
     @property
     def world(self):
         return self.context.world
@@ -88,36 +97,72 @@ class Location(Iterable[Pose]):
         """
         return next(iter(self))
 
+    def _standing_clearance(self, robot: AbstractRobot) -> List[CollisionRule]:
+        """
+        :param robot: The robot standing at a candidate pose.
+        :return: The rules a candidate is judged in collision under.
+
+        A standing pose only has to be clear of the surroundings; the arms are wherever
+        the previous motion left them, so the robot touching itself says nothing about
+        the pose.
+        """
+        return [
+            AvoidExternalCollisions(
+                robot=robot,
+                violated_distance=self.standing_violated_distance,
+            ),
+            AllowSelfCollisions(robot=robot),
+        ]
+
     def __iter__(self) -> Iterator[Pose]:
         test_world = deepcopy(self.world)
-        test_robot = test_world.get_semantic_annotations_by_type(type(self.robot))[0]
+        test_robot = cast(
+            AbstractRobot, test_world.get_semantic_annotation_by_id(self.robot.id)
+        )
         for validator in self.validators:
             validator.context = Context(
                 world=test_world,
                 robot=test_robot,
                 alternative_motion_mappings=self.context.alternative_motion_mappings,
+                motion_tolerances=self.context.motion_tolerances,
+                ticks_per_motion=self.context.ticks_per_motion,
             )
 
         if self.context.debug:
             VizMarkerPublisher(
                 _world=test_world, node=self.context.ros_node
-            ).with_tf_publisher()
+            ).with_collision_visualization()
 
         for pose_candidate in self.generator:
 
-            test_robot.root.parent_connection.origin = pose_candidate
-
-            test_world.collision_manager.clear_temporary_rules()
-            test_world.collision_manager.add_temporary_rule(
-                AvoidExternalCollisions(robot=test_robot, violated_distance=0.05)
+            # A candidate says where to stand and which way to look, which is the
+            # heading NavigateAction is handed. Turning it into a base pose the same way
+            # is what makes the checks below see the configuration the robot ends up in
+            # rather than one rotated by whatever its forward axis is.
+            test_robot.set_root_pose(
+                test_robot.mobile_base.pose_facing(pose_candidate)
+                if isinstance(test_robot, HasMobileBase)
+                else pose_candidate
             )
-            test_world.collision_manager.add_temporary_rule(
-                AllowSelfCollisions(robot=test_robot)
-            )
-            test_world.collision_manager.update_collision_matrix()
-            collisions = test_world.collision_manager.compute_collisions()
 
-            if collisions.contacts:
+            # Asked under rules of its own, which are taken back down again: the
+            # reachability simulation that follows has to see the rules the plan is
+            # executed with, and temporary rules outrank the robot's own.
+            collision_manager = test_world.collision_manager
+            rules_of_the_run = list(collision_manager.temporary_rules)
+            collision_manager.clear_temporary_rules()
+            collision_manager.extend_temporary_rule(
+                self._standing_clearance(test_robot)
+            )
+            collision_manager.update_collision_matrix()
+
+            stands_in_collision = test_robot.is_in_collision
+
+            collision_manager.clear_temporary_rules()
+            collision_manager.extend_temporary_rule(rules_of_the_run)
+            collision_manager.update_collision_matrix()
+
+            if stands_in_collision:
                 logger.debug(f"Candidate pose in collision, skipping")
                 continue
 

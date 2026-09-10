@@ -622,6 +622,23 @@ def test_json_integration(session, database):
     assert reconstructed == obj
 
 
+def test_custom_type_from_foreign_package(session, database):
+    """
+    Regression test for a bug where a JSON-mapped field whose type lives in a package
+    nothing else in the generated interface imports (here, ``random_events``) tripped a
+    ``MappedAnnotationError`` at class-definition time, because
+    ``WrappedTable.create_custom_type`` never registered that module as an import.
+    """
+    obj = HolderOfSimpleInterval()
+    dao = to_dao(obj)
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(HolderOfSimpleIntervalDAO)).one()
+    reconstructed = queried.from_dao()
+    assert reconstructed == obj
+
+
 def test_many_to_many_with_same_type(session, database):
 
     state = ToDataAccessObjectState()

@@ -1,13 +1,17 @@
 import logging
 import threading
 import time
+from abc import ABC, abstractmethod
 from dataclasses import field, dataclass
 from typing import Optional, Callable
 
 from typing_extensions import Self
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from giskardpy.motion_statechart.data_types import ObservationStateValues
+from giskardpy.motion_statechart.data_types import (
+    LifeCycleValues,
+    ObservationStateValues,
+)
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode, NodeArtifacts
 
 logger = logging.getLogger(__name__)
@@ -24,7 +28,7 @@ class CheckControlCycleCount(MotionStatechartNode):
     After this many control cycles, the node will turn True.
     """
 
-    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+    def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
         artifacts.observation = context.control_cycle_variable > self.threshold
         return artifacts
@@ -43,7 +47,7 @@ class Print(MotionStatechartNode):
         return ObservationStateValues.TRUE
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class CountSeconds(MotionStatechartNode):
     """
     This node counts X seconds and then turns True.
@@ -67,17 +71,62 @@ class CountSeconds(MotionStatechartNode):
         self._start_time = self._now()
 
 
-@dataclass(repr=False, eq=False)
-class CountControlCycles(MotionStatechartNode):
+@dataclass(eq=False, repr=False)
+class TickCounter(MotionStatechartNode, ABC):
     """
-    This node counts 'threshold'-many control cycles and then turns True.
+    Base for nodes that count control ticks while RUNNING and turn True once a target is
+    reached.
 
     Only counts while in state RUNNING.
     """
 
-    _counter: int = field(init=False)
+    _counter: int = field(init=False, default=0)
     """
-    Keeps track of how many ticks have passed since first True.
+    Number of ticks counted since the last start/reset.
+    """
+
+    def on_start(self, context: MotionStatechartContext):
+        self._counter = 0
+
+    def on_tick(
+        self, context: MotionStatechartContext
+    ) -> Optional[ObservationStateValues]:
+        self._counter += 1
+        if self._reached_target(context):
+            return ObservationStateValues.TRUE
+        return ObservationStateValues.FALSE
+
+    @abstractmethod
+    def _reached_target(self, context: MotionStatechartContext) -> bool:
+        """
+        Whether the counted target has been reached on the current tick.
+        """
+
+
+@dataclass(eq=False, repr=False)
+class CountSimulationTimeSeconds(TickCounter):
+    """
+    This node counts X seconds of simulation time (control cycles * simulation time
+    step) and then turns True.
+
+    Only counts while in state RUNNING.
+    """
+
+    seconds: float = field(kw_only=True)
+    """
+    How many seconds of simulation time to count.
+    """
+
+    def _reached_target(self, context: MotionStatechartContext) -> bool:
+        return context.qp_controller_config.control_dt * self._counter >= self.seconds
+
+
+@dataclass(eq=False, repr=False)
+class CountControlCycles(TickCounter):
+    """
+    This node counts 'control_cycles'-many control cycles and then turns True.
+
+    Only counts while in state RUNNING.
     """
 
     control_cycles: int = field(kw_only=True)
@@ -85,16 +134,8 @@ class CountControlCycles(MotionStatechartNode):
     Turns True after this many control cycles.
     """
 
-    def on_tick(
-        self, context: MotionStatechartContext
-    ) -> Optional[ObservationStateValues]:
-        self._counter += 1
-        if self._counter >= self.control_cycles:
-            return ObservationStateValues.TRUE
-        return ObservationStateValues.FALSE
-
-    def on_start(self, context: MotionStatechartContext):
-        self._counter = 0
+    def _reached_target(self, context: MotionStatechartContext) -> bool:
+        return self._counter >= self.control_cycles
 
 
 @dataclass(eq=False, repr=False)
@@ -212,7 +253,7 @@ class ThreadedPredicateMonitor(MotionStatechartNode):
         self._thread = None
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class Pulse(MotionStatechartNode):
     """
     Will stay True for a single tick, then turn False.
@@ -237,5 +278,53 @@ class Pulse(MotionStatechartNode):
         if self._counter < self.length:
             self._triggered = True
             self._counter += 1
+            return ObservationStateValues.TRUE
+        return ObservationStateValues.FALSE
+
+
+@dataclass(eq=False, repr=False)
+class CountNodeResets(MotionStatechartNode):
+    """
+    Turns True once :attr:`node` has been reset :attr:`target` times.
+
+    Counts attempts rather than control cycles, by watching the node re-enter
+    NOT_STARTED. Its count is never cleared, unlike the counters that reset themselves
+    when they start, so it survives the resets it is counting.
+    """
+
+    node: MotionStatechartNode = field(kw_only=True)
+    """
+    The node whose resets are counted.
+    """
+
+    target: int = field(kw_only=True)
+    """
+    Number of resets after which this turns True.
+    """
+
+    resets: int = field(default=0, init=False)
+    """
+    Resets of :attr:`node` seen so far.
+    """
+
+    _previous_life_cycle: Optional[LifeCycleValues] = field(
+        default=None, init=False, repr=False
+    )
+    """
+    Life cycle state of :attr:`node` on the previous control cycle.
+    """
+
+    def on_tick(
+        self, context: MotionStatechartContext
+    ) -> Optional[ObservationStateValues]:
+        current_life_cycle = self.node.life_cycle_state
+        if (
+            self._previous_life_cycle is not None
+            and current_life_cycle == LifeCycleValues.NOT_STARTED
+            and self._previous_life_cycle != LifeCycleValues.NOT_STARTED
+        ):
+            self.resets += 1
+        self._previous_life_cycle = current_life_cycle
+        if self.resets >= self.target:
             return ObservationStateValues.TRUE
         return ObservationStateValues.FALSE

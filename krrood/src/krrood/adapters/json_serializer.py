@@ -332,7 +332,11 @@ def _compute_attribute_diff(
     if not isinstance(original_values, list_like_classes):
         if original_values == new_values:
             return None
-        return JSONAttributeDiff(attribute_name=key, added_values=[new_values])
+        return JSONAttributeDiff(
+            attribute_name=key,
+            added_values=[new_values],
+            removed_values=[original_values],
+        )
 
     add = [new_value for new_value in new_values if new_value not in original_values]
     remove = [
@@ -520,30 +524,42 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
 
     @classmethod
     def from_json(cls, data: Dict[str, Any], clazz: Type, **kwargs) -> Self:
-        fields_ = {f.name: f for f in fields(clazz)}
+        introspector = DataclassOnlyIntrospector()
+        discovered_attributes = {
+            attr.field.name: attr.field for attr in introspector.discover(clazz)
+        }
 
         init_args = {}
+        post_init_args = {}
 
-        for k, v in fields_.items():
-            if k not in data.keys():
+        for field_name, field_ in discovered_attributes.items():
+            if field_name not in data.keys():
                 continue
 
-            current_data = data[k]
+            current_data = data[field_name]
 
             if isinstance(current_data, list):
-                current_result = [from_json(data, **kwargs) for data in current_data]
+                current_result = [from_json(item, **kwargs) for item in current_data]
             elif (
                 isinstance(current_data, dict)
                 and "keys" in current_data.keys()
                 and "values" in current_data.keys()
             ):
-                keys = [from_json(data, **kwargs) for data in current_data["keys"]]
-                values = [from_json(data, **kwargs) for data in current_data["values"]]
+                keys = [from_json(item, **kwargs) for item in current_data["keys"]]
+                values = [from_json(item, **kwargs) for item in current_data["values"]]
                 current_result = dict(zip(keys, values))
             else:
                 current_result = from_json(current_data, **kwargs)
-            init_args[k] = current_result
-        return clazz(**init_args)
+
+            if field_.init:
+                init_args[field_name] = current_result
+            else:
+                post_init_args[field_name] = current_result
+
+        instance = clazz(**init_args)
+        for field_name, field_value in post_init_args.items():
+            setattr(instance, field_name, field_value)
+        return instance
 
 
 @dataclass

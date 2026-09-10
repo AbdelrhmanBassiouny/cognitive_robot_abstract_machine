@@ -1,3 +1,4 @@
+import copy
 import operator
 
 import casadi as ca
@@ -9,6 +10,8 @@ import scipy.sparse as sp
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.symbolic_math.exceptions import (
     HasFreeVariablesError,
+    NotColumnVectorError,
+    NotEnoughArgumentsError,
     NotSquareMatrixError,
 )
 from krrood.symbolic_math.symbolic_math import VariableParameters
@@ -112,6 +115,26 @@ class TestLogic3:
                     actual
                 ), f"a={i}, b={j}, expected {expected}, actual {actual}"
 
+    def test_and3_of_one_argument_is_that_argument(self):
+        for i in self.values:
+            assert i == sm.trinary_logic_and(sm.Scalar(i)), f"a={i}"
+
+    def test_or3_of_one_argument_is_that_argument(self):
+        for i in self.values:
+            assert i == sm.trinary_logic_or(sm.Scalar(i)), f"a={i}"
+
+    def test_and3_without_arguments(self):
+        with pytest.raises(NotEnoughArgumentsError) as error:
+            sm.trinary_logic_and()
+        assert error.value.minimum_number_of_arguments == 1
+        assert error.value.actual_number_of_arguments == 0
+
+    def test_or3_without_arguments(self):
+        with pytest.raises(NotEnoughArgumentsError) as error:
+            sm.trinary_logic_or()
+        assert error.value.minimum_number_of_arguments == 1
+        assert error.value.actual_number_of_arguments == 0
+
     def test_not3(self):
         for i in self.values:
             expected = logic_not(i)
@@ -134,6 +157,62 @@ class TestLogic3:
         )
         const_expr_str = sm.trinary_logic_to_str(const_expr)
         assert const_expr_str == '("a" or Unknown)'
+
+
+class TestTrinaryPredicates:
+    """
+    The Scalar methods asking which trinary truth value an expression carries.
+    """
+
+    predicate_of_value = {
+        TrinaryTrue: sm.Scalar.is_true,
+        TrinaryFalse: sm.Scalar.is_false,
+        TrinaryUnknown: sm.Scalar.is_unknown,
+    }
+    """
+    The predicate that holds for each trinary truth value.
+    """
+
+    def test_each_predicate_holds_only_for_its_own_value(self):
+        for value in self.predicate_of_value:
+            for predicate_value, predicate in self.predicate_of_value.items():
+                expected = float(value == predicate_value)
+                actual = float(predicate(sm.Scalar(value)))
+                assert expected == actual, (
+                    f"{predicate.__name__} of {value}, "
+                    f"expected {expected}, actual {actual}"
+                )
+
+    def test_each_predicate_holds_over_a_variable(self):
+        """
+        The predicates decide once a value is substituted, which is what lets a
+        condition be built from a variable whose value is not known yet.
+        """
+        variable = sm.FloatVariable(name="observation")
+        for value in self.predicate_of_value:
+            for predicate_value, predicate in self.predicate_of_value.items():
+                expected = float(value == predicate_value)
+                actual = float(predicate(variable).substitute([variable], [value]))
+                assert expected == actual, (
+                    f"{predicate.__name__} of {value}, "
+                    f"expected {expected}, actual {actual}"
+                )
+
+    def test_each_predicate_builds_an_expression_over_its_input(self):
+        variable = sm.FloatVariable(name="observation")
+        for predicate in self.predicate_of_value.values():
+            expression = predicate(variable)
+            assert isinstance(expression, sm.Scalar), predicate.__name__
+            assert expression.free_variables() == [variable], predicate.__name__
+
+    def test_no_predicate_holds_for_a_value_outside_the_trinary_set(self):
+        """
+        Each predicate matches its own value exactly, rather than a range around it.
+        """
+        not_a_truth_value = sm.Scalar(2)
+        for predicate in self.predicate_of_value.values():
+            actual = float(predicate(not_a_truth_value))
+            assert actual == TrinaryFalse, f"{predicate.__name__}, actual {actual}"
 
 
 class TestIfElse:
@@ -424,6 +503,30 @@ class TestFloatVariable:
         d = {s: 1}
         assert d[s] == 1
 
+    def test_copying_yields_an_expression_over_the_same_symbol(self):
+        """
+        Every other operation on a variable yields a plain expression, and copying is no
+        different: a copy that is then changed is no longer that variable.
+        """
+        v = sm.FloatVariable(name="v")
+
+        copied = copy.copy(v)
+
+        assert type(copied) is sm.Scalar
+        assert copied.free_variables() == [v]
+
+    def test_substituting_a_variable_that_is_the_whole_expression(self):
+        """
+        A bare variable is an expression like any other, so substituting it replaces the
+        whole thing and leaves the variable itself untouched.
+        """
+        v = sm.FloatVariable(name="v")
+
+        substituted = v.substitute([v], [sm.Scalar(42)])
+
+        assert substituted.to_np() == 42
+        assert v.free_variables() == [v]
+
 
 class TestExpression:
 
@@ -432,6 +535,16 @@ class TestExpression:
         assert len(m.free_variables()) == 4
         a = sm.FloatVariable(name="a")
         assert a.equivalent(a.free_variables()[0])
+
+    def test_constant_expression_pins_no_free_variables(self):
+        assert sm.Vector([1, 2, 3]).pinned_free_variables == []
+
+    def test_symbolic_expression_pins_its_free_variables(self):
+        variables = sm.create_float_variables(["a", "b"])
+
+        pinned = sm.Vector(variables).pinned_free_variables
+
+        assert [variable.name for variable in pinned] == ["a", "b"]
 
     def test_pretty_str(self):
         e = sm.Matrix.eye(4)
@@ -919,6 +1032,11 @@ class TestVector:
         v = sm.Vector(data)
         assert v.to_list() == data.tolist()
 
+    def test_vector_from_multi_column_data(self):
+        with pytest.raises(NotColumnVectorError) as error:
+            sm.Vector(np.array([[1.0, 2.0], [3.0, 4.0]]))
+        assert error.value.actual_dimensions == (2, 2)
+
     def test_to_list_raises_on_variables(self):
         v = sm.Vector(vec := [sm.FloatVariable(name="a"), 2.0])
         with pytest.raises(HasFreeVariablesError):
@@ -1221,6 +1339,11 @@ class TestMatrix:
         mat = sm.Matrix(np_arr).reshape((2, 8))
         assert mat.shape == (2, 8)
         assert np.allclose(mat.to_np(), np_arr.reshape((2, 8)))
+
+    def test_inverse_of_non_square_matrix(self):
+        with pytest.raises(NotSquareMatrixError) as error:
+            sm.Matrix(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])).inverse()
+        assert error.value.actual_dimensions == (2, 3)
 
     def test_trace(self):
         m = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])

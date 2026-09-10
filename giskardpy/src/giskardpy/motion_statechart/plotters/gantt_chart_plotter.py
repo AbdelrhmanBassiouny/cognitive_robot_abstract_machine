@@ -2,16 +2,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List
 
 import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 
-from giskardpy.motion_statechart.plotters.styles import (
-    LiftCycleStateToColor,
-    ObservationStateToColor,
-)
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import (
     LifeCycleValues,
@@ -19,6 +14,7 @@ from giskardpy.motion_statechart.data_types import (
 )
 from giskardpy.motion_statechart.graph_node import Goal, MotionStatechartNode
 from giskardpy.utils.utils import create_path
+from semantic_digital_twin.world_description.geometry import Color
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +58,11 @@ class HistoryGanttChartPlotter:
     final_state_band_height_in_cm: float = 0.5
     """
     Height of the final state band in cm.
+    """
+
+    gap_between_axes_in_inches: float = 0.25
+    """
+    Horizontal gap between the main timeline and the final state column.
     """
 
     @property
@@ -150,9 +151,8 @@ class HistoryGanttChartPlotter:
         dimensions, padding, and margins to ensure proper alignment and display of node
         labels.
 
-        :param ordered_nodes: A list of MotionStatechartNode objects representing the
-            nodes to be plotted.
-        :type ordered_nodes: List[MotionStatechartNode]
+        :param ordered_nodes: The nodes to be plotted, in the order they appear on the
+            y-axis.
         :return: A tuple containing the main axis and the fixed-width final-state axis.
         """
         # Build node label list early so we can size the right margin adaptively
@@ -173,7 +173,6 @@ class HistoryGanttChartPlotter:
         final_w_inches = (
             self.final_state_band_height_in_cm * inches_per_unit
         )  # inches, fixed
-        pad_inches = 0.25
         # Base margins in inches
         left_margin_inches = 0.3
         bottom_margin_inches = 0.5
@@ -187,52 +186,39 @@ class HistoryGanttChartPlotter:
         fig_w_inches = (
             left_margin_inches
             + main_w_inches
-            + pad_inches
+            + self.gap_between_axes_in_inches
             + final_w_inches
             + right_margin_inches
         )
         fig_h_inches = self.figure_height
 
-        fig, ax_main = plt.subplots(
-            figsize=(fig_w_inches, fig_h_inches), constrained_layout=False
-        )
-        # Apply margins explicitly
-        fig.subplots_adjust(
-            left=left_margin_inches / fig_w_inches,
-            right=1 - right_margin_inches / fig_w_inches,
-            bottom=bottom_margin_inches / fig_h_inches,
-            top=1 - top_margin_inches / fig_h_inches,
-        )
+        fig = plt.figure(figsize=(fig_w_inches, fig_h_inches))
 
-        # Compute inner area (after margins) and set main axis position to exact width
-        inner_left = left_margin_inches / fig_w_inches
+        # Both axes are placed by hand so their widths stay fixed in inches,
+        # independent of the figure size the margins add up to.
         inner_bottom = bottom_margin_inches / fig_h_inches
         inner_top = 1 - top_margin_inches / fig_h_inches
-        inner_h_norm = inner_top - inner_bottom
-        # Pre-allocate extra width equal to (final width + pad). axes_grid1 will
-        # carve that space out from ax_main when appending the right axis, leaving
-        # the main axis with exactly main_w_inches of drawable width.
-        preallocated_main_w_inches = main_w_inches + final_w_inches + pad_inches
-        main_w_norm_of_fig = preallocated_main_w_inches / fig_w_inches
-        ax_main.set_position(
+        inner_height_in_figure_fraction = inner_top - inner_bottom
+
+        ax_main = fig.add_axes(
             [
-                inner_left,
+                left_margin_inches / fig_w_inches,
                 inner_bottom,
-                main_w_norm_of_fig,
-                inner_h_norm,
+                main_w_inches / fig_w_inches,
+                inner_height_in_figure_fraction,
             ]
         )
-
         ax_main.grid(True, axis="x", zorder=-1)
 
-        # Append a fixed-width final-state axis on the right with a fixed pad
-        divider = make_axes_locatable(ax_main)
-        ax_final = divider.append_axes(
-            "right",
-            size=axes_size.Fixed(final_w_inches),
-            pad=axes_size.Fixed(pad_inches),
+        ax_final = fig.add_axes(
+            [
+                (left_margin_inches + main_w_inches + self.gap_between_axes_in_inches)
+                / fig_w_inches,
+                inner_bottom,
+                final_w_inches / fig_w_inches,
+                inner_height_in_figure_fraction,
+            ],
             sharey=ax_main,
-            axes_class=ax_main.__class__,
         )
         return ax_main, ax_final
 
@@ -288,7 +274,6 @@ class HistoryGanttChartPlotter:
             node_idx=node_idx,
             history=life_cycle_history,
             control_cycle_indices=control_cycle_indices,
-            color_map=LiftCycleStateToColor,
             top=True,
         )
 
@@ -322,7 +307,6 @@ class HistoryGanttChartPlotter:
             node_idx=node_idx,
             history=obs_history,
             control_cycle_indices=control_cycle_indices,
-            color_map=ObservationStateToColor,
             top=False,
         )
 
@@ -364,7 +348,7 @@ class HistoryGanttChartPlotter:
             node_idx=node_idx,
             block_start=start,
             block_width=width,
-            color=LiftCycleStateToColor[last_lifecycle],
+            color=last_lifecycle.color,
             top=True,
         )
         self._draw_block(
@@ -372,7 +356,7 @@ class HistoryGanttChartPlotter:
             node_idx=node_idx,
             block_start=start,
             block_width=width,
-            color=ObservationStateToColor[last_observation],
+            color=last_observation.color,
             top=False,
         )
 
@@ -382,13 +366,12 @@ class HistoryGanttChartPlotter:
         node_idx: int,
         history: List[LifeCycleValues | ObservationStateValues],
         control_cycle_indices: List[int],
-        color_map: Dict[LifeCycleValues | ObservationStateValues, str],
         top: bool,
     ):
         """
         Plots a bar segment corresponding to the state changes of a node as per the
         history and its associated control cycle indices. Each state transition is
-        represented as a colored block determined by the color mapping.
+        represented as a block drawn in the color of the state it stands for.
 
         :param axis: The matplotlib Axes instance where the bar will be plotted.
         :param node_idx: The index of the node for which the bar is being plotted.
@@ -396,8 +379,6 @@ class HistoryGanttChartPlotter:
             observation state of the node.
         :param control_cycle_indices: A list of indices representing the control cycles
             associated with the state transitions.
-        :param color_map: A mapping between lifecycle or observation states and their
-            associated colors used for visualization.
         :param top: Indicates if the bar is to be plotted in the upper or lower part of
             the chart.
         """
@@ -411,7 +392,7 @@ class HistoryGanttChartPlotter:
                     node_idx=node_idx,
                     block_start=start_idx * self.x_width_per_control_cycle,
                     block_width=life_cycle_width,
-                    color=color_map[current_state],
+                    color=current_state.color,
                     top=top,
                 )
                 start_idx = idx
@@ -424,7 +405,7 @@ class HistoryGanttChartPlotter:
             node_idx=node_idx,
             block_start=start_idx * self.x_width_per_control_cycle,
             block_width=life_cycle_width,
-            color=color_map[current_state],
+            color=current_state.color,
             top=top,
         )
 
@@ -434,7 +415,7 @@ class HistoryGanttChartPlotter:
         node_idx,
         block_start,
         block_width,
-        color,
+        color: Color,
         top: bool,
         bar_height: float = 0.8,
     ):
@@ -460,7 +441,7 @@ class HistoryGanttChartPlotter:
             block_width,
             height=bar_height / 2,
             left=block_start,
-            color=color,
+            color=color.to_hex(),
             zorder=2,
         )
 

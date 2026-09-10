@@ -28,7 +28,6 @@ from krrood.entity_query_language.verbalization.boolean_predicate import (
 from krrood.entity_query_language.verbalization.fragments.features import Definiteness
 from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
-from krrood.patterns.field_metadata import FieldMetadata
 
 
 def _predicate(predicate: BooleanPredicate) -> object:
@@ -37,9 +36,7 @@ def _predicate(predicate: BooleanPredicate) -> object:
     """
     return field(
         default=False,
-        metadata=FieldMetadata(
-            other_metadata=[GrammarMetadata(boolean_predicate=predicate)]
-        ).as_dict(),
+        metadata=GrammarMetadata(boolean_predicate=predicate).as_dict(),
     )
 
 
@@ -269,3 +266,26 @@ def test_open_domain_intransitive_verb_alternative():
         verbalize_expression(animal.breathes == variable(bool, [True, False]))
         == "a _DeclaredForms either breathes or not"
     )
+
+
+# %% Bare infinitive form (an infinitive context negates by placing "not" before the
+# verb rather than through do-support/copula suppletion, so it needs the lemma itself,
+# not the finite form head() returns)
+
+
+def test_adjectival_bare_head_is_the_copula_lemma():
+    animal = variable(_DeclaredForms, [])
+    predicate = resolve_boolean_predicate(animal.reachable)
+    assert predicate.bare_head().text == "be"
+
+
+def test_possessive_bare_head_is_the_verb_lemma():
+    animal = variable(_DeclaredForms, [])
+    predicate = resolve_boolean_predicate(animal.milk)
+    assert predicate.bare_head().text == "have"
+
+
+def test_verbal_bare_head_is_the_declared_verb_lemma():
+    animal = variable(_DeclaredForms, [])
+    predicate = resolve_boolean_predicate(animal.secretes_milk)
+    assert predicate.bare_head().text == "secrete"

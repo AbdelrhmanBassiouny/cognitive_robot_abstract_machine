@@ -20,6 +20,7 @@ from coraplex.datastructures.enums import AxisIdentifier, Arms
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.plans.factories import execute_single, sequential
 from coraplex.robot_plans.actions.base import ActionDescription, DescriptionType
+from coraplex.robot_plans.mixins import HasMaxJointVelocity, HasTcpGoalThresholds
 from coraplex.robot_plans.motions.gripper import (
     MoveGripperMotion,
     MoveTCPWaypointsMotion,
@@ -93,7 +94,7 @@ class SetGripperAction(ActionDescription):
 
 
 @dataclass
-class ParkArmsAction(ActionDescription):
+class ParkArmsAction(ActionDescription, HasMaxJointVelocity):
     """
     Park the arms of the robot.
     """
@@ -108,7 +109,11 @@ class ParkArmsAction(ActionDescription):
         joint_names, joint_poses = self.get_joint_poses()
 
         return execute_single(
-            MoveJointsMotion(names=joint_names, positions=joint_poses)
+            MoveJointsMotion(
+                names=joint_names,
+                positions=joint_poses,
+                max_joint_velocity=self.max_joint_velocity,
+            )
         )
 
     def get_joint_poses(self) -> Tuple[List[str], List[float]]:
@@ -212,7 +217,7 @@ class CarryAction(ActionDescription):
 
 
 @dataclass
-class FollowToolCenterPointPathAction(ActionDescription):
+class FollowToolCenterPointPathAction(ActionDescription, HasTcpGoalThresholds):
     """
     Represents an action to move a robotic arm's TCP (Tool Center Point) along a path of
     poses.
@@ -236,6 +241,8 @@ class FollowToolCenterPointPathAction(ActionDescription):
             target_locations,
             self.arm,
             allow_gripper_collision=True,
+            position_threshold=self.position_threshold,
+            orientation_threshold=self.orientation_threshold,
         )
 
         return execute_single(motion)
@@ -249,7 +256,7 @@ class FollowToolCenterPointPathAction(ActionDescription):
 
 
 @dataclass
-class MoveManipulatorAction(ActionDescription):
+class MoveManipulatorAction(ActionDescription, HasTcpGoalThresholds):
     """
     Move the end_effector to a specific pose.
     """
@@ -276,6 +283,8 @@ class MoveManipulatorAction(ActionDescription):
                 self.target_pose,
                 self.end_effector,
                 self.allow_gripper_collision,
+                position_threshold=self.position_threshold,
+                orientation_threshold=self.orientation_threshold,
             )
         )
 

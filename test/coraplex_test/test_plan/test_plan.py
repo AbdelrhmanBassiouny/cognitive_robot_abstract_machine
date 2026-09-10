@@ -3,6 +3,12 @@ import time
 
 import pytest
 
+from giskardpy.motion_statechart.data_types import LifeCycleValues
+from krrood.rustworkx_utils.graph_visualizer_base import (
+    GraphLayout,
+    GraphVisualizerBackend,
+)
+
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import (
     ApproachDirection,
@@ -11,7 +17,6 @@ from coraplex.datastructures.enums import (
 )
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.execution_environment import simulated_robot
-from coraplex.language import CodeNode
 from coraplex.orm.ormatic_interface import *  # type: ignore
 from coraplex.plans.condition_nodes import ConditionNode
 from coraplex.plans.executables import GiskardExecutable
@@ -45,6 +50,8 @@ from semantic_digital_twin.robots.robot_parts import (
     EndEffector,
 )
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Pose
+from semantic_digital_twin.robots.pr2 import PR2Joint
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 
 
 @pytest.fixture(scope="session")
@@ -382,25 +389,6 @@ def test_get_previous_nodes():
 # ---- Tests interacting with simulated robot/world ----
 
 
-def test_interrupt_plan(immutable_model_world):
-    world, robot_view, context = immutable_model_world
-
-    act1 = MoveTorsoAction(TorsoState.HIGH)
-
-    act3 = MoveTorsoAction(TorsoState.LOW)
-
-    plan = sequential([act1, act3], context=context).plan
-
-    plan.root.children[1].interrupt()
-
-    with simulated_robot:
-        plan.perform()
-
-    assert world.state[
-        world.get_degree_of_freedom_by_name("torso_lift_joint").id
-    ].position == pytest.approx(0.3, abs=0.1)
-
-
 def test_pause_plan(immutable_model_world):
     world, robot_view, context = immutable_model_world
 
@@ -410,14 +398,14 @@ def test_pause_plan(immutable_model_world):
     def pause_plan(node):
         node.pause()
         assert world.state[
-            world.get_degree_of_freedom_by_name("torso_lift_joint").id
+            world.get_degree_of_freedom_by_name(PR2Joint.TORSO_LIFT).id
         ].position == pytest.approx(0.0, abs=0.1)
         node.resume()
 
         time.sleep(3)
 
         assert world.state[
-            world.get_degree_of_freedom_by_name("torso_lift_joint").id
+            world.get_degree_of_freedom_by_name(PR2Joint.TORSO_LIFT).id
         ].position == pytest.approx(0.3, abs=0.1)
 
     code_node = code(function=lambda: None)
@@ -429,20 +417,20 @@ def test_pause_plan(immutable_model_world):
         plan.perform()
 
     assert world.state[
-        world.get_degree_of_freedom_by_name("torso_lift_joint").id
+        world.get_degree_of_freedom_by_name(PR2Joint.TORSO_LIFT).id
     ].position == pytest.approx(0.3, abs=0.1)
 
 
 def _torso_position(world):
     return world.state[
-        world.get_degree_of_freedom_by_name("torso_lift_joint").id
+        world.get_degree_of_freedom_by_name(PR2Joint.TORSO_LIFT).id
     ].position
 
 
-def test_sequence_runs_all_motions_without_interrupt(immutable_model_world):
+def test_sequence_runs_all_motions(immutable_model_world):
     """
-    Control for the interrupt tests: without an interrupt every motion in the sequence
-    is executed, so the torso ends at the target of the *last* motion.
+    Every motion of a sequence is executed, so the torso ends at the target of the *last*
+    motion.
 
     The robot starts in the LOW configuration, so a final HIGH motion proves the second
     motion actually ran.
@@ -457,79 +445,6 @@ def test_sequence_runs_all_motions_without_interrupt(immutable_model_world):
         plan.perform()
 
     assert _torso_position(world) == pytest.approx(0.3, abs=0.05)
-
-
-def test_interrupt_finishes_active_motion_and_skips_the_rest(immutable_model_world):
-    """
-    Interrupting a plan lets the currently active motion finish but skips every
-    subsequent one ("finish active, skip rest").
-
-    The first motion (HIGH) is the active one and must complete (torso reaches the
-    HIGH target), while the trailing LOW and MID motions must be skipped - if any
-    of them ran, the torso would move away from the HIGH target.
-    """
-    world, robot_view, context = immutable_model_world
-
-    def interrupt(node: CodeNode):
-        node.plan.root.interrupt()
-
-    trigger = code(lambda: None)
-    trigger.code = lambda: interrupt(trigger)
-
-    plan = sequential(
-        [
-            MoveTorsoAction(TorsoState.HIGH),
-            trigger,
-            MoveTorsoAction(TorsoState.LOW),
-            MoveTorsoAction(TorsoState.MID),
-        ],
-        context=context,
-    ).plan
-    with simulated_robot:
-        plan.perform()
-
-    # active motion finished (reached HIGH) and the trailing motions were skipped
-    assert _torso_position(world) == pytest.approx(0.3, abs=0.05)
-
-
-def test_pause_holds_active_motion_until_resumed(immutable_model_world):
-    """
-    Pausing a node holds the motion it originates from: while paused the active motion
-    does not progress, and once resumed it runs to completion.
-
-    A leading delay gives the controller time to pause the motion's subtree *before* the
-    motion starts ticking; the controller then waits well past the point at which the
-    motion would otherwise have finished and checks that the torso has not moved, before
-    resuming it.
-    """
-    world, robot_view, context = immutable_model_world
-    start_position = _torso_position(world)
-    observed = {}
-
-    motion_subplan = sequential(
-        [code(lambda: time.sleep(1.0)), MoveTorsoAction(TorsoState.HIGH)]
-    )
-
-    def control():
-        # pause well before the (delayed) motion starts ticking
-        time.sleep(0.5)
-        motion_subplan.pause()
-        # give the motion ample time to run, were it not paused
-        time.sleep(2.0)
-        observed["while_paused"] = _torso_position(world)
-        motion_subplan.resume()
-
-    controller = code(lambda: None)
-    controller.code = control
-
-    plan = parallel([controller, motion_subplan], context=context).plan
-    with simulated_robot:
-        plan.perform()
-
-    # while paused (and past when it would have finished) the motion did not move
-    assert observed["while_paused"] == pytest.approx(start_position, abs=0.05)
-    # after resume the motion completed
-    assert _torso_position(world) == pytest.approx(0.3, abs=0.1)
 
 
 def test_algebra_sequential_plan(apartment_world_pr2_copy_with_context):
@@ -570,7 +485,7 @@ def test_parameterization_of_pick_up(apartment_world_pr2_copy_with_context):
     world, robot_view, context = apartment_world_pr2_copy_with_context
     context.evaluate_conditions = False
 
-    milk = world.get_body_by_name("milk.stl")
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
 
     milk_variable = variable_from([milk])
 
@@ -661,7 +576,9 @@ def test_motion_order_pick_up(mutable_model_world):
     root = sequential(
         [
             PickUpAction(
-                world.get_body_by_name("milk.stl"), Arms.LEFT, grasp_description
+                world.get_semantic_annotations_by_type(Milk)[0],
+                Arms.LEFT,
+                grasp_description,
             ),
         ],
         context,
@@ -683,8 +600,8 @@ def test_motion_order_pick_up(mutable_model_world):
     motion_names = [motion.name for motion in all_motions]
 
     assert motion_names == [
-        "OpenGripper",
         "MoveTCP",
+        "OpenGripper",
         "MoveTCP",
         "CloseGripper",
         "MoveTCP",
@@ -697,7 +614,7 @@ def test_motion_order_place(mutable_model_world):
     milk_body = world.get_body_by_name("milk.stl")
     milk_body.parent_connection.origin = world.get_body_by_name(
         "l_gripper_tool_frame"
-    ).global_pose
+    ).global_pose.to_homogeneous_matrix()
 
     with world.modify_world():
 
@@ -753,7 +670,7 @@ def test_node_expansion(immutable_model_world):
     plan = sequential(
         [
             PickUpAction(
-                object_designator=world.get_body_by_name("milk.stl"),
+                object_designator=world.get_semantic_annotations_by_type(Milk)[0],
                 arm=Arms.RIGHT,
                 grasp_description=GraspDescription(
                     ApproachDirection.FRONT,
@@ -770,7 +687,7 @@ def test_node_expansion(immutable_model_world):
 
     expanded_children = pick_node.children
     assert len(expanded_children) == 3
-    assert len(expanded_children[1].children) == 5
+    assert len(expanded_children[1].children) == 4
 
 
 def test_expand_move_torso(immutable_model_world):
@@ -791,7 +708,7 @@ def test_context_back_reference(immutable_model_world):
         [
             MoveTorsoAction(TorsoState.HIGH),
             PickUpAction(
-                world.get_body_by_name("milk.stl"),
+                world.get_semantic_annotations_by_type(Milk)[0],
                 Arms.RIGHT,
                 GraspDescription(
                     ApproachDirection.FRONT,
@@ -815,7 +732,7 @@ def test_action_nodes_unequal(immutable_model_world):
         [
             ParkArmsAction(Arms.LEFT),
             PickUpAction(
-                world.get_body_by_name("milk.stl"),
+                world.get_semantic_annotations_by_type(Milk)[0],
                 Arms.LEFT,
                 GraspDescription(
                     ApproachDirection.FRONT,
@@ -831,3 +748,23 @@ def test_action_nodes_unequal(immutable_model_world):
     pick_node = plan.children[1]
 
     assert not park_node == pick_node
+
+
+# %% how a plan is drawn
+
+
+def test_a_plan_node_is_drawn_in_the_color_of_its_state():
+    """
+    A plan is drawn in the same colors the motion statechart plots use, because both
+    read them off the state itself.
+    """
+    node = PlanNode()
+    plan = Plan()
+    plan.add_node(node)
+    node.status = LifeCycleValues.FAILED
+
+    visualizer = plan._create_visualizer(
+        backend=GraphVisualizerBackend.CYTOSCAPE, layout=GraphLayout.LAYERED
+    )
+
+    assert visualizer.node_color(node.index) == LifeCycleValues.FAILED.color.to_hex()

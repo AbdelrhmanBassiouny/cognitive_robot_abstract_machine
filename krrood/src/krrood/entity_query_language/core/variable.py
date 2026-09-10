@@ -133,9 +133,7 @@ class Variable(CanHaveDomainSource[T]):
         """
         for v in self._re_enterable_domain_generator_:
             bindings = sources.bindings | {self._id_: v}
-            yield self._build_operation_result_and_update_truth_value_(
-                bindings, sources
-            )
+            yield self._build_operation_result_(bindings, sources)
 
     def _replace_child_field_(
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
@@ -289,9 +287,7 @@ class InstantiatedVariable(
             instance = bind(**kwargs)
 
             bindings = {self._id_: instance} | child_result.bindings
-            result = self._build_operation_result_and_update_truth_value_(
-                bindings, child_result
-            )
+            result = self._build_operation_result_(bindings, child_result)
             result.previous_operation_result = child_result
             yield result
 
@@ -313,7 +309,11 @@ class InstantiatedVariable(
 
     def apply_mapping_on_external_root(self, *args, **kwargs: Dict[str, Any]) -> Any:
         """
-        Same as `MappedVariable.apply_mapping_on_external_root`
+        Build an instance of this variable's type from the given arguments.
+
+        :param args: Positional arguments for the type's constructor.
+        :param kwargs: Keyword arguments for the type's constructor.
+        :return: The constructed instance.
         """
         return self._type_(*args, **kwargs)
 

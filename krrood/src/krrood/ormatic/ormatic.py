@@ -5,14 +5,19 @@ import pathlib
 import uuid
 from dataclasses import dataclass, field, is_dataclass
 from enum import Enum
-from types import ModuleType
+from inspect import isclass
+from types import ModuleType, NoneType
 from typing import Set
 
 import rustworkx as rx
 import sqlalchemy
 import krrood.ormatic.custom_types  # type: ignore
 import krrood.ormatic.data_access_objects.alternative_mappings  # type: ignore
-from krrood.ormatic.helper import get_classes_of_ormatic_interface
+from krrood.ormatic.base import Base as SharedBase
+from krrood.ormatic.helper import (
+    get_classes_of_ormatic_interface,
+    OrmaticInterfaceInformation,
+)
 from sortedcontainers import SortedSet
 from sqlalchemy import JSON
 from typing_extensions import List, Type, Dict
@@ -29,9 +34,14 @@ from krrood.ormatic.data_access_objects.dao import DataAccessObject
 
 from krrood.ormatic.sqlalchemy_generator import SQLAlchemyGenerator
 from krrood.ormatic.type_dict import TypeDict
-from krrood.ormatic.utils import InheritanceStrategy, classes_of_package
-from krrood.utils import module_and_class_name, recursive_subclasses
-from krrood.ormatic.wrapped_table import WrappedTable, AssociationObject
+from krrood.ormatic.utils import classes_of_package
+from krrood.utils import module_and_class_name, recursive_subclasses, get_module_of_type
+from krrood.ormatic.wrapped_table import (
+    WrappedTable,
+    ExternalTable,
+    AssociationObject,
+    TableLike,
+)
 from krrood.adapters.json_serializer import SubclassJSONSerializer, JSONData
 from krrood.class_diagrams.class_diagram import (
     ClassDiagram,
@@ -63,21 +73,19 @@ class ORMatic:
     The class diagram to add the orm for.
     """
 
-    alternative_mappings: List[Type[AlternativeMapping]] = field(default_factory=list)
+    interface_information: OrmaticInterfaceInformation = field(
+        default_factory=OrmaticInterfaceInformation
+    )
     """
-    List of alternative mappings that should be used to map classes.
-    """
-
-    type_mappings: TypeDict = field(default_factory=TypeDict)
-    """
-    A dict that maps classes to custom types that should be used to save the classes.
-
-    They keys of the type mappings must be disjoint with the classes given..
+    The alternative mappings, type mappings, and externally-mapped classes to use.
     """
 
-    inheritance_strategy: InheritanceStrategy = InheritanceStrategy.JOINED
+    ormatic_interface_dependencies: List[ModuleType] = field(default_factory=list)
     """
-    The inheritance strategy to use.
+    The already-generated ormatic-interface modules this interface builds on, if any.
+
+    Every generated interface shares one declarative ``Base``
+    (:class:`krrood.ormatic.base.Base`), so any number of dependencies can be listed.
     """
 
     foreign_key_postfix = "_id"
@@ -109,6 +117,16 @@ class ORMatic:
     The wrapped tables instances for the SQLAlchemy conversion.
     """
 
+    external_tables: Dict[WrappedClass, ExternalTable] = field(
+        default_factory=dict, init=False
+    )
+    """
+    Lookup-only stand-ins for classes already mapped by an ormatic-interface
+    dependency (see :attr:`externally_mapped_classes`). Never rendered by the
+    generator; consulted only to resolve foreign keys, relationships, and parent
+    classes that point at them.
+    """
+
     association_objects: List[AssociationObject] = field(
         default_factory=list, init=False
     )
@@ -117,7 +135,10 @@ class ORMatic:
     """
 
     def __post_init__(self):
-        self.imported_modules.add(TypeDict.__module__)
+        self.imported_modules.add(get_module_of_type(TypeDict))
+        self.imported_modules.add("krrood.ormatic.base")
+        for dependency in self.ormatic_interface_dependencies:
+            self.imported_modules.add(dependency.__name__)
         self._fill_type_mappings()
         self._create_inheritance_graph()
         self._add_alternative_mappings_to_class_diagram()
@@ -125,7 +146,23 @@ class ORMatic:
         self.create_type_annotations_map()
 
         for wrapped_table in self.wrapped_tables.values():
-            self.imported_modules.add(wrapped_table.wrapped_clazz.clazz.__module__)
+            self.imported_modules.add(get_module_of_type(wrapped_table.wrapped_clazz.clazz))
+
+        # externally-mapped classes may live further up the chain than the immediate dependency
+        for external_table in self.external_tables.values():
+            self.imported_modules.add(get_module_of_type(external_table.dao_class))
+
+    @property
+    def alternative_mappings(self) -> List[Type[AlternativeMapping]]:
+        return self.interface_information.alternative_mappings
+
+    @property
+    def type_mappings(self) -> TypeDict:
+        return TypeDict(self.interface_information.type_mappings)
+
+    @property
+    def externally_mapped_classes(self) -> Dict[Type, Type]:
+        return self.interface_information.externally_mapped_classes
 
     def _fill_type_mappings(self):
         """
@@ -138,12 +175,20 @@ class ORMatic:
         self.type_mappings[uuid.UUID] = sqlalchemy.UUID
         self.type_mappings[pathlib.Path] = PathType
         self.type_mappings[JSONData] = JSONDataType
+        self.type_mappings[NoneType] = TypeType
 
         for key in self.type_mappings.keys():
-            self.imported_modules.add(key.__module__)
+            self.imported_modules.add(get_module_of_type(key))
 
     def _create_wrapped_tables(self):
         for wrapped_clazz in self.wrapped_classes_in_topological_order:
+
+            # already mapped by a dependency: reuse it instead of regenerating it
+            if dao_class := self.externally_mapped_classes.get(wrapped_clazz.clazz):
+                self.external_tables[wrapped_clazz] = ExternalTable(
+                    wrapped_clazz=wrapped_clazz, dao_class=dao_class
+                )
+                continue
 
             # check if the class has an alternative mapping
             if alternative_mapping := self.get_alternative_mapping(wrapped_clazz):
@@ -189,6 +234,26 @@ class ORMatic:
             if isinstance(edge, AlternativelyMaps)
         ]
 
+    @staticmethod
+    def register_externally_mapped_class(
+        dao_class: Type, externally_mapped_classes: Dict[Type, Type]
+    ) -> None:
+        """
+        Register the domain class(es) ``dao_class`` maps as already-mapped, so a
+        dependent interface reuses ``dao_class`` instead of regenerating it.
+        """
+        original_class = dao_class.original_class()
+
+        if not isclass(original_class):
+            externally_mapped_classes[original_class] = dao_class
+            return
+
+        if issubclass(original_class, AlternativeMapping):
+            externally_mapped_classes[original_class] = dao_class
+            externally_mapped_classes[original_class.original_class()] = dao_class
+        else:
+            externally_mapped_classes[original_class] = dao_class
+
     def get_alternative_mapping(
         self, wrapped_class: WrappedClass
     ) -> Optional[WrappedClass]:
@@ -211,8 +276,8 @@ class ORMatic:
             self.type_annotation_map[module_and_class_name(clazz)] = (
                 module_and_class_name(custom_type)
             )
-            self.imported_modules.add(clazz.__module__)
-            self.imported_modules.add(custom_type.__module__)
+            self.imported_modules.add(get_module_of_type(clazz))
+            self.imported_modules.add(get_module_of_type(custom_type))
 
     @property
     def wrapped_classes_in_topological_order(self) -> List[WrappedClass]:
@@ -249,7 +314,21 @@ class ORMatic:
 
     @property
     def mapped_classes(self) -> List[Type]:
-        return [key.clazz for key in self.wrapped_tables.keys()]
+        return [key.clazz for key in self.wrapped_tables.keys()] + [
+            key.clazz for key in self.external_tables.keys()
+        ]
+
+    def table_for(self, wrapped_class: WrappedClass) -> TableLike:
+        """
+        :param wrapped_class: The wrapped class to find the table of.
+        :return: The :class:`WrappedTable` generated for it, or the
+            :class:`ExternalTable` standing in for it if it is already mapped by a
+            dependency.
+        :raises KeyError: If neither exists for the given class.
+        """
+        if wrapped_class in self.wrapped_tables:
+            return self.wrapped_tables[wrapped_class]
+        return self.external_tables[wrapped_class]
 
     def make_all_tables(self):
         for table in self.wrapped_tables.values():
@@ -300,17 +379,26 @@ class ORMatic:
         :return: The ORMatic instance.
         """
         all_classes, all_alternative_mappings, all_type_mappings = set(), set(), {}
+        all_externally_mapped_classes: Dict[Type, Type] = {}
 
-        # import classes from the existing interface
+        # every interface shares one Base, so anything already mapped anywhere in the
+        # running process must be reused, not just what an explicit dependency mapped
+        for mapper in SharedBase.registry.mappers:
+            if issubclass(mapper.class_, DataAccessObject):
+                cls.register_externally_mapped_class(
+                    mapper.class_, all_externally_mapped_classes
+                )
+
+        # classes already mapped by a dependency are kept in the class diagram but not
+        # remapped, so inheritance/association edges to them still resolve
         for ormatic_interface in ormatic_interface_dependencies:
-            (
-                interface_classes,
-                interface_alternative_mappings,
-                interface_type_mappings,
-            ) = get_classes_of_ormatic_interface(ormatic_interface)
-            all_classes |= set(interface_classes)
-            all_alternative_mappings |= set(interface_alternative_mappings)
-            all_type_mappings.update(interface_type_mappings)
+            interface_info = get_classes_of_ormatic_interface(ormatic_interface)
+            all_classes |= set(interface_info.classes)
+            all_alternative_mappings |= set(interface_info.alternative_mappings)
+            all_type_mappings.update(interface_info.type_mappings)
+
+        # externally_mapped_classes is transitive across the whole chain, unlike classes above
+        all_classes |= set(all_externally_mapped_classes.keys())
 
         for package in packages:
             all_classes |= set(classes_of_package(package))
@@ -321,7 +409,7 @@ class ORMatic:
             am
             for am in recursive_subclasses(AlternativeMapping)
             if not ignore_krrood_test_classes
-            or "krrood_test" not in am.original_class().__module__
+            or "krrood_test" not in get_module_of_type(am.original_class())
         )
 
         # keep only dataclasses that are not AlternativeMapping or DataAccessObject subclasses
@@ -344,7 +432,11 @@ class ORMatic:
         # Create an ORMatic object with the classes to be mapped
         ormatic = ORMatic(
             class_diagram,
-            type_mappings=TypeDict(all_type_mappings),
-            alternative_mappings=list(all_alternative_mappings),
+            interface_information=OrmaticInterfaceInformation(
+                alternative_mappings=list(all_alternative_mappings),
+                type_mappings=all_type_mappings,
+                externally_mapped_classes=all_externally_mapped_classes,
+            ),
+            ormatic_interface_dependencies=list(ormatic_interface_dependencies),
         )
         return ormatic

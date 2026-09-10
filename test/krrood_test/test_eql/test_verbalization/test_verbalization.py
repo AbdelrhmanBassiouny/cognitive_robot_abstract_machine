@@ -22,7 +22,6 @@ from krrood.entity_query_language.verbalization.boolean_predicate import (
     AdjectivalPredicate,
 )
 from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
-from krrood.patterns.field_metadata import FieldMetadata
 from typing import Any
 from typing_extensions import List
 
@@ -443,9 +442,7 @@ class _NavParcel:
 class _NavPanel:
     # "lit" is an irregular participle the shape heuristic misses, so it declares its form.
     lit: bool = field(
-        metadata=FieldMetadata(
-            other_metadata=[GrammarMetadata(boolean_predicate=AdjectivalPredicate())]
-        ).as_dict()
+        metadata=GrammarMetadata(boolean_predicate=AdjectivalPredicate()).as_dict()
     )
 
 
@@ -725,14 +722,14 @@ def test_its_continues_uniformly_once_the_subject_licenses_it():
     )
 
 
-def test_two_distinct_relational_referents_are_numbered():
+def test_two_distinct_relational_referents_are_distinguished():
     """
-    Two distinct relational referents of the same type are numbered *"Robot 1"* /
-    *"Robot 2"* (bare, matching the variable convention) to tell them apart.
+    Two distinct relational referents of the same type are told apart by the pair
+    determiner (*"the … Robot"* / *"the other … Robot"*), not a number.
 
-    A following attribute spells the numbered owner out (*"the power of Robot 1"*)
-    rather than *"its power"* — the first clause's subject was the battery, not the
-    robot.
+    A following attribute spells the distinguished owner out (*"the power of the
+    _NavRobot"*) rather than *"its power"* — the first clause's subject was the battery,
+    not the robot.
     """
     p = variable(_NavPair, [])
     text = verbalize_expression(
@@ -745,19 +742,19 @@ def test_two_distinct_relational_referents_are_numbered():
         )
     )
     assert text == (
-        "Find a _NavPair such that the battery of _NavRobot 1, to which its primary is "
-        "assigned, is greater than 5, the power of _NavRobot 1 is greater than 1, and the "
-        "battery of _NavRobot 2, to which its secondary is assigned, is greater than 3"
+        "Find a _NavPair such that the battery of the _NavRobot to which its primary is "
+        "assigned is greater than 5, the power of the _NavRobot is greater than 1, and the "
+        "battery of the other _NavRobot, to which its secondary is assigned, is greater than 3"
     )
 
 
-def test_single_relational_referent_is_not_numbered():
+def test_single_relational_referent_is_not_distinguished():
     """
     A lone relational referent (no same-type collision) keeps the plain definite form.
     """
     m = variable(_NavMission, [])
     text = verbalize_expression(an(entity(m).where(m.assigned_to.battery > 5)))
-    assert "_NavRobot 1" not in text
+    assert "the other _NavRobot" not in text
     assert "the _NavRobot to which it is assigned" in text
 
 
@@ -1288,10 +1285,10 @@ def test_nested_constrained_aggregation_scope_is_plural_unnumbered():
     assert "BankTransaction 2" not in text, f"Spurious numbering in: {text!r}"
 
 
-def test_nested_non_aggregation_entity_keeps_numbering():
+def test_nested_non_aggregation_entity_keeps_distinguishing():
     """
-    A genuine (non-aggregation) entity sub-query is a specific entity and keeps its
-    disambiguation number.
+    A genuine (non-aggregation) entity sub-query is a specific, distinct entity and
+    keeps told apart by the pair determiner.
     """
     t1 = variable(BankTransaction, domain=None)
     t2 = variable(BankTransaction, domain=None)
@@ -1299,7 +1296,7 @@ def test_nested_non_aggregation_entity_keeps_numbering():
         entity(t1).where(t1 == an(entity(t2).where(t2.amount_details.amount > 100)))
     )
     text = verbalize_expression(query)
-    assert "BankTransaction 1" in text and "BankTransaction 2" in text, f"Got: {text!r}"
+    assert "another BankTransaction" in text, f"Got: {text!r}"
 
 
 # %% Integration: target test cases
@@ -1605,7 +1602,7 @@ def test_verbalize_custom_predicate_robotics_domain(handles_and_containers_world
     handle = variable(Handle, world.bodies)
     predicate = IsReachable(handle)
     text = verbalize_expression(predicate)
-    assert "Handle" in text
+    assert "a Handle" in text
     assert "is reachable" in text
 
 
@@ -2023,9 +2020,9 @@ def test_verbalize_triple():
     predicate = ConnectsTo(source, target)
     text = verbalize_expression(predicate)
 
-    assert "Body" in text
+    assert "a Body" in text
     assert "connects to" in text
-    assert "Handle" in text
+    assert "a Handle" in text
     # Subject–predicate–object order
     assert text.index("Body") < text.index("Handle")
 
@@ -2051,35 +2048,36 @@ def test_verbalize_1arg_predicate_without_fragment_raises():
 # %% Same-type variable disambiguation
 def test_two_same_type_variables_are_disambiguated():
     """
-    Two distinct variables of the same type must get numbered labels to tell them apart.
+    Two distinct variables of the same type must be told apart by the pair determiner.
 
     Currently both variables produce 'an Employee', making the output ambiguous:
     'an Employee's salary is greater than an Employee's salary'
-    Expected: 'Employee 1's salary is greater than Employee 2's salary'
+    Expected: 'an Employee's salary is greater than another Employee's salary'
     """
     employee1 = variable(Employee, [])
     employee2 = variable(Employee, [])
     cond = employee1.salary > employee2.salary
     text = verbalize_expression(cond)
-    assert "Employee 1" in text, f"Expected 'Employee 1' in: {text!r}"
-    assert "Employee 2" in text, f"Expected 'Employee 2' in: {text!r}"
+    assert "an Employee" in text, f"Expected 'an Employee' in: {text!r}"
+    assert "another Employee" in text, f"Expected 'another Employee' in: {text!r}"
 
 
 def test_two_same_type_variables_in_query_are_disambiguated():
     """
-    Two same-type variables inside a query must each get distinct numbered labels.
+    Two same-type variables inside a query must each be told apart by the pair
+    determiner.
     """
     employee1 = variable(Employee, [])
     employee2 = variable(Employee, [])
     query = an(entity(employee1).where(employee1.salary > employee2.salary))
     text = verbalize_expression(query)
-    assert "Employee 1" in text, f"Expected 'Employee 1' in: {text!r}"
-    assert "Employee 2" in text, f"Expected 'Employee 2' in: {text!r}"
+    assert "an Employee" in text, f"Expected 'an Employee' in: {text!r}"
+    assert "another Employee" in text, f"Expected 'another Employee' in: {text!r}"
 
 
 def test_three_same_type_variables_are_disambiguated():
     """
-    Three variables of the same type each get distinct numbered labels.
+    Three variables of the same type each get a distinct ordinal to tell them apart.
     """
     employee1 = variable(Employee, [])
     employee2 = variable(Employee, [])
@@ -2090,19 +2088,20 @@ def test_three_same_type_variables_are_disambiguated():
         )
     )
     text = verbalize_expression(query)
-    assert "Employee 1" in text, f"Expected 'Employee 1' in: {text!r}"
-    assert "Employee 2" in text, f"Expected 'Employee 2' in: {text!r}"
-    assert "Employee 3" in text, f"Expected 'Employee 3' in: {text!r}"
+    assert "an Employee" in text, f"Expected 'an Employee' in: {text!r}"
+    assert "a second Employee" in text, f"Expected 'a second Employee' in: {text!r}"
+    assert "a third Employee" in text, f"Expected 'a third Employee' in: {text!r}"
 
 
-def test_single_type_variable_not_numbered():
+def test_single_type_variable_not_disambiguated():
     """
-    A single variable of a type must keep the plain 'an Employee' form — no numbering.
+    A single variable of a type must keep the plain 'an Employee' form — no
+    disambiguation.
     """
     employee = variable(Employee, [])
     text = verbalize_expression(employee)
     assert "an Employee" in text, f"Expected 'an Employee' in: {text!r}"
-    assert "Employee 1" not in text, f"Did not expect numbering in: {text!r}"
+    assert "another Employee" not in text, f"Did not expect disambiguation in: {text!r}"
 
 
 def test_number_of_business_transactions():

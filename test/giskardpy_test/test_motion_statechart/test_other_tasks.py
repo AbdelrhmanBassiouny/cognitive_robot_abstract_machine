@@ -5,6 +5,8 @@ import numpy as np
 from giskardpy.executor import Executor
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import (
+    DefaultWeights,
+    LifeCycleValues,
     ObservationStateValues,
 )
 from giskardpy.motion_statechart.goals.open_close import Open, Close
@@ -20,6 +22,7 @@ from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
 )
+from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from giskardpy.motion_statechart.tasks.feature_functions import (
     AngleGoal,
     AlignPerpendicular,
@@ -33,7 +36,11 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
     Door,
     Hinge,
+    Bottle,
+    BottleCap,
+    ScrewMechanism,
 )
+from semantic_digital_twin.world_description.geometry import Scale
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
@@ -735,11 +742,34 @@ def test_angle_goal(pr2_world_state_reset: World):
 
 
 class TestOpenClose:
+    def test_the_mechanism_is_open_once_its_parts_reached_their_goals(
+        self, prismatic_bot2: World
+    ):
+        """
+        Neither part is ended by the goal that runs them, so a part something else ends
+        keeps counting through the verdict it earned rather than through the observation
+        behind it, which is gone by then.
+        """
+        motion_statechart = MotionStatechart()
+        motion_statechart.add_node(
+            open_goal := Open(
+                environment_link=prismatic_bot2.get_body_by_name("robot"),
+                tip_link=prismatic_bot2.get_body_by_name("robot2"),
+            )
+        )
+        Executor(MotionStatechartContext(world=prismatic_bot2)).compile(
+            motion_statechart=motion_statechart
+        )
+
+        assert set(open_goal._observation_expression.free_variables()) == {
+            part.goal_reached for part in open_goal.nodes
+        }
+
     def test_open(self, pr2_world_copy, tmp_path):
 
         with pr2_world_copy.modify_world():
             door = Door.create_with_new_body_in_world(
-                name=PrefixedName("door"),
+                name="door",
                 world=pr2_world_copy,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=1.5, z=1, yaw=np.pi, reference_frame=pr2_world_copy.root
@@ -747,7 +777,7 @@ class TestOpenClose:
             )
 
             handle = Handle.create_with_new_body_in_world(
-                name=PrefixedName("handle"),
+                name="handle",
                 world=pr2_world_copy,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=1.5,
@@ -766,7 +796,7 @@ class TestOpenClose:
             upper_limits.velocity = 1
 
             hinge = Hinge.create_with_new_body_in_world(
-                name=PrefixedName("hinge"),
+                name="hinge",
                 world=pr2_world_copy,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=1.5,
@@ -775,10 +805,12 @@ class TestOpenClose:
                     yaw=np.pi,
                     reference_frame=pr2_world_copy.root,
                 ),
-                connection_limits=DegreeOfFreedomLimits(
-                    lower=lower_limits, upper=upper_limits
+                parent_connection_specification=Hinge.parent_connection_specification(
+                    dof_limits=DegreeOfFreedomLimits(
+                        lower=lower_limits, upper=upper_limits
+                    ),
+                    axis=Vector3.Z(),
                 ),
-                active_axis=Vector3.Z(),
             )
 
             door.add(handle)
@@ -803,28 +835,28 @@ class TestOpenClose:
                                 yaw=np.pi, reference_frame=handle
                             ),
                         ),
-                        Parallel(
+                        opening := Parallel(
                             [
                                 Open(
                                     tip_link=r_tip,
                                     environment_link=handle,
                                     goal_joint_state=open_goal,
                                 ),
-                                opened := JointPositionReached(
+                                JointPositionReached(
                                     connection=root_C_hinge,
                                     position=open_goal,
                                     name="opened",
                                 ),
                             ]
                         ),
-                        Parallel(
+                        closing := Parallel(
                             [
                                 Close(
                                     tip_link=r_tip,
                                     environment_link=handle,
                                     goal_joint_state=close_goal,
                                 ),
-                                closed := JointPositionReached(
+                                JointPositionReached(
                                     connection=root_C_hinge,
                                     position=close_goal,
                                     name="closed",
@@ -846,5 +878,288 @@ class TestOpenClose:
         kin_sim.tick_until_end()
         msc.draw(str(tmp_path / "muh.pdf"))
 
-        assert opened.observation_state == ObservationStateValues.TRUE
-        assert closed.observation_state == ObservationStateValues.TRUE
+        assert opening.life_cycle_state == LifeCycleValues.SUCCEEDED
+        assert closing.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+    def test_unscrew_and_tighten_bottle_cap(self, pr2_world_copy):
+        screw_pitch = 0.03
+        unscrew_goal = 2 * np.pi
+        with pr2_world_copy.modify_world():
+            # The bottle lies on its side, its thread axis pointing towards the robot.
+            Bottle.create_with_new_body_in_world(
+                name="bottle",
+                world=pr2_world_copy,
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0.77, y=-0.2, z=0.9, reference_frame=pr2_world_copy.root
+                ),
+                scale=Scale(0.2, 0.06, 0.06),
+            )
+
+            bottle_cap = BottleCap.create_with_new_body_in_world(
+                name="bottle_cap",
+                world=pr2_world_copy,
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0.65, y=-0.2, z=0.9, reference_frame=pr2_world_copy.root
+                ),
+                scale=Scale(0.02, 0.04, 0.04),
+            )
+
+            lower_limits = DerivativeMap()
+            lower_limits.position = 0
+            lower_limits.velocity = -1
+            upper_limits = DerivativeMap()
+            upper_limits.position = unscrew_goal
+            upper_limits.velocity = 1
+
+            # The thread axis points from the bottle out through the cap, here
+            # towards the robot, so unscrewing moves the cap away from the bottle.
+            screw_joint = ScrewMechanism.create_with_new_body_in_world(
+                name="screw_joint",
+                world=pr2_world_copy,
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0.65, y=-0.2, z=0.9, reference_frame=pr2_world_copy.root
+                ),
+                parent_connection_specification=ScrewMechanism.parent_connection_specification(
+                    axis=Vector3(-1, 0, 0),
+                    dof_limits=DegreeOfFreedomLimits(
+                        lower=lower_limits, upper=upper_limits
+                    ),
+                    screw_pitch=screw_pitch,
+                ),
+            )
+
+            bottle_cap.add(screw_joint)
+
+        root_C_screw = bottle_cap.mechanical_joint.root.parent_connection
+        cap_body = bottle_cap.root
+        r_tip = pr2_world_copy.get_body_by_name("r_gripper_tool_frame")
+
+        world_T_cap_before = pr2_world_copy.compute_forward_kinematics_np(
+            pr2_world_copy.root, cap_body
+        )
+
+        unscrew_statechart = MotionStatechart()
+        unscrew_statechart.add_nodes(
+            [
+                sequence := Sequence(
+                    [
+                        # Grasp with the roll axis of the gripper collinear with the
+                        # screw axis, so the wrist can follow the cap's rotation.
+                        CartesianPose(
+                            root_link=pr2_world_copy.root,
+                            tip_link=r_tip,
+                            goal_pose=HomogeneousTransformationMatrix.from_xyz_rpy(
+                                reference_frame=cap_body
+                            ),
+                        ),
+                        open := Open(
+                            tip_link=r_tip,
+                            environment_link=cap_body,
+                            goal_joint_state=unscrew_goal,
+                        ),
+                    ]
+                ),
+            ]
+        )
+        unscrew_statechart.add_node(EndMotion.when_true(sequence))
+
+        kin_sim = Executor(
+            MotionStatechartContext(
+                world=pr2_world_copy,
+            )
+        )
+        kin_sim.compile(motion_statechart=unscrew_statechart)
+        kin_sim.tick_until_end()
+
+        assert open.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+        # One full turn must have moved the cap one screw pitch along the screw axis,
+        # away from the bottle (towards the robot, -x).
+        world_T_cap_unscrewed = pr2_world_copy.compute_forward_kinematics_np(
+            pr2_world_copy.root, cap_body
+        )
+        cap_translation = world_T_cap_unscrewed[:3, 3] - world_T_cap_before[:3, 3]
+        np.testing.assert_allclose(cap_translation, [-screw_pitch, 0.0, 0.0], atol=1e-3)
+
+        # Tighten again, this time commanding how far the cap must travel back down
+        # the thread instead of how far it must rotate.
+        unscrew_travel_distance = float(np.linalg.norm(cap_translation))
+        tightened_goal_joint_state = (
+            unscrew_goal
+            - root_C_screw.rotation_angle_for_travel_distance(unscrew_travel_distance)
+        )
+
+        tighten_statechart = MotionStatechart()
+        tighten_statechart.add_nodes(
+            [
+                close := Close(
+                    tip_link=r_tip,
+                    environment_link=cap_body,
+                    goal_joint_state=tightened_goal_joint_state,
+                ),
+            ]
+        )
+        tighten_statechart.add_node(EndMotion.when_true(close))
+
+        kin_sim = Executor(
+            MotionStatechartContext(
+                world=pr2_world_copy,
+            )
+        )
+        kin_sim.compile(motion_statechart=tighten_statechart)
+        kin_sim.tick_until_end()
+
+        assert close.observation_state == ObservationStateValues.TRUE
+
+        # The tightened cap must be back at its initial pose.
+        world_T_cap_tightened = pr2_world_copy.compute_forward_kinematics_np(
+            pr2_world_copy.root, cap_body
+        )
+        np.testing.assert_allclose(
+            world_T_cap_tightened[:3, 3], world_T_cap_before[:3, 3], atol=1e-3
+        )
+
+    def _expanded_nodes(self, goal: Open, world: World):
+        """
+        Expands a goal on a statechart of its own and returns the children it built.
+        """
+        statechart = MotionStatechart()
+        statechart.add_node(goal)
+        goal.expand(MotionStatechartContext(world=world))
+        return goal.nodes
+
+    def test_open_yields_the_mechanism_but_not_the_grasp_by_default(
+        self, prismatic_bot
+    ):
+        """
+        A caller that asks for nothing in particular gets the weights the motion needs:
+        following the mechanism gives way to collision avoidance, holding the grasped
+        part does not.
+        """
+        grasped_part = prismatic_bot.get_body_by_name("robot")
+        goal = Open(tip_link=prismatic_bot.root, environment_link=grasped_part)
+
+        nodes = self._expanded_nodes(goal, prismatic_bot)
+
+        mechanism_node = next(
+            node for node in nodes if isinstance(node, JointPositionList)
+        )
+        grasp_node = next(node for node in nodes if isinstance(node, CartesianPose))
+        assert mechanism_node.weight == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
+        assert grasp_node.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
+
+    def test_close_yields_the_mechanism_but_not_the_grasp_by_default(
+        self, prismatic_bot
+    ):
+        """
+        Closing defaults its weights the same way opening does.
+        """
+        grasped_part = prismatic_bot.get_body_by_name("robot")
+        goal = Close(tip_link=prismatic_bot.root, environment_link=grasped_part)
+
+        nodes = self._expanded_nodes(goal, prismatic_bot)
+
+        mechanism_node = next(
+            node for node in nodes if isinstance(node, JointPositionList)
+        )
+        grasp_node = next(node for node in nodes if isinstance(node, CartesianPose))
+        assert mechanism_node.weight == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
+        assert grasp_node.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
+
+    def test_open_weighs_mechanism_and_grasp_separately(self, prismatic_bot):
+        """
+        Driving the mechanism and holding the grasped part are separate goals, so a
+        caller can let the mechanism yield to collision avoidance while the grasp keeps
+        outranking it.
+        """
+        grasped_part = prismatic_bot.get_body_by_name("robot")
+        goal = Open(
+            tip_link=prismatic_bot.root,
+            environment_link=grasped_part,
+            mechanism_weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
+            grasp_weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
+        )
+
+        nodes = self._expanded_nodes(goal, prismatic_bot)
+
+        mechanism_node = next(
+            node for node in nodes if isinstance(node, JointPositionList)
+        )
+        grasp_node = next(node for node in nodes if isinstance(node, CartesianPose))
+        assert mechanism_node.weight == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
+        assert grasp_node.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
+
+    def test_close_weighs_mechanism_and_grasp_separately(self, prismatic_bot):
+        """
+        Closing splits its weights the same way opening does.
+        """
+        grasped_part = prismatic_bot.get_body_by_name("robot")
+        goal = Close(
+            tip_link=prismatic_bot.root,
+            environment_link=grasped_part,
+            mechanism_weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
+            grasp_weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
+        )
+
+        nodes = self._expanded_nodes(goal, prismatic_bot)
+
+        mechanism_node = next(
+            node for node in nodes if isinstance(node, JointPositionList)
+        )
+        grasp_node = next(node for node in nodes if isinstance(node, CartesianPose))
+        assert mechanism_node.weight == DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
+        assert grasp_node.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
+
+    def test_open_drives_towards_the_upper_limit(self, prismatic_bot):
+        """
+        Without a commanded state, opening drives the mechanism to the top of its range.
+        """
+        grasped_part = prismatic_bot.get_body_by_name("robot")
+        goal = Open(tip_link=prismatic_bot.root, environment_link=grasped_part)
+
+        self._expanded_nodes(goal, prismatic_bot)
+
+        assert goal.goal_joint_state == goal.connection.dof.limits.upper.position
+
+    def test_close_drives_towards_the_lower_limit(self, prismatic_bot):
+        """
+        Without a commanded state, closing drives the mechanism to the bottom of its
+        range, the mirror of what opening does.
+        """
+        grasped_part = prismatic_bot.get_body_by_name("robot")
+        goal = Close(tip_link=prismatic_bot.root, environment_link=grasped_part)
+
+        self._expanded_nodes(goal, prismatic_bot)
+
+        assert goal.goal_joint_state == goal.connection.dof.limits.lower.position
+
+    def test_open_clamps_a_goal_beyond_the_upper_limit(self, prismatic_bot):
+        """
+        A commanded state the mechanism cannot reach is cut down to its upper limit,
+        rather than left as a goal the solver can never observe as reached.
+        """
+        grasped_part = prismatic_bot.get_body_by_name("robot")
+        goal = Open(
+            tip_link=prismatic_bot.root,
+            environment_link=grasped_part,
+            goal_joint_state=1e3,
+        )
+
+        self._expanded_nodes(goal, prismatic_bot)
+
+        assert goal.goal_joint_state == goal.connection.dof.limits.upper.position
+
+    def test_close_clamps_a_goal_below_the_lower_limit(self, prismatic_bot):
+        """
+        Closing clamps an unreachable commanded state against the opposite limit.
+        """
+        grasped_part = prismatic_bot.get_body_by_name("robot")
+        goal = Close(
+            tip_link=prismatic_bot.root,
+            environment_link=grasped_part,
+            goal_joint_state=-1e3,
+        )
+
+        self._expanded_nodes(goal, prismatic_bot)
+
+        assert goal.goal_joint_state == goal.connection.dof.limits.lower.position

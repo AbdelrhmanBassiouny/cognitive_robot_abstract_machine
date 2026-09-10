@@ -14,7 +14,9 @@ from giskardpy.motion_statechart.debug_expression_trajectory import (
     DebugExpressionTrajectory,
     RecordedDebugExpression,
 )
+from giskardpy.motion_statechart.exceptions import EmptyDebugExpressionTrajectoryError
 from giskardpy.motion_statechart.graph_node import DebugExpression
+from giskardpy.utils.utils import create_path
 
 
 @dataclass
@@ -153,6 +155,8 @@ class DebugExpressionTrajectoryPlotter:
         Plot the recorded debug expressions and save the result to a PDF file.
 
         :param file_name: The path where the plot is saved.
+        :raises EmptyDebugExpressionTrajectoryError: When no debug expression samples
+            were recorded.
         """
         trajectory = self.debug_expression_trajectory
         recorded = [
@@ -161,7 +165,7 @@ class DebugExpressionTrajectoryPlotter:
             if len(recorded_debug_expression.values) > 0
         ]
         if len(trajectory.times) == 0 or len(recorded) == 0:
-            return
+            raise EmptyDebugExpressionTrajectoryError()
         time = trajectory.times - float(trajectory.times[0])
         duration = float(time[-1])
 
@@ -174,5 +178,6 @@ class DebugExpressionTrajectoryPlotter:
         axes[-1].set_xticks(ticks)
         axes[-1].set_xlabel("Time [s]")
 
+        create_path(file_name)
         plt.savefig(file_name, bbox_inches="tight")
         plt.close()

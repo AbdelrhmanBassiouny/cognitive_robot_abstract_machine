@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC
 from dataclasses import dataclass
 from typing_extensions import TYPE_CHECKING, Type, List
 
@@ -12,9 +13,10 @@ from coraplex.plans.failures import PlanFailure
 if TYPE_CHECKING:
     from coraplex.plans.designator import Designator
     from coraplex.robot_plans.actions.base import ActionDescription
-    from semantic_digital_twin.robots.robot_parts import AbstractRobot
+    from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
     from semantic_digital_twin.world_description.world_entity import (
         KinematicStructureEntity,
+        SemanticAnnotation,
     )
 
 
@@ -103,6 +105,24 @@ class WipingTargetMissing(DataclassException):
 
 
 @dataclass
+class PerceptionTargetMissing(DataclassException):
+    """
+    Raised when an action is asked to perceive before grasping but names no object.
+    """
+
+    instance: Designator
+    """
+    The action that has no object to detect.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.instance} perceives before grasping but names no object."
+
+    def suggest_correction(self) -> str:
+        return "provide an object_designator or leave perceive_before_grasp off."
+
+
+@dataclass
 class MissingToolFrame(DataclassException):
     """
     Raised when no tool frame is available for the requested arm.
@@ -146,10 +166,18 @@ class ConditionNotSatisfied(PlanFailure):
 @dataclass
 class MotionDidNotFinish(PlanFailure):
 
-    failed_motions: List[MotionStatechartNode]
+    unfinished_motions: List[MotionStatechartNode]
+    """
+    The nodes that did not succeed, whether they failed, were interrupted or never
+    ended.
+    """
 
     def error_message(self) -> str:
-        return f"Motion did not finish, following motions failed: {self.failed_motions}"
+        reports = ", ".join(
+            f"{motion.unique_name} ({motion.life_cycle_state.name})"
+            for motion in self.unfinished_motions
+        )
+        return f"Motion did not finish, following motions did not succeed: {reports}"
 
     def suggest_correction(self) -> str:
         return ""
@@ -171,3 +199,169 @@ class UnknownExecutionType(DataclassException):
 
     def suggest_correction(self) -> str:
         return ""
+
+
+@dataclass
+class PerceptionException(DataclassException, ABC):
+    """
+    Represents a custom exception specific to perception-related errors.
+    """
+
+
+@dataclass
+class PerceptionExceptionWithSemanticAnnotation(PerceptionException, ABC):
+    """
+    For PerceptionExceptions that name the annotation the perception was about.
+    """
+
+    semantic_annotation: Type[SemanticAnnotation]
+    """
+    The annotation the perception was about.
+    """
+
+
+@dataclass
+class PerceivedObjectNotInWorld(PerceptionExceptionWithSemanticAnnotation):
+    """
+    Raised when a detection names an object the world does not hold, so there is nothing
+    to write the perceived pose to.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The world holds no {self.semantic_annotation.__name__} the perceived pose "
+            f"could be written to."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "spawn the object before detecting it, and annotate it with the semantic "
+            "annotation that was queried."
+        )
+
+
+@dataclass
+class AmbiguousDetection(PerceptionExceptionWithSemanticAnnotation):
+    """
+    Raised when a detection's annotation describes several bodies, so the perceived pose
+    cannot be assigned to one of them.
+    """
+
+    body_count: int
+    """
+    How many distinct bodies the annotation described.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.semantic_annotation.__name__} describes {self.body_count} bodies in "
+            f"the world."
+        )
+
+    def suggest_correction(self) -> str:
+        return "narrow the query's semantic annotation so it names a single object."
+
+
+@dataclass
+class NothingDetected(PerceptionExceptionWithSemanticAnnotation):
+    """
+    Raised when a perception source answers a query without reporting any object.
+
+    Treated as a failure rather than an empty answer: a plan that carried on would act on
+    the pose the object was spawned with while believing perception had confirmed it.
+    """
+
+    def error_message(self) -> str:
+        return f"The perception source reported no {self.semantic_annotation.__name__}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "check that the object is in view and that the pipeline's crop and plane "
+            "parameters cover it."
+        )
+
+
+@dataclass
+class UnidentifiedDetections(PerceptionExceptionWithSemanticAnnotation):
+    """
+    Raised when a perception source reports several candidates it cannot tell apart.
+
+    A pipeline that localizes without classifying gives no way to choose between them,
+    so the choice is refused rather than made arbitrarily.
+    """
+
+    candidate_count: int
+    """
+    How many indistinguishable candidates were reported.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The perception source reported {self.candidate_count} candidates for "
+            f"{self.semantic_annotation.__name__} and none of them carry a class label."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "add a classifying annotator to the perception pipeline, or narrow what is "
+            "in view so a single object is reported."
+        )
+
+
+@dataclass
+class PerceptionSourceUnavailable(PerceptionException):
+    """
+    Raised when the perception pipeline does not answer within the configured timeout.
+    """
+
+    action_name: str
+    """
+    The action the source was expected on.
+    """
+
+    def error_message(self) -> str:
+        return f"No perception source is serving '{self.action_name}'."
+
+    def suggest_correction(self) -> str:
+        return "start the perception pipeline before running the plan."
+
+
+@dataclass
+class NotOnASingleLevelException(DataclassException):
+    """
+    Raised when an entity is detected to be on None or multiple levels at the same time.
+    """
+
+    message: str
+
+    def error_message(self) -> str:
+        return self.message
+
+    def suggest_correction(self) -> str:
+        return f"Move the robot to a recognized level"
+
+
+@dataclass
+class BodyIsNotHeld(DataclassException):
+    """
+    Raised when a grasp should be read off a body that no end effector is holding.
+    """
+
+    body: KinematicStructureEntity
+    """
+    The body that was expected to be held.
+    """
+
+    end_effector: EndEffector
+    """
+    The end effector that was expected to hold it.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"'{self.body.name}' is not held by '{self.end_effector.name}', so there is "
+            f"no grasp to read from the world."
+        )
+
+    def suggest_correction(self) -> str:
+        return "pick the body up before reading its grasp."

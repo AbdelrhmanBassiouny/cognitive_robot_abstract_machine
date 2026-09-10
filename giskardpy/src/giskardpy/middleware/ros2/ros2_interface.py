@@ -1,5 +1,6 @@
+import json
 import threading
-from typing import List, Optional, Tuple, Union, Any
+from typing import List, Tuple, Union, Any
 
 from action_msgs.msg import GoalStatus
 from rcl_interfaces.srv._get_parameters import (
@@ -21,6 +22,8 @@ from giskardpy.middleware.ros2.exceptions import (
 )
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.event_loop_manager import get_event_loop
+from krrood.adapters.exceptions import JSONSerializationError
+from krrood.adapters.json_serializer import from_json
 
 
 def msg_type_as_str(msg_type) -> str:
@@ -61,18 +64,20 @@ def wait_for_message(
 def get_robot_description(topic: str = "/robot_description") -> str:
     qos_profile = QoSProfile(depth=10)
     qos_profile.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
-    return wait_for_message(String, rospy.node, topic, qos_profile=qos_profile)[1].data
+    return wait_for_message(String, rospy.get_node(), topic, qos_profile=qos_profile)[
+        1
+    ].data
 
 
 def search_for_publisher_of_node_with_type(node_name: str, topic_type):
-    topics = rospy.node.get_publisher_names_and_types_by_node(node_name, "/")
+    topics = rospy.get_node().get_publisher_names_and_types_by_node(node_name, "/")
     return _search_in_topic_list(
         node_name=node_name, topic_list=topics, topic_type=topic_type
     )[0]
 
 
 def search_for_subscriber_of_node_with_type(node_name: str, topic_type):
-    topics = rospy.node.get_subscriber_names_and_types_by_node(node_name, "/")
+    topics = rospy.get_node().get_subscriber_names_and_types_by_node(node_name, "/")
     return _search_in_topic_list(
         node_name=node_name, topic_list=topics, topic_type=topic_type
     )[0]
@@ -80,11 +85,11 @@ def search_for_subscriber_of_node_with_type(node_name: str, topic_type):
 
 def search_for_publishers_of_type(topic_type) -> List[str]:
     topics = _search_in_topic_list(
-        topic_list=rospy.node.get_topic_names_and_types(), topic_type=topic_type
+        topic_list=rospy.get_node().get_topic_names_and_types(), topic_type=topic_type
     )
     matches = []
     for topic_name in topics:
-        if len(rospy.node.get_publishers_info_by_topic(topic_name)) > 0:
+        if len(rospy.get_node().get_publishers_info_by_topic(topic_name)) > 0:
             matches.append(topic_name)
     return matches
 
@@ -107,11 +112,11 @@ def search_for_unique_subscriber_of_type(topic_type) -> str:
 
 def search_for_subscribers_of_type(topic_type) -> List[str]:
     topics = _search_in_topic_list(
-        topic_list=rospy.node.get_topic_names_and_types(), topic_type=topic_type
+        topic_list=rospy.get_node().get_topic_names_and_types(), topic_type=topic_type
     )
     matches = []
     for topic_name in topics:
-        if len(rospy.node.get_subscriptions_info_by_topic(topic_name)) > 0:
+        if len(rospy.get_node().get_subscriptions_info_by_topic(topic_name)) > 0:
             matches.append(topic_name)
     return matches
 
@@ -124,7 +129,7 @@ def get_parameters(
     req = GetParameters_Request()
     req.names = parameters
     return controller_manager_services.service_caller(
-        node=rospy.node,
+        node=rospy.get_node(),
         service_name=f"{node_name}/get_parameters",
         service_type=GetParameters,
         request=req,
@@ -133,7 +138,7 @@ def get_parameters(
 
 
 def _search_in_topic_list(
-    topic_list: List[Tuple[str, list]], topic_type: str, node_name: Optional[str] = None
+    topic_list: List[Tuple[str, list]], topic_type: str, node_name: str | None = None
 ) -> List[str]:
     matches = []
     for topic_name, topic_types in topic_list:
@@ -154,8 +159,8 @@ def wait_for_publisher(publisher):
 
 
 class MyActionClient:
-    _goal_handle: Optional[ClientGoalHandle]
-    _result_future: Optional[Future]
+    _goal_handle: ClientGoalHandle | None
+    _result_future: Future | None
     _goal_counter: int
 
     def __init__(self, node_handle: Node, action_type, action_name: str):
@@ -171,7 +176,7 @@ class MyActionClient:
             node=node_handle, action_type=action_type, action_name=action_name
         )
         while not self._client.wait_for_server(timeout_sec=2):
-            rospy.node.get_logger().info(f"Waiting for {action_name} server...")
+            self.node_handle.get_logger().info(f"Waiting for {action_name} server...")
 
     def send_goal_async(self, goal) -> Future:
         self._goal_counter += 1
@@ -195,13 +200,34 @@ class MyActionClient:
         self.result = None
         match result.status:
             case GoalStatus.STATUS_ABORTED:
-                raise ExecutionAbortedException()
+                raise self.create_abort_exception(result)
             case GoalStatus.STATUS_SUCCEEDED:
                 return result
             case GoalStatus.STATUS_CANCELED:
                 raise ExecutionCanceledException(self._client._action_name, goal_id)
             case _:
                 raise Exception(f"Unexpected status {result.status}")
+
+    @staticmethod
+    def create_abort_exception(result: Any) -> Exception:
+        """
+        Rebuild the exception that made the server abort the goal.
+
+        The action status alone cannot tell a caller whether sending the goal again
+        would help, so the error itself travels in the result payload.
+
+        An error that cannot be rebuilt, because the client does not know its class or
+        cannot construct it, is reported as a plain abort; the original failure is worth
+        less than a caller that keeps working.
+        """
+        payload = json.loads(result.result.result)
+        error = payload.get("error")
+        if error is None:
+            return ExecutionAbortedException()
+        try:
+            return from_json(error)
+        except (JSONSerializationError, TypeError):
+            return ExecutionAbortedException()
 
     def __goal_accepted_cb(self, future: Future):
         goal_handle = future.result()

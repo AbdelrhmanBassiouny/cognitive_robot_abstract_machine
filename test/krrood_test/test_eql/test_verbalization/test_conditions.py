@@ -15,7 +15,6 @@ from krrood.entity_query_language.verbalization.boolean_predicate import (
     AdjectivalPredicate,
 )
 from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
-from krrood.patterns.field_metadata import FieldMetadata
 
 import krrood.entity_query_language.factories as eql
 from krrood.entity_query_language.factories import (
@@ -318,9 +317,7 @@ def test_two_value_domain_drops_the_serial_comma():
 class _Coffee:
     # "decaf" is adjectival (the heuristic can't tell), so it declares its predicate form.
     decaf: bool = field(
-        metadata=FieldMetadata(
-            other_metadata=[GrammarMetadata(boolean_predicate=AdjectivalPredicate())]
-        ).as_dict()
+        metadata=GrammarMetadata(boolean_predicate=AdjectivalPredicate()).as_dict()
     )
 
 

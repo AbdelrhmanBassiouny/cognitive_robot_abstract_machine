@@ -20,16 +20,12 @@ from typing_extensions import (
     get_origin,
 )
 
+from krrood.code_generation.source_extraction_utils import extract_function_source
 from krrood.ripple_down_rules.datastructures.case import create_case, Case
 from krrood.ripple_down_rules.utils import (
-    SubclassJSONSerializer,
-    get_full_class_name,
-    get_type_from_string,
-    conclusion_to_json,
     is_iterable,
     build_user_input_from_conclusion,
     encapsulate_user_input,
-    extract_function_or_class_file,
     are_results_subclass_of_types,
     make_list,
     get_imports_from_scope,
@@ -39,8 +35,7 @@ from krrood.ripple_down_rules.utils import (
 
 class VariableVisitor(ast.NodeVisitor):
     """
-    A visitor to extract all variables and comparisons from a python expression
-    represented as an AST tree.
+    A visitor to extract all variables and comparisons from a python expression represented as an AST tree.
     """
 
     compares: List[
@@ -117,7 +112,7 @@ def get_used_scope(code_str, scope):
     return used_scope
 
 
-class CallableExpression(SubclassJSONSerializer):
+class CallableExpression:
     """
     A callable that is constructed from a string statement written by an expert.
     """
@@ -141,9 +136,8 @@ class CallableExpression(SubclassJSONSerializer):
         :param expression_tree: The AST tree parsed from the user input.
         :param scope: The scope to use for the callable expression.
         :param conclusion: The conclusion to use for the callable expression.
-        :param mutually_exclusive: If True, the conclusion is mutually exclusive, i.e.
-            the callable expression can only return one conclusion. If False, the
-            callable expression can return multiple conclusions.
+        :param mutually_exclusive: If True, the conclusion is mutually exclusive, i.e. the callable expression can only
+            return one conclusion. If False, the callable expression can return multiple conclusions.
         """
         if user_input is None and conclusion is None:
             raise ValueError("Either user_input or conclusion must be provided.")
@@ -227,8 +221,7 @@ class CallableExpression(SubclassJSONSerializer):
 
     def combine_with(self, other: "CallableExpression") -> "CallableExpression":
         """
-        Combine this callable expression with another callable expression using the
-        'and' operator.
+        Combine this callable expression with another callable expression using the 'and' operator.
         """
         cond1_user_input = self.user_input.replace(
             self.get_encapsulating_function(), "def _cond1(case):"
@@ -251,9 +244,13 @@ class CallableExpression(SubclassJSONSerializer):
         """
         Update the user input from a file.
         """
-        new_function_body = extract_function_or_class_file(file_path, [function_name])[
-            function_name
-        ]
+        extracted_functions = {
+            definition.name: definition.source
+            for definition in extract_function_source(
+                [function_name], file_path=file_path
+            ).definitions
+        }
+        new_function_body = extracted_functions.get(function_name)
         if new_function_body is None:
             return
         self.user_input = self.get_encapsulating_function() + "\n" + new_function_body
@@ -262,10 +259,9 @@ class CallableExpression(SubclassJSONSerializer):
         """
         Write the callable expression to a python file.
 
-        :param file_path: The path to the file where the callable expression will be
-            written.
-        :param append: If True, the callable expression will be appended to the file. If
-            False, the file will be overwritten.
+        :param file_path: The path to the file where the callable expression will be written.
+        :param append: If True, the callable expression will be appended to the file. If False,
+         the file will be overwritten.
         """
         imports = "\n".join(get_imports_from_scope(self.scope))
         if append and os.path.exists(file_path):
@@ -326,8 +322,7 @@ class CallableExpression(SubclassJSONSerializer):
 
     def __str__(self):
         """
-        Return the user string where each compare is written in a line using compare
-        column offset start and end.
+        Return the user string where each compare is written in a line using compare column offset start and end.
         """
         if self.user_input is None:
             return str(self.conclusion)
@@ -343,51 +338,10 @@ class CallableExpression(SubclassJSONSerializer):
             prev_e = e
         return "\n".join(all_binary_ops) if len(all_binary_ops) > 0 else self.user_input
 
-    def _to_json(self) -> Dict[str, Any]:
-        return {
-            "user_input": self.user_input,
-            "conclusion_type": (
-                [get_full_class_name(t) for t in self.conclusion_type]
-                if self.conclusion_type is not None
-                else None
-            ),
-            "scope": {
-                k: get_full_class_name(v)
-                for k, v in self.scope.items()
-                if hasattr(v, "__module__")
-                and hasattr(v, "__name__")
-                and v.__module__ is not None
-                and v.__name__ is not None
-            },
-            "conclusion": conclusion_to_json(self.conclusion),
-            "mutually_exclusive": self.mutually_exclusive,
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any]) -> CallableExpression:
-        scope = {}
-        for k, v in data["scope"].items():
-            try:
-                scope[k] = get_type_from_string(v)
-            except ModuleNotFoundError:
-                pass
-        return cls(
-            user_input=data["user_input"],
-            conclusion_type=(
-                tuple(get_type_from_string(t) for t in data["conclusion_type"])
-                if data["conclusion_type"]
-                else None
-            ),
-            scope=scope,
-            conclusion=SubclassJSONSerializer.from_json(data["conclusion"]),
-            mutually_exclusive=data["mutually_exclusive"],
-        )
-
 
 def compile_expression_to_code(expression_tree: AST) -> Any:
     """
-    Compile an expression tree that was parsed from string into code that can be
-    executed using 'eval(code)'.
+    Compile an expression tree that was parsed from string into code that can be executed using 'eval(code)'
 
     :param expression_tree: The parsed expression tree.
     :return: The code that was compiled from the expression tree.

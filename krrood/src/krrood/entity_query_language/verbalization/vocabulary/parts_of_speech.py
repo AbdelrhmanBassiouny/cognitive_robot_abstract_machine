@@ -9,6 +9,7 @@ from krrood.entity_query_language.predicate import VerbalizationField
 from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
+    apply_subject_verb_agreement,
     Clause,
     VerbalizationFragment,
     NounPhrase,
@@ -23,6 +24,7 @@ from krrood.entity_query_language.verbalization.fragments.features import (
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
+    disjunctive_phrase,
     MAX_SET_MEMBERS,
     one_of,
 )
@@ -30,6 +32,7 @@ from krrood.entity_query_language.verbalization.microplanning.possessive import 
     possessive_path,
 )
 from krrood.entity_query_language.verbalization.navigation_path import PathStep
+from krrood.entity_query_language.verbalization.value_lexicon import type_members
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     Copulas,
@@ -229,9 +232,7 @@ class OneOf(ClauseElement):
             return listed
         # Past the cap the members are summarised by count; the category noun still distinguishes a
         # set of types from a set of plain values.
-        are_types = bool(members) and all(
-            isinstance(member, type) for member in members
-        )
+        are_types = type_members(members) is not None
         return PhraseFragment(
             parts=[
                 SetMembership.ONE_OF.as_fragment(),
@@ -278,10 +279,7 @@ class DisjunctivePhrase(ClauseElement):
         )
         if not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
             return Noun(self.members).as_fragment()
-        return oxford_comma(
-            [RoleFragment.for_value(member) for member in value],
-            Conjunctions.OR.as_fragment(),
-        )
+        return disjunctive_phrase([RoleFragment.for_value(member) for member in value])
 
 
 @dataclass(frozen=True)
@@ -356,6 +354,12 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     field fragment can be dropped in directly. The result is a :class:`Clause`, so coreference
     treats the first constituent as the clause's subject (pronominalisation, verb agreement).
 
+    A subject built from :class:`ConjunctivePhrase` (*"A, B, and C"*) is a coordination of ≥ 2
+    distinct entities, so the following predicate word (:class:`Copula` / :class:`Verb`) is tagged
+    plural here, at build time — coordination is static knowledge, unlike a quantified
+    population's plurality, which the coreference pass decides once it knows the subject is in
+    scope.
+
     :param constituents: The clause's elements in surface order.
     :return: The clause fragment.
 
@@ -368,7 +372,15 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     ... )
     'an Employee work in a Department'
     """
-    return Clause(parts=[constituent.as_fragment() for constituent in constituents])
+    leading = constituents[0] if constituents else None
+    coordinated = isinstance(leading, ConjunctivePhrase)
+    if coordinated:
+        items = list(leading.items)
+        constituents = (ConjunctivePhrase(items), *constituents[1:])
+    parts = [constituent.as_fragment() for constituent in constituents]
+    if coordinated and len(items) >= 2 and len(parts) > 1:
+        parts[1] = apply_subject_verb_agreement(parts[1], GrammaticalNumber.PLURAL)
+    return Clause(parts=parts)
 
 
 def function_as_noun(name: str, getter_prefix: str = "get") -> str:

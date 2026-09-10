@@ -1,7 +1,17 @@
+# %% ORM interfaces
+
+# Built before the imports below, which read a mapped datastructure: pytest imports every
+# conftest of a run before calling any hook, so a hook would fire too late. The build runs
+# once per process and never on an xdist worker.
+from ..orm_interface_build import regenerate_orm_interfaces
+
+regenerate_orm_interfaces()
+
+
+
 import numpy as np
 import pytest
 
-from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.utils.utils import load_xacro
 from giskardpy.middleware.ros2.utils.utils_for_tests import GiskardTester
 from giskardpy.motion_statechart.graph_node import EndMotion
@@ -31,32 +41,31 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import (
     Body,
 )
-
+from semantic_digital_twin.robots.pr2 import PR2Joint
 
 @pytest.fixture()
 def better_pr2_pose():
     return {
-        "r_shoulder_pan_joint": -1.7125,
-        "r_shoulder_lift_joint": -0.25672,
-        "r_upper_arm_roll_joint": -1.46335,
-        "r_elbow_flex_joint": -2.12,
-        "r_forearm_roll_joint": 1.76632,
-        "r_wrist_flex_joint": -0.10001,
-        "r_wrist_roll_joint": 0.05106,
-        "l_shoulder_pan_joint": 1.9652,
-        "l_shoulder_lift_joint": -0.26499,
-        "l_upper_arm_roll_joint": 1.3837,
-        "l_elbow_flex_joint": -2.12,
-        "l_forearm_roll_joint": 16.99,
-        "l_wrist_flex_joint": -0.10001,
-        "l_wrist_roll_joint": 0,
-        "torso_lift_joint": 0.2,
-        "l_gripper_l_finger_joint": 0.55,
-        "r_gripper_l_finger_joint": 0.55,
-        "head_pan_joint": 0,
-        "head_tilt_joint": 0,
+        PR2Joint.RIGHT_SHOULDER_PAN: -1.7125,
+        PR2Joint.RIGHT_SHOULDER_LIFT: -0.25672,
+        PR2Joint.RIGHT_UPPER_ARM_ROLL: -1.46335,
+        PR2Joint.RIGHT_ELBOW_FLEX: -2.12,
+        PR2Joint.RIGHT_FOREARM_ROLL: 1.76632,
+        PR2Joint.RIGHT_WRIST_FLEX: -0.10001,
+        PR2Joint.RIGHT_WRIST_ROLL: 0.05106,
+        PR2Joint.LEFT_SHOULDER_PAN: 1.9652,
+        PR2Joint.LEFT_SHOULDER_LIFT: -0.26499,
+        PR2Joint.LEFT_UPPER_ARM_ROLL: 1.3837,
+        PR2Joint.LEFT_ELBOW_FLEX: -2.12,
+        PR2Joint.LEFT_FOREARM_ROLL: 16.99,
+        PR2Joint.LEFT_WRIST_FLEX: -0.10001,
+        PR2Joint.LEFT_WRIST_ROLL: 0,
+        PR2Joint.TORSO_LIFT: 0.2,
+        PR2Joint.LEFT_GRIPPER_LEFT_FINGER: 0.55,
+        PR2Joint.RIGHT_GRIPPER_LEFT_FINGER: 0.55,
+        PR2Joint.HEAD_PAN: 0,
+        PR2Joint.HEAD_TILT: 0,
     }
-
 
 @pytest.fixture(scope="function")
 def pr2_with_box(pr2_world_copy) -> World:
@@ -76,7 +85,6 @@ def pr2_with_box(pr2_world_copy) -> World:
         pr2_world_copy.add_connection(root_C_box)
     return pr2_world_copy
 
-
 @pytest.fixture()
 def mini_world():
     world = World()
@@ -88,19 +96,6 @@ def mini_world():
         )
         world.add_connection(connection)
     return world
-
-
-@pytest.fixture(scope="function")
-def init_rospy():
-
-    rospy.init_node("giskard")
-
-    try:
-        yield None
-    finally:
-        # Cleanly reset TF and shutdown ROS2 node/executor
-        rospy.shutdown()
-
 
 @pytest.fixture()
 def giskard_factory(init_rospy, robot: GiskardTester):
@@ -137,16 +132,13 @@ def giskard_factory(init_rospy, robot: GiskardTester):
 
     return _create_giskard
 
-
 @pytest.fixture()
 def giskard(giskard_factory, default_joint_state):
     return giskard_factory(default_joint_state)
 
-
 @pytest.fixture()
 def giskard_better_pose(giskard_factory, better_pose):
     return giskard_factory(better_pose)
-
 
 @pytest.fixture()
 def kitchen_setup(giskard_better_pose: GiskardTester) -> GiskardTester:
@@ -163,7 +155,6 @@ def kitchen_setup(giskard_better_pose: GiskardTester) -> GiskardTester:
     )
     return giskard_better_pose
 
-
 @pytest.fixture()
 def apartment_setup(giskard_better_pose: GiskardTester) -> GiskardTester:
     giskard_better_pose.default_env_name = "iai_apartment"
@@ -179,7 +170,6 @@ def apartment_setup(giskard_better_pose: GiskardTester) -> GiskardTester:
         ),
     )
     return giskard_better_pose
-
 
 def _symmetric_prismatic_limits(
     position: float | None, velocity: float
@@ -199,7 +189,6 @@ def _symmetric_prismatic_limits(
             position=position, velocity=velocity, acceleration=None, jerk=None
         ),
     )
-
 
 def _make_prismatic_world(dof_limits: list[DegreeOfFreedomLimits]) -> World:
     """
@@ -223,18 +212,15 @@ def _make_prismatic_world(dof_limits: list[DegreeOfFreedomLimits]) -> World:
     MinimalRobot.from_world(world)
     return world
 
-
 @pytest.fixture()
 def prismatic_bot():
     return _make_prismatic_world([_symmetric_prismatic_limits(1, 1)])
-
 
 @pytest.fixture()
 def prismatic_bot2():
     return _make_prismatic_world(
         [_symmetric_prismatic_limits(1, 1), _symmetric_prismatic_limits(0.5, 0.5)]
     )
-
 
 @pytest.fixture()
 def prismatic_world_no_position_limits():

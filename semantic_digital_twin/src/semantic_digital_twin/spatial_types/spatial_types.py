@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from abc import ABC
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
+from enum import Enum, StrEnum
 
 import casadi as ca
 import numpy as np
@@ -20,14 +22,14 @@ from typing_extensions import (
 )
 
 import krrood.symbolic_math.symbolic_math as sm
-from krrood.adapters.json_serializer import SubclassJSONSerializer, from_json, to_json
+from krrood.adapters.json_serializer import SubclassJSONSerializer
 from krrood.symbolic_math.exceptions import (
     WrongDimensionsError,
     UnsupportedOperationError,
 )
 from krrood.symbolic_math.symbolic_math import Matrix, to_sx
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
-    WorldEntityWithIDKwargsTracker,
+    WorldEntityReference,
 )
 from semantic_digital_twin.exceptions import (
     InsufficientVectorsError,
@@ -40,6 +42,41 @@ if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
         KinematicStructureEntity,
     )
+
+
+class _ConstantMatrixParts(ca.SX, Enum):
+    """
+    The entries a homogeneous matrix always holds, whatever it represents.
+
+    Assigned as whole rows and columns rather than element by element, because
+    :meth:`SpatialType._verify_type` runs on every intermediate product and each casadi
+    element write costs about as much as the whole slice.
+    """
+
+    HOMOGENEOUS_BOTTOM_ROW = [[0.0, 0.0, 0.0, 1.0]]
+    """
+    The last row every 4x4 homogeneous matrix ends in.
+    """
+
+    ZERO_TRANSLATION = [[0.0], [0.0], [0.0]]
+    """
+    The translation column of a matrix that carries rotation only.
+    """
+
+
+class SpatialFrameKey(StrEnum):
+    """
+    The entities a spatial type is expressed against.
+
+    Both halves of the serialization name the entity the same way, so the name lives
+    here rather than at every place that reads or writes one.
+    """
+
+    REFERENCE = "reference_frame"
+    """The entity a value is given relative to."""
+
+    CHILD = "child_frame"
+    """The entity a transformation points at."""
 
 
 @dataclass(eq=False, repr=False)
@@ -67,26 +104,42 @@ class SpatialType:
     Can be None if no reference frame is required or applicable.
     """
 
+    def to_json(self) -> Dict[str, Any]:
+        """
+        The json of a spatial type, carrying the frame it is expressed in.
+
+        What the value itself looks like is left to the type, which adds it to what this
+        returns.
+
+        :raises SpatialTypeNotJsonSerializable: If the value is not a constant one, since
+            an expression means nothing to whoever reads it.
+        """
+        if not self.is_constant():
+            raise SpatialTypeNotJsonSerializable(self)
+        result = super().to_json()
+        if self.reference_frame is not None:
+            WorldEntityReference(SpatialFrameKey.REFERENCE).write(
+                result, self.reference_frame
+            )
+        return result
+
     @classmethod
     def _parse_optional_frame_from_json(
-        cls, data: Dict[str, Any], key: str, **kwargs
+        cls, data: Dict[str, Any], frame: SpatialFrameKey, **kwargs
     ) -> Optional[KinematicStructureEntity]:
         """
-        Resolve an optional kinematic structure entity from JSON by key.
-
-        Raises KinematicStructureEntityNotInKwargs if the name cannot be resolved via
-        the tracker/world.
+        Resolve a kinematic structure entity a serialized spatial type refers to.
 
         :param data: parsed JSON data
-        :param key: name of the attribute in data that is a KinematicStructureEntity
+        :param frame: which of its frames the spatial type is asked for
         :param kwargs: addition kwargs of _from_json
-        :return: None if the key is not present or its value is None.
+        :return: None if the spatial type refers to no such entity.
+        :raises WorldEntityWithIDNotInKwargs: If nothing known carries that id.
         """
-        frame_data = data.get(key, {})
-        if not frame_data:
+        reference = WorldEntityReference(frame)
+        if not data.get(reference.id_key):
             return None
-        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        return tracker.get_world_entity_with_id(id=from_json(frame_data))
+        return reference.resolve(data, **kwargs)
 
     @staticmethod
     def _ensure_consistent_frame(
@@ -126,26 +179,35 @@ class SpatialType:
                     )
         return reference_frame
 
-    def __deepcopy__(self, memo) -> Self:
+    def _copy_with_data(self, data: ca.SX) -> Self:
         """
-        Even in a deep copy, we don't want to copy the reference and child frame, just
-        the matrix itself, because are just references to kinematic structure entities.
+        Build a copy of this spatial object around already-copied matrix data.
+
+        Bypasses the constructor: `data` comes from an object of this very type, so it
+        already satisfies :meth:`_verify_type`, and it contains the same free variables,
+        which are carried over rather than re-derived from the expression graph.
+
+        :param data: The copied matrix data the result takes ownership of.
+        :return: A copy of this object holding `data`.
         """
-        if id(self) in memo:
-            return memo[id(self)]
-        result = type(self).from_casadi_sx(deepcopy(self.casadi_sx))
+        result = type(self).__new__(type(self))
+        result._casadi_sx = data
         result.reference_frame = self.reference_frame
+        result.pinned_free_variables = self.pinned_free_variables
         return result
 
-    def __copy__(self, memo) -> Self:
+    def __deepcopy__(self, memo) -> Self:
         """
-        Even in a deep copy, we don't want to copy the reference and child frame, just
-        the matrix itself, because are just references to kinematic structure entities.
+        Copy the matrix, but share the frames.
+
+        Frames are references to kinematic structure entities, which belong to the world
+        rather than to this object, so a deep copy must not duplicate them.
         """
         if id(self) in memo:
             return memo[id(self)]
-        result = type(self).from_casadi_sx(copy(self.casadi_sx))
-        result.reference_frame = self.reference_frame
+        with sm.CasadiLock():
+            result = self._copy_with_data(deepcopy(self.casadi_sx))
+        memo[id(self)] = result
         return result
 
 
@@ -180,13 +242,11 @@ class HomogeneousTransformationMatrix(
         self.child_frame = child_frame
         if data is None:
             self._casadi_sx = ca.SX.eye(4)
-            return
-        if isinstance(data, SpatialType):
+        elif isinstance(data, SpatialType):
             # create a copy if data is a spatial type, because they are often still being used
-            casadi_sx = copy(data.casadi_sx)
+            self.casadi_sx = copy(data.casadi_sx)
         else:
-            casadi_sx = sm.to_sx(data)
-        self.casadi_sx = casadi_sx
+            self.casadi_sx = sm.to_sx(data)
         super().__post_init__()
 
     def _verify_type(self):
@@ -194,18 +254,15 @@ class HomogeneousTransformationMatrix(
             raise WrongDimensionsError(
                 expected_dimensions=(4, 4), actual_dimensions=self.shape
             )
-        self[3, 0] = 0.0
-        self[3, 1] = 0.0
-        self[3, 2] = 0.0
-        self[3, 3] = 1.0
+        self[3, :] = _ConstantMatrixParts.HOMOGENEOUS_BOTTOM_ROW
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, key="reference_frame_id", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         child_frame = cls._parse_optional_frame_from_json(
-            data, key="child_frame_id", **kwargs
+            data, frame=SpatialFrameKey.CHILD, **kwargs
         )
         return cls.from_xyz_quaternion(
             *data["position"][:3],
@@ -242,13 +299,9 @@ class HomogeneousTransformationMatrix(
         return cls(transformation_matrix)
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            result["reference_frame_id"] = to_json(self.reference_frame.id)
         if self.child_frame is not None:
-            result["child_frame_id"] = to_json(self.child_frame.id)
+            WorldEntityReference(SpatialFrameKey.CHILD).write(result, self.child_frame)
         result["position"] = self.to_position().to_np().tolist()
         result["rotation"] = self.to_quaternion().to_np().tolist()
         return result
@@ -480,21 +533,27 @@ class HomogeneousTransformationMatrix(
         return self.to_rotation_matrix().to_quaternion()
 
     def to_pose(self) -> Pose:
-        result = Pose.from_casadi_sx(casadi_sx=self.casadi_sx)
+        result = Pose.from_casadi_sx(casadi_sx=copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
-    def __deepcopy__(self, memo) -> HomogeneousTransformationMatrix:
+    def _copy_with_data(self, data: ca.SX) -> HomogeneousTransformationMatrix:
+        result = super()._copy_with_data(data)
+        result.child_frame = self.child_frame
+        return result
+
+    def copy_with_new_reference_frames(
+        self,
+        new_reference_frame: KinematicStructureEntity,
+        new_child_frame: KinematicStructureEntity | None,
+    ) -> HomogeneousTransformationMatrix:
         """
-        Even in a deep copy, we don't want to copy the reference and child frame, just
-        the matrix itself, because are just references to kinematic structure entities.
+        Copies the transformation matrix and changes the reference and child frames.
         """
-        if id(self) in memo:
-            return memo[id(self)]
         return HomogeneousTransformationMatrix(
             data=deepcopy(self.casadi_sx),
-            reference_frame=self.reference_frame,
-            child_frame=self.child_frame,
+            reference_frame=new_reference_frame,
+            child_frame=new_child_frame,
         )
 
     def __hash__(self):
@@ -534,10 +593,10 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         self.reference_frame = reference_frame
         if data is None:
             self._casadi_sx = ca.SX.eye(4)
-            return
-        empty_data = to_sx(Matrix.eye(4))
-        empty_data[:3, :3] = sm.to_sx(data)[:3, :3]
-        self._casadi_sx = empty_data
+        else:
+            empty_data = to_sx(Matrix.eye(4))
+            empty_data[:3, :3] = sm.to_sx(data)[:3, :3]
+            self._casadi_sx = empty_data
         super().__post_init__()
 
     def _verify_type(self):
@@ -545,18 +604,13 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             raise WrongDimensionsError(
                 expected_dimensions=(4, 4), actual_dimensions=self.shape
             )
-        self[0, 3] = 0
-        self[1, 3] = 0
-        self[2, 3] = 0
-        self[3, 0] = 0
-        self[3, 1] = 0
-        self[3, 2] = 0
-        self[3, 3] = 1
+        self[:3, 3] = _ConstantMatrixParts.ZERO_TRANSLATION
+        self[3, :] = _ConstantMatrixParts.HOMOGENEOUS_BOTTOM_ROW
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, key="reference_frame_id", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return Quaternion.from_iterable(
             data["quaternion"],
@@ -564,11 +618,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         ).to_rotation_matrix()
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            result["reference_frame_id"] = to_json(self.reference_frame.id)
         result["quaternion"] = self.to_quaternion().to_np().tolist()
         return result
 
@@ -730,7 +780,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             return angle
 
     def to_generic_matrix(self) -> sm.Matrix:
-        return sm.Matrix.from_casadi_sx(self.casadi_sx)
+        return sm.Matrix.from_casadi_sx(copy(self.casadi_sx))
 
     @classmethod
     def from_vectors(
@@ -772,6 +822,39 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         )
         return R
+
+    @classmethod
+    def from_x_axis(
+        cls,
+        x_vector: Vector3,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> RotationMatrix:
+        """
+        Create a rotation matrix from the direction its x-axis points along.
+
+        The y- and z-axis only complete the frame and are otherwise arbitrary.
+
+        :param x_vector: the direction the x-axis should point along
+        :param reference_frame: the frame the resulting rotation matrix is expressed in
+        :return: a rotation matrix whose x-axis points along ``x``
+        """
+        # Crossing a direction with a world axis degenerates when the two are parallel, so
+        # pick whichever of the X/Y axes yields the better-conditioned (longer) cross
+        # product.
+        frame_V_cross_x = x_vector.cross(Vector3.X())
+        frame_V_cross_y = x_vector.cross(Vector3.Y())
+        y = Vector3.from_iterable(
+            [
+                sm.if_greater(
+                    frame_V_cross_x.norm(),
+                    frame_V_cross_y.norm(),
+                    frame_V_cross_x[i],
+                    frame_V_cross_y[i],
+                )
+                for i in range(3)
+            ]
+        )
+        return cls.from_vectors(x=x_vector, y=y, reference_frame=reference_frame)
 
     @classmethod
     def from_rpy(
@@ -854,7 +937,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     def T(self) -> RotationMatrix:
         return RotationMatrix(self.casadi_sx.T, reference_frame=self.reference_frame)
 
-    def rotational_error(self, other: RotationMatrix) -> sm.Scalar:
+    def rotational_distance(self, other: RotationMatrix) -> sm.Scalar:
         """
         Calculate the rotational error between two rotation matrices.
 
@@ -869,8 +952,36 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return r_distance.to_angle()
 
 
+class Point(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, ABC):
+    """
+    Shared x/y coordinate access for 2D and 3D points.
+
+    :class:`Point2` and :class:`Point3` both subclass this directly -- a
+    :class:`Point3` is not a :class:`Point2` -- so that code which only needs the
+    coordinates every point has (e.g. path plotting) can accept either without a
+    ``Union``. Only :class:`Point3` has a ``z``: a 2D point has no height of its own,
+    so :class:`Point2` does not carry the attribute at all.
+    """
+
+    @property
+    def x(self) -> sm.Scalar:
+        return self[0]
+
+    @x.setter
+    def x(self, value: sm.ScalarData):
+        self[0] = value
+
+    @property
+    def y(self) -> sm.Scalar:
+        return self[1]
+
+    @y.setter
+    def y(self, value: sm.ScalarData):
+        self[1] = value
+
+
 @dataclass(eq=False, init=False, repr=False)
-class Point3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Point3(Point):
     """
     Represents a 3D point with reference frame handling.
 
@@ -938,13 +1049,13 @@ class Point3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         if isinstance(data, SpatialType) and reference_frame is None:
             reference_frame = data.reference_frame
         result = cls(reference_frame=reference_frame)
-        result.casadi_sx = sm.to_sx(data)
+        result.casadi_sx = copy(sm.to_sx(data))
         return result
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, key="reference_frame_id", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls.from_iterable(
             data["data"][:3],
@@ -978,32 +1089,12 @@ class Point3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return result
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            result["reference_frame_id"] = to_json(self.reference_frame.id)
         result["data"] = self.to_np().tolist()
         return result
 
     def norm(self) -> sm.Scalar:
         return sm.Scalar.from_casadi_sx(ca.norm_2(self[:3].casadi_sx))
-
-    @property
-    def x(self) -> sm.Scalar:
-        return self[0]
-
-    @x.setter
-    def x(self, value: sm.ScalarData):
-        self[0] = value
-
-    @property
-    def y(self) -> sm.Scalar:
-        return self[1]
-
-    @y.setter
-    def y(self, value: sm.ScalarData):
-        self[1] = value
 
     @property
     def z(self) -> sm.Scalar:
@@ -1113,10 +1204,85 @@ class Point3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return result
 
     def to_generic_vector(self) -> sm.Vector:
-        return sm.Vector.from_casadi_sx(self.casadi_sx[:3])
+        return sm.Vector.from_casadi_sx(copy(self.casadi_sx[:3]))
 
     def euclidean_distance(self, other: Self) -> sm.Scalar:
         return self.to_generic_vector().euclidean_distance(other.to_generic_vector())
+
+
+@dataclass(eq=False, init=False, repr=False)
+class Point2(Point):
+    """
+    Represents a 2D point with reference frame handling.
+
+    Stored as a bare 2×1 symbolic vector ``[x, y]``, with no homogeneous augmentation --
+    the same convention :class:`Pose2D` uses. The point always lies on its reference
+    frame's own x-y plane (z=0 relative to that frame); :meth:`to_point3` converts to
+    the equivalent 3D :class:`Point3` whenever a 3D calculation is required.
+    """
+
+    def __init__(
+        self,
+        x: sm.ScalarData = 0,
+        y: sm.ScalarData = 0,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ):
+        """
+        :param x: X-coordinate of the point. Defaults to 0.
+        :param y: Y-coordinate of the point. Defaults to 0.
+        :param reference_frame:
+        """
+        self.casadi_sx = sm.to_sx([x, y])
+        self.reference_frame = reference_frame
+        super().__post_init__()
+
+    def _verify_type(self):
+        if self.shape != (2, 1):
+            raise WrongDimensionsError(
+                expected_dimensions=(2, 1), actual_dimensions=self.shape
+            )
+
+    @classmethod
+    def from_pose(
+        cls,
+        pose: Pose,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Point2:
+        """
+        Extract a Point2 from a 3D Pose by dropping z, roll, pitch and yaw.
+
+        :param pose: The pose to extract the point from.
+        :param reference_frame: The reference frame. Defaults to ``pose``'s.
+        :return: The Point2 instance.
+        """
+        frame = reference_frame if reference_frame is not None else pose.reference_frame
+        return cls(x=pose.x, y=pose.y, reference_frame=frame)
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        reference_frame = cls._parse_optional_frame_from_json(
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
+        )
+        x, y = data["data"][:2]
+        return cls(x=x, y=y, reference_frame=reference_frame)
+
+    def to_json(self) -> Dict[str, Any]:
+        result = super().to_json()
+        result["data"] = self.to_np().tolist()
+        return result
+
+    def to_point3(self, z: sm.ScalarData = 0) -> Point3:
+        """
+        Convert to a 3D :class:`Point3`.
+
+        :param z: The z-coordinate the resulting point should have. Defaults to 0.
+        """
+        return Point3(self.x, self.y, z, reference_frame=self.reference_frame)
+
+    def __hash__(self):
+        if self.is_constant():
+            return hash((*self.to_np().tolist(), self.reference_frame))
+        return super().__hash__()
 
 
 @dataclass(eq=False, init=False, repr=False)
@@ -1173,7 +1339,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, key="reference_frame_id", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls.from_iterable(
             data["data"][:3],
@@ -1181,11 +1347,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            result["reference_frame_id"] = to_json(self.reference_frame.id)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -1222,7 +1384,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         result = cls(
             reference_frame=reference_frame, visualisation_frame=visualisation_frame
         )
-        result.casadi_sx = sm.to_sx(data)
+        result.casadi_sx = copy(sm.to_sx(data))
         return result
 
     @classmethod
@@ -1483,7 +1645,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_point3(self) -> Point3:
-        result = Point3.from_casadi_sx(self.casadi_sx)
+        result = Point3.from_casadi_sx(copy(self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
@@ -1536,7 +1698,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, key="reference_frame_id", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls.from_iterable(
             data["data"],
@@ -1544,11 +1706,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            result["reference_frame_id"] = to_json(self.reference_frame.id)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -1780,7 +1938,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_generic_vector(self) -> sm.Vector:
-        return sm.Vector.from_casadi_sx(self.casadi_sx)
+        return sm.Vector.from_casadi_sx(copy(self.casadi_sx))
 
     def to_rotation_matrix(self) -> RotationMatrix:
         return RotationMatrix.from_quaternion(self)
@@ -1792,6 +1950,19 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         if isinstance(other, Quaternion):
             return sm.Scalar(ca.mtimes(self.casadi_sx.T, other.casadi_sx))
         return NotImplemented
+
+    def rotational_distance(self, other: Quaternion) -> sm.Scalar:
+        """
+        Calculate the rotational error between two orientations.
+
+        The dot product is taken as an absolute value, so the two quaternions that
+        describe every rotation count as the same orientation.
+
+        :param other: The second orientation.
+        :return: The angle between the two orientations, 0 when they describe the same
+            rotation.
+        """
+        return 2 * sm.safe_acos(abs(self.dot(other)))
 
     def slerp(self, other: Quaternion, t: sm.ScalarData) -> Quaternion:
         """
@@ -1874,15 +2045,12 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             raise WrongDimensionsError(
                 expected_dimensions=(4, 4), actual_dimensions=self.shape
             )
-        self[3, 0] = 0.0
-        self[3, 1] = 0.0
-        self[3, 2] = 0.0
-        self[3, 3] = 1.0
+        self[3, :] = _ConstantMatrixParts.HOMOGENEOUS_BOTTOM_ROW
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, key="reference_frame_id", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls.from_xyz_quaternion(
             *data["position"][:3],
@@ -1891,11 +2059,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            result["reference_frame_id"] = to_json(self.reference_frame.id)
         result["position"] = self.to_position().to_np().tolist()
         result["rotation"] = self.to_quaternion().to_np().tolist()
         return result
@@ -2163,8 +2327,11 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     # ------------------------------------------------------------------
 
     @property
-    def position(self) -> Point3:
-        return self.to_pose().to_position()
+    def position(self) -> Point2:
+        """
+        :return: The position this pose is composed of, dropping the bearing.
+        """
+        return Point2(self.x, self.y, reference_frame=self.reference_frame)
 
     @property
     def orientation(self) -> Quaternion:
@@ -2199,6 +2366,26 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         frame = reference_frame if reference_frame is not None else pose.reference_frame
         return cls(x=pose.x, y=pose.y, yaw=yaw, reference_frame=frame)
 
+    @classmethod
+    def from_position_and_yaw(
+        cls,
+        position: Point2,
+        yaw: sm.ScalarData = 0,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Pose2D:
+        """
+        Compose a Pose2D from a position and a bearing.
+
+        :param position: Where the pose is.
+        :param yaw: Which way the pose faces. Defaults to 0.
+        :param reference_frame: The reference frame. Defaults to ``position``'s.
+        :return: The Pose2D instance.
+        """
+        frame = (
+            reference_frame if reference_frame is not None else position.reference_frame
+        )
+        return cls(x=position.x, y=position.y, yaw=yaw, reference_frame=frame)
+
     # ------------------------------------------------------------------
     # JSON serialization
     # ------------------------------------------------------------------
@@ -2206,7 +2393,7 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         reference_frame = cls._parse_optional_frame_from_json(
-            data, key="reference_frame_id", **kwargs
+            data, frame=SpatialFrameKey.REFERENCE, **kwargs
         )
         return cls(
             x=data["data"][0],
@@ -2216,11 +2403,7 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def to_json(self) -> Dict[str, Any]:
-        if not self.is_constant():
-            raise SpatialTypeNotJsonSerializable(self)
         result = super().to_json()
-        if self.reference_frame is not None:
-            result["reference_frame_id"] = to_json(self.reference_frame.id)
         result["data"] = self.to_np().tolist()
         return result
 

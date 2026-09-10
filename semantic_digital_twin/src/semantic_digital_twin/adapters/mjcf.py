@@ -4,8 +4,9 @@ from dataclasses import dataclass, field
 
 import mujoco
 import numpy
+import trimesh
 from scipy.spatial.transform import Rotation
-from typing_extensions import Optional, Dict
+from typing_extensions import Optional, Dict, Self
 from xml.etree import ElementTree as ET
 
 from semantic_digital_twin.adapters.multi_sim import (
@@ -19,6 +20,7 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoLight,
     MujocoTendon,
 )
+from semantic_digital_twin.adapters.world_model_parser import WorldModelParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import WorldEntityNotFoundError
 from semantic_digital_twin.spatial_types import (
@@ -63,7 +65,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class MJCFParser:
+class MJCFParser(WorldModelParser):
     """
     Class to parse an MJCF file and convert it into a World object.
     """
@@ -88,10 +90,27 @@ class MJCFParser:
             self.prefix = os.path.basename(self.file_path).split(".")[0]
         self.spec: mujoco.MjSpec = mujoco.MjSpec.from_file(self.file_path)
         self.tree = ET.fromstring(self.spec.to_xml())
-        self.world = World()
 
     @classmethod
-    def from_xml_string(cls, xml_string: str) -> "MJCFParser":
+    def from_file(
+        cls,
+        file_path: str,
+        prefix: Optional[str] = None,
+        mimic_joints: Optional[Dict[str, str]] = None,
+    ) -> Self:
+        """
+        Creates a parser for a scene file.
+
+        :param file_path: The path of the file to parse.
+        :param prefix: The prefix for every name used in this world.
+        :param mimic_joints: A mapping of joint names to the names of the joints they
+            mimic.
+        :return: A parser for the world described by that file.
+        """
+        return cls(file_path=file_path, mimic_joints=mimic_joints or {}, prefix=prefix)
+
+    @classmethod
+    def from_xml_string(cls, xml_string: str) -> Self:
         file_path = "/tmp/scene.xml"
         with open(file_path, "w") as f:
             f.write(xml_string)
@@ -101,8 +120,12 @@ class MJCFParser:
         """
         Parse the MJCF file and convert it into a World object.
 
+        The world is built per call, so parsing repeatedly yields independent worlds
+        that share no entity identifiers.
+
         :return: The World object representing the MJCF scene.
         """
+        self.world = World()
         worldbody: mujoco.MjsBody = self.spec.worldbody
         with self.world.modify_world():
             self.parse_equalities()
@@ -257,12 +280,13 @@ class MJCFParser:
     ) -> Optional[Texture]:
         """
         Resolves the texture a primitive (box/sphere/cylinder/plane) geom's ``material``
-        references, if any. Mesh geoms resolve their texture separately, as part of their
-        own trimesh visual (see the ``mjGEOM_MESH`` case in :meth:`parse_geom`).
+        references, if any. Mesh geoms resolve their texture separately, as part of
+        their own trimesh visual (see the ``mjGEOM_MESH`` case in :meth:`parse_geom`).
 
-        :param mujoco_geom: The Mujoco geometry whose material to resolve a texture from.
-        :return: The resolved texture, or ``None`` if the geom has no material, its material
-            has no texture, or the texture file cannot be found on disk.
+        :param mujoco_geom: The Mujoco geometry whose material to resolve a texture
+            from.
+        :return: The resolved texture, or ``None`` if the geom has no material, its
+            material has no texture, or the texture file cannot be found on disk.
         """
         if not mujoco_geom.material:
             return None
@@ -340,6 +364,15 @@ class MJCFParser:
                     color=color,
                     texture=self._resolve_primitive_texture(mujoco_geom),
                 )
+            case mujoco.mjtGeom.mjGEOM_ELLIPSOID:
+                # No dedicated Shape exists for an ellipsoid (unlike a sphere, its
+                # three semi-axes need not be equal), so it is approximated by a unit
+                # sphere mesh stretched to the geom's three diameters instead.
+                unit_sphere = trimesh.creation.icosphere(subdivisions=3, radius=0.5)
+                unit_sphere.apply_scale(size)
+                ellipsoid = Mesh.from_trimesh(mesh=unit_sphere, origin=origin_transform)
+                ellipsoid.color = color
+                return ellipsoid
             case mujoco.mjtGeom.mjGEOM_MESH:
                 mujoco_mesh: mujoco.MjsMesh = self.spec.mesh(mujoco_geom.meshname)
                 meshdir = os.path.join(
@@ -659,7 +692,8 @@ class MJCFParser:
                 body=body,
                 name=mujoco_light.name,
                 mode=mujoco_light.mode,
-                directional=mujoco_light.type == mujoco.mjtLightType.mjLIGHT_DIRECTIONAL,
+                directional=mujoco_light.type
+                == mujoco.mjtLightType.mjLIGHT_DIRECTIONAL,
                 active=bool(mujoco_light.active),
                 cast_shadow=bool(mujoco_light.castshadow),
                 position=mujoco_light.pos.tolist(),

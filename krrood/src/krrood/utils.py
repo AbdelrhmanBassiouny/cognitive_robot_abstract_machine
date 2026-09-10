@@ -3,16 +3,12 @@ from __future__ import annotations
 import ast
 import builtins
 import importlib
-import inspect
 import os
-import subprocess
 import sys
 import types
-from collections import defaultdict
-from copy import deepcopy
 from dataclasses import Field
 from dataclasses import fields, MISSING
-from functools import lru_cache, wraps
+from functools import lru_cache
 from importlib.util import resolve_name
 from inspect import isclass
 from os import PathLike
@@ -22,6 +18,11 @@ from typing import Tuple, Generic, Hashable
 from typing import Union, Any
 
 from typing_extensions import (
+    Dict,
+    get_origin,
+    get_args,
+)
+from typing_extensions import (
     TypeVar,
     Type,
     List,
@@ -30,12 +31,6 @@ from typing_extensions import (
     TypeVarTuple,
     _SpecialForm,
 )
-from typing_extensions import (
-    Iterable,
-    Dict,
-    get_origin,
-    get_args,
-)
 
 from krrood import logger
 from krrood.exceptions import (
@@ -43,7 +38,6 @@ from krrood.exceptions import (
     NoDefaultValueFound,
     PackageNameNotFoundError,
     PathMissingRequiredPartsError,
-    SubprocessExecutionError,
     SourceDataNotProvided,
 )
 
@@ -70,8 +64,22 @@ def get_full_class_name(cls):
     return cls.__module__ + "." + cls.__name__
 
 
-def module_and_class_name(t: Union[Type, _SpecialForm]) -> str:
-    return f"{t.__module__}.{t.__name__}"
+def module_and_class_name(type_: Union[Type, _SpecialForm]) -> str:
+    """
+    :param type_: A class or special form.
+    :return: Its fully qualified ``"{module}.{name}"`` identifier.
+    """
+    return f"{get_module_of_type(type_)}.{type_.__name__}"
+
+
+def get_module_of_type(type_: Union[Type, _SpecialForm]) -> str:
+    """
+    :param type_: The type of which the module is obtained.
+    :return: The module name of the given type_.
+    """
+    if type_ is types.NoneType:
+        return "types"
+    return type_.__module__
 
 
 def get_default_value(dataclass_type, field_name):
@@ -114,43 +122,6 @@ def get_default_values_for_dataclass(dataclass_type):
     return defaults
 
 
-def generate_relative_import(
-    from_module: str, target_module: str, symbol: str | None = None
-) -> str:
-    """
-    Generate a relative import statement using Python's own resolver.
-
-    :param from_module: The module where the import is being made.
-    :param target_module: The module to import.
-    :param symbol: The symbol (e.g., a class, a method, ..., etc.) to import (optional).
-    """
-    # Compute absolute module name as Python would resolve it
-    absolute = resolve_name(target_module, from_module)
-
-    from_pkg = from_module.rsplit(".", 1)[0]
-    from_parts = from_pkg.split(".")
-    target_parts = absolute.split(".")
-
-    # find common prefix
-    i = 0
-    while (
-        i < min(len(from_parts), len(target_parts)) and from_parts[i] == target_parts[i]
-    ):
-        i += 1
-
-    up = len(from_parts) - i
-    prefix = "." * (up + 1)
-
-    remainder = ".".join(target_parts[i:])
-
-    if symbol:
-        if remainder:
-            return f"from {prefix}{remainder} import {symbol}"
-        return f"from {prefix} import {symbol}"
-    else:
-        return f"from {prefix} import {remainder}"
-
-
 @lru_cache
 def own_dataclass_fields(cls) -> List[Field]:
     """
@@ -164,61 +135,12 @@ def own_dataclass_fields(cls) -> List[Field]:
     return [f for f in fields(cls) if f.name not in base_fields]
 
 
-def get_type_names_per_module_from_types(
-    type_objects: Iterable[Type],
-    excluded_names: Optional[List[str]] = None,
-    excluded_modules: Optional[List[str]] = None,
-) -> Dict[str, List[str]]:
-    """
-    Get a dictionary of type names grouped by module.
-
-    :param type_objects: A list of type objects to format.
-    :param excluded_names: A list of names to exclude from the imports.
-    :param excluded_modules: A list of modules to exclude from the imports.
-    :return: A dictionary of type names grouped by module.
-    """
-    excluded_modules = [] if excluded_modules is None else excluded_modules
-    excluded_names = [] if excluded_names is None else excluded_names
-    module_to_types = defaultdict(list)
-    for type_object in type_objects:
-        try:
-            if isinstance(type_object, type) or is_typing_type(type_object):
-                module = type_object.__module__
-                name = type_object.__qualname__
-            elif callable(type_object):
-                module, name = get_function_import_data(type_object)
-            elif hasattr(type(type_object), "__module__"):
-                module = type(type_object).__module__
-                name = type(type_object).__qualname__
-            else:
-                continue
-            if name == "NoneType":
-                module = "types"
-            if (
-                module is None
-                or module == "builtins"
-                or module.startswith("_")
-                or module in sys.builtin_module_names
-                or module in excluded_modules
-                or "<" in module
-                or name in excluded_names
-                or "site-packages" in module.split(".")
-            ):
-                continue
-            if module == "typing":
-                module = "typing_extensions"
-            module_to_types[module].append(name)
-        except AttributeError:
-            continue
-    return module_to_types
-
-
-def is_typing_type(type_object: Type):
+def is_typing_type(type_object: Any):
     """
     :param type_object: A type object to check.
     :return: True if the type is a type from the typing module, False otherwise.
     """
-    return type_object.__module__ == "typing"
+    return hasattr(type_object, "__module__") and type_object.__module__ == "typing"
 
 
 def is_builtin_type(type_object: Any):
@@ -417,87 +339,6 @@ def get_path_starting_from_latest_encounter_of(
         return os.path.join(*path_parts)
     else:
         raise PathMissingRequiredPartsError(should_contain, path)
-
-
-def get_imports_from_types(
-    type_objects: Iterable[Type],
-    target_file_path: Optional[str] = None,
-    package_name: Optional[str] = None,
-    excluded_names: Optional[List[str]] = None,
-    excluded_modules: Optional[List[str]] = None,
-) -> List[str]:
-    """
-    Format import lines from type objects.
-
-    :param type_objects: A list of type objects to format.
-    :param target_file_path: The file path to which the imports should be relative.
-    :param package_name: The name of the package to use for relative imports.
-    :param excluded_names: A list of names to exclude from the imports.
-    :param excluded_modules: A list of modules to exclude from the imports.
-    :return: A list of formatted import lines.
-    """
-    module_to_types = get_type_names_per_module_from_types(
-        type_objects, excluded_names, excluded_modules
-    )
-
-    lines = []
-    stem_imports = []
-    for module, names in module_to_types.items():
-        filtered_names = set()
-        for name in set(names):
-            if "." in name:
-                stem = ".".join(name.split(".")[1:])
-                name_to_import = name.split(".")[0]
-                filtered_names.add(name_to_import)
-                stem_imports.append(f"{stem} = {name_to_import}.{stem}")
-            else:
-                filtered_names.add(name)
-        joined = ", ".join(sorted(set(filtered_names)))
-        import_path = module
-        if (
-            (target_file_path is not None)
-            and (package_name is not None)
-            and (package_name in module)
-        ):
-            import_path = get_relative_import(
-                target_file_path, module_name=module, package_name=package_name
-            )
-        lines.append(f"from {import_path} import {joined}")
-    lines.extend(stem_imports)
-    return lines
-
-
-def run_black_on_file(filename: str):
-    """
-    Format the file with black.
-
-    :param filename: The name of the file to format.
-    """
-    command = [sys.executable, "-m", "black", filename]
-    run_subprocess_on_file(command)
-
-
-def run_ruff_on_file(filename: str):
-    """
-    Format the file with ruff.
-
-    :param filename: The name of the file to format.
-    """
-    command = ["ruff", "check", "--fix", filename]
-    run_subprocess_on_file(command)
-
-
-def run_subprocess_on_file(command: List[str]):
-    """
-    Run a subprocess command and handle errors.
-
-    :param command: The command to run as a list of arguments.
-    :raises SubprocessExecutionError: If the subprocess command fails.
-    """
-    try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        raise SubprocessExecutionError(command, e.returncode, e.stdout, e.stderr) from e
 
 
 def get_generic_type_parameters(
@@ -745,7 +586,7 @@ def _handle_import_node(
 
 
 @lru_cache(maxsize=None)
-def _warn_about_unresolvable_type_checking_import_once(
+def _log_unresolvable_import_once(
     resolved_module_name: Optional[str],
     name: str,
     file_path: Optional[str],
@@ -759,17 +600,16 @@ def _warn_about_unresolvable_type_checking_import_once(
     A dataclass field annotated under ``if TYPE_CHECKING:`` with a name from a module
     involved in a circular import can be re-resolved many times while that module is
     still initializing (once per class needing it, and once per lookup attempt). Every
-    attempt raises the exact same, already self-diagnosing ``AttributeError`` and is
-    otherwise harmless, so repeating the warning for each attempt only floods the log
-    without adding information; the ``lru_cache`` collapses repeats of the identical
-    triple to a single log line.
+    attempt fails identically and is otherwise harmless, so repeating the warning for
+    each attempt only floods the log without adding information; the ``lru_cache``
+    collapses repeats of the identical triple to a single log line.
 
     :param resolved_module_name: The module the failed import targeted.
-    :param name: The attribute name that could not be found on the module.
+    :param name: The name that could not be bound from that module.
     :param file_path: The path of the file whose imports were being extracted.
-    :param error_message: The message of the ``AttributeError`` that was raised.
+    :param error_message: The message of the error that was raised.
     """
-    logger.warning(
+    logger.debug(
         f"Could not import {resolved_module_name}: {error_message} while extracting imports from {file_path}"
     )
 
@@ -782,6 +622,14 @@ def _handle_import_from_node(
 ) -> Optional[str]:
     """
     Process a from-import node and update the provided scope mapping.
+
+    A statement whose module cannot be imported contributes no names and is skipped,
+    just as a name missing from an imported module is: the scope is built for
+    best-effort name resolution, so one statement that cannot be bound must not cost
+    the caller every other name in the file.
+
+    ..note:: A module a generator is about to write, such as an ORM interface, is
+        absent for exactly as long as that generator runs.
 
     :param node: The from-import node to process.
     :param scope: The scope mapping to update.
@@ -802,15 +650,22 @@ def _handle_import_from_node(
     # Mimic original behavior: allow package_name to be overwritten for subsequent iterations
     package_name = resolved_package_name
 
-    module = None
-    if resolved_module_name is not None:
-        module = get_and_import_module(resolved_module_name, package_name)
+    try:
+        module = None
+        if resolved_module_name is not None:
+            module = get_and_import_module(resolved_module_name, package_name)
 
-    if module is None and resolved_package_name and resolved_module_name:
-        # Fallback already attempted in _import_module_safely; keep for parity
-        module = get_and_import_module(
-            f"{resolved_package_name}.{resolved_module_name}", None
-        )
+        if module is None and resolved_package_name and resolved_module_name:
+            # Fallback already attempted in _import_module_safely; keep for parity
+            module = get_and_import_module(
+                f"{resolved_package_name}.{resolved_module_name}", None
+            )
+    except ModuleNotFoundError as error:
+        for alias in node.names:
+            _log_unresolvable_import_once(
+                resolved_module_name, alias.name, file_path, str(error)
+            )
+        return package_name
 
     for alias in node.names:
         name = alias.name
@@ -821,67 +676,9 @@ def _handle_import_from_node(
             else:
                 scope[asname] = getattr(module, name)
         except AttributeError as e:
-            _warn_about_unresolvable_type_checking_import_once(
-                resolved_module_name, name, file_path, str(e)
-            )
+            _log_unresolvable_import_once(resolved_module_name, name, file_path, str(e))
 
     return package_name
-
-
-TCallable = TypeVar("TCallable", bound=Callable[..., Any])
-
-
-def memoize(function: TCallable) -> TCallable:
-    """
-    Caches the return value of a function call at the instance level.
-    """
-
-    @wraps(function)
-    def wrapper(self, *args: Any, **kwargs: Any) -> Any:
-        if not hasattr(self, "__memo__"):
-            self.__memo__ = {}
-        memo = self.__memo__
-
-        key = (function, self, args, frozenset(kwargs.items()))
-        try:
-            return memo[key]
-        except KeyError:
-            rv = function(self, *args, **kwargs)
-            memo[key] = rv
-            return rv
-
-    return wrapper  # type: ignore
-
-
-def copy_memoize(function: TCallable) -> TCallable:
-    """
-    Caches the return value of a function call at the instance level but returns a
-    deepcopy of the value.
-    """
-
-    @wraps(function)
-    def wrapper(self, *args, **kwargs):
-        if not hasattr(self, "__memo__"):
-            self.__memo__ = {}
-        memo = self.__memo__
-
-        key = (function, self, args, frozenset(kwargs.items()))
-        try:
-            return deepcopy(memo[key])
-        except KeyError:
-            rv = function(self, *args, **kwargs)
-            memo[key] = rv
-            return deepcopy(rv)
-
-    return wrapper
-
-
-def clear_memoization_cache(instance):
-    """
-    Clears the memoization cache of an instance.
-    """
-    if hasattr(instance, "__memo__"):
-        instance.__memo__.clear()
 
 
 def is_dynamic_class(cls: Type) -> bool:

@@ -1,17 +1,41 @@
 from __future__ import annotations
 
+import itertools
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import EnumType
 from functools import cached_property
 from types import UnionType, EllipsisType
 
 import numpy as np
-from typing_extensions import Any, Iterable, Optional, Union, get_args
-from krrood.parametrization.exceptions import EmptyVariableDomain, InvalidEllipsis
+from typing_extensions import (
+    Any,
+    Iterable,
+    Optional,
+    TYPE_CHECKING,
+    Type,
+    Union,
+    get_args,
+)
+from krrood.parametrization.exceptions import (
+    EmptyVariableDomain,
+    InvalidEllipsis,
+    JointQueryAcrossClassesNotSupported,
+)
 import random_events.variable
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.operators.causal import (
+    Cause,
+    CausesEffect,
+    Confounder,
+)
 from krrood.entity_query_language.core.variable import Literal, Variable
-from krrood.entity_query_language.factories import and_
+from krrood.entity_query_language.factories import and_, ConditionType
+from krrood.entity_query_language.operators.core_logical_operators import (
+    AND,
+    flatten_operands,
+)
 from krrood.entity_query_language.query.match import Match, AttributeMatch
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.ormatic.data_access_objects.to_dao import ToDataAccessObjectState
@@ -28,9 +52,68 @@ from random_events.variable import (
     most_appropriate_variable_type,
 )
 
+if TYPE_CHECKING:
+    from probabilistic_model.probabilistic_model import ProbabilisticModel
+
+
+class ModelQueryParameters(ABC):
+    """
+    Shared interface between EQL constructs and ``ProbabilisticModel``: whatever a
+    :class:`~krrood.parametrization.model_registries.ModelRegistry` needs to resolve a
+    model, regardless of which EQL construct is asking. Three constructs each build
+    their own parameters this way -- :class:`UnderspecifiedParameters` for a ``Match``
+    (``distribution_of(...)`` too, which wraps one), :class:`SelectedAttributesParameters`
+    for a bare attribute selection (``average(...)``), and :class:`ConditionParameters`
+    for a bare condition (``probability_of(...)``) -- so a registry can type against
+    this one interface instead of a union of the three.
+    """
+
+    @property
+    @abstractmethod
+    def variables(self) -> dict[str, random_events.variable.Variable]:
+        """
+        :return: A dictionary that maps variable names to the random events variables
+            this query references.
+        """
+
+    @property
+    @abstractmethod
+    def queried_class(self) -> Type:
+        """
+        :return: The single class this query's model must be resolved for.
+        :raises JointQueryAcrossClassesNotSupported: If the query references
+            attributes reached from more than one owner class.
+        """
+
+    @staticmethod
+    def _single_owner_class(attributes: Iterable[Attribute]) -> Type:
+        """
+        Shared ``queried_class`` implementation for the two subclasses
+        (:class:`SelectedAttributesParameters`, :class:`ConditionParameters`) that
+        resolve their class from a plain collection of attributes rather than a
+        ``Match``'s own selected variable.
+
+        :param attributes: The attributes a subclass's ``queried_class`` was given.
+        :return: The single class every attribute is reached from -- the class of each
+            attribute chain's root ``variable(...)``, not its immediate parent (so a
+            multi-hop chain like ``x.arm.battery`` resolves to ``x``'s class, matching
+            what every :class:`ModelRegistry
+            <krrood.parametrization.model_registries.ModelRegistry>` is keyed on, not
+            ``Arm``).
+        :raises JointQueryAcrossClassesNotSupported: If the attributes are reached from
+            more than one owner class -- every :class:`ModelRegistry
+            <krrood.parametrization.model_registries.ModelRegistry>` resolves a single
+            model per class, so a query joining several classes' models is not
+            supported.
+        """
+        owner_classes = {attribute._chain_root_._type_ for attribute in attributes}
+        if len(owner_classes) != 1:
+            raise JointQueryAcrossClassesNotSupported(owner_classes)
+        return owner_classes.pop()
+
 
 @dataclass
-class UnderspecifiedParameters:
+class UnderspecifiedParameters(ModelQueryParameters):
     """
     A class that extracts all necessary information from a
     {py:class}`~krrood.entity_query_language.query.match.Match` and binds it together.
@@ -93,6 +176,32 @@ class UnderspecifiedParameters:
     A cache for events that are created from symbolic expressions.
     """
 
+    search_cause_variables: list[random_events.variable.Variable] = field(
+        init=False, default_factory=list
+    )
+    """
+    Variables assigned a `Cause` (`cause`) marker: the do()-intervention targets
+    `ProbabilisticBackend` should search over.
+    """
+
+    search_confounder_variables: list[random_events.variable.Variable] = field(
+        init=False, default_factory=list
+    )
+    """
+    Variables assigned a `Confounder` (`confounder`) marker: Pearl's backdoor-criterion
+    adjustment set `ProbabilisticBackend` should sum out of each cause candidate's
+    interventional probability, so it is not left baked into the correlation between
+    cause and effect.
+    """
+
+    effect_variables_from_causes_effect: list[random_events.variable.Variable] = field(
+        init=False, default_factory=list
+    )
+    """
+    Variables compared in a `causes_effect(...)` condition: the effect(s) a `Cause`
+    search should optimize the interventional probability of.
+    """
+
     def __post_init__(self):
         self.statement.expression.build()
         self._random_event_compiler = WhereExpressionToRandomEventTranslator(
@@ -103,6 +212,24 @@ class UnderspecifiedParameters:
                 self._random_event_compiler.translate()
             )
         _ = self.variables  # make variables available
+        self._extract_effect_variables_from_causes_effect_conditions()
+
+    def _extract_effect_variables_from_causes_effect_conditions(self) -> None:
+        """
+        Populate :attr:`effect_variables_from_causes_effect` by walking the where
+        conditions for :class:`~krrood.entity_query_language.operators.causal.CausesEffect`
+        nodes and reading the variable(s) their wrapped comparator(s) compare.
+        """
+        root = self._random_event_compiler.conditions_root
+        if root is None:
+            return
+        for expression in itertools.chain([root], root._descendants_):
+            if not isinstance(expression, CausesEffect):
+                continue
+            for comparator in flatten_operands(expression._child_, AND):
+                self.effect_variables_from_causes_effect.append(
+                    self._random_event_compiler.variables[comparator.left]
+                )
 
     @cached_property
     def variables(self) -> dict[str, random_events.variable.Variable]:
@@ -120,6 +247,63 @@ class UnderspecifiedParameters:
 
         return result
 
+    @property
+    def queried_class(self) -> type:
+        """
+        :return: The class the match's selected variable is an instance of.
+        """
+        return self.statement._expression.selected_variable._type_
+
+    def resolve_conditioned_and_truncated_model(
+        self, model: ProbabilisticModel
+    ) -> Optional[ProbabilisticModel]:
+        """
+        Apply this match's literal-value conditions, then its where-conditions, then
+        its krrood-variable-assignment truncations, to ``model``, in that order -- the
+        same sequence
+        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend` already
+        applies to a non-causal match before sampling from it.
+
+        :param model: The model to condition and truncate.
+        :return: The resulting model, or ``None`` if any step leaves no solution.
+        """
+        conditioned, _ = model.conditional(
+            self.conditioning_assignments_from_literal_values
+        )
+        if conditioned is None:
+            return None
+
+        if self.truncation_assignments_from_where_conditions:
+            truncated, _ = conditioned.truncated(
+                self.truncation_assignments_from_where_conditions
+            )
+        else:
+            truncated = conditioned
+        if truncated is None:
+            return None
+
+        return self.apply_krrood_variable_truncation(truncated)
+
+    def apply_krrood_variable_truncation(
+        self, model: ProbabilisticModel
+    ) -> Optional[ProbabilisticModel]:
+        """
+        Truncate ``model`` on this match's symbolic-variable-assignment constraints
+        (e.g. ``z=variable(int, domain=[1, 2, 3])``), if any.
+
+        :param model: The model to truncate.
+        :return: ``model`` unchanged if there are no such constraints, the truncated
+            model otherwise, or ``None`` if truncating leaves no solution.
+        """
+        if not self.truncation_assignments_from_krrood_variables:
+            return model
+        complete_event = self.truncation_assignments_from_krrood_variables[0]
+        complete_event.fill_missing_variables(self.variables.values())
+        for event in self.truncation_assignments_from_krrood_variables[1:]:
+            complete_event = complete_event.intersection_with(event)
+        truncated, _ = model.truncated(complete_event, singleton_allowed=True)
+        return truncated
+
     def _extract_variables_from_attribute_match(
         self, attribute_match: AttributeMatch
     ) -> dict[str, random_events.variable.Variable]:
@@ -131,6 +315,12 @@ class UnderspecifiedParameters:
         """
         krrood_variable = attribute_match.assigned_variable
 
+        if isinstance(krrood_variable, Cause):
+            return self._handle_cause_attribute_match(attribute_match)
+
+        if isinstance(krrood_variable, Confounder):
+            return self._handle_confounder_attribute_match(attribute_match)
+
         if isinstance(krrood_variable, Literal):
             return self._handle_literal_attribute_match(attribute_match)
 
@@ -138,6 +328,57 @@ class UnderspecifiedParameters:
             return self._handle_variable_attribute_match(attribute_match)
 
         return {}
+
+    def _handle_cause_attribute_match(
+        self, attribute_match: AttributeMatch
+    ) -> dict[str, random_events.variable.Variable]:
+        """
+        Handle attribute matches assigned a
+        :class:`~krrood.entity_query_language.operators.causal.Cause` (``cause``) marker:
+        register the variable to search over, the same way a free ``...`` field would
+        be, and record it as a cause variable for
+        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`'s
+        interventional search.
+
+        :param attribute_match: The attribute match with a ``Cause`` assigned value.
+        :return: A dictionary of extracted variables.
+        """
+        name = attribute_match.name_from_variable_access_path
+        krrood_variable = attribute_match.assigned_variable
+        type_ = self._process_attribute_match_type(krrood_variable._type_)
+
+        if not issubclass(type_, compatible_types):
+            raise InvalidEllipsis(type_)
+
+        cause_variable = variable_from_name_and_type(name=name, type_=type_)
+        self.search_cause_variables.append(cause_variable)
+        return {name: cause_variable}
+
+    def _handle_confounder_attribute_match(
+        self, attribute_match: AttributeMatch
+    ) -> dict[str, random_events.variable.Variable]:
+        """
+        Handle attribute matches assigned a
+        :class:`~krrood.entity_query_language.operators.causal.Confounder`
+        (``confounder``) marker: register the variable to search over, the same way a
+        free ``...`` field would be, and record it as an adjustment variable for
+        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`'s
+        interventional search.
+
+        :param attribute_match: The attribute match with a ``Confounder`` assigned
+            value.
+        :return: A dictionary of extracted variables.
+        """
+        name = attribute_match.name_from_variable_access_path
+        krrood_variable = attribute_match.assigned_variable
+        type_ = self._process_attribute_match_type(krrood_variable._type_)
+
+        if not issubclass(type_, compatible_types):
+            raise InvalidEllipsis(type_)
+
+        confounder_variable = variable_from_name_and_type(name=name, type_=type_)
+        self.search_confounder_variables.append(confounder_variable)
+        return {name: confounder_variable}
 
     def _handle_literal_attribute_match(
         self, attribute_match: AttributeMatch
@@ -431,8 +672,10 @@ class UnderspecifiedParameters:
             if mapped_variable is None:
                 continue
 
-            if attribute_match and isinstance(
-                attribute_match.assigned_value, SymbolicExpression
+            if (
+                attribute_match
+                and isinstance(attribute_match.assigned_value, SymbolicExpression)
+                and not isinstance(attribute_match.assigned_value, Literal)
             ):
                 [domain_index] = [
                     val
@@ -472,3 +715,90 @@ class UnderspecifiedParameters:
             return most_appropriate_variable_type(types)
         else:
             return type_
+
+
+@dataclass
+class SelectedAttributesParameters(ModelQueryParameters):
+    """
+    A class that extracts all necessary information from a bare selection of
+    attributes and binds it together.
+
+    This serves the same role as :class:`UnderspecifiedParameters` does for
+    :class:`~krrood.entity_query_language.query.match.Match` -- glue between
+    `ProbabilisticModel` and EQL -- but for constructs that select attributes directly
+    rather than a structural match, since there are no where conditions, literal
+    assignments or cause/confounder markers to extract. Used to resolve a bare
+    ``average(...)`` selection under
+    :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`.
+    """
+
+    attributes: tuple[Attribute, ...]
+    """
+    The attributes to extract information from.
+    """
+
+    @cached_property
+    def queried_class(self) -> Type:
+        """
+        :return: The single class every selected attribute is reached from.
+        :raises JointQueryAcrossClassesNotSupported: If the selected attributes are
+            reached from more than one owner class.
+        """
+        return self._single_owner_class(self.attributes)
+
+    @cached_property
+    def variables(self) -> dict[str, random_events.variable.Variable]:
+        """
+        :return: A dictionary that maps variable names to random events variables for
+            the selected attributes.
+        """
+        return {
+            attribute._name_: variable_from_name_and_type(
+                attribute._name_, attribute._type_
+            )
+            for attribute in self.attributes
+        }
+
+
+@dataclass
+class ConditionParameters(ModelQueryParameters):
+    """
+    A class that extracts all necessary information from a condition expression given
+    to {py:class}`~krrood.entity_query_language.operators.probabilistic_queries.Probability`
+    (``probability_of(...)``) and binds it together, reusing the same
+    :class:`~krrood.parametrization.random_events_translator.WhereExpressionToRandomEventTranslator`
+    a ``Match``'s ``where`` conditions are already translated with.
+    """
+
+    condition: ConditionType
+    """
+    The condition to extract information from.
+    """
+
+    @cached_property
+    def _translator(self) -> WhereExpressionToRandomEventTranslator:
+        return WhereExpressionToRandomEventTranslator(self.condition)
+
+    @cached_property
+    def event(self) -> Event:
+        """
+        :return: The random event the condition translates to.
+        """
+        return self._translator.translate()
+
+    @cached_property
+    def variables(self) -> dict[str, random_events.variable.Variable]:
+        """
+        :return: A dictionary that maps variable names to random events variables that
+            appear in the condition.
+        """
+        return {v.name: v for v in self._translator.variables.values()}
+
+    @cached_property
+    def queried_class(self) -> Type:
+        """
+        :return: The single class every variable in the condition is reached from.
+        :raises JointQueryAcrossClassesNotSupported: If the condition constrains
+            attributes reached from more than one owner class.
+        """
+        return self._single_owner_class(self._translator.variables.keys())

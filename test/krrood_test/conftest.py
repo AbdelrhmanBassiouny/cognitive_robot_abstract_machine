@@ -14,7 +14,11 @@ from krrood.entity_query_language.predicate import (
     HasTypes,
     HasType,
 )
+from krrood.entity_query_language.testing.result_generation import (
+    regenerate_verbalization_results,
+)
 from krrood.ormatic.data_access_objects.alternative_mappings import *  # type: ignore
+from krrood.ormatic.helper import OrmaticInterfaceInformation
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.type_dict import TypeDict
 from krrood.ormatic.utils import classes_of_module, create_engine
@@ -34,8 +38,11 @@ from .dataset.example_classes import (
     ConceptType,
     JSONSerializableClass,
 )
-from .dataset.role_and_ontology import university_ontology_like_classes_without_descriptors, \
-    role_takers_in_another_module, classes_for_testing_role_recursion_error
+from .dataset.role_and_ontology import (
+    university_ontology_like_classes_without_descriptors,
+    role_takers_in_another_module,
+    classes_for_testing_role_recursion_error,
+)
 from .dataset.semantic_world_like_classes import *
 from .test_eql.conf.world.doors_and_drawers import DoorsAndDrawersWorld
 from .test_eql.conf.world.handles_and_containers import (
@@ -64,7 +71,9 @@ def generate_sqlalchemy_interface():
     all_classes |= set(classes_of_module(krrood.symbol_graph.symbol_graph))
     all_classes |= set(classes_of_module(example_classes))
     all_classes |= set(classes_of_module(semantic_world_like_classes))
-    all_classes |= set(classes_of_module(university_ontology_like_classes_without_descriptors))
+    all_classes |= set(
+        classes_of_module(university_ontology_like_classes_without_descriptors)
+    )
     all_classes |= set(classes_of_module(role_takers_in_another_module))
     all_classes |= set(classes_of_module(classes_for_testing_role_recursion_error))
     all_classes |= set(classes_of_module(alternative_mappings_construction_order))
@@ -91,8 +100,10 @@ def generate_sqlalchemy_interface():
 
     instance = ORMatic(
         class_dependency_graph=class_diagram,
-        type_mappings=TypeDict({KRROODPhysicalObject: ConceptType}),
-        alternative_mappings=recursive_subclasses(AlternativeMapping),
+        interface_information=OrmaticInterfaceInformation(
+            type_mappings=TypeDict({KRROODPhysicalObject: ConceptType}),
+            alternative_mappings=recursive_subclasses(AlternativeMapping),
+        ),
     )
 
     instance.make_all_tables()
@@ -135,6 +146,18 @@ try:
     from .dataset.ormatic_interface import *
 except ImportError:
     pass
+
+# Generate verbalization_results.py the same way: always fresh, so a wording change
+# shows up as an ordinary diff to review before committing, instead of a failing test.
+regenerate_verbalization_results(
+    krrood,
+    os.path.join(
+        os.path.dirname(__file__),
+        "test_eql",
+        "test_verbalization",
+        "verbalization_results.py",
+    ),
+)
 
 
 @pytest.fixture

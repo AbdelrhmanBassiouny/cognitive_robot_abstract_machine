@@ -15,16 +15,15 @@ from typing_extensions import get_args, get_origin, Any
 
 from krrood import logger
 from krrood.class_diagrams.utils import resolve_type, get_type_hints_of_object
+from krrood.patterns.caching import clear_memoization_cache, memoize
 from krrood.utils import (
     module_and_class_name,
     own_dataclass_fields,
-    memoize,
-    clear_memoization_cache,
     T,
 )
 
 try:
-    from krrood.rustworkx_utils import RWXNode
+    from krrood.rustworkx_utils.rxnode import RWXNode
 except ImportError:
     RWXNode = None
 from typing_extensions import (
@@ -47,7 +46,12 @@ from krrood.class_diagrams.attribute_introspector import (
     DataclassOnlyIntrospector,
 )
 from krrood.class_diagrams.method_classifier import factory_method_names
+from krrood.class_diagrams.progress_report import (
+    is_progress_wanted,
+    report_progress,
+)
 from krrood.class_diagrams.wrapped_field import WrappedField
+from krrood.patterns.field_metadata import FieldMetadata
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from typing_extensions import Generic
 
@@ -275,6 +279,19 @@ class WrappedClass(Generic[T], SubClassSafeGeneric):
     A mapping from field name to its WrappedField instance.
     """
 
+    def fields_with_metadata(
+        self, metadata_type: Type[FieldMetadata]
+    ) -> List[WrappedField]:
+        """
+        :return: the fields of this class carrying metadata of *metadata_type*, in
+            declaration order.
+        """
+        return [
+            wrapped_field
+            for wrapped_field in self.fields
+            if metadata_type.of_wrapped_field(wrapped_field) is not None
+        ]
+
     def _get_introspector(self) -> AttributeIntrospector:
         """
         :return: The introspector to use for finding the fields to wrap in a WrappedField.
@@ -425,7 +442,8 @@ class ClassDiagram:
             if is_dataclass(get_origin(clazz)):
                 generics.append(clazz)
                 clazz = get_origin(clazz)
-            self.add_node(WrappedClass(clazz=clazz))
+            # pass the bare class so add_node() dedupes it against classes/generics
+            self.add_node(clazz)
         self._create_nodes_for_specialized_generic_type_hints(generics)
         self._create_all_relations()
 
@@ -856,8 +874,13 @@ class ClassDiagram:
         internal collection. Relations are only created when the target class is found among
         the wrapped classes.
 
+        Resolving a class's field types is the long part of building a diagram, so a
+        class finished here is what progress is reported against.
+
         :raises: This method does not explicitly raise any exceptions.
         """
+        report_wanted = is_progress_wanted()
+        total_classes = len(self.wrapped_classes)
         for clazz in self.wrapped_classes:
             # Handle GenericAlias in issubclass
             origin = get_origin(clazz.clazz)
@@ -890,6 +913,8 @@ class ClassDiagram:
                     target=wrapped_target_class,
                 )
                 self.add_relation(relation)
+            if report_wanted:
+                report_progress(clazz.name, total_classes)
 
     def _create_association_relations_inferred_from_role_takers(self):
         """
@@ -1106,8 +1131,8 @@ class ClassDiagram:
     def clear(self):
         self._dependency_graph.clear()
         # ``role_chain_starting_from_node`` and ``to_subdiagram_without_inherited_associations`` are
-        # memoized on this instance, so clearing its ``__memo__`` invalidates them once the graph
-        # changes. The per-association ``get_original_source_instance_...`` memo is scoped to each
+        # memoized on this instance, so clearing its cache invalidates them once the graph changes.
+        # The per-association ``get_original_source_instance_...`` memo is scoped to each
         # association instance and is dropped with the graph, so it needs no explicit clearing.
         clear_memoization_cache(self)
 
