@@ -12,6 +12,10 @@ from numpy.testing import assert_raises
 from typing_extensions import Tuple, Type
 
 from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.callbacks.callback import (
+    ModelChangeCallback,
+    StateChangeCallback,
+)
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
@@ -2776,3 +2780,112 @@ def test_column_indices_of_degree_of_freedom_outside_the_state(world_setup):
 
     with pytest.raises(DofNotInWorldStateError):
         world.state.column_indices([DegreeOfFreedom(name=PrefixedName("new_dof"))])
+
+
+# %% World Replacement
+
+
+@dataclass(eq=False)
+class ModelChangeRecordingCallback(ModelChangeCallback):
+    notifications: list = field(default_factory=list, init=False)
+
+    def on_model_change(self, publish_changes: bool = None, **kwargs):
+        self.notifications.append(publish_changes)
+
+
+@dataclass(eq=False)
+class StateChangeRecordingCallback(StateChangeCallback):
+    notifications: list = field(default_factory=list, init=False)
+
+    def on_state_change(self, publish_changes: bool = None, **kwargs):
+        self.notifications.append(publish_changes)
+
+
+def test_replace_with_replaces_entities_and_kinematic_structure():
+    world = World.create_with_root_body("old_root")
+    old_body = Body(name=PrefixedName("old_body"))
+    with world.modify_world():
+        world.add_body(old_body)
+        world.add_connection(FixedConnection(parent=world.root, child=old_body))
+
+    other_world = World.create_with_root_body("new_root")
+    new_body = Body(name=PrefixedName("new_body"))
+    with other_world.modify_world():
+        other_world.add_body(new_body)
+        other_world.add_connection(
+            FixedConnection(parent=other_world.root, child=new_body)
+        )
+
+    world._replace_with(other_world)
+
+    assert world.root.name == PrefixedName("new_root")
+    assert world.is_kinematic_structure_entity_in_world_by_name("new_body")
+    assert not world.is_kinematic_structure_entity_in_world_by_name("old_body")
+    assert (
+        world.get_kinematic_structure_entity_by_name(PrefixedName("new_body"))
+        is not None
+    )
+    with pytest.raises(WorldEntityNotFoundError):
+        world.get_kinematic_structure_entity_by_name(PrefixedName("old_body"))
+    assert len(world.kinematic_structure_entities) == 2
+
+
+def test_replace_with_transfers_degrees_of_freedom_and_state():
+    world = World.create_with_root_body("w1_root")
+    other_world = World.create_with_root_body("w2_root")
+    child_body = Body(name=PrefixedName("moving_child"))
+    with other_world.modify_world():
+        other_world.add_body(child_body)
+        conn = RevoluteConnection.create_with_dofs(
+            world=other_world,
+            parent=other_world.root,
+            child=child_body,
+            axis=Vector3.Z(),
+        )
+        other_world.add_connection(conn)
+    other_world.state[conn.dof.id].position = 0.75
+
+    world._replace_with(other_world)
+
+    assert len(world.degrees_of_freedom) == 1
+    assert world.state[conn.dof.id].position == pytest.approx(0.75)
+
+
+def test_replace_with_preserves_registered_callbacks_and_notifies():
+    world = World.create_with_root_body("world_root")
+    model_callback = ModelChangeRecordingCallback(_world=world)
+    state_callback = StateChangeRecordingCallback(_world=world)
+
+    other_world = World.create_with_root_body("replacement_root")
+    other_body = Body(name=PrefixedName("replacement_body"))
+    with other_world.modify_world():
+        other_world.add_body(other_body)
+        other_world.add_connection(
+            FixedConnection(parent=other_world.root, child=other_body)
+        )
+
+    model_callback.notifications.clear()
+    state_callback.notifications.clear()
+
+    world._replace_with(other_world)
+
+    assert model_callback in world.get_world_model_manager().model_change_callbacks
+    assert state_callback in world.state.state_change_callbacks
+    assert model_callback.notifications == [False]
+
+
+def test_replace_with_clears_other_world():
+    world = World.create_with_root_body("w1")
+    other_world = World.create_with_root_body("w2")
+    other_body = Body(name=PrefixedName("b2"))
+    with other_world.modify_world():
+        other_world.add_body(other_body)
+        other_world.add_connection(
+            FixedConnection(parent=other_world.root, child=other_body)
+        )
+
+    world._replace_with(other_world)
+
+    assert other_world.root is None
+    assert len(other_world.kinematic_structure_entities) == 0
+    assert len(other_world.connections) == 0
