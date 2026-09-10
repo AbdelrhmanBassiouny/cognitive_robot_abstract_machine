@@ -161,7 +161,7 @@ class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
     """
 
     @classproperty
-    def hole_direction(self) -> Vector3:
+    def _hole_direction_axis(cls) -> Vector3:
         return Vector3.NEGATIVE_X()
 
 
@@ -659,7 +659,7 @@ class DoubleDoor(SemanticAnnotation):
 @dataclass(eq=False)
 class Drawer(Furniture, HasCaseAsRootBody, HasHandle, HasMechanicalJoint):
     @classproperty
-    def hole_direction(self) -> Vector3:
+    def _hole_direction_axis(cls) -> Vector3:
         return Vector3.Z()
 
 
@@ -671,7 +671,7 @@ class Elevator(HasCaseAsRootBody, HasDoors, HasMechanicalJoint):
     """
 
     @classproperty
-    def hole_direction(self) -> Vector3:
+    def _hole_direction_axis(cls) -> Vector3:
         return Vector3.NEGATIVE_X()
 
     def open(self):
@@ -688,16 +688,27 @@ class Elevator(HasCaseAsRootBody, HasDoors, HasMechanicalJoint):
         Closes the elevator doors
         """
         for door in self.doors:
-            door.mechanical_joint.position = door.mechanical_joint.position = (
+            door.mechanical_joint.position = (
                 door.mechanical_joint.root.parent_connection.dof.limits.lower.position
             )
+
+    def drive_position_for_floor(self, floor: Level) -> float:
+        """
+        The drive position at which the elevator serves the given floor.
+
+        The half height accounts for the case body's origin sitting at its ground rather
+        than at its centre.
+
+        :param floor: The floor the elevator should serve.
+        :return: The position to drive the elevator's mechanical joint to.
+        """
+        return float(floor.floor_plane[0].z)
 
     def drive_to_floor(self, floor: Level):
         """
         Drives the elevator to the floor given
         """
-        drive_height = floor.floor_plane[0].z + (self.scale.z / 2)
-        self.mechanical_joint.position = drive_height
+        self.mechanical_joint.position = self.drive_position_for_floor(floor)
 
 
 ############################### subclasses to Furniture
@@ -709,6 +720,8 @@ class ShelfLayer(HasSupportingSurface):
     A horizontal surface used for storing objects, typically found inside cabinets or on
     walls.
     """
+
+    _synonyms = {"level", "board"}
 
 
 @dataclass(eq=False)
@@ -724,11 +737,13 @@ class CounterTop(Furniture, HasSupportingSurface, HasSink):
     A semantic annotation that represents a counter top.
     """
 
+    _synonyms = {"countertop"}
+
 
 @dataclass(eq=False)
 class Cabinet(Furniture, HasCaseAsRootBody, HasDoors, HasDrawers):
     @classproperty
-    def hole_direction(self) -> Vector3:
+    def _hole_direction_axis(cls) -> Vector3:
         return Vector3.NEGATIVE_X()
 
 
@@ -875,6 +890,8 @@ class Wall(HasApertures):
 
     Doors are a computed property.
     """
+
+    _synonyms = {"walls"}
 
     @property
     def doors(self) -> Iterable[Door]:
@@ -1256,6 +1273,8 @@ class SideTable(Table):
     A side table.
     """
 
+    _synonyms = {"bedside"}
+
 
 @dataclass(eq=False)
 class Desk(Table, HasLegs):
@@ -1292,7 +1311,7 @@ class TrashCan(HasCaseAsRootBody, Furniture):
     """
 
     @classproperty
-    def hole_direction(self) -> Vector3:
+    def _hole_direction_axis(cls) -> Vector3:
         return Vector3.Z()
 
 
@@ -1820,3 +1839,5 @@ class CoffeeMachine(HasRootBody):
     """
     A countertop appliance that brews coffee.
     """
+
+    _synonyms = {"coffe"}

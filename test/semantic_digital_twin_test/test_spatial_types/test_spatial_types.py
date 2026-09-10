@@ -55,7 +55,9 @@ class TestRotationMatrix:
         m1 = rotation_matrix_from_quaternion(*q1)
         m2 = rotation_matrix_from_quaternion(*q2)
         RotationMatrix()
-        actual_angle = RotationMatrix(data=m1).rotational_error(RotationMatrix(data=m2))
+        actual_angle = RotationMatrix(data=m1).rotational_distance(
+            RotationMatrix(data=m2)
+        )
         _, expected_angle = axis_angle_from_rotation_matrix(m1.T.dot(m2))
         try:
             assert np.allclose(
@@ -598,6 +600,24 @@ class TestPoint3:
         actual = p.norm()
         expected = np.linalg.norm(v)
         assert np.allclose(actual, expected)
+
+    def test_from_iterable_copies_a_symbolic_math_type_input(self):
+        """
+        `from_iterable` must not alias a SymbolicMathType input's casadi_sx: the result
+        must own an independent container from the source.
+        """
+        source = Point3(x=1, y=2, z=3)
+        result = Point3.from_iterable(source)
+        assert result.casadi_sx is not source.casadi_sx
+
+    def test_from_iterable_copies_a_raw_casadi_sx_input(self):
+        """
+        `from_iterable` must not alias a raw casadi_sx input: the result must own its
+        own container rather than the one passed in.
+        """
+        source = Point3(x=1, y=2, z=3)
+        result = Point3.from_iterable(source.casadi_sx)
+        assert result.casadi_sx is not source.casadi_sx
 
     def test_init(self):
         l = [1, 2, 3]
@@ -1228,6 +1248,24 @@ class TestVector3:
         existing_vector = Vector3(x=1, y=2, z=3)  # reference_frame=some_frame
         new_vector = Vector3.from_iterable(existing_vector)
         assert new_vector.reference_frame == existing_vector.reference_frame
+
+    def test_from_iterable_copies_a_symbolic_math_type_input(self):
+        """
+        `from_iterable` must not alias a SymbolicMathType input's casadi_sx: the result
+        must own an independent container from the source.
+        """
+        source = Vector3(x=1, y=2, z=3)
+        result = Vector3.from_iterable(source)
+        assert result.casadi_sx is not source.casadi_sx
+
+    def test_from_iterable_copies_a_raw_casadi_sx_input(self):
+        """
+        `from_iterable` must not alias a raw casadi_sx input: the result must own its
+        own container rather than the one passed in.
+        """
+        source = Vector3(x=1, y=2, z=3)
+        result = Vector3.from_iterable(source.casadi_sx)
+        assert result.casadi_sx is not source.casadi_sx
 
     def test_compilation_and_execution(self):
         """
@@ -1963,6 +2001,24 @@ class TestTransformationMatrix:
 
 class TestQuaternion:
 
+    def test_from_iterable_copies_a_symbolic_math_type_input(self):
+        """
+        `from_iterable` must not alias a SymbolicMathType input's casadi_sx: the result
+        must own an independent container from the source.
+        """
+        source = Quaternion(x=0, y=0, z=0, w=1)
+        result = Quaternion.from_iterable(source)
+        assert result.casadi_sx is not source.casadi_sx
+
+    def test_from_iterable_copies_a_raw_casadi_sx_input(self):
+        """
+        `from_iterable` must not alias a raw casadi_sx input: the result must own its
+        own container rather than the one passed in.
+        """
+        source = Quaternion(x=0, y=0, z=0, w=1)
+        result = Quaternion.from_iterable(source.casadi_sx)
+        assert result.casadi_sx is not source.casadi_sx
+
     @pytest.mark.parametrize("q1", quaternions)
     @pytest.mark.parametrize("q2", quaternions)
     @pytest.mark.parametrize("t", numbers)
@@ -2041,6 +2097,32 @@ class TestQuaternion:
         q2 = np.array(q2)
         expected = np.dot(q1.T, q2)
         assert np.allclose(result, expected)
+
+    @pytest.mark.parametrize("q1", quaternions)
+    @pytest.mark.parametrize("q2", quaternions)
+    def test_rotational_distance_matches_the_rotation_matrices(self, q1, q2):
+        """
+        Two orientations are the same angle apart however they are described.
+        """
+        actual = Quaternion.from_iterable(q1).rotational_distance(
+            Quaternion.from_iterable(q2)
+        )
+        expected = RotationMatrix(
+            data=rotation_matrix_from_quaternion(*q1)
+        ).rotational_distance(RotationMatrix(data=rotation_matrix_from_quaternion(*q2)))
+        assert np.allclose(
+            shortest_angular_distance(actual.to_np()[0], expected.to_np()[0]), 0
+        )
+
+    @pytest.mark.parametrize("q", quaternions)
+    def test_rotational_distance_of_the_two_quaternions_of_one_rotation(self, q):
+        """
+        A quaternion and its negation describe the same rotation, so there is no angle
+        between them.
+        """
+        quaternion = Quaternion.from_iterable(q)
+        assert np.allclose(quaternion.rotational_distance(-quaternion).to_np(), 0)
+        assert np.allclose(quaternion.rotational_distance(quaternion).to_np(), 0)
 
 
 def test_underspecification_of_vector():

@@ -36,13 +36,14 @@ from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospect
 from krrood.entity_query_language.predicate import Symbol
 from krrood.symbolic_math.symbolic_math import Matrix
 from krrood.utils import get_full_class_name
-from krrood.utils import memoize
+from krrood.patterns.caching import memoize
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
+    AlreadyBelongsToAWorldError,
     ReferenceFrameMismatchError,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties
@@ -110,6 +111,18 @@ class WorldEntity(Symbol):
         return hash(self) == hash(other)
 
     def add_to_world(self, world: World):
+        """
+        Register this entity as part of the given world.
+
+        :param world: The world this entity becomes part of.
+        :raises AlreadyBelongsToAWorldError: If this entity belongs to another world,
+            which has to release it first. Re-registering it would leave it in the
+            previous world's lookup table under a world it no longer reports.
+        """
+        if self._world is not None and self._world is not world:
+            raise AlreadyBelongsToAWorldError(
+                world=self._world, type_trying_to_add=type(self)
+            )
         self._world = world
         world._world_entity_hash_table[hash(self)] = self
 
@@ -1143,6 +1156,26 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
             self.child = child
         self.parent_T_connection_expression.reference_frame = self.parent
         self.parent_T_connection_expression.child_frame = self.child
+
+    def _calculate_local_kinematics(
+        self, transformation: HomogeneousTransformationMatrix
+    ) -> HomogeneousTransformationMatrix:
+        """
+        Un-compose an origin with this connection's constant offsets, leaving the part a
+        degree of freedom can carry.
+
+        :param transformation: The desired origin, already expressed in the parent
+            frame. Callers accepting other frames convert first.
+        :return: The local kinematics producing that origin.
+        """
+        if isinstance(transformation, np.ndarray):
+            transformation = HomogeneousTransformationMatrix(data=transformation)
+        local_kinematics = (
+            self.parent_T_connection_expression.inverse()
+            @ transformation
+            @ self.connection_T_child_expression.inverse()
+        )
+        return local_kinematics
 
 
 GenericConnection = TypeVar("GenericConnection", bound=Connection)

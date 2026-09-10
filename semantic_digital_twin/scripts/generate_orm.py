@@ -17,8 +17,11 @@ import semantic_digital_twin.orm.model
 
 import semantic_digital_twin.adapters.procthor.procthor_resolver
 from krrood.adapters.json_serializer import SubclassJSONSerializer
+from krrood.entity_query_language.predicate import SymbolicCallable
 from krrood.ormatic.ormatic import ORMatic
-from semantic_digital_twin.reasoning.predicates import ContainsType
+from krrood.utils import recursive_subclasses
+import semantic_digital_twin.reasoning.predicates
+import semantic_digital_twin.reasoning.world_rdr.rules
 from semantic_digital_twin.semantic_annotations.position_descriptions import (
     SemanticDirection,
 )
@@ -42,9 +45,12 @@ ignore_classes = {
     ForwardKinematicsManager,
     MeshFileStorage,
     semantic_digital_twin.adapters.procthor.procthor_resolver.ProcthorResolver,
-    ContainsType,
     SemanticDirection,
     SubclassJSONSerializer,
+    # A symbolic operation is a step of a query, not something a world stores, so none of
+    # them is mapped. The modules defining them are imported above so that they are all
+    # declared by the time this is read.
+    *recursive_subclasses(SymbolicCallable),
 }
 
 

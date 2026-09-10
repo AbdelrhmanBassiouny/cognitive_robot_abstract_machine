@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing_extensions import Any, Dict, Optional
 
 from coraplex.locations.pose_validator import AreReachableBy, IsObjectReachableBy
-from coraplex.plans.attachment_nodes import AttachNode
+from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import LookAtAction
@@ -114,7 +114,7 @@ class ReachAction(
             MoveToolCenterPointMotion(
                 target_pre_pose,
                 self.arm,
-                allow_gripper_collision=False,
+                allow_gripper_collision=True,
                 max_linear_velocity=self.pre_approach_linear_velocity,
                 position_threshold=self.position_threshold,
                 orientation_threshold=self.orientation_threshold,
@@ -139,7 +139,7 @@ class ReachAction(
             MoveToolCenterPointMotion(
                 target_pose,
                 self.arm,
-                allow_gripper_collision=False,
+                allow_gripper_collision=True,
                 max_linear_velocity=self.final_approach_linear_velocity,
                 position_threshold=self.position_threshold,
                 orientation_threshold=self.orientation_threshold,
@@ -267,11 +267,12 @@ class PickUpAction(
                 MoveGripperMotion(
                     motion=GripperState.CLOSE,
                     gripper=self.arm,
+                    allow_gripper_collision=True,
                     finger_velocity=self.grasp_closing_velocity,
                     stall_minimum_time=self.grasp_stall_minimum_time,
                     tolerate_stall=self.tolerate_grasp_stall,
                 ),
-                AttachNode(
+                ReAttachNode(
                     body=self.object_designator.root,
                     new_parent=ViewManager.get_end_effector_view(
                         self.arm, self.robot
@@ -379,6 +380,7 @@ class GraspingAction(ActionDescription, HasTcpGoalThresholds):
                     self.arm,
                     position_threshold=self.position_threshold,
                     orientation_threshold=self.orientation_threshold,
+                    allow_gripper_collision=True,
                 ),
                 MoveGripperMotion(GripperState.OPEN, self.arm),
                 MoveToolCenterPointMotion(

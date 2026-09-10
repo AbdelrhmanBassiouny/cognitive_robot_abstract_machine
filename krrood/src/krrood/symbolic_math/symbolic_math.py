@@ -25,7 +25,9 @@ import inspect
 import math
 import operator
 import sys
+import threading
 import weakref
+from types import TracebackType
 from abc import ABC, abstractmethod
 from collections import Counter
 from dataclasses import field, dataclass
@@ -65,6 +67,48 @@ from krrood.symbolic_math.exceptions import (
 )
 
 EPS: float = sys.float_info.epsilon * 4.0
+
+
+class CasadiLock:
+    """
+    Serialises every construction and copy of a CasADi expression.
+
+    CasADi reference-counts the nodes its expressions share without atomics, so two
+    threads building or copying expressions that reach the same node corrupt those
+    counts and crash the process natively. Every code path that creates or copies an
+    expression from more than one thread must hold this lock.
+
+    .. note::
+        Take it innermost. A memoized call already copies its cached expression under
+        this lock, so acquiring a memoization lock while holding this one would order
+        the two locks both ways round.
+    """
+
+    _lock: ClassVar[threading.RLock] = threading.RLock()
+    """
+    The single lock every CasADi expression is built and copied under.
+
+    Reentrant because building an expression composes other expressions, and copying one
+    copies the expressions it contains.
+    """
+
+    def __enter__(self) -> CasadiLock:
+        """
+        Waits until no other thread is inside CasADi.
+        """
+        self._lock.acquire()
+        return self
+
+    def __exit__(
+        self,
+        exception_type: Optional[Type[BaseException]],
+        exception: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """
+        Lets the next thread into CasADi.
+        """
+        self._lock.release()
 
 
 @dataclass
@@ -243,6 +287,20 @@ class CompiledFunction:
     Used to memorize if the result must be recomputed every time.
     """
 
+    _call_lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
+    """
+    Serialises :meth:`__call__` so binding every positional argument into, and
+    evaluating from, the shared ``_function_buffer``/``_out`` buffers is atomic to
+    concurrent callers.
+
+    Does not guard :meth:`bind_args_to_memory_view` or :meth:`evaluate` when called
+    directly: production call sites bind once during setup and then call ``evaluate()``
+    alone on every control-loop tick from a single owning thread, and that path stays
+    lock-free to avoid adding synchronization cost to a real-time loop.
+    """
+
     def __post_init__(self):
         # Normalize variable_parameters to VariableParameters
         if self.variable_parameters is None:
@@ -325,6 +383,10 @@ class CompiledFunction:
         Binds the arg at index arg_idx to the memoryview of a numpy_array.
 
         If your args keep the same memory across calls, you only need to bind them once.
+
+        .. warning:: Not synchronized with :meth:`evaluate` or :meth:`__call__`. Calling
+            this directly from multiple threads on the same instance, concurrently with
+            an :meth:`evaluate` call, is not protected by :attr:`_call_lock`.
         """
         if not self._is_constant:
             self._function_buffer.set_arg(arg_idx, memoryview(numpy_array))
@@ -332,6 +394,11 @@ class CompiledFunction:
     def evaluate(self) -> np.ndarray | sp.csc_matrix:
         """
         Evaluate the compiled function with the current args.
+
+        .. warning:: Not synchronized with :meth:`bind_args_to_memory_view` or
+            :meth:`__call__`. Calling this directly from multiple threads on the same
+            instance is not protected by :attr:`_call_lock`; the intended usage is one
+            owning thread binding once and then calling this repeatedly.
         """
         if not self._is_constant:
             self._function_evaluator()
@@ -344,22 +411,27 @@ class CompiledFunction:
         function. Similarly, the result will be written to the output buffer and does
         not allocate new memory on each eval.
 
+        Safe to call concurrently from multiple threads on the same instance:
+        :attr:`_call_lock` serialises the bind-then-evaluate sequence so one caller
+        cannot observe another caller's in-flight arguments or result.
+
         :param args: A numpy array for each VariableGroup in self.variable_parameters.
             .. warning:: Make sure the numpy array is of type float! (check is too expensive)
         :return: The evaluated result as numpy array or sparse matrix
         """
-        if self._is_constant:
-            return self._out
-        expected_number_of_args = len(self.variable_parameters)
-        actual_number_of_args = len(args)
-        if expected_number_of_args != actual_number_of_args:
-            raise WrongNumberOfArgsError(
-                expected_number_of_args,
-                actual_number_of_args,
-            )
-        for arg_idx, arg in enumerate(args):
-            self.bind_args_to_memory_view(arg_idx, arg)
-        return self.evaluate()
+        with self._call_lock:
+            if self._is_constant:
+                return self._out
+            expected_number_of_args = len(self.variable_parameters)
+            actual_number_of_args = len(args)
+            if expected_number_of_args != actual_number_of_args:
+                raise WrongNumberOfArgsError(
+                    expected_number_of_args,
+                    actual_number_of_args,
+                )
+            for arg_idx, arg in enumerate(args):
+                self.bind_args_to_memory_view(arg_idx, arg)
+            return self.evaluate()
 
     def call_with_kwargs(self, **kwargs: float) -> np.ndarray:
         """
@@ -882,6 +954,36 @@ class Scalar(SymbolicMathType):
     def is_const_false(self):
         return self.is_constant() and self == False
 
+    def is_true(self) -> Scalar:
+        """
+        :return: An expression that is True wherever this one is the trinary True.
+        """
+        return Scalar(ca.eq(self.casadi_sx, True))
+
+    def is_not_true(self) -> Scalar:
+        """
+        :return: maps True -> False, UNKNOW/False -> True
+        """
+        return trinary_logic_not(self.is_true())
+
+    def is_false(self) -> Scalar:
+        """
+        :return: An expression that is True wherever this one is the trinary False.
+        """
+        return Scalar(ca.eq(self.casadi_sx, False))
+
+    def is_not_false(self) -> Scalar:
+        """
+        :return: maps False -> True, UNKNOW/True -> False
+        """
+        return trinary_logic_not(self.is_false())
+
+    def is_unknown(self) -> Scalar:
+        """
+        :return: An expression that is True wherever this one is the trinary Unknown.
+        """
+        return Scalar(ca.eq(self.casadi_sx, 0.5))
+
     def __bool__(self) -> bool:
         """
         Evaluates the object as a boolean value, implementing the `__bool__` special
@@ -1072,6 +1174,16 @@ class FloatVariable(Scalar):
         casadi_sx = ca.SX.sym(self.name)
         self._registry[casadi_sx] = self
         super().__init__(casadi_sx)
+
+    def __copy__(self) -> Scalar:
+        """
+        A variable cannot be copied as a variable: a copy that is then changed is no
+        longer that variable. Copying yields a plain expression over the same symbol,
+        which is what every other operation on a variable returns.
+
+        :return: An expression over the same symbol.
+        """
+        return Scalar.from_casadi_sx(copy.copy(self.casadi_sx))
 
     @classmethod
     def create_with_resolver(cls, name: str, resolver: Callable[[], float]) -> Self:
@@ -1265,8 +1377,8 @@ class Matrix(SymbolicMathType):
         """
         Iterate over the first axis of the matrix, yielding Vector rows.
 
-        This mirrors NumPy's behavior for 2D arrays where iteration returns 1D row views
-        along axis 0.
+        This mirrors NumPy's behavior for 2D arrays where iteration returns one Vector
+        per row, in order, along axis 0.
         """
         for i in range(self.shape[0]):
             yield Vector.from_casadi_sx(self.casadi_sx[i, :])
@@ -2071,9 +2183,9 @@ def trinary_logic_and(*args: FloatVariable | Scalar) -> Scalar:
         Unknown | Unknown | Unknown | False
         False   | False   | False   | False
     """
-    if len(args) < 2:
+    if len(args) < 1:
         raise NotEnoughArgumentsError(
-            minimum_number_of_arguments=2, actual_number_of_arguments=len(args)
+            minimum_number_of_arguments=1, actual_number_of_arguments=len(args)
         )
     # if there is any False, return False
     if any(x for x in args if x.is_const_false()):
@@ -2100,15 +2212,15 @@ def trinary_logic_or(*args: FloatVariable | Scalar) -> Scalar:
         Unknown | True    | Unknown | Unknown
         False   | True    | Unknown | False
     """
-    if len(args) < 2:
+    if len(args) < 1:
         raise NotEnoughArgumentsError(
-            minimum_number_of_arguments=2, actual_number_of_arguments=len(args)
+            minimum_number_of_arguments=1, actual_number_of_arguments=len(args)
         )
-    # if there is any False, return False
+    # if there is any True, return True
     if any(x for x in args if x.is_const_true()):
         return Scalar.const_true()
-    # filter all True
-    args = [x for x in args if not x.is_const_true()]
+    # filter all False
+    args = [x for x in args if not x.is_const_false()]
     if len(args) == 0:
         return Scalar.const_false()
     if len(args) == 1:
