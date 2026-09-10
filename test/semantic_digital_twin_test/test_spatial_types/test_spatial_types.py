@@ -1,3 +1,4 @@
+import dataclasses
 from copy import deepcopy
 
 import numpy as np
@@ -20,7 +21,7 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import Pose, SpatialType
 from semantic_digital_twin.world_description.world_entity import Body
 from .reference_implementations import (
     rotation_matrix_from_quaternion,
@@ -2184,3 +2185,36 @@ class TestConstantEntriesAreNormalised:
             sm.to_sx(self._matrix_with_wrong_constant_entries())
         )
         np.testing.assert_array_equal(rotation.to_np()[:3, 3], [0.0, 0.0, 0.0])
+
+
+# %% the reference frame every spatial type inherits
+
+
+class TestTheReferenceFrameIsInheritedAsAField:
+    """
+    ``SpatialType`` declares the reference frame once, and only a dataclass turns that
+    declaration into a field of the types inheriting it.
+
+    Where it stays a plain class attribute, whoever reads it off the class finds the
+    declaration itself instead of a frame.
+    """
+
+    spatial_types = [
+        Point3,
+        Vector3,
+        RotationMatrix,
+        Quaternion,
+        HomogeneousTransformationMatrix,
+        Pose,
+    ]
+
+    @pytest.mark.parametrize("spatial_type", spatial_types)
+    def test_a_spatial_type_inherits_what_spatial_type_declares(self, spatial_type):
+        """
+        Every field of ``SpatialType`` is a field of the type inheriting from it.
+        """
+        declared = {declaration.name for declaration in dataclasses.fields(SpatialType)}
+        inherited = {
+            declaration.name for declaration in dataclasses.fields(spatial_type)
+        }
+        assert declared <= inherited
