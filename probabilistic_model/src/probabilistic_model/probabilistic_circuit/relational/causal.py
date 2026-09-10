@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing_extensions import TYPE_CHECKING, List, Optional, TypeAlias
+from typing_extensions import TYPE_CHECKING, List, Optional
 
 import pandas as pd
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
@@ -44,15 +44,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-VariableReference: TypeAlias = Variable | str | MappedVariable
-"""
-A cause, effect, or adjustment variable, given as an already-resolved ``Variable``, an
-EQL attribute-access expression (e.g. ``variable(Molecule).mutagenic``, or
-``variable(MoleculeAggregations).chlorine_count()`` for an aggregation), or a dotted
-access-path string -- all resolved against a grounded circuit via
-:meth:`RelationalCausalCircuit.resolve_variable`.
-"""
-
 
 @dataclass
 class RelationalCausalCircuit:
@@ -64,8 +55,10 @@ class RelationalCausalCircuit:
 
     adjustment_region_count_warning_threshold: int = 1000
     """
-    Warn rather than silently proceed when the Cartesian product of an adjustment
-    set's leaf-region counts exceeds this. See :meth:`from_grounded_circuit`.
+    Warn rather than silently proceed when the Cartesian product of an adjustment set's
+    leaf-region counts exceeds this.
+
+    See :meth:`from_grounded_circuit`.
     """
 
     @staticmethod
@@ -104,26 +97,6 @@ class RelationalCausalCircuit:
             raise VariableNotFoundError(path, list(circuit.variables))
         raise AmbiguousVariablePathError(path, matches)
 
-    @staticmethod
-    def _resolve_variables(
-        circuit: ProbabilisticCircuit, variables: List[VariableReference]
-    ) -> List[Variable]:
-        """
-        Resolve a mixed list of Variables and dotted access-path strings.
-
-        :param circuit: The grounded circuit to resolve any path strings against.
-        :param variables: Variables and/or dotted access-path strings.
-        :return: The resolved Variables, in input order.
-        """
-        return [
-            (
-                variable
-                if isinstance(variable, Variable)
-                else RelationalCausalCircuit.resolve_variable(circuit, variable)
-            )
-            for variable in variables
-        ]
-
     def fit(
         self,
         relational_probabilistic_circuit: RelationalProbabilisticCircuit,
@@ -138,19 +111,18 @@ class RelationalCausalCircuit:
 
         Partitions the training dataframe by ``stratify_by``'s exact value and fits one
         sub-circuit per partition (see :meth:`_fit_stratified_class_circuit`), rather
-        than the plain, unconstrained fit
-        ``RelationalProbabilisticCircuit.fit`` otherwise runs: every row sharing a
-        value then ends up under one circuit branch by construction, instead of
-        possibly split across sibling leaves.
+        than the plain, unconstrained fit ``RelationalProbabilisticCircuit.fit``
+        otherwise runs: every row sharing a value then ends up under one circuit branch
+        by construction, instead of possibly split across sibling leaves.
 
         :param relational_probabilistic_circuit: The circuit to fit, in place.
         :param instances: Training instances; all must share the same DAO class.
         :param stratify_by: Name of the class-level dataframe column to partition the
-            training data by -- an EQL attribute-access expression's own ``._name_``,
-            or the equivalent dotted access-path string.
+            training data by -- an EQL attribute-access expression's own ``._name_``, or
+            the equivalent dotted access-path string.
         :param dataframe_from_parent: Forwarded to
             ``RelationalProbabilisticCircuit.fit``.
-        :return: ``relational_probabilistic_circuit``, fitted, to allow chaining.
+        :return:``relational_probabilistic_circuit``, fitted, to allow chaining.
         """
         relational_probabilistic_circuit.class_circuit_builder = (
             lambda class_dataframe, variables: self._fit_stratified_class_circuit(
@@ -203,9 +175,9 @@ class RelationalCausalCircuit:
         self,
         relational_probabilistic_circuit: RelationalProbabilisticCircuit,
         query: Match,
-        causal_variables: List[VariableReference],
-        effect_variables: List[VariableReference],
-        adjustment_variables: Optional[List[VariableReference]] = None,
+        causal_variables: List[Variable],
+        effect_variables: List[Variable],
+        adjustment_variables: Optional[List[Variable]] = None,
         grounding_mode: GroundingMode = GroundingMode.SAMPLED,
         trim_to_registered_variables: bool = False,
     ) -> CausalCircuit:
@@ -219,9 +191,11 @@ class RelationalCausalCircuit:
         :param relational_probabilistic_circuit: The fitted relational circuit to
             ground.
         :param query: The grounding query.
-        :param causal_variables: Cause variables to register, as Variables or dotted
-            access-path strings resolved against the grounded circuit (see
-            :meth:`resolve_variable`).
+        :param causal_variables: Already-resolved cause variables to register. If you
+            only have a name, ground ``relational_probabilistic_circuit`` for the same
+            query yourself first, resolve the name against that circuit (see
+            :meth:`resolve_variable`), and pass the result here -- a Variable's name
+            identifies it regardless of which grounding produced it.
         :param effect_variables: Effect variables to register, same format.
         :param adjustment_variables: Backdoor-adjustment variables to register, same
             format. Defaults to none.
@@ -250,9 +224,9 @@ class RelationalCausalCircuit:
     def from_grounded_circuit(
         self,
         grounded_circuit: ProbabilisticCircuit,
-        causal_variables: List[VariableReference],
-        effect_variables: List[VariableReference],
-        adjustment_variables: Optional[List[VariableReference]] = None,
+        causal_variables: List[Variable],
+        effect_variables: List[Variable],
+        adjustment_variables: Optional[List[Variable]] = None,
         trim_to_registered_variables: bool = False,
     ) -> CausalCircuit:
         """
@@ -264,9 +238,9 @@ class RelationalCausalCircuit:
         can be wrapped this way, whether or not it was built with causal use in mind.
 
         :param grounded_circuit: The grounded circuit to wrap.
-        :param causal_variables: Cause variables to register, as Variables or dotted
-            access-path strings resolved against ``grounded_circuit`` (see
-            :meth:`resolve_variable`).
+        :param causal_variables: Already-resolved cause variables to register. Resolve
+            a name against ``grounded_circuit`` first (see :meth:`resolve_variable`) if
+            you only have one.
         :param effect_variables: Effect variables to register, same format.
         :param adjustment_variables: Backdoor-adjustment variables to register, same
             format. Defaults to none.
@@ -288,11 +262,6 @@ class RelationalCausalCircuit:
             support-deterministic for ``causal_variables``.
         """
         adjustment_variables = adjustment_variables or []
-        causal_variables = self._resolve_variables(grounded_circuit, causal_variables)
-        effect_variables = self._resolve_variables(grounded_circuit, effect_variables)
-        adjustment_variables = self._resolve_variables(
-            grounded_circuit, adjustment_variables
-        )
 
         if trim_to_registered_variables:
             registered_variables = list(

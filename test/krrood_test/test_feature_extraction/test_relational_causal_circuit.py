@@ -81,28 +81,29 @@ def test_resolve_variable_raises_for_ambiguous_suffix(rpc, room_query_4):
 # %% RelationalCausalCircuit.ground
 
 
+def _resolve_against_a_fresh_grounding(rpc, query, paths, grounding_mode):
+    """
+    Resolve each of ``paths`` against a circuit grounded just for that purpose.
+
+    ``RelationalCausalCircuit.ground`` requires already-resolved Variables (see its
+    docstring), since it accepts no path strings itself; a caller who only has names
+    grounds once to resolve them, the way this helper does, before grounding again for
+    the ``CausalCircuit`` it actually wants.
+
+    :param rpc: The relational circuit to ground.
+    :param query: The grounding query.
+    :param paths: Dotted access-path strings to resolve.
+    :param grounding_mode: The grounding mode to resolve under.
+    :return: The resolved Variables, in input order.
+    """
+    grounded = rpc.ground(query, grounding_mode=grounding_mode)
+    return [RelationalCausalCircuit.resolve_variable(grounded, path) for path in paths]
+
+
 def test_relational_causal_circuit_ground_returns_a_causal_circuit(rpc, room_query_4):
     np.random.seed(0)
-    causal_circuit = RelationalCausalCircuit().ground(
-        rpc,
-        room_query_4,
-        causal_variables=["chair_count()"],
-        effect_variables=["objects[0].type"],
-    )
-    assert isinstance(causal_circuit, CausalCircuit)
-
-
-def test_relational_causal_circuit_ground_accepts_resolved_variables(rpc, room_query_4):
-    """
-    Callers may pass already-resolved Variable objects instead of path strings.
-    """
-    np.random.seed(0)
-    grounded = rpc.ground(room_query_4, grounding_mode=GroundingMode.SAMPLED)
-    chair_count_variable = RelationalCausalCircuit.resolve_variable(
-        grounded, "chair_count()"
-    )
-    object_type_variable = RelationalCausalCircuit.resolve_variable(
-        grounded, "objects[0].type"
+    [chair_count_variable, object_type_variable] = _resolve_against_a_fresh_grounding(
+        rpc, room_query_4, ["chair_count()", "objects[0].type"], GroundingMode.SAMPLED
     )
 
     np.random.seed(0)
@@ -121,11 +122,16 @@ def test_relational_causal_circuit_ground_defaults_to_causal_sampled(rpc, room_q
     entire point of grounding a CausalCircuit this way.
     """
     np.random.seed(0)
+    [chair_count_variable, object_type_variable] = _resolve_against_a_fresh_grounding(
+        rpc, room_query_4, ["chair_count()", "objects[0].type"], GroundingMode.SAMPLED
+    )
+
+    np.random.seed(0)
     causal_circuit = RelationalCausalCircuit().ground(
         rpc,
         room_query_4,
-        causal_variables=["chair_count()"],
-        effect_variables=["objects[0].type"],
+        causal_variables=[chair_count_variable],
+        effect_variables=[object_type_variable],
     )
     names = {v.name for v in causal_circuit.probabilistic_circuit.variables}
     assert "SceneRoomAggregations.chair_count()" in names
@@ -133,11 +139,16 @@ def test_relational_causal_circuit_ground_defaults_to_causal_sampled(rpc, room_q
 
 def test_relational_causal_circuit_ground_backdoor_adjustment_runs(rpc, room_query_4):
     np.random.seed(0)
+    [chair_count_variable, object_type_variable] = _resolve_against_a_fresh_grounding(
+        rpc, room_query_4, ["chair_count()", "objects[0].type"], GroundingMode.SAMPLED
+    )
+
+    np.random.seed(0)
     causal_circuit = RelationalCausalCircuit().ground(
         rpc,
         room_query_4,
-        causal_variables=["chair_count()"],
-        effect_variables=["objects[0].type"],
+        causal_variables=[chair_count_variable],
+        effect_variables=[object_type_variable],
     )
     chair_count_variable = RelationalCausalCircuit.resolve_variable(
         causal_circuit.probabilistic_circuit, "chair_count()"
@@ -159,13 +170,27 @@ def test_relational_causal_circuit_ground_warns_on_expensive_adjustment_set(
     together must warn once their leaf-region product exceeds the configured threshold,
     rather than waiting to discover the cost at query time.
     """
+    object_type_0, object_type_1, chair_count_variable, table_count_variable = (
+        _resolve_against_a_fresh_grounding(
+            rpc,
+            room_query_4,
+            [
+                "objects[0].type",
+                "objects[1].type",
+                "chair_count()",
+                "table_count()",
+            ],
+            GroundingMode.EXACT,
+        )
+    )
+
     with caplog.at_level("WARNING"):
         RelationalCausalCircuit(adjustment_region_count_warning_threshold=0).ground(
             rpc,
             room_query_4,
-            causal_variables=["objects[0].type"],
-            effect_variables=["objects[1].type"],
-            adjustment_variables=["chair_count()", "table_count()"],
+            causal_variables=[object_type_0],
+            effect_variables=[object_type_1],
+            adjustment_variables=[chair_count_variable, table_count_variable],
             grounding_mode=GroundingMode.EXACT,
         )
     assert any("leaf regions" in message for message in caplog.messages)
@@ -174,15 +199,29 @@ def test_relational_causal_circuit_ground_warns_on_expensive_adjustment_set(
 def test_relational_causal_circuit_ground_does_not_warn_below_threshold(
     rpc, room_query_4, caplog
 ):
+    object_type_0, object_type_1, chair_count_variable, table_count_variable = (
+        _resolve_against_a_fresh_grounding(
+            rpc,
+            room_query_4,
+            [
+                "objects[0].type",
+                "objects[1].type",
+                "chair_count()",
+                "table_count()",
+            ],
+            GroundingMode.EXACT,
+        )
+    )
+
     with caplog.at_level("WARNING"):
         RelationalCausalCircuit(
             adjustment_region_count_warning_threshold=10_000
         ).ground(
             rpc,
             room_query_4,
-            causal_variables=["objects[0].type"],
-            effect_variables=["objects[1].type"],
-            adjustment_variables=["chair_count()", "table_count()"],
+            causal_variables=[object_type_0],
+            effect_variables=[object_type_1],
+            adjustment_variables=[chair_count_variable, table_count_variable],
             grounding_mode=GroundingMode.EXACT,
         )
     assert not any("leaf regions" in message for message in caplog.messages)
