@@ -16,6 +16,7 @@ dependencies = [
     "krrood",
     "probabilistic_model",
     "random_events",
+    "segmind",
     "semantic_digital_twin",
 ]
 
