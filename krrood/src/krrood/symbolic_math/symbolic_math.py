@@ -945,14 +945,23 @@ class Scalar(SymbolicMathType):
     def const_true(cls) -> Self:
         return cls(True)
 
-    def is_const_true(self):
-        return self.is_constant() and self == True
+    def is_const_true(self) -> bool:
+        """
+        Determine whether the scalar is constantly true.
+        """
+        return self.is_constant() and bool(self == True)
 
-    def is_const_unknown(self):
-        return self.is_constant() and self == 0.5
+    def is_const_unknown(self) -> bool:
+        """
+        Determine whether the scalar is constantly unknown.
+        """
+        return self.is_constant() and bool(self == 0.5)
 
-    def is_const_false(self):
-        return self.is_constant() and self == False
+    def is_const_false(self) -> bool:
+        """
+        Determine whether the scalar is constantly false.
+        """
+        return self.is_constant() and bool(self == False)
 
     def is_true(self) -> Scalar:
         """
@@ -1032,34 +1041,71 @@ class Scalar(SymbolicMathType):
     # %% Comparison operations
     def _compare(
         self, other: Scalar | FloatVariable | NumericalScalar | bool, op_f: Callable
-    ) -> Scalar | bool:
+    ) -> Scalar:
+        """
+        Compare this scalar with another value using the given operator function.
+
+        :param other: Value to compare with.
+        :param op_f: Operator function to apply.
+        :return: A scalar expression representing the result of the comparison.
+        """
         left = to_sx(self)
         right = to_sx(other)
         result = op_f(left, right)
-        if result.is_constant():
-            return bool(result)
         return Scalar.from_casadi_sx(result)
 
-    def __eq__(
-        self, other: Scalar | FloatVariable | NumericalScalar | bool
-    ) -> Scalar | bool:
+    def __eq__(self, other: Scalar | FloatVariable | NumericalScalar | bool) -> Scalar:
+        """
+        Compare for equality.
+
+        :param other: Value to compare with.
+        :return: A scalar representing the equality comparison.
+        """
         return self._compare(other, operator.eq)
 
-    def __ne__(
-        self, other: Scalar | FloatVariable | NumericalScalar | bool
-    ) -> Scalar | bool:
+    def __ne__(self, other: Scalar | FloatVariable | NumericalScalar | bool) -> Scalar:
+        """
+        Compare for inequality.
+
+        :param other: Value to compare with.
+        :return: A scalar representing the inequality comparison.
+        """
         return self._compare(other, operator.ne)
 
-    def __le__(self, other: Scalar | FloatVariable) -> Scalar | bool:
+    def __le__(self, other: Scalar | FloatVariable | NumericalScalar | bool) -> Scalar:
+        """
+        Compare for less than or equal to.
+
+        :param other: Value to compare with.
+        :return: A scalar representing the comparison result.
+        """
         return self._compare(other, operator.le)
 
-    def __lt__(self, other: Scalar | FloatVariable) -> Scalar | bool:
+    def __lt__(self, other: Scalar | FloatVariable | NumericalScalar | bool) -> Scalar:
+        """
+        Compare for less than.
+
+        :param other: Value to compare with.
+        :return: A scalar representing the comparison result.
+        """
         return self._compare(other, operator.lt)
 
-    def __ge__(self, other: Scalar | FloatVariable) -> Scalar | bool:
+    def __ge__(self, other: Scalar | FloatVariable | NumericalScalar | bool) -> Scalar:
+        """
+        Compare for greater than or equal to.
+
+        :param other: Value to compare with.
+        :return: A scalar representing the comparison result.
+        """
         return self._compare(other, operator.ge)
 
-    def __gt__(self, other: Scalar | FloatVariable) -> Scalar | bool:
+    def __gt__(self, other: Scalar | FloatVariable | NumericalScalar | bool) -> Scalar:
+        """
+        Compare for greater than.
+
+        :param other: Value to compare with.
+        :return: A scalar representing the comparison result.
+        """
         return self._compare(other, operator.gt)
 
     # %% Arithmatic operations
