@@ -131,7 +131,7 @@ def test_only_the_surface_asked_about_is_searched(
 ):
     request = SceneRequest(supporting_surface=pipeline.lid.name)
 
-    searches = pipeline.searched_surfaces(scene.board, request)
+    searches = pipeline.searched_surfaces(pipeline.table, scene.board, request)
 
     assert [search.surface for search in searches] == [pipeline.lid]
 
@@ -139,7 +139,7 @@ def test_only_the_surface_asked_about_is_searched(
 def test_every_surface_is_searched_when_the_request_names_none(
     pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    searches = pipeline.searched_surfaces(scene.board, SceneRequest())
+    searches = pipeline.searched_surfaces(pipeline.table, scene.board, SceneRequest())
 
     assert [search.surface for search in searches] == [pipeline.table, pipeline.lid]
 
