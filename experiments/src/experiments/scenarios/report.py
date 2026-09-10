@@ -7,7 +7,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import List
+from typing_extensions import List, Protocol
 
 from experiments.experiment_definitions import (
     DEFAULT_CONFIDENCE_LEVEL,
@@ -18,7 +18,29 @@ from experiments.experiment_definitions import (
     TypstRenderer,
     Unit,
 )
-from experiments.scenarios.trial import Trial, TrialOutcome
+from experiments.scenarios.trial import TrialOutcome
+
+# %% what a metric reads a trial for
+
+
+class MeasuredTrial(Protocol):
+    """
+    What a metric reads off a finished trial.
+
+    Declared rather than left to convention: a trial a run is still holding and a trial
+    read back out of the database are different classes, and a metric measures either.
+    """
+
+    outcome: TrialOutcome
+    """
+    Whether the trial reached the scenario's goal.
+    """
+
+    duration: float
+    """
+    How long the trial took, in seconds.
+    """
+
 
 # %% one number read off a trial
 
@@ -35,7 +57,7 @@ class Metric(ABC):
     """
 
     @abstractmethod
-    def measure(self, trial: Trial) -> float:
+    def measure(self, trial: MeasuredTrial) -> float:
         """
         Read this metric's number off the given trial.
 
@@ -50,7 +72,7 @@ class GoalReached(Metric):
     success rate of the run.
     """
 
-    def measure(self, trial: Trial) -> float:
+    def measure(self, trial: MeasuredTrial) -> float:
         return float(trial.outcome is TrialOutcome.SUCCEEDED)
 
 
@@ -62,7 +84,7 @@ class TrialDuration(Metric):
 
     unit: Unit = Unit.SECONDS
 
-    def measure(self, trial: Trial) -> float:
+    def measure(self, trial: MeasuredTrial) -> float:
         return trial.duration
 
 
@@ -102,7 +124,7 @@ class Report:
     The scenario the trials ran.
     """
 
-    trials: List[Trial]
+    trials: List[MeasuredTrial]
     """
     The trials the metrics are measured over.
     """
