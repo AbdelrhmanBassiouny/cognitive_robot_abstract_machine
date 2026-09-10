@@ -25,11 +25,11 @@ from experiments.montessori.perception.orthophoto import (
     OrthophotoProjector,
     WorkspaceRegion,
 )
+from experiments.montessori.perception.look_choice import RectifiedFrame
 from experiments.montessori.perception.pipeline import (
     ColorBlobDetector,
     EdgeFitDetector,
     MontessoriPerceptionPipeline,
-    RectifiedFrame,
 )
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import (
@@ -178,7 +178,7 @@ def test_the_hue_separation_wraps_around_the_colour_circle():
 def test_the_edge_fit_answers_a_look_for_a_piece_of_known_outline():
     look = TargetOnSurface.of(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
 
-    assert EdgeFitDetector().answers(look)
+    assert EdgeFitDetector().asked_about(look).tolist()
 
 
 def test_the_color_blob_answers_only_where_colour_separates_the_target():
@@ -188,17 +188,19 @@ def test_the_color_blob_answers_only_where_colour_separates_the_target():
     )
     detector = ColorBlobDetector()
 
-    assert detector.answers(separating)
-    assert not detector.answers(merging)
+    assert detector.asked_about(separating).tolist()
+    assert not detector.asked_about(merging).tolist()
 
 
 def test_a_detector_states_the_looks_it_answers_once_and_is_asked_per_look():
     detector = EdgeFitDetector()
     look = TargetOnSurface.of(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
 
-    assert detector.answers(look)
+    assert detector.asked_about(look).tolist()
     stated = detector.answerable_looks
-    assert not detector.answers(replace(look, target_outline_is_known=False))
+    assert not detector.asked_about(
+        replace(look, target_outline_is_known=False)
+    ).tolist()
 
     assert detector.answerable_looks is stated
 
@@ -275,7 +277,7 @@ def test_every_detector_the_rules_choose_declared_it_could_answer(rules):
     ]
 
     for look in looks:
-        assert rules.detector_for(look).answers(look)
+        assert rules.detector_for(look).asked_about(look).tolist()
 
 
 # %% growing the rules while they are in use
@@ -385,8 +387,10 @@ def test_nothing_is_annotated_yet_so_every_look_falls_to_the_edge_fit(
     pipeline: MontessoriPerceptionPipeline,
 ):
     for surface in (pipeline.table, pipeline.lid):
-        [(detector, chosen_for)] = pipeline.detector_rules.detectors_for(
-            surface, KNOWN_PIECES
+        [(detector, chosen_for)] = (
+            pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
+                surface, KNOWN_PIECES
+            )
         )
         assert isinstance(detector, EdgeFitDetector)
         assert chosen_for == KNOWN_PIECES
@@ -395,8 +399,10 @@ def test_nothing_is_annotated_yet_so_every_look_falls_to_the_edge_fit(
 def test_a_mirror_table_is_searched_by_fitting_edges_whatever_the_piece(
     annotated_pipeline: MontessoriPerceptionPipeline,
 ):
-    [(detector, chosen_for)] = annotated_pipeline.detector_rules.detectors_for(
-        annotated_pipeline.table, KNOWN_PIECES
+    [(detector, chosen_for)] = (
+        annotated_pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
+            annotated_pipeline.table, KNOWN_PIECES
+        )
     )
 
     assert isinstance(detector, EdgeFitDetector)
@@ -408,7 +414,7 @@ def test_a_matte_lid_splits_the_pieces_by_whether_colour_separates_them(
 ):
     chosen = {
         type(detector): {piece.hue for piece in pieces}
-        for detector, pieces in annotated_pipeline.detector_rules.detectors_for(
+        for detector, pieces in annotated_pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
             annotated_pipeline.lid, KNOWN_PIECES
         )
     }

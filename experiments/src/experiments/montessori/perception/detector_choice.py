@@ -11,7 +11,8 @@ edits the pipeline.
 The choice is made in two parts, which answer different questions:
 
 - **What a detector can answer at all** is the detector's own statement, as an entity
-  query language condition over the look (see :meth:`PieceDetector.capability`). A
+  query language condition over the look (see
+  :meth:`~krrood.entity_query_language.backends.PerceptionDetector.capability`). A
   detector is never chosen for a look it declared it cannot answer.
 - **Which of the ones that can should**, which is what the rule tree decides.
 
@@ -28,8 +29,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from functools import cached_property
 
+from krrood.entity_query_language.backends import Look, PerceptionDetector
 from krrood.entity_query_language.factories import (
     ConditionType,
     add,
@@ -69,7 +70,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class TargetOnSurface:
+class TargetOnSurface(Look):
     """
     One piece, the surface it is being looked for on, and what the world says about the
     two together.
@@ -121,52 +122,15 @@ class TargetOnSurface:
 # %% what a detector says it can answer
 
 
-class PieceDetector(ABC):
+class PieceDetector(PerceptionDetector[TargetOnSurface], ABC):
     """
     Something that finds the loose pieces resting on one surface.
 
-    A detector states the looks it can answer, so the choice between detectors is made
-    by matching a look against what each one says rather than by a caller knowing which
-    is which.
+    The looks it can answer are the ones its
+    :meth:`~krrood.entity_query_language.backends.PerceptionDetector.capability` states
+    over a :class:`TargetOnSurface`, so the choice between detectors is made by matching
+    a look against what each one says rather than by a caller knowing which is which.
     """
-
-    @abstractmethod
-    def capability(self, look: TargetOnSurface) -> ConditionType:
-        """
-        The looks this detector can answer, as a condition over a look.
-
-        Written as an entity query language condition rather than as a predicate on a
-        value, so the same statement both decides one look and forms part of the rule
-        tree that chooses between detectors.
-
-        :param look: The :class:`TargetOnSurface` variable to state the condition over.
-        :return: The condition, which holds exactly for the looks this detector answers.
-        """
-
-    @cached_property
-    def stated_look(self) -> TargetOnSurface:
-        """
-        The variable this detector states its own capability over.
-
-        The statement is made once and one look at a time is bound to this to ask it.
-        """
-        return variable(TargetOnSurface, domain=[])
-
-    @cached_property
-    def answerable_looks(self) -> Query:
-        """
-        The looks this detector can answer, stated once over :attr:`stated_look`.
-        """
-        return an(entity(self.stated_look).where(self.capability(self.stated_look)))
-
-    def answers(self, look: TargetOnSurface) -> bool:
-        """
-        Whether this detector declares it can answer one look.
-
-        :param look: The look to put to it.
-        """
-        self.stated_look._update_domain_([look])
-        return bool(self.answerable_looks.tolist())
 
     piece_height: float
     """
