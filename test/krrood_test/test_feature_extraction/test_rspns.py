@@ -63,7 +63,7 @@ def scenario():
 
 
 @pytest.fixture
-def rpc(scenario):
+def relational_probabilistic_circuit(scenario):
     room_dao, room2_dao = scenario
     model = RelationalProbabilisticCircuit(SceneRoom)
     model.fit([room_dao, room2_dao])
@@ -87,13 +87,16 @@ def test_ground_before_fit_raises(room_query_4):
         model.ground(room_query_4)
 
 
-def test_fit_class_circuit_is_valid(rpc):
-    assert rpc.class_probabilistic_circuit is not None
-    assert rpc.class_probabilistic_circuit.is_valid()
+def test_fit_class_circuit_is_valid(relational_probabilistic_circuit):
+    assert relational_probabilistic_circuit.class_probabilistic_circuit is not None
+    assert relational_probabilistic_circuit.class_probabilistic_circuit.is_valid()
 
 
-def test_fit_class_circuit_has_room_scalar_variables(rpc):
-    names = {v.name for v in rpc.class_probabilistic_circuit.variables}
+def test_fit_class_circuit_has_room_scalar_variables(relational_probabilistic_circuit):
+    names = {
+        v.name
+        for v in relational_probabilistic_circuit.class_probabilistic_circuit.variables
+    }
     assert "SceneRoom.position.x" in names
     assert "SceneRoom.position.y" in names
     assert "SceneRoom.position.z" in names
@@ -103,57 +106,79 @@ def test_fit_class_circuit_has_room_scalar_variables(rpc):
     assert "SceneRoom.orientation.w" in names
 
 
-def test_fit_class_circuit_has_aggregation_variable(rpc):
-    names = {v.name for v in rpc.class_probabilistic_circuit.variables}
+def test_fit_class_circuit_has_aggregation_variable(relational_probabilistic_circuit):
+    names = {
+        v.name
+        for v in relational_probabilistic_circuit.class_probabilistic_circuit.variables
+    }
     assert "SceneRoomAggregations.total_count()" in names
 
 
-def test_fit_creates_exchangeable_template_for_objects(rpc):
-    assert "objects" in rpc.exchangeable_distribution_templates
-    template = rpc.exchangeable_distribution_templates["objects"]
+def test_fit_creates_exchangeable_template_for_objects(
+    relational_probabilistic_circuit,
+):
+    assert (
+        "objects"
+        in relational_probabilistic_circuit.exchangeable_distribution_templates
+    )
+    template = relational_probabilistic_circuit.exchangeable_distribution_templates[
+        "objects"
+    ]
     assert template.template_distribution.class_probabilistic_circuit is not None
 
 
-def test_fit_exchangeable_template_latent_is_total_count(rpc):
-    template = rpc.exchangeable_distribution_templates["objects"]
+def test_fit_exchangeable_template_latent_is_total_count(
+    relational_probabilistic_circuit,
+):
+    template = relational_probabilistic_circuit.exchangeable_distribution_templates[
+        "objects"
+    ]
     latent_names = {v.name for v in template.latent_variables}
     assert "SceneRoomAggregations.total_count()" in latent_names
 
 
-def test_fit_exchangeable_template_models_object_type(rpc):
-    template = rpc.exchangeable_distribution_templates["objects"]
+def test_fit_exchangeable_template_models_object_type(relational_probabilistic_circuit):
+    template = relational_probabilistic_circuit.exchangeable_distribution_templates[
+        "objects"
+    ]
     pc = template.template_distribution.class_probabilistic_circuit
     names = {v.name for v in pc.variables}
     assert "type" in names
 
 
-def test_ground_circuit_is_valid(rpc, room_query_4):
-    model = rpc.ground(room_query_4)
+def test_ground_circuit_is_valid(relational_probabilistic_circuit, room_query_4):
+    model = relational_probabilistic_circuit.ground(room_query_4)
     assert model.is_valid()
 
 
-def test_ground_has_per_object_type_variables(rpc, room_query_4):
-    model = rpc.ground(room_query_4)
+def test_ground_has_per_object_type_variables(
+    relational_probabilistic_circuit, room_query_4
+):
+    model = relational_probabilistic_circuit.ground(room_query_4)
     names = {v.name for v in model.variables}
     for i in range(4):
         assert f"SceneRoom.objects[{i}].type" in names
 
 
-def test_ground_preserves_room_scalar_variables(rpc, room_query_4):
-    model = rpc.ground(room_query_4)
+def test_ground_preserves_room_scalar_variables(
+    relational_probabilistic_circuit, room_query_4
+):
+    model = relational_probabilistic_circuit.ground(room_query_4)
     names = {v.name for v in model.variables}
     assert "SceneRoom.position.x" in names
     assert "SceneRoom.orientation.w" in names
 
 
-def test_ground_retains_unavailable_aggregates_by_default(rpc, room_query_4):
+def test_ground_retains_unavailable_aggregates_by_default(
+    relational_probabilistic_circuit, room_query_4
+):
     """
     ``chair_count`` and ``table_count`` cannot be determined from the underspecified
     query, so the Monte-Carlo path must retain them as variables (grounding never
     integrates undetermined latents out), alongside the object-type variables.
     """
     np.random.seed(0)
-    model = rpc.ground(room_query_4)
+    model = relational_probabilistic_circuit.ground(room_query_4)
     names = {v.name for v in model.variables}
     assert "SceneRoomAggregations.chair_count()" in names
     assert "SceneRoomAggregations.table_count()" in names
@@ -161,36 +186,92 @@ def test_ground_retains_unavailable_aggregates_by_default(rpc, room_query_4):
         assert f"SceneRoom.objects[{i}].type" in names
 
 
-def test_ground_with_unavailable_aggregate_is_valid(rpc, room_query_4):
+def test_ground_with_unavailable_aggregate_is_valid(
+    relational_probabilistic_circuit, room_query_4
+):
     np.random.seed(0)
-    assert rpc.ground(room_query_4).is_valid()
+    assert relational_probabilistic_circuit.ground(room_query_4).is_valid()
 
 
-def test_non_positive_sample_count_raises_when_integration_needed(rpc, room_query_4):
+def test_non_positive_sample_count_raises_when_integration_needed(
+    relational_probabilistic_circuit, room_query_4
+):
     """
     Monte-Carlo integration cannot be disabled: a non-positive sample count is rejected
     when undetermined aggregates must be integrated out.
     """
-    rpc.monte_carlo_sample_count = 0
+    relational_probabilistic_circuit.monte_carlo_sample_count = 0
     with pytest.raises(InvalidMonteCarloSampleCountError):
-        rpc.ground(room_query_4)
+        relational_probabilistic_circuit.ground(room_query_4)
 
 
-def test_monte_carlo_sample_count_controls_mixture_size(rpc, room_query_4):
+@pytest.fixture
+def relational_probabilistic_circuit_with_ambiguous_total_count_4():
+    """
+    Two rooms share ``total_count() == 4`` but split it differently between chairs and
+    tables (3 chairs/1 table vs.
+
+    2 chairs/2 tables), so conditioning on 4 objects still
+    leaves genuine ambiguity between two distinct ``(chair_count, table_count)``
+    aggregate values for :func:`test_monte_carlo_sample_count_controls_mixture_size` to
+    discover -- ``relational_probabilistic_circuit``'s own two rooms have distinct ``total_count()`` values (3 and
+    4), so conditioning on 4 objects there pins the aggregates down to a single value
+    regardless of sample count.
+    """
+    three_chairs_one_table = SceneRoom(
+        position=KRROODPosition(x=4.0, y=3.0, z=0.0),
+        orientation=KRROODOrientation(x=0.0, y=0.0, z=0.0, w=1.0),
+        objects=[
+            SceneObject(type=SceneObjectType.TABLE),
+            SceneObject(type=SceneObjectType.CHAIR),
+            SceneObject(type=SceneObjectType.CHAIR),
+            SceneObject(type=SceneObjectType.CHAIR),
+        ],
+    )
+    two_chairs_two_tables = SceneRoom(
+        position=KRROODPosition(x=5.0, y=2.0, z=0.0),
+        orientation=KRROODOrientation(x=0.0, y=0.0, z=0.0, w=1.0),
+        objects=[
+            SceneObject(type=SceneObjectType.TABLE),
+            SceneObject(type=SceneObjectType.TABLE),
+            SceneObject(type=SceneObjectType.CHAIR),
+            SceneObject(type=SceneObjectType.CHAIR),
+        ],
+    )
+    model = RelationalProbabilisticCircuit(SceneRoom)
+    model.fit([to_dao(three_chairs_one_table), to_dao(two_chairs_two_tables)])
+    return model
+
+
+def test_monte_carlo_sample_count_controls_mixture_size(
+    relational_probabilistic_circuit_with_ambiguous_total_count_4, room_query_4
+):
     """
     Drawing more samples discovers more distinct aggregate values, each adding an
     exchangeable-distribution instance (and its sum units) to the mixture.
     """
     np.random.seed(0)
-    rpc.monte_carlo_sample_count = 1
-    single = sum(1 for n in rpc.ground(room_query_4).nodes() if isinstance(n, SumUnit))
+    relational_probabilistic_circuit_with_ambiguous_total_count_4.monte_carlo_sample_count = (
+        1
+    )
+    single = len(
+        relational_probabilistic_circuit_with_ambiguous_total_count_4.ground(
+            room_query_4
+        ).nodes()
+    )
     np.random.seed(0)
-    rpc.monte_carlo_sample_count = 50
-    many = sum(1 for n in rpc.ground(room_query_4).nodes() if isinstance(n, SumUnit))
+    relational_probabilistic_circuit_with_ambiguous_total_count_4.monte_carlo_sample_count = (
+        50
+    )
+    many = len(
+        relational_probabilistic_circuit_with_ambiguous_total_count_4.ground(
+            room_query_4
+        ).nodes()
+    )
     assert many > single
 
 
-def test_ground_variable_count_scales_with_query_size(rpc):
+def test_ground_variable_count_scales_with_query_size(relational_probabilistic_circuit):
     query_2 = a(SceneRoom)(
         position=a(KRROODPosition)(x=..., y=..., z=...),
         orientation=a(KRROODOrientation)(x=..., y=..., z=..., w=...),
@@ -203,31 +284,43 @@ def test_ground_variable_count_scales_with_query_size(rpc):
         objects=[a(SceneObject)(type=...) for _ in range(4)],
     )
     query_4.resolve()
-    assert len(rpc.ground(query_4).variables) > len(rpc.ground(query_2).variables)
+    assert len(relational_probabilistic_circuit.ground(query_4).variables) > len(
+        relational_probabilistic_circuit.ground(query_2).variables
+    )
 
 
 # %% GroundingMode.SAMPLED retains undetermined latents instead of discarding them
 
 
-def test_sampled_grounding_retains_undetermined_latents_as_variables(rpc, room_query_4):
+def test_sampled_grounding_retains_undetermined_latents_as_variables(
+    relational_probabilistic_circuit, room_query_4
+):
     np.random.seed(0)
-    model = rpc.ground(room_query_4, grounding_mode=GroundingMode.SAMPLED)
+    model = relational_probabilistic_circuit.ground(
+        room_query_4, grounding_mode=GroundingMode.SAMPLED
+    )
     names = {v.name for v in model.variables}
     assert "SceneRoomAggregations.chair_count()" in names
     assert "SceneRoomAggregations.table_count()" in names
 
 
-def test_sampled_grounding_preserves_object_type_variables(rpc, room_query_4):
+def test_sampled_grounding_preserves_object_type_variables(
+    relational_probabilistic_circuit, room_query_4
+):
     np.random.seed(0)
-    model = rpc.ground(room_query_4, grounding_mode=GroundingMode.SAMPLED)
+    model = relational_probabilistic_circuit.ground(
+        room_query_4, grounding_mode=GroundingMode.SAMPLED
+    )
     names = {v.name for v in model.variables}
     for i in range(4):
         assert f"SceneRoom.objects[{i}].type" in names
 
 
-def test_sampled_grounding_is_valid(rpc, room_query_4):
+def test_sampled_grounding_is_valid(relational_probabilistic_circuit, room_query_4):
     np.random.seed(0)
-    model = rpc.ground(room_query_4, grounding_mode=GroundingMode.SAMPLED)
+    model = relational_probabilistic_circuit.ground(
+        room_query_4, grounding_mode=GroundingMode.SAMPLED
+    )
     assert model.is_valid()
 
 
@@ -251,7 +344,9 @@ def _causal_circuit_for(model):
     )
 
 
-def test_sampled_grounding_supports_causal_circuit_registration(rpc, room_query_4):
+def test_sampled_grounding_supports_causal_circuit_registration(
+    relational_probabilistic_circuit, room_query_4
+):
     """
     The whole point of ``GroundingMode.SAMPLED``: a latent that predictive
     grounding would have discarded must be usable as a registered cause in a
@@ -259,14 +354,18 @@ def test_sampled_grounding_supports_causal_circuit_registration(rpc, room_query_
     precondition ``backdoor_adjustment`` relies on.
     """
     np.random.seed(0)
-    model = rpc.ground(room_query_4, grounding_mode=GroundingMode.SAMPLED)
+    model = relational_probabilistic_circuit.ground(
+        room_query_4, grounding_mode=GroundingMode.SAMPLED
+    )
     causal_circuit = _causal_circuit_for(model)
 
     result = causal_circuit.verify_support_determinism()
     assert result.passed
 
 
-def test_sampled_grounding_backdoor_adjustment_runs(rpc, room_query_4):
+def test_sampled_grounding_backdoor_adjustment_runs(
+    relational_probabilistic_circuit, room_query_4
+):
     """
     End-to-end regression test: computing ``P(effect | do(cause))`` on a
     ``SAMPLED``-grounded circuit must not raise.
@@ -275,7 +374,9 @@ def test_sampled_grounding_backdoor_adjustment_runs(rpc, room_query_4):
     whose grounded circuit happens to collapse to a single leaf as its own root.
     """
     np.random.seed(0)
-    model = rpc.ground(room_query_4, grounding_mode=GroundingMode.SAMPLED)
+    model = relational_probabilistic_circuit.ground(
+        room_query_4, grounding_mode=GroundingMode.SAMPLED
+    )
     causal_circuit = _causal_circuit_for(model)
 
     interventional_circuit = causal_circuit.backdoor_adjustment(
@@ -288,19 +389,27 @@ def test_sampled_grounding_backdoor_adjustment_runs(rpc, room_query_4):
 # %% GroundingMode.EXACT retains undetermined latents via exact partition
 
 
-def test_exact_grounding_retains_undetermined_latents_as_variables(rpc, room_query_4):
-    model = rpc.ground(room_query_4, grounding_mode=GroundingMode.EXACT)
+def test_exact_grounding_retains_undetermined_latents_as_variables(
+    relational_probabilistic_circuit, room_query_4
+):
+    model = relational_probabilistic_circuit.ground(
+        room_query_4, grounding_mode=GroundingMode.EXACT
+    )
     names = {v.name for v in model.variables}
     assert "SceneRoomAggregations.chair_count()" in names
     assert "SceneRoomAggregations.table_count()" in names
 
 
-def test_exact_grounding_is_valid(rpc, room_query_4):
-    model = rpc.ground(room_query_4, grounding_mode=GroundingMode.EXACT)
+def test_exact_grounding_is_valid(relational_probabilistic_circuit, room_query_4):
+    model = relational_probabilistic_circuit.ground(
+        room_query_4, grounding_mode=GroundingMode.EXACT
+    )
     assert model.is_valid()
 
 
-def test_exact_grounding_is_reproducible_across_calls(rpc, room_query_4):
+def test_exact_grounding_is_reproducible_across_calls(
+    relational_probabilistic_circuit, room_query_4
+):
     """
     ``EXACT`` grounding -- whether it takes its own exact-partition path or falls back
     to ``SAMPLED`` -- must ground the identical set of variables across calls, even
@@ -309,26 +418,38 @@ def test_exact_grounding_is_reproducible_across_calls(rpc, room_query_4):
     np.random.seed(0)
     first = {
         v.name
-        for v in rpc.ground(room_query_4, grounding_mode=GroundingMode.EXACT).variables
+        for v in relational_probabilistic_circuit.ground(
+            room_query_4, grounding_mode=GroundingMode.EXACT
+        ).variables
     }
     np.random.seed(123)
     second = {
         v.name
-        for v in rpc.ground(room_query_4, grounding_mode=GroundingMode.EXACT).variables
+        for v in relational_probabilistic_circuit.ground(
+            room_query_4, grounding_mode=GroundingMode.EXACT
+        ).variables
     }
     assert first == second
 
 
-def test_exact_grounding_supports_causal_circuit_registration(rpc, room_query_4):
-    model = rpc.ground(room_query_4, grounding_mode=GroundingMode.EXACT)
+def test_exact_grounding_supports_causal_circuit_registration(
+    relational_probabilistic_circuit, room_query_4
+):
+    model = relational_probabilistic_circuit.ground(
+        room_query_4, grounding_mode=GroundingMode.EXACT
+    )
     causal_circuit = _causal_circuit_for(model)
 
     result = causal_circuit.verify_support_determinism()
     assert result.passed
 
 
-def test_exact_grounding_backdoor_adjustment_runs(rpc, room_query_4):
-    model = rpc.ground(room_query_4, grounding_mode=GroundingMode.EXACT)
+def test_exact_grounding_backdoor_adjustment_runs(
+    relational_probabilistic_circuit, room_query_4
+):
+    model = relational_probabilistic_circuit.ground(
+        room_query_4, grounding_mode=GroundingMode.EXACT
+    )
     causal_circuit = _causal_circuit_for(model)
 
     interventional_circuit = causal_circuit.backdoor_adjustment(
@@ -339,7 +460,7 @@ def test_exact_grounding_backdoor_adjustment_runs(rpc, room_query_4):
 
 
 def test_exact_grounding_falls_back_to_sampled_when_partition_overlaps(
-    rpc, room_query_4, caplog
+    relational_probabilistic_circuit, room_query_4, caplog
 ):
     """
     When the fitted circuit's partition over the undetermined latents is not disjoint,
@@ -353,7 +474,9 @@ def test_exact_grounding_falls_back_to_sampled_when_partition_overlaps(
         return_value=False,
     ):
         with caplog.at_level("WARNING"):
-            model = rpc.ground(room_query_4, grounding_mode=GroundingMode.EXACT)
+            model = relational_probabilistic_circuit.ground(
+                room_query_4, grounding_mode=GroundingMode.EXACT
+            )
 
     assert model.is_valid()
     names = {v.name for v in model.variables}
@@ -575,10 +698,8 @@ def test_partition_disjointly_false_for_a_single_branch():
     variable = Integer("value")
     circuit = ProbabilisticCircuit()
     _integer_leaf(variable, {1: 1.0}, circuit)
-    assert (
-        not ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
-            circuit
-        )
+    assert not ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
+        circuit
     )
 
 
@@ -589,9 +710,7 @@ def test_partition_disjointly_true_for_disjoint_branches():
     root.add_subcircuit(_integer_leaf(variable, {1: 1.0}, circuit), 0.0)
     root.add_subcircuit(_integer_leaf(variable, {2: 1.0}, circuit), 0.0)
     root.normalize()
-    assert ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
-        circuit
-    )
+    assert ExchangeablePartGrounder._undetermined_latents_partition_disjointly(circuit)
 
 
 def test_partition_disjointly_false_for_overlapping_branches():
@@ -601,8 +720,6 @@ def test_partition_disjointly_false_for_overlapping_branches():
     root.add_subcircuit(_integer_leaf(variable, {1: 0.5, 2: 0.5}, circuit), 0.0)
     root.add_subcircuit(_integer_leaf(variable, {2: 0.5, 3: 0.5}, circuit), 0.0)
     root.normalize()
-    assert (
-        not ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
-            circuit
-        )
+    assert not ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
+        circuit
     )
