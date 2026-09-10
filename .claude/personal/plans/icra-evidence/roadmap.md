@@ -1299,3 +1299,72 @@ already froze and reviewed four rounds on - or breaking that shipped feature. Ke
 `question` optional and `text` in place; replied on the thread with the concrete
 conflict and asked which he wants, per the standing rule against resolving a thread
 whose ask was answered differently from what it asked.
+
+### `question-set-answered-from-memory` (#304), resolved 2026-09-10
+
+The developer's directive from earlier that morning — *"I still want it the question
+required and it becomes the role_taker and RecordedQuestion is a Role[Question]"* — is
+implemented. `RecordedQuery` is split rather than mutated: the base keeps only what an
+ordinary query needs (`text`, `answer`, `latency`, `moment`, `answered_predicates`); a new
+`ScoredQuery(RecordedQuery, Role[Question])` carries `question` as the required
+`role_taker` plus `answered_correctly`, with `bucket`/`bloom_level` as explicit read-only
+properties reading through it. `answer_and_record` and `PaperFigure.scored_queries_of`
+(previously `query.bucket is not None`) now build/filter by `isinstance(query,
+ScoredQuery)`. This is the same multi-inheritance shape
+`experiments.montessori.perception.detections.DetectedMontessoriShape(MontessoriDetection,
+Role[MontessoriShape])` already uses in this codebase, ORM-mapped today — not a new
+pattern for this repository, only new to `episodes.episode`.
+
+**Verified before implementing, since nothing in krrood's own suite exercises `Role`
+through ORMatic.** A standalone mimic of the exact shape — a plain-dataclass base with a
+default field, a `Role[T]`-based subclass adding a required, `SubclassJSONSerializer`-typed
+`role_taker` — round-trips through a real SQLite session (`krrood.ormatic.utils.create_engine`,
+whose custom JSON (de)serializer is what makes `Question.to_json`/`_from_json` actually
+get called). The generated `role_taker` column comes out `nullable=False` on its own; no
+`AlternativeMapping` is needed, since the same `type_mappings[SubclassJSONSerializer] =
+JSON` wiring the old optional field already used applies to `role_taker` unchanged,
+regardless of field name; and a mixed list of plain and scored rows reconstructs through
+SQLAlchemy's joined-table polymorphism with the right concrete type.
+
+**Also, for the first time on this branch, the real `experiments` package was importable
+in a session container.** `uv sync` still fails on the `docopt-ng`/`pyproject.toml` parse
+bug every round has hit, but installing every workspace package directly with `pip
+install -e` under a Python 3.12 venv (this container's default `python3` is 3.11, which
+the project rejects) works cleanly. `experiments.episodes.episode` imports,
+`ScoredQuery(role_taker=ObjectsSeen(), ...)` constructs, `.question`/`.bucket`/
+`.bloom_level` read correctly, and `Role`'s own guard fires on an undeclared attribute
+assignment. What still needs CI: regenerating the workspace's ORM interfaces, since
+giskardpy's `generate_orm.py` still hits `DebugExpressionPublisher`/`rclpy` — the same
+standing limitation this branch has recorded throughout — so the actual database round
+trip (a new test in `test_episodes.py`) is CI-only.
+
+**One part of the ask still not carried out, flagged again rather than guessed at.** The
+thread's first comment also asked to drop `text` once `question` carries the same
+information; the most recent comment doesn't repeat that part. `text` stays on
+`RecordedQuery`/`ScoredQuery`, because `QueryDeterminism` (`paper/queries.py`, already
+merged in #297) still groups any recorded query — Question or not — by its literal
+`text`, unchanged since the previous round. Replied on the thread with this reasoning;
+left **unresolved**, since only the required-`role_taker` half of the ask was carried out.
+
+**Two more CI failures investigated and confirmed pre-existing, not fixed:**
+`test_panda_ground_cubes_demo.py::test_park_arms_is_actually_reached`
+(`DofNotInWorldStateError`, entirely in `semantic_digital_twin`'s MuJoCo world-building
+code this branch never touches — the file has no history on `main` and only exists inside
+#265's own merge) and three `experiments_test` collection errors sharing one root cause,
+`ImportError: cannot import name 'AttachNode' from 'coraplex.plans.attachment_nodes'`,
+also outside this branch's diff.
+
+**One real CI bug found and fixed on this branch.** `test_question_scoring.py` imported
+the `scene`/`robot` fixtures from `test_questions.py` but not `two_arm_robot_world`, which
+`scene` itself depends on — pytest resolves a fixture's own dependencies against the
+*requesting* module's own fixture scope, not the module the fixture was originally
+defined in, so importing `scene` alone was not enough even though `test_questions.py`'s
+own tests (which import `two_arm_robot_world` directly) passed in the same CI run. Fixed
+by importing it directly from `semantic_digital_twin.testing` in `test_question_scoring.py`
+too, matching the convention `test_questions.py`/`test_episodes.py` already follow.
+
+Still with the developer: whether `text` should also go, the long-term
+`values_agree` sorted-vs-positional list-comparison question from the previous round, and
+the two pre-existing base-branch CI failures above.
+
+Session: https://claude.ai/code/session_01SRx86WkcpXrGnNJdjXAHgm

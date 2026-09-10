@@ -144,6 +144,23 @@ items:
     as literally asked, would conflict with `QueryDeterminism` (#297, already merged), which groups
     any recorded query - including ones with no `Question` at all - by its literal text. See
     roadmap's "reviewed again 2026-09-09" section.
+
+    Resolved 2026-09-10. The developer answered: "the question required and it becomes the
+    role_taker and RecordedQuestion is a Role[Question]". `RecordedQuery` is split rather than
+    mutated - the base keeps only what an ordinary query needs, and a new
+    `ScoredQuery(RecordedQuery, Role[Question])` carries `question` as the required `role_taker`.
+    Verified the ORMatic mapping in a standalone krrood-only mimic first (nothing in krrood's own
+    suite exercised `Role` through ORMatic), then built and imported the real `experiments` package
+    directly with `pip install -e` under a Python 3.12 venv, bypassing this container's still-broken
+    `uv sync` - the furthest any session on this branch has gotten locally, though the actual
+    database round trip still needs CI (giskardpy's `generate_orm.py` still needs `rclpy`). `text`
+    is kept rather than dropped, since `QueryDeterminism` still needs it for ad hoc queries with no
+    `Question`; replied on the thread and left it unresolved, since only half the ask is done. Two
+    more CI failures found and confirmed pre-existing/unrelated
+    (`test_park_arms_is_actually_reached`'s `DofNotInWorldStateError`, and an `AttachNode`
+    `ImportError` behind three collection errors); one real CI bug in this item's own test fixed
+    (`test_question_scoring.py` was missing the `two_arm_robot_world` import `scene` needs). See
+    roadmap's "resolved 2026-09-10" section for the full reasoning.
   blockers: []
 - id: objects-seen-asked-of-the-perception-system
   title: >-
