@@ -108,7 +108,7 @@ class SpatialType:
         if not frame_data:
             return None
         tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        return tracker.get_world_entity_with_id(id=from_json(frame_data))
+        return tracker.get(from_json(frame_data))
 
     @staticmethod
     def _ensure_consistent_frame(

@@ -215,7 +215,7 @@ class DegreeOfFreedom(WorldEntityWithID, SubclassJSONSerializer):
             id=uuid,
             has_hardware_interface=data["has_hardware_interface"],
         )
-        tracker.add_world_entity_with_id(self)
+        tracker.add(self.id, self)
         return self
 
     def __deepcopy__(self, memo):

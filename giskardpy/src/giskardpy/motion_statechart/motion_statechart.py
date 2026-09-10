@@ -27,6 +27,7 @@ from giskardpy.motion_statechart.exceptions import (
     UnsupportedObservationVariableError,
 )
 from giskardpy.motion_statechart.graph_node import (
+    DeserializedNodeTracker,
     MotionStatechartNode,
     TrinaryCondition,
     Goal,
@@ -1205,6 +1206,7 @@ class MotionStatechart(SubclassJSONSerializer):
         :return: The deserialized motion statechart.
         """
         motion_statechart = cls()
+        DeserializedNodeTracker.from_kwargs(kwargs)
         for json_data in data["nodes"]:
             node = from_json(json_data, **kwargs)
             motion_statechart.add_node(node)

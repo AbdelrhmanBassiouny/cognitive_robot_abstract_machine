@@ -16,7 +16,7 @@ from typing_extensions import (
     Any,
 )
 
-from krrood.adapters.exceptions import JSONSerializationError
+from krrood.adapters.exceptions import JSONSerializationError, UntrackedObjectError
 from krrood.exceptions import DataclassException
 from krrood.symbolic_math.symbolic_math import SymbolicMathType
 from semantic_digital_twin.datastructures.definitions import JointStateType
@@ -1390,12 +1390,20 @@ class SpatialTypeNotJsonSerializable(NotJsonSerializable):
 
 
 @dataclass
-class WorldEntityWithIDNotInKwargs(JSONSerializationError):
-    world_entity_id: UUID
+class WorldEntityWithIDNotInKwargs(UntrackedObjectError):
+    """
+    Raised when a JSON document refers to a world entity that was neither deserialized
+    from it nor is part of the world it is deserialized into.
+    """
+
+    key: UUID
+    """
+    The id of the world entity the document refers to.
+    """
 
     def error_message(self) -> str:
         return (
-            f"World entity '{self.world_entity_id}' is not in the kwargs of the "
+            f"World entity '{self.key}' is not in the kwargs of the "
             f"method that created it."
         )
 

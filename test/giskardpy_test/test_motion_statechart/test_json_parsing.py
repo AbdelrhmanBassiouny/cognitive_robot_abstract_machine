@@ -21,6 +21,7 @@ from giskardpy.motion_statechart.graph_node import (
     CancelMotion,
 )
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
+from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from giskardpy.motion_statechart.motion_statechart import (
     MotionStatechart,
     LifeCycleState,
@@ -479,3 +480,50 @@ def test_duplicate_condition():
     msc_copy = MotionStatechart.from_json(new_json_data)
     msc_copy._add_transitions()
     assert len(msc_copy.unique_edges) == 3
+
+
+def test_node_referenced_by_another_node_is_one_instance_after_json_round_trip():
+    """
+    A node that another node refers to is deserialized as the node of the motion
+    statechart, not as a detached copy.
+    """
+    msc = MotionStatechart()
+    msc.add_node(watched := ConstTrueNode())
+    msc.add_node(still_progressing := StillProgressing(monitored_node=watched))
+    msc.add_node(EndMotion.when_true(watched))
+
+    new_json_data = json.loads(json.dumps(msc.to_json()))
+
+    msc_copy = MotionStatechart.from_json(new_json_data)
+    still_progressing_copy = msc_copy.get_node_by_index(still_progressing.index)
+    assert still_progressing_copy.monitored_node is msc_copy.get_node_by_index(
+        watched.index
+    )
+
+
+def test_nested_sequence_goal_json_round_trip_compilation():
+    """
+    A statechart with nested goals watched by a progress monitor can be deserialized and
+    compiled.
+    """
+    msc = MotionStatechart()
+    leaf_node = ConstTrueNode(name="ConstTrue")
+    child_sequence = Sequence(nodes=[leaf_node], name="SequentialNode")
+    root = Sequence(nodes=[child_sequence], name="ActionNode")
+    msc.add_node(root)
+    msc.add_node(still_progressing := StillProgressing(monitored_node=root))
+    msc.add_node(still_progressing.cancel_motion())
+    msc.add_node(EndMotion.when_true(root))
+
+    json_data = msc.to_json()
+    json_str = json.dumps(json_data)
+    new_json_data = json.loads(json_str)
+
+    msc_copy = MotionStatechart.from_json(new_json_data)
+    executor = Executor(
+        context=MotionStatechartContext(
+            world=World(),
+            qp_controller_config=QPControllerConfig.create_with_simulation_defaults(),
+        )
+    )
+    executor.compile(motion_statechart=msc_copy)
