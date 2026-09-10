@@ -14,6 +14,7 @@ from __future__ import annotations
 import enum
 import itertools
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -35,7 +36,10 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.query.match import Match
 from probabilistic_model.distributions.helper import make_dirac
 from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
-from probabilistic_model.learning.jpt.variables import infer_variables_from_dataframe
+from probabilistic_model.learning.jpt.variables import (
+    AnnotatedVariable,
+    infer_variables_from_dataframe,
+)
 from probabilistic_model.probabilistic_circuit.relational.exceptions import (
     CircuitNotFittedError,
     ClassCircuitGroundingFailedError,
@@ -256,7 +260,7 @@ class ExchangeablePartGrounder:
         retained_variables = (
             SortedSet(self.circuit.variables) - self.undetermined_latents
         )
-        self.circuit.marginal_in_place(retained_variables)
+        self.circuit.restrict_to_variables_in_place(retained_variables)
         mounted_roots = [
             self._mount_instance_with_retained_latents(assignment)
             for assignment in sampled_assignments
@@ -311,7 +315,7 @@ class ExchangeablePartGrounder:
         retained_variables = (
             SortedSet(self.circuit.variables) - self.undetermined_latents
         )
-        self.circuit.marginal_in_place(retained_variables)
+        self.circuit.restrict_to_variables_in_place(retained_variables)
 
         mounted_roots = []
         for _, latent_branch in branches:
@@ -588,6 +592,19 @@ class RelationalProbabilisticCircuit:
     Must be a positive integer.
     """
 
+    class_circuit_builder: Optional[
+        Callable[[pd.DataFrame, list[AnnotatedVariable]], ProbabilisticCircuit]
+    ] = None
+    """
+    Builds the class-level circuit from the class dataframe and its inferred variables,
+    in place of ``fit``'s plain, unconstrained ``JointProbabilityTree`` fit.
+
+    Set this before calling ``fit`` when a specific circuit shape is needed -- for
+    instance one that is support-deterministic over a chosen variable -- rather than
+    ``fit`` knowing about that requirement itself. Leave ``None`` for the plain,
+    unconstrained fit.
+    """
+
     schema_information: Optional[DataAccessObjectSchema] = field(
         init=False, default=None
     )
@@ -737,9 +754,9 @@ class RelationalProbabilisticCircuit:
         Fit the relational probabilistic circuit from a list of DAO instances.
 
         Builds a ``FeatureExtractor``, trains a ``JointProbabilityTree`` on the class-
-        level features, and then recursively fits one
-        ``ExchangeableDistributionTemplate`` per exchangeable part discovered in the
-        schema.
+        level features (or runs :attr:`class_circuit_builder` instead, if set), and then
+        recursively fits one ``ExchangeableDistributionTemplate`` per exchangeable part
+        discovered in the schema.
 
         :param instances: Training instances; all must share the same DAO class.
         :param dataframe_from_parent: Pre-built dataframe supplied by a parent
@@ -752,9 +769,14 @@ class RelationalProbabilisticCircuit:
             self.feature_extractor, instances, dataframe_from_parent
         )
         variables = infer_variables_from_dataframe(class_dataframe)
-        self.class_probabilistic_circuit = JointProbabilityTree(
-            annotated_variables=variables
-        ).fit(class_dataframe)
+        if self.class_circuit_builder is None:
+            self.class_probabilistic_circuit = JointProbabilityTree(
+                annotated_variables=variables
+            ).fit(class_dataframe)
+        else:
+            self.class_probabilistic_circuit = self.class_circuit_builder(
+                class_dataframe, variables
+            )
         self.schema_information = get_dao_schema(type(instances[0]))
         for collection_relationship in self.schema_information.collection_relationships:
             exchangeable_part = collection_relationship.key
@@ -781,11 +803,12 @@ class RelationalProbabilisticCircuit:
         :return: The conditioned circuit and the product nodes that will be extended
             with the grounded exchangeable distribution.
         """
-        conditioning_result, _ = circuit.log_conditional_in_place(
-            aggregation_statistics
-        )
-        if conditioning_result is None:
-            circuit = self.class_probabilistic_circuit.__deepcopy__()
+        if aggregation_statistics:
+            conditioning_result, _ = circuit.log_conditional_in_place(
+                aggregation_statistics
+            )
+            if conditioning_result is None:
+                circuit = self.class_probabilistic_circuit.__deepcopy__()
         if len(circuit.nodes()) == 0:
             raise ClassCircuitGroundingFailedError(self.class_)
         product_nodes_to_extend = find_lowest_product_nodes_that_model_variables(

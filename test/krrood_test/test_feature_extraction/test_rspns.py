@@ -206,27 +206,68 @@ def test_non_positive_sample_count_raises_when_integration_needed(
     with pytest.raises(InvalidMonteCarloSampleCountError):
         relational_probabilistic_circuit.ground(room_query_4)
 
+@pytest.fixture
+def relational_probabilistic_circuit_with_ambiguous_total_count_4():
+    """
+    Two rooms share ``total_count() == 4`` but split it differently between chairs and
+    tables (3 chairs/1 table vs.
+
+    2 chairs/2 tables), so conditioning on 4 objects still
+    leaves genuine ambiguity between two distinct ``(chair_count, table_count)``
+    aggregate values for :func:`test_monte_carlo_sample_count_controls_mixture_size` to
+    discover -- ``relational_probabilistic_circuit``'s own two rooms have distinct ``total_count()`` values (3 and
+    4), so conditioning on 4 objects there pins the aggregates down to a single value
+    regardless of sample count.
+    """
+    three_chairs_one_table = SceneRoom(
+        position=KRROODPosition(x=4.0, y=3.0, z=0.0),
+        orientation=KRROODOrientation(x=0.0, y=0.0, z=0.0, w=1.0),
+        objects=[
+            SceneObject(type=SceneObjectType.TABLE),
+            SceneObject(type=SceneObjectType.CHAIR),
+            SceneObject(type=SceneObjectType.CHAIR),
+            SceneObject(type=SceneObjectType.CHAIR),
+        ],
+    )
+    two_chairs_two_tables = SceneRoom(
+        position=KRROODPosition(x=5.0, y=2.0, z=0.0),
+        orientation=KRROODOrientation(x=0.0, y=0.0, z=0.0, w=1.0),
+        objects=[
+            SceneObject(type=SceneObjectType.TABLE),
+            SceneObject(type=SceneObjectType.TABLE),
+            SceneObject(type=SceneObjectType.CHAIR),
+            SceneObject(type=SceneObjectType.CHAIR),
+        ],
+    )
+    model = RelationalProbabilisticCircuit(SceneRoom)
+    model.fit([to_dao(three_chairs_one_table), to_dao(two_chairs_two_tables)])
+    return model
+
 
 def test_monte_carlo_sample_count_controls_mixture_size(
-    relational_probabilistic_circuit, room_query_4
+    relational_probabilistic_circuit_with_ambiguous_total_count_4, room_query_4
 ):
     """
     Drawing more samples discovers more distinct aggregate values, each adding an
     exchangeable-distribution instance (and its sum units) to the mixture.
     """
     np.random.seed(0)
-    relational_probabilistic_circuit.monte_carlo_sample_count = 1
-    single = sum(
+    relational_probabilistic_circuit_with_ambiguous_total_count_4.monte_carlo_sample_count = (
         1
-        for node in relational_probabilistic_circuit.ground(room_query_4).nodes()
-        if isinstance(node, SumUnit)
+    )
+    single = len(
+        relational_probabilistic_circuit_with_ambiguous_total_count_4.ground(
+            room_query_4
+        ).nodes()
     )
     np.random.seed(0)
-    relational_probabilistic_circuit.monte_carlo_sample_count = 50
-    many = sum(
-        1
-        for node in relational_probabilistic_circuit.ground(room_query_4).nodes()
-        if isinstance(node, SumUnit)
+    relational_probabilistic_circuit_with_ambiguous_total_count_4.monte_carlo_sample_count = (
+        50
+    )
+    many = len(
+        relational_probabilistic_circuit_with_ambiguous_total_count_4.ground(
+            room_query_4
+        ).nodes()
     )
     assert many > single
 
