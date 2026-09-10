@@ -18,8 +18,8 @@ from typing_extensions import (
 )
 
 from krrood.adapters.exceptions import JSONSerializationError, UntrackedObjectError
+from krrood.symbolic_math.exceptions import SymbolicMathNotJsonSerializableError
 from krrood.exceptions import DataclassException
-from krrood.symbolic_math.symbolic_math import SymbolicMathType
 from semantic_digital_twin.datastructures.definitions import JointStateType
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
@@ -1448,17 +1448,12 @@ class NotJsonSerializable(JSONSerializationError): ...
 
 
 @dataclass
-class SpatialTypeNotJsonSerializable(NotJsonSerializable):
-    spatial_object: SymbolicMathType
-
-    def error_message(self) -> str:
-        return (
-            f"Object of type '{self.spatial_object.__class__.__name__}' is not JSON serializable, because it has "
-            f"free variables: {self.spatial_object.free_variables()}"
-        )
-
-    def suggest_correction(self) -> str:
-        return ""
+class SpatialTypeNotJsonSerializable(
+    NotJsonSerializable, SymbolicMathNotJsonSerializableError
+):
+    """
+    Raised when a spatial type that depends on variables is serialized to JSON.
+    """
 
 
 @dataclass

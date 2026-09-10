@@ -7,6 +7,7 @@ import trimesh.boolean
 
 from krrood.adapters.exceptions import UntrackedObjectError
 from krrood.adapters.json_serializer import from_json, to_json
+from krrood.symbolic_math.exceptions import SymbolicMathNotJsonSerializableError
 from krrood.symbolic_math.symbolic_math import FloatVariable
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
@@ -131,6 +132,16 @@ def test_point3_json_serialization_with_expression():
     point = Point3(f := FloatVariable(name="muh"), reference_frame=body)
     with pytest.raises(SpatialTypeNotJsonSerializable):
         point.to_json()
+
+
+def test_spatial_type_refuses_an_expression_like_any_symbolic_math_value():
+    body = Body(name=PrefixedName("body"))
+    point = Point3(FloatVariable(name="muh"), reference_frame=body)
+
+    with pytest.raises(SymbolicMathNotJsonSerializableError) as error:
+        point.to_json()
+
+    assert error.value.expression is point
 
 
 def test_KinematicStructureEntityNotInKwargs():
