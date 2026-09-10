@@ -20,7 +20,12 @@ from typing_extensions import (
     TypeVar,
 )
 
-from experiments.episodes.episode import InsertionAttempt, RecordedQuery, RecordedTrial
+from experiments.episodes.episode import (
+    InsertionAttempt,
+    RecordedQuery,
+    RecordedTrial,
+    ScoredQuery,
+)
 from experiments.experiment_definitions import (
     DEFAULT_CONFIDENCE_LEVEL,
     ExperimentResult,
@@ -224,17 +229,19 @@ class PaperFigure(ABC):
         return [query for trial in trials for query in trial.queries]
 
     @classmethod
-    def scored_queries_of(cls, trials: Sequence[RecordedTrial]) -> List[RecordedQuery]:
+    def scored_queries_of(cls, trials: Sequence[RecordedTrial]) -> List[ScoredQuery]:
         """
         Every query of the given trials that answers a question of the frozen set.
 
-        An ordinary query carries no bucket, which is what tells it apart from one
-        :meth:`~experiments.questions.question_set.QuestionSet.answer_and_record`
-        recorded.
+        An ordinary query is a plain :class:`~experiments.episodes.episode.RecordedQuery`,
+        which is what tells it apart from a :class:`ScoredQuery`, the kind
+        :meth:`~experiments.questions.question_set.QuestionSet.answer_and_record` records.
 
         :param trials: The trials to read.
         """
-        return [query for query in cls.queries_of(trials) if query.bucket is not None]
+        return [
+            query for query in cls.queries_of(trials) if isinstance(query, ScoredQuery)
+        ]
 
     @staticmethod
     def indicators(

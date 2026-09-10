@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from krrood.utils import recursive_subclasses
 from typing_extensions import Any, List, Type, TypeVar
 
-from experiments.episodes.episode import RecordedQuery
+from experiments.episodes.episode import ScoredQuery
 from experiments.questions.long_term_memory import LongTermMemoryQuestion
 from experiments.questions.question import (
     BloomLevel,
@@ -138,7 +138,7 @@ class QuestionSet:
                 found.append(question.bucket)
         return found
 
-    def answer_and_record(self, source: Any) -> List[RecordedQuery]:
+    def answer_and_record(self, source: Any) -> List[ScoredQuery]:
         """
         Ask every question of this set, score each against ground truth, and return the
         outcome as episode rows.
@@ -146,18 +146,18 @@ class QuestionSet:
         :param source: The memory every question of this set is asked of.
         """
         batch_started_at = time.perf_counter()
-        recorded: List[RecordedQuery] = []
+        recorded: List[ScoredQuery] = []
         for question in self.questions:
             asked_at = time.perf_counter()
             answer = question.ask(source)
             latency = time.perf_counter() - asked_at
             recorded.append(
-                RecordedQuery(
+                ScoredQuery(
+                    role_taker=question,
                     text=question.english,
                     answer=str(answer),
                     latency=latency,
                     moment=asked_at - batch_started_at,
-                    question=question,
                     answered_correctly=question.values_agree(
                         answer, question.ground_truth(source)
                     ),

@@ -5,13 +5,14 @@ rows, and the two paper tables computed from what was recorded.
 
 from __future__ import annotations
 
-from experiments.episodes.episode import RecordedTrial
+from experiments.episodes.episode import RecordedTrial, ScoredQuery
 from experiments.paper.figure import FigureName
 from experiments.questions.long_term_memory import AnythingMovedInTheEpisode
 from experiments.questions.question import BloomLevel, Bucket
 from experiments.questions.working_memory import ObjectColours, ObjectsSeen
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.testing import two_arm_robot_world
 
 from .test_paper_figures import (
     NO_ABLATION,
@@ -34,6 +35,7 @@ def test_answer_and_record_scores_every_question_of_the_set(
 
     assert len(recorded) == len(scene.question_set.questions)
     for question, row in zip(scene.question_set.questions, recorded):
+        assert isinstance(row, ScoredQuery)
         assert row.text == question.english
         assert row.question is question
         assert row.bucket is question.bucket
@@ -42,18 +44,16 @@ def test_answer_and_record_scores_every_question_of_the_set(
         assert row.latency >= 0.0
 
 
-def test_an_ordinary_query_carries_no_bucket_or_bloom_level():
+def test_an_ordinary_query_is_not_mistaken_for_a_scored_question():
     """
     A query built the way any other query is recorded, not through
-    :meth:`~experiments.questions.question_set.QuestionSet.answer_and_record`, is not
-    mistaken for a scored question.
+    :meth:`~experiments.questions.question_set.QuestionSet.answer_and_record`, is a
+    plain :class:`~experiments.episodes.episode.RecordedQuery`, not a
+    :class:`~experiments.episodes.episode.ScoredQuery`.
     """
     ordinary = query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.1, TWIN_BACKEND)
 
-    assert ordinary.question is None
-    assert ordinary.bucket is None
-    assert ordinary.bloom_level is None
-    assert ordinary.answered_correctly is None
+    assert not isinstance(ordinary, ScoredQuery)
 
 
 # %% accuracy per bucket and per level of Bloom's taxonomy

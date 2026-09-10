@@ -16,6 +16,7 @@ from enum import StrEnum
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.plans.plan import Plan
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from krrood.patterns.role import Role
 from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.world import World
 from typing_extensions import TYPE_CHECKING, List, Optional, Sequence
@@ -127,36 +128,46 @@ class RecordedQuery:
     Which backend answered each predicate of the query.
     """
 
-    question: Optional[Question] = None
+
+@dataclass(eq=False)
+class ScoredQuery(RecordedQuery, Role[Question]):
     """
-    The question of the frozen set this query answers, or None if it is an ordinary
-    query. The instance that was actually asked, not only its class: a long-term-memory
-    question's own fields (which episode it is about) are part of what it asked, and
-    ``Question`` is a :class:`~krrood.adapters.json_serializer.SubclassJSONSerializer` so
-    this round-trips through the database as JSON.
+    A recorded query that answers a question of the frozen set, scored against ground
+    truth.
+
+    The question is the role taker: this row is the question, playing the part of one
+    query a trial asked and recorded. The instance that was actually asked, not only its
+    class, is what is held - a long-term-memory question's own fields (which episode it
+    is about) are part of what it asked - and ``Question`` is a
+    :class:`~krrood.adapters.json_serializer.SubclassJSONSerializer` so it round-trips
+    through the database as JSON, the same mapping any other field of that type gets.
     """
 
-    answered_correctly: Optional[bool] = None
+    answered_correctly: bool = field(kw_only=True)
     """
-    Whether this query's answer matched ground truth, or None if it does not answer a
-    question of the frozen set.
+    Whether this query's answer matched ground truth.
     """
-
-    @property
-    def bucket(self) -> Optional[Bucket]:
-        """
-        The kind of thing this query asks about, or None if it does not answer a
-        question of the frozen set.
-        """
-        return self.question.bucket if self.question else None
 
     @property
-    def bloom_level(self) -> Optional[BloomLevel]:
+    def question(self) -> Question:
         """
-        The level of Bloom's taxonomy this query exercises, or None if it does not
-        answer a question of the frozen set.
+        The question of the frozen set this query answers.
         """
-        return self.question.bloom_level if self.question else None
+        return self.role_taker
+
+    @property
+    def bucket(self) -> Bucket:
+        """
+        The kind of thing this query asks about.
+        """
+        return self.question.bucket
+
+    @property
+    def bloom_level(self) -> BloomLevel:
+        """
+        The level of Bloom's taxonomy this query exercises.
+        """
+        return self.question.bloom_level
 
 
 @dataclass

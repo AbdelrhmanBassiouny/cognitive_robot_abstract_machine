@@ -18,6 +18,7 @@ from experiments.episodes.episode import (
     InsertionOutcome,
     RecordedQuery,
     RecordedTrial,
+    ScoredQuery,
 )
 from experiments.experiment_definitions import Unit
 from experiments.paper.figure import FigureFile, FigureName
@@ -156,20 +157,31 @@ def query(
     :param question: The question of the frozen set this query answers, if it answers
         one - the instance that was actually asked, carrying its bucket and Bloom level,
         rather than the caller naming them separately and risking the two drifting apart.
-    :param answered_correctly: Whether this query's answer matched ground truth, if it
-        answers a question of the frozen set.
+        Recorded as a :class:`~experiments.episodes.episode.ScoredQuery` rather than an
+        ordinary query when given.
+    :param answered_correctly: Whether this query's answer matched ground truth. Required
+        together with ``question``, since a :class:`ScoredQuery` always carries one.
     """
-    return RecordedQuery(
+    answered_predicates = [
+        AnsweredPredicate(predicate_name="supported_by", backend_name=backend)
+        for backend in backends
+    ]
+    if question is None:
+        return RecordedQuery(
+            text=text,
+            answer=answer,
+            latency=latency,
+            moment=1.0,
+            answered_predicates=answered_predicates,
+        )
+    return ScoredQuery(
+        role_taker=question,
         text=text,
         answer=answer,
         latency=latency,
         moment=1.0,
-        question=question,
         answered_correctly=answered_correctly,
-        answered_predicates=[
-            AnsweredPredicate(predicate_name="supported_by", backend_name=backend)
-            for backend in backends
-        ],
+        answered_predicates=answered_predicates,
     )
 
 
