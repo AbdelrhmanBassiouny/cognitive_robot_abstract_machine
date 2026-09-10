@@ -363,10 +363,14 @@ def _causal_circuit_for(model):
     GroundingMode.SAMPLED/EXACT causal-registration test below exercises.
     """
     chair_count_variable = next(
-        variable for variable in model.variables if variable.name == "SceneRoomAggregations.chair_count()"
+        variable
+        for variable in model.variables
+        if variable.name == "SceneRoomAggregations.chair_count()"
     )
     object_type_variable = next(
-        variable for variable in model.variables if variable.name == "SceneRoom.objects[0].type"
+        variable
+        for variable in model.variables
+        if variable.name == "SceneRoom.objects[0].type"
     )
     tree = MarginalDeterminismTreeNode.from_causal_graph(
         [chair_count_variable], [object_type_variable]
@@ -559,10 +563,14 @@ def test_exact_grounding_preserves_correlation_with_the_retained_latent(
         correlated_room_query, grounding_mode=GroundingMode.EXACT
     )
     chair_count_variable = next(
-        variable for variable in grounded.variables if variable.name == "SceneRoomAggregations.chair_count()"
+        variable
+        for variable in grounded.variables
+        if variable.name == "SceneRoomAggregations.chair_count()"
     )
     object_type_variable = next(
-        variable for variable in grounded.variables if variable.name == "SceneRoom.objects[0].type"
+        variable
+        for variable in grounded.variables
+        if variable.name == "SceneRoom.objects[0].type"
     )
 
     tree = MarginalDeterminismTreeNode.from_causal_graph(
@@ -700,10 +708,8 @@ def test_partition_disjointly_false_for_a_single_branch():
     variable = Integer("value")
     circuit = ProbabilisticCircuit()
     _integer_leaf(variable, {1: 1.0}, circuit)
-    assert (
-        not ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
-            circuit
-        )
+    assert not ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
+        circuit
     )
 
 
@@ -714,9 +720,7 @@ def test_partition_disjointly_true_for_disjoint_branches():
     root.add_subcircuit(_integer_leaf(variable, {1: 1.0}, circuit), 0.0)
     root.add_subcircuit(_integer_leaf(variable, {2: 1.0}, circuit), 0.0)
     root.normalize()
-    assert ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
-        circuit
-    )
+    assert ExchangeablePartGrounder._undetermined_latents_partition_disjointly(circuit)
 
 
 def test_partition_disjointly_false_for_overlapping_branches():
@@ -726,8 +730,6 @@ def test_partition_disjointly_false_for_overlapping_branches():
     root.add_subcircuit(_integer_leaf(variable, {1: 0.5, 2: 0.5}, circuit), 0.0)
     root.add_subcircuit(_integer_leaf(variable, {2: 0.5, 3: 0.5}, circuit), 0.0)
     root.normalize()
-    assert (
-        not ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
-            circuit
-        )
+    assert not ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
+        circuit
     )
