@@ -19,7 +19,8 @@ Each detector states the requests it can answer as an entity query language cond
 which is
 :meth:`~krrood.entity_query_language.backends.PerceptionDetector.capability` and is the
 same statement every family of detectors makes about itself, so a detector added to the
-rules brings its own condition with it.
+rules brings its own condition with it. No two of these say the same, so each rule is
+one detector's capability and nothing more.
 """
 
 from __future__ import annotations
@@ -27,22 +28,16 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from krrood.entity_query_language.backends import (
-    PerceptionDetector,
-    state_the_detectors_own_condition,
-)
-from krrood.entity_query_language.factories import a
-from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.interface import FunctionInterface
-from krrood.entity_query_language.rdr.serialization import NullModelSaver
-from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from typing_extensions import Dict, List, Optional, Tuple
+from krrood.entity_query_language.backends import DetectorChoice, PerceptionDetector
+from krrood.entity_query_language.factories import a, add, alternative, entity
+from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.query.query import Entity
+from typing_extensions import Dict, List, Optional
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriScene,
-    MontessoriShapeDetection,
 )
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.exceptions import (
@@ -209,14 +204,15 @@ class SceneDetector(PerceptionDetector[SceneRequest], ABC):
 
 
 @dataclass
-class LookRules:
+class LookRules(DetectorChoice[SceneRequest]):
     """
     The rule tree that says which detector answers a look at this scene.
 
     Its rules are krrood ripple-down rules whose conditions are entity query language
     expressions over the request itself, so a request the rules get wrong is corrected
     by adding a rule rather than by editing the ones already stated, and the tree can be
-    read (:meth:`render_tree`) rather than only run.
+    read (:meth:`~krrood.entity_query_language.backends.DetectorChoice.render_tree`)
+    rather than only run.
     """
 
     find_the_board: SceneDetector
@@ -230,98 +226,29 @@ class LookRules:
     surfaces by along with them.
     """
 
-    rules: EQLSingleClassRDR = field(init=False, repr=False, compare=False)
-    """
-    The rules themselves, as one tree that outlives the requests it answers.
-
-    Nothing is persisted when a rule is added: a rule concludes the detector itself
-    rather than a name for one, and the engine writes a model file as Python source,
-    which can spell an enum member or a number but not a collaborator. The rules are
-    recovered by stating them again from the detectors, which is what building this
-    does.
-    """
-
-    expert: Expert = field(init=False, repr=False, compare=False)
-    """
-    Asked for a new rule's condition, which it reads off the detector being fitted.
-    """
-
-    def __post_init__(self) -> None:
+    def underspecified_look(self) -> Match:
         """
-        State the rules by fitting the requests each detector answers.
-
-        The engine authors its own tree, so a rule is written by putting a known request
-        and the detector that answers it to it, and each detector supplies the condition
-        from its own
-        :meth:`~krrood.entity_query_language.backends.PerceptionDetector.capability`.
+        A request whose detector is to be worked out.
         """
-        self.expert = Expert(
-            interface=FunctionInterface(
-                answer_function=state_the_detectors_own_condition
-            )
-        )
-        self.rules = EQLSingleClassRDR.from_underspecified(
-            a(SceneRequest)(detector=...), model_saver=NullModelSaver()
-        )
-        answered = self.requests_each_detector_answers()
-        self.rules.fit(
-            cases=[request for request, _ in answered],
-            targets=[detector for _, detector in answered],
-            expert=self.expert,
-        )
+        return a(SceneRequest)(detector=...)
 
-    def requests_each_detector_answers(
-        self,
-    ) -> List[Tuple[SceneRequest, SceneDetector]]:
+    def rules_stated_at_the_start(self) -> Entity:
         """
-        The known kinds of request, each paired with the detector that answers it.
+        Each detector answers the requests it says it can, and no two of them say the
+        same, so what a request asks for settles the choice on its own.
 
-        The unnarrowed request is fitted alongside the two narrowed ones, so the rules
-        are held to answering it rather than left to happen to.
+        Searching the surfaces comes first, so a request narrowed to neither is answered
+        by the detector that reports both.
         """
-        return [
-            (SceneRequest(), self.find_the_pieces),
-            (
-                SceneRequest(detection_type=MontessoriShapeDetection),
-                self.find_the_pieces,
-            ),
-            (
-                SceneRequest(detection_type=MontessoriBoardDetection),
-                self.find_the_board,
-            ),
-        ]
+        rules = entity(self.look).where(self.find_the_pieces.capability(self.look))
+        with rules:
+            add(self.chosen_detector, self.find_the_pieces)
+            with alternative(self.find_the_board.capability(self.look)):
+                add(self.chosen_detector, self.find_the_board)
+        return rules
 
-    def detector_for(self, request: SceneRequest) -> SceneDetector:
+    def nothing_answers(self, request: SceneRequest) -> NoDetectorAnswersTheRequest:
         """
-        The detector that answers one request.
-
-        :param request: What the look was asked for.
-        :raises NoDetectorAnswersTheRequest: If no rule reaches this request.
+        :param request: The request no rule reached.
         """
-        concluded = self.rules.classify(request)
-        if concluded is ...:
-            raise NoDetectorAnswersTheRequest(str(request))
-        return concluded
-
-    def add_rule(self, request: SceneRequest, detector: SceneDetector) -> None:
-        """
-        State a kind of request the rules do not yet cover.
-
-        The rule joins the tree already in use, so such a request is answered by
-        *detector* from the next call onwards without any of the rules already stated
-        being rewritten. That is what a tree of rules is for, and it is the path an
-        expert correcting an answer takes.
-
-        :param request: The kind of request that was not covered.
-        :param detector: The detector that answers it, which supplies the rule's
-            condition from its own capability.
-        """
-        self.rules.fit_case(request, detector, self.expert)
-
-    def render_tree(self, request: SceneRequest) -> str:
-        """
-        The rules as a tree, with the rule that answers one request marked out.
-
-        :param request: The request to read the tree for.
-        """
-        return self.rules.render_tree(request, use_color=False)
+        return NoDetectorAnswersTheRequest(str(request))

@@ -296,3 +296,55 @@ class NoDetectorAnswersTheRequest(DataclassException):
             "State the detector that answers this kind of request, through "
             "LookRules.add_rule, or ask for something a stated rule already reaches."
         )
+
+
+@dataclass
+class NoSurfaceFinderAnswersTheLook(DataclassException):
+    """
+    Raised when no finder declares it can say where a surface reaches, so the stretch
+    searched would be a guess rather than anything the world or the picture states.
+    """
+
+    surface: str
+    """
+    What the world says about the surface that was looked for.
+    """
+
+    def error_message(self) -> str:
+        return f"No finder declares it can say where {self.surface} reaches."
+
+    def suggest_correction(self) -> str:
+        return (
+            "State how far the surface reaches in the world it is described in, so a "
+            "finder that already answers this kind of surface declares it can."
+        )
+
+
+@dataclass
+class SurfaceNotSeenWhereTheWorldPutsIt(DataclassException):
+    """
+    Raised when the depth image holds nothing standing where a surface is modelled, so
+    there is no measurement of it to report.
+    """
+
+    surface: str
+    """
+    What the world calls the surface that was looked for.
+    """
+
+    height: float
+    """
+    The height the world puts it at, above the reference frame's origin, in metres.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Nothing stands at {self.height} m where {self.surface} is modelled, so "
+            "the camera saw no surface there."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Point the camera at the surface, or correct the height the world puts it "
+            "at, so the picture and the model describe the same scene."
+        )

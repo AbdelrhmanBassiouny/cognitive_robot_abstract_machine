@@ -19,6 +19,7 @@ from experiments.montessori.perception.pipeline import MontessoriPerceptionPipel
 from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.geometry import SurfaceFinish
 
 SETUP_NAME = "tracy"
 """
@@ -55,6 +56,11 @@ def searched_workspace(path: Path = TUNED_WORKSPACE_FILE) -> WorkspaceRegion:
     """
     The stretch of table a run over this setup's recordings searches.
 
+    This is the widest a look may search rather than what it does search: the stretch
+    of it the camera actually shows is measured every frame, and on these recordings
+    that measurement reaches the same answer from :data:`WIDEST_WORKSPACE` as from a
+    workspace already cut down by hand.
+
     :param path: The file a tuned workspace was written to.
     :return: That workspace, or the whole of :data:`WIDEST_WORKSPACE` where none has
         been tuned.
@@ -72,6 +78,7 @@ def table_surface() -> WorkspaceSurface:
         name=PrefixedName("table", SETUP_NAME),
         region=searched_workspace(),
         height=TABLE_HEIGHT,
+        finish=SurfaceFinish.MIRROR,
     )
 
 

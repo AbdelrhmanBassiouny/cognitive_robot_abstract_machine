@@ -61,6 +61,7 @@ from experiments.montessori.perception.orthophoto import (
 )
 from experiments.montessori.perception.piece_matcher import PieceMatcher
 from experiments.montessori.perception.scene_request import SceneRequest
+from experiments.montessori.perception.surface_finding import SurfaceRules
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import (
     HUE_RANGE,
@@ -1179,6 +1180,16 @@ class MontessoriPerceptionPipeline:
     pipeline does not have to change for perception to answer something new.
     """
 
+    surface_rules: SurfaceRules = field(default_factory=SurfaceRules)
+    """
+    Says how far each of the scene's surfaces reaches, from what the world states about
+    it.
+
+    A surface the world describes well enough to recognise in a picture is measured
+    there rather than taken from the model it is described by, so a table the model has
+    drifted away from is still searched where it really stands.
+    """
+
     headroom: float = 0.15
     """
     How far above the table, in metres, the view still holds something worth seeing.
@@ -1215,28 +1226,50 @@ class MontessoriPerceptionPipeline:
     @property
     def workspace(self) -> WorkspaceBox:
         """
-        The space this pipeline looks at: its own patch of table, and the room above it
-        a piece or the board can stand in.
+        The space the world says this pipeline looks at, before anything has been seen.
+        """
+        return self.workspace_over(self.table)
+
+    def workspace_over(self, table: WorkspaceSurface) -> WorkspaceBox:
+        """
+        The space above one stretch of table that holds anything worth seeing.
+
+        :param table: The table as it is being searched, which is what the room above it
+            is measured from.
         """
         return WorkspaceBox(
-            region=self.table.region,
-            minimum_height=self.table.height,
-            maximum_height=self.table.height + self.headroom,
+            region=table.region,
+            minimum_height=table.height,
+            maximum_height=table.height + self.headroom,
         )
 
-    def rectify(self, frame: RgbdFrame, height: float) -> Orthophoto:
+    def table_in(self, frame: RgbdFrame) -> WorkspaceSurface:
         """
-        Rectify a frame onto a horizontal plane, which is where outlines lying in that
-        plane are measured.
+        The table one frame shows, which is what that look searches.
+
+        Where the world describes the table well enough to recognise it in a picture the
+        rules answer by measuring it, so a run searches the table rather than a
+        rectangle drawn around it; where it does not, the answer is the modelled table
+        itself.
+
+        :param frame: The camera data the table is looked for in.
+        """
+        return self.surface_rules.surface_in(self.table, frame)
+
+    def rectify(self, frame: RgbdFrame, surface: WorkspaceSurface) -> Orthophoto:
+        """
+        Rectify a frame onto a surface's own plane, which is where outlines lying in
+        that plane are measured.
 
         Every plane is rectified over the same patch of table, so the board is found
         wherever on it the board happens to stand.
 
         :param frame: The camera data to rectify.
-        :param height: Height of the plane, above the world frame's origin, in metres.
+        :param surface: The surface whose plane is rectified onto, and whose stretch of
+            table is the patch rectified.
         :return: That plane's top-down view.
         """
-        return OrthophotoProjector(region=self.table.region).project(frame, height)
+        return OrthophotoProjector(region=surface.region).project(frame, surface.height)
 
     def detect(
         self, frame: RgbdFrame, request: SceneRequest = SceneRequest()
@@ -1247,6 +1280,10 @@ class MontessoriPerceptionPipeline:
         How the look is answered is concluded from the request rather than written here:
         the rules say which way of looking answers it, and that way says which detectors
         run over which surfaces.
+
+        The table is found in the frame before anything is searched on it, so a look
+        reads the stretch of table the camera actually shows rather than a rectangle
+        drawn around it.
 
         :param frame: The camera data to search.
         :param request: What the look was asked for, unnarrowed by default.
@@ -1263,12 +1300,16 @@ class MontessoriPerceptionPipeline:
         The material one look works over: what was asked for, the surfaces the world
         describes, and the frame to answer it from.
 
+        The table is the one this look found rather than the one the world models, so
+        every plane rectified and every surface searched is the stretch the camera
+        actually shows.
+
         :param frame: The camera data to search.
         :param request: What the look was asked for, unnarrowed by default.
         """
         return SceneToSearch(
             frame=frame,
-            table=self.table,
+            table=self.table_in(frame),
             lid=self.lid,
             reference_frame=self.reference_frame,
             request=request,
