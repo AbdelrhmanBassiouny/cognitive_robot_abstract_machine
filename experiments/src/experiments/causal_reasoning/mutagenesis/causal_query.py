@@ -5,6 +5,7 @@ mutagenicity and running backdoor adjustment on the grounded circuit.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -268,36 +269,38 @@ class BranchingAtomCountCausalQuery:
         )
 
     @staticmethod
-    def classify_by_branching_atom_count(
+    def classify_by_branching_atom_count_and_indicator_1(
         molecules: List[MutagenesisMolecule],
-        effects: List[BranchingAtomCountCausalEffect],
     ) -> ConfusionMatrix:
         """
-        Classify each molecule as mutagenic exactly when its branching-atom count's
-        naive probability in ``effects`` is above one half, and tally the result
+        Classify each molecule as mutagenic exactly when most molecules sharing its
+        (branching-atom count, ``ind1``) pair are mutagenic, and tally the result
         against the molecule's actual label.
 
         This is not what the causal query is for -- backdoor adjustment answers a
         different question than classification does -- but it gives a reference point
-        for how much signal branching-atom count alone carries about mutagenicity.
+        for how much signal these two fields carry about mutagenicity together. The
+        majority vote is read directly off ``molecules`` themselves, not off a fitted
+        circuit, and evaluated on the same molecules it was computed from.
 
-        :param molecules: Molecules to classify. Every molecule's branching-atom count
-            must appear in ``effects``.
-        :param effects: Per-branching-atom-count naive probabilities, as returned by
-            :meth:`run`.
+        :param molecules: Molecules to classify, and to compute the per-pair majority
+            vote from.
         :return: The resulting confusion matrix.
-        :raises KeyError: If a molecule's branching-atom count is not in ``effects``.
         """
-        naive_probability_by_count = {
-            effect.branching_atom_count: effect.naive_probability_mutagenic
-            for effect in effects
+        labels_by_key = defaultdict(list)
+        for molecule in molecules:
+            labels_by_key[
+                BranchingAtomCountCausalQuery._classification_key(molecule)
+            ].append(molecule.mutagenic)
+        predicted_mutagenic_by_key = {
+            key: labels.count(True) > labels.count(False)
+            for key, labels in labels_by_key.items()
         }
+
         true_positive = false_positive = true_negative = false_negative = 0
         for molecule in molecules:
-            branching_atom_count = MutagenesisMoleculeAggregations(
-                instance=molecule
-            ).branching_atom_count()
-            predicted_mutagenic = naive_probability_by_count[branching_atom_count] > 0.5
+            key = BranchingAtomCountCausalQuery._classification_key(molecule)
+            predicted_mutagenic = predicted_mutagenic_by_key[key]
             if predicted_mutagenic and molecule.mutagenic:
                 true_positive += 1
             elif predicted_mutagenic and not molecule.mutagenic:
@@ -308,6 +311,18 @@ class BranchingAtomCountCausalQuery:
                 true_negative += 1
         return ConfusionMatrix(
             true_positive, false_positive, true_negative, false_negative
+        )
+
+    @staticmethod
+    def _classification_key(molecule: MutagenesisMolecule) -> tuple[int, bool]:
+        """
+        :param molecule: The molecule to key.
+        :return: The (branching-atom count, ``ind1``) pair
+            :meth:`classify_by_branching_atom_count_and_indicator_1` groups by.
+        """
+        return (
+            MutagenesisMoleculeAggregations(instance=molecule).branching_atom_count(),
+            molecule.indicator_1,
         )
 
     @staticmethod

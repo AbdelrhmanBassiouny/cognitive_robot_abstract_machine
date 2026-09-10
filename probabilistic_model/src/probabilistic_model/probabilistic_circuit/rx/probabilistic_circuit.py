@@ -708,10 +708,6 @@ class SumUnit(InnerUnit):
                     # add an edge to that subcircuit
                     self.add_subcircuit(sub_subcircuit, new_weight)
 
-                # detach, but remove the node only once no other parent references
-                # it: Monte-Carlo grounding can mount one shared instance under
-                # several nodes, so removing it unconditionally would delete it out
-                # from under the others.
                 if self.probabilistic_circuit.graph.has_edge(
                     self.index, subcircuit.index
                 ):

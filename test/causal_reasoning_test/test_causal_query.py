@@ -11,7 +11,6 @@ import numpy as np
 import pytest
 
 from experiments.causal_reasoning.mutagenesis.causal_query import (
-    BranchingAtomCountCausalEffect,
     BranchingAtomCountCausalQuery,
 )
 from experiments.causal_reasoning.mutagenesis.dataset import (
@@ -52,7 +51,7 @@ def test_synthetic_causal_circuit_is_support_deterministic():
 
 
 def _molecule_with_branching_atom_count(
-    branching_atom_count: int, mutagenic: bool
+    branching_atom_count: int, indicator_1: bool, mutagenic: bool
 ) -> MutagenesisMolecule:
     atoms = [
         MutagenesisAtom(
@@ -65,7 +64,7 @@ def _molecule_with_branching_atom_count(
         )
     ]
     return MutagenesisMolecule(
-        indicator_1=False,
+        indicator_1=indicator_1,
         logp=0.0,
         lumo=0.0,
         mutagenic=mutagenic,
@@ -74,42 +73,32 @@ def _molecule_with_branching_atom_count(
     )
 
 
-def test_classify_by_branching_atom_count_counts_matches_and_mismatches():
+def test_classify_by_branching_atom_count_and_indicator_1_votes_per_pair():
     """
-    Predicts mutagenic exactly when the branching-atom count's naive probability is
-    above one half, then tallies the result against each molecule's actual label.
+    Two molecules share a branching-atom count but differ on ``ind1``, splitting them
+    into their own perfectly separable groups; voting on branching-atom count alone
+    would tie 2-2 and misclassify half of them, so this is a regression test that the
+    ``ind1`` split, not just the branching-atom-count tally, drives the prediction.
     """
-    effects = [
-        BranchingAtomCountCausalEffect(
-            branching_atom_count=1,
-            region_probability=0.5,
-            naive_probability_mutagenic=0.2,
-            adjusted_probability_mutagenic=0.2,
-        ),
-        BranchingAtomCountCausalEffect(
-            branching_atom_count=5,
-            region_probability=0.5,
-            naive_probability_mutagenic=0.8,
-            adjusted_probability_mutagenic=0.8,
-        ),
-    ]
     molecules = [
-        _molecule_with_branching_atom_count(1, mutagenic=False),
-        _molecule_with_branching_atom_count(1, mutagenic=True),
-        _molecule_with_branching_atom_count(5, mutagenic=True),
-        _molecule_with_branching_atom_count(5, mutagenic=False),
+        _molecule_with_branching_atom_count(3, indicator_1=True, mutagenic=True),
+        _molecule_with_branching_atom_count(3, indicator_1=True, mutagenic=True),
+        _molecule_with_branching_atom_count(3, indicator_1=False, mutagenic=False),
+        _molecule_with_branching_atom_count(3, indicator_1=False, mutagenic=False),
     ]
 
-    confusion_matrix = BranchingAtomCountCausalQuery.classify_by_branching_atom_count(
-        molecules, effects
+    confusion_matrix = (
+        BranchingAtomCountCausalQuery.classify_by_branching_atom_count_and_indicator_1(
+            molecules
+        )
     )
 
-    assert confusion_matrix.true_negative == 1
-    assert confusion_matrix.false_negative == 1
-    assert confusion_matrix.true_positive == 1
-    assert confusion_matrix.false_positive == 1
+    assert confusion_matrix.true_positive == 2
+    assert confusion_matrix.true_negative == 2
+    assert confusion_matrix.false_positive == 0
+    assert confusion_matrix.false_negative == 0
     assert confusion_matrix.total == 4
-    assert confusion_matrix.accuracy == pytest.approx(0.5)
+    assert confusion_matrix.accuracy == pytest.approx(1.0)
 
 
 # %% live-dataset pipeline (real CTU Mutagenesis data, skipped without network access)
@@ -166,10 +155,10 @@ def test_effect_probabilities_are_valid_probabilities(causal_query_result):
 
 
 @requires_mutagenesis_dataset
-def test_confusion_matrix_covers_every_molecule(
-    causal_query_result, mutagenesis_molecules
-):
-    confusion_matrix = BranchingAtomCountCausalQuery.classify_by_branching_atom_count(
-        mutagenesis_molecules, causal_query_result.effects
+def test_confusion_matrix_covers_every_molecule(mutagenesis_molecules):
+    confusion_matrix = (
+        BranchingAtomCountCausalQuery.classify_by_branching_atom_count_and_indicator_1(
+            mutagenesis_molecules
+        )
     )
     assert confusion_matrix.total == len(mutagenesis_molecules)

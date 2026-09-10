@@ -133,16 +133,21 @@ backdoor-adjusted for `ind1`, on the full dataset:
 The circuit passes support-determinism verification, and the whole thing runs end to
 end in well under a minute.
 
-For reference, thresholding the naive P(mutagenic) column at one half turns
-branching-atom count into a plain classifier. Its confusion matrix against the
+For reference, majority-voting mutagenicity per (branching-atom count, `ind1`) pair
+turns these two fields into a plain classifier. Its confusion matrix against the
 actual labels, on the same 188 molecules:
 
 | | Predicted mutagenic | Predicted non-mutagenic |
 |---|---:|---:|
-| Actually mutagenic | 114 | 11 |
-| Actually non-mutagenic | 18 | 45 |
+| Actually mutagenic | 108 | 17 |
+| Actually non-mutagenic | 9 | 54 |
 
-That is 159 correct out of 188, 84.6% accuracy, from branching-atom count alone.
+That is 162 correct out of 188, 86.2% accuracy, from branching-atom count and `ind1`
+together. Branching-atom count alone gets 84.6%; adding `ind1` closes only part of
+the gap. Pushing further would need a properly held-out train/test split and a real
+classifier fit on more of the dataset's fields, not a majority vote read off two
+fields directly, a different, separate piece of work from what this experiment sets
+out to show.
 
 ## Final takeway from this experiment
 

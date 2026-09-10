@@ -799,9 +799,6 @@ class RelationalProbabilisticCircuit:
         :return: The conditioned circuit and the product nodes that will be extended
             with the grounded exchangeable distribution.
         """
-        # Skipped when there is nothing to condition on: log_conditional_in_place
-        # simplifies even for an empty point, flattening a stratified class circuit's
-        # own per-value branches before grounding attaches anything to them.
         if aggregation_statistics:
             conditioning_result, _ = circuit.log_conditional_in_place(
                 aggregation_statistics
