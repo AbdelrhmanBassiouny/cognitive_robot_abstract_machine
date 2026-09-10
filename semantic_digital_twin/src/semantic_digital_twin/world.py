@@ -1856,6 +1856,24 @@ class World(HasSimulatorProperties):
 
             other.clear()
 
+    def _replace_with(self, other: World) -> None:
+        """
+        Replace all entities, kinematic structure, and state with those of `other`,
+        preserving registered callbacks and listeners.
+
+        :param other: The world instance whose content replaces the current world.
+        """
+        model_change_callbacks = list(self._model_manager.model_change_callbacks)
+        state_change_callbacks = list(self.state.state_change_callbacks)
+
+        with self._world_lock:
+            with self.modify_world(publish_changes=False):
+                self.clear()
+            self.merge_world(other)
+            self._model_manager.model_change_callbacks.extend(model_change_callbacks)
+            self.state.state_change_callbacks.extend(state_change_callbacks)
+            self._notify_model_change(publish_changes=False)
+
     def is_kinematic_structure_entity_in_world_by_name(self, name: str) -> bool:
         """
         Checks if there is a kinematic structure entity with the given name in the
