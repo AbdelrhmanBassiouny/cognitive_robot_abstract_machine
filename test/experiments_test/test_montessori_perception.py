@@ -16,6 +16,7 @@ from experiments.montessori.perception.detections import (
     MontessoriShapeDetection,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.pieces import KNOWN_PIECES
 from experiments.montessori.semantics import MontessoriShapeCategory
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
@@ -211,7 +212,10 @@ def test_the_board_is_still_found_under_a_piece_standing_on_its_lid(
 def test_a_piece_the_depth_image_cannot_resolve_stands_at_its_nominal_height(
     pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    nominal = pipeline.piece_detector.piece_height
+    [(detector, _)] = pipeline.detector_rules.detectors_for(
+        pipeline.table, KNOWN_PIECES
+    )
+    nominal = detector.piece_height
 
     for piece in scene.shapes:
         assert piece.height == pytest.approx(nominal)

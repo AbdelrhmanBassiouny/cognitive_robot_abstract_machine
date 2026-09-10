@@ -251,3 +251,26 @@ class NothingRecordedOnTopic(DataclassException):
             "Record the bag again with every camera topic the perception node reads, "
             "or capture from a bag that already has them."
         )
+
+
+@dataclass
+class NoDetectorAnswersTheLook(DataclassException):
+    """
+    Raised when no detector declares it can answer a look, so nothing would be run for
+    it and reporting nothing found would be a lie about the scene.
+    """
+
+    look: str
+    """
+    What was asked for, and what the world says about the surface it was asked about.
+    """
+
+    def error_message(self) -> str:
+        return f"No detector declares it can answer {self.look}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "State what the world knows about the surface or the target, so a detector "
+            "that already answers this kind of look declares it can, or add one that "
+            "does."
+        )
