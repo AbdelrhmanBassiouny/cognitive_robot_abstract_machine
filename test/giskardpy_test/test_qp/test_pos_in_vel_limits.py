@@ -6,7 +6,6 @@ import numpy as np
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.qp.pos_in_vel_limits import (
-    NEGLIGIBLE_VELOCITY,
     shifted_velocity_profile,
     zero_negligible_velocities,
 )
@@ -55,6 +54,7 @@ def test_shifted_velocity_profile_already_treats_negative_residue_as_rest():
 
 
 # %% zero_negligible_velocities
+NEGLIGIBLE_VELOCITY = 1e-4
 
 
 def test_zero_negligible_velocities_clears_small_positive_velocities():
