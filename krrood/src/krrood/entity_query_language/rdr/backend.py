@@ -30,6 +30,7 @@ from krrood.entity_query_language.backends import QueryBackend
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.evaluable import Evaluable
+from krrood.entity_query_language.factories import ConditionType
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.rdr.exceptions import QueryIsNotAMatch
 from krrood.entity_query_language.rdr.expert import Expert
@@ -124,6 +125,17 @@ class RDRBackend(QueryBackend):
         if not isinstance(expression, Match):
             raise QueryIsNotAMatch(expression)
         return iter(self.fill(expression))
+
+    def capability(self, statement: Evaluable) -> ConditionType:
+        """
+        Answers a match naming exactly one ``...`` attribute to infer, of a type a
+        single-class RDR can conclude one value for -- the same precondition
+        :class:`UnderspecifiedMatch` enforces when the statement is actually answered.
+        """
+        return (
+            isinstance(statement, Match)
+            and UnderspecifiedMatch(statement).names_one_supported_inference_target()
+        )
 
     def fit(self, query: Match, ground_truth: Optional[GroundTruth] = None) -> Self:
         """
