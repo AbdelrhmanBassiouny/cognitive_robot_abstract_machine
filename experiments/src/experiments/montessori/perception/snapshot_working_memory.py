@@ -3,9 +3,11 @@ Working memory as a snapshot of the twin, refreshed only when it is worth refres
 
 While a piece is held, the twin already follows the gripper's kinematics through the
 attachment mechanism -- perception has nothing to add and is not consulted. While idle,
-a look is taken at a low rate, and a piece's believed pose is corrected only when the
-newly perceived pose differs from it by more than a threshold, so that perception noise
-on an unmoved piece is never mistaken for a piece that moved on its own.
+a look is taken at a low rate and every piece it reports is written straight onto the
+twin's belief. Whether a piece actually moved, and whether the robot moved it, is not
+this class's question: it belongs to the event system that watches the twin over time
+(:class:`~segmind.detectors.atomic_event_detectors_nodes.TranslationDetector` and its
+kin), which sees every correction this class commits.
 """
 
 from __future__ import annotations
@@ -24,33 +26,12 @@ from semantic_digital_twin.world import World
 
 # %% what a look reports
 
-POSE_CHANGE_THRESHOLD_METERS = 1e-6
-"""
-How far a newly perceived position has to differ from the believed one before it is
-committed, in metres.
-
-Measured, not chosen: repeating a look at an unchanging simulated scene reproduces the
-same detected position to within floating-point noise (~1e-15 m; see
-``test_montessori_snapshot_working_memory.py``'s
-``test_the_committed_threshold_matches_three_times_the_measured_position_noise``), so
-three standard deviations of *that* noise would be a number too small to guard against
-anything but the computation's own numerical floor. This default is a numerical safety
-margin above that floor instead -- large enough that no repeated look ever crosses it on
-its own, and still many orders of magnitude below any real piece movement.
-
-The item's own description asks for the same measurement taken on the real robot, where
-sensor noise is not zero. That number is not available in this environment and is
-tracked separately (see ``icra-mechanism/roadmap.md``) rather than assumed here; once it
-exists, it is the real gate and this simulated figure becomes the fallback for runs with
-no such measurement.
-"""
-
 
 @dataclass(eq=False)
 class PerceivedPose(Role[Pose]):
     """
-    A loose piece as one look reported it, narrowed to what deciding whether it moved
-    needs.
+    A loose piece as one look reported it, narrowed to what matching it to a believed
+    piece needs.
 
     A role of the pose one look reported, the same pattern
     :class:`~experiments.montessori.perception.detections.DetectedMontessoriShape`
@@ -85,12 +66,15 @@ def perceived_poses_of(scene: MontessoriScene) -> List[PerceivedPose]:
 @dataclass
 class SnapshotWorkingMemory:
     """
-    Keeps the twin's belief about loose pieces a snapshot, refreshed only while idle and
-    only where it actually changed.
+    Keeps the twin's belief about loose pieces a snapshot, refreshed only while idle.
 
     Nothing here decides *whether* the robot is idle or *how* a look is taken -- both
     are handed in, so this class depends on the fact of idleness and the fact of a look
-    rather than on the gripper or the camera themselves.
+    rather than on the gripper or the camera themselves. It also does not decide
+    *whether* a piece moved: every look it takes is written onto the twin
+    unconditionally, and telling a piece the robot moved from one that moved on its own
+    is the event system's question to answer over the corrections this class commits,
+    not this class's own.
     """
 
     world: World
@@ -122,12 +106,6 @@ class SnapshotWorkingMemory:
     the same way the continuous node throttles its own camera-rate pipeline runs.
     """
 
-    pose_change_threshold: float = POSE_CHANGE_THRESHOLD_METERS
-    """
-    How far a perceived position has to differ from the believed one, in metres, before
-    :meth:`tick` commits it. See :data:`POSE_CHANGE_THRESHOLD_METERS`.
-    """
-
     _last_look: float = field(init=False, default=float("-inf"))
     """
     When :meth:`tick` last actually took a look, as a monotonic timestamp.
@@ -138,29 +116,29 @@ class SnapshotWorkingMemory:
 
     def tick(self, now: float) -> List[MontessoriShape]:
         """
-        Take a look and correct whatever piece moved, if it is time to and the robot is
-        idle.
+        Take a look and write what it found onto the twin, if it is time to and the
+        robot is idle.
 
         :param now: The current time, as whatever clock the caller's ``minimum_period``
             is measured against.
-        :return: The pieces whose believed pose was corrected.
+        :return: The pieces whose believed pose was written.
         """
         if not self.is_idle():
             return []
         if now - self._last_look < self.minimum_period:
             return []
         self._last_look = now
-        return self._commit_changed_pieces(self.look())
+        return self._commit_matched_pieces(self.look())
 
-    def _commit_changed_pieces(
+    def _commit_matched_pieces(
         self, perceived_poses: List[PerceivedPose]
     ) -> List[MontessoriShape]:
         """
         Match each perceived pose to the nearest believed piece of the same kind not
-        already matched, and commit it where it differs enough to matter.
+        already matched, and write it onto that piece unconditionally.
 
         :param perceived_poses: What the look found.
-        :return: The pieces whose believed pose was corrected.
+        :return: The pieces whose believed pose was written.
         """
         matched: set[MontessoriShape] = set()
         committed: List[MontessoriShape] = []
@@ -169,9 +147,8 @@ class SnapshotWorkingMemory:
             if piece is None:
                 continue
             matched.add(piece)
-            if self._has_moved(piece, perceived.role_taker):
-                self._commit(piece, perceived.role_taker)
-                committed.append(piece)
+            self._commit(piece, perceived.role_taker)
+            committed.append(piece)
         return committed
 
     def _nearest_unmatched_piece(
@@ -206,26 +183,13 @@ class SnapshotWorkingMemory:
             ),
         )
 
-    def _has_moved(self, piece: MontessoriShape, pose: Pose) -> bool:
-        """
-        Whether ``pose`` differs from ``piece``'s believed pose by more than
-        :attr:`pose_change_threshold`.
-
-        :param piece: The piece to compare against.
-        :param pose: Where it was just seen.
-        """
-        distance = np.linalg.norm(
-            self._believed_position(piece) - self._position_of(pose)
-        )
-        return distance > self.pose_change_threshold
-
     def _commit(self, piece: MontessoriShape, pose: Pose) -> None:
         """
         Write ``pose`` onto ``piece``'s own connection.
 
         State, not structure: the piece already exists in the twin, so this only moves
-        it, the same way a later look already writes a new placement into the
-        connection an earlier one built.
+        it, the same way a later look already writes a new placement into the connection
+        an earlier one built.
 
         :param piece: The piece whose believed pose is corrected.
         :param pose: Where it was just seen.
