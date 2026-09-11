@@ -221,6 +221,12 @@ class RenderedScene(CardPanel):
     ``uint8``.
     """
 
+    answer_mask: np.ndarray
+    """
+    Which pixels of the picture the answer covers, shape ``(height, width)`` of
+    ``bool``.
+    """
+
     def holds(self, color: Color) -> bool:
         """
         Whether any pixel of the picture was drawn in the given colour.
@@ -312,7 +318,7 @@ class SceneRender:
             the world holds no geometry to place it around.
         """
         select_offscreen_rendering_backend()
-        placed = self._placed_around_the_scene()
+        placed = self.place_around_the_scene()
         camera = self.camera if self.camera is not None else placed[0]
         scene = MujocoSim(
             world=self.world,
@@ -351,7 +357,7 @@ class SceneRender:
 
     # %% placing the camera
 
-    def _placed_around_the_scene(self) -> List[SimulatorAdditionalProperty]:
+    def place_around_the_scene(self) -> List[SimulatorAdditionalProperty]:
         """
         What this render has to add to the world to draw it at all, already attached and
         in the order it was placed: the overview camera when none was given, then a light
@@ -361,18 +367,18 @@ class SceneRender:
             geometry to place it around.
         """
         wanted_camera = self.camera is None
-        wanted_light = not self._is_lit()
+        wanted_light = not self.is_lit()
         if not wanted_camera and not wanted_light:
             return []
-        bounds = self._bounds()
+        bounds = self.bounds()
         placed: List[SimulatorAdditionalProperty] = []
         if wanted_camera:
-            placed.append(self._overview_camera(bounds))
+            placed.append(self.overview_camera(bounds))
         if wanted_light:
-            placed.append(self._light_over(bounds))
+            placed.append(self.light_over(bounds))
         return placed
 
-    def _bounds(self) -> np.ndarray:
+    def bounds(self) -> np.ndarray:
         """
         The corners of the box the world's geometry stands in.
 
@@ -383,7 +389,7 @@ class SceneRender:
             raise NothingToDrawError(world=self.world)
         return np.asarray(bounds)
 
-    def _is_lit(self) -> bool:
+    def is_lit(self) -> bool:
         """
         Whether the world says how it is lit, in which case a render leaves its lighting
         alone.
@@ -394,7 +400,7 @@ class SceneRender:
             for stated in entity.simulator_additional_properties
         )
 
-    def _overview_camera(self, bounds: np.ndarray) -> MujocoCamera:
+    def overview_camera(self, bounds: np.ndarray) -> MujocoCamera:
         """
         A camera hung on the world's root looking diagonally down on the whole scene,
         already attached to it.
@@ -412,7 +418,7 @@ class SceneRender:
         self.world.root.simulator_additional_properties.append(camera)
         return camera
 
-    def _light_over(self, bounds: np.ndarray) -> MujocoLight:
+    def light_over(self, bounds: np.ndarray) -> MujocoLight:
         """
         A light shining down on the whole scene from the way the overview camera looks
         at it, already attached to the world's root.
@@ -471,36 +477,44 @@ class SceneRender:
             ).result
 
         picture = np.ascontiguousarray(colors)
-        self._outline(picture, segmentation, scene, answers)
+        covered = self._covered_by(segmentation, scene, answers)
+        self._outline(picture, covered)
         if self.label_answers:
             self._label(picture, viewpoint, answers)
-        return RenderedScene(image=picture)
+        return RenderedScene(image=picture, answer_mask=covered)
 
-    def _outline(
-        self,
-        picture: np.ndarray,
+    @staticmethod
+    def _covered_by(
         segmentation: np.ndarray,
         scene: MujocoSim,
         answers: Sequence[KinematicStructureEntity],
-    ) -> None:
+    ) -> np.ndarray:
         """
-        Draw the edge of every pixel the answer covers.
+        Which pixels of the picture the answer covers.
 
-        The recolouring alone leaves an answer standing behind something else with no
-        edge to read it by; the segmentation says exactly which pixels are the answer's,
-        so the outline follows what is actually visible of it.
+        The segmentation says which geom each pixel was drawn from, so this is what is
+        actually visible of the answer rather than everywhere it would be if nothing
+        stood in front of it.
 
-        :param picture: The picture to draw on, changed in place.
         :param segmentation: Each pixel's ``(model id, object type)``.
         :param scene: The scene the picture was drawn from.
         :param answers: The bodies and regions the answer names.
         """
         answered_geoms = [geom for answer in answers for geom in scene.geoms_of(answer)]
-        if not answered_geoms:
-            return
-        covered = np.isin(segmentation[:, :, 0], answered_geoms) & (
+        return np.isin(segmentation[:, :, 0], answered_geoms) & (
             segmentation[:, :, 1] == mujoco.mjtObj.mjOBJ_GEOM
         )
+
+    def _outline(self, picture: np.ndarray, covered: np.ndarray) -> None:
+        """
+        Draw the edge of every pixel the answer covers.
+
+        The recolouring alone leaves an answer standing behind something else with no
+        edge to read it by.
+
+        :param picture: The picture to draw on, changed in place.
+        :param covered: Which pixels the answer covers.
+        """
         edges, _ = cv2.findContours(
             covered.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )

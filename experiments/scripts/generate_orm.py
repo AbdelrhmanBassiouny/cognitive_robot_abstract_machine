@@ -28,6 +28,7 @@ import experiments.paper.measurement
 import experiments.paper.outcomes
 import experiments.paper.panel
 import experiments.paper.plan_timeline
+import experiments.paper.pose_change
 import experiments.paper.queries
 import experiments.paper.query_card
 import experiments.paper.questions
@@ -120,6 +121,7 @@ for paper_module in (
     experiments.paper.outcomes,
     experiments.paper.panel,
     experiments.paper.plan_timeline,
+    experiments.paper.pose_change,
     experiments.paper.queries,
     experiments.paper.query_card,
     experiments.paper.questions,
