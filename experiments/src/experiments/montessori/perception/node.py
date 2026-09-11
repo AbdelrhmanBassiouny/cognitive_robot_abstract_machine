@@ -23,28 +23,19 @@ import time
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass, field
 
-import numpy as np
 import rclpy
-from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
-from rclpy.time import Time
-from sensor_msgs.msg import CameraInfo, CompressedImage
+from sensor_msgs.msg import CompressedImage
 from typing_extensions import Callable, List, Optional, TypeVar
 
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
 from experiments.montessori.perception.board_publishing import BoardPublisher
-from experiments.montessori.perception.camera import (
-    CameraIntrinsics,
-    CameraTopic,
-    RgbdFrame,
-    decode_compressed_color_image,
-    decode_compressed_depth_image,
-)
+from experiments.montessori.perception.camera import CameraTopic, RgbdFrame
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import NoSceneAvailable
+from experiments.montessori.perception.live_camera import LiveCamera
 from experiments.montessori.perception.markers import DetectionMarkerPublisher
 from experiments.montessori.perception.overlay import (
     DetectionOverlay,
@@ -57,13 +48,9 @@ from experiments.montessori.perception.scene_windows import SceneWindows
 from experiments.montessori.perception.viewer import CameraFrameViewer
 from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.network_limits import check_large_messages_can_arrive
-from semantic_digital_twin.adapters.ros.tfwrapper import TFWrapper
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
 from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
 from semantic_digital_twin.robots.tracy import Tracy
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
-)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -144,24 +131,9 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     Draws the detections onto the frame the viewer shows.
     """
 
-    _transforms: TFWrapper = field(init=False)
+    _camera: LiveCamera = field(init=False)
     """
-    Reads where the camera stood when a frame was taken.
-    """
-
-    _intrinsics: Optional[CameraIntrinsics] = field(init=False, default=None)
-    """
-    The intrinsics the camera last reported.
-    """
-
-    _camera_frame: Optional[str] = field(init=False, default=None)
-    """
-    The frame the camera last reported its images in.
-    """
-
-    _latest_depth: Optional[CompressedImage] = field(init=False, default=None)
-    """
-    The newest depth image, held until a colour image arrives to pair it with.
+    The newest of everything the camera publishes, and where it stands.
     """
 
     _frame: Optional[RgbdFrame] = field(init=False, default=None)
@@ -185,61 +157,29 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     """
 
     def __post_init__(self) -> None:
-        self._transforms = TFWrapper(node=self.node)
-        self.node.create_subscription(
-            CameraInfo,
-            CameraTopic.CAMERA_INFO,
-            self._on_camera_info,
-            qos_profile_sensor_data,
-        )
-        self.node.create_subscription(
-            CompressedImage, CameraTopic.DEPTH, self._on_depth, qos_profile_sensor_data
-        )
-        self.node.create_subscription(
-            CompressedImage, CameraTopic.COLOR, self._on_color, qos_profile_sensor_data
-        )
+        self._camera = LiveCamera(node=self.node, color_callback=self._on_look)
 
-    # %% subscriptions
+    # %% each look
 
-    def _on_camera_info(self, message: CameraInfo) -> None:
+    def _on_look(self, _: CompressedImage) -> None:
         """
-        Remember the intrinsics and the frame the camera reports its images in.
-
-        :param message: The camera's own calibration.
-        """
-        self._intrinsics = CameraIntrinsics.from_camera_info_matrix(message.k)
-        self._camera_frame = message.header.frame_id
-
-    def _on_depth(self, message: CompressedImage) -> None:
-        """
-        Hold the newest depth image until a colour image arrives to pair it with.
-
-        :param message: The depth image.
-        """
-        self._latest_depth = message
-
-    def _on_color(self, message: CompressedImage) -> None:
-        """
-        Pair a colour image with the newest depth image and run the pipeline on the two.
+        Run the pipeline on the newest look, once a colour image has completed it.
 
         The bare images are shown only while the camera cannot be placed in the world,
         since a viewer that is about to be handed the same ones cut down to the
         workspace and drawn on would otherwise flash the bare ones first.
-
-        :param message: The colour image.
         """
-        if not self._ready() or time.monotonic() - self._last_run < self.minimum_period:
+        if (
+            self._camera.missing_inputs()
+            or time.monotonic() - self._last_run < self.minimum_period
+        ):
             return
         self._last_run = time.monotonic()
-        color = decode_compressed_color_image(message.data, message.format)
-        depth = decode_compressed_depth_image(
-            self._latest_depth.data, self._latest_depth.format
-        )
-        frame = self._build_frame(color, depth)
+        frame = self._build_frame()
         if frame is None:
             if self.viewer is not None:
-                self.viewer.show_color(color)
-                self.viewer.show_depth(depth)
+                self.viewer.show_color(self._camera.color_image)
+                self.viewer.show_depth(self._camera.depth_image)
             return
         scene = self.pipeline.detect(frame)
         with self._lock:
@@ -262,79 +202,29 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
             pipeline=self.pipeline, viewer=self.viewer, overlay=self.overlay
         ).show(frame, scene)
 
-    def _ready(self) -> bool:
-        """
-        Whether everything the pipeline needs has arrived at least once.
-        """
-        return self._intrinsics is not None and self._latest_depth is not None
-
     def _missing_inputs(self) -> List[str]:
         """
         The inputs that have not arrived yet, for reporting why no scene is available.
+
+        A colour image counts as missing until one has been looked at, since it is the
+        one that completes a look.
         """
-        missing = []
-        if self._intrinsics is None:
-            missing.append(str(CameraTopic.CAMERA_INFO))
-        if self._latest_depth is None:
-            missing.append(str(CameraTopic.DEPTH))
-        if self._scene is None:
+        missing = self._camera.missing_inputs()
+        if self._scene is None and str(CameraTopic.COLOR) not in missing:
             missing.append(str(CameraTopic.COLOR))
         return missing
 
-    def _build_frame(self, color: np.ndarray, depth: np.ndarray) -> Optional[RgbdFrame]:
+    def _build_frame(self) -> Optional[RgbdFrame]:
         """
-        Assemble one colour image, the depth image taken with it, and the camera's pose
-        into a frame the pipeline can read.
+        The newest look, in the pipeline's own reference frame.
 
-        :param color: The colour image, blue/green/red.
-        :param depth: The depth image in metres.
-        :return: The frame, or None while the camera's pose is not yet known to the
-            transform tree.
-        """
-        reference_frame_T_camera = self._camera_pose()
-        if reference_frame_T_camera is None:
-            return None
-        return RgbdFrame(
-            color=color,
-            depth=depth,
-            intrinsics=self._intrinsics,
-            reference_frame_T_camera=reference_frame_T_camera,
-        )
-
-    def _camera_pose(self) -> Optional[np.ndarray]:
-        """
-        Where the camera stands, in the pipeline's own reference frame.
-
-        Reads the newest transform rather than the one stamped on the image: this camera
-        is bolted to the robot's own table, so its pose does not move between the frame
-        being taken and being processed, and asking for a past stamp only risks falling
-        off the back of the transform buffer.
-
-        :return: The camera's pose as a 4x4 homogeneous transformation, or None while
-            the transform tree cannot yet answer for that frame.
+        :return: The frame, or None while the pipeline has no reference frame or the
+            camera's pose is not yet known to the transform tree.
         """
         reference_frame = self.pipeline.reference_frame
-        if reference_frame is None or self._camera_frame is None:
+        if reference_frame is None:
             return None
-        if not self._transforms.wait_for_transform(
-            str(reference_frame.name.name),
-            self._camera_frame,
-            Time(),
-            Duration(seconds=0.2),
-        ):
-            return None
-        transform = self._transforms.lookup_transform(
-            str(reference_frame.name.name), self._camera_frame
-        ).transform
-        return HomogeneousTransformationMatrix.from_xyz_quaternion(
-            transform.translation.x,
-            transform.translation.y,
-            transform.translation.z,
-            transform.rotation.x,
-            transform.rotation.y,
-            transform.rotation.z,
-            transform.rotation.w,
-        ).to_np()
+        return self._camera.frame_in(str(reference_frame.name.name))
 
     # %% serving results
 
