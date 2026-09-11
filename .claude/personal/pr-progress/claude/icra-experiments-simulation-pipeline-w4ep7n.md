@@ -42,6 +42,19 @@ everything ready for it."
   carry (face + opposite edge; firmer squeeze ejects it; condim 6 dropped it on the
   lowering). Strict xfail with that reason.
 
+**State at the end of the session.** Committed as `97223f4f1` (amended `e4b8167d8`),
+the remote's `d2a39f92b3` (PR #316 merged into #265 by its own session) merged in as
+`723d3cb449`, pushed to `bass`; #316's branch fast-forwarded to the same tip and pushed
+(GitHub already shows #316 as merged). PR #265 description has a section for this
+session; still a draft. Full `test/experiments_test` on the pre-merge tree: 1194
+passed, 4 failed (two caplog ones #316 also lists, `test_real_stretch_demo_process_boundary`
+which fails on the pre-session tip too, one order-dependent `test_episodes` that passes
+alone); on the merged tree the 316-touched modules plus this session's: 77 + 89 passed,
+1 xfailed. Videos in `~/pickup_demo_videos/2026-09-12_perceived_pickup/`. The first
+`save-plan.sh` of this session reverted two other sessions' plan entries (stale
+CLAUDE.local.md copy -- the hazard the notes warn about); repaired from `25f6f9483d`
+plus this session's additions, dashboard republished.
+
 **Open for the developer.** (1) Run `pickup_demo_real` on the robot: check the perceived
 board and pieces in rviz before pressing Enter; gripper close setpoints
 (`grasp_widths.py`) were tuned for the 30 mm set -- the 16 mm rectangular prism may need
