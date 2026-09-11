@@ -2215,3 +2215,63 @@ description through the GitHub MCP server escapes the backticks in the `## Promo
 block's fenced link, so each write grows the run of stray backticks and quotes around the
 URL. The URL itself is untouched and the link still works; the block is the stack
 tooling's own and rewriting it is not this item's work.
+
+## 2026-09-12: the pickup demo runs on the perception pipeline, and the simulation says what it costs
+
+The developer's ask, the night before a recording day: the real pickup demo should run on
+the perception pipeline end to end, with a MuJoCo run "similar exactly to the real one"
+and videos, while the robot is off. Recorded on `integrated-simulation-pipeline` (#265,
+`97223f4f1`), since it is the demo that item's branch carries.
+
+**What the real demo now does.** Nothing on the table is placed by hand. `hold_board`
+(`scene_publishing.py`, the renamed `board_publishing.py`) looks for the board by its
+description, stands it in the live world and hands the look a pipeline reading its lid;
+`PiecePublisher` stands every piece the look put on the bare table as the known piece --
+resting on the surface rather than at the height the depth image read it at, which for a
+24 mm piece the sensor barely resolves would have sunk the body 11 mm into the table.
+`PerceivedSorting` is the run: perceive, then pick each piece from where it was seen and
+release it over the hole of the perceived board it fits through, through a `ShapeSorter`
+the Giskard rig and the MuJoCo rig each implement. Measured on `scaled_pieces_in_a_row`
+against its tape truth: board corner and all four pieces within the tape's 15 mm.
+
+**The simulation is two worlds, and that is the design worth keeping.** The reality holds
+Tracy, the board at the tape's centre and the smaller set at the tape's places, all
+physics; the belief holds Tracy alone, as the fetched world does, and is filled only by
+looking through a camera hung on Tracy's `camera_link` at the optical pose every shipped
+capture carries (rotation the ROS optical convention, offset `(-2.3, -32.2, -1.1)` mm --
+the colour sensor's own place in the housing). Plans are made in the belief and played on
+the reality's actuators, the belief's joints following the simulated ones after every
+advance. The look stands board and pieces within a millimetre of the reality; the whole
+test module runs in 85 s, filmed.
+
+**Three defects the simulated rig had all along, each found by measuring, none of them the
+perception's:**
+
+- Each arm's shoulder link stands 40 mm deep in the box Tracy's description raises where
+  the arms are bolted on. That contact pinned the pan joint (constraint torque 353 Nm
+  against a 330 Nm servo), so every reach settled 0.04-0.2 rad short and every grasp closed
+  on air. The earlier MuJoCo demo's "grasp reliability" issue very likely was this.
+- `close_gripper_around` sized the close to a bounding box along the closing axis and
+  stopped on contact with a body by name. A turned triangular prism's box is wider than the
+  prism, so the fingers stopped short of it; and the belief's body is not the reality's, so
+  the contact stop never fired. It now aims at the narrowest width, stops when both pads
+  touch one and the same thing, and squeezes a millimetre on -- which is what the real
+  gripper does when it stalls.
+- A piece pinched at a few contact points turns freely about the line through them with
+  sliding friction alone (`condim` 3), and works its way out on the carry. `MujocoGeom` in
+  `semantic_digital_twin` now carries `contact_dimensionality`; loose pieces get 4. The
+  triangular prism tipped 13 degrees with 3 and stays level with 4; 6 dropped it on the
+  lowering.
+
+**What still fails, and why it is left.** The triangular prism is held by one face and the
+opposite edge, and the grasp does not survive the one-leg carry to its hole in the demo's
+own sequence (it survives a two-leg carry in isolation, which says how marginal it is). A
+firmer squeeze ejects it like a seed; lowering the grasp tips it more. It is a strict
+expected failure naming this; the real pads are compliant and have held it. Cube, cylinder
+and rectangular prism go through on every run.
+
+**Standing hazards for the next session.** The Robotiq close setpoints in
+`grasp_widths.py` were tuned for the 30 mm set; the smaller set's 16 mm rectangular prism
+may need more than 0.6. #316's `record_episode --execution real` still builds its world
+from the URDF (`TracyOnItsOwnTable`) rather than from the fetched world and a look;
+`PerceivedSorting` is what a perceiving `MontessoriWorldBuilder` would wrap.
