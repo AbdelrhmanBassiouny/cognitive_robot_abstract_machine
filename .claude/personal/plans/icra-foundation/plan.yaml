@@ -190,6 +190,15 @@ items:
     GiskardExecutable.max_ticks_per_motion_mapping/tick_limit mechanism alongside it. Full
     detail recorded in roadmap.md and in the PR description's own new section. Still not
     CI-green on this tip - nothing armed to watch it, per the standing rule.
+
+    2026-09-11: icra-evidence's question-set-answered-from-memory (#304) merged in
+    (db9561fa6). #304 was cut off this branch's tip before the tracy_icra merge, the two
+    main merges and the LongTermMemory fix above, but none of those touched the files #304
+    changed, so the merge applied with no conflicts; GitHub closed #304 as merged
+    automatically once its head became an ancestor of this branch. Adds RecordedQuery as
+    Role[Question], QuestionSet.answer_and_record, and the AccuracyByBucket/
+    AccuracyByBloomLevel paper figures. Byte-compiled clean; still CI-only for verification,
+    same standing container limitation. Full detail in the PR description's own new section.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback

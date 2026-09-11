@@ -2122,3 +2122,24 @@ still carried by script, not by simulated grasp, because a position-driven gripp
 survive being simulated without joint actuators the Montessori robot does not have wired.
 `TracyHoldsAPiece` is scoped to that limitation until whoever answers that thread's
 open question (in `montessori-scenarios`' fourth round) resolves it.
+
+## #304 merged into `integrated-simulation-pipeline` (#265), 2026-09-11
+
+`icra-evidence`'s `question-set-answered-from-memory` (#304) is folded into #265
+(`db9561fa6`). #304 had been cut off #265's tip on 2026-09-09, before the `tracy_icra`
+merge, the two subsequent `main` merges, and the `LongTermMemory` CI fix all landed on
+#265 (recorded above); none of those touched the twelve files #304 changed, so the merge
+was a clean three-way merge with no conflicts, confirmed by diffing the merge result
+against #304's own diff (they match file-for-file). GitHub detected #304's head as an
+ancestor of #265 once pushed and closed #304 as merged automatically.
+
+What it adds: `RecordedQuery` (`experiments/episodes/episode.py`) becomes
+`Role[Question]`, with `question` as the required `role_taker` and `text` now a property
+reading `role_taker.english` rather than a stored field; `QuestionSet.answer_and_record`
+scores every question of a set against ground truth; and two new `PaperFigure`s,
+`AccuracyByBucket` and `AccuracyByBloomLevel`, read those scored rows.
+
+Byte-compiled clean; this session's container still cannot import the `experiments`
+package (`uv sync` fails on the same `pyproject.toml` parse error every session on this
+branch has reported), so CI remains what verifies both the working-memory and
+long-term-memory halves.
