@@ -181,6 +181,13 @@ class DetectedMontessoriShape(MontessoriDetection, Role[MontessoriShape]):
     """
 
     @property
+    def color(self) -> Color:
+        """
+        The colour the set this piece was looked for in gives its kind.
+        """
+        return self.hypothesis.piece_of(self.category).color
+
+    @property
     def surface_height(self) -> float:
         """
         Height of the surface this piece rests on, in metres.

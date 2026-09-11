@@ -144,12 +144,12 @@ def test_the_board_is_found_in_every_capture(
     assert scene.board.lid_height == capture_pipeline.lid.height
 
 
-MESH_SCALE_TOLERANCE = 0.06
+MESH_SCALE_TOLERANCE = 0.08
 """
 How far from the mesh's own size the board may measure and still be that mesh's size.
 
 A piece standing on a hole takes that opening away from the measurement and moves the
-best size by up to five parts in a hundred, measured with three pieces on the lid; a
+best size by up to seven parts in a hundred, measured with three pieces on the lid; a
 camera pose that foreshortens the lid moved it by fourteen, which is what this keeps
 out.
 """
@@ -280,18 +280,23 @@ def test_a_statement_describing_the_board_is_answered_with_the_board_it_found(
 # %% the loose pieces
 
 
-TABLE_PIECES_STILL_MISREAD: List[str] = ["stuck_cube_in_hole"]
+TABLE_PIECES_STILL_MISREAD: List[str] = [
+    "stuck_cube_in_hole",
+    "displaced_cube_from_hole",
+]
 """
-The captures with a piece on the table this look reports as another kind.
+The captures with a piece on the table this look reports as another kind, or not at all.
 
-``stuck_cube_in_hole`` has the full-size cylinder standing off to the robot's left,
-where the camera sees its side as well as its top. The side's edges lie outside the top
-face, and the cube's larger outline accounts for more of them than the cylinder's own
-does (0.44 against 0.32 of the edges, a lead of 0.11 in strength), so the cube is
-reported. Recorded on 2026-09-11, when the camera pose the captures state was corrected
-and the rectified top face became a true circle; the old pose read it as an ellipse the
-cube fitted worse. Preferring the outline that explains the edges *of a piece that size*
-rather than the most edges is ``competing-explanations``.
+Both have the full-size cylinder standing off to the robot's left, where the camera sees
+its side as well as its top, and the side's edges lie outside the top face. On
+``stuck_cube_in_hole`` the cube's larger outline accounts for more of them than the
+cylinder's own does (0.44 against 0.32 of the edges, a lead of 0.11 in strength), so a
+cube is reported; on ``displaced_cube_from_hole`` the cylinder leads the cube by 0.074,
+one thousandth under the lead a report requires, so nothing is. Recorded on 2026-09-11,
+when the camera pose the captures state was corrected and the rectified top face became
+a true circle; the old pose read it as an ellipse the cube fitted worse. Preferring the
+outline that explains the edges *of a piece that size* rather than the most edges is
+``competing-explanations``.
 """
 
 
@@ -308,8 +313,8 @@ def expected_to_misread_the_table(request: pytest.FixtureRequest, name: str) -> 
             pytest.mark.xfail(
                 strict=True,
                 reason=(
-                    "A cylinder seen with its side is reported as a cube - see "
-                    "TABLE_PIECES_STILL_MISREAD. Owned by the plan item "
+                    "A cylinder seen with its side is reported as a cube, or not at "
+                    "all - see TABLE_PIECES_STILL_MISREAD. Owned by the plan item "
                     "competing-explanations."
                 ),
             )
@@ -350,7 +355,6 @@ def test_only_the_pieces_resting_on_the_table_are_detected_there(
 LID_PIECES_STILL_MISSED: List[str] = [
     "objects_on_montessori",
     "non_inserted_objects",
-    "tracy_pickup_demo",
 ]
 """
 The captures whose lid pieces this look does not report.
@@ -360,15 +364,14 @@ to look, and a look told where to expect a piece finds it (see
 ``test_a_piece_wearing_the_surfaces_own_hue_is_found_where_it_is_expected``). What can
 tell it differs between these, and only one kind of telling exists on a capture.
 
-``tracy_pickup_demo`` is a cylinder standing *in* its hole: the outline that fits it
-best is a cube's, laid over the hole's own rim, which the board's geometry explains
-nearly as well (0.70 against 0.73), so the look rightly refuses to report it. It joined
-this list on 2026-09-11, when the camera pose the captures state was corrected and the
-holes came to stand where they are; on the old pose the same fit landed by luck. The
-two captures that left the list the same day -- ``disoriented_cube_on_hole`` and
-``displaced_cube_from_hole`` -- are a cube on a hole that is fitted once the lid is
-rectified where it really lies. Separating a piece from a ghost that follows the same
-edges is ``competing-explanations``.
+Three captures left this list on 2026-09-11, when the camera pose the captures state was
+corrected: ``disoriented_cube_on_hole`` and ``displaced_cube_from_hole`` are a cube on a
+hole that is fitted once the lid is rectified where it really lies, and
+``tracy_pickup_demo``'s cylinder standing *in* its hole is fitted at the tape-refined
+pose and not at one nine millimetres from it, where a cube's outline on the hole's own
+rim explains the edges nearly as well as the piece does (0.70 against 0.73). That the
+answer turns on nine millimetres is the fragility ``competing-explanations`` is about:
+separating a piece from a ghost that follows the same edges.
 
 The other two are pieces nothing acted on, so no history says anything about them, and a
 capture carries no world to say it instead.

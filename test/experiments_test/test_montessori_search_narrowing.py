@@ -83,18 +83,6 @@ The shipped capture these tests read, which is the demonstration's own: it holds
 on the table and on the lid, so a narrowing has something to leave out.
 """
 
-CYLINDER_IN_ITS_HOLE_NOT_REPORTED = (
-    "The cylinder standing in its hole on tracy_pickup_demo is not reported since the "
-    "captures state the camera pose they were really taken from (2026-09-11): the "
-    "outline that fits it best is a cube's on the hole's own rim, which the board's "
-    "geometry explains nearly as well - see LID_PIECES_STILL_MISSED in "
-    "test_montessori_detection_on_captures. Owned by the plan item "
-    "competing-explanations; these tests read that cylinder against the cube."
-)
-"""
-Why the tests below that need both pieces on the lid are expected to fail.
-"""
-
 # %% a display that draws nowhere
 
 
@@ -525,7 +513,6 @@ def test_the_rectified_picture_of_a_step_is_what_it_left_to_read_turned_to_the_c
         )
 
 
-@pytest.mark.xfail(strict=True, reason=CYLINDER_IN_ITS_HOLE_NOT_REPORTED)
 def test_the_rectified_picture_reads_the_way_the_camera_sees_the_plane(
     watched, capture_frame
 ):
@@ -600,7 +587,6 @@ def test_the_answer_is_marked_in_the_whole_picture_the_narrowing_ends_in(
     assert drawn.shape == capture_frame.color.shape
 
 
-@pytest.mark.xfail(strict=True, reason=CYLINDER_IN_ITS_HOLE_NOT_REPORTED)
 def test_the_demonstration_states_its_way_down_to_the_cube_alone(watched):
     """
     Each condition of the statement the demonstration watches leaves less of the table
@@ -676,7 +662,6 @@ def categories_reported(found) -> List[MontessoriShapeCategory]:
     return [piece.category for piece in found]
 
 
-@pytest.mark.xfail(strict=True, reason=CYLINDER_IN_ITS_HOLE_NOT_REPORTED)
 def test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen(
     looking_at_the_capture: MontessoriPerceptionBackend,
     square_hole: Body,
@@ -706,7 +691,6 @@ def test_which_way_a_piece_lies_from_a_hole_is_read_from_where_it_is_seen(
     ) == [MontessoriShapeCategory.CYLINDER]
 
 
-@pytest.mark.xfail(strict=True, reason=CYLINDER_IN_ITS_HOLE_NOT_REPORTED)
 def test_the_two_sides_of_a_hole_hold_different_pieces(
     looking_at_the_capture: MontessoriPerceptionBackend,
     square_hole: Body,
@@ -752,7 +736,6 @@ def test_a_look_between_two_holes_reports_what_stands_between_them(
     assert categories_reported(found) == [MontessoriShapeCategory.CUBE]
 
 
-@pytest.mark.xfail(strict=True, reason=CYLINDER_IN_ITS_HOLE_NOT_REPORTED)
 def test_a_look_near_a_hole_reaches_as_far_as_the_radius_it_was_asked_for(
     looking_at_the_capture: MontessoriPerceptionBackend,
     triangle_hole: Body,
@@ -776,7 +759,6 @@ def test_a_look_near_a_hole_reaches_as_far_as_the_radius_it_was_asked_for(
     }
 
 
-@pytest.mark.xfail(strict=True, reason=CYLINDER_IN_ITS_HOLE_NOT_REPORTED)
 def test_a_look_asked_for_a_color_reports_only_the_pieces_that_wear_it(
     looking_at_the_capture: MontessoriPerceptionBackend,
 ):
