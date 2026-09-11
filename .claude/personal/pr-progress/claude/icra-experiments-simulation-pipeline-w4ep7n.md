@@ -1,4 +1,4 @@
-## #265: live shape and hole detection is wrong on the new 80 % pieces (2026-09-11, done; bringup restart owed)
+## #265: live shape and hole detection is wrong on the new 80 % pieces (2026-09-11, done; bringup restarted 21:47)
 
 **Session.** https://claude.ai/code/session_0186xZo3eqCDVcqhi1E3LHdY -- resume here if
 anything breaks. Memory note `perception-position-offset-stopgap` holds the earlier
@@ -103,7 +103,39 @@ four pieces and nothing else. The overlay already draws each box with its parall
 `capture_from_camera` prints it after writing. Tests in `test_montessori_measured_plane`
 (leaned / lifted captures), `test_montessori_live_camera` (the node keeps the error).
 
-**Open for the developer.** (1) Restart the bringup, then run the node and check no
+**Bringup restarted 21:47 and the pose is live**: `tf2_echo table camera_link` reads
+0.429 0.003 0.893 and a live capture measures the table 0.4 deg / +1 mm off, within
+tolerance.
+
+**The flicker (screenshots 21:42-21:45: one frame right, the next with the board box
+and holes a row out).** Reproduced on an 8-frame burst off the live camera at 21:55:
+6 of 8 frames fitted the board at x 1.066, yaw 12.5 deg, holes on the wood (fine-fit
+agreement 0.43); 2 at x 1.045, yaw -0.5 deg, holes on their openings (0.80). Cause:
+`BoardDetector` seeded the layout fit at the *mean* of the hole-sized dark patches and
+let it move at most `seed_reach` = 60 mm from there. Only 4 of the 6 holes read dark
+(the two nearest the camera are lit), so even on a good frame the mean lay 45 mm from
+the board's centre; on the bad frames the shadow under the lid's left rim (y 0.302, the
+lid's edge) came out as a 5th hole-sized dark patch, the mean moved to 68 mm and the
+right placement fell out of reach, so the rough grid took the best in-reach placement --
+the layout turned a twelfth of a turn and shifted 21 mm. The spurious yellow
+"triangular_prism"/"rectangular_prism" on the drawer front in those frames are the
+same defect: a misplaced board leaves the drawer wood (hue 26 = the smaller set's
+yellow) unclaimed by `table_hidden_by`. Fix (`4bf6694f1`): each opening is
+one of the holes, so `BoardHoleLayout.origins_with_a_hole_at(openings, yaw)` names
+where the board would stand for every (opening, hole) pairing, and
+`OutlineFitter.fit_among(CandidatePositions...)` takes the best of those over the full
+circle of coarse turns, then settles it as before; `seed_reach` and
+`PerforatedSurface.middle` are gone. Missing holes and false patches no longer move the
+seed. Measured: all 8 burst frames now at (1.045, 0.156-0.157); the 7 shipped captures
+fit within 0-4 mm of their previous placement at the same agreement; the rough pass
+costs 0.04 s against 0.10 s. `burst_00` is shipped as capture `shadowed_lid_rim` (same
+scene and tape truth as `scaled_pieces_in_a_row`); before the fix it failed 5 of the 15
+capture tests (holes, corner, tape places, drawer-front pieces). Unit tests in
+`test_montessori_board_layout` for the origins and `fit_among`. Still per-frame:
+`burst_04` misses the real triangular prism (strength below the lead) -- a piece
+detection miss, not the board.
+
+**Open for the developer.** (1) Done: bringup restarted, pose within tolerance; run the node and check no
 "published pose is off" warning is logged (or take a capture: the CLI prints the error).
 Until then the live node is ~0.2 m off in x -- do not resurrect the `icra_final` stopgap.
 (2) Answered: the board is 80 mm by tape, so the 7 mm the depth reads
