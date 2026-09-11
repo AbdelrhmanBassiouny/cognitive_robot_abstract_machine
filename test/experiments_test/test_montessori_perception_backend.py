@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import pytest
 
+from experiments.montessori.board_description import DescribedBoard
+from experiments.montessori.hole_geometry import BoardHoleLayout
+from experiments.montessori.world import BOARD_SCALE
 from experiments.montessori.perception.backend import (
     MontessoriPerceptionBackend,
 )
@@ -151,6 +154,30 @@ def test_a_stated_placement_reaches_the_look_as_the_relation_that_says_it(
     assert isinstance(placement, Near)
     assert placement.place is lid
     assert placement.radius == 0.05
+
+
+def test_a_stated_board_reaches_the_look_as_a_board_search_carrying_its_description():
+    """
+    A board stated by what it measures is looked for by fitting that description, so the
+    statement's layout and height reach the look as they were stated.
+    """
+    stated = DescribedBoard.of_layout(
+        BoardHoleLayout.of_board_mesh(), height=float(BOARD_SCALE.z)
+    )
+
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(stated.statement())
+    )
+
+    assert request.the_board_is_asked_for
+    described = request.described_board
+    assert [hole.category for hole in described.layout.holes] == [
+        hole.category for hole in stated.layout.holes
+    ]
+    assert [hole.center for hole in described.layout.holes] == [
+        hole.center for hole in stated.layout.holes
+    ]
+    assert described.height == stated.height
 
 
 def test_a_stated_turn_reaches_the_look_as_the_relation_that_says_it():

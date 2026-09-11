@@ -17,9 +17,14 @@ from dataclasses import dataclass, field
 import numpy as np
 from typing_extensions import Optional
 
+from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.hole_geometry import extrude_polygon
 from experiments.montessori.pieces import KnownPiece
-from experiments.montessori.semantics import MONTESSORI_SHAPE_CLASSES, MontessoriShape
+from experiments.montessori.semantics import (
+    MONTESSORI_SHAPE_CLASSES,
+    MontessoriShape,
+    ShapeSortingBoard,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -139,6 +144,17 @@ class ImaginedWorld:
         with self.world.modify_world():
             self.world.remove_semantic_annotation(shape)
             self.world.remove_branch_from_world(shape.root)
+
+    def stand_board(self, described: DescribedBoard, pose: Pose) -> ShapeSortingBoard:
+        """
+        Stand a described board in this world where it was seen.
+
+        :param described: The board the look was asked for.
+        :param pose: Where its lid's centre was seen, at the lid's own height, in
+            :attr:`reference_frame`.
+        :return: The board as the world holds it, ready to be a detection's role taker.
+        """
+        return described.stand_in(self.world, pose, IMAGINATION_PREFIX)
 
     @staticmethod
     def _mesh_of(piece: KnownPiece) -> Mesh:

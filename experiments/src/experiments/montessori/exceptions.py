@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import FrozenSet, TYPE_CHECKING
+from typing_extensions import FrozenSet, Optional, TYPE_CHECKING
 
 from krrood.exceptions import DataclassException
 
@@ -92,4 +92,35 @@ class HoleHasNoLandingRegionError(DataclassException):
         return (
             "Take the hole from a world that measured the space under it, which "
             "MontessoriWorld does when it builds its board."
+        )
+
+
+@dataclass
+class BoardDescriptionIncomplete(DataclassException):
+    """
+    Raised when a statement of the shape-sorting board leaves open something a look
+    needs to lay the board's holes over a picture.
+    """
+
+    missing_attribute: str
+    """
+    The attribute the statement leaves open, by the name the annotation gives it.
+    """
+
+    hole_index: Optional[int] = None
+    """
+    Which of the stated holes leaves it open, in the order they were stated, or None
+    where the board itself does.
+    """
+
+    def error_message(self) -> str:
+        described = (
+            "The board" if self.hole_index is None else f"Hole {self.hole_index}"
+        )
+        return f"{described} is stated without its {self.missing_attribute}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "State the lid's size and height, and every hole's shape, size and place "
+            "on the lid, so the whole layout can be fitted at once."
         )

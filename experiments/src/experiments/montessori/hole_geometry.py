@@ -17,8 +17,13 @@ from pathlib import Path
 
 import numpy as np
 import trimesh
-from typing_extensions import List, Self, Tuple
+from typing_extensions import Callable, Dict, List, Self, Tuple
 
+from experiments.montessori.pieces import (
+    circle_boundary,
+    equilateral_triangle_boundary,
+    rectangle_boundary,
+)
 from experiments.montessori.planar_geometry import (
     KnownOutline,
     PlanarPoint,
@@ -32,6 +37,19 @@ from semantic_digital_twin.world_description.geometry import Scale
 BOARD_MESH_PATH = Path(__file__).parent / "resources" / "board.stl"
 """
 Path to the shape-sorting board's mesh, cut with its six real shape holes.
+"""
+
+DESCRIBED_OUTLINE_POINT_SPACING = 0.003
+"""
+How far apart, in metres, the points along the outline of a hole built from a
+description stand.
+
+A hole cut into the board's mesh is outlined by every bend of its cut edge, while a hole
+built from a description has only its shape's corners. The board fit's rough pass
+compares an outline at its corners and at a coarse spacing along each edge, so a layout
+of corners alone gives it too few points to tell the right turn from a wrong one on a lid
+with pieces lying on it. At this spacing the described layout was fitted correctly on
+every shipped capture, where its bare corners missed one.
 """
 
 HOLE_MARKER_THICKNESS = 0.005
@@ -135,6 +153,54 @@ class HoleFootprint:
     The hole's true cross-section outline: an ordered, closed polygon of ``(x, y)``
     points relative to :attr:`center` (as opposed to its bounding box).
     """
+
+    turn: float = 0.0
+    """
+    How far the hole's own axes are turned from the board mesh's local axes, in radians.
+    """
+
+    @classmethod
+    def of_description(
+        cls,
+        category: MontessoriShapeCategory,
+        size: PlanarSize,
+        center: PlanarPoint,
+        turn: float,
+    ) -> HoleFootprint:
+        """
+        The hole a description states: its shape at its own size, turned where it stands.
+
+        :param category: The shape the hole is cut in.
+        :param size: How far it reaches along its own axes; see
+            :attr:`~experiments.montessori.semantics.ShapeSortingHole.footprint_size`.
+        :param center: Where its centre stands, about the lid's centre.
+        :param turn: How far it is turned, in radians.
+        """
+        outline = turned(
+            points_along(
+                _OUTLINE_OF_HOLE_SHAPE[category](size), DESCRIBED_OUTLINE_POINT_SPACING
+            ),
+            turn,
+        )
+        extent = outline.max(axis=0) - outline.min(axis=0)
+        return cls(
+            category=category,
+            center=center,
+            size=PlanarSize(float(extent[0]), float(extent[1])),
+            boundary=tuple(PlanarPoint(float(x), float(y)) for x, y in outline),
+            turn=turn,
+        )
+
+    @property
+    def own_size(self) -> PlanarSize:
+        """
+        How far the hole reaches along its own axes, before :attr:`turn` turns it.
+        """
+        outline = turned(
+            np.array([(point.x, point.y) for point in self.boundary]), -self.turn
+        )
+        extent = outline.max(axis=0) - outline.min(axis=0)
+        return PlanarSize(float(extent[0]), float(extent[1]))
 
     @property
     def cross_section_size(self) -> float:
@@ -265,6 +331,67 @@ def hole_names(categories: List[MontessoriShapeCategory]) -> List[str]:
     return names
 
 
+# %% the outline a hole's stated shape and size give it
+
+
+def _rectangle_outline(size: PlanarSize) -> np.ndarray:
+    """
+    :param size: The rectangle's width along x and length along y.
+    :return: Its corners about its own middle.
+    """
+    return rectangle_boundary(size.x, size.y)
+
+
+def _circle_outline(size: PlanarSize) -> np.ndarray:
+    """
+    :param size: The circle's diameter, along x.
+    :return: The polygon standing in for it, about its own middle.
+    """
+    return circle_boundary(size.x)
+
+
+def _triangle_outline(size: PlanarSize) -> np.ndarray:
+    """
+    :param size: The equilateral triangle's side, along x.
+    :return: Its corners about its own centroid, apex along +y.
+    """
+    return equilateral_triangle_boundary(size.x)
+
+
+_OUTLINE_OF_HOLE_SHAPE: Dict[
+    MontessoriShapeCategory, Callable[[PlanarSize], np.ndarray]
+] = {
+    MontessoriShapeCategory.CUBE: _rectangle_outline,
+    MontessoriShapeCategory.RECTANGULAR_PRISM: _rectangle_outline,
+    MontessoriShapeCategory.DISK: _rectangle_outline,
+    MontessoriShapeCategory.CYLINDER: _circle_outline,
+    MontessoriShapeCategory.TRIANGULAR_PRISM: _triangle_outline,
+}
+"""
+The outline, about its own centre and along its own axes, a hole of each shape is cut
+with at a stated size. A disk's hole is the slot its edge drops through.
+"""
+
+
+def _turn_of_outline(category: MontessoriShapeCategory, outline: np.ndarray) -> float:
+    """
+    How far a hole cut in the mesh is turned from the outline its shape is stated with.
+
+    On this board only the triangle is cut turned; every other hole runs along the
+    mesh's own axes, where its size along each axis says everything. A triangle looks
+    the same under a third of a turn, so any of its corners points where the stated
+    outline's apex does.
+
+    :param category: The shape the hole is cut in.
+    :param outline: The mesh's outline of the hole, about its own centre.
+    :return: The turn, in radians.
+    """
+    if category is not MontessoriShapeCategory.TRIANGULAR_PRISM:
+        return 0.0
+    corner = outline[np.argmax(np.linalg.norm(outline, axis=1))]
+    return float(math.atan2(corner[1], corner[0]) - math.pi / 2)
+
+
 def detect_hole_footprints() -> List[HoleFootprint]:
     """
     Detect the shape-sorting board's holes by slicing its mesh horizontally through the
@@ -295,18 +422,18 @@ def detect_hole_footprints() -> List[HoleFootprint]:
         fill_ratio = measurement.area / (size_x * size_y)
         category = _classify_hole_shape(len(loop), fill_ratio, aspect_ratio)
         boundary = loop[:-1] if np.allclose(loop[0], loop[-1]) else loop
+        about_center = boundary - np.array(
+            [measurement.centroid.x, measurement.centroid.y]
+        )
         footprints.append(
             HoleFootprint(
                 category=category,
                 center=measurement.centroid,
                 size=PlanarSize(float(size_x), float(size_y)),
                 boundary=tuple(
-                    PlanarPoint(
-                        float(x - measurement.centroid.x),
-                        float(y - measurement.centroid.y),
-                    )
-                    for x, y in boundary
+                    PlanarPoint(float(x), float(y)) for x, y in about_center
                 ),
+                turn=_turn_of_outline(category, about_center),
             )
         )
 
@@ -475,4 +602,5 @@ def _scaled_footprint(footprint: HoleFootprint, scale: float) -> HoleFootprint:
             PlanarPoint(point.x * scale, point.y * scale)
             for point in footprint.boundary
         ),
+        turn=footprint.turn,
     )

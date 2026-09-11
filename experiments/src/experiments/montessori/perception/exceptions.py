@@ -176,23 +176,6 @@ class SurfaceHasNothingToMeasure(DataclassException):
 
 
 @dataclass
-class BoardMissingFromWorld(DataclassException):
-    """
-    Raised when the world perception was built against describes no shape-sorting board,
-    so the height of the lid its holes lie in is not there to be read.
-    """
-
-    def error_message(self) -> str:
-        return "The world describes no shape-sorting board."
-
-    def suggest_correction(self) -> str:
-        return (
-            "Spawn the board into the world the robot publishes, so the height of its "
-            "lid is read from the scene rather than assumed."
-        )
-
-
-@dataclass
 class CaptureIncomplete(DataclassException):
     """
     Raised when a saved look at the scene is missing one of the files it is written as,

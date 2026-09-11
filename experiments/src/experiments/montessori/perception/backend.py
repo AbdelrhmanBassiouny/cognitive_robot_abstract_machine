@@ -35,7 +35,7 @@ standing.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from typing_extensions import (
     Any,
@@ -50,11 +50,17 @@ from typing_extensions import (
     TypeVar,
 )
 
+from experiments.montessori.board_description import (
+    DescribedBoard,
+    StatedBoardAttribute,
+)
 from experiments.montessori.perception.detections import (
     DetectedMontessoriShape,
+    MontessoriBoardDetection,
     MontessoriDetection,
     MontessoriScene,
 )
+from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.montessori.perception.exceptions import (
     LookHasNoReferenceFrame,
     SightingHasNoBody,
@@ -62,6 +68,7 @@ from experiments.montessori.perception.exceptions import (
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
 from krrood.entity_query_language.backends import (
+    AttributeEqualityToLiteral,
     LookRequest,
     PerceptionBackend,
     object_stated_by,
@@ -144,6 +151,44 @@ class StandsWhereAllowed(SightingReading[PlacementRelation]):
         return stated.construct_instance().allows(instance.pose.to_position())
 
 
+# %% what a statement asks this scene's look for
+
+
+@dataclass(frozen=True)
+class MontessoriLookRequest(LookRequest[MontessoriDetection]):
+    """
+    What a statement asks a look at the Montessori scene for, together with the board it
+    describes by what that board measures.
+
+    The attributes a request reads off a statement say which values were fixed but not
+    which stated hole each belongs to, so a described board is read off the statement as
+    a whole.
+    """
+
+    described_board: Optional[DescribedBoard] = None
+    """
+    The board the statement describes, or None where it asks for something else.
+    """
+
+    @classmethod
+    def of(
+        cls, read: LookRequest[Any], described_board: Optional[DescribedBoard]
+    ) -> MontessoriLookRequest:
+        """
+        :param read: What the statement asks a look for, as any perception backend
+            reads it.
+        :param described_board: The board the statement describes, if any.
+        :return: The same request, carrying the described board.
+        """
+        return cls(
+            type_=read.type_,
+            stated_attributes=read.stated_attributes,
+            stated_relations=read.stated_relations,
+            described_things=read.described_things,
+            described_board=described_board,
+        )
+
+
 # %% the backend
 
 
@@ -183,9 +228,45 @@ class MontessoriPerceptionBackend(PerceptionBackend):
     read, which colour to look for, and which way round to lay a piece.
     """
 
-    def look(
-        self, request: LookRequest[MontessoriDetection]
-    ) -> Iterable[MontessoriDetection]:
+    @classmethod
+    def read_request(cls, expression: Match[Any]) -> MontessoriLookRequest:
+        """
+        Read what a statement asks a look for, together with the board it describes.
+
+        :param expression: The statement to read.
+        :raises BoardDescriptionIncomplete: If it asks for a board without stating
+            everything a look needs to lay that board's holes over a picture.
+        :return: What the statement asks for, carrying the described board.
+        """
+        read = super().read_request(expression)
+        if not issubclass(read.type_, ShapeSortingBoard):
+            return MontessoriLookRequest.of(read, described_board=None)
+        return MontessoriLookRequest.of(
+            replace(read, stated_attributes=cls._board_attributes_of(read)),
+            DescribedBoard.of_statement(expression),
+        )
+
+    @staticmethod
+    def _board_attributes_of(
+        read: LookRequest[Any],
+    ) -> List[AttributeEqualityToLiteral]:
+        """
+        The attributes a board statement fixes on the board itself.
+
+        A stated hole's attributes reach a request flattened onto the board, where they
+        name nothing the board has. The look acts on them as the layout it fits, so only
+        what the board itself is stated to measure is checked again over what came back.
+
+        :param read: What a statement over a board asks a look for.
+        :return: The attributes it fixes on the board.
+        """
+        return [
+            attribute
+            for attribute in read.stated_attributes
+            if attribute.attribute_name in StatedBoardAttribute
+        ]
+
+    def look(self, request: MontessoriLookRequest) -> Iterable[MontessoriDetection]:
         """
         Take a look at the scene.
 
@@ -193,7 +274,11 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         :return: Everything the look found.
         """
         self.seen = self.source.scene(self.scene_request(request))
-        return self.seen.detections
+        if request.described_board is None:
+            return self.seen.detections
+        if self.seen.stood_board is None:
+            return []
+        return [self.seen.stood_board]
 
     def discard(self, instances: List[MontessoriDetection]) -> None:
         """
@@ -311,22 +396,39 @@ class MontessoriPerceptionBackend(PerceptionBackend):
         )
 
     @classmethod
-    def scene_request(cls, request: LookRequest[MontessoriDetection]) -> SceneRequest:
+    def scene_request(cls, request: MontessoriLookRequest) -> SceneRequest:
         """
         Read what a statement asks for as something a look at this scene can act on.
 
         :param request: What the statement asks a look for.
         :return: The kind of detection to run detectors for, the surface to search, the
-            placements to stay within, the colour to look for, and the turn to lay a
-            piece at.
+            placements to stay within, the colour to look for, the turn to lay a piece
+            at, and the board to fit.
         """
         return SceneRequest(
-            detection_type=request.type_,
+            detection_type=cls.detection_type_asked_for(request),
             supporting_surface=cls.supporting_surface_asked_about(request),
             placements=cls.placements_asked_about(request),
             color=request.related_by(Colored),
             turn=cls.turn_asked_about(request),
+            described_board=request.described_board,
         )
+
+    @staticmethod
+    def detection_type_asked_for(
+        request: MontessoriLookRequest,
+    ) -> Type[MontessoriDetection]:
+        """
+        The kind of detection that answers a statement.
+
+        A board described by what it measures is answered by finding a board, which the
+        look then stands in its world as the board the statement asks about.
+
+        :param request: What the statement asks a look for.
+        """
+        if request.described_board is None:
+            return request.type_
+        return MontessoriBoardDetection
 
     @classmethod
     def turn_asked_about(

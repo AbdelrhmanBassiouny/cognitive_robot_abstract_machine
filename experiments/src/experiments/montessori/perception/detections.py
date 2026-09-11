@@ -20,7 +20,11 @@ from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.hypotheses import PieceHypothesis
 from experiments.montessori.perception.imagination import ImaginedWorld
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
-from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
+from experiments.montessori.semantics import (
+    MontessoriShape,
+    MontessoriShapeCategory,
+    ShapeSortingBoard,
+)
 from krrood.patterns.role import Role
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -281,6 +285,12 @@ class MontessoriScene:
     board: Optional[MontessoriBoardDetection] = None
     """
     The shape-sorting board, or None if it was not in view.
+    """
+
+    stood_board: Optional[ShapeSortingBoard] = None
+    """
+    The board a request described, standing in :attr:`imagined` where it was found, or
+    None where no board was described or found.
     """
 
     imagined: Optional[ImaginedWorld] = None

@@ -15,7 +15,10 @@ from dataclasses import dataclass, replace
 
 from typing_extensions import List, Tuple, Type
 
-from experiments.montessori.perception.backend import MontessoriPerceptionBackend
+from experiments.montessori.perception.backend import (
+    MontessoriLookRequest,
+    MontessoriPerceptionBackend,
+)
 from experiments.montessori.perception.detections import DetectedMontessoriShape
 from experiments.montessori.perception.scene_request import SceneRequest
 from krrood.entity_query_language.predicate import Relation
@@ -38,7 +41,9 @@ class MontessoriExpectation(Expectation):
         """
         return replace(
             MontessoriPerceptionBackend.scene_request(
-                self.look_request(DetectedMontessoriShape)
+                MontessoriLookRequest.of(
+                    self.look_request(DetectedMontessoriShape), described_board=None
+                )
             ),
             believed_by=self.source,
         )

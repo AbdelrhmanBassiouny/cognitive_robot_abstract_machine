@@ -6,14 +6,16 @@ Perception reads which stretch of table to search, and how high each surface lie
 the world the robot publishes -- see
 :meth:`~experiments.montessori.perception.pipeline.MontessoriPerceptionPipeline.of_world`.
 A recording carries no world, so the two surfaces it was taken over are written down
-here, measured off the transform tree those same recordings publish. Nothing that runs
-against the live robot reads this.
+here, measured off the transform tree those same recordings publish. The live robot
+reads only :func:`lab_board` from here: the board on this table, which a look has to
+find before the world the robot publishes holds it.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.hole_geometry import (
     BoardHoleLayout,
     hole_names,
@@ -360,6 +362,18 @@ def board_holes_in(world: World, board: MontessoriBoardDetection) -> Dict[str, B
             placed[name] = hole
     world.update_forward_kinematics()
     return placed
+
+
+def lab_board() -> DescribedBoard:
+    """
+    The shape-sorting board on this table, described by what it measures: the board's
+    own mesh at :data:`BOARD_SCALE_AGAINST_THE_MESH`, standing as tall as the mesh, the
+    height :data:`LID_HEIGHT` raises the lid above the table by.
+    """
+    return DescribedBoard.of_layout(
+        BoardHoleLayout.of_board_mesh(BOARD_SCALE_AGAINST_THE_MESH),
+        height=float(BOARD_SCALE.z),
+    )
 
 
 def perception_pipeline(world: Optional[World] = None) -> MontessoriPerceptionPipeline:

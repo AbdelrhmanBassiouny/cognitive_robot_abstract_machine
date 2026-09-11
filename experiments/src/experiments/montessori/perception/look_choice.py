@@ -151,9 +151,10 @@ class SceneToSearch:
     The surface the scene is set up on, and the patch of it this look searches.
     """
 
-    lid: WorkspaceSurface
+    lid: Optional[WorkspaceSurface]
     """
-    The board's lid: the second surface pieces rest on, and the plane its holes lie in.
+    The board's lid as the world models it: the second surface pieces rest on, and the
+    plane its holes lie in, or None where the world holds no board yet.
     """
 
     reference_frame: Optional[KinematicStructureEntity] = None
@@ -229,6 +230,8 @@ class SceneToSearch:
         """
         if board is None:
             searches = [SurfaceSearch(surface=self.table)]
+        elif self.lid is None:
+            searches = [SurfaceSearch(surface=self.table, supported_surfaces=(board,))]
         else:
             searches = [
                 SurfaceSearch(surface=self.table, supported_surfaces=(board,)),
@@ -362,6 +365,7 @@ class SceneToSearch:
                     candidates=(KNOWN_PIECE_BY_CATEGORY[shape.shape_category],),
                 )
                 for surface in (self.table, self.lid)
+                if surface is not None
             )
         return placed
 

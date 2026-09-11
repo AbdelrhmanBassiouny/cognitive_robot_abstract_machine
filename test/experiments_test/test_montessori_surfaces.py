@@ -14,7 +14,6 @@ from typing_extensions import List, Tuple
 from experiments.montessori.perception import pipeline as pipeline_module
 from experiments.montessori.perception.detections import MontessoriBoardDetection
 from experiments.montessori.perception.exceptions import (
-    BoardMissingFromWorld,
     RegionsDoNotMeet,
     SurfaceHasNothingToMeasure,
 )
@@ -250,14 +249,21 @@ def test_the_pipeline_takes_the_lid_height_from_the_board_in_the_world():
     )
 
 
-def test_a_world_without_a_board_is_refused():
+def test_a_world_without_a_board_leaves_its_lid_to_be_found_by_looking():
+    """
+    A board the world does not hold yet is found from its description, so a pipeline is
+    still built and simply has no modelled lid to read.
+    """
     lone_table = Body(
         name=PrefixedName("lone_table", "test"),
         collision=ShapeCollection([Box(scale=Scale(1.0, 1.0, 0.02))]),
     )
 
-    with pytest.raises(BoardMissingFromWorld):
-        MontessoriPerceptionPipeline.of_world(_world_rooted_at(lone_table), lone_table)
+    pipeline = MontessoriPerceptionPipeline.of_world(
+        _world_rooted_at(lone_table), lone_table
+    )
+
+    assert pipeline.lid is None
 
 
 def test_the_node_takes_no_scene_constant_from_another_module():

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 from typing_extensions import Optional, Tuple, Type
 
+from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.perception.detections import (
     DetectedMontessoriShape,
     MontessoriBoardDetection,
@@ -82,6 +83,15 @@ class SceneRequest(Look):
     Which way the thing sought is turned, as the relation that says it with nothing
     standing in the place of that thing, or ``None`` where the statement says nothing
     about its turn.
+    """
+
+    described_board: Optional[DescribedBoard] = None
+    """
+    The board asked for, as a statement described it by what it measures, or ``None``
+    where the request describes none.
+
+    A look asked for a described board fits that description's layout, at the height the
+    description gives the lid.
     """
 
     believed_by: Optional[BeliefSource] = None

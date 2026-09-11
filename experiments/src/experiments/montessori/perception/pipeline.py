@@ -19,14 +19,14 @@ and usually cannot say: the same reflections leave the depth image with large dr
 and centimetre-scale noise, far too coarse to measure a thirty millimetre piece. It is
 also asked whether a surface is open where it looks solid, which is a step down of a
 centimetre to the drawer under the board's lid: a rendering answers that exactly and a
-capture of this table does not, so the darkness of a hole is read beside its depth rather
-than replaced by it.
+capture of this table does not, so the darkness of a hole is read beside its depth
+rather than replaced by it.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import cv2
 import numpy as np
@@ -54,9 +54,6 @@ from experiments.montessori.perception.explanations import (
     PlaceInThePicture,
 )
 from experiments.montessori.hole_geometry import BoardHoleLayout, PlacedHole
-from experiments.montessori.perception.exceptions import (
-    BoardMissingFromWorld,
-)
 from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.hypotheses import (
     BelievedPlace,
@@ -1419,22 +1416,64 @@ class FindTheBoard(SceneDetector):
 
     def detect(self, scene: SceneToSearch) -> MontessoriScene:
         """
-        Find the board.
+        Find the board, and stand a board the request describes in the world the look
+        brings its findings into.
 
         :param scene: What was asked for, and the frame to answer it from.
         """
-        return MontessoriScene(board=self.board_in(scene))
+        board = self.board_in(scene)
+        described = scene.request.described_board
+        if board is None or described is None:
+            return MontessoriScene(board=board)
+        imagined = scene.imagine()
+        return MontessoriScene(
+            board=board,
+            stood_board=imagined.stand_board(described, board.pose),
+            imagined=imagined,
+        )
 
     def board_in(self, scene: SceneToSearch) -> Optional[MontessoriBoardDetection]:
         """
         The board as this look sees it, rectified onto the plane its lid stands in.
 
         :param scene: The frame to find it in, and the surfaces it stands among.
-        :return: The board, or None if it was not in view.
+        :return: The board, or None if it was not in view or neither the world nor the
+            request says how high its lid stands.
         """
-        return self.board_detector.detect(
-            scene.rectified.at(scene.lid.height), scene.reference_frame
+        lid_height = self.lid_height_in(scene)
+        if lid_height is None:
+            return None
+        return self.board_detector_for(scene.request).detect(
+            scene.rectified.at(lid_height), scene.reference_frame
         )
+
+    @staticmethod
+    def lid_height_in(scene: SceneToSearch) -> Optional[float]:
+        """
+        How high the board's lid stands: the modelled lid where the world holds a board,
+        and otherwise the table this look measured raised by the height the request
+        describes the board to stand.
+
+        :param scene: The frame to find the board in, and the surfaces it stands among.
+        :return: The lid's height above the world frame's origin, in metres, or None
+            where neither the world nor the request says.
+        """
+        if scene.lid is not None:
+            return scene.lid.height
+        described = scene.request.described_board
+        if described is None:
+            return None
+        return scene.table.height + described.height
+
+    def board_detector_for(self, request: SceneRequest) -> BoardDetector:
+        """
+        :param request: What the look was asked for.
+        :return: The board detector fitting the layout the request describes, or the one
+            this way of looking was configured with where it describes none.
+        """
+        if request.described_board is None:
+            return self.board_detector
+        return replace(self.board_detector, layout=request.described_board.layout)
 
 
 @dataclass(eq=False)
@@ -1608,15 +1647,17 @@ class MontessoriPerceptionPipeline:
     reflective table is too noisy to support.
     """
 
-    lid: WorkspaceSurface
+    lid: Optional[WorkspaceSurface]
     """
-    The board's lid: the second surface pieces rest on, and the plane its holes are cut
-    in.
+    The board's lid as the world models it: the second surface pieces rest on, and the
+    plane its holes are cut in, or None where the world holds no board yet.
 
     Its height must match the physical board, since it sets the plane the holes are
     rectified onto and so how far apart their centres come out. How far it reaches is
     not read from here but from the board as it was seen, because a board that has been
-    slid across the table stands exactly as high as before somewhere else.
+    slid across the table stands exactly as high as before somewhere else. Without one,
+    a look asked for a described board finds the lid at the height the description gives
+    it.
     """
 
     reference_frame: Optional[KinematicStructureEntity] = None
@@ -1675,24 +1716,30 @@ class MontessoriPerceptionPipeline:
 
         The stretch of table to search and the plane each surface stands at are read
         from the world, so perception looks where the robot's own model says the scene
-        is.
+        is. A world holding no board leaves the lid to be found by looking for a
+        described one.
 
         :param world: The world the scene is described in.
         :param table: The body carrying the surface the scene is set up on.
-        :raises BoardMissingFromWorld: If the world describes no shape-sorting board.
         :raises SurfaceHasNothingToMeasure: If a surface the scene needs has no shape.
         """
-        reference_frame = world.root
-        boards = world.get_semantic_annotations_by_type(ShapeSortingBoard)
-        if not boards:
-            raise BoardMissingFromWorld()
-        [board] = boards
         return cls(
-            table=WorkspaceSurface.of_body(table, reference_frame),
-            lid=WorkspaceSurface.of(board, reference_frame),
-            reference_frame=reference_frame,
+            table=WorkspaceSurface.of_body(table, world.root),
+            lid=cls._lid_of(world),
+            reference_frame=world.root,
             world=world,
         )
+
+    @staticmethod
+    def _lid_of(world: World) -> Optional[WorkspaceSurface]:
+        """
+        :param world: The world the scene is described in.
+        :return: The lid of the board the world holds, or None where it holds none.
+        """
+        board = ShapeSortingBoard.held_by(world)
+        if board is None:
+            return None
+        return WorkspaceSurface.of(board, world.root)
 
     @property
     def workspace(self) -> WorkspaceBox:
