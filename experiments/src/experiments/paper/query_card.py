@@ -16,9 +16,9 @@ from pathlib import Path
 
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import DetectionEvent, PickUpEvent
-from typing_extensions import ClassVar, Dict, List, Optional, Tuple, Type
+from typing_extensions import ClassVar, Dict, List, Optional, Sequence, Tuple, Type
 
-from experiments.episodes.artifacts import EpisodeArtifacts
+from experiments.episodes.artifacts import ArtifactDirectory, EpisodeArtifacts
 from experiments.episodes.episode import RecordedQuery, RecordedTrial
 from experiments.experiment_definitions import TypstRenderer
 from experiments.paper.camera_frame import BagFrameAt
@@ -55,6 +55,15 @@ class QueryCardName(StrEnum):
     SIDE_OF_ANOTHER_OBJECT = "side_of_another_object"
     PICKED_UP_RECENTLY = "picked_up_recently"
     OWN_DEGREES_OF_FREEDOM = "own_degrees_of_freedom"
+
+
+TRIAL_DIRECTORY = "trial_%02d"
+"""
+What one trial's own directory of cards is called inside its episode's.
+
+A trial asks the same questions as every other trial of its episode, so the cards of two
+of them would otherwise write over each other.
+"""
 
 
 @dataclass(frozen=True)
@@ -622,3 +631,52 @@ class QueryCardSet:
             for card in self.cards
             for written in card.write(trial, output_directory, artifacts)
         ]
+
+    def write_every_episode(
+        self,
+        trials: Sequence[RecordedTrial],
+        output_directory: Path,
+        artifacts: Optional[ArtifactDirectory] = None,
+    ) -> List[WrittenQueryCard]:
+        """
+        Leave the cards of every episode the given trials belong to.
+
+        Each episode is given a directory named after its identifier and each of its
+        trials one inside that, so a corpus of runs is written in one pass without any of
+        them writing over another.
+
+        :param trials: The trials to draw, of however many episodes.
+        :param output_directory: Where the episodes' directories go, created if they are
+            not there.
+        :param artifacts: Where every episode's own files are kept, which is where a run
+            on the robot left the recording its camera panels are read from.
+        :return: Where each card was left, in the order they were written.
+        """
+        written: List[WrittenQueryCard] = []
+        for recorded in self._by_episode(trials):
+            episode = recorded[0].episode
+            episode_directory = output_directory / episode.identifier
+            for number, trial in enumerate(recorded, start=1):
+                written.extend(
+                    self.write(
+                        trial,
+                        episode_directory / (TRIAL_DIRECTORY % number),
+                        None if artifacts is None else artifacts.open_for(episode),
+                    )
+                )
+        return written
+
+    @staticmethod
+    def _by_episode(
+        trials: Sequence[RecordedTrial],
+    ) -> List[List[RecordedTrial]]:
+        """
+        The given trials gathered into the episode each belongs to, in the order the
+        episodes were first seen and each episode's trials in the order they were given.
+
+        :param trials: The trials to gather.
+        """
+        episodes: Dict[str, List[RecordedTrial]] = {}
+        for trial in trials:
+            episodes.setdefault(trial.episode.identifier, []).append(trial)
+        return list(episodes.values())

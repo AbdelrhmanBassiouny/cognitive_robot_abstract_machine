@@ -9,6 +9,7 @@ themselves does, so those tests are skipped where the run named no offscreen bac
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from experiments.episodes.episode import Episode, RecordedQuery, RecordedTrial, 
 from experiments.paper.figure import FigureFile
 from experiments.paper.panel import PanelKind
 from experiments.paper.query_card import (
+    TRIAL_DIRECTORY,
     EpisodeKeptNoWorldError,
     PickedUpRecentlyCard,
     QueryCardName,
@@ -408,3 +410,38 @@ def test_the_set_writes_one_card_per_query_the_trial_asked(
     """
     written = QueryCardSet.for_the_paper().write(trial, tmp_path)
     assert [card.query for card in written] == trial.queries
+
+
+# %% a whole corpus of runs
+
+
+@needs_a_renderer
+def test_every_episode_is_written_under_its_own_identifier(
+    trial: RecordedTrial, tmp_path: Path
+) -> None:
+    """
+    A corpus is written in one pass, so each episode's cards go under what addresses
+    that episode outside the database.
+    """
+    written = QueryCardSet.for_the_paper().write_every_episode([trial], tmp_path)
+    assert {card.markup_path.parent.parent.name for card in written} == {
+        trial.episode.identifier
+    }
+
+
+@needs_a_renderer
+def test_two_trials_of_one_episode_do_not_write_over_each_other(
+    trial: RecordedTrial, tmp_path: Path
+) -> None:
+    """
+    Every trial of an episode asks the same questions, so each is given a directory of
+    its own inside the episode's.
+    """
+    second = replace(trial)
+    written = QueryCardSet.for_the_paper().write_every_episode(
+        [trial, second], tmp_path
+    )
+    assert {card.markup_path.parent.name for card in written} == {
+        TRIAL_DIRECTORY % 1,
+        TRIAL_DIRECTORY % 2,
+    }
