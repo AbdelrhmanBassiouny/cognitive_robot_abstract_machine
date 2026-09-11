@@ -11,12 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
 import pytest
+from krrood.adapters.json_serializer import from_json, to_json
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
-    SpatialType,
 )
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
@@ -31,7 +30,7 @@ from segmind.datastructures.events import (
     PickUpEvent,
     TranslationEvent,
 )
-from typing_extensions import Any, List
+from typing_extensions import List
 
 from experiments.questions.question import (
     BloomLevel,
@@ -42,6 +41,7 @@ from experiments.questions.question import (
 )
 from experiments.questions.question import QuestionedThings
 from experiments.questions.question_set import QuestionSet
+from experiments.questions.long_term_memory import AnythingMovedInTheEpisode
 from experiments.questions.working_memory import (
     AnythingMoved,
     HeldInTheHand,
@@ -58,6 +58,7 @@ from experiments.questions.working_memory import (
     SideOfAnotherObject,
     SupportingSurfaces,
 )
+from krrood.adapters.json_serializer import from_json, to_json
 
 TABLE_COLOUR = Color(0.5, 0.3, 0.1)
 """
@@ -277,25 +278,6 @@ def robot(scene: QuestionedScene) -> AbstractRobot:
     return scene.robot
 
 
-def answers_agree(answered: Any, true: Any) -> bool:
-    """
-    Whether an answer and the truth are the same thing.
-
-    Places are compared as numbers, because two poses standing for the same place are
-    two objects and the twin's own equality says so.
-
-    :param answered: What the question answered.
-    :param true: What the twin actually holds.
-    """
-    if isinstance(answered, SpatialType):
-        return np.allclose(answered.to_np(), true.to_np())
-    if isinstance(answered, list):
-        return len(answered) == len(true) and all(
-            answers_agree(one, other) for one, other in zip(answered, true)
-        )
-    return answered == true
-
-
 # %% what a question declares about itself
 
 
@@ -364,7 +346,7 @@ def test_the_colours_are_the_ones_the_shapes_carry(robot: AbstractRobot):
 
 def test_the_places_are_where_the_twin_puts_the_objects(robot: AbstractRobot):
     question = ObjectPlaces()
-    assert answers_agree(question.ask(robot), question.ground_truth(robot))
+    assert question.matches_ground_truth(robot)
 
 
 # %% support and spatial relations
@@ -433,7 +415,7 @@ def test_the_place_of_a_link_is_where_the_twin_puts_it(
     scene: QuestionedScene, robot: AbstractRobot
 ):
     question = PlaceOfOwnBody(body_name=scene.own_body_name)
-    assert answers_agree(question.ask(robot), question.ground_truth(robot))
+    assert question.matches_ground_truth(robot)
 
 
 def test_the_robot_counts_the_links_the_twin_says_are_its_own(
@@ -455,11 +437,35 @@ def test_every_question_of_the_set_answers_its_own_ground_truth(
     scene: QuestionedScene, robot: AbstractRobot
 ):
     for question in scene.question_set.questions:
-        assert answers_agree(
-            question.ask(robot), question.ground_truth(robot)
-        ), question.english
+        assert question.matches_ground_truth(robot), question.english
 
 
 def test_every_question_of_the_set_reads_as_a_question(scene: QuestionedScene):
     for question in scene.question_set.questions:
         assert question.english.endswith("?")
+
+
+# %% persisted as the question actually asked, not only its class
+
+
+def test_a_question_with_no_fields_of_its_own_round_trips_by_class_alone():
+    """
+    A working-memory question typically adds nothing beyond its class, so persisting it
+    is persisting which subclass it is.
+    """
+    restored = from_json(to_json(ObjectsSeen()))
+
+    assert type(restored) is ObjectsSeen
+
+
+def test_a_question_with_its_own_fields_round_trips_with_them():
+    """
+    A long-term-memory question's own fields are part of what it asked - here, which
+    episode - so persisting only the class would lose it.
+    """
+    asked = AnythingMovedInTheEpisode(episode_identifier="episode-42")
+
+    restored = from_json(to_json(asked))
+
+    assert type(restored) is AnythingMovedInTheEpisode
+    assert restored.episode_identifier == "episode-42"

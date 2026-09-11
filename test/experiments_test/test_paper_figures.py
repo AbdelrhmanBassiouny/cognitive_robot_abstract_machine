@@ -25,6 +25,8 @@ from experiments.paper.figure_set import FigureSet
 from experiments.paper.measurement import RunConditions
 from experiments.paper.outcomes import ConditionOutcome, PredictionScore
 from experiments.paper.queries import BackendLatency
+from experiments.questions.question import Question
+from experiments.questions.working_memory import ObjectColours, ObjectsSeen
 from experiments.scenarios.trial import TrialOutcome
 
 from .test_episodes import SortingFailureType, minimal_plan
@@ -61,15 +63,19 @@ DETECTOR_BACKEND = "DetectorBackend"
 The backend the other recorded predicates were routed to.
 """
 
-WHAT_IS_ON_THE_TABLE = "an(entity(body).where(body.supported_by == table))"
-"""
-The query asked repeatedly, so that determinism has repetitions to measure.
-"""
 
-WHERE_IS_THE_CUBE = "the(entity(body).where(body.name == cube)).position"
-"""
-The query asked only once, which determinism therefore has nothing to say about.
-"""
+def repeated_question() -> Question:
+    """
+    The question asked repeatedly, so that determinism has repetitions to measure.
+    """
+    return ObjectsSeen()
+
+
+def single_question() -> Question:
+    """
+    The question asked only once, which determinism therefore has nothing to say about.
+    """
+    return ObjectColours()
 
 
 def episode(
@@ -137,20 +143,31 @@ def attempt(
     )
 
 
-def query(text: str, answer: str, latency: float, *backends: str) -> RecordedQuery:
+def query(
+    question: Question,
+    answer: str,
+    latency: float,
+    *backends: str,
+    answered_correctly: bool | None = None,
+) -> RecordedQuery:
     """
     One query asked while a trial ran.
 
-    :param text: The query as it was asked.
+    :param question: The question this query answers - the instance that was actually
+        asked, carrying its own English text, bucket and Bloom level, rather than the
+        caller naming them separately and risking the two drifting apart.
     :param answer: The answer as it was rendered.
     :param latency: Seconds the query took to answer.
     :param backends: The backend each of its predicates was routed to.
+    :param answered_correctly: Whether this query's answer matched ground truth, if it
+        was scored against the frozen set.
     """
     return RecordedQuery(
-        text=text,
+        role_taker=question,
         answer=answer,
         latency=latency,
         moment=1.0,
+        answered_correctly=answered_correctly,
         answered_predicates=[
             AnsweredPredicate(predicate_name="supported_by", backend_name=backend)
             for backend in backends
@@ -178,15 +195,15 @@ def recorded_corpus() -> list[RecordedTrial]:
                 attempt(ROUND_HOLE, InsertionOutcome.FELL_THROUGH),
             ],
             queries=[
-                query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.2, TWIN_BACKEND),
-                query(WHERE_IS_THE_CUBE, "(0.1, 0.2, 0.3)", 0.4, TWIN_BACKEND),
+                query(repeated_question(), "cube, cylinder", 0.2, TWIN_BACKEND),
+                query(single_question(), "(0.1, 0.2, 0.3)", 0.4, TWIN_BACKEND),
             ],
         ),
         trial(
             unablated,
             TrialOutcome.SUCCEEDED,
             duration=12.0,
-            queries=[query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.6, TWIN_BACKEND)],
+            queries=[query(repeated_question(), "cube, cylinder", 0.6, TWIN_BACKEND)],
         ),
         trial(
             unablated,
@@ -200,7 +217,7 @@ def recorded_corpus() -> list[RecordedTrial]:
                     observed_failure=SortingFailureType.WRONG_HOLE,
                 ),
             ],
-            queries=[query(WHAT_IS_ON_THE_TABLE, "cube", 1.0, DETECTOR_BACKEND)],
+            queries=[query(repeated_question(), "cube", 1.0, DETECTOR_BACKEND)],
         ),
         trial(
             ablated,
@@ -221,7 +238,7 @@ def recorded_corpus() -> list[RecordedTrial]:
             ],
             queries=[
                 query(
-                    WHAT_IS_ON_THE_TABLE,
+                    repeated_question(),
                     "cube, cylinder",
                     0.8,
                     DETECTOR_BACKEND,
@@ -471,7 +488,7 @@ def test_a_repeated_question_reports_how_often_it_agreed_with_itself(recorded_tr
     """
     [agreement] = rows_of(FigureName.QUERY_DETERMINISM, recorded_trials)
 
-    assert agreement.query == WHAT_IS_ON_THE_TABLE
+    assert agreement.query == repeated_question().english
     assert agreement.agreement.measurement_count == 4
     assert agreement.agreement.average.mean == 0.75
 
@@ -483,7 +500,7 @@ def test_a_question_asked_once_is_not_reported_as_deterministic(recorded_trials)
     """
     rows = rows_of(FigureName.QUERY_DETERMINISM, recorded_trials)
 
-    assert WHERE_IS_THE_CUBE not in [row.query for row in rows]
+    assert single_question().english not in [row.query for row in rows]
 
 
 # %% simulation against the robot

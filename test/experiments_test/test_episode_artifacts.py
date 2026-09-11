@@ -21,6 +21,7 @@ from experiments.episodes.artifacts import (
     configured_artifact_directory,
 )
 from experiments.episodes.episode import Episode, RecordedQuery, RecordedTrial
+from experiments.questions.working_memory import ObjectColours, ObjectsSeen
 from experiments.scenarios.trial import TrialOutcome
 
 from .test_episode_recording import sorting_episode
@@ -72,7 +73,7 @@ def two_answered_trials(episode: Episode) -> list[RecordedTrial]:
             episode,
             [
                 RecordedQuery(
-                    text="What is on the lid?",
+                    role_taker=ObjectsSeen(),
                     answer="The cube.",
                     latency=0.02,
                     moment=1.5,
@@ -83,7 +84,7 @@ def two_answered_trials(episode: Episode) -> list[RecordedTrial]:
             episode,
             [
                 RecordedQuery(
-                    text="Which hole did it go into?",
+                    role_taker=ObjectColours(),
                     answer="The square one.",
                     latency=0.03,
                     moment=1.75,
