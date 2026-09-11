@@ -1126,11 +1126,18 @@ class MontessoriWorld:
             self._spawn(handle, handle_position)
             drawer.add(handle)
 
-        self._give_every_hole_its_landing_region(holes_by_key)
+        self._give_every_hole_its_landing_region(
+            holes_by_key,
+            table_top_z=float(TABLE_POSITION.z) + TABLE_SCALE.z / 2,
+            board_top_z=float(BOARD_POSITION.z) + BOARD_SCALE.z / 2,
+        )
         return board
 
     def _give_every_hole_its_landing_region(
-        self, holes_by_key: Dict[str, ShapeSortingHole]
+        self,
+        holes_by_key: Dict[str, ShapeSortingHole],
+        table_top_z: float,
+        board_top_z: float,
     ) -> None:
         """
         Measure the space under each hole and spawn the :class:`Region` a shape that has
@@ -1141,9 +1148,10 @@ class MontessoriWorld:
         standing in a shaft cannot shrink it.
 
         :param holes_by_key: The board's holes, keyed by their own key.
+        :param table_top_z: Height of the surface the board stands on, which a layout
+            that stands the board somewhere else states for itself.
+        :param board_top_z: Height of the board's own top surface.
         """
-        table_top_z = float(TABLE_POSITION.z) + TABLE_SCALE.z / 2
-        board_top_z = float(BOARD_POSITION.z) + BOARD_SCALE.z / 2
         self.world.update_forward_kinematics()
         open_spaces = {
             key: _open_space_under(hole, table_top_z, board_top_z)

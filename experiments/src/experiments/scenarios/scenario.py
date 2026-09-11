@@ -126,6 +126,16 @@ class Perturbation(Generic[WorldType], SubClassSafeGeneric, ABC):
         :param world: The world the trial is running in.
         """
 
+    @abstractmethod
+    def instruction_for_a_person(self) -> str:
+        """
+        What to tell the person at the table to bring this change about themselves.
+
+        A trial on the real robot has no world to write to, so the same instance that
+        changes a simulated one says what a person does instead. One perturbation
+        therefore describes one change, however the trial is run.
+        """
+
 
 # %% the scenario itself
 
