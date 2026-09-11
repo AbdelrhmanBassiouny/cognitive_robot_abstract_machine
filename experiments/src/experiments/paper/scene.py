@@ -20,7 +20,7 @@ from krrood.exceptions import DataclassException
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
-from experiments.paper.panel import CardPanel
+from experiments.paper.panel import ANSWER_COLOR, CardPanel
 from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoCamera,
@@ -43,12 +43,6 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 # %% the colours a picture tells an answer apart in
-
-ANSWER_COLOR = Color(1.0, 0.78, 0.06, 1.0)
-"""
-What a body the answer names is drawn in: fully opaque, so it reads as the subject of
-the picture rather than as one more thing standing in it.
-"""
 
 BACKGROUND_COLOR = Color(0.72, 0.72, 0.74, 0.45)
 """

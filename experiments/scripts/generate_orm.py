@@ -21,14 +21,17 @@ import experiments.questions.question
 import experiments.questions.question_set
 import experiments.questions.working_memory
 import experiments.paper.camera_frame
+import experiments.paper.chart
 import experiments.paper.figure
 import experiments.paper.figure_set
 import experiments.paper.measurement
 import experiments.paper.outcomes
 import experiments.paper.panel
+import experiments.paper.plan_timeline
 import experiments.paper.queries
 import experiments.paper.query_card
 import experiments.paper.questions
+import experiments.paper.run_plan
 import experiments.paper.scene
 import experiments.paper.timeline
 import coraplex.orm.ormatic_interface
@@ -110,14 +113,17 @@ for question_module in (
 # panel holds pixels, neither of which is anything a row could keep
 for paper_module in (
     experiments.paper.camera_frame,
+    experiments.paper.chart,
     experiments.paper.figure,
     experiments.paper.figure_set,
     experiments.paper.measurement,
     experiments.paper.outcomes,
     experiments.paper.panel,
+    experiments.paper.plan_timeline,
     experiments.paper.queries,
     experiments.paper.query_card,
     experiments.paper.questions,
+    experiments.paper.run_plan,
     experiments.paper.scene,
     experiments.paper.timeline,
 ):
