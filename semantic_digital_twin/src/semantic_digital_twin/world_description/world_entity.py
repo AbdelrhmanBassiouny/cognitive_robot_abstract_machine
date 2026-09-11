@@ -6,9 +6,8 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import deepcopy
-from dataclasses import dataclass, field, Field
+from dataclasses import dataclass, field, Field, replace
 from dataclasses import fields
-from functools import cached_property
 from functools import cached_property
 from uuid import UUID, uuid4
 
@@ -36,9 +35,9 @@ from krrood.adapters.json_serializer import (
 )
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
 from krrood.entity_query_language.predicate import Symbol
+from krrood.patterns.caching import memoize
 from krrood.symbolic_math.symbolic_math import Matrix
 from krrood.utils import get_full_class_name
-from krrood.patterns.caching import memoize
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityReference,
     WorldEntityWithIDKwargsTracker,
@@ -874,9 +873,16 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
 
 
 @dataclass(eq=False)
-class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, ABC):
+class Connection(WorldEntityWithSimulatorProperties, ABC):
     """
     Represents a connection between two entities in the world.
+    """
+
+    id: UUID = field(init=False)
+    """
+    The identifier of this connection, derived from the ids of its parent and child.
+
+    Every copy of a connection, in any world, therefore carries the same id.
     """
 
     _world: Optional[World] = field(default=None, repr=False, hash=False, init=False)
@@ -916,6 +922,7 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
     """
 
     def __post_init__(self):
+        self.id = uuid.uuid5(self.parent.id, str(self.child.id))
         self.name = self.name or self._generate_default_name(
             parent=self.parent, child=self.child
         )
@@ -969,7 +976,9 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
         return [field_ for field_ in fields(cls) if field_.init]
 
     def to_json(self, **kwargs) -> Dict[str, Any]:
-        result = super().to_json(**kwargs)
+        # A connection writes its own fields, so it skips the field dump of
+        # WorldEntityWithID.to_json
+        result = SubclassJSONSerializer.to_json(self, **kwargs)
         for field_ in self._serialized_fields():
             value = getattr(self, field_.name)
             if isinstance(value, WorldEntityWithID):
@@ -1031,9 +1040,6 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
     @property
     def has_hardware_interface(self) -> bool:
         return False
-
-    def add_to_world(self, world: World):
-        self._world = world
 
     @classmethod
     def _generate_default_name(
@@ -1193,6 +1199,23 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
             child=self.child,
             parent_T_connection_expression=parent_T_connection_expression,
             connection_T_child_expression=self.connection_T_child_expression,
+        )
+
+    def copy_with_new_child(self, new_child: KinematicStructureEntity) -> Self:
+        """
+        Create a copy of this connection that connects its parent to ``new_child``,
+        keeping everything else the connection was built with.
+
+        :param new_child: The child of the copy.
+        :return: The copy, named after its parent and new child.
+        """
+        connection_T_child_expression = deepcopy(self.connection_T_child_expression)
+        connection_T_child_expression.child_frame = new_child
+        return replace(
+            self,
+            child=new_child,
+            connection_T_child_expression=connection_T_child_expression,
+            name=None,
         )
 
     def update_references_for_world(self, world: World):

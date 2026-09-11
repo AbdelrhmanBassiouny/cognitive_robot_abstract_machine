@@ -250,6 +250,33 @@ def test_a_reference_to_an_entity_the_world_lacks_names_the_entity():
     assert raised.value.world_entity_name == body.name
 
 
+def test_a_connection_written_as_a_reference_carries_only_its_id_and_name():
+    world = World()
+    parent = Body(name=PrefixedName("cable_post"))
+    child = Body(name=PrefixedName("cable"))
+    with world.modify_world():
+        world.add_connection(connection := FixedConnection(parent=parent, child=child))
+
+    json_data = to_json(connection, **WorldEntityReferenceWriter().create_kwargs())
+
+    assert json_data == WorldEntityReferenceWriter().write_reference(connection)
+
+
+def test_a_connection_written_as_a_reference_is_read_as_the_connection_of_the_world():
+    world = World()
+    parent = Body(name=PrefixedName("cable_post"))
+    child = Body(name=PrefixedName("cable"))
+    with world.modify_world():
+        world.add_connection(connection := FixedConnection(parent=parent, child=child))
+    json_data = json.loads(
+        json.dumps(to_json(connection, **WorldEntityReferenceWriter().create_kwargs()))
+    )
+
+    tracker = WorldEntityWithIDKwargsTracker.from_world(world)
+
+    assert from_json(json_data, **tracker.create_kwargs()) is connection
+
+
 def test_world_entity_missing_from_the_world_is_an_untracked_object():
     body = Body(name=PrefixedName("body"))
     point = Point3(1, 2, 3, reference_frame=body)

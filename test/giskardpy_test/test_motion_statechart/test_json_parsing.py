@@ -20,6 +20,7 @@ from giskardpy.motion_statechart.graph_node import (
     EndMotion,
     CancelMotion,
 )
+from giskardpy.motion_statechart.monitors.joint_monitors import JointPositionReached
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from giskardpy.motion_statechart.motion_statechart import (
@@ -159,6 +160,26 @@ def test_a_motion_statechart_refers_to_world_entities_by_reference(mini_world):
     node_copy = msc_copy.get_node_by_index(node.index)
     assert node_copy.root_link is root
     assert node_copy.tip_link is tip
+
+
+def test_a_motion_statechart_refers_to_connections_by_reference(mini_world):
+    """
+    A connection is a world entity like any other, so a node holding one points at the
+    connection of the reader's world.
+    """
+    connection = mini_world.get_connection_by_name("root_T_tip")
+    msc = MotionStatechart()
+    msc.add_node(node := JointPositionReached(connection=connection, position=0.5))
+
+    json_data = json.loads(json.dumps(msc.to_json()))
+
+    assert json_data["nodes"][node.index][
+        "connection"
+    ] == WorldEntityReferenceWriter().write_reference(connection)
+
+    tracker = WorldEntityWithIDKwargsTracker.from_world(mini_world)
+    msc_copy = MotionStatechart.from_json(json_data, **tracker.create_kwargs())
+    assert msc_copy.get_node_by_index(node.index).connection is connection
 
 
 def test_start_condition(mini_world):
