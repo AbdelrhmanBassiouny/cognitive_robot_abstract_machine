@@ -131,18 +131,20 @@ class JointState(SubclassJSONSerializer):
     def from_lists(cls, connections: List[ActiveConnection1DOF], targets: List[float]):
         return cls(connections, targets)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
-            **super().to_json(),
+            **super().to_json(**kwargs),
             "child_ids": [
-                to_json(connection.child.id) for connection in self.connections
+                to_json(connection.child.id, **kwargs)
+                for connection in self.connections
             ],
             "child_names": [
-                to_json(connection.child.name) for connection in self.connections
+                to_json(connection.child.name, **kwargs)
+                for connection in self.connections
             ],
             "target_values": self.target_values,
-            "joint_state_type": to_json(self.state_type),
-            "name": to_json(self.name),
+            "joint_state_type": to_json(self.state_type, **kwargs),
+            "name": to_json(self.name, **kwargs),
         }
 
     @classmethod
@@ -154,7 +156,7 @@ class JointState(SubclassJSONSerializer):
         tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
         child_names = data.get("child_names") or [None] * len(data["child_ids"])
         connections = [
-            tracker.get_world_entity_with_id(
+            tracker.get(
                 from_json(child_id), name=from_json(child_name)
             ).parent_connection
             for child_id, child_name in zip(data["child_ids"], child_names)
