@@ -28,7 +28,6 @@ from experiments.montessori.results_database import (
 )
 from experiments.montessori.scenarios import (
     DetectionRelabelled,
-    LightingChanged,
     PerceivedPoseOffset,
     PieceShoved,
     SortingStep,
@@ -40,6 +39,11 @@ from experiments.montessori.scenarios import (
 )
 
 from .test_episode_recording import UNREACHABLE_URI
+
+LIGHTING_THE_PAPER_DOES_NOT_RECORD = "lighting-changed"
+"""
+The perturbation the command line used to offer and no longer does.
+"""
 
 # %% every choice parses
 
@@ -131,7 +135,6 @@ def test_a_scenario_choice_builds_the_scenario_it_names(choice, scenario_class):
 @pytest.mark.parametrize(
     "choice, perturbation_class",
     [
-        (PerturbationChoice.LIGHTING_CHANGED, LightingChanged),
         (PerturbationChoice.TARGET_HOLE_MOVED, TargetHoleMoved),
         (PerturbationChoice.PIECE_SHOVED, PieceShoved),
         (PerturbationChoice.PERCEIVED_POSE_OFFSET, PerceivedPoseOffset),
@@ -154,6 +157,16 @@ def test_a_perturbation_choice_builds_the_perturbation_it_names(
 
     assert type(perturbation) is perturbation_class
     assert perturbation.step is SortingStep.SETTLE
+
+
+def test_the_command_line_offers_no_lighting_perturbation():
+    """
+    The paper records no lighting condition, so a run cannot be asked for one.
+    """
+    with pytest.raises(SystemExit):
+        parse_arguments(
+            [RecordingOption.PERTURBATION, LIGHTING_THE_PAPER_DOES_NOT_RECORD]
+        )
 
 
 def test_asking_for_no_perturbation_applies_none():
