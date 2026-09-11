@@ -4,11 +4,9 @@ import json
 from dataclasses import dataclass, field
 from threading import Thread
 from time import sleep
-from typing import Dict, List
+from typing import TYPE_CHECKING, Dict, List
 
 import rclpy
-from json_msgs.action import JsonAction
-from json_msgs.action._json_action import JsonAction_Result
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.exceptions import NoActiveGoalToCancelError
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
@@ -28,6 +26,13 @@ from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchroni
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
+
+if TYPE_CHECKING:
+    # Deferred: json_msgs is a ROS2 message package, not installed everywhere this
+    # module is imported (e.g. ORM generation) -- see feedback_publisher.py's
+    # identical deferral for the same reason.
+    from json_msgs.action import JsonAction
+    from json_msgs.action._json_action import JsonAction_Result
 
 
 @dataclass
@@ -59,6 +64,8 @@ class GiskardWrapper:
     )
 
     def __post_init__(self):
+        from json_msgs.action import JsonAction
+
         if self.world is None:
             self.node_handle.get_logger().info(
                 "No world provided, fetching from service"
@@ -134,6 +141,8 @@ class GiskardWrapper:
         :param motion_statechart: statechart to send to Giskard
         :return: action goal message holding the serialized motion goal
         """
+        from json_msgs.action import JsonAction
+
         goal_msg = JsonAction.Goal()
         goal = MotionGoal.for_motion_statechart(
             motion_statechart,

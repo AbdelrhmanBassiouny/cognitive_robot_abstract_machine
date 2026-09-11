@@ -4,10 +4,15 @@ import json
 import time
 import traceback
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 import rclpy
-from json_msgs.action import JsonAction
+
+if TYPE_CHECKING:
+    # Deferred: json_msgs is a ROS2 message package, not installed everywhere this
+    # module is imported (e.g. ORM generation) -- see feedback_publisher.py's
+    # identical deferral for the same reason.
+    from json_msgs.action import JsonAction
 
 from giskardpy.data_types.exceptions import DontPrintStackTrace
 from giskardpy.executor import Executor, RealTimePacer
@@ -259,6 +264,8 @@ class MotionServer:
         published_position = self.published_position_of_goal()
         if published_position is not None:
             states["published_position"] = to_json(published_position)
+        from json_msgs.action import JsonAction
+
         result = JsonAction.Result()
         result.result = json.dumps(states)
         return result

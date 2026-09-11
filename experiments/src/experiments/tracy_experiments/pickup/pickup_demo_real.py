@@ -67,7 +67,7 @@ from coraplex.datastructures.enums import (
 )
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.execution_environment import ExecutionEnvironment
-from coraplex.plans.attachment_nodes import AttachNode, DetachNode
+from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.factories import sequential
 from coraplex.robot_plans.actions.core.pick_up import ReachAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
@@ -514,7 +514,7 @@ class _SortingRig:
         reach_plan = sequential([reach], context=self.context).plan
         lift = sequential(
             [
-                AttachNode(body=body, new_parent=self.tool_frame),
+                ReAttachNode(body=body, new_parent=self.tool_frame),
                 MoveToolCenterPointMotion(
                     lift_to_pose,
                     PICK_ARM,
@@ -540,7 +540,7 @@ class _SortingRig:
         ).plan
         retract_and_park = sequential(
             [
-                DetachNode(body=body, new_parent=self.world.root),
+                ReAttachNode(body=body, new_parent=self.world.root),
                 MoveToolCenterPointMotion(
                     retract_pose,
                     PICK_ARM,
