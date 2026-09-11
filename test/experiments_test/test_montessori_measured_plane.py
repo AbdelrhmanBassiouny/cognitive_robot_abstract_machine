@@ -12,7 +12,12 @@ from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.exceptions import (
     SurfaceNotSeenWhereTheWorldPutsIt,
 )
-from experiments.montessori.perception.measured_plane import MeasuredPlane
+from experiments.montessori.perception.measured_plane import (
+    HEIGHT_TOLERANCE,
+    LEVEL_TOLERANCE,
+    CameraPoseError,
+    MeasuredPlane,
+)
 from experiments.montessori.perception.recorded_setup import TABLE_HEIGHT, table_surface
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -112,3 +117,69 @@ def test_a_surface_the_camera_does_not_see_is_refused():
 
     with pytest.raises(SurfaceNotSeenWhereTheWorldPutsIt):
         MeasuredPlane.of_surface(capture.to_frame(), surface)
+
+
+# %% the stated pose against the surface
+
+LEAN = 5.0
+"""
+How far, in degrees, the camera's stated pose is turned off the pose a capture was taken
+from, in the tests that state it wrong.
+"""
+
+RAISE = 0.05
+"""
+How far, in metres, the camera's stated pose is lifted off the pose a capture was taken
+from, in the tests that state it wrong.
+"""
+
+
+def leaned_capture(name: str = "tracy_pickup_demo") -> SceneCapture:
+    """
+    A shipped capture whose stated camera pose is turned by :data:`LEAN` about the
+    camera's own y-axis.
+    """
+    capture = SceneCapture.load(name)
+    leaned = HomogeneousTransformationMatrix.from_xyz_rpy(
+        0.0, 0.0, 0.0, 0.0, np.radians(LEAN), 0.0
+    ).to_np()
+    return replace(
+        capture, reference_frame_T_camera=capture.reference_frame_T_camera @ leaned
+    )
+
+
+def test_a_pose_the_pictures_were_taken_from_is_within_tolerance():
+    error = CameraPoseError.of(
+        SceneCapture.load("tracy_pickup_demo").to_frame(), table_surface()
+    )
+
+    assert error.within_tolerance
+    assert error.tilt < LEVEL_TOLERANCE
+    assert abs(error.height) < HEIGHT_TOLERANCE
+
+
+def test_a_pose_stated_leaning_is_reported_leaning_that_far():
+    error = CameraPoseError.of(leaned_capture().to_frame(), table_surface())
+
+    assert not error.within_tolerance
+    assert error.tilt == pytest.approx(LEAN, abs=0.5)
+
+
+def test_a_pose_stated_too_high_is_reported_by_that_height():
+    capture = SceneCapture.load("tracy_pickup_demo")
+    lifted = capture.reference_frame_T_camera.copy()
+    lifted[2, 3] += RAISE
+
+    error = CameraPoseError.of(
+        replace(capture, reference_frame_T_camera=lifted).to_frame(), table_surface()
+    )
+
+    assert not error.within_tolerance
+    assert error.height == pytest.approx(RAISE, abs=HEIGHT_TOLERANCE)
+
+
+def test_the_error_names_its_tilt_and_height_in_words():
+    error = CameraPoseError.of(leaned_capture().to_frame(), table_surface())
+
+    assert f"{error.tilt:.1f}" in str(error)
+    assert f"{error.height * 1000:+.0f} mm" in str(error)

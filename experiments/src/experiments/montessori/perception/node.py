@@ -37,6 +37,7 @@ from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.live_camera import LiveCamera
 from experiments.montessori.perception.markers import DetectionMarkerPublisher
+from experiments.montessori.perception.measured_plane import CameraPoseError
 from experiments.montessori.perception.overlay import (
     DetectionOverlay,
 )
@@ -132,6 +133,12 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     Draws the detections onto the frame the viewer shows.
     """
 
+    camera_pose_error: Optional[CameraPoseError] = field(init=False, default=None)
+    """
+    How far the camera's published pose is from levelling the table, read off the first
+    look the node could place in the world, or None until one has been.
+    """
+
     _camera: LiveCamera = field(init=False)
     """
     The newest of everything the camera publishes, and where it stands.
@@ -182,6 +189,8 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
                 self.viewer.show_color(self._camera.color_image)
                 self.viewer.show_depth(self._camera.depth_image)
             return
+        if self.camera_pose_error is None:
+            self.check_camera_pose(frame)
         scene = self.pipeline.detect(frame)
         with self._lock:
             self._scene = scene
@@ -190,6 +199,26 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
             self.markers.publish(scene)
         if self.viewer is not None:
             self._show(frame, scene)
+
+    def check_camera_pose(self, frame: RgbdFrame) -> CameraPoseError:
+        """
+        Read how far the camera's published pose is off against the table, keep the
+        answer, and warn if it is more than the depth image's noise explains.
+
+        The transform tree publishes whatever calibration the robot description was
+        written with, and a camera that has moved since reports every detection from the
+        wrong place; the table is flat and at a known height whatever the calibration
+        says, so it is what the pose is checked against.
+
+        :param frame: A look placed in the world by the published pose.
+        """
+        self.camera_pose_error = CameraPoseError.of(frame, self.pipeline.table)
+        if not self.camera_pose_error.within_tolerance:
+            self.node.get_logger().warning(
+                f"the camera's published pose is off: {self.camera_pose_error}; "
+                "recalibrate the camera link in the robot description"
+            )
+        return self.camera_pose_error
 
     def _show(self, frame: RgbdFrame, scene: MontessoriScene) -> None:
         """

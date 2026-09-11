@@ -37,6 +37,8 @@ from experiments.montessori.perception.capture_from_camera import (
 from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.live_camera import LiveCamera
+from experiments.montessori.perception.node import MontessoriPerceptionNode
+from experiments.montessori.perception.recorded_setup import perception_pipeline
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -46,6 +48,7 @@ from .test_montessori_camera import (
     DEPTH_FORMAT_FIELD,
     encode_compressed_depth,
 )
+from .test_montessori_measured_plane import LEAN, leaned_capture
 
 # %% the scene this process publishes
 
@@ -349,3 +352,18 @@ def test_writing_a_capture_reports_what_never_arrived_when_the_camera_is_silent(
         str(CameraTopic.DEPTH),
         str(CameraTopic.COLOR),
     ]
+
+
+# %% the stated pose is checked against the table on the first placed look
+
+
+def test_the_node_reports_how_far_the_stated_pose_is_off_on_its_first_placed_look(
+    node: Node,
+):
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+
+    error = perception.check_camera_pose(leaned_capture().to_frame())
+
+    assert perception.camera_pose_error is error
+    assert not error.within_tolerance
+    assert error.tilt == pytest.approx(LEAN, abs=0.5)

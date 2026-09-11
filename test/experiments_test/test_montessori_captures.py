@@ -20,8 +20,12 @@ from experiments.montessori.perception.captures import (
     SceneCapture,
 )
 from experiments.montessori.perception.exceptions import CaptureIncomplete
-from experiments.montessori.perception.measured_plane import MeasuredPlane
-from experiments.montessori.perception.recorded_setup import TABLE_HEIGHT, table_surface
+from experiments.montessori.perception.measured_plane import (
+    HEIGHT_TOLERANCE,
+    LEVEL_TOLERANCE,
+    CameraPoseError,
+)
+from experiments.montessori.perception.recorded_setup import table_surface
 
 from .dataset.montessori_capture_truths import CAPTURE_TRUTHS
 
@@ -163,18 +167,6 @@ def test_a_shipped_capture_reads_into_a_registered_frame() -> None:
 
 # %% the camera stands where a capture says it does
 
-LEVEL_TOLERANCE = 1.0
-"""
-How far from horizontal, in degrees, the table may come out before the stated camera
-pose is wrong by more than the depth image's own noise explains.
-"""
-
-HEIGHT_TOLERANCE = 0.01
-"""
-How far from its stated height, in metres, the table may come out before the stated
-camera pose is wrong by more than the depth image's own noise explains.
-"""
-
 
 @pytest.mark.parametrize("name", sorted(CAPTURE_TRUTHS))
 def test_a_shipped_capture_places_the_table_level_at_its_own_height(name: str) -> None:
@@ -184,9 +176,8 @@ def test_a_shipped_capture_places_the_table_level_at_its_own_height(name: str) -
     stated pose is the one the pictures were taken from, rather than a calibration the
     camera has since moved away from.
     """
-    plane = MeasuredPlane.of_surface(
-        SceneCapture.load(name).to_frame(), table_surface()
-    )
+    error = CameraPoseError.of(SceneCapture.load(name).to_frame(), table_surface())
 
-    assert plane.tilt < LEVEL_TOLERANCE
-    assert plane.height == pytest.approx(TABLE_HEIGHT, abs=HEIGHT_TOLERANCE)
+    assert error.within_tolerance
+    assert error.tilt < LEVEL_TOLERANCE
+    assert error.height == pytest.approx(0.0, abs=HEIGHT_TOLERANCE)

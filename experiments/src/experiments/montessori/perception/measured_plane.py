@@ -69,6 +69,23 @@ VERTICAL = np.array([0.0, 0.0, 1.0])
 The direction a horizontal surface's normal points, in the frame poses are reported in.
 """
 
+LEVEL_TOLERANCE = 1.0
+"""
+How far from horizontal, in degrees, a surface may come out before the stated camera
+pose is wrong by more than the depth image's own noise explains.
+"""
+
+HEIGHT_TOLERANCE = 0.01
+"""
+How far from its stated height, in metres, a surface may come out before the stated
+camera pose is wrong by more than the depth image's own noise explains.
+"""
+
+MILLIMETRES_PER_METRE = 1000.0
+"""
+What a height in metres is multiplied by to be read in millimetres.
+"""
+
 
 @dataclass(frozen=True)
 class MeasuredPlane:
@@ -181,3 +198,67 @@ class MeasuredPlane:
         if not len(points):
             raise SurfaceNotSeenWhereTheWorldPutsIt(str(surface.name), surface.height)
         return cls.fit(points)
+
+
+# %% the stated pose against the surface
+
+
+@dataclass(frozen=True)
+class CameraPoseError:
+    """
+    How far a camera's stated pose is from the pose its pictures were taken from, read
+    off a horizontal surface at a known height.
+
+    A pose that is right levels the surface at its stated height; one the camera has
+    moved away from since it was written down tilts and lifts it by the same amount.
+    """
+
+    plane: MeasuredPlane
+    """
+    The plane the depth image measures where the world puts the surface, in the frame
+    the stated pose reports points in.
+    """
+
+    surface: WorkspaceSurface
+    """
+    The surface as the world models it: horizontal, at its stated height.
+    """
+
+    @property
+    def tilt(self) -> float:
+        """
+        How far the surface leans from horizontal, in degrees.
+        """
+        return self.plane.tilt
+
+    @property
+    def height(self) -> float:
+        """
+        How far above its stated height the surface is measured, in metres.
+        """
+        return self.plane.height - self.surface.height
+
+    @property
+    def within_tolerance(self) -> bool:
+        """
+        Whether the depth image's own noise explains the whole of the error.
+        """
+        return self.tilt <= LEVEL_TOLERANCE and abs(self.height) <= HEIGHT_TOLERANCE
+
+    @classmethod
+    def of(cls, frame: RgbdFrame, surface: WorkspaceSurface) -> Self:
+        """
+        The error of a frame's stated pose, read off one surface it shows.
+
+        :param frame: The camera data to read, carrying the camera's stated pose.
+        :param surface: The surface as the world models it.
+        :raises SurfaceNotSeenWhereTheWorldPutsIt: If nothing stands at the modelled
+            plane inside the surface's stretch.
+        """
+        return cls(plane=MeasuredPlane.of_surface(frame, surface), surface=surface)
+
+    def __str__(self) -> str:
+        return (
+            f"{self.surface.name} measured {self.tilt:.1f} deg off horizontal and "
+            f"{self.height * MILLIMETRES_PER_METRE:+.0f} mm from its stated height"
+        )

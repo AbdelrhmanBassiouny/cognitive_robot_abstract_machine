@@ -25,6 +25,8 @@ from rclpy.node import Node
 from experiments.montessori.perception.captures import CAPTURE_DIRECTORY, SceneCapture
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.live_camera import LiveCamera
+from experiments.montessori.perception.measured_plane import CameraPoseError
+from experiments.montessori.perception.recorded_setup import table_surface
 from experiments.montessori.perception.recordings import REFERENCE_FRAME
 
 NODE_NAME = "montessori_capture"
@@ -128,6 +130,9 @@ def main() -> None:
         directory=arguments.into,
     )
     print(f"wrote {capture.name} to {capture.directory}")
+    print(
+        f"published camera pose: {CameraPoseError.of(capture.to_frame(), table_surface())}"
+    )
 
 
 if __name__ == "__main__":
