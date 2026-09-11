@@ -19,6 +19,15 @@ answer is yes or no. Done in three commits:
 3. [x] ecb7c6a - EventAgainstThePlanCard with the four panels, BagFramesAround
        (camera either side of the event), panel dispatch refactored to one
        named method per PanelKind.
+4. [x] f1017a0 - layered.py (LayeredFigure, Layer): the four levels stacked
+       into ONE picture, which is what "four levelled visualization" actually
+       meant. The card sets layered = True and its markup names the one
+       stacked figure; each level is still written beside it.
+       PanelKind members now carry a PanelWording (level name / caption /
+       what is written where the level is missing).
+       Stacking caught a real defect: both charts were drawn only as wide as
+       what they happened to hold, so a second sat in a different place on
+       each. TrialChart.drawn now takes the trial's span and both span it.
 
 The two runs it exists for both verified by rendering: the robot's own pick-up
 gets its plan item picked out in amber; the shoved piece gets a plan that was
@@ -35,7 +44,12 @@ handling something else, nothing picked out.
   taken). Both flagged in the PR description for the user to tune.
 - The camera before/after level is the one of the four never drawn for real
   here: its geometry is asserted, but the tests that open an actual rosbag are
-  skipped without the recordings, same as test_montessori_bag_replay.
+  skipped without the recordings, same as test_montessori_bag_replay. In the
+  rendered example figures it shows as its "only a run on the robot records a
+  camera" band.
+- OPEN JUDGEMENT CALL flagged in the PR: a level with nothing to draw is
+  stacked as a band saying why, rather than dropped. Good for showing the
+  structure; the user may prefer it omitted for the paper's simulated runs.
 - Still cannot run (no ROS in sandbox, so ORM interfaces cannot be generated):
   test_paper_figures.py, test_paper_figures_from_the_database.py, end-to-end
   runs of the two scripts, and generate_orm.py itself. The new paper modules
