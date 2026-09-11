@@ -191,8 +191,8 @@ def _hole_spec_from_footprint_tracy(
     directly for a board whose height is only known once Tracy is mounted.
     """
     position = Point3(
-        float(board_position.x) + footprint.center[0],
-        float(board_position.y) + footprint.center[1],
+        float(board_position.x) + footprint.center.x,
+        float(board_position.y) + footprint.center.y,
         board_top_z - HOLE_MARKER_THICKNESS / 2,
     )
     return _HoleSpec(key, footprint.category, position, footprint)

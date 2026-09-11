@@ -191,8 +191,8 @@ def _hole_spec_from_footprint_2(footprint: HoleFootprint, key: str) -> _HoleSpec
     time and so cannot be reused directly for a differently-positioned board.
     """
     position = Point3(
-        BOARD_POSITION_2.x + footprint.center[0],
-        BOARD_POSITION_2.y + footprint.center[1],
+        BOARD_POSITION_2.x + footprint.center.x,
+        BOARD_POSITION_2.y + footprint.center.y,
         BOARD_POSITION_2.z + BOARD_SCALE.z / 2 - HOLE_MARKER_THICKNESS / 2,
     )
     return _HoleSpec(key, footprint.category, position, footprint)
