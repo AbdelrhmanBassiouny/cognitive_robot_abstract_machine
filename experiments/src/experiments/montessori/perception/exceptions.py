@@ -492,3 +492,27 @@ class SimulatedCameraIsAlreadyLooking(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Stop the camera before starting it again, or keep asking the one look."
+
+
+@dataclass
+class NoBoardInView(DataclassException):
+    """
+    Raised when every look allowed for the board showed no board answering the
+    description.
+    """
+
+    looks: int
+    """
+    How many looks were taken.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"No board answering the description was in view in {self.looks} look(s)."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check that the board stands on the table in the camera's view, and that "
+            "the description matches the board on this table."
+        )

@@ -23,6 +23,7 @@ from experiments.montessori.perception.exceptions import (
     SimulatedCameraIsAlreadyLooking,
     SimulatedCameraIsNotLooking,
 )
+from physics_simulators.mujoco_simulator import MujocoSimulator
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoCamera,
     MujocoSim,
@@ -75,7 +76,10 @@ class SimulatedCamera:
     A camera the twin places, answering with what MuJoCo renders through it.
 
     Rendering needs a MuJoCo mirror of the world, so the camera is started before it is
-    asked for a look and stopped afterwards; used as a context manager it does both.
+    asked for a look and stopped afterwards; used as a context manager it does both. A
+    camera standing in a world that is already being simulated draws from that
+    simulation instead (:attr:`drawn_by`), since two mirrors of one world cannot be run
+    side by side.
     """
 
     world: World
@@ -103,10 +107,19 @@ class SimulatedCamera:
     standing in it and the real camera this one stands in for sees no such thing.
     """
 
+    drawn_by: Optional[MujocoSim] = None
+    """
+    A running simulation of :attr:`world` the pictures are drawn from, or None for a
+    mirror of the camera's own, built when it starts looking.
+
+    The camera has to be attached to its body before that simulation is built, since a
+    simulation draws only the cameras its model was built with.
+    """
+
     _mirror: Optional[MujocoSim] = field(default=None, init=False, repr=False)
     """
     The MuJoCo copy of :attr:`world` the pictures are drawn from, while the camera is
-    looking.
+    looking through a mirror of its own.
     """
 
     def __post_init__(self) -> None:
@@ -164,10 +177,15 @@ class SimulatedCamera:
 
     def start(self) -> None:
         """
-        Build the MuJoCo mirror this camera draws its pictures from.
+        Build the MuJoCo mirror this camera draws its pictures from, or make room for
+        its pictures in the simulation it draws from.
 
-        :raises SimulatedCameraIsAlreadyLooking: If the camera is already looking.
+        :raises SimulatedCameraIsAlreadyLooking: If the camera is already looking
+            through a mirror of its own.
         """
+        if self.drawn_by is not None:
+            self._make_room_for_the_picture(self.drawn_by.simulator._mj_model)
+            return
         if self._mirror is not None:
             raise SimulatedCameraIsAlreadyLooking(self.camera.name)
 
@@ -181,18 +199,35 @@ class SimulatedCamera:
             MujocoSynchronizer.UNTHROTTLED_SYNC_RATE_HZ
         )
         self._mirror.simulator.start(simulate_in_thread=False, render_in_thread=False)
-        self._make_room_for_the_picture()
+        self._make_room_for_the_picture(self._mirror.simulator._mj_model)
 
     def stop(self) -> None:
         """
-        Tear the mirror down.
+        Tear the mirror down; a camera drawing from a running simulation leaves that
+        simulation running.
 
-        :raises SimulatedCameraIsNotLooking: If the camera was never started.
+        :raises SimulatedCameraIsNotLooking: If a camera with a mirror of its own was
+            never started.
         """
+        if self.drawn_by is not None:
+            return
         if self._mirror is None:
             raise SimulatedCameraIsNotLooking(self.camera.name)
         self._mirror.simulator.stop()
         self._mirror = None
+
+    @property
+    def _simulator(self) -> MujocoSimulator:
+        """
+        What the pictures are drawn from.
+
+        :raises SimulatedCameraIsNotLooking: If the camera has not been started.
+        """
+        if self.drawn_by is not None:
+            return self.drawn_by.simulator
+        if self._mirror is None:
+            raise SimulatedCameraIsNotLooking(self.camera.name)
+        return self._mirror.simulator
 
     def __enter__(self) -> Self:
         self.start()
@@ -212,10 +247,7 @@ class SimulatedCamera:
 
         :raises SimulatedCameraIsNotLooking: If the camera has not been started.
         """
-        if self._mirror is None:
-            raise SimulatedCameraIsNotLooking(self.camera.name)
-
-        simulator = self._mirror.simulator
+        simulator = self._simulator
         # Only MuJoCo's own stepping recomputes body poses from the joint values, and
         # this mirror is not stepped in the background, so a world moved since the last
         # picture needs the poses worked out again before anything is drawn. Held under
@@ -237,15 +269,16 @@ class SimulatedCamera:
             reference_frame_T_camera=self.reference_frame_T_camera,
         )
 
-    def _make_room_for_the_picture(self) -> None:
+    def _make_room_for_the_picture(self, model: mujoco.MjModel) -> None:
         """
-        Widen the mirror's offscreen buffer to the picture this camera takes.
+        Widen a model's offscreen buffer to the picture this camera takes.
 
         A model states how large a picture may be drawn away from a window, and its
         default is smaller than a camera's picture usually is; a renderer asked for more
         than the model allows refuses outright.
+
+        :param model: The MuJoCo model the pictures are drawn from.
         """
-        model = self._mirror.simulator._mj_model
         model.vis.global_.offwidth = max(model.vis.global_.offwidth, self.width)
         model.vis.global_.offheight = max(model.vis.global_.offheight, self.height)
 

@@ -34,7 +34,8 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from typing_extensions import Dict, List, Tuple
+import numpy as np
+from typing_extensions import Dict, List, Optional, Tuple
 
 from coraplex.datastructures.enums import Arms
 from coraplex.exceptions import MotionDidNotFinish
@@ -64,9 +65,9 @@ Giskard tick rate used both to plan (scratch world) and to pace trajectory playb
 DEFAULT_MAX_TICKS = 2000
 """
 Tick budget a single plan gets before giving up, matching
-:attr:`~coraplex.datastructures.dataclasses.Context.ticks_per_motion`'s own
-kinematic-motion default -- planning always runs kinematically (see this module's own
-docstring), regardless of whether the executing arm is physically simulated.
+:attr:`~coraplex.datastructures.dataclasses.Context.ticks_per_motion`'s own kinematic-
+motion default -- planning always runs kinematically (see this module's own docstring),
+regardless of whether the executing arm is physically simulated.
 """
 
 
@@ -240,7 +241,8 @@ def follow_joint_trajectory(
 ) -> None:
     """
     Drive ``actuators`` through ``trajectory`` on the real, physically simulated world,
-    one recorded waypoint per :meth:`~experiments.tracy_experiments.real_time_simulation.
+    one recorded waypoint per
+    :meth:`~experiments.tracy_experiments.real_time_simulation.
     RealTimeSimulation.advance` step, then hold the final waypoint until every joint
     settles.
 
@@ -384,6 +386,39 @@ since it is *commanded* penetration into a rigid object, and the whole point of 
 the close to the object is to keep that penetration bounded and deliberate.
 """
 
+CLOSING_DIRECTIONS_TRIED = 90
+"""
+How many directions across an object are measured to find the narrowest, over a half
+turn: every two degrees, which is finer than a fingertip pad is wide.
+"""
+
+
+def narrowest_half_width(target_body: Body, gripper_root: Body) -> float:
+    """
+    Half of the narrowest an object is across, in the plane the gripper's fingers close
+    in.
+
+    An object is measured in the plane of the gripper's own root, perpendicular to the
+    direction it approaches from, over every direction the fingers might close along
+    rather than only the one they will: the fingers stop on contact wherever the object
+    is wider, so aiming for the narrowest is what makes them meet it whichever way it is
+    turned.
+
+    :param target_body: The object to measure.
+    :param gripper_root: The gripper's own root body.
+    :return: Half the narrowest width, in metres.
+    """
+    world = gripper_root._world
+    gripper_T_body = world.compute_forward_kinematics_np(gripper_root, target_body)
+    vertices = np.asarray(target_body.collision.combined_mesh.vertices)
+    in_gripper_frame = vertices @ gripper_T_body[:3, :3].T + gripper_T_body[:3, 3]
+    across = in_gripper_frame[:, :2]
+    angles = np.linspace(0.0, np.pi, CLOSING_DIRECTIONS_TRIED, endpoint=False)
+    directions = np.column_stack([np.cos(angles), np.sin(angles)])
+    extents = across @ directions.T
+    widths = extents.max(axis=0) - extents.min(axis=0)
+    return float(widths.min()) / 2
+
 
 def _knuckle_raw_dof(robot: Tracy, arm_side: Arms) -> DegreeOfFreedom:
     """
@@ -431,6 +466,30 @@ def _finger_pad_inner_x(
         left_tip_body.collision.as_bounding_box_collection_in_frame(gripper_root)
         .bounding_box()
         .min_x
+    )
+
+
+def _half_width_at(
+    world: World, robot: Tracy, arm_side: Arms, raw_angle: float
+) -> float:
+    """
+    How far out from the gripper's own centreline the fingertip pads' inner faces stand
+    with the knuckle at a raw angle, measured on an isolated scratch copy of ``world``.
+
+    :param world: The live world to clone for the measurement; never itself modified.
+    :param robot: The robot whose gripper is measured.
+    :param arm_side: Which arm's gripper is measured.
+    :param raw_angle: The knuckle's raw angle to measure at.
+    """
+    scratch_world = deepcopy(world)
+    [scratch_robot] = scratch_world.get_semantic_annotations_by_type(Tracy)
+    prefix = "right_" if arm_side == Arms.RIGHT else "left_"
+    return _finger_pad_inner_x(
+        scratch_world,
+        _arm_of(scratch_robot, arm_side).end_effector.root,
+        scratch_world.get_body_by_name(f"{prefix}robotiq_85_left_finger_tip_link"),
+        _knuckle_raw_dof(scratch_robot, arm_side),
+        raw_angle,
     )
 
 
@@ -504,13 +563,15 @@ def close_gripper_around(
     directly on Tracy: the fully-closed target let the fingers close *past* a shape's
     own width, shoving it out from between them before both sides ever made contact.
     Mirrors the proven-working Franka Montessori demo's own
-    (``montessori_segmind_integration``) fix: measure the target's own half-width along
-    the gripper's closing axis, in the gripper's own root frame (so it stays correct
-    regardless of the object's orientation relative to the approach), and close to
-    that instead, minus :data:`SQUEEZE_MARGIN` so the fingers press in rather than
-    merely touch. Also stops early if both fingertip pads register real MuJoCo contact
-    against ``target_body`` before reaching the computed target, as a safety net
-    against the target being sized slightly off.
+    (``montessori_segmind_integration``) fix: measure the target's own half-width in the
+    gripper's own root frame and close to that, minus :data:`SQUEEZE_MARGIN` so the
+    fingers press in rather than merely touch. The width aimed for is the narrowest the
+    object is across (:func:`narrowest_half_width`), since the fingers close only
+    :data:`SQUEEZE_MARGIN` past the point where both pads touch one and the same thing,
+    the way a real gripper stalls on whatever is between its fingers: an object turned
+    so that it is wider along the closing axis is then gripped at its real width, where
+    aiming for its width along that axis alone could leave the fingers short of it
+    whenever that width was read off a bounding box larger than the object.
 
     :param sim: The running real-time simulation to drive.
     :param actuators: Every joint's own actuator, keyed by joint name.
@@ -524,11 +585,9 @@ def close_gripper_around(
     """
     world = robot._world
     gripper_root = _arm_of(robot, arm_side).end_effector.root
-    half_width = target_body.collision.as_bounding_box_collection_in_frame(
-        gripper_root
-    ).bounding_box()
-    half_width = (half_width.max_x - half_width.min_x) / 2
-    target_inner_x = max(0.0, half_width - squeeze_margin)
+    target_inner_x = max(
+        0.0, narrowest_half_width(target_body, gripper_root) - squeeze_margin
+    )
     raw_angle = _closing_raw_angle_for_half_width(
         world, robot, arm_side, target_inner_x
     )
@@ -543,26 +602,51 @@ def close_gripper_around(
 
     simulator = sim.multi_sim.simulator
     left_tip_name, right_tip_name = _fingertip_body_names(arm_side)
-    target_name = target_body.name.name
 
-    def both_fingertips_touching() -> bool:
-        left_contacts = simulator.get_contact_bodies(
-            body_name=left_tip_name, including_children=False
-        ).result
-        right_contacts = simulator.get_contact_bodies(
-            body_name=right_tip_name, including_children=False
-        ).result
-        return target_name in left_contacts and target_name in right_contacts
+    def held_between_the_fingertips() -> set[str]:
+        left_contacts = set(
+            simulator.get_contact_bodies(
+                body_name=left_tip_name, including_children=False
+            ).result
+        )
+        right_contacts = set(
+            simulator.get_contact_bodies(
+                body_name=right_tip_name, including_children=False
+            ).result
+        )
+        return (left_contacts & right_contacts) - {left_tip_name, right_tip_name}
 
+    knuckle = raw_dof.name.name
+    squeezed_at: Optional[float] = None
     for waypoint in trajectory:
+        if squeezed_at is not None and waypoint[knuckle] >= squeezed_at:
+            sim.command(actuators[knuckle], squeezed_at)
+            sim.advance(tick_period)
+            return
         for joint_name, target in waypoint.items():
             sim.command(actuators[joint_name], target)
         sim.advance(tick_period)
-        if both_fingertips_touching():
-            logger.info(
-                "%s: gripper stopped early on both-fingertip contact.", target_body.name
-            )
-            return
+        if squeezed_at is not None:
+            continue
+        held = held_between_the_fingertips()
+        if not held:
+            continue
+        touching_at = simulator.get_joint_value(knuckle).result
+        squeezed_at = _closing_raw_angle_for_half_width(
+            world,
+            robot,
+            arm_side,
+            max(
+                0.0,
+                _half_width_at(world, robot, arm_side, touching_at) - squeeze_margin,
+            ),
+        )
+        logger.info(
+            "%s: both fingertips touching %s; squeezing %.1f mm further.",
+            target_body.name,
+            ", ".join(sorted(held)),
+            squeeze_margin * 1000,
+        )
     logger.info(
         "%s: gripper closed to its own half-width-sized target (%.4fm).",
         target_body.name,

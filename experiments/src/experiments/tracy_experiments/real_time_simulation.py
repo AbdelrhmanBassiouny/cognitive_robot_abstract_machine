@@ -13,11 +13,12 @@ instead sidesteps that race entirely.
 from __future__ import annotations
 
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import Optional, Self
+from typing_extensions import List, Optional, Self
 
-from semantic_digital_twin.adapters.multi_sim import MujocoSim
+from semantic_digital_twin.adapters.multi_sim import MujocoSim, RegionAppearance
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Actuator
 
@@ -34,6 +35,20 @@ class SimulationNotStartedError(RuntimeError):
         self.world = world
         """
         The world whose simulation was advanced too early.
+        """
+
+
+class SimulationObserver(ABC):
+    """
+    Something told how far a :class:`RealTimeSimulation` has advanced, after every
+    advance.
+    """
+
+    @abstractmethod
+    def simulation_advanced(self, simulated_time: float) -> None:
+        """
+        :param simulated_time: Seconds of simulated time advanced since the simulation
+            started.
         """
 
 
@@ -66,6 +81,33 @@ class RealTimeSimulation:
     Whether to run without opening MuJoCo's viewer window.
     """
 
+    paced_to_the_wall_clock: bool = True
+    """
+    Whether an advance waits out the difference between simulated and elapsed time, so
+    the motion runs at life speed; off, the physics runs as fast as the machine allows,
+    for a run nobody watches.
+    """
+
+    region_appearance: RegionAppearance = RegionAppearance.TRANSPARENT
+    """
+    How much of the regions the world holds the simulation draws.
+    """
+
+    followers: List[World] = field(default_factory=list)
+    """
+    Worlds kept in step with the simulated robot: after every advance, each joint of a
+    follower that shares its name with a simulated joint takes the simulated position.
+
+    What a follower holds beyond those joints -- what its robot believes stands on the
+    table -- is its own, which is what lets a plan be made in a world that knows only
+    what it was told while the physics runs in one that knows everything.
+    """
+
+    observers: List[SimulationObserver] = field(default_factory=list)
+    """
+    Told how far the simulation has advanced, after every advance.
+    """
+
     multi_sim: MujocoSim = field(init=False)
     """
     The MuJoCo mirror of :attr:`world`.
@@ -83,7 +125,10 @@ class RealTimeSimulation:
 
     def __post_init__(self):
         self.multi_sim = MujocoSim(
-            world=self.world, headless=self.headless, step_size=self.step_size
+            world=self.world,
+            headless=self.headless,
+            step_size=self.step_size,
+            region_appearance=self.region_appearance,
         )
 
     def __enter__(self) -> Self:
@@ -145,7 +190,24 @@ class RealTimeSimulation:
             simulator.step()
             self._simulated_time += simulator.step_size
         simulator.renderer.sync()
+        self._update_followers()
+        for observer in self.observers:
+            observer.simulation_advanced(self._simulated_time)
 
+        if not self.paced_to_the_wall_clock:
+            return
         remaining = self._start_time + self._simulated_time - time.time()
         if remaining > 0:
             time.sleep(remaining)
+
+    def _update_followers(self) -> None:
+        """
+        Hand every follower the simulated position of each joint it shares a name with.
+        """
+        for follower in self.followers:
+            for dof in follower.degrees_of_freedom:
+                simulated = self.world.get_degree_of_freedom_by_name(dof.name)
+                follower.state[dof.id].position = self.world.state[
+                    simulated.id
+                ].position
+            follower.notify_state_change()
