@@ -218,6 +218,19 @@ items:
     ReferenceWriter - the standing hazard's fourth instance, and the first that is a changed
     signature rather than a renamed field, which the recorded field-diff sweep cannot find. A test
     pins it. Full detail in roadmap.md.
+
+    2026-09-12: the pickup demo runs on the perception pipeline (97223f4f1, on the branch as
+    e4b8167d8). pickup_demo_real places nothing by hand: the look stands the board and the
+    pieces in the live world (scene_publishing.py) and PerceivedSorting sorts each into the
+    perceived board's hole, tested on the tape-measured capture. pickup_demo_mujoco is the same
+    run in MuJoCo with a belief holding Tracy alone, the camera on camera_link at the captures'
+    optical pose, and the belief's joints following the simulation; cube, cylinder and
+    rectangular prism go through their holes, the triangular prism slips out of the parallel
+    pads on the carry (strict xfail). Three simulation fixes: the shoulder links sunk into the
+    table pinned the pan joint; the simulated close aims at the narrowest width and stops on
+    any shared fingertip contact; loose pieces get torsional friction
+    (MujocoGeom.contact_dimensionality). #316 was merged into this branch by its own session
+    the same night and its branch fast-forwarded to this tip. Full detail in roadmap.md.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback
