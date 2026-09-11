@@ -1122,3 +1122,128 @@ fixes, a `Quaternion.rotational_error` addition, and more). Fetched and merged c
 neither of this item's two touched files, nor anything under `test/experiments_test/`, was
 touched by that merge, so the CI-fix verification above stands unaffected. Pushed as
 `a391078`.
+
+## 2026-09-11: #311's CI fixed, and every one of its nine failures was the base's
+
+Asked directly in chat: *"Fix the CI and this should be based on 265 and get merged into
+it."* The base was already `claude/icra-experiments-simulation-pipeline-w4ep7n` (#265);
+what was outstanding was the red CI and the merge.
+
+**None of the nine failures were this PR's.** Checked rather than assumed: #265's own run
+on the identical commit (`6afc7b33d`, run 34577080504) fails the same three jobs -
+`experiments`, `coraplex`, `semantic_digital_twin` - with the same tests. Fixed here
+anyway, because this branch merges into #265 and a failure that is the base's is still
+one the merge inherits.
+
+Run against the real CI image rather than the ROS-stub scaffolding the entry above
+describes: `dockerd` is installed in this sandbox but not started; started it, pulled
+`ghcr.io/abdelrhmanbassiouny/cognitive_robot_abstract_machine:jazzy`, mounted the
+checkout at `/ws/cognitive_robot_abstract_machine` and ran `uv sync --extra dev --active`
+and pytest exactly as `ci_reusable.yml` does. Worth doing that way for anything that
+touches ROS, MuJoCo or the ORM generator - a stub can only approximate what the image
+settles.
+
+### `semantic_digital_twin`: one rename left half-finished
+
+`RotationMatrix.rotational_error` and `Quaternion.rotational_error` were renamed to
+`rotational_distance` on main (`5edd9cd68`); `test_numeric_pose.py`, added on this stack,
+still called the old name. Renamed `NumericPose.rotational_error` to match rather than
+leaving the numeric measure spelled differently from the symbolic one it is checked
+against - one operation, one name, and its own sibling is already `euclidean_distance`.
+21 tests pass.
+
+### `experiments`: three collection errors, three stale renames and one that was not
+
+`clear_memoization_cache` moved to `krrood.patterns.caching`, `_extrude_polygon` lost its
+underscore, `AttachNode`/`DetachNode` became one `ReAttachNode`, and
+`_HOLE_KEY_BY_CATEGORY` became `hole_geometry.HOLE_NAME_BY_CATEGORY`. All four ported
+from #301's `0e1754407`, which had already found and verified them.
+
+The fifth was not a rename, and is the one #301 left: `_landing_region_height` and
+`_landing_region_position` were folded into `_open_space_under`, which reads the space
+under a hole off the world's own collision geometry instead of computing it from two
+heights. `tracy_experiments/montessori/world.py` and `montessori/world2.py` both still
+built their landing regions the old way. Both now use the base class's own
+`_give_every_hole_its_landing_region`, which is the pass that already knew how to do it -
+moved, as the base does it, to after the drawers are spawned, since what is open under a
+hole depends on them. The one thing the base class had to give up is reading the two
+heights off its own module constants: it takes them as arguments now, so a layout that
+stands the board somewhere else states its own.
+
+### `experiments`: the generation counts nothing asked for
+
+`confidence_aware_eql/data_generation.py` called `query.expression.limit(...)`, which on
+this branch's krrood reaches an `Attribute` rather than the query, so every generation
+fell back to the backend's default of 50 samples. `query.limit(...)`, ported from #301.
+All ten confidence-aware tests pass.
+
+### `experiments`: mapping the package without a ROS message package
+
+Two halves. First, four giskardpy ROS2 middleware modules imported `json_msgs` at module
+level, so importing giskardpy's ORM interface at all needed it; deferred, ported from
+#301.
+
+Second, the one #301 reported and did not fix. With those deferred the generator reaches
+`GiskardWrapperNode._goal_result: JsonAction_Result | None` - a name that exists only
+under `TYPE_CHECKING`, so krrood's class-diagram builder raises `CouldNotResolveType`
+rather than resolving it. Fixed by not mapping the class: `GiskardWrapper` is the client
+that talks to a *running* Giskard - a node handle, an action client, the goal it is
+waiting on - which is a running system rather than a record of one, the same reason this
+generator already ignores `giskardpy.qp.solvers`. Its generated table held only
+`giskard_node_name` and a world reference, and nothing anywhere read it.
+
+Left alone deliberately: krrood's own inability to resolve a `TYPE_CHECKING`-only forward
+reference. Making the class diagram tolerate an unresolvable field would silently drop
+real fields elsewhere, which is a decision about shared infrastructure rather than about
+this failure.
+
+### `coraplex`: an actuator that pulls on a tendon has no degree of freedom to read
+
+`test_park_arms_is_actually_reached` died in `MujocoBuilder._end_build`, writing the home
+keyframe's `ctrl` row: it read `world.state[actuator.dofs[0].id]` for every actuator, and
+the Panda's gripper actuator `/actuator8` drives the `/split` *tendon*, not a joint. The
+degree of freedom it names stands for the tendon, belongs to no connection, and is
+therefore deleted as orphaned when the parsing block closes - so the state has no entry
+for it. Probed the built world rather than reasoning about it: seven joint actuators
+resolve, `/actuator8` names `/split`, and `/split` is in neither `world.degrees_of_freedom`
+nor `world.state`.
+
+The keyframe now measures the transmission instead of assuming a joint: a tendon is as
+long as the joints it wraps, each weighted by the coefficient `MujocoTendon.joints`
+already carries (`/finger_joint1` and `/finger_joint2`, 0.5 each). That matters rather
+than being cosmetic - MuJoCo defaults an unset `ctrl` to 0, and 0 on that actuator's
+0-255 range means a closed gripper, so leaving it unwritten would snap the fingers shut
+the instant physics steps.
+
+Also removed a duplicated, shadowed `_end_build` sitting immediately above it - a merge
+artifact #301 spotted and left alone. It was dead, not implicated in the failure.
+
+### Merged into #265, and the base moved twice underneath it
+
+Merged as `98ffd37d0`. Two things happened while the CI fixes were being verified, both
+worth a later reader knowing:
+
+**`snapshot-working-memory` (#301) landed in #265 first, and had independently fixed part
+of the same CI.** Its session found the ORM-generation root cause a second time, and found
+one this session had not: `segmind/scripts/generate_orm.py` declared `dependencies = []`
+despite importing `semantic_digital_twin.orm.model` for its alternative mappings, so
+`FunctionMappingDAO` was mapped twice whenever the experiments generator imported both
+interfaces in one process. Rather than keep this session's own narrower fix (ignoring the
+whole `python_interface` module) the two generator scripts and `data_generation.py` were
+taken from #301 **verbatim**, so the overlapping text was byte-identical and the eventual
+merge carried no conflict in them at all. Worth repeating whenever two branches converge
+on the same fix: take one of them whole rather than keeping a near-duplicate.
+
+**The base merge was made twice, once locally and once through GitHub.** The developer
+pressed Update branch on #311 at the same moment this session merged #265 in by hand. The
+two produced the identical tree, so the local one was dropped and the published one kept.
+The push was rejected first, which is how it was noticed.
+
+### What the flake looked like, so it is not re-diagnosed as a regression
+
+`test_has_fallen_through_hole_is_true_once_the_shape_settles_in_mujoco` failed once on the
+merged tree under `pytest -n auto` on a four-core box, having passed in the previous full
+run of the same suite and passing again alone in 38 s. It is a MuJoCo settling test, and
+four workers on four cores starve it. Real CI passes it. Recorded because it exercises the
+landing region this session changed, which makes it look like a regression until run
+alone.
