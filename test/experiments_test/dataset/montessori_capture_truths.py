@@ -153,11 +153,34 @@ CAPTURE_TRUTHS: Dict[str, CaptureTruth] = {
         ),
         board_front_left_corner=PlanarPoint(0.99, 0.30),
     ),
+    "shadowed_lid_rim": CaptureTruth(
+        pieces_on_table=(
+            MontessoriShapeCategory.CYLINDER,
+            MontessoriShapeCategory.TRIANGULAR_PRISM,
+            MontessoriShapeCategory.RECTANGULAR_PRISM,
+            MontessoriShapeCategory.CUBE,
+        ),
+        pieces_on_lid=(),
+        piece_set=SMALLER_PIECES,
+        tape_measured=(
+            TapeMeasuredPiece(MontessoriShapeCategory.CYLINDER, PlanarPoint(0.79, 0.0)),
+            TapeMeasuredPiece(
+                MontessoriShapeCategory.TRIANGULAR_PRISM, PlanarPoint(0.79, 0.10)
+            ),
+            TapeMeasuredPiece(
+                MontessoriShapeCategory.RECTANGULAR_PRISM, PlanarPoint(0.79, 0.20)
+            ),
+            TapeMeasuredPiece(MontessoriShapeCategory.CUBE, PlanarPoint(0.79, 0.30)),
+        ),
+        board_front_left_corner=PlanarPoint(0.99, 0.30),
+    ),
 }
 """
 What each shipped capture shows, keyed by the capture's own name.
 
 Every one of them holds the shape-sorting board, so only the loose pieces differ. The
-first six hold the full-size set; ``scaled_pieces_in_a_row`` was taken on 2026-09-11 of
-the smaller set standing in a row, each piece and the board measured with a tape.
+first six hold the full-size set; ``scaled_pieces_in_a_row`` and ``shadowed_lid_rim``
+were taken on 2026-09-11 of the smaller set standing in a row, each piece and the board
+measured with a tape. In the second the shadow under the lid's left rim reads as one
+more dark patch on the lid, beside the four holes the lighting leaves dark.
 """

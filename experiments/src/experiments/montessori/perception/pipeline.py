@@ -66,7 +66,11 @@ from experiments.montessori.perception.look_choice import (
     SceneToSearch,
 )
 from experiments.montessori.perception.occupancy import Occupancy
-from experiments.montessori.perception.outline_fit import OutlineFitter, Placement
+from experiments.montessori.perception.outline_fit import (
+    CandidatePositions,
+    OutlineFitter,
+    Placement,
+)
 from experiments.montessori.perception.orthophoto import (
     Orthophoto,
     OrthophotoProjector,
@@ -413,14 +417,6 @@ class PerforatedSurface:
     """
 
     @property
-    def middle(self) -> PlanarPoint:
-        """
-        Roughly where the board stands, which is where its openings put it.
-        """
-        middle = np.array([(patch.x, patch.y) for patch in self.middles]).mean(axis=0)
-        return PlanarPoint(float(middle[0]), float(middle[1]))
-
-    @property
     def rims(self) -> np.ndarray:
         """
         Mask of the rim of every opening the picture's own colours do not show, 255
@@ -459,7 +455,11 @@ class BoardDetector:
 
     What those openings are is then settled by fitting the board's whole known layout
     over them at once, rather than by measuring each patch and deciding from its
-    proportions what shape it is. The patches only say roughly where to start.
+    proportions what shape it is. The patches only say where to start: each is one of
+    the holes, whichever one, so each names where the board would stand for every hole
+    it could be, and the layout is tried at all of those places. The board is then
+    found from any few of its holes, and a patch that is not a hole at all names places
+    the picture bears out no better than chance.
     """
 
     layout: BoardHoleLayout = field(default_factory=BoardHoleLayout.of_board_mesh)
@@ -480,12 +480,16 @@ class BoardDetector:
         )
     )
     """
-    Finds roughly which way round the board lies, over every turn it could be at.
+    Finds roughly where the board stands and which way round it lies, among the places
+    its openings name over every turn it could be at.
 
     A board can be stood on the table any way round, and nothing before the fit says
-    which, so the turn has to be searched over a whole circle -- which is most of what a
-    fit costs. This pass reaches wide enough, and compares at few enough points, that a
-    circle is affordable, and it is only ever asked which twelfth of a turn to look in.
+    which, so the turn has to be searched over a whole circle. A named place is off by
+    however far an opening's middle lies from its hole's centre and by what the nearest
+    twelfth of a turn moves the holes, so this pass forgives an edge lying some way from
+    an outline, and it compares at few enough points that a circle is affordable; it is
+    only ever asked which twelfth of a turn to look in and which named place to look
+    around.
     """
 
     fitter: OutlineFitter = field(
@@ -540,20 +544,6 @@ class BoardDetector:
     patches.
     """
 
-    seed_reach: float = 0.06
-    """
-    How far, in metres, the fit may move the board from where the openings put it.
-
-    The patches are whatever the lighting made dark or the depth found hollow and are
-    not the holes, so their middle is only ever a place to start. Measured on the
-    shipped captures rectified onto the lid where it really stands, that middle lies up
-    to about fifty millimetres from the board's centre: a piece standing in a hole takes
-    that hole's patch away, and the shadow the lid's front edge casts on the drawers
-    below adds patches in front of the board. This reaches past that with a little room,
-    at a fifth more of a look's time than the forty millimetres that left one capture's
-    board a row out.
-    """
-
     def detect(
         self,
         orthophoto: Orthophoto,
@@ -573,7 +563,7 @@ class BoardDetector:
         placement = self._fit(
             self.layout,
             EdgeDistances.of(orthophoto, together_with=perforated.rims),
-            perforated.middle,
+            perforated.middles,
         )
         return self._board_at(placement, orthophoto, reference_frame)
 
@@ -602,21 +592,14 @@ class BoardDetector:
         perforated = self._perforations_in(orthophoto)
         if perforated is None:
             return None
-        openings = np.array([(patch.x, patch.y) for patch in perforated.middles])
         edges = EdgeDistances.of(orthophoto, together_with=perforated.rims)
         return min(
             candidates,
-            key=lambda scale: self._gap_to_openings(
-                scale, edges, perforated.middle, openings
-            ),
+            key=lambda scale: self._gap_to_openings(scale, edges, perforated.middles),
         )
 
     def _gap_to_openings(
-        self,
-        scale: float,
-        edges: EdgeDistances,
-        seed: PlanarPoint,
-        openings: np.ndarray,
+        self, scale: float, edges: EdgeDistances, openings: Sequence[PlanarPoint]
     ) -> float:
         """
         How far the openings seen lie from the holes a board of one size would put
@@ -624,50 +607,60 @@ class BoardDetector:
 
         :param scale: The size to try, against the mesh.
         :param edges: The edges seen in the lid's plane.
-        :param seed: Roughly where the board stands.
-        :param openings: World-frame ``(n, 2)`` middles of the openings seen.
+        :param openings: Where the openings seen stand.
         :return: The middle distance, in metres, from an opening to the nearest hole.
         """
         layout = BoardHoleLayout.of_board_mesh(scale)
-        placement = self._fit(layout, edges, seed)
+        placement = self._fit(layout, edges, openings)
         holes = np.array(
             [
                 (hole.center.x, hole.center.y)
                 for hole in layout.placed(placement.center, placement.yaw)
             ]
         )
+        seen = np.array([(opening.x, opening.y) for opening in openings])
         return float(
             np.median(
-                np.linalg.norm(openings[:, None, :] - holes[None, :, :], axis=2).min(
-                    axis=1
-                )
+                np.linalg.norm(seen[:, None, :] - holes[None, :, :], axis=2).min(axis=1)
             )
         )
 
     def _fit(
-        self, layout: BoardHoleLayout, edges: EdgeDistances, seed: PlanarPoint
+        self,
+        layout: BoardHoleLayout,
+        edges: EdgeDistances,
+        openings: Sequence[PlanarPoint],
     ) -> Placement:
         """
-        Lay one layout over the edges, from anywhere within reach of the seed and at any
-        turn.
+        Lay one layout over the edges, at any turn and wherever the openings say a board
+        with a hole at each of them would stand.
 
-        Searched twice over: once roughly, over every turn a board could be stood at,
-        and once carefully around the answer. Sweeping a whole circle at the resolution
-        the second pass needs would cost three times as much and answer the same, since
-        all the first one has to say is which twelfth of a turn the board lies in.
+        Searched twice over: once roughly, over every turn a board could be stood at
+        and every place the openings name, and once carefully around the answer.
+        Sweeping a whole circle at the resolution the second pass needs would cost far
+        more and answer the same, since all the first one has to say is which twelfth
+        of a turn the board lies in and which of the named places it stands nearest.
+
+        Named places rather than a grid around the openings' middle, because that middle
+        is not the board's: the holes the lighting leaves lit are missing from it, and
+        the shadow under the lid's rim adds a patch that is no hole, so it can lie
+        further from the board than any grid affordably walks.
 
         :param layout: The holes to look for.
         :param edges: The edges seen in the lid's plane.
-        :param seed: Roughly where the board stands.
+        :param openings: Where the openings seen stand.
         """
-        rough = self.rough_fitter.fit(
+        rough = self.rough_fitter.fit_among(
             layout,
             edges,
-            center=seed,
-            radius=self.seed_reach,
-            angles=list(
-                np.arange(-math.pi, math.pi, self.rough_fitter.coarse_angle_step)
-            ),
+            [
+                CandidatePositions(
+                    yaw=yaw, positions=layout.origins_with_a_hole_at(openings, yaw)
+                )
+                for yaw in np.arange(
+                    -math.pi, math.pi, self.rough_fitter.coarse_angle_step
+                )
+            ],
         )
         turns = round(
             self.rough_fitter.coarse_angle_step / self.fitter.coarse_angle_step
@@ -733,10 +726,10 @@ class BoardDetector:
         The surface is filled in first, so that an opening is a patch within a solid
         region rather than a gap that the surface's own outline has to enclose; a hole
         broken open at the board's edge would otherwise be missed entirely. Its depth is
-        read against the height the surface itself was measured at rather than the
-        plane the world states, so a depth image that reads the whole lid a few
-        millimetres low -- the shipped captures read it seven below a lid measured with
-        a tape -- does not read as one opening the size of itself.
+        read against the height the surface itself was measured at rather than the plane
+        the world states, so a depth image that reads the whole lid a few millimetres
+        low -- the shipped captures read it seven below a lid measured with a tape --
+        does not read as one opening the size of itself.
 
         :param surface: The candidate surface's own contour, in rectified pixels.
         :param orthophoto: The rectified view it was found in.

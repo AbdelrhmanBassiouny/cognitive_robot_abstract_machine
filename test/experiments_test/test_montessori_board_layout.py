@@ -19,6 +19,7 @@ import pytest
 from experiments.montessori.hole_geometry import BoardHoleLayout, detect_hole_footprints
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
+from experiments.montessori.perception.outline_fit import CandidatePositions
 from experiments.montessori.perception.pipeline import BoardDetector
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.world import BOARD_SCALE
@@ -95,6 +96,30 @@ def test_a_placed_hole_carries_its_own_outline_about_its_own_centre():
         [(point.x, point.y) for point in placed.footprint.boundary]
     ) + np.array([placed.center.x, placed.center.y])
     assert placed.outline == pytest.approx(boundary)
+
+
+def test_every_origin_named_by_an_opening_stands_one_hole_on_it():
+    """
+    An opening names one origin per hole: the board standing at that origin, turned the
+    same way, has exactly that hole on the opening.
+    """
+    layout = BoardHoleLayout.of_board_mesh()
+    openings = [PlanarPoint(0.8, 0.13), PlanarPoint(0.85, 0.2)]
+    yaw = math.radians(30.0)
+
+    origins = layout.origins_with_a_hole_at(openings, yaw)
+
+    assert origins.shape == (len(openings) * len(layout.holes), 2)
+    for index, origin in enumerate(origins):
+        opening = openings[index // len(layout.holes)]
+        hole = layout.holes[index % len(layout.holes)]
+        [placed] = [
+            candidate
+            for candidate in layout.placed(PlanarPoint(*origin), yaw)
+            if candidate.footprint is hole
+        ]
+        assert placed.center.x == pytest.approx(opening.x)
+        assert placed.center.y == pytest.approx(opening.y)
 
 
 def test_no_two_turns_of_the_layout_look_alike():
@@ -180,6 +205,45 @@ def test_the_layout_is_found_where_it_was_drawn(
         layout.smallest_equivalent_turn(drawn_yaw), abs=math.radians(3.0)
     )
     assert placement.outline_agreement > 0.9
+
+
+def test_the_layout_is_found_from_a_few_of_its_openings_and_a_patch_that_is_none(
+    lid_region: WorkspaceRegion,
+) -> None:
+    """
+    Fitting the layout among the places its openings name recovers the placement they
+    were drawn at from three of the six holes and a dark patch that is no hole, though
+    the middle of those four lies further from the board than any grid reaches.
+
+    Driven through the detector's own rough fitter, so what is measured is the
+    configuration that ships.
+    """
+    layout = BoardHoleLayout.of_board_mesh()
+    drawn_center = PlanarPoint(0.79, 0.135)
+    drawn_yaw = math.radians(-7.6)
+    edges = edges_showing(
+        layout.outline_points(drawn_yaw, 0.001)
+        + np.array([drawn_center.x, drawn_center.y]),
+        lid_region,
+    )
+    seen = layout.placed(drawn_center, drawn_yaw)[:3]
+    openings = [hole.center for hole in seen] + [PlanarPoint(0.79, 0.30)]
+    fitter = BoardDetector().rough_fitter
+
+    placement = fitter.fit_among(
+        layout,
+        edges,
+        [
+            CandidatePositions(
+                yaw=yaw, positions=layout.origins_with_a_hole_at(openings, yaw)
+            )
+            for yaw in np.arange(-math.pi, math.pi, fitter.coarse_angle_step)
+        ],
+    )
+
+    assert placement.center.x == pytest.approx(drawn_center.x, abs=fitter.step)
+    assert placement.center.y == pytest.approx(drawn_center.y, abs=fitter.step)
+    assert placement.yaw == pytest.approx(drawn_yaw, abs=fitter.coarse_angle_step)
 
 
 def test_a_layout_fitted_where_nothing_was_drawn_agrees_with_nothing(
