@@ -135,12 +135,14 @@ def stands_in_the_scene_of(entity: WorldEntity, robot: AbstractRobot) -> bool:
 
     The symbol graph tracks every entity ever made, a piece taken out of a scene and one
     never put in one included, and two of the same name in two worlds are equal by the
-    twin's account; a question is about the robot's own scene.
+    twin's account; a question is about the robot's own scene. An entity the graph only
+    remembers, handed out as None once it has been garbage collected, stands in no scene
+    at all.
 
-    :param entity: The body or connection to judge.
+    :param entity: The body or connection to judge, or None for one that is gone.
     :param robot: The robot whose scene it is.
     """
-    return entity._world is robot._world
+    return entity is not None and entity._world is robot._world
 
 
 class Side(StrEnum):

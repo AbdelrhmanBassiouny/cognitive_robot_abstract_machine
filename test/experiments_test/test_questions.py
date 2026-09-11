@@ -57,6 +57,7 @@ from experiments.questions.working_memory import (
     Side,
     SideOfAnotherObject,
     SupportingSurfaces,
+    stands_in_the_scene_of,
 )
 from krrood.adapters.json_serializer import from_json, to_json
 
@@ -352,6 +353,14 @@ def test_a_body_standing_in_no_world_is_not_among_the_objects_seen(
     assert stray.has_collision()
     assert ObjectsSeen().ask(robot) == [scene.table, scene.cube, scene.cylinder]
     assert SupportingSurfaces(subject=scene.cube).ask(robot) == [scene.table]
+
+
+def test_an_entity_the_symbol_graph_has_lost_stands_in_no_scene(robot: AbstractRobot):
+    """
+    The symbol graph keeps only a weak reference to each entity, and hands out None for
+    one that has been garbage collected while a query still ranges over it.
+    """
+    assert bool(stands_in_the_scene_of(None, robot)) is False
 
 
 def test_the_colours_are_the_ones_the_shapes_carry(robot: AbstractRobot):
