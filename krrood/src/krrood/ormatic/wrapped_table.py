@@ -670,10 +670,12 @@ class WrappedTable(TableLike):
         """
         type_endpoint = wrapped_field.type_endpoint
 
-        # check underspecified generic fields
+        # check underspecified generic fields; a custom type mapping stores the value
+        # whole, so a free generic parameter has nothing left to decide for it
         if (
             wrapped_field.is_underspecified_generic
             and isclass(type_endpoint)
+            and type_endpoint not in self.ormatic.type_mappings
             and not any(
                 [
                     am
