@@ -2337,8 +2337,18 @@ interfaces for the first time here — a `sitecustomize.py` standing in for the 
 own `random_events.plotting` — so a session can now run `regenerate_all_orm.py` end to end,
 which every earlier entry in this roadmap records as impossible here.
 
-**Left standing.** The fix is in `krrood`'s generator rather than in anything this item
-introduced, so it would stand alone as a bug-fix branch off `main`; it went on #265 because the
-only field of that shape in the workspace is the one #304 added here, and because it is what
-makes this branch's experiments job green. If the developer would rather have it separately
-reviewable, it is one commit (`5d9049212`) and cherry-picks cleanly.
+**Also its own PR off `main`, at the developer's direction: #317, labelled `bug`.** The fix is in
+`krrood`'s generator rather than in anything this item introduced, so it stands alone; it went
+on #265 first because the only field of that shape in the workspace is the one #304 added here,
+and because it is what makes this branch's experiments job green. Cherry-picked onto `main` as
+`7599ef771` — one conflict, `example_classes.py`'s import block, where `main` has since dropped
+`AbstractContextManager`. The claim the branch-side measurement could not make is measured there:
+regenerating all five interfaces on `main` with and without the change produces byte-identical
+files, because `main` holds no field of this shape yet, and `test/krrood_test` is 2352 passed,
+34 skipped, 0 failed on that base. #265 keeps the commit meanwhile, so it stays green without
+waiting on #317; once #317 lands, the next merge of `main` into #265 no-ops on it, since both
+sides carry the same change.
+
+This is deliberately tracked in this roadmap rather than as an item of its own: it is one
+bug-fix PR off `main` with a single root cause, not a multi-PR piece of work, and the only reason
+it appears in this plan at all is that this item's CI is where it surfaced.
