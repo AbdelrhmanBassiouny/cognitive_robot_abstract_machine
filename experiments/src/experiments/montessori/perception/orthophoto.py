@@ -320,9 +320,9 @@ class WorkspaceRegion(SubclassJSONSerializer):
             and self.minimum_y <= y <= self.maximum_y
         )
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs: Any) -> Dict[str, Any]:
         return {
-            **super().to_json(),
+            **super().to_json(**kwargs),
             RegionField.MINIMUM_X.value: self.minimum_x,
             RegionField.MAXIMUM_X.value: self.maximum_x,
             RegionField.MINIMUM_Y.value: self.minimum_y,
