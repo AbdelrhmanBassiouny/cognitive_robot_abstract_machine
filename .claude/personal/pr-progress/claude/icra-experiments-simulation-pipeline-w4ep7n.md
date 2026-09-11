@@ -77,11 +77,10 @@ and left `LID_PIECES_STILL_MISSED`.
 
 **Open for the developer.** (1) Recalibrate `camera_link` in `iai_tracy_description`
 (numbers above); until then the live node is ~0.2 m off in x -- do not resurrect the
-`icra_final` stopgap. (2) The lid measures ~73 mm above the table on every capture where
-`BOARD_SCALE.z` says 80 mm -- measure the board's height; if 73, LID_HEIGHT and the twin's
-board follow. (3) Confirm the smaller set's sizes: cube stated 22.4 (taken as given), the
-others 0.8 x the full-size ones (cylinder 22.4, rectangle 16x32, triangle side 29.6,
-~24 tall) -- read off the capture to about a millimetre. (4) Whether the narrowing
+`icra_final` stopgap. (2) Answered: the board is 80 mm by tape, so the 7 mm the depth reads
+the lid low is the sensor's (the opening-against-measured-surface change covers it).
+(3) Answered: the cube is 24, so the smaller set is a uniform 0.8 (commit after
+`58eb1f2f4`). (4) Whether the narrowing
 demonstration should move to `scaled_pieces_in_a_row` (all four pieces found) instead of
 staying xfailed on `tracy_pickup_demo`. (5) Untracked leftovers still in the tree:
 `pickup_demo_perceived_board.py` + its test (collection error), `test_montessori_shape_bodies.py`,
