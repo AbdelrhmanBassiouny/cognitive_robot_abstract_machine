@@ -108,6 +108,19 @@ class UnderspecifiedMatch:
             raise MultipleInferenceTargets([t.attribute_name for t in targets])
         return targets[0]
 
+    def names_one_supported_inference_target(self) -> bool:
+        """
+        Whether this match names exactly one ``...`` attribute, of a type a single-class
+        RDR can conclude one value for -- the same requirement :meth:`single_target`
+        enforces by raising.
+        """
+        targets = [
+            attribute_match
+            for attribute_match in self.match._matches_with_variables_
+            if is_ellipsis_target(attribute_match)
+        ]
+        return len(targets) == 1 and self._is_supported_inference_target(targets[0])
+
     @property
     def target_attribute_name(self) -> str:
         """
@@ -138,8 +151,15 @@ class UnderspecifiedMatch:
             conditions.append(attribute == leaf.assigned_variable._value_)
         return conditions
 
+    def _is_supported_inference_target(self, target: AttributeMatch) -> bool:
+        """
+        Whether *target* names an attribute a single-class RDR can conclude one value
+        for, rather than an unbounded iterable a future ``MultiClassRDR`` would be
+        needed for.
+        """
+        annotation = get_type_hints_of_object(self.case_type).get(target.attribute_name)
+        return annotation is None or not _is_unbounded_iterable(annotation)
+
     def _guard_single_valued(self, target: AttributeMatch) -> None:
-        name = target.attribute_name
-        annotation = get_type_hints_of_object(self.case_type).get(name)
-        if annotation is not None and _is_unbounded_iterable(annotation):
-            raise UnsupportedInferenceTarget(self.case_type, name)
+        if not self._is_supported_inference_target(target):
+            raise UnsupportedInferenceTarget(self.case_type, target.attribute_name)

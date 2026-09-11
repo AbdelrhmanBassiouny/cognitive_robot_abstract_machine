@@ -53,6 +53,7 @@ from krrood.entity_query_language.exceptions import (
 )
 from krrood.entity_query_language.factories import (
     ConditionType,
+    a,
     an,
     and_,
     entity,
@@ -60,6 +61,7 @@ from krrood.entity_query_language.factories import (
     variable,
 )
 from krrood.entity_query_language.query.match import Match, AttributeMatch
+from krrood.ormatic.data_access_objects.helper import get_dao_class
 from krrood.entity_query_language.query.query import Entity, Query
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
 from krrood.entity_query_language.rdr.expert import Expert
@@ -186,6 +188,22 @@ class QueryBackend(ABC):
         :return: An iterable of answers.
         """
 
+    @abstractmethod
+    def capability(self, statement: Evaluable) -> ConditionType:
+        """
+        Whether this backend can answer *statement*, as a condition over it.
+
+        The same shape :meth:`PerceptionDetector.capability` gives a detector: states
+        the predicate and statement forms this backend answers, and the precondition on
+        the knowledge state under which it answers them, so a statement is never routed
+        to a backend that has already declared it cannot answer it.
+
+        :param statement: The statement to state a capability over -- the same kind of
+            object :meth:`evaluate` is put.
+        :return: The condition, which holds exactly for the statements this backend
+            answers.
+        """
+
     def _warn_or_raise_on_unresolved_cause_(self, expression: Evaluable) -> None:
         """
         Warn (or, if :attr:`raise_on_unresolvable_cause` is set, raise) when
@@ -199,6 +217,28 @@ class QueryBackend(ABC):
         if self.raise_on_unresolvable_cause:
             raise BackendCannotEvaluateCause(expression, backend_type=type(self))
         logger.warning(BackendCannotEvaluateCause(expression, backend_type=type(self)))
+
+
+# %% asking a backend for one field rather than a whole statement
+
+
+def backend_supplies(backend: QueryBackend, field: Attribute) -> bool:
+    """
+    Whether *backend* can supply *field*, asked as a capability over the class it
+    belongs to.
+
+    States *field* as an entity query language :class:`Attribute` rather than by its
+    bare name: the field is put to :meth:`QueryBackend.capability` as the one attribute
+    an otherwise underspecified statement over its class wants, so a backend answers
+    "I can supply at least that field" against the same vocabulary it states its own
+    capability in.
+
+    :param backend: The backend asked.
+    :param field: The field wanted, as an attribute of the class it belongs to.
+    :return: Whether *backend* declares it can supply *field*.
+    """
+    described = a(field._chain_root_._type_)(**{field._attribute_name_: ...})
+    return bool(backend.capability(described))
 
 
 @dataclass
@@ -219,6 +259,16 @@ class SelectiveBackend(QueryBackend, ABC):
             raise SelectiveBackendCannotResolveEllipsisMatch(expression)
         self._warn_or_raise_on_unresolved_cause_(expression)
         yield from self._evaluate(expression)
+
+    def capability(self, statement: Evaluable) -> ConditionType:
+        """
+        A selective backend answers anything but an underspecified match, since
+        selecting from existing data has nothing to construct an unstated attribute
+        from -- the same condition :meth:`evaluate` already enforces.
+        """
+        return not (
+            isinstance(statement, Match) and statement._has_ellipsis_attributes_
+        )
 
     @abstractmethod
     def _evaluate(self, expression: Evaluable) -> Iterable[T]: ...
@@ -242,6 +292,14 @@ class GenerativeBackend(QueryBackend, ABC):
         if not isinstance(expression, Match):
             raise GenerativeBackendQueryIsNotUnderspecifiedVariable(expression)
         yield from self._evaluate(expression)
+
+    def capability(self, statement: Evaluable) -> ConditionType:
+        """
+        A generative backend answers only a match, since constructing a new instance
+        needs the underspecified statement -- the same condition :meth:`evaluate`
+        already enforces.
+        """
+        return isinstance(statement, Match)
 
     @abstractmethod
     def _evaluate(self, expression: Match[T]) -> Iterable[T]: ...
@@ -1005,6 +1063,20 @@ class PerceptionBackend(GenerativeBackend, ABC):
         )
 
 
+def selected_type(statement: Evaluable) -> Type:
+    """
+    The class a statement selects, read the way its own kind of statement carries it --
+    a :class:`~krrood.entity_query_language.query.match.Match` states it on
+    ``_variable_``, a query states it on ``selected_variable``.
+
+    :param statement: The statement to read.
+    :return: The class it selects.
+    """
+    if isinstance(statement, Match):
+        return statement._variable_._type_
+    return statement.selected_variable._type_
+
+
 @dataclass
 class SQLAlchemyBackend(SelectiveBackend):
     """
@@ -1015,6 +1087,15 @@ class SQLAlchemyBackend(SelectiveBackend):
     """
     The session maker used for the database interactions.
     """
+
+    def capability(self, statement: Evaluable) -> ConditionType:
+        """
+        Beyond what every selective backend answers, the database only holds a class
+        ormatic mapped a table for -- anything about a past episode, and nothing else.
+        """
+        return super().capability(statement) and (
+            get_dao_class(selected_type(statement)) is not None
+        )
 
     def _evaluate(self, expression: Query) -> Iterable:
         session = self.session_maker()
@@ -1044,6 +1125,18 @@ class EntityQueryLanguageGenerativeBackend(GenerativeBackend):
     constructor, and keeps those that satisfy the match's ``where`` conditions.
     """
 
+    def capability(self, statement: Evaluable) -> ConditionType:
+        """
+        Beyond what every generative backend answers, every leaf this match leaves fully
+        unspecified (``...`` or ``cause``) must be enum-typed, since deterministic
+        generation enumerates a leaf's domain rather than searching it (use the
+        :class:`ProbabilisticBackend` for a leaf whose domain is not enumerable).
+        """
+        return super().capability(statement) and all(
+            self._attribute_match_is_suitable_for_generation(attribute_match)
+            for attribute_match in statement._matches_with_variables_
+        )
+
     def _evaluate(self, expression: Match[T]) -> Iterable[T]:
         self._warn_or_raise_on_unresolved_cause_(expression)
         variables: Dict[str, Variable] = {}
@@ -1065,7 +1158,25 @@ class EntityQueryLanguageGenerativeBackend(GenerativeBackend):
         yield from filtered_results._evaluate_natively_()
 
     @staticmethod
+    def _attribute_match_is_suitable_for_generation(
+        attribute_match: AttributeMatch,
+    ) -> bool:
+        """
+        Whether an assignment in the match can be used to generate solutions.
+
+        :param attribute_match: The attribute match to check.
+        :return: ``False`` for a non-enum leaf left fully unspecified (``...`` or
+            ``cause``), which deterministic generation cannot enumerate; ``True``
+            otherwise.
+        """
+        return not (
+            isinstance(attribute_match.assigned_value, (type(Ellipsis), Cause))
+            and not issubclass(attribute_match.assigned_variable._type_, enum.Enum)
+        )
+
+    @classmethod
     def _check_attribute_match_is_suitable_for_generation(
+        cls,
         attribute_match: AttributeMatch,
     ) -> None:
         """
@@ -1077,9 +1188,7 @@ class EntityQueryLanguageGenerativeBackend(GenerativeBackend):
             deterministic generation cannot enumerate (use the
             :class:`ProbabilisticBackend` instead).
         """
-        if isinstance(
-            attribute_match.assigned_value, (type(Ellipsis), Cause)
-        ) and not issubclass(attribute_match.assigned_variable._type_, enum.Enum):
+        if not cls._attribute_match_is_suitable_for_generation(attribute_match):
             raise UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration(
                 attribute_match
             )
@@ -1157,6 +1266,19 @@ class ProbabilisticBackend(GenerativeBackend):
             yield self._resolve_average(bare_average)
             return
         yield from super().evaluate(expression)
+
+    def capability(self, statement: Evaluable) -> ConditionType:
+        """
+        A probabilistic backend answers a :class:`ProbabilisticQuery` or a bare
+        ``average(...)`` selection in closed form, or otherwise generates instances the
+        way any generative backend does -- the same three-way dispatch :meth:`evaluate`
+        makes.
+        """
+        if isinstance(statement, ProbabilisticQuery):
+            return True
+        if self._bare_average_selection(statement) is not None:
+            return True
+        return super().capability(statement)
 
     @staticmethod
     def _bare_average_selection(expression: Evaluable) -> Optional[Average]:
