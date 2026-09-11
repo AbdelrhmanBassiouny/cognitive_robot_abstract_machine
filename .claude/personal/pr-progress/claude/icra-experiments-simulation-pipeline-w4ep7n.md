@@ -34,16 +34,45 @@ detected (green), the cyan cube and yellow rectangular prism get no box at all.
 a `SceneCapture`). `node.py` still has its own duplicate subscriptions/`TFWrapper`. No
 tests for either yet. No new capture written yet.
 
+**Found 2026-09-11 evening (root cause).** The published `table -> camera_link` transform
+(`iai_tracy_description/urdf/tracy.urdf.xacro`, commit `db06ecf` of 2026-04-30, "new
+calibration for camera_link", xyz `0.410542 -0.015143 0.932933` rpy `-0.046277 1.378820
+-0.050299`) is stale: the camera has physically moved since. Measured off the depth of
+*every* shipped capture and the new one alike: the table's normal is 22.9-23.0 deg off
+the optical axis (published: 11.0 deg) and the camera stands 0.892-0.894 m above the
+table (published 0.935). Projecting the robot's own gripper (TF `l_gripper_tool_frame`)
+into the picture with the published pose lands ~240 px above the real fingers; with the
+fitted pose it lands on them. Fitted pose in `map` (optical frame, 4x4) is saved in the
+scratchpad as `T_new.npy`; as a `camera_link` origin in the `table` frame it is
+xyz `0.4264 -0.0206 0.8938` rpy `0.0400 1.1716 0.0326` (tilt+height from the table plane,
+x/y from the gripper pixel, yaw kept from the URDF). *The URDF must be recalibrated; that
+is outside this repo.* With the fitted pose: the pieces deproject to x 0.788-0.793 and
+y 0.014/0.111/0.209/0.305 against the tape's 0.79 and 0/0.10/0.20/0.30 (corrected by the
+developer: cylinder 0, triangle 0.10, rectangle 0.20, cube 0.30; board front-left corner
+(0.99, 0.30)); the board is found at x 0.986-1.100, y 0.021-0.305 with the mesh at scale
+1.0 and all six holes on their openings. `BOARD_SCALE_AGAINST_THE_MESH = 0.865` is an
+artefact: the wrong tilt reads the board at 0.81 (x) x 0.92 (y) of its size, mean 0.865.
+The tuned workspace (`tracy_workspace.json`, max x 0.915) also excludes the true board.
+The new pieces are 0.8 of the old set (cube 22.4 per the developer; cylinder 22.4,
+rectangle 16x32, triangle side 29.6, ~24 tall) and a different colour: hue 98 (was 86,
+cyan) and 26 (was 21; note 26 is also the board's wood). With pose + scale 1.0 + a 0.8
+set with those hues, all four pieces are detected within 1 cm of the tape.
+
 **Plan.**
 1. Finish `LiveCamera`: `MontessoriPerceptionNode` reads through it; mocked tests for
    `LiveCamera`/`write_capture`. Commit.
 2. Take captures off the live camera with `capture_from_camera.py`, ship them under
    `resources/captures/`.
-3. Extend `CaptureTruth` with per-piece positions and the board pose; write tests that
-   assert detected positions/categories against them (must fail on today's code).
-4. Diagnose and fix hole detection and shape detection (80 % pieces -- `KnownPiece`
-   sizes are the 100 % ones) one root cause at a time, each with its failing test first.
-5. Update this note and the PR description; push; keep #265 a draft.
+3. Table-plane fit module + a test that every capture's depth agrees with its stated
+   pose (fails today); rewrite all seven captures' `reference_frame_T_camera` to the
+   fitted pose.
+4. Board mesh at its own size (drop 0.865); workspace re-tuned to reach the board.
+5. A known-piece *set* the pipeline is handed (old set for the shipped captures, the
+   0.8 set with its hues for the new capture and the live node).
+6. `CaptureTruth` with positions; ground-truth tests on `scaled_pieces_in_a_row`.
+7. Re-run the whole montessori suite; re-measure whatever the corrected pose moves.
+8. Update this note and the PR description; push; keep #265 a draft. Tell the developer
+   the URDF numbers.
 
 ## #265: the board is found by describing it in EQL (2026-09-11)
 
