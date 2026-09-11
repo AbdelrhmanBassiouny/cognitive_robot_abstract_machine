@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import imageio.v2 as imageio
 import pytest
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.plans.plan import Plan
@@ -29,6 +30,7 @@ from experiments.episodes.episode import (
     RecordedTrial,
     Tick,
 )
+from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import PanelKind
 from experiments.paper.plan_timeline import PlanTimeline
 from experiments.paper.query_card import (
@@ -359,19 +361,57 @@ def test_a_simulated_run_is_drawn_without_the_camera(
 
 
 @needs_a_renderer
-def test_the_markup_names_exactly_the_pictures_the_card_wrote(
+def test_the_markup_names_exactly_the_one_stacked_figure(
     a_person_shoved_it: RecordedTrial, tmp_path: Path
 ) -> None:
     """
-    The paper includes the card's markup and nothing else, so every picture it names has
-    to be one the card actually left beside it.
+    The levels of this card are read against each other, which only holds if the paper is
+    given them as one picture -- so its markup names the stacked figure and nothing else.
     """
     [written] = EventAgainstThePlanCard().write(a_person_shoved_it, tmp_path)
     markup = written.markup_path.read_text()
-    named = {path.name for path in written.panel_paths.values()}
-    assert named == {
-        line.split('"')[1] for line in markup.splitlines() if "image(" in line
+    assert written.layered_path.is_file()
+    assert {line.split('"')[1] for line in markup.splitlines() if "image(" in line} == {
+        written.layered_path.name
     }
+
+
+@needs_a_renderer
+def test_every_level_is_written_beside_the_stacked_figure(
+    a_person_shoved_it: RecordedTrial, tmp_path: Path
+) -> None:
+    """
+    The stacked figure is what the paper includes, but each level is left beside it as
+    well, so one of them can be shown on its own without drawing the card again.
+    """
+    [written] = EventAgainstThePlanCard().write(a_person_shoved_it, tmp_path)
+    assert all(path.is_file() for path in written.panel_paths.values())
+
+
+@needs_a_renderer
+def test_a_level_the_run_recorded_nothing_for_keeps_its_place(
+    a_person_shoved_it: RecordedTrial, tmp_path: Path
+) -> None:
+    """
+    A simulated run records no camera, so that level has no picture -- and it is still
+    stacked in its own place, because a reader shown three levels of four cannot tell
+    whether the fourth was left out or never existed.
+    """
+    card = EventAgainstThePlanCard()
+
+    [written] = card.write(a_person_shoved_it, tmp_path)
+
+    assert PanelKind.CAMERA_BEFORE_AND_AFTER not in written.panel_paths
+    assert written.layered_path.is_file()
+    stacked = imageio.imread(written.layered_path)
+    drawn_alone = LayeredFigure().of(
+        [
+            Layer(name=panel.level, picture=written.panel_paths[panel])
+            for panel in card.panels
+            if panel in written.panel_paths
+        ]
+    )
+    assert stacked.shape[0] > drawn_alone.shape[0]
 
 
 @needs_a_renderer

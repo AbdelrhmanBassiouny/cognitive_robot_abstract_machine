@@ -110,7 +110,9 @@ class PlanTimeline:
         """
         rows = self._rows_of(RunPlan.of(trial), emphasise)
         return RenderedPlanTimeline(
-            rows=rows, mark=mark, figure=self.chart.drawn(rows, mark)
+            rows=rows,
+            mark=mark,
+            figure=self.chart.drawn(rows, mark, trial.duration),
         )
 
     # %% reading the rows off the plan

@@ -158,12 +158,20 @@ class TrialChart:
     What is written under the chart's horizontal axis.
     """
 
-    def drawn(self, rows: Sequence[ChartRow], mark: Optional[float]) -> Figure:
+    def drawn(
+        self,
+        rows: Sequence[ChartRow],
+        mark: Optional[float],
+        span: Optional[float] = None,
+    ) -> Figure:
         """
         The chart these rows are drawn as.
 
         :param rows: The rows to draw, top to bottom in the order they are given.
         :param mark: Seconds into the trial the rule stands at, or None for no rule.
+        :param span: How long the trial ran, in seconds. Given, the chart spans the
+            whole of it rather than only what these rows happen to cover, so that a
+            second falls in the same place on every chart of one trial.
         """
         figure = Figure(
             figsize=(self.width_in_inches, self._height_of(rows)),
@@ -179,6 +187,8 @@ class TrialChart:
             )
         if mark is not None:
             axes.axvline(mark, color=ASKED_COLOR.to_hex(), linewidth=self.rule_width)
+        if span is not None:
+            axes.set_xlim(0.0, span)
         axes.set_yticks(range(len(rows)))
         axes.set_yticklabels([row.label for row in rows])
         axes.set_ylim(-1.0, max(len(rows), 1))

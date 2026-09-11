@@ -69,30 +69,90 @@ class PanelKind(StrEnum):
     """
 
     @property
+    def level(self) -> str:
+        """
+        What this picture shows, as the band of a layered figure names it.
+        """
+        return _PANEL_WORDING[self].level
+
+    @property
     def caption(self) -> str:
         """
         What this picture shows, as the paper's reader is told it under the figure.
         """
-        return _PANEL_CAPTIONS[self]
+        return _PANEL_WORDING[self].caption
+
+    @property
+    def when_missing(self) -> str:
+        """
+        What is written in this picture's place where the run left nothing to draw it
+        from.
+        """
+        return _PANEL_WORDING[self].when_missing
 
 
-_PANEL_CAPTIONS = {
-    PanelKind.SCENE: "drawn into the digital twin.",
-    PanelKind.TIMELINE: "against the events of the run, with the query's own moment "
-    "marked.",
-    PanelKind.PLAN_TIMELINE: "against the plan the robot was running, with the item "
-    "that accounts for the event picked out.",
-    PanelKind.POSE_CHANGE: "drawn into the twin where it was and where it ended up, "
-    "the earlier pose ghosted.",
-    PanelKind.CAMERA_FRAME: "as the robot's camera saw it at that moment.",
-    PanelKind.CAMERA_BEFORE_AND_AFTER: "as the robot's camera saw it just before and "
-    "just after.",
+@dataclass(frozen=True)
+class PanelWording:
+    """
+    What a reader is told about one kind of picture, wherever they meet it.
+
+    Kept beside the members rather than in them so a member names the situation it means
+    and not the wording it is rendered with.
+    """
+
+    level: str
+    """
+    What the picture shows, short enough to write on the band above it.
+    """
+
+    caption: str
+    """
+    What the picture shows, as it is written under a figure of its own.
+    """
+
+    when_missing: str
+    """
+    What is written in the picture's place where the run left nothing to draw it from.
+    """
+
+
+_PANEL_WORDING = {
+    PanelKind.SCENE: PanelWording(
+        level="the scene the answer is about",
+        caption="drawn into the digital twin.",
+        when_missing="this run kept no world to draw.",
+    ),
+    PanelKind.TIMELINE: PanelWording(
+        level="what was seen",
+        caption="against the events of the run, with the query's own moment marked.",
+        when_missing="this run reported no events.",
+    ),
+    PanelKind.PLAN_TIMELINE: PanelWording(
+        level="what the robot was running",
+        caption="against the plan the robot was running, with the item that accounts "
+        "for the event picked out.",
+        when_missing="this run recorded no plan.",
+    ),
+    PanelKind.POSE_CHANGE: PanelWording(
+        level="where the object went",
+        caption="drawn into the twin where it was and where it ended up, the earlier "
+        "pose ghosted.",
+        when_missing="this run saw the object move at no point.",
+    ),
+    PanelKind.CAMERA_FRAME: PanelWording(
+        level="what the camera saw",
+        caption="as the robot's camera saw it at that moment.",
+        when_missing="only a run on the robot records a camera.",
+    ),
+    PanelKind.CAMERA_BEFORE_AND_AFTER: PanelWording(
+        level="what the camera saw, before and after",
+        caption="as the robot's camera saw it just before and just after.",
+        when_missing="only a run on the robot records a camera.",
+    ),
 }
 """
-What each kind of picture shows, kept beside the members rather than in them so a member
-names the situation it means and not the wording it is rendered with.
+What a reader is told about each kind of picture.
 """
-
 
 # %% one picture of a card
 

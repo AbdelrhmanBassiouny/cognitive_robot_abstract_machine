@@ -28,6 +28,7 @@ from experiments.episodes.episode import RecordedQuery, RecordedTrial
 from experiments.experiment_definitions import TypstRenderer
 from experiments.paper.camera_frame import BagFrameAt, BagFramesAround
 from experiments.paper.figure import FigureFile
+from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import CardPanel, PanelKind
 from experiments.paper.plan_timeline import PlanTimeline
 from experiments.paper.pose_change import PoseChange, PoseChangeRender
@@ -66,6 +67,18 @@ class QueryCardName(StrEnum):
     EVENT_AGAINST_THE_PLAN = "event_against_the_plan"
 
 
+class CardFile(StrEnum):
+    """
+    What a card leaves beside its own panels, named as the file is called after the
+    card.
+    """
+
+    LAYERED = "layered"
+    """
+    The card's levels drawn one above another as a single picture.
+    """
+
+
 TRIAL_DIRECTORY = "trial_%02d"
 """
 What one trial's own directory of cards is called inside its episode's.
@@ -99,6 +112,12 @@ class WrittenQueryCard:
     panel_paths: Dict[PanelKind, Path]
     """
     Where each of the card's pictures was left, in the order they were drawn.
+    """
+
+    layered_path: Optional[Path] = None
+    """
+    Where the card's levels were left stacked as one picture, or None for a card that
+    shows each of its pictures as a figure of its own.
     """
 
 
@@ -204,6 +223,17 @@ class QueryCard(ABC):
     What the card shows, as the paper's reader is told it.
     """
 
+    layered: ClassVar[bool] = False
+    """
+    Whether this card's pictures are shown as one stacked figure rather than as one
+    figure each.
+
+    A card whose pictures are read *against* each other -- an event over the plan that
+    was running when it happened -- only reads that way if they are one picture, since
+    separate figures float apart on a page. A card whose pictures each stand on their own
+    is better off as separate figures the layout can place where they fit.
+    """
+
     labels_the_answers: ClassVar[bool] = True
     """
     Whether each thing picked out of the scene is written over with its own name.
@@ -302,6 +332,18 @@ class QueryCard(ABC):
         """
         return "%s_%s%s" % (self.stem(number), panel.value, FigureFile.IMAGE.value)
 
+    def layered_file_name(self, number: int) -> str:
+        """
+        What this card's stacked picture is called.
+
+        :param number: Which asking of this card's question it shows.
+        """
+        return "%s_%s%s" % (
+            self.stem(number),
+            CardFile.LAYERED.value,
+            FigureFile.IMAGE.value,
+        )
+
     def markup_file_name(self, number: int) -> str:
         """
         What this card's markup is called.
@@ -355,14 +397,67 @@ class QueryCard(ABC):
             panel: drawn.write(output_directory / self.panel_file_name(number, panel))
             for panel, drawn in self._panels(trial, query, artifacts).items()
         }
+        layered_path = self._layered(number, output_directory, panel_paths)
         markup_path = output_directory / self.markup_file_name(number)
-        markup_path.write_text(self._markup(query, panel_paths))
+        markup_path.write_text(
+            self._markup(query, self._figures(panel_paths, layered_path))
+        )
         return WrittenQueryCard(
             card=self.name,
             query=query,
             markup_path=markup_path,
             panel_paths=panel_paths,
+            layered_path=layered_path,
         )
+
+    def _layered(
+        self,
+        number: int,
+        output_directory: Path,
+        panel_paths: Dict[PanelKind, Path],
+    ) -> Optional[Path]:
+        """
+        This card's pictures stacked into one, or None for a card that shows each of them
+        as a figure of its own.
+
+        Every picture the card declares keeps its place, drawn or not: a reader shown
+        three of four levels cannot tell whether the fourth was left out or never
+        existed.
+
+        :param number: Which asking of this card's question it shows.
+        :param output_directory: Where the file goes.
+        :param panel_paths: Where each of the card's pictures was left.
+        """
+        if not self.layered:
+            return None
+        return LayeredFigure().write(
+            [
+                Layer(
+                    name=panel.level,
+                    picture=panel_paths.get(panel),
+                    note=panel.when_missing,
+                )
+                for panel in self.panels
+            ],
+            output_directory / self.layered_file_name(number),
+        )
+
+    def _figures(
+        self, panel_paths: Dict[PanelKind, Path], layered_path: Optional[Path]
+    ) -> List[Tuple[str, Path]]:
+        """
+        What the paper is given for this card: one figure of the levels stacked, or one
+        figure per picture.
+
+        :param panel_paths: Where each of the card's pictures was left.
+        :param layered_path: Where its stacked picture was left, or None.
+        """
+        if layered_path is not None:
+            return [(self.caption, layered_path)]
+        return [
+            ("%s %s" % (self.caption, panel.caption), path)
+            for panel, path in panel_paths.items()
+        ]
 
     def _panels(
         self,
@@ -548,21 +643,18 @@ class QueryCard(ABC):
             if camera is not None:
                 camera.body.simulator_additional_properties.remove(camera)
 
-    def _markup(self, query: RecordedQuery, panel_paths: Dict[PanelKind, Path]) -> str:
+    @staticmethod
+    def _markup(query: RecordedQuery, figures: List[Tuple[str, Path]]) -> str:
         """
-        This card as the Typst the paper includes: what was asked, what was answered,
-        and every picture of it.
+        This card as the Typst the paper includes: what was asked, what was answered, and
+        every figure of it.
 
         :param query: The query this card shows.
-        :param panel_paths: Where each of its pictures was left.
+        :param figures: What each figure shows and where it was left.
         """
         lines = ["== %s" % query.text, "", "#emph[%s]" % query.answer, ""]
-        for panel, path in panel_paths.items():
-            lines.append(
-                TypstRenderer.render_image_figure(
-                    "%s %s" % (self.caption, panel.caption), path.name
-                )
-            )
+        for caption, path in figures:
+            lines.append(TypstRenderer.render_image_figure(caption, path.name))
             lines.append("")
         return "\n".join(lines)
 
@@ -728,6 +820,7 @@ class EventAgainstThePlanCard(QueryCard):
         PanelKind.POSE_CHANGE,
     )
     caption: ClassVar[str] = "What the run saw happen to the object:"
+    layered: ClassVar[bool] = True
 
     def answers(
         self, asked: PickedUpRecently, world: World

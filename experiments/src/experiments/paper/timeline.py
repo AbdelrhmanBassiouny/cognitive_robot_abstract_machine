@@ -114,7 +114,9 @@ class EventTimeline:
         """
         rows = self._rows_of(trial, emphasise)
         return RenderedTimeline(
-            rows=rows, mark=mark, figure=self.chart.drawn(rows, mark)
+            rows=rows,
+            mark=mark,
+            figure=self.chart.drawn(rows, mark, trial.duration),
         )
 
     # %% reading the rows off the trial

@@ -18,6 +18,7 @@ from experiments.episodes.episode import RecordedTrial
 from experiments.paper.chart import TimelineSpan
 from experiments.paper.panel import ANSWER_COLOR
 from experiments.paper.plan_timeline import PlanTimeline, RenderedPlanTimeline
+from experiments.paper.timeline import EventTimeline
 from experiments.paper.run_plan import RunPlan, TrialRanNoPlanError
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -186,3 +187,24 @@ def test_a_drawn_chart_is_a_panel_of_a_card(trial: RecordedTrial) -> None:
     without knowing which of its panels it is.
     """
     assert isinstance(PlanTimeline().of(trial), RenderedPlanTimeline)
+
+
+# %% the axis both charts of a card share
+
+
+def test_the_chart_spans_the_whole_trial(trial: RecordedTrial) -> None:
+    """
+    A chart drawn only as wide as what it happens to hold would put the same second in a
+    different place on each chart of a card.
+    """
+    assert PlanTimeline().of(trial).figure.axes[0].get_xlim() == (0.0, TRIAL_DURATION)
+
+
+def test_both_charts_of_one_trial_span_the_same_seconds(trial: RecordedTrial) -> None:
+    """
+    The two charts are read straight down, one under the other, which only means
+    anything if a second is in the same place on both.
+    """
+    events = EventTimeline().of(trial)
+    plan = PlanTimeline().of(trial)
+    assert events.figure.axes[0].get_xlim() == plan.figure.axes[0].get_xlim()

@@ -23,6 +23,7 @@ import experiments.questions.working_memory
 import experiments.paper.camera_frame
 import experiments.paper.chart
 import experiments.paper.figure
+import experiments.paper.layered
 import experiments.paper.figure_set
 import experiments.paper.measurement
 import experiments.paper.outcomes
@@ -116,6 +117,7 @@ for paper_module in (
     experiments.paper.camera_frame,
     experiments.paper.chart,
     experiments.paper.figure,
+    experiments.paper.layered,
     experiments.paper.figure_set,
     experiments.paper.measurement,
     experiments.paper.outcomes,
