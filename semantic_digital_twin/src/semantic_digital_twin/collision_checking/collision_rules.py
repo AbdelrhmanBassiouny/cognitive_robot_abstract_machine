@@ -312,6 +312,31 @@ class AllowCollisionForEndEffector(AllowCollisionRule):
 
 
 @dataclass
+class AllowCollisionBetweenEndEffectorsAndHeldBodies(AllowCollisionRule):
+    """
+    Allows collisions between every body an end effector holds and the bodies of that
+    end effector, since holding a body means touching it.
+
+    The held bodies are read every time the world model changes, so a body grasped
+    after this rule was created is covered. A held body stays checked against the rest
+    of the robot.
+    """
+
+    def _update(self, world: World):
+        # robot_parts imports the world, which imports the collision rules
+        from semantic_digital_twin.robots.robot_parts import AbstractRobot
+
+        self.allowed_collision_pairs = {
+            CollisionCheck.create_for_bodies_with_collision(held_body, body)
+            for robot in world.get_semantic_annotations_by_type(AbstractRobot)
+            for end_effector in robot.get_end_effectors()
+            for held_body in end_effector.held_bodies
+            for body in end_effector.bodies_with_collision
+            if body != held_body
+        }
+
+
+@dataclass
 class AllowNonRobotCollisions(AllowCollisionRule):
     """
     Allows collision checks between all bodies that do not belong to any robot.
