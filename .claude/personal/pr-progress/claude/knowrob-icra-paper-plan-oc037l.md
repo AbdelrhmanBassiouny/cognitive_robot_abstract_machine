@@ -19,3 +19,10 @@ Findings that limit claims: segmind composite events are imperative, no provenan
 Next (developer's call): accept/amend the re-cut, then apply it to the three
 plan.yaml files on claude/personal-notes and republish the dashboards; start
 event-rules-as-eql and question-performatives in parallel sessions off #265.
+
+Update 2026-09-11 (later): the segmind EQL event rules exist on the fork branch
+sorinar329/cognitive_robot_abstract_machine:safety_ai_ws (forked 2026-05-06, main 2610
+commits ahead, tracks a generated ormatic_interface.py, old event class names). Verdict:
+port ~60 lines (rule body of _find_interaction_events, event_time_difference,
+not_(exists(...)) dedup) onto #265; do not merge. Its krrood half already landed on main
+as InferenceExplanation's meta-query methods. Artifact item 1 rewritten accordingly.
