@@ -1024,6 +1024,19 @@ class MujocoCamera(MultiSimCamera):
         x_axis.scale(1)
         return RotationMatrix.from_vectors(x=x_axis, z=z_axis)
 
+    @staticmethod
+    def quaternion_of(pose: HomogeneousTransformationMatrix) -> List[float]:
+        """
+        A pose's turn, ordered the way :attr:`quaternion` states one.
+
+        MuJoCo puts a quaternion's real part first while the twin puts it last, so the
+        two are the same turn written two ways.
+
+        :param pose: The pose whose turn is wanted.
+        """
+        x, y, z, real = pose.to_quaternion().to_np().tolist()
+        return [real, x, y, z]
+
     @classmethod
     def overview_pose(
         cls,
@@ -4193,6 +4206,21 @@ class MujocoSim(MultiSim):
         return tuple(
             geom for geom in range(model.ngeom) if model.geom_bodyid[geom] == body
         )
+
+    def make_room_for_a_picture(self, width: int, height: int) -> None:
+        """
+        Widen the scene's offscreen buffer to a picture of the given size.
+
+        A model states how large a picture may be drawn away from a window, and its
+        default is smaller than a camera's picture usually is; a renderer asked for more
+        than the model allows refuses outright.
+
+        :param width: Width of the picture to be drawn, in pixels.
+        :param height: Height of the picture to be drawn, in pixels.
+        """
+        model = self.simulator._mj_model
+        model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
+        model.vis.global_.offheight = max(model.vis.global_.offheight, height)
 
     def recolor(self, entity: KinematicStructureEntity, color: Color) -> None:
         """

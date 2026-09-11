@@ -106,13 +106,8 @@ def looking_down_at(
     root_R_camera = RotationMatrix.from_vectors(
         x=Vector3(0.0, -1.0, 0.0), z=Vector3(0.0, 0.0, 1.0)
     )
-    quaternion_x, quaternion_y, quaternion_z, quaternion_real = (
-        HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            rotation_matrix=root_R_camera
-        )
-        .to_quaternion()
-        .to_np()
-        .tolist()
+    root_T_camera = HomogeneousTransformationMatrix.from_point_rotation_matrix(
+        rotation_matrix=root_R_camera
     )
     camera = MujocoCamera(
         name=CAMERA_NAME,
@@ -122,7 +117,7 @@ def looking_down_at(
             float(target.y),
             float(target.z) + height_above_the_target,
         ],
-        quaternion=[quaternion_real, quaternion_x, quaternion_y, quaternion_z],
+        quaternion=MujocoCamera.quaternion_of(root_T_camera),
         fovy=CAMERA_FIELD_OF_VIEW,
         resolution=[float(CAMERA_PICTURE_WIDTH), float(CAMERA_PICTURE_HEIGHT)],
     )
