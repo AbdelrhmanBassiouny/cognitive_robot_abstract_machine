@@ -43,7 +43,7 @@ from typing_extensions import Optional, Type
 from experiments.montessori.semantics import MontessoriShape, NoMatchingHoleError
 from experiments.montessori.world import MontessoriWorld, robot_installed
 from krrood.entity_query_language.backends import ProbabilisticBackend
-from krrood.utils import clear_memoization_cache
+from krrood.patterns.caching import clear_memoization_cache
 from semantic_digital_twin.adapters.multi_sim import MujocoActuator, MujocoSim
 from coraplex.datastructures.enums import Arms
 from semantic_digital_twin.collision_checking.collision_rules import (
@@ -179,6 +179,7 @@ class InsertionAttemptResult:
     target_horizontal_offset: Point3
     """
     The horizontal offset the attempt was actually released at (see :attr:`~experiments.
+
     montessori.insert_shape_action.InsertMontessoriShapeAction.target_horizontal_offset`
     ), whether given by the caller or generated internally.
     """
@@ -314,9 +315,9 @@ def _insert_shape_or_none(
 
 ROBOT_TABLE_BUFFER_ZONE_DISTANCE = 0.02
 """
-Buffer-zone distance (see
-:attr:`~semantic_digital_twin.collision_checking.collision_rules.AvoidCollisionRule.buffer_zone_distance`)
-used for the robot against the table, instead of the robot's default 5cm
+Buffer-zone distance (see :attr:`~semantic_digital_twin.collision_checking.collision_rul
+es.AvoidCollisionRule.buffer_zone_distance`) used for the robot against the table,
+instead of the robot's default 5cm
 (:meth:`~semantic_digital_twin.robots.hsrb.HSRB._setup_collision_rules`).
 
 A grasp pose sits at the target shape's own center, a couple of centimeters above the
@@ -428,7 +429,9 @@ def _insert_all_shapes(montessori: MontessoriWorld, headless: bool) -> None:
                 attempt,
                 MAX_INSERTION_ATTEMPTS,
             )
-            result = _insert_shape_or_none(shape, montessori, context, headless, attempt)
+            result = _insert_shape_or_none(
+                shape, montessori, context, headless, attempt
+            )
             if result is not None and result.fell_through_hole:
                 break
         else:
