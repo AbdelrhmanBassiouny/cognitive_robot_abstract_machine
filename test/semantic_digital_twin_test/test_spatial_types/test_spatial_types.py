@@ -1,3 +1,4 @@
+import dataclasses
 from copy import deepcopy
 
 import numpy as np
@@ -21,7 +22,7 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import Pose, SpatialType
 from semantic_digital_twin.world_description.geometry import Box
 from semantic_digital_twin.world_description.world_entity import Body
 from .reference_implementations import (
@@ -57,7 +58,9 @@ class TestRotationMatrix:
         m1 = rotation_matrix_from_quaternion(*q1)
         m2 = rotation_matrix_from_quaternion(*q2)
         RotationMatrix()
-        actual_angle = RotationMatrix(data=m1).rotational_error(RotationMatrix(data=m2))
+        actual_angle = RotationMatrix(data=m1).rotational_distance(
+            RotationMatrix(data=m2)
+        )
         _, expected_angle = axis_angle_from_rotation_matrix(m1.T.dot(m2))
         try:
             assert np.allclose(
@@ -2120,6 +2123,32 @@ class TestQuaternion:
         expected = np.dot(q1.T, q2)
         assert np.allclose(result, expected)
 
+    @pytest.mark.parametrize("q1", quaternions)
+    @pytest.mark.parametrize("q2", quaternions)
+    def test_rotational_distance_matches_the_rotation_matrices(self, q1, q2):
+        """
+        Two orientations are the same angle apart however they are described.
+        """
+        actual = Quaternion.from_iterable(q1).rotational_distance(
+            Quaternion.from_iterable(q2)
+        )
+        expected = RotationMatrix(
+            data=rotation_matrix_from_quaternion(*q1)
+        ).rotational_distance(RotationMatrix(data=rotation_matrix_from_quaternion(*q2)))
+        assert np.allclose(
+            shortest_angular_distance(actual.to_np()[0], expected.to_np()[0]), 0
+        )
+
+    @pytest.mark.parametrize("q", quaternions)
+    def test_rotational_distance_of_the_two_quaternions_of_one_rotation(self, q):
+        """
+        A quaternion and its negation describe the same rotation, so there is no angle
+        between them.
+        """
+        quaternion = Quaternion.from_iterable(q)
+        assert np.allclose(quaternion.rotational_distance(-quaternion).to_np(), 0)
+        assert np.allclose(quaternion.rotational_distance(quaternion).to_np(), 0)
+
 
 def test_underspecification_of_vector():
     q = a(Vector3)(x=1, y=2, z=3)
@@ -2224,3 +2253,36 @@ def test_a_pose_belonging_to_no_frame_at_all_is_still_said_as_a_pose():
         verbalize_expression(shape.origin == HomogeneousTransformationMatrix())
         == "the origin of a Box is a pose"
     )
+
+
+# %% the reference frame every spatial type inherits
+
+
+class TestTheReferenceFrameIsInheritedAsAField:
+    """
+    ``SpatialType`` declares the reference frame once, and only a dataclass turns that
+    declaration into a field of the types inheriting it.
+
+    Where it stays a plain class attribute, whoever reads it off the class finds the
+    declaration itself instead of a frame.
+    """
+
+    spatial_types = [
+        Point3,
+        Vector3,
+        RotationMatrix,
+        Quaternion,
+        HomogeneousTransformationMatrix,
+        Pose,
+    ]
+
+    @pytest.mark.parametrize("spatial_type", spatial_types)
+    def test_a_spatial_type_inherits_what_spatial_type_declares(self, spatial_type):
+        """
+        Every field of ``SpatialType`` is a field of the type inheriting from it.
+        """
+        declared = {declaration.name for declaration in dataclasses.fields(SpatialType)}
+        inherited = {
+            declaration.name for declaration in dataclasses.fields(spatial_type)
+        }
+        assert declared <= inherited

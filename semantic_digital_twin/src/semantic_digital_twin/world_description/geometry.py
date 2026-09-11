@@ -8,7 +8,7 @@ import re
 import shutil
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, Field
 from enum import Enum, StrEnum, auto
 from functools import cached_property
 from pathlib import Path
@@ -576,6 +576,13 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         world_mesh.apply_transform(world.transform(self.origin, target_frame).to_np())
         return world_mesh
 
+    @classmethod
+    def _serialized_fields(cls) -> List[Field]:
+        """
+        The fields a shape carries in its json: everything its constructor takes.
+        """
+        return [field_ for field_ in fields(cls) if field_.init]
+
     def to_json(self) -> Dict[str, Any]:
         return {
             **super().to_json(),
@@ -608,6 +615,16 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
             "texture": from_json(texture, **kwargs) if texture is not None else None,
             "finish": cls.finish_from_json(data),
         }
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(
+            **{
+                field_.name: from_json(data[field_.name], **kwargs)
+                for field_ in cls._serialized_fields()
+                if field_.name in data
+            }
+        )
 
     def __eq__(self, other: Shape) -> bool:
         """
@@ -737,6 +754,18 @@ class Mesh(Shape):
         if mesh.units is not None:
             mesh.convert_units("meters")
         return mesh
+
+    @classmethod
+    def _serialized_fields(cls) -> List[Field]:
+        """
+        A mesh carries its geometry rather than the file it was read from, which the
+        process reading the json may not have.
+        """
+        return [
+            field_
+            for field_ in super()._serialized_fields()
+            if field_.name != "filename"
+        ]
 
     def to_json(self) -> Dict[str, Any]:
         # Serialize the unscaled geometry and the scale separately. This is the same
@@ -1266,7 +1295,6 @@ class Cylinder(Shape):
             **cls.arguments_from_json(data, **kwargs),
         )
 
-
 @dataclass(eq=False)
 class Box(Shape):
     """
@@ -1329,7 +1357,6 @@ class Box(Shape):
             scale=from_json(data["scale"], **kwargs),
             **cls.arguments_from_json(data, **kwargs),
         )
-
 
 T = TypeVar("T")
 

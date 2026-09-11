@@ -697,7 +697,7 @@ def test_pick_up_action_closes_the_gripper_on_what_it_grasps(immutable_model_wor
 
 
 def test_place_action_lets_the_carried_object_touch_what_it_lands_on(
-    immutable_model_world,
+    mutable_model_world,
 ):
     """
     A carried body hangs below the tool frame and is therefore freed together with the
@@ -706,10 +706,16 @@ def test_place_action_lets_the_carried_object_touch_what_it_lands_on(
 
     The retract afterwards holds nothing and keeps the default.
     """
-    world, view, context = immutable_model_world
+    world, view, context = mutable_model_world
     target_location = Pose(Point3.from_iterable([1, 1, 1]), reference_frame=world.root)
 
-    place = PlaceAction(world.get_body_by_name("milk.stl"), target_location, Arms.LEFT)
+    milk = world.get_body_by_name("milk.stl")
+    with world.modify_world():
+        world.move_branch_with_fixed_connection(
+            milk, view.left_arm.end_effector.tool_frame
+        )
+
+    place = PlaceAction(milk, target_location, Arms.LEFT)
     sequential([place], context=context)
     plan = place._action_plan.plan
 
