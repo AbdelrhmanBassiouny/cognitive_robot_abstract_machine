@@ -6,9 +6,8 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import deepcopy
-from dataclasses import dataclass, field, Field
+from dataclasses import dataclass, field, Field, replace
 from dataclasses import fields
-from functools import cached_property
 from functools import cached_property
 from uuid import UUID, uuid4
 
@@ -27,6 +26,8 @@ from typing_extensions import (
 )
 
 from krrood.adapters.json_serializer import (
+    DataclassJSONSerializer,
+    ReferenceWriter,
     SubclassJSONSerializer,
     to_json,
     from_json,
@@ -34,9 +35,9 @@ from krrood.adapters.json_serializer import (
 )
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
 from krrood.entity_query_language.predicate import Symbol
+from krrood.patterns.caching import memoize
 from krrood.symbolic_math.symbolic_math import Matrix
 from krrood.utils import get_full_class_name
-from krrood.patterns.caching import memoize
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityReference,
     WorldEntityWithIDKwargsTracker,
@@ -172,29 +173,29 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer):
     def add_to_world(self, world: World):
         super().add_to_world(world)
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
         introspector = DataclassOnlyIntrospector()
         for field_ in introspector.discover(self.__class__):
             value = getattr(self, field_.public_name)
 
             if isinstance(value, (list, set)):
-                current_result = [self._item_to_json(item) for item in value]
+                current_result = [self._item_to_json(item, **kwargs) for item in value]
             else:
-                current_result = self._item_to_json(value)
+                current_result = self._item_to_json(value, **kwargs)
             result[field_.public_name] = current_result
         return result
 
     @classmethod
-    def _item_to_json(cls, item: Any):
+    def _item_to_json(cls, item: Any, **kwargs):
         """
         Convert an item to JSON format, handling WorldEntityWithID objects by
         serializing their ID.
         """
         if isinstance(item, WorldEntityWithID):
-            result = to_json(item.id)
+            result = to_json(item.id, **kwargs)
         else:
-            result = to_json(item)
+            result = to_json(item, **kwargs)
         return result
 
     def _track_object_in_from_json(
@@ -211,7 +212,7 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer):
         :return: The instance of WorldEntityWithIDKwargsTracker.
         """
         tracker = WorldEntityWithIDKwargsTracker.from_kwargs(from_json_kwargs)
-        tracker.add_world_entity_with_id(self)
+        tracker.add(self.id, self)
         return tracker
 
     @classmethod
@@ -227,9 +228,9 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer):
 
         half_initialized_instance = cls.__new__(cls)
         half_initialized_instance.id = from_json(data["id"], **kwargs)
-        if tracker.has_world_entity_with_id(half_initialized_instance.id):
-            return tracker.get_world_entity_with_id(half_initialized_instance.id)
-        tracker.add_world_entity_with_id(half_initialized_instance)
+        if tracker.has(half_initialized_instance.id):
+            return tracker.get(half_initialized_instance.id)
+        tracker.add(half_initialized_instance.id, half_initialized_instance)
 
         fields_ = {f.name: f for f in fields(cls)}
 
@@ -267,7 +268,7 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer):
 
         if isinstance(obj, uuid.UUID):
             obj = from_json(data, **kwargs)
-            return state.get_world_entity_with_id(obj)
+            return state.get(obj)
         else:
             return obj
 
@@ -299,6 +300,54 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer):
                 current_result = _resolve_item(value, world)
             result[field_.public_name] = current_result
         return self.__class__(**result)
+
+
+@dataclass
+class ReferencedWorldEntity(SubclassJSONSerializer):
+    """
+    Stands in a JSON document for a world entity that whoever reads the document already
+    has.
+
+    Reading it yields the entity of the reader's world, see
+    :class:`WorldEntityWithIDKwargsTracker`.
+    """
+
+    id: UUID
+    """
+    The id of the entity referred to.
+    """
+
+    name: PrefixedName
+    """
+    The name of the entity referred to, which says which entity was meant where it
+    cannot be found.
+    """
+
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        return DataclassJSONSerializer.to_json(self, **kwargs)
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> WorldEntityWithID:
+        """
+        :return: The entity of the reader's world that the reference refers to.
+        :raises MissingWorldError: If the keyword arguments carry no world to find the
+            entity in.
+        :raises WorldEntityWithIDNotInKwargs: If the world holds no entity with the id.
+        """
+        reference = DataclassJSONSerializer.from_json(data, clazz=cls, **kwargs)
+        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
+        return tracker.get(reference.id, name=reference.name)
+
+
+@dataclass
+class WorldEntityReferenceWriter(ReferenceWriter[WorldEntityWithID]):
+    """
+    Writes world entities as :class:`ReferencedWorldEntity`, for documents whose reader
+    has the world the entities belong to.
+    """
+
+    def write_reference(self, entity: WorldEntityWithID) -> Dict[str, Any]:
+        return ReferencedWorldEntity(id=entity.id, name=entity.name).to_json()
 
 
 @dataclass(eq=False)
@@ -678,10 +727,10 @@ class Region(KinematicStructureEntity):
             return None
         return self.area.combined_mesh
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
-        result["name"] = to_json(self.name)
-        result["area"] = to_json(self.area)
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
+        result["name"] = to_json(self.name, **kwargs)
+        result["area"] = to_json(self.area, **kwargs)
         return result
 
     @classmethod
@@ -904,9 +953,16 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
 
 
 @dataclass(eq=False)
-class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, ABC):
+class Connection(WorldEntityWithSimulatorProperties, ABC):
     """
     Represents a connection between two entities in the world.
+    """
+
+    id: UUID = field(init=False)
+    """
+    The identifier of this connection, derived from the ids of its parent and child.
+
+    Every copy of a connection, in any world, therefore carries the same id.
     """
 
     _world: Optional[World] = field(default=None, repr=False, hash=False, init=False)
@@ -946,6 +1002,7 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
     """
 
     def __post_init__(self):
+        self.id = uuid.uuid5(self.parent.id, str(self.child.id))
         self.name = self.name or self._generate_default_name(
             parent=self.parent, child=self.child
         )
@@ -998,14 +1055,16 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
         """
         return [field_ for field_ in fields(cls) if field_.init]
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        # A connection writes its own fields, so it skips the field dump of
+        # WorldEntityWithID.to_json
+        result = SubclassJSONSerializer.to_json(self, **kwargs)
         for field_ in self._serialized_fields():
             value = getattr(self, field_.name)
             if isinstance(value, WorldEntityWithID):
                 WorldEntityReference(field_.name).write(result, value)
             else:
-                result[field_.name] = to_json(value)
+                result[field_.name] = to_json(value, **kwargs)
         return result
 
     @classmethod
@@ -1061,9 +1120,6 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
     @property
     def has_hardware_interface(self) -> bool:
         return False
-
-    def add_to_world(self, world: World):
-        self._world = world
 
     @classmethod
     def _generate_default_name(
@@ -1223,6 +1279,23 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer, AB
             child=self.child,
             parent_T_connection_expression=parent_T_connection_expression,
             connection_T_child_expression=self.connection_T_child_expression,
+        )
+
+    def copy_with_new_child(self, new_child: KinematicStructureEntity) -> Self:
+        """
+        Create a copy of this connection that connects its parent to ``new_child``,
+        keeping everything else the connection was built with.
+
+        :param new_child: The child of the copy.
+        :return: The copy, named after its parent and new child.
+        """
+        connection_T_child_expression = deepcopy(self.connection_T_child_expression)
+        connection_T_child_expression.child_frame = new_child
+        return replace(
+            self,
+            child=new_child,
+            connection_T_child_expression=connection_T_child_expression,
+            name=None,
         )
 
     def update_references_for_world(self, world: World):

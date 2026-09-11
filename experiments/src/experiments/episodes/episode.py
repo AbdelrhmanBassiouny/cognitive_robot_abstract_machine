@@ -16,10 +16,12 @@ from enum import StrEnum
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.plans.plan import Plan
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from krrood.patterns.role import Role
 from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.world import World
 from typing_extensions import TYPE_CHECKING, List, Optional, Sequence
 
+from experiments.questions.question import BloomLevel, Bucket, Question
 from experiments.scenarios.trial import TrialOutcome
 
 if TYPE_CHECKING:
@@ -95,15 +97,17 @@ class AnsweredPredicate:
     """
 
 
-@dataclass
-class RecordedQuery:
+@dataclass(eq=False)
+class RecordedQuery(Role[Question]):
     """
     One query asked during a trial, with how it was routed and what it answered.
-    """
 
-    text: str
-    """
-    The query as it was asked.
+    The question is the role taker: this row is the question, playing the part of one
+    query a trial asked and recorded. The instance that was actually asked, not only its
+    class, is what is held - a long-term-memory question's own fields (which episode it
+    is about) are part of what it asked - and ``Question`` is a
+    :class:`~krrood.adapters.json_serializer.SubclassJSONSerializer` so it round-trips
+    through the database as JSON.
     """
 
     answer: str
@@ -125,6 +129,40 @@ class RecordedQuery:
     """
     Which backend answered each predicate of the query.
     """
+
+    answered_correctly: Optional[bool] = None
+    """
+    Whether this query's answer matched ground truth, or None if it was not scored
+    against the frozen set.
+    """
+
+    @property
+    def question(self) -> Question:
+        """
+        The question this query answers.
+        """
+        return self.role_taker
+
+    @property
+    def text(self) -> str:
+        """
+        The query as it was asked.
+        """
+        return self.question.english
+
+    @property
+    def bucket(self) -> Bucket:
+        """
+        The kind of thing this query asks about.
+        """
+        return self.question.bucket
+
+    @property
+    def bloom_level(self) -> BloomLevel:
+        """
+        The level of Bloom's taxonomy this query exercises.
+        """
+        return self.question.bloom_level
 
 
 @dataclass

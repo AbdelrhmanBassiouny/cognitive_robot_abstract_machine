@@ -19,6 +19,7 @@ from experiments.paper.outcomes import (
     TrialOutcomeByExecutionType,
 )
 from experiments.paper.queries import QueryDeterminism, QueryLatencyByBackend
+from experiments.paper.questions import AccuracyByBloomLevel, AccuracyByBucket
 
 # %% asking for a table the paper does not print
 
@@ -71,6 +72,8 @@ class FigureSet:
                 QueryLatencyByBackend(),
                 QueryDeterminism(),
                 TrialOutcomeByExecutionType(),
+                AccuracyByBucket(),
+                AccuracyByBloomLevel(),
             ]
         )
 

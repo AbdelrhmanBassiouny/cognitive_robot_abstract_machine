@@ -115,7 +115,7 @@ class SpatialType:
     Can be None if no reference frame is required or applicable.
     """
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         """
         The json of a spatial type, carrying the frame it is expressed in.
 
@@ -127,7 +127,7 @@ class SpatialType:
         """
         if not self.is_constant():
             raise SpatialTypeNotJsonSerializable(self)
-        result = super().to_json()
+        result = super().to_json(**kwargs)
         if self.reference_frame is not None:
             WorldEntityReference(SpatialFrameKey.REFERENCE).write(
                 result, self.reference_frame
@@ -374,8 +374,8 @@ class HomogeneousTransformationMatrix(
         transformation_matrix.append([0, 0, 0, 1])
         return cls(transformation_matrix)
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
         if self.child_frame is not None:
             WorldEntityReference(SpatialFrameKey.CHILD).write(result, self.child_frame)
         result["position"] = self.to_position().to_np().tolist()
@@ -702,8 +702,8 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         ).to_rotation_matrix()
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
         result["quaternion"] = self.to_quaternion().to_np().tolist()
         return result
 
@@ -1179,8 +1179,8 @@ class Point3(HasPosition, Point):
             z.resolve = lambda: resolver()[2]
         return result
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -1357,8 +1357,8 @@ class Point2(Point):
         x, y = data["data"][:2]
         return cls(x=x, y=y, reference_frame=reference_frame)
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -1437,8 +1437,8 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -1796,8 +1796,8 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
         result["data"] = self.to_np().tolist()
         return result
 
@@ -2149,8 +2149,8 @@ class Pose(HasPose, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
         result["position"] = self.to_position().to_np().tolist()
         result["rotation"] = self.to_quaternion().to_np().tolist()
         return result
@@ -2523,8 +2523,8 @@ class Pose2D(HasPose, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             reference_frame=reference_frame,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        result = super().to_json()
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        result = super().to_json(**kwargs)
         result["data"] = self.to_np().tolist()
         return result
 
