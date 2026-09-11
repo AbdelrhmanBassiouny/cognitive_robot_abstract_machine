@@ -71,10 +71,10 @@ from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceS
 from experiments.montessori.pieces import (
     HUE_TOLERANCE,
     KNOWN_PIECES,
-    LOOSE_PIECE_HEIGHT,
     KnownPiece,
     hue_distance,
     hue_of,
+    tallest,
 )
 from semantic_digital_twin.world_description.geometry import Color, SurfaceFinish
 
@@ -218,6 +218,15 @@ class SurfacePass:
     """
 
     @property
+    def piece_height(self) -> float:
+        """
+        Roughly how tall the pieces this pass looks for stand, in metres, which sets the
+        plane a piece's top is rectified onto and is reported as its height wherever the
+        depth image cannot resolve one.
+        """
+        return tallest(self.candidates)
+
+    @property
     def sought_pieces(self) -> Tuple[KnownPiece, ...]:
         """
         The pieces this pass looks for: the ones its detector was chosen for, narrowed
@@ -243,13 +252,6 @@ class PieceDetector(PerceptionDetector[TargetOnSurface], BeliefSource, ABC):
     :meth:`~krrood.entity_query_language.backends.PerceptionDetector.capability` states
     over a :class:`TargetOnSurface`, so the choice between detectors is made by matching
     a look against what each one says rather than by a caller knowing which is which.
-    """
-
-    piece_height: float = LOOSE_PIECE_HEIGHT
-    """
-    Roughly how tall a loose piece stands, in metres, which sets the plane a piece's top
-    is rectified onto and is reported as its height wherever the depth image cannot
-    resolve one.
     """
 
     hue_tolerance: int = HUE_TOLERANCE

@@ -46,6 +46,7 @@ from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
 from experiments.montessori.perception.scene_windows import SceneWindows
 from experiments.montessori.perception.viewer import CameraFrameViewer
+from experiments.montessori.pieces import SMALLER_PIECES
 from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.network_limits import check_large_messages_can_arrive
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
@@ -340,10 +341,10 @@ def pipeline_of(world: World) -> MontessoriPerceptionPipeline:
     """
     :param world: The world the robot publishes.
     :return: The pipeline looking at the scene that world describes, on the robot's own
-        table.
+        table, for the pieces standing on it now.
     """
     [robot] = world.get_semantic_annotations_by_type(Tracy)
-    return MontessoriPerceptionPipeline.of_world(world, robot.root)
+    return MontessoriPerceptionPipeline.of_world(world, robot.root, SMALLER_PIECES)
 
 
 def find_board(

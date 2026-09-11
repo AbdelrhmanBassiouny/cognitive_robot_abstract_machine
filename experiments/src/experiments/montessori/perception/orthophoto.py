@@ -527,7 +527,9 @@ class Orthophoto:
     None where the look carried no depth at all.
     """
 
-    def opening_mask(self, drop: float) -> np.ndarray:
+    def opening_mask(
+        self, drop: float, surface_height: Optional[float] = None
+    ) -> np.ndarray:
         """
         Mark where this plane is open rather than solid: the pixels the camera measured
         a surface well below it.
@@ -536,16 +538,39 @@ class Orthophoto:
         says it only in the second -- a hole is dark because little light reaches into
         it, and a rendered one is lit like the surface it is cut through.
 
-        :param drop: How far below the plane, in metres, a reading has to lie for the
+        :param drop: How far below the surface, in metres, a reading has to lie for the
             plane to be open there.
+        :param surface_height: How high the surface the openings are cut through was
+            measured to stand, or None to take the plane's own stated height. A stated
+            height is only as good as the model it came from; measured against the
+            surface itself, an opening is a drop from what actually surrounds it.
         :return: A ``uint8`` mask, 255 where the plane is open and 0 elsewhere.
         """
         if self.measured_height is None:
             return np.zeros(self.image.shape[:2], dtype=np.uint8)
-        below = self.plane_height - np.nan_to_num(
-            self.measured_height, nan=self.plane_height
-        )
+        top = self.plane_height if surface_height is None else surface_height
+        below = top - np.nan_to_num(self.measured_height, nan=top)
         return (below >= drop).astype(np.uint8) * 255
+
+    def surface_height_within(self, mask: np.ndarray) -> Optional[float]:
+        """
+        How high the surface the camera measured stands over a patch of this plane.
+
+        The middle reading, so the openings cut through the surface and anything
+        resting on it -- a minority of the patch, and far from it -- leave the answer
+        where the surface is.
+
+        :param mask: Nonzero where the patch lies, shape ``(height, width)``.
+        :return: The height, in metres, or None where this view carries no depth or the
+            patch holds no reading.
+        """
+        if self.measured_height is None:
+            return None
+        readings = self.measured_height[mask > 0]
+        readings = readings[np.isfinite(readings)]
+        if not len(readings):
+            return None
+        return float(np.median(readings))
 
     @cached_property
     def hue_saturation_value(self) -> np.ndarray:

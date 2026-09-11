@@ -518,10 +518,7 @@ def test_a_detection_a_colour_suggested_names_the_detector_that_read_it(
 def test_a_piece_the_depth_image_cannot_resolve_stands_at_its_nominal_height(
     pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    [(detector, _)] = pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
-        pipeline.table, KNOWN_PIECES
-    )
-    nominal = detector.piece_height
+    nominal = pipeline.pieces.height
     stands_at = {
         surface.name: surface.height for surface in (pipeline.table, pipeline.lid)
     }

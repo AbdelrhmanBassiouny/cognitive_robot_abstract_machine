@@ -1,7 +1,7 @@
 {
   "__json_type__": "experiments.montessori.perception.captures.SceneCapture",
-  "name": "tracy_pickup_demo",
-  "recorded_from": "tracy_pickup_demo_20260828_173800",
+  "name": "scaled_pieces_in_a_row",
+  "recorded_from": "live_camera_20260911_185712",
   "color_format": "rgb8; jpeg compressed bgr8",
   "intrinsic_matrix": [
     [
