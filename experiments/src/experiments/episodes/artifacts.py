@@ -159,6 +159,20 @@ class EpisodeArtifacts:
         run_files.mkdir(parents=True, exist_ok=True)
         return Path(shutil.copy2(path, run_files / path.name))
 
+    def keep_directory(self, path: Path) -> Path:
+        """
+        Take a copy of one directory the run produced, with everything in it.
+
+        What a recording that is a directory of files, such as a bag, is kept as: one
+        run file holding all of them.
+
+        :param path: The directory the run produced.
+        :return: The copy this episode keeps.
+        """
+        run_files = self.directory / EpisodeArtifact.RUN_FILES
+        run_files.mkdir(parents=True, exist_ok=True)
+        return Path(shutil.copytree(path, run_files / path.name))
+
     def keep_transcript(self, transcript: Transcript) -> Path:
         """
         Render this episode's questions and answers into one readable document.

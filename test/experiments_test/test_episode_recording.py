@@ -7,10 +7,26 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+import numpy
+import pytest
 from coraplex.datastructures.enums import ExecutionType
+from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
+from semantic_digital_twin.testing import two_arm_robot_world
 from sqlalchemy import func, select
+from typing_extensions import Optional
 
-from experiments.episodes.episode import Episode, RecordedTrial
+from experiments.episodes.artifacts import (
+    ArtifactDirectory,
+    ArtifactNotKept,
+    EpisodeArtifacts,
+    Transcript,
+)
+from experiments.episodes.episode import (
+    Episode,
+    InsertionAttempt,
+    InsertionOutcome,
+    RecordedTrial,
+)
 from experiments.episodes.recording import (
     EpisodeRecording,
     RecordsNothing,
@@ -24,6 +40,8 @@ from experiments.montessori.results_database import (
 from experiments.orm.ormatic_interface import EpisodeDAO, RecordedTrialDAO
 from experiments.scenarios.trial import TrialOutcome
 
+from .test_episodes import minimal_plan
+from .test_questions import robot, scene
 from .test_scenarios import (
     PiecePushedAway,
     SortOnePiece,
@@ -248,3 +266,151 @@ def test_a_run_describes_the_conditions_and_perturbations_it_was_made_under():
     assert episode.condition_names == [WithoutThePiecePose.__name__]
     assert episode.perturbation_names == [PiecePushedAway.__name__]
     assert episode.scenario_name == SortOnePiece.name
+
+
+# %% a run that observes its trials and keeps their artifacts
+
+
+FRAME_SIDE = 16
+"""
+Pixel width and height of the frames the filmed trials are made of, kept small because
+what is asserted is that the video was written rather than what it shows.
+"""
+
+
+@dataclass
+class FilmsEveryTrial:
+    """
+    Stands in for the scene a scenario films, handing back a short video of each trial.
+    """
+
+    frames_per_trial: int = 3
+    """
+    How many frames one trial's video holds.
+    """
+
+    def video_of_the_trial(self) -> RecordedVideo:
+        return RecordedVideo(
+            frames=[
+                numpy.full((FRAME_SIDE, FRAME_SIDE, 3), index * 10, dtype=numpy.uint8)
+                for index in range(self.frames_per_trial)
+            ],
+            frames_per_second=30,
+        )
+
+
+def observing_recording(
+    episode: Episode,
+    kept: TrialsKeptInMemory,
+    artifacts: Optional[EpisodeArtifacts] = None,
+    film: Optional[FilmsEveryTrial] = None,
+    repetitions: int = 1,
+) -> EpisodeRecording:
+    """
+    A run of the recording scenario that observes its trials and keeps what they left.
+
+    :param episode: The episode the run makes.
+    :param kept: Where its trials go.
+    :param artifacts: Where its artifacts go, if anywhere.
+    :param film: What films its trials, if anything.
+    :param repetitions: How many trials it runs.
+    """
+    return EpisodeRecording(
+        repetitions=repetitions,
+        episode=episode,
+        records_trials=kept,
+        artifacts=artifacts,
+        film=film,
+    )
+
+
+def test_what_the_observer_saw_is_recorded_on_the_trial():
+    scenario = SortOnePiece()
+    episode = Episode.from_run(scenario)
+    kept = TrialsKeptInMemory()
+    recording = observing_recording(episode, kept)
+    attempt = InsertionAttempt(
+        shape_name="cube", plan=minimal_plan(), outcome=InsertionOutcome.FELL_THROUGH
+    )
+    recording.observer.tick(0.5, [])
+    recording.observer.attempted(attempt)
+
+    recording.run(scenario)
+
+    [trial] = kept.trials
+    assert [tick.moment for tick in trial.ticks] == [0.5]
+    assert trial.insertion_attempts == [attempt]
+
+
+def test_the_observer_starts_afresh_with_every_trial():
+    """
+    A tick observed in one trial belongs to it alone, and the observer's clock is
+    restarted as each trial begins.
+    """
+    scenario = SortOnePiece()
+    kept = TrialsKeptInMemory()
+    recording = observing_recording(Episode.from_run(scenario), kept, repetitions=2)
+    recording.observer.tick(0.5, [])
+
+    recording.run(scenario)
+
+    assert [len(trial.ticks) for trial in kept.trials] == [1, 0]
+
+
+def test_the_transcript_is_kept_with_every_trial_asked_so_far(tmp_path, scene):
+    """
+    Rewritten as each trial finishes rather than once at the end, so a run that dies
+    keeps the transcript of the trials it finished.
+    """
+    scenario = SortOnePiece()
+    episode = Episode.from_run(scenario)
+    artifacts = ArtifactDirectory(path=tmp_path).open_for(episode)
+    kept = TrialsKeptInMemory()
+    recording = observing_recording(episode, kept, artifacts=artifacts, repetitions=2)
+    recording.observer.ask(scene.question_set, scene.robot, 1.0)
+
+    recording.run(scenario)
+
+    assert (
+        artifacts.transcript.read_text()
+        == Transcript(episode=episode, trials=kept.trials).render()
+    )
+
+
+def test_the_video_of_every_trial_is_kept_as_one_video(tmp_path):
+    scenario = SortOnePiece()
+    episode = Episode.from_run(scenario)
+    artifacts = ArtifactDirectory(path=tmp_path).open_for(episode)
+    film = FilmsEveryTrial()
+    recording = observing_recording(
+        episode, TrialsKeptInMemory(), artifacts=artifacts, film=film, repetitions=2
+    )
+
+    recording.run(scenario)
+
+    assert artifacts.video.stat().st_size > 0
+    assert len(recording.video.frames) == film.frames_per_trial * 2
+
+
+def test_a_run_that_films_nothing_keeps_no_video(tmp_path):
+    scenario = SortOnePiece()
+    episode = Episode.from_run(scenario)
+    artifacts = ArtifactDirectory(path=tmp_path).open_for(episode)
+
+    observing_recording(episode, TrialsKeptInMemory(), artifacts=artifacts).run(
+        scenario
+    )
+
+    with pytest.raises(ArtifactNotKept):
+        artifacts.video
+
+
+def test_a_run_without_artifacts_records_its_trials_all_the_same():
+    scenario = SortOnePiece()
+    kept = TrialsKeptInMemory()
+
+    observing_recording(Episode.from_run(scenario), kept, film=FilmsEveryTrial()).run(
+        scenario
+    )
+
+    assert len(kept.trials) == 1

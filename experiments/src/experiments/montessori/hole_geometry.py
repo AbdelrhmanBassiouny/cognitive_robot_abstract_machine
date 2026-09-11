@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import trimesh
-from typing_extensions import Callable, Dict, List, Self, Tuple
+from typing_extensions import Callable, Dict, List, Self, Sequence, Tuple
 
 from experiments.montessori.pieces import (
     circle_boundary,
@@ -548,6 +548,29 @@ class BoardHoleLayout(KnownOutline):
         :param angle: A turn about the world frame's z-axis, in radians.
         """
         return (angle + math.pi) % (2 * math.pi) - math.pi
+
+    def origins_with_a_hole_at(
+        self, openings: Sequence[PlanarPoint], yaw: float
+    ) -> np.ndarray:
+        """
+        Where the board's own origin stands for one of its holes to stand at one of
+        the openings seen, with the board turned one way.
+
+        An opening cut through a lid is one of the holes, whichever one it is, so each
+        opening names as many places for the board as the layout has holes -- and the
+        place named by the hole the opening really is, is named by every other opening
+        too.
+
+        :param openings: Where the openings stand, on the lid's plane.
+        :param yaw: How far the board is turned, in radians about the world frame's
+            z-axis.
+        :return: The world-frame ``(n, 2)`` origins, one per opening and hole.
+        """
+        seen = np.array([(opening.x, opening.y) for opening in openings]).reshape(-1, 2)
+        holes = turned(
+            np.array([(hole.center.x, hole.center.y) for hole in self.holes]), yaw
+        )
+        return (seen[:, None, :] - holes[None, :, :]).reshape(-1, 2)
 
     def placed(self, center: PlanarPoint, yaw: float) -> List[PlacedHole]:
         """
