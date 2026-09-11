@@ -50,14 +50,18 @@ items:
       to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on
       #169's c8bf6f05.
     - >-
-      CI has never reported on this lineage. The tip db9561fa6 carried zero check runs and no commit
-      status, so the tracy_icra merge, both earlier main merges and the #304 merge have none of them
-      been exercised by CI; every number recorded for them was measured in a session container that
-      cannot generate the ORM interfaces or import ROS. The third main merge (b5e2e2669, 2026-09-11)
-      cleared the branch's conflict - mergeable_state went from dirty to unstable - and its push
-      started the first run this lineage has had. Nothing is armed to watch it, per the standing
-      rule against scheduled checks: read the run directly. The needs-resolution label clears itself
-      on the next maintenance pass now that the branch merges cleanly again.
+      CI has now spoken on this lineage, for the first time since the tracy_icra merge, and it found
+      one defect. The third main merge (b5e2e2669, 2026-09-11) cleared the branch's conflict -
+      mergeable_state went from dirty to unstable - and its push started the run; twenty-two of the
+      twenty-three checks passed and test_each_lib (experiments) failed on
+      AttributeError: all_role_takers, which is ORMatic dropping RecordedQuery.role_taker because a
+      Question is a generic left unparameterized. Fixed in 5d9049212 and pushed on e976addc2, with
+      the roadmap section of 2026-09-11 (evening) recording what the error actually named. The
+      needs-resolution label has cleared. What stays open here is the same standing gap in a
+      narrower form: nothing is armed to watch the run on e976addc2, per the rule against scheduled
+      checks, so read it directly, and the numbers recorded for the tracy_icra merge, both earlier
+      main merges and the #304 merge were still measured in a container that reaches neither a
+      Postgres nor a ROS install.
   notes: >
     The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor
     stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a
