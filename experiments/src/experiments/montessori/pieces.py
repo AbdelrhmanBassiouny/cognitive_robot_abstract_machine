@@ -213,13 +213,8 @@ from the loose pieces by its outline.
 
 SMALLER_SET_SCALE = 0.8
 """
-How large the pieces of the smaller set are against the full-size set they were printed
-from, apart from the cube.
-"""
-
-SMALLER_CUBE_EDGE = 0.0224
-"""
-Edge length, in metres, of the smaller set's cube, measured off the piece.
+How large the pieces of the smaller set are against the full-size set they were
+printed from: the cube measures 24 mm where the full-size one measures 30.
 """
 
 SMALLER_SET_BLUE_HUE = 98
@@ -491,38 +486,13 @@ The disk and the sphere are left out because this physical set has neither.
 """
 
 
-def _smaller_set() -> KnownPieceSet:
-    """
-    The set on the table since September 2026: :data:`FULL_SIZE_PIECES` at
-    :data:`SMALLER_SET_SCALE` in its own plastics, apart from the cube, which was
-    measured at :data:`SMALLER_CUBE_EDGE`.
-    """
-    scaled = FULL_SIZE_PIECES.scaled(
-        SMALLER_SET_SCALE,
-        {CYAN_HUE: SMALLER_SET_BLUE_HUE, YELLOW_HUE: SMALLER_SET_YELLOW_HUE},
-    )
-    cube = scaled.by_category[MontessoriShapeCategory.CUBE]
-    return KnownPieceSet(
-        pieces=tuple(
-            (
-                KnownPiece(
-                    category=cube.category,
-                    outline=rectangle_boundary(SMALLER_CUBE_EDGE, SMALLER_CUBE_EDGE),
-                    height=SMALLER_CUBE_EDGE,
-                    hue=cube.hue,
-                    rotation_period=cube.rotation_period,
-                )
-                if piece is cube
-                else piece
-            )
-            for piece in scaled.pieces
-        )
-    )
-
-
-SMALLER_PIECES = _smaller_set()
+SMALLER_PIECES = FULL_SIZE_PIECES.scaled(
+    SMALLER_SET_SCALE,
+    {CYAN_HUE: SMALLER_SET_BLUE_HUE, YELLOW_HUE: SMALLER_SET_YELLOW_HUE},
+)
 """
-The set on the table since September 2026, see :func:`_smaller_set`.
+The set on the table since September 2026: :data:`FULL_SIZE_PIECES` at
+:data:`SMALLER_SET_SCALE` in its own plastics.
 """
 
 KNOWN_PIECES: Tuple[KnownPiece, ...] = FULL_SIZE_PIECES.pieces

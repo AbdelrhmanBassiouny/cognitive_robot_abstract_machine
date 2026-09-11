@@ -734,8 +734,9 @@ class BoardDetector:
         region rather than a gap that the surface's own outline has to enclose; a hole
         broken open at the board's edge would otherwise be missed entirely. Its depth is
         read against the height the surface itself was measured at rather than the
-        plane the world states, so a lid modelled a few millimetres too high does not
-        read as one opening the size of itself.
+        plane the world states, so a depth image that reads the whole lid a few
+        millimetres low -- the shipped captures read it seven below a lid measured with
+        a tape -- does not read as one opening the size of itself.
 
         :param surface: The candidate surface's own contour, in rectified pixels.
         :param orthophoto: The rectified view it was found in.
