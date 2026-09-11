@@ -625,3 +625,52 @@ def test_nested_sequence_goal_json_round_trip_compilation():
         )
     )
     executor.compile(motion_statechart=msc_copy)
+
+
+# %% the history a run wrote
+
+HOW_FAST_THE_JOINT_MAY_TURN = 1.0
+"""
+The velocity limit the joint of the world below is given, in radians per second.
+
+:class:`~giskardpy.motion_statechart.tasks.joint_tasks.JointPositionList` limits its
+command to the joint's own velocity limits, so a joint without one cannot be commanded
+at all.
+"""
+
+
+def test_a_statechart_that_ran_keeps_its_history_through_json(mini_world):
+    """
+    The history is what says which node was running when, so a statechart read back from
+    JSON has to answer for a node exactly what the one that ran does.
+    """
+    connection = mini_world.connections[0]
+    connection.raw_dof.limits.lower.velocity = -HOW_FAST_THE_JOINT_MAY_TURN
+    connection.raw_dof.limits.upper.velocity = HOW_FAST_THE_JOINT_MAY_TURN
+    msc = MotionStatechart()
+    task = JointPositionList(goal_state=JointState.from_mapping({connection: 0.5}))
+    msc.add_node(task)
+    msc.add_node(EndMotion.when_true(task))
+    executor = Executor(
+        context=MotionStatechartContext(
+            world=mini_world,
+            qp_controller_config=QPControllerConfig.create_with_simulation_defaults(),
+        )
+    )
+    executor.compile(motion_statechart=msc)
+    executor.tick_until_end()
+
+    tracker = WorldEntityWithIDKwargsTracker.from_world(mini_world)
+    msc_copy = MotionStatechart.from_json(
+        json.loads(json.dumps(msc.to_json())),
+        world=mini_world,
+        **tracker.create_kwargs(),
+    )
+
+    task_copy = msc_copy.get_node_by_index(task.index)
+    assert msc_copy.history.get_life_cycle_history_of_node(
+        task_copy
+    ) == msc.history.get_life_cycle_history_of_node(task)
+    assert msc_copy.history.get_observation_history_of_node(
+        task_copy
+    ) == msc.history.get_observation_history_of_node(task)
