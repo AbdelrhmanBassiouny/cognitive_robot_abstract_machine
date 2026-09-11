@@ -166,6 +166,31 @@ class RecordedQuery(Role[Question]):
 
 
 @dataclass
+class RecordedMotion:
+    """
+    One motion a trial ran, and when it ran.
+
+    A trial runs several, one per motion state chart its steps build, so what was asked
+    of the controller at a moment is read off whichever of these was running then.
+    """
+
+    motion_statechart: MotionStatechart
+    """
+    The chart that ran, holding the history the controller wrote into it.
+    """
+
+    start_moment: float
+    """
+    Seconds between the start of the trial and the moment this motion began.
+    """
+
+    end_moment: float
+    """
+    Seconds between the start of the trial and the moment this motion ended.
+    """
+
+
+@dataclass
 class InsertionAttempt:
     """
     One attempt to insert a shape, how it ended, and what was made of that.
@@ -242,14 +267,14 @@ class RecordedTrial:
     Every insertion attempted while the trial ran, in the order they were made.
     """
 
-    motion_statechart: Optional[MotionStatechart] = None
+    motions: List[RecordedMotion] = field(default_factory=list)
     """
-    The motion the trial ran, or None if it ran none.
+    Every motion the trial ran, in the order they ran.
 
-    What a question about the control program reaches: the statechart holds the tasks
+    What a question about the control program reaches: each statechart holds the tasks
     that were active and the constraints they put on the optimization, so asking what the
-    robot was constrained by at the time is a query over this rather than over prose
-    about it.
+    robot was constrained by at a moment is a query over whichever of these was running
+    then rather than over prose about it.
     """
 
     @classmethod
