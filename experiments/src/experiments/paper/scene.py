@@ -20,6 +20,7 @@ from krrood.exceptions import DataclassException
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
+from experiments.paper.panel import CardPanel
 from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoCamera,
@@ -181,7 +182,7 @@ class PointOfView:
 
 
 @dataclass
-class RenderedScene:
+class RenderedScene(CardPanel):
     """
     One picture of a scene with an answer picked out of it.
     """

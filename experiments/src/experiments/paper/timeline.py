@@ -18,6 +18,7 @@ from segmind.datastructures.events import DetectionEvent
 from typing_extensions import Dict, List, Optional, Sequence, Tuple, Type
 
 from experiments.episodes.episode import RecordedTrial, Tick
+from experiments.paper.panel import CardPanel
 from semantic_digital_twin.world_description.geometry import Color
 
 # %% the colours a chart tells its rows apart in
@@ -98,7 +99,7 @@ class TimelineRow:
 
 
 @dataclass
-class RenderedTimeline:
+class RenderedTimeline(CardPanel):
     """
     One drawn chart of a trial's events, and the rows it was drawn from.
     """
