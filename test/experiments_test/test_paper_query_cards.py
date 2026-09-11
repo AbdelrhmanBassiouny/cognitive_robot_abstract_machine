@@ -401,15 +401,21 @@ def test_a_cards_markup_says_what_was_asked_and_what_was_answered(
 
 
 @needs_a_renderer
-def test_the_set_writes_one_card_per_query_the_trial_asked(
+def test_the_set_writes_a_card_for_every_query_each_of_its_cards_shows(
     trial: RecordedTrial, tmp_path: Path
 ) -> None:
     """
-    Every asking of a question the paper shows becomes a card of its own, so the trial's
-    three queries are three cards.
+    Every asking of a question the paper shows becomes a card of its own, and a question
+    the paper shows in two ways becomes one card of each -- so what the set writes is
+    every pairing of one of its cards with a query that card shows.
     """
-    written = QueryCardSet.for_the_paper().write(trial, tmp_path)
-    assert [card.query for card in written] == trial.queries
+    cards = QueryCardSet.for_the_paper()
+
+    written = cards.write(trial, tmp_path)
+
+    assert [(card.card, card.query) for card in written] == [
+        (card.name, query) for card in cards.cards for query in card.queries_in(trial)
+    ]
 
 
 # %% a whole corpus of runs

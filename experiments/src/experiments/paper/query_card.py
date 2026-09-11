@@ -15,16 +15,24 @@ from enum import StrEnum
 from pathlib import Path
 
 from krrood.exceptions import DataclassException
-from segmind.datastructures.events import DetectionEvent, PickUpEvent
+from segmind.datastructures.events import (
+    AgentInteractionEvent,
+    DetectionEvent,
+    MotionEvent,
+    PickUpEvent,
+)
 from typing_extensions import ClassVar, Dict, List, Optional, Sequence, Tuple, Type
 
 from experiments.episodes.artifacts import ArtifactDirectory, EpisodeArtifacts
 from experiments.episodes.episode import RecordedQuery, RecordedTrial
 from experiments.experiment_definitions import TypstRenderer
-from experiments.paper.camera_frame import BagFrameAt
+from experiments.paper.camera_frame import BagFrameAt, BagFramesAround
 from experiments.paper.figure import FigureFile
 from experiments.paper.panel import CardPanel, PanelKind
+from experiments.paper.plan_timeline import PlanTimeline
+from experiments.paper.pose_change import PoseChange, PoseChangeRender
 from experiments.paper.scene import PointOfView, SceneRender
+from experiments.paper.run_plan import plans_of
 from experiments.paper.timeline import EventTimeline
 from experiments.questions.question import Question
 from experiments.questions.working_memory import (
@@ -55,6 +63,7 @@ class QueryCardName(StrEnum):
     SIDE_OF_ANOTHER_OBJECT = "side_of_another_object"
     PICKED_UP_RECENTLY = "picked_up_recently"
     OWN_DEGREES_OF_FREEDOM = "own_degrees_of_freedom"
+    EVENT_AGAINST_THE_PLAN = "event_against_the_plan"
 
 
 TRIAL_DIRECTORY = "trial_%02d"
@@ -393,17 +402,133 @@ class QueryCard(ABC):
         if panel is PanelKind.SCENE:
             return self._scene(query.question, trial)
         if panel is PanelKind.TIMELINE:
-            return EventTimeline().of(
-                trial,
-                mark=query.moment,
-                emphasise=self.emphasise(query.question, trial),
-            )
+            return self._event_chart(trial, query)
+        if panel is PanelKind.PLAN_TIMELINE:
+            return self._plan_chart(trial, query)
+        if panel is PanelKind.POSE_CHANGE:
+            return self._pose_change(trial, query)
+        if panel is PanelKind.CAMERA_FRAME:
+            return self._camera_frame(trial, query, artifacts)
+        return self._camera_frames_around(trial, query, artifacts)
+
+    def _event_chart(self, trial: RecordedTrial, query: RecordedQuery) -> CardPanel:
+        """
+        When each kind of event was reported, with this query's own moment marked.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        """
+        return EventTimeline().of(
+            trial,
+            mark=query.moment,
+            emphasise=self.emphasise(query.question, trial),
+        )
+
+    def _plan_chart(
+        self, trial: RecordedTrial, query: RecordedQuery
+    ) -> Optional[CardPanel]:
+        """
+        What the robot was running, with the item accounting for the answered event
+        picked out. None where the run recorded no plan.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        """
+        if not plans_of(trial):
+            return None
+        return PlanTimeline().of(
+            trial,
+            mark=query.moment,
+            emphasise=self.emphasise(query.question, trial),
+        )
+
+    def _pose_change(
+        self, trial: RecordedTrial, query: RecordedQuery
+    ) -> Optional[CardPanel]:
+        """
+        The object drawn where it was and where it ended up. None where the run saw it
+        move at no point, or where the twin holds it fixed.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        """
+        answered = self.emphasise(query.question, trial)
+        if not answered:
+            return None
+        change = PoseChange.around(answered[0], trial)
+        if change is None:
+            return None
+        world = self.world_of(trial)
+        subject = world.get_body_by_name(change.subject.name.name)
+        render = PoseChangeRender(world=world)
+        if not render.can_be_stood_somewhere_else(subject.parent_connection):
+            return None
+        return render.of(
+            PoseChange(subject=subject, before=change.before, after=change.after)
+        )
+
+    def _camera_frame(
+        self,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        artifacts: Optional[EpisodeArtifacts],
+    ) -> Optional[CardPanel]:
+        """
+        What the robot's camera saw at the moment the query was asked. None where the run
+        recorded none.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        :param artifacts: The episode's own files, or None.
+        """
         if artifacts is None:
             return None
         frame = BagFrameAt(
             artifacts=artifacts, moment=query.moment, trial_duration=trial.duration
         )
         return frame if frame.was_recorded else None
+
+    def _camera_frames_around(
+        self,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        artifacts: Optional[EpisodeArtifacts],
+    ) -> Optional[CardPanel]:
+        """
+        What that camera saw either side of the answered event. None where the run
+        recorded none, or answered no event to take the frames around.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        :param artifacts: The episode's own files, or None.
+        """
+        if artifacts is None:
+            return None
+        answered = self.emphasise(query.question, trial)
+        if not answered:
+            return None
+        either_side = BagFramesAround(
+            artifacts=artifacts,
+            moment=self.reported_at(answered[0], trial, query.moment),
+            trial_duration=trial.duration,
+        )
+        return either_side if either_side.was_recorded else None
+
+    @staticmethod
+    def reported_at(
+        event: DetectionEvent, trial: RecordedTrial, otherwise: float
+    ) -> float:
+        """
+        How far into the trial the monitor first reported the given event.
+
+        :param event: The event to place.
+        :param trial: The trial it was reported in.
+        :param otherwise: What to answer where no tick reported it.
+        """
+        for tick in trial.ticks:
+            if any(reported is event for reported in tick.events):
+                return tick.moment
+        return otherwise
 
     def _scene(self, asked: Question, trial: RecordedTrial) -> CardPanel:
         """
@@ -581,6 +706,87 @@ class OwnDegreesOfFreedomCard(QueryCard):
         return list(self.robot_of(world).bodies)
 
 
+@dataclass
+class EventAgainstThePlanCard(QueryCard):
+    """
+    What the robot saw happen to an object, set against what it was running at the time.
+
+    The card that says why the answer is what it is rather than only what it is. Four
+    levels read one under the other: the event the monitor reported, the item of the plan
+    that accounts for it, what the camera saw either side of it, and where the object
+    went. A pick-up the robot performed has an item of the plan standing under it and the
+    piece ends up in the gripper; a piece a person shoved has a translation under an empty
+    stretch of plan, which is the picture of an answer of no.
+    """
+
+    name: ClassVar[QueryCardName] = QueryCardName.EVENT_AGAINST_THE_PLAN
+    question: ClassVar[Type[Question]] = PickedUpRecently
+    panels: ClassVar[Tuple[PanelKind, ...]] = (
+        PanelKind.TIMELINE,
+        PanelKind.PLAN_TIMELINE,
+        PanelKind.CAMERA_BEFORE_AND_AFTER,
+        PanelKind.POSE_CHANGE,
+    )
+    caption: ClassVar[str] = "What the run saw happen to the object:"
+
+    def answers(
+        self, asked: PickedUpRecently, world: World
+    ) -> List[KinematicStructureEntity]:
+        """
+        The object the question is about.
+
+        :param asked: The question as it was asked.
+        :param world: The twin the run happened in.
+        """
+        return [asked.subject]
+
+    def emphasise(
+        self, asked: PickedUpRecently, trial: RecordedTrial
+    ) -> List[DetectionEvent]:
+        """
+        What the run saw happen to that object, which is what the four levels are read
+        against.
+
+        An agency question is about what was done to the object, so what the robot did to
+        it is what the card shows where the run saw any of it. Where it saw none, what is
+        left is the object moving on its own -- which is exactly the case the answer is no
+        in, and the case the card has to show for that answer to mean anything.
+
+        Matched by the name the twin gives the object rather than by identity, because a
+        recalled episode's question and its events are read back as separate objects.
+
+        :param asked: The question as it was asked.
+        :param trial: The trial it was asked during.
+        """
+        acted_on = self._reported_about(asked.subject, trial, AgentInteractionEvent)
+        return (
+            acted_on
+            if acted_on
+            else self._reported_about(asked.subject, trial, MotionEvent)
+        )
+
+    @staticmethod
+    def _reported_about(
+        subject: KinematicStructureEntity,
+        trial: RecordedTrial,
+        kind: Type[DetectionEvent],
+    ) -> List[DetectionEvent]:
+        """
+        Every event of the given kind the run reported about the given object, in the
+        order they were reported.
+
+        :param subject: The object the events are about.
+        :param trial: The trial to read.
+        :param kind: The kind of event wanted.
+        """
+        return [
+            event
+            for tick in trial.ticks
+            for event in tick.events
+            if isinstance(event, kind) and event.tracked_object.name == subject.name
+        ]
+
+
 # %% every card the paper shows
 
 
@@ -606,6 +812,7 @@ class QueryCardSet:
                 SideOfAnotherObjectCard(),
                 PickedUpRecentlyCard(),
                 OwnDegreesOfFreedomCard(),
+                EventAgainstThePlanCard(),
             ]
         )
 
