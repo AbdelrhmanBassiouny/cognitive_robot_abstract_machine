@@ -1,3 +1,31 @@
+## #265: the pickup demo runs on the perception pipeline, real and in MuJoCo (2026-09-12, in progress)
+
+**Session.** https://claude.ai/code/session_01GCgvcENQygfenibC73KQ1n -- resume here.
+
+**The task, in the developer's words (2026-09-11 evening).** "Now I want the pickup demo
+real to fully work with the perception pipeline, you cannot use the robot now as I
+powered it off. So do what you can and test what you can until I come back. Also do a
+full simulation based test in mujoco similar exactly to the real one. And record mujoco
+videos and save them and show them to me. Commit your work after testing it and push,
+also don't forget to fetch any updates to pr 265 as it is being updated regularly. I
+will be using PR 316 (it is soon going to merge into PR 265) to record tomorrow so make
+everything ready for it."
+
+**Plan.**
+1. ROS-free scene publishing: `scene_publishing.py` (board + pieces a look found stood
+   in the world the robot publishes), `RepeatedLook` base for a source whose pipeline is
+   refreshed once the world holds the board. Tests on the `scaled_pieces_in_a_row`
+   capture against its tape truth.
+2. `perceived_sorting.py`: the demo's logic (perceive -> spawn -> release pose over the
+   perceived board's hole) with a `ShapeSorter` the real rig and the MuJoCo rig implement.
+3. `pickup_demo_real.py` rewritten on it (hand-placed constants gone).
+4. `pickup_demo_mujoco.py`: ground-truth world on Tracy's table at the tape layout
+   (smaller set, board centre (1.045, 0.159)), camera on `camera_link` at the capture's
+   optical pose, belief world = Tracy alone, perception publishes into the belief world,
+   actuator-driven sorting; videos (overview + robot camera) written by the run.
+5. Full headless test of the MuJoCo demo; commit, push; merge #265 into #316's branch so
+   tomorrow's recording has it.
+
 ## #265: live shape and hole detection is wrong on the new 80 % pieces (2026-09-11, done; bringup restarted 21:47)
 
 **Session.** https://claude.ai/code/session_0186xZo3eqCDVcqhi1E3LHdY -- resume here if
