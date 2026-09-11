@@ -783,7 +783,7 @@ class WrappedTable(TableLike):
         :param wrapped_field: The field to get the information from.
         """
         # create foreign key
-        fk_name = f"{wrapped_field.field.name}{self.ormatic.foreign_key_postfix}"
+        fk_name = f"_{wrapped_field.field.name}{self.ormatic.foreign_key_postfix}"
         fk_type = (
             f"Mapped[{module_and_class_name(Optional)}[{module_and_class_name(int)}]]"
             if wrapped_field.is_optional
@@ -831,9 +831,9 @@ class WrappedTable(TableLike):
         # Always disambiguate sides using source_/target_ prefixes to avoid
         # duplicated column names in self-referential relationships
         left_fk_name = (
-            f"source_{self.tablename.lower()}{self.ormatic.foreign_key_postfix}"
+            f"_source_{self.tablename.lower()}{self.ormatic.foreign_key_postfix}"
         )
-        right_fk_name = f"target_{target_wrapped_table.tablename.lower()}{self.ormatic.foreign_key_postfix}"
+        right_fk_name = f"_target_{target_wrapped_table.tablename.lower()}{self.ormatic.foreign_key_postfix}"
 
         # create association table metadata
         association_table = AssociationObject(
