@@ -9,8 +9,10 @@ Every scene here is built headless on the test dataset's own grasping robot, the
 from __future__ import annotations
 
 import pytest
+from krrood.ormatic.data_access_objects.helper import to_dao
 from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
+from sqlalchemy import select
 
 from experiments.episodes.episode import Episode
 from experiments.montessori.scenarios import (
@@ -21,6 +23,7 @@ from experiments.montessori.scenarios import (
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.watched_run import WatchedSortingRun
+from experiments.orm.ormatic_interface import RecordedTrialDAO
 from experiments.questions.question import Memory
 
 from .test_episode_recording import TrialsKeptInMemory
@@ -183,3 +186,30 @@ def test_a_scenario_told_to_show_itself_carries_that_to_its_simulation(area):
     scenario.build_world()
 
     assert scenario.simulation.headless is False
+
+
+def test_the_questions_asked_come_back_from_the_database_without_their_world(
+    area, experiments_database_session
+):
+    """
+    A question that singles a piece out is kept as JSON with the piece in it, and the
+    world the piece stood in is gone by the time the episode is asked about.
+    """
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+    run = watched(scenario)
+    run.run(scenario)
+    [trial] = run.records_trials.trials
+    session = experiments_database_session
+    session.add(to_dao(trial))
+    session.commit()
+
+    [restored] = [
+        row.from_dao() for row in session.scalars(select(RecordedTrialDAO)).all()
+    ]
+
+    assert [query.text for query in restored.queries] == [
+        query.text for query in trial.queries
+    ]

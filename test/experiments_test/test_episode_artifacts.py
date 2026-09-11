@@ -271,3 +271,26 @@ def test_a_two_trial_episode_keeps_its_video_its_files_and_its_transcript(tmp_pa
     assert artifacts.video.stat().st_size > 0
     assert [kept.name for kept in artifacts.run_files] == ["scene.xml"]
     assert trials[1].queries[0].answer in artifacts.transcript.read_text()
+
+
+def test_a_directory_the_run_produced_is_kept_whole(tmp_path):
+    """
+    A bag is a directory of files rather than one file, and is kept as one run file with
+    everything in it.
+    """
+    bag = tmp_path / "run_20260911_120000"
+    bag.mkdir()
+    (bag / "metadata.yaml").write_text("rosbag2_bagfile_information: {}")
+    (bag / "run_0.mcap").write_bytes(b"mcap")
+    artifacts = ArtifactDirectory(path=tmp_path / "artifacts").open_for(
+        sorting_episode()
+    )
+
+    kept = artifacts.keep_directory(bag)
+
+    assert [kept.name for kept in artifacts.run_files] == [bag.name]
+    assert sorted(path.name for path in kept.iterdir()) == [
+        "metadata.yaml",
+        "run_0.mcap",
+    ]
+    assert (kept / "run_0.mcap").read_bytes() == b"mcap"

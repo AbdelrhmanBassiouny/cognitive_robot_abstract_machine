@@ -11,6 +11,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world import World
 from typing_extensions import Optional
 
@@ -144,7 +147,9 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
                 object_compared_against=compared_against,
                 object_in_the_hand=scene.body_of(acted_on),
                 own_body_asked_about=scene.gripper.name,
-                point_of_view=scene.robot.root.global_transform,
+                point_of_view=HomogeneousTransformationMatrix(
+                    scene.robot.root.global_transform.to_np()
+                ),
             )
         )
 

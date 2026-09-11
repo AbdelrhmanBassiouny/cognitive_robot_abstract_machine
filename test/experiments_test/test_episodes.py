@@ -12,12 +12,18 @@ from coraplex.datastructures.enums import ExecutionType
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import PlanNode
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from segmind.datastructures.events import InsertionEvent, PickUpEvent
+from segmind.datastructures.events import ContactEvent, InsertionEvent, PickUpEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.testing import two_arm_robot_world
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 from sqlalchemy import select
 
@@ -145,6 +151,58 @@ def test_events_are_persisted_under_the_tick_they_were_seen_in(
         for tick in ticks
     }
     assert events_by_moment == {1.0: {"PickUpEventDAO"}, 2.0: {"InsertionEventDAO"}}
+
+
+def test_a_contact_event_comes_back_without_the_world_it_was_seen_in(
+    experiments_database_session,
+):
+    """
+    A contact event reads the pose of what it is about off the world when it is made,
+    and a body read back from the database stands in no world any more.
+    """
+    session = experiments_database_session
+    world = World()
+    tracked_shape = Body(
+        name=PrefixedName("circular_hole_1_shape"),
+        collision=ShapeCollection([Box(scale=Scale(0.1, 0.1, 0.1))]),
+    )
+    table = Body(
+        name=PrefixedName("table"),
+        collision=ShapeCollection([Box(scale=Scale(1.0, 1.0, 0.1))]),
+    )
+    with world.modify_world():
+        world.add_kinematic_structure_entity(table)
+        world.add_connection(
+            FixedConnection(
+                parent=table,
+                child=tracked_shape,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    reference_frame=table
+                ),
+            )
+        )
+    trial = RecordedTrial(
+        episode=sorting_episode(),
+        outcome=TrialOutcome.SUCCEEDED,
+        duration=12.5,
+        ticks=[
+            Tick(
+                moment=1.0,
+                events=[ContactEvent(tracked_object=tracked_shape, with_object=table)],
+            )
+        ],
+    )
+
+    session.add(to_dao(trial))
+    session.commit()
+
+    [recorded_trial] = session.scalars(select(RecordedTrialDAO)).all()
+    restored: RecordedTrial = recorded_trial.from_dao()
+    [tick] = restored.ticks
+    [event] = tick.events
+    assert type(event) is ContactEvent
+    assert event.tracked_object.name == tracked_shape.name
+    assert event.with_object.name == table.name
 
 
 def test_a_query_keeps_the_backend_that_answered_each_predicate(

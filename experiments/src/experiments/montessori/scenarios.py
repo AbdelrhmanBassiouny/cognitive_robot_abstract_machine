@@ -60,6 +60,7 @@ from coraplex.datastructures.enums import (
 )
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.execution_environment import simulated_robot
+from coraplex.view_manager import ViewManager
 from coraplex.plans.factories import sequential
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
@@ -118,7 +119,7 @@ from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.reasoning.robot_predicates import robot_holds_body
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -577,12 +578,19 @@ class SortingScene:
         return robot
 
     @property
+    def end_effector(self) -> EndEffector:
+        """
+        The end effector the robot sorts with: the one on the arm that sorts, which is
+        the only one a one-armed robot has.
+        """
+        return ViewManager.get_end_effector_view(THE_ARM_THAT_SORTS, self.robot)
+
+    @property
     def gripper(self) -> Body:
         """
         The frame the robot grasps with, which a held piece hangs from.
         """
-        [end_effector] = self.robot.get_end_effectors()
-        return end_effector.tool_frame
+        return self.end_effector.tool_frame
 
     @property
     def categories(self) -> Set[MontessoriShapeCategory]:
@@ -701,9 +709,8 @@ class SortingScene:
         How the robot takes hold of a piece: from above, since every piece here stands
         on a table and is posted down through a hole.
         """
-        [end_effector] = self.robot.get_end_effectors()
         return GraspDescription(
-            ApproachDirection.FRONT, VerticalAlignment.TOP, end_effector
+            ApproachDirection.FRONT, VerticalAlignment.TOP, self.end_effector
         )
 
     def stand_the_piece_at(

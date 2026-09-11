@@ -416,6 +416,11 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     """
 
     def __post_init__(self):
+        # an event read back from a record is about a body that stands in no world any
+        # more, so there is nothing to read its pose off; the numbers it read when it
+        # happened are the record's
+        if self.tracked_object._world is None:
+            return
         # combined_mesh (not tracked_object.collision.combined_mesh directly) so this
         # also works when with_object is a hole's Region root, which exposes its
         # geometry via .area rather than .collision.
