@@ -9,7 +9,7 @@ into the scene it was asked of, they can see that it does.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
@@ -24,6 +24,8 @@ from experiments.paper.panel import CardPanel
 from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoCamera,
+    MujocoLight,
+    MultiSimLight,
     MujocoSim,
     RegionAppearance,
     select_offscreen_rendering_backend,
@@ -31,9 +33,8 @@ from semantic_digital_twin.adapters.multi_sim import (
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
-    RotationMatrix,
-    Vector3,
 )
+from semantic_digital_twin.mixin import SimulatorAdditionalProperty
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
@@ -80,6 +81,25 @@ POINT_OF_VIEW_CAMERA_NAME = "paper_point_of_view_camera"
 What a render calls the camera it puts in a body's own frame.
 """
 
+SCENE_LIGHT_NAME = "paper_scene_light"
+"""
+What a render calls the light it hangs over a scene that states none of its own.
+"""
+
+AMBIENT_LIGHT = [0.45, 0.45, 0.45]
+"""
+How much light reaches a surface no lamp points at, as red, green and blue.
+
+High enough that a body facing away from the light is still read as a shape rather than
+as background, since a card has to show what the answer names wherever it happens to
+stand.
+"""
+
+DIFFUSE_LIGHT = [0.75, 0.75, 0.75]
+"""
+How much light a surface facing the lamp takes, as red, green and blue.
+"""
+
 
 def drawn(color: Color) -> Tuple[int, int, int]:
     """
@@ -122,17 +142,39 @@ class NothingToDrawError(DataclassException):
 # %% where a scene is looked at from
 
 
+VIEW_T_MUJOCO_CAMERA = HomogeneousTransformationMatrix.from_xyz_rpy().to_np()
+VIEW_T_MUJOCO_CAMERA[:3, :3] = np.array(
+    [[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+)
+"""
+The turn from the way the twin states where something looks from to the way MuJoCo
+states a camera's own frame.
+
+The twin faces a looker down its x-axis with y to its left and z up; MuJoCo points a
+camera down its own negative z with y up the picture and x across it. Getting this wrong
+leaves every picture facing somewhere the question was not asked from.
+"""
+
+
 @dataclass(frozen=True)
 class PointOfView:
     """
-    A scene looked at from something standing in it, which is what a question about one
+    A scene looked at from somewhere standing in it, which is what a question about one
     object being to a side of another is asked from.
     """
 
     body: Body
     """
-    The body the picture is taken from, in whose frame *left* and *right* mean what the
-    question means by them.
+    The body the picture hangs on, in whose frame :attr:`pose` is given.
+    """
+
+    pose: HomogeneousTransformationMatrix = field(
+        default_factory=HomogeneousTransformationMatrix.from_xyz_rpy
+    )
+    """
+    Where in that body's frame the looker stands and which way it faces, stated the way
+    the twin states a point of view: x the way it faces, y to its left, z up. The body's
+    own frame by default.
     """
 
     field_of_view: float = 60.0
@@ -152,25 +194,17 @@ class PointOfView:
 
     def camera(self) -> MujocoCamera:
         """
-        A camera sitting in :attr:`body`'s own frame and facing the way it faces,
-        already attached to it.
-
-        The twin faces a looker down its x-axis with y to its left and z up, while
-        MuJoCo points a camera down its own negative z with y up the picture, so the two
-        frames are a fixed turn apart -- the turn that makes a body's left the left of
-        the picture.
+        A camera standing where this point of view is and facing the way it faces,
+        already attached to :attr:`body`.
         """
-        body_R_camera = RotationMatrix.from_vectors(
-            x=Vector3(0.0, -1.0, 0.0), z=Vector3(-1.0, 0.0, 0.0)
+        body_T_camera = HomogeneousTransformationMatrix(
+            self.pose.to_np() @ VIEW_T_MUJOCO_CAMERA
         )
         camera = MujocoCamera(
             name=POINT_OF_VIEW_CAMERA_NAME,
             body=self.body,
-            quaternion=MujocoCamera.quaternion_of(
-                HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                    rotation_matrix=body_R_camera
-                )
-            ),
+            position=body_T_camera.to_position().to_np()[:3].tolist(),
+            quaternion=MujocoCamera.quaternion_of(body_T_camera),
             fovy=self.field_of_view,
             resolution=[float(self.width), float(self.height)],
         )
@@ -274,14 +308,18 @@ class SceneRender:
         """
         Draw the world with the given things picked out of it.
 
+        A world that states no camera or no light of its own is given one for the length
+        of the render and has it taken off again, so drawing a card changes nothing
+        about the twin the next query is answered from.
+
         :param answers: The bodies and regions the answer names, which may be none where
             the query answered nothing.
-        :raises NothingToDrawError: If no camera was given and the world holds no
-            geometry to frame one around.
+        :raises NothingToDrawError: If the render has to place a camera or a light and
+            the world holds no geometry to place it around.
         """
         select_offscreen_rendering_backend()
-        placed_camera = self._overview_camera() if self.camera is None else None
-        camera = self.camera if placed_camera is None else placed_camera
+        placed = self._placed_around_the_scene()
+        camera = self.camera if self.camera is not None else placed[0]
         scene = MujocoSim(
             world=self.world,
             headless=True,
@@ -296,8 +334,8 @@ class SceneRender:
             return self._drawn(scene, camera, answers)
         finally:
             scene.simulator.stop()
-            if placed_camera is not None:
-                placed_camera.body.simulator_additional_properties.remove(placed_camera)
+            for own in placed:
+                own.body.simulator_additional_properties.remove(own)
 
     def pick_out(
         self, scene: MujocoSim, answers: Sequence[KinematicStructureEntity]
@@ -315,17 +353,57 @@ class SceneRender:
 
     # %% placing the camera
 
-    def _overview_camera(self) -> MujocoCamera:
+    def _placed_around_the_scene(self) -> List[SimulatorAdditionalProperty]:
         """
-        A camera hung on the world's root looking diagonally down on the whole scene,
-        already attached to it.
+        What this render has to add to the world to draw it at all, already attached and
+        in the order it was placed: the overview camera when none was given, then a light
+        when the world states none.
 
-        :raises NothingToDrawError: If the world holds no geometry to frame one around.
+        :raises NothingToDrawError: If anything has to be placed and the world holds no
+            geometry to place it around.
+        """
+        wanted_camera = self.camera is None
+        wanted_light = not self._is_lit()
+        if not wanted_camera and not wanted_light:
+            return []
+        bounds = self._bounds()
+        placed: List[SimulatorAdditionalProperty] = []
+        if wanted_camera:
+            placed.append(self._overview_camera(bounds))
+        if wanted_light:
+            placed.append(self._light_over(bounds))
+        return placed
+
+    def _bounds(self) -> np.ndarray:
+        """
+        The corners of the box the world's geometry stands in.
+
+        :raises NothingToDrawError: If the world holds no geometry.
         """
         bounds = RayTracer(self.world).scene.bounds
         if bounds is None:
             raise NothingToDrawError(world=self.world)
-        pose = MujocoCamera.overview_pose(np.asarray(bounds))
+        return np.asarray(bounds)
+
+    def _is_lit(self) -> bool:
+        """
+        Whether the world says how it is lit, in which case a render leaves its lighting
+        alone.
+        """
+        return any(
+            isinstance(stated, MultiSimLight)
+            for entity in self.world.kinematic_structure_entities
+            for stated in entity.simulator_additional_properties
+        )
+
+    def _overview_camera(self, bounds: np.ndarray) -> MujocoCamera:
+        """
+        A camera hung on the world's root looking diagonally down on the whole scene,
+        already attached to it.
+
+        :param bounds: The corners of the box the scene stands in.
+        """
+        pose = MujocoCamera.overview_pose(bounds)
         camera = MujocoCamera(
             name=OVERVIEW_CAMERA_NAME,
             body=self.world.root,
@@ -335,6 +413,30 @@ class SceneRender:
         )
         self.world.root.simulator_additional_properties.append(camera)
         return camera
+
+    def _light_over(self, bounds: np.ndarray) -> MujocoLight:
+        """
+        A light shining down on the whole scene from the way the overview camera looks
+        at it, already attached to the world's root.
+
+        Cast in parallel rays rather than from a lamp standing somewhere, so a scene of
+        any size is lit evenly and a body far from the middle is as readable as one in
+        it.
+
+        :param bounds: The corners of the box the scene stands in.
+        """
+        overhead = MujocoCamera.overview_pose(bounds).to_position().to_np()[:3]
+        light = MujocoLight(
+            name=SCENE_LIGHT_NAME,
+            body=self.world.root,
+            directional=True,
+            position=overhead.tolist(),
+            direction=(-overhead / np.linalg.norm(overhead)).tolist(),
+            ambient=AMBIENT_LIGHT,
+            diffuse=DIFFUSE_LIGHT,
+        )
+        self.world.root.simulator_additional_properties.append(light)
+        return light
 
     # %% drawing
 

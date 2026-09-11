@@ -40,6 +40,25 @@ class PanelKind(StrEnum):
     What the robot's own camera saw at that moment, which only a run on the robot has.
     """
 
+    @property
+    def caption(self) -> str:
+        """
+        What this picture shows, as the paper's reader is told it under the figure.
+        """
+        return _PANEL_CAPTIONS[self]
+
+
+_PANEL_CAPTIONS = {
+    PanelKind.SCENE: "drawn into the digital twin.",
+    PanelKind.TIMELINE: "against the events of the run, with the query's own moment "
+    "marked.",
+    PanelKind.CAMERA_FRAME: "as the robot's camera saw it at that moment.",
+}
+"""
+What each kind of picture shows, kept beside the members rather than in them so a member
+names the situation it means and not the wording it is rendered with.
+"""
+
 
 # %% one picture of a card
 
@@ -55,6 +74,7 @@ class CardPanel(ABC):
         """
         Leave this picture at the given path.
 
-        :param path: The file it is written to, its directory created if it is not there.
-        :return: ``path``.
+        :param path: The file it is written to, its directory created if it is not
+            there.
+        :return:``path``.
         """

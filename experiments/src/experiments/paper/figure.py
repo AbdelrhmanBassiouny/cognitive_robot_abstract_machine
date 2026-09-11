@@ -63,11 +63,23 @@ class FigureName(StrEnum):
 
 class FigureFile(StrEnum):
     """
-    The suffix each of the two files a figure is written to carries.
+    The suffix each file the paper's own figures are written to carries.
     """
 
     TYPST_TABLE = ".typ"
+    """
+    The markup the paper includes, whether it holds a table or names pictures.
+    """
+
     ROW_MANIFEST = ".json"
+    """
+    The rows a table presents, so a number in the paper is traceable to them.
+    """
+
+    IMAGE = ".png"
+    """
+    One drawn picture, which is what a query card's panels are written as.
+    """
 
 
 @dataclass(frozen=True)

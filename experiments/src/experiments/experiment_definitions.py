@@ -508,3 +508,18 @@ class TypstRenderer:
         :return: Typst markup for a captioned figure.
         """
         return f"#figure(\n{self.render_table()},\n  caption: [{caption}]\n)"
+
+    @staticmethod
+    def render_image_figure(caption: str, image_name: str) -> str:
+        """
+        Renders a picture wrapped in a Typst #figure with a caption.
+
+        The sibling of :meth:`render_figure` for a figure that shows a drawing rather
+        than a table, so a document includes both the same way.
+
+        :param caption: Caption text describing what the picture shows.
+        :param image_name: The picture's file name, resolved beside the markup that
+            names it.
+        :return: Typst markup for a captioned figure.
+        """
+        return f'#figure(\n  image("{image_name}"),\n  caption: [{caption}]\n)'

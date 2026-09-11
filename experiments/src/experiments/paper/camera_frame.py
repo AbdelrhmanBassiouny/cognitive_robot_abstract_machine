@@ -100,22 +100,37 @@ class BagFrameAt(CardPanel):
     """
 
     @property
+    def expected_at(self) -> Path:
+        """
+        Where the run's camera recording is kept, whether or not it kept one.
+        """
+        return (
+            self.artifacts.directory
+            / EpisodeArtifact.RUN_FILES
+            / RunFile.CAMERA_RECORDING
+        )
+
+    @property
+    def was_recorded(self) -> bool:
+        """
+        Whether the episode kept a camera recording to read a frame out of, which is
+        what lets a card leave the panel out rather than fail on it.
+        """
+        return self.expected_at.is_dir()
+
+    @property
     def recording(self) -> Path:
         """
         The directory the run left its camera's recording in.
 
         :raises NoCameraRecordingError: When the episode kept none.
         """
-        bag = (
-            self.artifacts.directory
-            / EpisodeArtifact.RUN_FILES
-            / RunFile.CAMERA_RECORDING
-        )
-        if not bag.is_dir():
+        if not self.was_recorded:
             raise NoCameraRecordingError(
-                episode_identifier=self.artifacts.episode.identifier, expected_at=bag
+                episode_identifier=self.artifacts.episode.identifier,
+                expected_at=self.expected_at,
             )
-        return bag
+        return self.expected_at
 
     @property
     def fraction(self) -> float:

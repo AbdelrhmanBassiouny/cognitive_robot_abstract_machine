@@ -10,7 +10,6 @@ no window, and those are skipped where the run named none.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import imageio.v2 as imageio
@@ -24,9 +23,9 @@ from experiments.paper.scene import (
     SceneRender,
 )
 from semantic_digital_twin.adapters.multi_sim import (
-    MUJOCO_RENDERING_BACKEND_VARIABLE,
-    MujocoRenderingBackend,
+    MujocoLight,
     MujocoSim,
+    MultiSimLight,
     RegionAppearance,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -39,27 +38,9 @@ from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
+from .offscreen_rendering import needs_a_renderer
+
 # %% what this test needs to be there
-
-
-def can_draw_without_a_screen() -> bool:
-    """
-    Whether this run named a backend MuJoCo can draw offscreen through.
-
-    MuJoCo locks its backend at the moment it is imported, so a run that has to draw
-    without a window names one in the environment it starts from; a run that named none
-    falls back to the windowed backend and aborts the render.
-    """
-    return os.environ.get(MUJOCO_RENDERING_BACKEND_VARIABLE, "").lower() in tuple(
-        MujocoRenderingBackend
-    )
-
-
-needs_a_renderer = pytest.mark.skipif(
-    not can_draw_without_a_screen(),
-    reason="%s names no offscreen backend, so nothing can be drawn"
-    % MUJOCO_RENDERING_BACKEND_VARIABLE,
-)
 
 # %% a scene with two things standing in it
 
@@ -145,6 +126,20 @@ def body_named(world: World, name: str) -> Body:
     :param name: Which body is wanted.
     """
     return world.get_body_by_name(name)
+
+
+def lights_of(world: World) -> list:
+    """
+    Every light the world itself states.
+
+    :param world: The world to read.
+    """
+    return [
+        stated
+        for entity in world.kinematic_structure_entities
+        for stated in entity.simulator_additional_properties
+        if isinstance(stated, MultiSimLight)
+    ]
 
 
 def drawn_colors_of(scene: MujocoSim, body: Body) -> Tuple[Tuple[float, ...], ...]:
@@ -233,6 +228,57 @@ def test_picking_an_answer_out_leaves_the_twin_alone(
     assert [shape.color for shape in answered.visual] == [STATED_COLOR]
 
 
+# %% lighting the scene
+
+
+def test_a_world_stating_no_light_is_lit_for_the_picture(
+    scene_with_two_things: World,
+) -> None:
+    """
+    A scene nothing lights renders black, so a render that has to place its own camera
+    places a light too.
+    """
+    render_of(scene_with_two_things).of(
+        [body_named(scene_with_two_things, ANSWERED_NAME)]
+    )
+    assert lights_of(scene_with_two_things) == []
+
+
+def test_a_world_stating_its_own_light_is_left_alone(
+    scene_with_two_things: World,
+) -> None:
+    """
+    A world that says how it is lit keeps its own lighting, rather than being lit twice.
+    """
+    stated = MujocoLight(name="stated_light", body=scene_with_two_things.root)
+    scene_with_two_things.root.simulator_additional_properties.append(stated)
+    render_of(scene_with_two_things).of(
+        [body_named(scene_with_two_things, ANSWERED_NAME)]
+    )
+    assert lights_of(scene_with_two_things) == [stated]
+
+
+def test_a_lit_picture_is_brighter_than_an_unlit_one(
+    scene_with_two_things: World,
+) -> None:
+    """
+    The light is what makes the answer readable: the same scene rendered without one is
+    darker than the same scene rendered with the one the render places.
+    """
+    answers = [body_named(scene_with_two_things, ANSWERED_NAME)]
+    lit = render_of(scene_with_two_things).of(answers)
+    scene_with_two_things.root.simulator_additional_properties.append(
+        MujocoLight(
+            name="feeble_light",
+            body=scene_with_two_things.root,
+            diffuse=[0.0, 0.0, 0.0],
+            specular=[0.0, 0.0, 0.0],
+        )
+    )
+    unlit = render_of(scene_with_two_things).of(answers)
+    assert lit.image.mean() > unlit.image.mean()
+
+
 # %% asking for a picture of nothing
 
 
@@ -298,3 +344,17 @@ def test_a_picture_taken_from_a_body_sees_what_stands_in_front_of_it(
         faded=FADED,
     ).of([seen])
     assert drawn.holds(HIGHLIGHT)
+
+
+def test_a_point_of_view_stands_where_its_pose_puts_it(
+    scene_with_two_things: World,
+) -> None:
+    """
+    A question asked from a place rather than from a body is drawn from that place, so
+    the camera stands where the pose says rather than at the body it hangs on.
+    """
+    stood_at = HomogeneousTransformationMatrix.from_xyz_rpy(x=0.3, y=-0.2, z=1.1)
+    camera = PointOfView(
+        body=body_named(scene_with_two_things, ANSWERED_NAME), pose=stood_at
+    ).camera()
+    assert camera.position == pytest.approx(stood_at.to_position().to_np()[:3].tolist())

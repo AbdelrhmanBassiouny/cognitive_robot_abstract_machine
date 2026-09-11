@@ -15,12 +15,17 @@ import experiments.questions.long_term_memory
 import experiments.questions.question
 import experiments.questions.question_set
 import experiments.questions.working_memory
+import experiments.paper.camera_frame
 import experiments.paper.figure
 import experiments.paper.figure_set
 import experiments.paper.measurement
 import experiments.paper.outcomes
+import experiments.paper.panel
 import experiments.paper.queries
+import experiments.paper.query_card
 import experiments.paper.questions
+import experiments.paper.scene
+import experiments.paper.timeline
 import coraplex.orm.ormatic_interface
 import segmind.orm.ormatic_interface
 
@@ -81,16 +86,23 @@ for question_module in (
 ):
     ignored_classes |= set(classes_of_module(question_module))
 
-# a table of the paper is computed from what was recorded rather than recorded itself,
+# a figure of the paper is computed from what was recorded rather than recorded itself,
 # and it is regenerated whenever the database changes, so storing one would store an
-# answer next to the rows it was read off
+# answer next to the rows it was read off. The same holds of a query card and of
+# everything it is drawn from: a render holds a live mirror of the world and a drawn
+# panel holds pixels, neither of which is anything a row could keep
 for paper_module in (
+    experiments.paper.camera_frame,
     experiments.paper.figure,
     experiments.paper.figure_set,
     experiments.paper.measurement,
     experiments.paper.outcomes,
+    experiments.paper.panel,
     experiments.paper.queries,
+    experiments.paper.query_card,
     experiments.paper.questions,
+    experiments.paper.scene,
+    experiments.paper.timeline,
 ):
     ignored_classes |= set(classes_of_module(paper_module))
 

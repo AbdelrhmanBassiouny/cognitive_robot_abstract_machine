@@ -1,0 +1,624 @@
+"""
+One query of the paper shown beside a picture of what its answer means.
+
+The counterpart of :mod:`~experiments.paper.figure`: a table says how often the queries
+were answered correctly, a card says what one of those answers *is* -- the bodies it
+names picked out of the twin, when in the run it was asked, and, for a run on the robot,
+what the camera was looking at while it was.
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
+
+from krrood.exceptions import DataclassException
+from segmind.datastructures.events import DetectionEvent, PickUpEvent
+from typing_extensions import ClassVar, Dict, List, Optional, Tuple, Type
+
+from experiments.episodes.artifacts import EpisodeArtifacts
+from experiments.episodes.episode import RecordedQuery, RecordedTrial
+from experiments.experiment_definitions import TypstRenderer
+from experiments.paper.camera_frame import BagFrameAt
+from experiments.paper.figure import FigureFile
+from experiments.paper.panel import CardPanel, PanelKind
+from experiments.paper.scene import PointOfView, SceneRender
+from experiments.paper.timeline import EventTimeline
+from experiments.questions.question import Question
+from experiments.questions.working_memory import (
+    NumberOfOwnDegreesOfFreedom,
+    ObjectsSeen,
+    PickedUpRecently,
+    SideOfAnotherObject,
+)
+from semantic_digital_twin.adapters.multi_sim import MujocoCamera
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
+
+# %% which card of the paper a card is
+
+
+class QueryCardName(StrEnum):
+    """
+    Every query the paper shows a picture of, named by the question it asks.
+
+    A member's value is the stem of the files the card is written to, so the paper and
+    the script that regenerates it name a card once.
+    """
+
+    OBJECTS_SEEN = "objects_seen"
+    SIDE_OF_ANOTHER_OBJECT = "side_of_another_object"
+    PICKED_UP_RECENTLY = "picked_up_recently"
+    OWN_DEGREES_OF_FREEDOM = "own_degrees_of_freedom"
+
+
+@dataclass(frozen=True)
+class WrittenQueryCard:
+    """
+    Where one card's markup, and every picture it names, were left.
+    """
+
+    card: QueryCardName
+    """
+    The card that was written.
+    """
+
+    query: RecordedQuery
+    """
+    The query it shows, so a card in the paper is traceable to the run that asked it.
+    """
+
+    markup_path: Path
+    """
+    The Typst markup the paper includes, which names every picture below.
+    """
+
+    panel_paths: Dict[PanelKind, Path]
+    """
+    Where each of the card's pictures was left, in the order they were drawn.
+    """
+
+
+# %% asking for a card that cannot be drawn
+
+
+@dataclass
+class UnknownQueryCardError(DataclassException):
+    """
+    Raised when a card is asked for that the set does not hold.
+    """
+
+    card: QueryCardName
+    """
+    The card nothing was found for.
+    """
+
+    def error_message(self) -> str:
+        return "The set holds no card showing %s." % self.card.value
+
+    def suggest_correction(self) -> str:
+        return (
+            "Add a QueryCard for it to QueryCardSet.for_the_paper, which is where the "
+            "queries the paper shows are listed."
+        )
+
+
+@dataclass
+class EpisodeKeptNoWorldError(DataclassException):
+    """
+    Raised when a card is asked to draw a scene of an episode that kept no world.
+    """
+
+    episode_identifier: str
+    """
+    The episode that was asked.
+    """
+
+    def error_message(self) -> str:
+        return "Episode %s kept no world, so its scene cannot be drawn." % (
+            self.episode_identifier
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "A run keeps its world as it records, so an episode recorded before the run "
+            "was asked for one has rows but nothing to draw. Record the episode again, "
+            "or write only the cards whose panels do not show the twin."
+        )
+
+
+@dataclass
+class RobotNotFoundInTheWorldError(DataclassException):
+    """
+    Raised when a card asks a world which robot ran in it and it holds other than one.
+    """
+
+    found: int
+    """
+    How many robots it holds.
+    """
+
+    def error_message(self) -> str:
+        return "The world holds %d robots, not one." % self.found
+
+    def suggest_correction(self) -> str:
+        return (
+            "A question about the robot's own body is about one robot, so the world it "
+            "is asked of has to say which. Record the episode with the robot its "
+            "scenario builds."
+        )
+
+
+# %% one card
+
+
+@dataclass
+class QueryCard(ABC):
+    """
+    One query of the paper, drawn as the panels that say what its answer means.
+
+    A card is a question rather than one asking of it: a trial asks the same question as
+    often as its scenario says, and each asking is drawn as a card of its own.
+    """
+
+    name: ClassVar[QueryCardName]
+    """
+    Which card of the paper this is.
+    """
+
+    question: ClassVar[Type[Question]]
+    """
+    The question of the frozen set this card shows the answer to.
+    """
+
+    panels: ClassVar[Tuple[PanelKind, ...]]
+    """
+    The pictures this card is made of, in the order they are shown.
+    """
+
+    caption: ClassVar[str]
+    """
+    What the card shows, as the paper's reader is told it.
+    """
+
+    @abstractmethod
+    def answers(self, asked: Question, world: World) -> List[KinematicStructureEntity]:
+        """
+        The things in the twin this question's answer points at, which the scene picks
+        out.
+
+        :param asked: The question as it was asked, which is what names the things a
+            question about particular objects is about.
+        :param world: The twin the run happened in.
+        """
+
+    def emphasise(self, asked: Question, trial: RecordedTrial) -> List[DetectionEvent]:
+        """
+        The events of the trial this question's answer is about, whose rows the timeline
+        picks out. None, for a question that is not about anything that happened.
+
+        :param asked: The question as it was asked.
+        :param trial: The trial it was asked during.
+        """
+        return []
+
+    def point_of_view(self, asked: Question, world: World) -> Optional[MujocoCamera]:
+        """
+        The camera this card's scene is drawn through, or None to frame the whole scene
+        from the overview viewpoint.
+
+        :param asked: The question as it was asked.
+        :param world: The twin the run happened in.
+        """
+        return None
+
+    # %% what a card reaches for in the trial it is given
+
+    def queries_in(self, trial: RecordedTrial) -> List[RecordedQuery]:
+        """
+        Every query of the trial this card shows, in the order they were asked.
+
+        :param trial: The trial to read.
+        """
+        return [
+            query
+            for query in trial.queries
+            if isinstance(query.question, self.question)
+        ]
+
+    @staticmethod
+    def robot_of(world: World) -> AbstractRobot:
+        """
+        The robot the run's world holds.
+
+        :param world: The twin the run happened in.
+        :raises RobotNotFoundInTheWorldError: If it holds other than one robot.
+        """
+        robots = world.get_semantic_annotations_by_type(AbstractRobot)
+        if len(robots) != 1:
+            raise RobotNotFoundInTheWorldError(found=len(robots))
+        return robots[0]
+
+    @staticmethod
+    def world_of(trial: RecordedTrial) -> World:
+        """
+        The twin the run happened in.
+
+        :param trial: The trial whose episode's world is read.
+        :raises EpisodeKeptNoWorldError: If the episode kept no world.
+        """
+        if trial.episode.world is None:
+            raise EpisodeKeptNoWorldError(episode_identifier=trial.episode.identifier)
+        return trial.episode.world
+
+    # %% what this card's files are called
+
+    def stem(self, number: int) -> str:
+        """
+        What one asking of this card's question has its files named after.
+
+        :param number: Which asking of it this is, counting from one.
+        """
+        return "%s_%02d" % (self.name.value, number)
+
+    def panel_file_name(self, number: int, panel: PanelKind) -> str:
+        """
+        What one picture of this card is called.
+
+        :param number: Which asking of this card's question it belongs to.
+        :param panel: Which picture of the card it is.
+        """
+        return "%s_%s%s" % (self.stem(number), panel.value, FigureFile.IMAGE.value)
+
+    def markup_file_name(self, number: int) -> str:
+        """
+        What this card's markup is called.
+
+        :param number: Which asking of this card's question it shows.
+        """
+        return "%s%s" % (self.stem(number), FigureFile.TYPST_TABLE.value)
+
+    # %% writing it out
+
+    def write(
+        self,
+        trial: RecordedTrial,
+        output_directory: Path,
+        artifacts: Optional[EpisodeArtifacts] = None,
+    ) -> List[WrittenQueryCard]:
+        """
+        Leave one card per asking of this card's question in the given directory.
+
+        :param trial: The trial the queries were asked during.
+        :param output_directory: Where the files go, created if it is not there.
+        :param artifacts: The episode's own files, where a run on the robot kept the
+            recording its camera panel is read from. Without them the card is drawn
+            without that panel.
+        :return: Where each card was left, in the order they were written.
+        """
+        output_directory.mkdir(parents=True, exist_ok=True)
+        return [
+            self._written(trial, query, number, output_directory, artifacts)
+            for number, query in enumerate(self.queries_in(trial), start=1)
+        ]
+
+    def _written(
+        self,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        number: int,
+        output_directory: Path,
+        artifacts: Optional[EpisodeArtifacts],
+    ) -> WrittenQueryCard:
+        """
+        Draw and leave one card, for one asking of this card's question.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        :param number: Which asking of this card's question it is, counting from one.
+        :param output_directory: Where the files go.
+        :param artifacts: The episode's own files, or None.
+        """
+        panel_paths = {
+            panel: drawn.write(output_directory / self.panel_file_name(number, panel))
+            for panel, drawn in self._panels(trial, query, artifacts).items()
+        }
+        markup_path = output_directory / self.markup_file_name(number)
+        markup_path.write_text(self._markup(query, panel_paths))
+        return WrittenQueryCard(
+            card=self.name,
+            query=query,
+            markup_path=markup_path,
+            panel_paths=panel_paths,
+        )
+
+    def _panels(
+        self,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        artifacts: Optional[EpisodeArtifacts],
+    ) -> Dict[PanelKind, CardPanel]:
+        """
+        Draw every picture of this card that there is something to draw it from.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        :param artifacts: The episode's own files, or None.
+        """
+        drawn = {
+            panel: self._drawn(panel, trial, query, artifacts) for panel in self.panels
+        }
+        return {
+            panel: picture for panel, picture in drawn.items() if picture is not None
+        }
+
+    def _drawn(
+        self,
+        panel: PanelKind,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        artifacts: Optional[EpisodeArtifacts],
+    ) -> Optional[CardPanel]:
+        """
+        One picture of this card, or None where the run left nothing to draw it from.
+
+        :param panel: Which picture of the card to draw.
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        :param artifacts: The episode's own files, or None.
+        """
+        if panel is PanelKind.SCENE:
+            return self._scene(query.question, trial)
+        if panel is PanelKind.TIMELINE:
+            return EventTimeline().of(
+                trial,
+                mark=query.moment,
+                emphasise=self.emphasise(query.question, trial),
+            )
+        if artifacts is None:
+            return None
+        frame = BagFrameAt(
+            artifacts=artifacts, moment=query.moment, trial_duration=trial.duration
+        )
+        return frame if frame.was_recorded else None
+
+    def _scene(self, asked: Question, trial: RecordedTrial) -> CardPanel:
+        """
+        The twin with the things this question's answer names picked out of it.
+
+        :param asked: The question as it was asked.
+        :param trial: The trial it was asked during.
+        :raises EpisodeKeptNoWorldError: If the episode kept no world.
+        """
+        world = self.world_of(trial)
+        camera = self.point_of_view(asked, world)
+        try:
+            return SceneRender(world=world, camera=camera).of(
+                self.answers(asked, world)
+            )
+        finally:
+            if camera is not None:
+                camera.body.simulator_additional_properties.remove(camera)
+
+    def _markup(self, query: RecordedQuery, panel_paths: Dict[PanelKind, Path]) -> str:
+        """
+        This card as the Typst the paper includes: what was asked, what was answered,
+        and every picture of it.
+
+        :param query: The query this card shows.
+        :param panel_paths: Where each of its pictures was left.
+        """
+        lines = ["== %s" % query.text, "", "#emph[%s]" % query.answer, ""]
+        for panel, path in panel_paths.items():
+            lines.append(
+                TypstRenderer.render_image_figure(
+                    "%s %s" % (self.caption, panel.caption), path.name
+                )
+            )
+            lines.append("")
+        return "\n".join(lines)
+
+
+# %% the cards the paper shows
+
+
+@dataclass
+class ObjectsSeenCard(QueryCard):
+    """
+    What the robot answers it can see, drawn as those objects picked out of the scene.
+    """
+
+    name: ClassVar[QueryCardName] = QueryCardName.OBJECTS_SEEN
+    question: ClassVar[Type[Question]] = ObjectsSeen
+    panels: ClassVar[Tuple[PanelKind, ...]] = (
+        PanelKind.SCENE,
+        PanelKind.TIMELINE,
+        PanelKind.CAMERA_FRAME,
+    )
+    caption: ClassVar[str] = "The objects the robot answers it sees:"
+
+    def answers(self, asked: Question, world: World) -> List[KinematicStructureEntity]:
+        """
+        Every object of the scene, read off the twin the same way the question's own
+        ground truth is.
+
+        :param asked: The question as it was asked.
+        :param world: The twin the run happened in.
+        """
+        return list(asked.ground_truth(self.robot_of(world)))
+
+
+@dataclass
+class SideOfAnotherObjectCard(QueryCard):
+    """
+    Whether one object is to a side of another, drawn from the place it was asked from.
+    """
+
+    name: ClassVar[QueryCardName] = QueryCardName.SIDE_OF_ANOTHER_OBJECT
+    question: ClassVar[Type[Question]] = SideOfAnotherObject
+    panels: ClassVar[Tuple[PanelKind, ...]] = (
+        PanelKind.SCENE,
+        PanelKind.CAMERA_FRAME,
+    )
+    caption: ClassVar[str] = "The two objects a spatial question relates:"
+
+    def answers(
+        self, asked: SideOfAnotherObject, world: World
+    ) -> List[KinematicStructureEntity]:
+        """
+        The two objects the question relates, since what its yes or no means is where
+        they stand relative to each other.
+
+        :param asked: The question as it was asked.
+        :param world: The twin the run happened in.
+        """
+        return [asked.subject, asked.other]
+
+    def point_of_view(
+        self, asked: SideOfAnotherObject, world: World
+    ) -> Optional[MujocoCamera]:
+        """
+        The place the question was asked from, which is what makes its left and right
+        mean anything.
+
+        :param asked: The question as it was asked.
+        :param world: The twin the run happened in.
+        """
+        return PointOfView(body=world.root, pose=asked.point_of_view).camera()
+
+
+@dataclass
+class PickedUpRecentlyCard(QueryCard):
+    """
+    Whether an object was picked up, drawn beside the pick-ups the monitor reported.
+    """
+
+    name: ClassVar[QueryCardName] = QueryCardName.PICKED_UP_RECENTLY
+    question: ClassVar[Type[Question]] = PickedUpRecently
+    panels: ClassVar[Tuple[PanelKind, ...]] = (
+        PanelKind.SCENE,
+        PanelKind.TIMELINE,
+        PanelKind.CAMERA_FRAME,
+    )
+    caption: ClassVar[str] = "The object a question about what happened is about:"
+
+    def answers(
+        self, asked: PickedUpRecently, world: World
+    ) -> List[KinematicStructureEntity]:
+        """
+        The object the question is about.
+
+        :param asked: The question as it was asked.
+        :param world: The twin the run happened in.
+        """
+        return [asked.subject]
+
+    def emphasise(
+        self, asked: PickedUpRecently, trial: RecordedTrial
+    ) -> List[DetectionEvent]:
+        """
+        The pick-ups of that object the monitor reported.
+
+        Matched by the name the twin gives the object rather than by identity, because a
+        recalled episode's question and its events are read back as separate objects.
+
+        :param asked: The question as it was asked.
+        :param trial: The trial it was asked during.
+        """
+        return [
+            event
+            for tick in trial.ticks
+            for event in tick.events
+            if isinstance(event, PickUpEvent)
+            and event.tracked_object.name == asked.subject.name
+        ]
+
+
+@dataclass
+class OwnDegreesOfFreedomCard(QueryCard):
+    """
+    How many joints the robot answers it has, drawn as its own body picked out of the
+    scene.
+    """
+
+    name: ClassVar[QueryCardName] = QueryCardName.OWN_DEGREES_OF_FREEDOM
+    question: ClassVar[Type[Question]] = NumberOfOwnDegreesOfFreedom
+    panels: ClassVar[Tuple[PanelKind, ...]] = (PanelKind.SCENE,)
+    caption: ClassVar[str] = "The body a question about the robot itself counts:"
+
+    def answers(self, asked: Question, world: World) -> List[KinematicStructureEntity]:
+        """
+        Every link the robot is made of, since the joints it counts are what hold them
+        together.
+
+        :param asked: The question as it was asked.
+        :param world: The twin the run happened in.
+        """
+        return list(self.robot_of(world).bodies)
+
+
+# %% every card the paper shows
+
+
+@dataclass
+class QueryCardSet:
+    """
+    Every query the paper shows a picture of, drawn together from one recorded trial.
+    """
+
+    cards: List[QueryCard] = field(default_factory=list)
+    """
+    The cards, in the order the script writes them.
+    """
+
+    @classmethod
+    def for_the_paper(cls) -> QueryCardSet:
+        """
+        The set the paper's own figures are drawn from.
+        """
+        return cls(
+            cards=[
+                ObjectsSeenCard(),
+                SideOfAnotherObjectCard(),
+                PickedUpRecentlyCard(),
+                OwnDegreesOfFreedomCard(),
+            ]
+        )
+
+    def card_named(self, card: QueryCardName) -> QueryCard:
+        """
+        The one card of this set showing the given query.
+
+        :param card: The card wanted.
+        :raises UnknownQueryCardError: If the set holds no card showing it.
+        """
+        for held in self.cards:
+            if held.name is card:
+                return held
+        raise UnknownQueryCardError(card=card)
+
+    def write(
+        self,
+        trial: RecordedTrial,
+        output_directory: Path,
+        artifacts: Optional[EpisodeArtifacts] = None,
+    ) -> List[WrittenQueryCard]:
+        """
+        Leave every card of the paper the given trial asked a query for.
+
+        :param trial: The trial the queries were asked during.
+        :param output_directory: Where the files go, created if it is not there.
+        :param artifacts: The episode's own files, where a run on the robot kept the
+            recording its camera panels are read from.
+        :return: Where each card was left, in the order they were written.
+        """
+        return [
+            written
+            for card in self.cards
+            for written in card.write(trial, output_directory, artifacts)
+        ]
