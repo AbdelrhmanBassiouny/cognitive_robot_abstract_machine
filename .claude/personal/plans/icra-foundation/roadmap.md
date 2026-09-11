@@ -2148,9 +2148,9 @@ long-term-memory halves.
 
 The branch had been unmergeable against `main` since 2026-09-07. The stack maintenance
 routine reports a conflict by labelling the fork pull request `needs-resolution` and
-skipping the branch on every later pass, so nothing moved it: twelve routine comments on
-#265, the conflict set changing under it as `main` moved, and no session picking it up.
-The manifest meanwhile said `in_progress` with no mention of it. That gap is why this
+skipping the branch on every later pass, so nothing moved it: twelve routine comments
+on #265, the conflict set changing under it as `main` moved, and no session picking it
+up. The manifest meanwhile said `in_progress` with no mention of it. That gap is why this
 resolve was needed, and it is now recorded on the item's own `blockers` rather than only
 in the pull request's comments.
 
