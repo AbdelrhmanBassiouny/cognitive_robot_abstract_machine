@@ -715,3 +715,85 @@ real MuJoCo pipeline in a from-scratch Python 3.12 venv built this session (`uv 
 under `/usr/local/bin/uv` — the older `uv` on `PATH` couldn't parse this repo's `pyproject.toml`;
 `libegl1`/`libegl-mesa0` needed installing for offscreen rendering) — worth reusing rather than
 rebuilding from scratch, though a fresh session's container will not have it.
+
+## 2026-09-11: `perturbations` restarted on a fresh branch, #311
+
+Kicked off by `/plan-item-kickoff icra-mechanism perturbations` in `auto` mode. #311,
+on `claude/icra-mechanism-perturbations-o1wkof`, replacing the closed #305.
+
+### What the previous attempt left behind, and what is dropped
+
+The 2026-09-09 entry above records #305's closure: it carried a duplicate, wrong fix for
+`plan_item_bootstrap.py` (hardcoding one indentation convention as if universal, superseded
+by #302's derive-it-from-the-block fix) and no perturbation code at all. Both `beff1237a`
+and its revert are dropped from this branch's history entirely rather than carried and
+undone, as that entry asked. Nothing on this branch touches `.claude/` tooling.
+
+What is carried over is the one uncontested commit, cherry-picked unchanged:
+`b673ec883`, which moved `simulated_setup.py`'s `camera_over_the_table`/`looking_down_at`/
+`table_surface`/`lid_surface`/`perception_pipeline` from taking the `MontessoriWorld`
+scene builder to taking the `World` it wraps. A `Perturbation[World].apply(world)` and a
+`ScenarioStep[World].perform(world)` only ever receive the raw `World`, so the look step
+this item adds could not call those builders as they stood.
+
+### The blocker that was still recorded, and what is actually true
+
+The item's `blockers` named two things. Both were checked live rather than taken from the
+manifest:
+
+- **`#302` had not merged.** Still true — it is open at kickoff. It does not block this
+  item's own work: #302 fixes shared session tooling on `main`, and the only thing that
+  needs it here is writing this manifest entry, since `icra-mechanism/plan.yaml` uses the
+  flush-left item convention the unfixed script corrupts. Worked around without touching
+  the branch: `plan_item_bootstrap.py` was run from a detached worktree pinned at the
+  clone's starting commit, whose copy of the script already derives the indentation from
+  the block being patched. The branch itself carries no tooling change, which is the whole
+  point of restarting it.
+- **Cross-plan: `montessori-scenarios` (#296) `not_started`.** Stale in the same way
+  `snapshot-working-memory`'s blocker was. The 2026-09-09 entry already established that
+  #265's own convergence pass folded `experiments/scenarios/scenario.py`,
+  `experiments/montessori/scenarios.py` and the simulated-camera setup in by hand, so the
+  content is present on the base even though #296 is not a git ancestor of it. Re-confirmed
+  on this kickoff by reading those files off #265's tree directly.
+
+### Base, unchanged from the two siblings kicked off the same week
+
+`claude/icra-experiments-simulation-pipeline-w4ep7n` (#265), not `tracy_icra`. Checked
+rather than assumed: `git merge-base --is-ancestor origin/claude/icra-experiments-simulation-pipeline-w4ep7n
+origin/tracy_icra` still answers no, and #265 is not merged into `main` either. Same
+answer as #301 and #303, and the same follow-up: this branch needs restacking onto
+`tracy_icra` once `tracy-demo-takes-the-integrated-branch` lands there.
+
+A scope-overlap check against that base reports no path this item touches is absent from
+it and no other unlanded branch touching them, so this is its own work rather than
+something to fold.
+
+### The design, unchanged from what 2026-09-09 settled
+
+The four `Perturbation[World]` instances and the look step stand as recorded; only the
+implementation was outstanding. Restated here only as far as the code confirmed it against
+#265's tree:
+
+- `TargetHoleMoved` and `PieceShoved` change the world directly. `SortingScene
+  .stand_the_piece_at` already writes a body's placement as state on its parent connection,
+  which is the mechanism both use.
+- `PerceivedPoseOffset` and `DetectionRelabelled` change what a look reports rather than
+  what stands in the world. `Perturbation.apply(world)` receives only the world, so it
+  leaves a marker registered on the world that the new `LookAtTheScene` step reads and
+  clears once it has taken and distorted its look.
+- `Perturbation` gains `instruction_for_a_person()` on the shared base in
+  `scenarios/scenario.py`, so the existing `LightingChanged` implements it too. That is
+  what makes the protocol one object across simulation and the real table, per the item's
+  own notes.
+
+`LookAtTheScene` is the step that makes the two perception perturbations reachable at all:
+no Montessori scenario step takes a real look today — `SortingStep.ANSWER` reads `InsideOf`
+straight off the twin's ground truth. It captures a frame through `SimulatedCamera` and
+reads it with `MontessoriPerceptionPipeline`, both already wired by `simulated_setup.py`.
+
+### Verification
+
+Tests first, per `AGENTS.md`. One test per perturbation asserting the change it names and
+not another, against the twin's own state or the returned `MontessoriScene` rather than
+against rendered text; one that every `Perturbation` renders a person-instruction; and one
+that a look step with no marker registered reports the scene undistorted.
