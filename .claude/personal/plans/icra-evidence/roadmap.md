@@ -1426,3 +1426,16 @@ base-branch CI failures (`test_park_arms_is_actually_reached`'s
 `DofNotInWorldStateError`, and the `AttachNode` `ImportError`).
 
 Session: https://claude.ai/code/session_01SRx86WkcpXrGnNJdjXAHgm
+
+## `question-set-answered-from-memory` (#304) merged into #265, 2026-09-11
+
+Item done. #304 was cut off #265 directly on 2026-09-09 (see the "kicked off 2026-09-09"
+entry above), and #265 moved on in the meantime with the `tracy_icra` merge, two `main`
+merges, and a `LongTermMemory` CI fix. Merging #304's branch into #265 applied with no
+conflicts, since none of those intervening commits touched the files #304 changed; GitHub
+closed #304 as merged automatically once its head became an ancestor of #265's branch.
+Full detail of the merge itself is recorded in `icra-foundation`'s own roadmap, under
+`integrated-simulation-pipeline` (#265), since that is the branch and PR the merge landed
+on.
+
+Session: https://claude.ai/code/session_013v3b2pZJyfELaCfPjoMJFM

@@ -79,7 +79,7 @@ items:
   session: https://claude.ai/code/session_01CeBaw39xNxHaYphUsVzXow
   depends_on:
   - question-set-and-ground-truth
-  status: in_progress
+  status: done
   notes: >
     Prioritised to the front on 2026-09-08 at the developer's direction, and the item two people can
     run in parallel from the day the question set is frozen: one takes the working-memory spelling
@@ -176,6 +176,13 @@ items:
     via the pip-installed Python 3.12 venv; pushed in `86d40a450`; replied and resolved the
     thread - the first round the full ask was carried out as stated. See roadmap's "resolved
     further 2026-09-11" section for the full reasoning.
+
+    Merged into #265 2026-09-11 (`db9561fa6`), since #304 was itself cut off #265's tip and
+    #265 had since moved on (the `tracy_icra` merge, two `main` merges, the `LongTermMemory`
+    CI fix). The merge applied cleanly - none of those intervening commits touched the files
+    #304 changed - and GitHub closed #304 as merged automatically once its head became an
+    ancestor of #265's branch. Item done; #265's own entry in `icra-foundation` records the
+    merge in full.
   blockers: []
 - id: objects-seen-asked-of-the-perception-system
   title: >-
