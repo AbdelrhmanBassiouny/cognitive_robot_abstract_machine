@@ -4171,3 +4171,40 @@ class MujocoSim(MultiSim):
     simulator: MujocoSimulator
     synchronizer: Type[MultiSimSynchronizer] = MujocoSynchronizer
     default_file_path: str = "/tmp/scene.xml"
+
+    # %% what the scene draws an entity with
+
+    def geoms_of(self, entity: KinematicStructureEntity) -> Tuple[int, ...]:
+        """
+        The geoms the scene draws one entity with, in the order the model holds them.
+
+        Empty for an entity the scene holds a frame for but draws nothing of, which is
+        what a region hidden by :attr:`RegionAppearance.HIDDEN` is.
+
+        :param entity: The body or region whose geoms are wanted.
+        :raises MujocoEntityNotFoundError: If the scene holds no body of that name.
+        """
+        model = self.simulator._mj_model
+        body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, entity.name.name)
+        if body < 0:
+            raise MujocoEntityNotFoundError(
+                entity_name=entity.name.name, entity_type=mujoco.mjtObj.mjOBJ_BODY
+            )
+        return tuple(
+            geom for geom in range(model.ngeom) if model.geom_bodyid[geom] == body
+        )
+
+    def recolor(self, entity: KinematicStructureEntity, color: Color) -> None:
+        """
+        Draw one entity in the given colour from the next render on.
+
+        Changes what the scene is drawn in without changing the world it mirrors, so a
+        picture can single an entity out while the twin keeps the colour it states.
+
+        :param entity: The body or region to recolor.
+        :param color: The colour to draw every geom of it in.
+        :raises MujocoEntityNotFoundError: If the scene holds no body of that name.
+        """
+        model = self.simulator._mj_model
+        for geom in self.geoms_of(entity):
+            model.geom_rgba[geom] = color.to_rgba()
