@@ -2216,6 +2216,143 @@ block's fenced link, so each write grows the run of stray backticks and quotes a
 URL. The URL itself is untouched and the link still works; the block is the stack
 tooling's own and rewriting it is not this item's work.
 
+## 2026-09-11 (evening): the position offset was the camera's calibration, and every capture carried it
+
+Asked to fix the shape and hole detection on the new, smaller pieces, with four tape-measured
+positions to check against. The offset the live node reported -- everything about 0.2 m
+toward the camera -- had been chased through extrinsics, intrinsics and table height already
+and ruled out, because the live transform equalled the one the captures carried. It did; both
+were wrong. The `table -> camera_link` joint in `iai_tracy_description` is a hand-eye
+calibration from 2026-04-30, and the camera has moved since: fitting a plane through the
+depth image's table points puts the camera 22.9 deg off the table's normal (published 11.0)
+and 0.894 m above the table (published 0.935), on every one of the seven captures alike, so
+the move predates the August recordings. Projecting the robot's own gripper into the picture
+settled it independently of any tape: with the published pose it lands 240 px above the
+fingers, with the fitted one on them.
+
+**What that pose had been explaining away.** `BOARD_SCALE_AGAINST_THE_MESH = 0.865` was
+the tilt's foreshortening of the lid -- 0.81 along x by 0.92 along y, mean 0.865 -- and is
+gone; the mesh is the board's size, and the layout fit now measures 0.95-0.99 of it on every
+capture. The tuned workspace stopped at x = 0.915, which is the table's far edge at 1.18 m
+foreshortened. The piece sizes in `pieces.py` were measured off the captures too, but at the
+pieces' distance the distortion is only 0.92 x 0.97, and the cube and cylinder read 30 and
+28 mm top-down under the corrected pose -- those numbers stand.
+
+**What corrected geometry then exposed.** Two things the fit had been getting right by luck:
+the board detector's depth reading takes an opening as a drop from the *stated* lid plane,
+which stands 7 mm above the lid the depth measures (73 mm above the table, not the twin's
+80), so the whole lid speckled into openings -- it now reads the drop from the surface it
+measures; and a piece standing in a hole plus the shadow the lid's front edge casts on the
+drawers move the layout's seed up to 5 cm from the board's centre, past the 40 mm the fit
+was allowed -- it is 60 mm now. Two detections the old pose found are lost with the honest
+geometry and recorded as strict expected failures owned by `competing-explanations`: the
+cylinder standing in its hole on `tracy_pickup_demo` (a cube outline on the hole's rim
+explains the edges nearly as well, 0.70 against 0.73 -- six narrowing tests read that cylinder
+and are xfailed with it) and `stuck_cube_in_hole`'s table cylinder seen with its side, read as
+a cube because the larger outline accounts for the side's edges. Two lid cubes the old pose
+missed are found now.
+
+**The pieces are a set a look is told about.** The table holds four-fifths-size pieces in
+different plastic since September (hue 98 and 26 against the full-size set's 86 and 21; the
+cube 22.4 mm as the developer measured it, the rest 0.8 of the full-size ones -- confirm the
+three). `KnownPieceSet` carries a set, the pipeline is handed one, and every reading of the
+module-level constants inside the pipeline reads the set it was given -- the shipped captures
+keep the full-size set, the new capture and the live node take the smaller one. Each
+`CaptureTruth` names its set, and the new capture also records where the tape put each piece
+and the board's front-left corner; all four pieces are reported within 15 mm of the tape,
+the board's corner within 15 mm.
+
+**Standing.** The URDF is outside this repository and still says April: the live node reads
+TF, so until `camera_link` is recalibrated (fitted origin in `table`: xyz 0.4264 -0.0206
+0.8938, rpy 0.0400 1.1716 0.0326; x/y from one gripper pixel, yaw kept) live positions stay
+0.2 m off, and the `icra_final` stopgap must not come back. `LiveCamera` and
+`capture_from_camera` make the next capture a one-line affair, and
+`MeasuredPlane.of_surface` says within a degree whether a stated pose still holds.
+
+## 2026-09-11 (night): CI's first word on this lineage, and the error named the wrong thing
+
+The push of `b5e2e2669` started the first CI run this branch has had since the `tracy_icra`
+merge. Twenty-two of twenty-three checks passed. The one that did not,
+`test_each_lib (experiments)`, reported `AttributeError: all_role_takers` — one failure in
+`test_episodes.py` and ten collection errors in `test_paper_figures_from_the_database.py`,
+all the same thing.
+
+**The error named neither the field that was missing nor where it went missing.**
+`all_role_takers` is a property on `Role` whose body reads `self.role_taker`. A role with no
+taker makes that read raise `AttributeError`, and an `AttributeError` escaping a property is
+indistinguishable, to Python, from the attribute not existing — so the lookup falls through to
+`Role.__getattr__`, which reports the *property's* name. The repr in the traceback said it
+plainly and was easy to read past: `[AttributeError('role_taker') raised in repr()]`.
+
+**What was actually wrong sits two layers up.** ORMatic's `WrappedTable.parse_field` skipped
+every field whose type is a generic class with free type parameters, on the reasoning that such
+a field says nothing about which table holds it. True for a field the ORM stores in a table;
+false for one it stores *by value*, where the value decides everything — a
+`SubclassJSONSerializer` names its own subclass in the JSON it writes. The skip is the first
+branch of the chain, so it won over the custom-type branch that would have made the column.
+
+`RecordedQuery` is the first field of that shape in this workspace, and #304 created it: `86d40a450`
+made it a `Role[Question]`, and a `Question` is `Generic[SourceType, AnswerType]`, left
+unparameterized where the role binds it. So `role_taker` was dropped from the table outright —
+nothing wrote the question, nothing read it back, and `from_dao`'s fourth phase then ran
+`Role.__post_init__` on a role that had no taker at all. Parameterizing the binding would not
+have helped: `is_underspecified_generic` reads the endpoint class's own `__parameters__`, and
+`Question`'s are non-empty however the field spells it.
+
+**The exception, and its measured blast radius.** The skip now stands aside for a type a custom
+type already stores and no table maps — `is_stored_as_a_value` — which is the one case where the
+parameter is free and the storage is still fully decided. Regenerating all five ORM interfaces
+in the repository with and without the change adds exactly one column,
+`RecordedQueryDAO.role_taker`, a non-nullable JSON column, and leaves `coraplex`, `giskardpy`,
+`segmind` and `semantic_digital_twin` byte for byte identical. That measurement is worth keeping
+as the method: a change inside the generator is only as safe as the diff of what it generates.
+
+**Three tests, each failing without it**, and all in `krrood`, because that is where the defect
+is: `test_a_field_typed_as_an_unparameterized_generic_is_mapped` and its round trip in
+`test_ormatic/test_generic_json_field.py` name the cause, and
+`test_patterns/test_role_persistence.py` names what broke — a role read back out of the database
+keeps the taker it was stored with, and registers for it. The mimics are krrood's own, in the
+krrood dataset, as that package's self-containment rule requires; `GenericJSONSerializableClass`
+stands in for `Question` and is excluded from the mapped set the same way `JSONSerializableClass`
+already is, since the point is that it is stored as a value rather than in a table.
+
+**Two things to carry forward.** First, the cheapest reproduction of an ORM defect is not the
+failing package: it took four attempts in `krrood`'s own dataset — a plain role, a role over a
+concrete JSON value, then a role over an *unparameterized generic* JSON value — to land on the
+one that reproduces, and each attempt ran in a second against a suite that needs no ROS, where
+the `experiments` suite needs a full workspace ORM build. Second, an `AttributeError` raised
+inside a property is silently rewritten by the interpreter into an `AttributeError` about the
+property; any class with both a `__getattr__` and computed properties will mislabel its own
+failures this way, and `Role` has exactly that shape.
+
+**Measured**, in a Python 3.12 container with the workspace on the path and
+`CRAM_ORM_BUILD=never`: `test_episodes.py` and `test_paper_figures_from_the_database.py`, the
+two files CI failed in, 21 passed; `test/krrood_test` 3079 passed with 2 failed, both
+`test_object_diagram`, which need graphviz's `dot`; the ten `experiments` modules that touch the
+episode model, the questions, the paper figures or the Montessori ORM, 113 passed with 5 failed,
+each a package this container lacks (`psycopg` for the three unreachable-database tests, an
+`imageio` video backend for the two artifact ones). The container was taught to build the ORM
+interfaces for the first time here — a `sitecustomize.py` standing in for the ROS packages, plus
+`piqp`, `rtree`, `scikit-image`, `transforms3d`, `opencv-python-headless`, `mypy` and the repo's
+own `random_events.plotting` — so a session can now run `regenerate_all_orm.py` end to end,
+which every earlier entry in this roadmap records as impossible here.
+
+**Also its own PR off `main`, at the developer's direction: #317, labelled `bug`.** The fix is in
+`krrood`'s generator rather than in anything this item introduced, so it stands alone; it went
+on #265 first because the only field of that shape in the workspace is the one #304 added here,
+and because it is what makes this branch's experiments job green. Cherry-picked onto `main` as
+`7599ef771` — one conflict, `example_classes.py`'s import block, where `main` has since dropped
+`AbstractContextManager`. The claim the branch-side measurement could not make is measured there:
+regenerating all five interfaces on `main` with and without the change produces byte-identical
+files, because `main` holds no field of this shape yet, and `test/krrood_test` is 2352 passed,
+34 skipped, 0 failed on that base. #265 keeps the commit meanwhile, so it stays green without
+waiting on #317; once #317 lands, the next merge of `main` into #265 no-ops on it, since both
+sides carry the same change.
+
+This is deliberately tracked in this roadmap rather than as an item of its own: it is one
+bug-fix PR off `main` with a single root cause, not a multi-PR piece of work, and the only reason
+it appears in this plan at all is that this item's CI is where it surfaced.
+
 ## 2026-09-12: the pickup demo runs on the perception pipeline, and the simulation says what it costs
 
 The developer's ask, the night before a recording day: the real pickup demo should run on
