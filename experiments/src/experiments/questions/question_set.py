@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass
 
 from krrood.utils import recursive_subclasses
-from typing_extensions import Any, List, Type, TypeVar
+from typing_extensions import Any, List, Set, Type, TypeVar
 
 from experiments.episodes.episode import RecordedQuery
 from experiments.questions.long_term_memory import LongTermMemoryQuestion
@@ -27,6 +27,7 @@ from experiments.questions.question import (
     Question,
     QuestionedThings,
     RememberedThings,
+    RequiredFact,
 )
 from experiments.questions.working_memory import WorkingMemoryQuestion
 
@@ -96,6 +97,24 @@ class QuestionSet:
                 asked
                 for question in questions_of(LongTermMemoryQuestion)
                 for asked in question.asked_of(things)
+            ]
+        )
+
+    def answerable_with(self, recorded: Set[RequiredFact]) -> QuestionSet:
+        """
+        The questions of this set whose required facts were all recorded, in the set's
+        own order.
+
+        A question whose facts nothing recorded cannot be scored: it would be counted
+        wrong for evidence it never had.
+
+        :param recorded: The facts a run represented.
+        """
+        return QuestionSet(
+            questions=[
+                question
+                for question in self.questions
+                if set(question.required_facts) <= recorded
             ]
         )
 
