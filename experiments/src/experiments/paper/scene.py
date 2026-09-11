@@ -343,10 +343,14 @@ class SceneRender:
         """
         Recolour an already-built scene so the answer stands out of it.
 
+        Anything the twin states geometry for but no appearance is drawn as well: a card
+        whose answer is missing from its own picture says nothing.
+
         :param scene: The MuJoCo copy of :attr:`world` the picture is drawn from.
         :param answers: The bodies and regions the answer names.
         """
         for entity in self.world.kinematic_structure_entities:
+            scene.make_visible(entity)
             scene.recolor(entity, self.faded)
         for answer in answers:
             scene.recolor(answer, self.highlight)

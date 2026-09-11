@@ -14,10 +14,12 @@ import pytest
 from typing_extensions import Tuple
 
 from semantic_digital_twin.adapters.multi_sim import (
+    GeomVisibilityAndCollisionType,
     MujocoSim,
     RegionAppearance,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import MujocoEntityNotFoundError
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -53,6 +55,11 @@ The name of the body the world holds, which its geom is named after.
 REGION_NAME = "named_volume"
 """
 The name of the region the world names, which its geom is named after.
+"""
+
+ONLY_COLLIDED_WITH_NAME = "only_collided_with"
+"""
+The name of the body the world states a shape for without stating how it looks.
 """
 
 RECOLORED = Color(0.0, 0.0, 1.0, 0.5)
@@ -240,3 +247,106 @@ def test_recoloring_does_not_change_the_world_the_scene_mirrors(
     assert [shape.color for shape in thing_of(world_with_a_region).visual] == [
         THING_COLOR
     ]
+
+
+# %% drawing what the world states no appearance for
+
+
+@pytest.fixture
+def world_with_a_shape_only_collided_with() -> World:
+    """
+    A world holding one body that wears a shape it takes up space with and none it is
+    seen with.
+    """
+    world = World()
+    body = Body(name=PrefixedName(ONLY_COLLIDED_WITH_NAME))
+    body.collision = ShapeCollection(
+        [Box(scale=Scale(0.1, 0.1, 0.1), color=THING_COLOR)], reference_frame=body
+    )
+    with world.modify_world():
+        world.add_body(body)
+    return world
+
+
+def groups_of(
+    scene: MujocoSim, entity: KinematicStructureEntity
+) -> Tuple[GeomVisibilityAndCollisionType, ...]:
+    """
+    The group the scene puts each of an entity's geoms in.
+
+    :param scene: The scene to read.
+    :param entity: The body or region whose geoms are read.
+    """
+    return tuple(
+        GeomVisibilityAndCollisionType(scene.simulator._mj_model.geom_group[geom])
+        for geom in scene.geoms_of(entity)
+    )
+
+
+def test_a_shape_only_collided_with_is_not_drawn_by_default(
+    world_with_a_shape_only_collided_with: World,
+) -> None:
+    """
+    A body the world states no appearance for is built into a group a renderer hides, so
+    it takes up space without being seen.
+    """
+    scene = built_as(
+        world_with_a_shape_only_collided_with, RegionAppearance.TRANSPARENT
+    )
+    entity = (
+        world_with_a_shape_only_collided_with.get_kinematic_structure_entity_by_name(
+            ONLY_COLLIDED_WITH_NAME
+        )
+    )
+    assert not any(group.is_drawn for group in groups_of(scene, entity))
+
+
+def test_making_it_visible_puts_it_in_a_group_a_renderer_draws(
+    world_with_a_shape_only_collided_with: World,
+) -> None:
+    """
+    A picture that has to show such a body can ask for it, and every geom of it is then
+    drawn.
+    """
+    scene = built_as(
+        world_with_a_shape_only_collided_with, RegionAppearance.TRANSPARENT
+    )
+    entity = (
+        world_with_a_shape_only_collided_with.get_kinematic_structure_entity_by_name(
+            ONLY_COLLIDED_WITH_NAME
+        )
+    )
+    scene.make_visible(entity)
+    assert all(group.is_drawn for group in groups_of(scene, entity))
+
+
+def test_a_body_the_scene_already_draws_is_left_as_it_is(
+    world_with_a_region: World,
+) -> None:
+    """
+    A body with geometry of its own to be seen by is not moved, so its collision hull is
+    never drawn a second time over it.
+    """
+    scene = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
+    thing = thing_of(world_with_a_region)
+    before = groups_of(scene, thing)
+    scene.make_visible(thing)
+    assert groups_of(scene, thing) == before
+
+
+# %% asking the scene about something it does not hold
+
+
+def test_asking_for_the_geoms_of_something_the_scene_has_no_body_for_says_so(
+    world_with_a_region: World,
+) -> None:
+    """
+    A picture that singles out a body the scene never built would silently draw nothing,
+    so the scene says which entity it does not hold instead.
+    """
+    scene = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
+    missing = Body(name=PrefixedName("never_built"))
+    with pytest.raises(MujocoEntityNotFoundError) as raised:
+        scene.geoms_of(missing)
+    assert raised.value.entity_name == missing.name.name
+    assert raised.value.entity_type is mujoco.mjtObj.mjOBJ_BODY

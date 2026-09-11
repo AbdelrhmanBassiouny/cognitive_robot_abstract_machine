@@ -155,6 +155,21 @@ class GeomVisibilityAndCollisionType(IntEnum):
     Undefined geometry type (variant 2).
     """
 
+    @property
+    def is_drawn(self) -> bool:
+        """
+        Whether a renderer draws a geom of this group without being asked to.
+
+        MuJoCo's own default shows the first three groups and hides the rest, so geometry
+        a body only takes up space with is built into the scene without appearing in any
+        picture of it.
+        """
+        return self in (
+            GeomVisibilityAndCollisionType.VISIBLE_AND_COLLIDABLE_1,
+            GeomVisibilityAndCollisionType.VISIBLE_AND_COLLIDABLE_2,
+            GeomVisibilityAndCollisionType.ONLY_VISIBLE,
+        )
+
 
 class RegionAppearance(Enum):
     """
@@ -4221,6 +4236,28 @@ class MujocoSim(MultiSim):
         model = self.simulator._mj_model
         model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
         model.vis.global_.offheight = max(model.vis.global_.offheight, height)
+
+    def make_visible(self, entity: KinematicStructureEntity) -> None:
+        """
+        Draw an entity the scene holds geometry for but draws nothing of.
+
+        A body stated with collision geometry and no visual geometry is built into a
+        group a renderer hides, so a picture that has to show that body needs its geoms
+        moved into one a renderer draws. An entity the scene already draws is left
+        alone, so nothing is drawn a second time over its own visual geometry.
+
+        :param entity: The body or region to draw.
+        :raises MujocoEntityNotFoundError: If the scene holds no body of that name.
+        """
+        model = self.simulator._mj_model
+        geoms = self.geoms_of(entity)
+        if any(
+            GeomVisibilityAndCollisionType(model.geom_group[geom]).is_drawn
+            for geom in geoms
+        ):
+            return
+        for geom in geoms:
+            model.geom_group[geom] = GeomVisibilityAndCollisionType.ONLY_VISIBLE
 
     def recolor(self, entity: KinematicStructureEntity, color: Color) -> None:
         """

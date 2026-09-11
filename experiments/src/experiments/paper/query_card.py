@@ -195,6 +195,15 @@ class QueryCard(ABC):
     What the card shows, as the paper's reader is told it.
     """
 
+    labels_the_answers: ClassVar[bool] = True
+    """
+    Whether each thing picked out of the scene is written over with its own name.
+
+    A card whose answer is a handful of named objects reads better for it; one whose
+    answer is a whole robot does not, since the names of a dozen links written over each
+    other say less than the shape they are drawn on.
+    """
+
     @abstractmethod
     def answers(self, asked: Question, world: World) -> List[KinematicStructureEntity]:
         """
@@ -407,9 +416,9 @@ class QueryCard(ABC):
         world = self.world_of(trial)
         camera = self.point_of_view(asked, world)
         try:
-            return SceneRender(world=world, camera=camera).of(
-                self.answers(asked, world)
-            )
+            return SceneRender(
+                world=world, camera=camera, label_answers=self.labels_the_answers
+            ).of(self.answers(asked, world))
         finally:
             if camera is not None:
                 camera.body.simulator_additional_properties.remove(camera)
@@ -559,6 +568,7 @@ class OwnDegreesOfFreedomCard(QueryCard):
     question: ClassVar[Type[Question]] = NumberOfOwnDegreesOfFreedom
     panels: ClassVar[Tuple[PanelKind, ...]] = (PanelKind.SCENE,)
     caption: ClassVar[str] = "The body a question about the robot itself counts:"
+    labels_the_answers: ClassVar[bool] = False
 
     def answers(self, asked: Question, world: World) -> List[KinematicStructureEntity]:
         """

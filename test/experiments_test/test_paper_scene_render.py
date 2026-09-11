@@ -23,6 +23,7 @@ from experiments.paper.scene import (
     SceneRender,
 )
 from semantic_digital_twin.adapters.multi_sim import (
+    GeomVisibilityAndCollisionType,
     MujocoLight,
     MujocoSim,
     MultiSimLight,
@@ -226,6 +227,75 @@ def test_picking_an_answer_out_leaves_the_twin_alone(
     answered = body_named(scene_with_two_things, ANSWERED_NAME)
     render_of(scene_with_two_things).pick_out(scene, [answered])
     assert [shape.color for shape in answered.visual] == [STATED_COLOR]
+
+
+# %% a body the twin states no visual geometry for
+
+
+@pytest.fixture
+def scene_of_shapes_only_collided_with() -> World:
+    """
+    A world whose two bodies wear a shape they take up space with and none they are seen
+    with, which is how the scene the frozen question set is asked of states its objects.
+    """
+    world = World()
+    bodies = []
+    for name in (ANSWERED_NAME, OTHER_NAME):
+        body = Body(name=PrefixedName(name))
+        body.collision = ShapeCollection(
+            [Box(scale=Scale(0.2, 0.2, 0.2), color=STATED_COLOR)], reference_frame=body
+        )
+        bodies.append(body)
+    with world.modify_world():
+        world.add_body(bodies[0])
+        world.add_connection(
+            FixedConnection(
+                parent=bodies[0],
+                child=bodies[1],
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0.5
+                ),
+            )
+        )
+    return world
+
+
+@needs_a_renderer
+def test_an_answer_the_twin_only_collides_with_is_still_drawn(
+    scene_of_shapes_only_collided_with: World,
+) -> None:
+    """
+    A card whose answer is not drawn says nothing, so a body the twin states no visual
+    geometry for is drawn with the geometry it takes up space with.
+    """
+    drawn = render_of(scene_of_shapes_only_collided_with).of(
+        [body_named(scene_of_shapes_only_collided_with, ANSWERED_NAME)]
+    )
+    assert drawn.holds(HIGHLIGHT)
+
+
+def test_what_the_answer_stands_among_is_drawn_too(
+    scene_of_shapes_only_collided_with: World,
+) -> None:
+    """
+    An answer drawn alone in an empty picture says where nothing is, so every body of
+    the scene is put in a group a renderer draws, not only the ones the answer names.
+    """
+    scene = MujocoSim(
+        world=scene_of_shapes_only_collided_with,
+        headless=True,
+        region_appearance=RegionAppearance.TRANSPARENT,
+    )
+    render_of(scene_of_shapes_only_collided_with).pick_out(
+        scene, [body_named(scene_of_shapes_only_collided_with, ANSWERED_NAME)]
+    )
+    assert all(
+        GeomVisibilityAndCollisionType(
+            scene.simulator._mj_model.geom_group[geom]
+        ).is_drawn
+        for entity in scene_of_shapes_only_collided_with.kinematic_structure_entities
+        for geom in scene.geoms_of(entity)
+    )
 
 
 # %% lighting the scene
