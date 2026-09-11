@@ -148,15 +148,14 @@ items:
   notes: >-
     Perturbation instances the runner applies at a named step: the target hole moved 10 cm, a fixed offset added to a reported pose, a detection relabelled as another piece, an external body pushing a piece while the robot is idle. In simulation they act on the MuJoCo world or on the perception result; on the robot the same Perturbation renders a one-line instruction to the person at the table, so the protocol is the same object. Experiment B's ~30 injected events and Experiment C's perturbation conditions are drawn from these.
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `montessori-scenarios` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    PR #305 closed unmerged 2026-09-09: it carried a duplicate, worse fix for
-    `plan_item_bootstrap.py`'s indentation bug (hardcoded the opposite convention
-    instead of deriving it from the block being edited) - superseded by #302. No
-    perturbation code was ever written on it. Blocked until #302 merges; a fresh
-    session should branch from #302's fix (or `main` once merged), skip the design
-    already settled in roadmap.md, and start on the actual `Perturbation` subclasses.
+    - >-
+      Cut off #265 (`claude/icra-experiments-simulation-pipeline-w4ep7n`) rather than `tracy_icra`,
+      since `tracy_icra` does not yet carry the scenario model, the Montessori scenarios or the
+      simulated-camera perception this item builds on (checked live 2026-09-11). Needs restacking
+      onto `tracy_icra` once icra-foundation's `tracy-demo-takes-the-integrated-branch` lands there.
+      The two blockers recorded before this (cross-plan `montessori-scenarios`, and #302 having to
+      merge first) were checked and are no longer what stops anything - see roadmap.md's 2026-09-11
+      section.
 - id: expectation-checked-under-perturbation-in-simulation
   title: >-
     A robot plan run in simulation under a perturbation, and the violated expectation reported as the failure
