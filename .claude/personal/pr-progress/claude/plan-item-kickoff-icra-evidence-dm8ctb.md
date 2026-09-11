@@ -264,10 +264,56 @@ shape — not run against the real DB here (still needs CI, per the `rclpy` limi
 above), but constructed and attribute-checked against the real classes directly, further
 than any prior round on this branch managed locally.
 
+## Round 6: the `ScoredQuery` split was rejected — `RecordedQuery` itself is `Role[Question]`, `text` dropped (2026-09-11)
+
+The developer rejected Round 5's design outright, on the same thread: "I don't like
+that we have a new class now. I said RecordedQuestion should be a Role[Question] and
+remove text because this is in the Question object." Both parts of round 4/5's
+unresolved ask, done literally this time, no hedging.
+
+**`RecordedQuery` merged back into one class.** `RecordedQuery(Role[Question])`, with
+`role_taker` required — `Role` itself enforces that, nothing added here. `ScoredQuery`
+is gone entirely. `text` is no longer a stored field; it is a property reading
+`role_taker.english` (via a `question` property that returns `role_taker`), since
+that is genuinely the same information, read through the question instead of
+duplicated beside it.
+
+**The "ordinary ad hoc query" case that motivated keeping `text` across rounds 4-5
+turned out to be a test-fixture concept, not a real one.** Grepped the whole
+`experiments` package: nothing outside `QuestionSet.answer_and_record` constructs a
+`RecordedQuery` at all — there is no production code path that records a query with no
+`Question` behind it. The `QueryDeterminism`/`BackendLatency` conflict raised across
+three rounds was real for `test_paper_figures.py`'s own fixtures (which built ad hoc
+queries from raw EQL string literals), not for anything shipping. So making
+`question`/`role_taker` required costs nothing real. `scored_queries_of` now checks
+`answered_correctly is not None` instead of a class, which is what actually
+distinguishes a scored row from an unscored one now that only one class exists.
+
+**Every fixture that built a "text-only" ad hoc query now passes a real `Question`.**
+`test_paper_figures.py`'s `query()` helper takes `question: Question` (positional,
+required) instead of `text: str`; its corpus-building helpers use
+`ObjectsSeen()`/`ObjectColours()` in place of the old `WHAT_IS_ON_THE_TABLE`/
+`WHERE_IS_THE_CUBE` EQL-string constants, with new `repeated_question()`/
+`single_question()` helpers for the determinism table's two cases.
+`test_question_scoring.py`, `test_episodes.py`, and `test_episode_artifacts.py` follow
+the same pattern.
+
+**Verified again against the real classes**, same approach as round 5 (pip-installed
+workspace under a Python 3.12 venv, bypassing this container's still-broken
+`uv sync`): constructed `RecordedQuery` instances directly, checked
+`.text`/`.question`/`.bucket`/`.bloom_level` read correctly, and ran
+`AccuracyByBucket`/`AccuracyByBloomLevel` over a small in-memory corpus built the same
+way the pytest fixtures now are — all match what the tests assert. The database round
+trip is still CI-only (giskardpy's `generate_orm.py` still needs `rclpy`).
+
+Pushed in `86d40a450`. Replied on the thread and resolved it — the first round the
+full ask was carried out as stated, with nothing left standing on it.
+
 ## Next
 
-Still open, all three left to the developer as before: whether `text` should also go
-from `ScoredQuery` (replied on the thread, not resolved), the long-term
-`values_agree` sorted-vs-positional list-comparison question, and the pre-existing
-`AttachNode`/`DofNotInWorldStateError` CI failures on the base (#265). CI not polled
-further this session per standing instructions against scheduled/timed checks.
+Two items remain open, both left to the developer as before: the long-term
+`values_agree` sorted-vs-positional list-comparison question (no long-term test of
+`answer_and_record` added on this branch until it's answered), and the pre-existing
+`AttachNode`/`DofNotInWorldStateError` CI failures on the base (#265), confirmed
+unrelated to this branch's diff across two rounds now. CI not polled further this
+session per standing instructions against scheduled/timed checks.
