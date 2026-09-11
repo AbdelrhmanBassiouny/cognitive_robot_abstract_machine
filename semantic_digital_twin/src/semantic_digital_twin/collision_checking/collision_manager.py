@@ -315,14 +315,16 @@ class CollisionManager(ModelChangeCallback):
         """
         return self.default_rules + self.temporary_rules + self.ignore_collision_rules
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
-            **super().to_json(),
-            "id": to_json(self.id),
-            "default_rules": to_json(self.default_rules),
-            "temporary_rules": to_json(self.temporary_rules),
-            "ignore_collision_rules": to_json(self.ignore_collision_rules),
-            "max_avoided_bodies_rules": to_json(self.max_avoided_bodies_rules),
+            **super().to_json(**kwargs),
+            "id": to_json(self.id, **kwargs),
+            "default_rules": to_json(self.default_rules, **kwargs),
+            "temporary_rules": to_json(self.temporary_rules, **kwargs),
+            "ignore_collision_rules": to_json(self.ignore_collision_rules, **kwargs),
+            "max_avoided_bodies_rules": to_json(
+                self.max_avoided_bodies_rules, **kwargs
+            ),
         }
 
     @classmethod

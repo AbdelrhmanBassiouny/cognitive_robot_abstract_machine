@@ -195,12 +195,12 @@ class AvoidExternalCollisions(AvoidCollisionRule, SubclassJSONSerializer):
             for body_a, body_b in product(body_subset, external_bodies)
         }
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
-            **super().to_json(),
-            "robot": to_json(self.robot.id),
+            **super().to_json(**kwargs),
+            "robot": to_json(self.robot.id, **kwargs),
             "body_subset": to_json(
-                {b.id for b in self.body_subset} if self.body_subset else None
+                {b.id for b in self.body_subset} if self.body_subset else None, **kwargs
             ),
         }
 
@@ -716,13 +716,13 @@ class SelfCollisionMatrixRule(AllowCollisionRule, SubclassJSONSerializer):
             )
         return self
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
-            **super().to_json(),
+            **super().to_json(**kwargs),
             "allowed_body_ids": to_json(
-                {body.id for body in self.allowed_collision_bodies}
+                {body.id for body in self.allowed_collision_bodies}, **kwargs
             ),
-            "allowed_collision_pairs": to_json(self.allowed_collision_pairs),
+            "allowed_collision_pairs": to_json(self.allowed_collision_pairs, **kwargs),
         }
 
     @classmethod
