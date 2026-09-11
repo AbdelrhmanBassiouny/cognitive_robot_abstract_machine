@@ -24,7 +24,7 @@ from typing_extensions import Any, Callable, List, Optional, Protocol
 
 from krrood.patterns.method_patch import MethodPatch
 
-from experiments.montessori.semantics import MontessoriShape
+from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
 from experiments.montessori.world import MontessoriWorld
 from giskardpy.executor import Executor
 from giskardpy.motion_statechart.context import MotionStatechartContext
@@ -77,21 +77,40 @@ def build_shape_monitor(
     Build a :class:`MontessoriEventMonitor` tracking a single loose shape's pick-up and
     insertion into its own matching hole.
 
-    :param montessori: The Montessori scene the shape belongs to; used to look up the
-        shape's own matching hole's landing region (see
-        :attr:`~experiments.montessori.world.MontessoriWorld.landing_regions`) as an
-        extra contact/containment candidate. The hole's own root region is a thin
-        marker flush with its opening; measured against a real, physically simulated
-        drop, a shape can fall clean through it between one tick and the next without
-        ever registering an overlap, and the board's overall bounding box cannot tell
-        "still crossing the hole" from "now resting past it" apart either -- the
-        landing region (spanning the opening's full depth) fixes both.
+    :param montessori: The Montessori scene the shape belongs to.
     :param shape: The loose shape to track.
     :param listener: Told what each tick detected, for a run that wants the events as
         they happen rather than once the attempt they fell within has finished.
     """
-    hole = montessori.board.hole_for(shape)
-    landing_region = montessori.landing_regions.get(hole.name.name)
+    return build_shape_monitor_in_scene(montessori.world, shape, listener)
+
+
+def build_shape_monitor_in_scene(
+    world: World,
+    shape: MontessoriShape,
+    listener: Optional[ReceivesDetectedEvents] = None,
+) -> MontessoriEventMonitor:
+    """
+    Build a :class:`MontessoriEventMonitor` tracking a single loose shape's pick-up and
+    insertion into its own matching hole, in a world holding a shape-sorting board.
+
+    The shape's own matching hole's landing region (see
+    :attr:`~experiments.montessori.semantics.ShapeSortingHole.landing_region`) is an
+    extra contact/containment candidate. The hole's own root region is a thin marker
+    flush with its opening; measured against a real, physically simulated drop, a shape
+    can fall clean through it between one tick and the next without ever registering an
+    overlap, and the board's overall bounding box cannot tell "still crossing the hole"
+    from "now resting past it" apart either -- the landing region (spanning the
+    opening's full depth) fixes both.
+
+    :param world: The world the board and the shape stand in.
+    :param shape: The loose shape to track.
+    :param listener: Told what each tick detected, for a run that wants the events as
+        they happen rather than once the attempt they fell within has finished.
+    """
+    [board] = world.get_semantic_annotations_by_type(ShapeSortingBoard)
+    hole = board.hole_for(shape)
+    landing_region = hole.landing_region
     additional_candidates = {hole: landing_region} if landing_region is not None else {}
     detectors = [
         HoleContactDetector(
@@ -126,9 +145,7 @@ def build_shape_monitor(
         PlacingDetector(tracked_object=shape.root),
         InsertionDetector(tracked_object=shape.root),
     ]
-    return MontessoriEventMonitor(
-        world=montessori.world, detectors=detectors, listener=listener
-    )
+    return MontessoriEventMonitor(world=world, detectors=detectors, listener=listener)
 
 
 class TicksDetectors(Protocol):
