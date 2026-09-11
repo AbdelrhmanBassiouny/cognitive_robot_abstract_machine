@@ -69,6 +69,9 @@ from experiments.montessori.exceptions import (
     HoleHasNoLandingRegionError,
     NoSuchPieceError,
 )
+from experiments.montessori.perception.detections import MontessoriScene
+from experiments.montessori.perception.simulated_camera import SimulatedCamera
+from experiments.montessori.perception.simulated_setup import perception_pipeline
 from experiments.montessori.pieces import (
     KNOWN_PIECE_BY_CATEGORY,
     KNOWN_PIECES,
@@ -129,7 +132,11 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 )
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body, Region
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    Region,
+    SemanticAnnotation,
+)
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.predicate import RenderedFields
@@ -180,6 +187,7 @@ class SortingStep(StepName):
     PICK_UP = "pick up"
     PUT_DOWN = "put down"
     PUSH = "push"
+    LOOK = "look"
     ANSWER = "answer"
 
 
@@ -1315,6 +1323,46 @@ class PushThePiece(ScenePhysicsStep):
         self.scene.settle()
 
 
+@dataclass
+class LookAtTheScene(ScenePhysicsStep):
+    """
+    Take a look at the scene through the camera over the table, and keep what
+    perception made of it.
+
+    The one step of a run that reaches the scene through a camera rather than through
+    the twin's own state, so it is the only place a perturbation of a reported pose or
+    of a detection's label has anything to act on. Such a perturbation leaves what it
+    wants changed on the world, since it is handed the world and nothing else; this
+    step applies each one to what it found and takes it off the world again, so a
+    perturbation strikes at the one look its step named rather than at every later one.
+
+    The scene is let go of while the look is taken: a camera draws its picture from a
+    mirror of the world built for it, and two simulations of one world are one too
+    many.
+    """
+
+    camera: SimulatedCamera = field(kw_only=True)
+    """
+    The camera the look is taken through.
+    """
+
+    seen: Optional[MontessoriScene] = field(init=False, default=None)
+    """
+    What the last look found, or None before one has been taken.
+    """
+
+    def perform(self, world: World) -> None:
+        self.scene.stop()
+        with self.camera as looking:
+            self.seen = perception_pipeline(world).detect(looking.frame())
+        for waiting in world.get_semantic_annotations_by_type(
+            PerturbationOfTheNextLook
+        ):
+            waiting.perturbation.change_what_was_seen(self.seen)
+            with world.modify_world():
+                world.remove_semantic_annotation(waiting)
+
+
 # %% what a run counts as success
 
 
@@ -1425,6 +1473,21 @@ class ThePieceIsHeld(Goal[World]):
 
 # %% the change a run applies to its world
 
+CENTIMETRES_PER_METRE = 100
+"""
+How many centimetres a metre is, since every length here is held in metres and a person
+at the table is told centimetres.
+"""
+
+HOW_FAR_A_MOVED_HOLE_GOES = 0.1
+"""
+How far a perturbation slides the hole a piece is being aimed at, in metres.
+
+The distance this perturbation was specified at. It is stated here rather than
+defaulted onto :class:`TargetHoleMoved`, which takes the whole displacement: how far
+the hole goes is settled, and which way it goes is the scene's to say.
+"""
+
 
 @dataclass
 class LightingChanged(Perturbation[World]):
@@ -1439,6 +1502,219 @@ class LightingChanged(Perturbation[World]):
         world.root.simulator_additional_properties.append(
             MujocoLight(name=SCENE_LIGHT_NAME, body=world.root, directional=True)
         )
+
+    def instruction_for_a_person(self) -> str:
+        return "Light the table differently."
+
+
+@dataclass
+class TargetHoleMoved(Perturbation[World]):
+    """
+    Slide the board, so the hole a piece is meant to drop through is no longer where
+    the robot was going to let go of it.
+
+    The board is what moves, because a hole is cut into its lid rather than standing
+    beside it: the board and every hole in it hang off connections with no degree of
+    freedom, so the one thing that can be moved is the board itself, and every hole
+    travels with it. The named hole therefore ends up exactly this displacement from
+    where it was, which is what a run aiming at it has to cope with.
+    """
+
+    category: MontessoriShapeCategory
+    """
+    The shape whose own hole the displacement is stated for, and which the instruction
+    to a person names.
+    """
+
+    displacement: Vector3
+    """
+    How far the board is moved and which way, in the board's own frame.
+    """
+
+    def apply(self, world: World) -> None:
+        board = SortingScene(world).board.root.parent_connection
+        with world.modify_world():
+            board.parent_T_connection_expression = (
+                board.parent_T_connection_expression
+                @ HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=float(self.displacement.x),
+                    y=float(self.displacement.y),
+                    z=float(self.displacement.z),
+                )
+            )
+
+    def instruction_for_a_person(self) -> str:
+        return (
+            f"Slide the board so its {self.category} hole sits "
+            f"{_in_centimetres(self.displacement)} from where it is now."
+        )
+
+
+@dataclass
+class PieceShoved(Perturbation[World]):
+    """
+    Move a loose piece, as something other than the robot running into it would.
+
+    Where the piece ends up is what this states; the shove itself, as a contact a body
+    sliding along its rail makes, is :class:`PushThePiece`'s, which the one scenario
+    that builds a pusher uses. Both leave the scene in the state a run has to cope
+    with, which is what a perturbation is for.
+    """
+
+    category: MontessoriShapeCategory
+    """
+    The shape of the piece that is moved.
+    """
+
+    displacement: Vector3
+    """
+    How far the piece is moved and which way, in the world root frame.
+    """
+
+    def apply(self, world: World) -> None:
+        scene = SortingScene(world)
+        stands_at = scene.position_of(self.category)
+        scene.stand_the_piece_at(
+            self.category,
+            Point3(
+                float(stands_at.x) + float(self.displacement.x),
+                float(stands_at.y) + float(self.displacement.y),
+                float(stands_at.z) + float(self.displacement.z),
+            ),
+        )
+
+    def instruction_for_a_person(self) -> str:
+        return (
+            f"Push the {self.category} {_in_centimetres(self.displacement)} "
+            f"across the table."
+        )
+
+
+# %% the change a run applies to what it is shown
+
+
+@dataclass
+class PerturbationOfWhatIsSeen(Perturbation[World], ABC):
+    """
+    A perturbation of what a look reports rather than of what stands in the scene.
+
+    A perturbation is handed the world and nothing else, and the look it is aimed at is
+    taken by a later step, so it leaves itself on the world for :class:`LookAtTheScene`
+    to find. What the twin holds is untouched, which is the point: the run goes wrong
+    because what it was told differs from what is there.
+    """
+
+    def apply(self, world: World) -> None:
+        with world.modify_world():
+            world.add_semantic_annotation(PerturbationOfTheNextLook(perturbation=self))
+
+    @abstractmethod
+    def change_what_was_seen(self, seen: MontessoriScene) -> None:
+        """
+        Change what a look reported, in place.
+
+        :param seen: What the look found.
+        """
+
+
+@dataclass(eq=False)
+class PerturbationOfTheNextLook(SemanticAnnotation):
+    """
+    A perturbation of what is seen, left on the world until a look is taken.
+
+    The world is the only thing a perturbation and the step taking the look both hold,
+    so it is what carries one to the other.
+    """
+
+    perturbation: PerturbationOfWhatIsSeen = field(kw_only=True)
+    """
+    The perturbation waiting for that look.
+    """
+
+
+@dataclass
+class PerceivedPoseOffset(PerturbationOfWhatIsSeen):
+    """
+    Report a piece as standing somewhere other than where the look found it.
+
+    The piece itself does not move, so a run that reaches for where it was told the
+    piece is misses it by exactly this much.
+    """
+
+    category: MontessoriShapeCategory
+    """
+    The shape whose reported place is moved.
+    """
+
+    offset: Vector3
+    """
+    How far the reported place is moved and which way, in the frame the look reports
+    in.
+    """
+
+    def change_what_was_seen(self, seen: MontessoriScene) -> None:
+        for shape in seen.shapes:
+            if shape.category is not self.category:
+                continue
+            reported_at = shape.pose.to_position()
+            shape.pose = Pose(
+                position=Point3(
+                    float(reported_at.x) + float(self.offset.x),
+                    float(reported_at.y) + float(self.offset.y),
+                    float(reported_at.z) + float(self.offset.z),
+                ),
+                orientation=shape.pose.to_quaternion(),
+                reference_frame=shape.pose.reference_frame,
+            )
+
+    def instruction_for_a_person(self) -> str:
+        return (
+            f"Once the robot has looked at the table, move the {self.category} "
+            f"{_in_centimetres(self.offset)} without telling it."
+        )
+
+
+@dataclass
+class DetectionRelabelled(PerturbationOfWhatIsSeen):
+    """
+    Report a piece as being a piece of another shape.
+
+    What the look found stays where it is and keeps its outline; only what it is called
+    changes, which is what sends the run to the wrong hole.
+    """
+
+    category: MontessoriShapeCategory
+    """
+    The shape of the piece that is actually there.
+    """
+
+    reported_as: MontessoriShapeCategory
+    """
+    The shape it is reported as instead.
+    """
+
+    def change_what_was_seen(self, seen: MontessoriScene) -> None:
+        for shape in seen.shapes:
+            if shape.category is self.category:
+                shape.category = self.reported_as
+
+    def instruction_for_a_person(self) -> str:
+        return (
+            f"Put the {self.reported_as} where the {self.category} is, so the robot "
+            f"finds the wrong shape there."
+        )
+
+
+def _in_centimetres(displacement: Vector3) -> str:
+    """
+    How far a displacement reaches, worded for the person asked to bring it about.
+
+    :param displacement: The displacement to word.
+    """
+    reach = math.hypot(
+        float(displacement.x), float(displacement.y), float(displacement.z)
+    )
+    return f"{round(reach * CENTIMETRES_PER_METRE)} cm"
 
 
 # %% the scene a run is set in

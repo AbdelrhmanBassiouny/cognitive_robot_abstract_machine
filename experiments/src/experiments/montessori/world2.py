@@ -24,9 +24,13 @@ than needing a bit of both at every step.
 
 from __future__ import annotations
 
-from typing_extensions import List
+from typing_extensions import Dict, List
 
-from experiments.montessori.hole_geometry import HOLE_MARKER_THICKNESS, HoleFootprint
+from experiments.montessori.hole_geometry import (
+    HOLE_MARKER_THICKNESS,
+    HOLE_NAME_BY_CATEGORY,
+    HoleFootprint,
+)
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
@@ -47,7 +51,6 @@ from experiments.montessori.world import (
     _DRAWER_POSITIONS,
     _HANDLE_OFFSET,
     _HOLE_FOOTPRINTS,
-    _HOLE_KEY_BY_CATEGORY,
     _SHAPE_COLORS,
     _HoleSpec,
     _board_body,
@@ -56,9 +59,6 @@ from experiments.montessori.world import (
     _body_with_visual_only_shape,
     _drawer_body,
     _hole_marker_shape,
-    _landing_region,
-    _landing_region_height,
-    _landing_region_position,
     _name,
     _shape_body,
     _table_shapes,
@@ -191,8 +191,8 @@ def _hole_spec_from_footprint_2(footprint: HoleFootprint, key: str) -> _HoleSpec
     time and so cannot be reused directly for a differently-positioned board.
     """
     position = Point3(
-        BOARD_POSITION_2.x + footprint.center[0],
-        BOARD_POSITION_2.y + footprint.center[1],
+        BOARD_POSITION_2.x + footprint.center.x,
+        BOARD_POSITION_2.y + footprint.center.y,
         BOARD_POSITION_2.z + BOARD_SCALE.z / 2 - HOLE_MARKER_THICKNESS / 2,
     )
     return _HoleSpec(key, footprint.category, position, footprint)
@@ -210,7 +210,7 @@ def _build_hole_specs_2(footprints: List[HoleFootprint]) -> List[_HoleSpec]:
             circular_hole_count += 1
             key = f"circular_hole_{circular_hole_count}"
         else:
-            key = _HOLE_KEY_BY_CATEGORY[footprint.category]
+            key = HOLE_NAME_BY_CATEGORY[footprint.category]
         hole_specs.append(_hole_spec_from_footprint_2(footprint, key))
     return hole_specs
 
@@ -281,9 +281,7 @@ class MontessoriWorld2(MontessoriWorld):
         )
         self._spawn(board, BOARD_POSITION_2)
 
-        table_top_z = float(BOARD_TABLE_POSITION.z) + BOARD_TABLE_SCALE.z / 2
-        board_top_z = float(BOARD_POSITION_2.z) + BOARD_SCALE.z / 2
-        landing_region_height = _landing_region_height(table_top_z, board_top_z)
+        holes_by_key: Dict[str, ShapeSortingHole] = {}
         for hole_spec in _HOLES_2:
             hole = ShapeSortingHole(
                 name=_name(hole_spec.key),
@@ -301,19 +299,7 @@ class MontessoriWorld2(MontessoriWorld):
             )
             self._spawn(hole, hole_spec.position)
             board.add(hole)
-
-            landing_region = _landing_region(
-                _name(f"{hole_spec.key}_landing_region"),
-                hole_spec.shape,
-                landing_region_height,
-            )
-            self._spawn_region(
-                landing_region,
-                _landing_region_position(
-                    hole_spec.position, table_top_z, landing_region_height
-                ),
-            )
-            self.landing_regions[hole_spec.key] = landing_region
+            holes_by_key[hole_spec.key] = hole
 
         for index, drawer_position in enumerate(_DRAWER_POSITIONS_2, start=1):
             drawer = Drawer(
@@ -345,6 +331,11 @@ class MontessoriWorld2(MontessoriWorld):
             self._spawn(handle, handle_position)
             drawer.add(handle)
 
+        self._give_every_hole_its_landing_region(
+            holes_by_key,
+            table_top_z=float(BOARD_TABLE_POSITION.z) + BOARD_TABLE_SCALE.z / 2,
+            board_top_z=float(BOARD_POSITION_2.z) + BOARD_SCALE.z / 2,
+        )
         return board
 
     def _build_shapes(self) -> None:

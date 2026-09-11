@@ -178,18 +178,18 @@ def test_the_angle_between_two_numeric_poses_matches_the_symbolic_one(
     Motion detection compares consecutive poses, and the numeric comparison replaces the
     symbolic rotational error, so it has to name the same rotation.
 
-    ..note:: :meth:`RotationMatrix.rotational_error` reports some rotations the long way
+    ..note:: :meth:`RotationMatrix.rotational_distance` reports some rotations the long way
        round, as ``2*pi`` minus the angle; the numeric measure always takes the shorter
        way, so the two are compared modulo that wrap.
     """
     first = Pose.from_xyz_rpy(0.0, 0.0, 0.0, 0.2, -0.4, 1.1)
     second = Pose.from_xyz_rpy(1.0, 2.0, 3.0, roll, pitch, yaw)
     symbolic = float(
-        first.to_rotation_matrix().rotational_error(second.to_rotation_matrix())
+        first.to_rotation_matrix().rotational_distance(second.to_rotation_matrix())
     )
     expected = min(symbolic, 2.0 * np.pi - symbolic)
 
-    measured = NumericPose.of_pose(first).rotational_error(NumericPose.of_pose(second))
+    measured = NumericPose.of_pose(first).rotational_distance(NumericPose.of_pose(second))
 
     assert measured == pytest.approx(expected, abs=1e-6)
 

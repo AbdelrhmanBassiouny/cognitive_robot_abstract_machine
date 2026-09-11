@@ -1936,9 +1936,6 @@ class MujocoBuilder(MultiSimBuilder):
     def _end_build(self, file_path: str):
         self._build_equalities()
         self._build_tendons()
-    def _end_build(self, file_path: str):
-        self._build_equalities()
-        self._build_tendons()
         compiled_model = self.spec.compile()
         self.spec.to_file(file_path)
         import xml.etree.ElementTree as ET
@@ -1980,13 +1977,52 @@ class MujocoBuilder(MultiSimBuilder):
             )
             if actuator_id == -1:
                 continue
-            position = self.world.state[actuator.dofs[0].id].position
             ctrl[actuator_id] = MujocoSynchronizer._ctrl_for_position(
-                actuator, position
+                actuator, self._transmission_length(actuator)
             )
         if ctrl:
             key_element.set("ctrl", " ".join(map(str, ctrl)))
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
+
+    def _transmission_length(self, actuator: Actuator) -> float:
+        """
+        The length of what ``actuator`` pulls on, which is what a position servo's
+        setpoint is stated against.
+
+        A joint transmission is as long as the degree of freedom the actuator names, a
+        tendon as long as the joints it wraps together, each weighted by its own
+        coefficient. The degree of freedom an actuator names for a tendon stands for
+        the tendon rather than for anything the world holds a state for, since a degree
+        of freedom belonging to no connection is deleted as orphaned.
+
+        :param actuator: The actuator whose transmission to measure.
+        """
+        transmission = actuator.dofs[0]
+        tendon = self._tendon_named(transmission.name.name)
+        if tendon is None:
+            return self.world.state[transmission.id].position
+        return sum(
+            coefficient
+            * self.world.state[
+                self.world.get_connection_by_name(joint_name).dofs[0].id
+            ].position
+            for joint_name, coefficient in tendon.joints.items()
+        )
+
+    def _tendon_named(self, name: str) -> Optional[MujocoTendon]:
+        """
+        This world's tendon of that name, or ``None`` when it has none.
+
+        :param name: The name the tendon was built under.
+        """
+        return next(
+            (
+                tendon
+                for tendon in self.world.simulator_additional_properties
+                if isinstance(tendon, MujocoTendon) and tendon.name == name
+            ),
+            None,
+        )
 
     def _compute_keyframe_qpos(self, compiled_model: mujoco.MjModel) -> List[float]:
         """
