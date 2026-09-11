@@ -90,3 +90,40 @@ search to thirty-six and left three of the board's six holes over wood on
 `tracy_pickup_demo`. So this plan's fix stands where it belongs — `offsets_within` and
 `OutlineFitter.placements_within`, for a belief — and the fitter keeps its own lattice
 for a search.
+
+## 2026-09-11: `translation-detector-answers-snapshot-corrections` added, via `/add-plan-item`
+
+Added by `/add-plan-item` at the developer's direct request, following
+`icra-mechanism`'s `snapshot-working-memory` (#301) resolve pass the same session:
+`SnapshotWorkingMemory`'s pose-change threshold was removed per the developer's
+direction on that PR's review thread, and the "did a piece actually move" question it
+used to answer was named as `TranslationDetector`'s job instead — real work in a
+different subsystem (`segmind`) than that item's own track, so it was recorded here
+rather than built on #301.
+
+**Why this plan, why `events`.** Twenty-six plans scanned (every `plan.yaml` under
+`.claude/personal/plans/`) for anything already covering Segmind event detection;
+`knowledge-directed-expectation` is the only one whose own description — "what the
+robot did, and what Segmind saw it do" — is about the event vocabulary this item
+extends, and its `events` track already owns `expectations-from-events`, the item
+reading that same vocabulary from the other side (perception's expectations against
+what events confirm). `check_scope_overlap.py --base origin/main --path
+segmind/src/segmind/detectors/atomic_event_detectors_nodes.py --path
+test/segmind_test/test_detectors/test_segmind_detectors.py` found no unlanded branch
+touching either file and no path absent from `main`, so this is new work, not a fold.
+
+**Base: `tracy_icra`, checked rather than assumed.** `atomic_event_detectors_nodes.py`
+and its test differ between `main` and `tracy_icra` (different blobs), and this same
+plan's own history (`icra-foundation`'s `segmind-detectors-on-the-demo-branch`, merged
+into `tracy_icra` 2026-09-03) recorded that branch bringing "its own background
+threaded event_monitoring.py for TracyMontessoriWorld, and a much larger detector test
+suite" — the more evolved Segmind detector lineage lives on `tracy_icra`, not `main`.
+This is specific to what this item extends, not a claim that `tracy_icra` is this
+plan's own standing base convention (this plan's other items are cut from a mix of
+bases).
+
+**Not started; depends on nothing recorded.** The design itself — trigger on a sudden
+large jump, work off a discrete snapshot-triggered look rather than a continuous
+per-tick window — is stated in the item's own notes from the review thread that
+prompted it, but not designed in detail here; that is this item's own first work, not
+something settled in advance the way `icra-mechanism`'s kickoffs usually record.

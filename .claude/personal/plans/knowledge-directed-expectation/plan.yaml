@@ -291,3 +291,47 @@ items:
     the violated expectation, and let recovery be the plan re-asking rather than a policy of its
     own. If the deadline forces a cut, this is the item to protect and robokudo-detector is the one
     to drop.'
+- id: translation-detector-answers-snapshot-corrections
+  title: >-
+    TranslationDetector decides whether a piece moved, not SnapshotWorkingMemory
+  branch: null
+  pull_request_number: null
+  track: events
+  depends_on: []
+  status: not_started
+  notes: >-
+    Split out of icra-mechanism's `snapshot-working-memory` (#301) on 2026-09-11, per the
+    developer's own direction on that PR's review thread: `SnapshotWorkingMemory` now
+    writes every perceived pose onto the twin unconditionally, and deciding whether a
+    piece actually moved -- versus perception noise -- is `TranslationDetector`'s
+    question (`segmind/src/segmind/detectors/atomic_event_detectors_nodes.py`), not
+    perception's. Quoted from the review thread: "translation event should happen by
+    segmind... the translationdetector should also trigger in sudden big distance moves,
+    It should adapt to the framerate or in our case it is a snap shot based update...
+    Segmind should also be able to handle this case." Deliberately not built on #301
+    itself -- segmind is a different subsystem than that item's own track
+    (`backend-routing`, `experiments`).
+
+    Two changes, both on the existing `TranslationDetector` (a `MotionDetector`
+    subclass that already fires a `TranslationEvent` off a sliding window of continuous
+    per-tick motion, per `test/segmind_test/test_detectors/test_segmind_detectors.py`):
+    (1) trigger on a sudden large jump between two positions, not only a sustained
+    motion trend; (2) work off one discrete snapshot-triggered look rather than assuming
+    continuous perception, since `SnapshotWorkingMemory` never runs perception
+    continuously -- there is no per-tick window to slide over.
+
+    Base branch: `tracy_icra`, not `main`. Checked rather than assumed:
+    `atomic_event_detectors_nodes.py` and its test file differ between `main` and
+    `tracy_icra` (different blobs), and `icra-foundation`'s own
+    `segmind-detectors-on-the-demo-branch` item (done, merged into `tracy_icra`
+    2026-09-03) recorded that branch bringing "its own background threaded
+    event_monitoring.py for TracyMontessoriWorld, and a much larger detector test
+    suite" -- `tracy_icra` carries the more evolved segmind detector lineage. This
+    plan's own items are cut from a mix of bases (`main`, feature branches); nothing
+    here says `tracy_icra` is this plan's standing convention, only that it is where
+    the current `TranslationDetector` this item extends actually lives.
+
+    No duplicate found: `check_scope_overlap.py --base origin/main --path
+    segmind/src/segmind/detectors/atomic_event_detectors_nodes.py --path
+    test/segmind_test/test_detectors/test_segmind_detectors.py` reports no paths
+    absent from `main` and no open-PR candidate touching either file.
