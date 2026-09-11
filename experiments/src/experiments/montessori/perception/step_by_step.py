@@ -52,7 +52,6 @@ from experiments.montessori.perception.recorded_setup import (
     recorded_world,
 )
 from experiments.montessori.perception.scene_request import SceneRequest
-from experiments.montessori.pieces import KNOWN_PIECES
 from experiments.montessori.perception.scene_source import RecordedFrame
 from experiments.montessori.perception.viewer import (
     ImageDisplay,
@@ -459,7 +458,9 @@ class SearchNarrowing:
                 image=cv2.bitwise_and(
                     rectified.image,
                     rectified.image,
-                    mask=self._piece_colors().color_mask(rectified, step.request.color),
+                    mask=self._piece_colors().color_mask(
+                        rectified, self.pipeline.pieces.colored(step.request.color)
+                    ),
                 ),
             )
         return ViewFromAbove(view=RectifiedView(frame=frame, orthophoto=rectified))
@@ -475,7 +476,7 @@ class SearchNarrowing:
         """
         [(detector, _)] = (
             self.pipeline.look_rules.find_the_pieces.detector_rules.detectors_for(
-                self.pipeline.table, KNOWN_PIECES
+                self.pipeline.table, self.pipeline.pieces.pieces
             )
         )
         return detector.colors

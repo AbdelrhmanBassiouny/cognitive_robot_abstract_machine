@@ -213,7 +213,7 @@ class MeasuredSurfaceFinder(SurfaceFinder):
             plane inside that stretch.
         """
         modelled = sought.surface
-        at_the_plane = self._points_standing_at(modelled, sought.frame)
+        at_the_plane = self.points_standing_at(modelled, sought.frame)
         if not len(at_the_plane):
             raise SurfaceNotSeenWhereTheWorldPutsIt(str(modelled.name), modelled.height)
         surface_points = self._within(
@@ -227,7 +227,7 @@ class MeasuredSurfaceFinder(SurfaceFinder):
             raise SurfaceNotSeenWhereTheWorldPutsIt(str(modelled.name), modelled.height)
         return replace(modelled, region=self._reach_of(surface_points, modelled.region))
 
-    def _points_standing_at(
+    def points_standing_at(
         self, modelled: WorkspaceSurface, frame: RgbdFrame
     ) -> np.ndarray:
         """
@@ -310,7 +310,8 @@ class MeasuredSurfaceFinder(SurfaceFinder):
         Each edge is taken out to the sample beyond the outermost point rather than in,
         so a measured stretch is a whole number of the modelled region's own pixels away
         from its corner and rectifies the world onto the same lattice the unmeasured one
-        did.
+        did -- and no further than the modelled stretch itself, which a last step's
+        rounding could otherwise overshoot by a hair.
 
         :param points: The surface's own points, shape ``(n, 3)``.
         :param region: The stretch the world models, whose grid the answer lands on.
@@ -324,10 +325,10 @@ class MeasuredSurfaceFinder(SurfaceFinder):
         minimum_x, minimum_y = region.to_world_position(*steps_out)
         maximum_x, maximum_y = region.to_world_position(*steps_back)
         return WorkspaceRegion(
-            minimum_x=minimum_x,
-            maximum_x=maximum_x,
-            minimum_y=minimum_y,
-            maximum_y=maximum_y,
+            minimum_x=max(minimum_x, region.minimum_x),
+            maximum_x=min(maximum_x, region.maximum_x),
+            minimum_y=max(minimum_y, region.minimum_y),
+            maximum_y=min(maximum_y, region.maximum_y),
             resolution=region.resolution,
         )
 

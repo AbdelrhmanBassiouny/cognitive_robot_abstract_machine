@@ -1,7 +1,7 @@
 {
   "__json_type__": "experiments.montessori.perception.captures.SceneCapture",
-  "name": "displaced_cube_from_hole",
-  "recorded_from": "displaced_cube_from_hole",
+  "name": "scaled_pieces_in_a_row",
+  "recorded_from": "live_camera_20260911_185712",
   "color_format": "rgb8; jpeg compressed bgr8",
   "intrinsic_matrix": [
     [

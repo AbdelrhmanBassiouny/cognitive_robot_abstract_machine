@@ -19,7 +19,6 @@ from experiments.montessori.perception.explanations import BoardOutlines, Explan
 from experiments.montessori.perception.footprint import RectifiedFootprint
 from experiments.montessori.perception.hypotheses import PieceHypothesis
 from experiments.montessori.perception.imagination import ImaginedWorld
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import (
     MontessoriShape,
     MontessoriShapeCategory,
@@ -145,7 +144,7 @@ class DetectedMontessoriShape(MontessoriDetection, Role[MontessoriShape]):
     How far its top surface stands above the surface it rests on, in metres.
 
     Read from the depth image where that image resolves the piece, and otherwise the
-    height :attr:`~experiments.montessori.perception.pipeline.EdgeFitDetector.piece_height`
+    height :attr:`~experiments.montessori.perception.detector_choice.SurfacePass.piece_height`
     says a loose piece stands: a depth sensor that cannot tell a two centimetre piece
     from the surface under it says nothing about how tall the piece is, and reporting
     zero would place it in the surface itself.
@@ -184,9 +183,9 @@ class DetectedMontessoriShape(MontessoriDetection, Role[MontessoriShape]):
     @property
     def color(self) -> Color:
         """
-        The colour this set gives the piece that was recognised.
+        The colour the set this piece was looked for in gives its kind.
         """
-        return KNOWN_PIECE_BY_CATEGORY[self.category].color
+        return self.hypothesis.piece_of(self.category).color
 
     @property
     def surface_height(self) -> float:

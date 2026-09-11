@@ -60,11 +60,7 @@ from experiments.montessori.perception.orthophoto import (
 )
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
-from experiments.montessori.pieces import (
-    KNOWN_PIECE_BY_CATEGORY,
-    LOOSE_PIECE_HEIGHT,
-    pieces_colored,
-)
+from experiments.montessori.pieces import FULL_SIZE_PIECES, KnownPieceSet
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -174,6 +170,12 @@ class SceneToSearch:
     workspace and so where a look may expect to find them.
 
     ``None`` where a look has no world behind it at all, as a recorded frame does.
+    """
+
+    pieces: KnownPieceSet = FULL_SIZE_PIECES
+    """
+    The loose pieces standing on the table: the ones a look fits and the colours it
+    looks for.
     """
 
     explanations: CompetingExplanations = field(default_factory=CompetingExplanations)
@@ -307,7 +309,7 @@ class SceneToSearch:
         :param search: The surface being searched.
         """
         reach = search.region
-        standing = search.surface.height + LOOSE_PIECE_HEIGHT
+        standing = search.surface.height + self.pieces.height
         return VolumetricBoundingBox.from_array_bounds(
             np.array([reach.minimum_x, reach.minimum_y, search.surface.height]),
             np.array([reach.maximum_x, reach.maximum_y, standing]),
@@ -332,7 +334,7 @@ class SceneToSearch:
         standing_on_the_lid = OccupiedVolume(
             outline=board.outline,
             bottom=board.lid_height,
-            top=board.lid_height + LOOSE_PIECE_HEIGHT,
+            top=board.lid_height + self.pieces.height,
         )
         return standing_on_the_lid.hides(self.table.height, self.frame.camera_position)
 
@@ -362,7 +364,7 @@ class SceneToSearch:
                         center=PlanarPoint(x=float(position[0]), y=float(position[1])),
                     ),
                     source=self.world,
-                    candidates=(KNOWN_PIECE_BY_CATEGORY[shape.shape_category],),
+                    candidates=(self.pieces.by_category[shape.shape_category],),
                 )
                 for surface in (self.table, self.lid)
                 if surface is not None
@@ -406,7 +408,7 @@ class SceneToSearch:
                     ),
                 ),
                 source=self.request.believed_by,
-                candidates=pieces_colored(self.request.color),
+                candidates=self.pieces.colored(self.request.color),
             )
         ]
 

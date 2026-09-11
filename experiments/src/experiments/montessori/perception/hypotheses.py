@@ -25,6 +25,7 @@ from experiments.montessori.pieces import (
     hue_distance,
 )
 from experiments.montessori.planar_geometry import PlanarPoint
+from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
@@ -152,6 +153,15 @@ class PieceHypothesis:
     :attr:`candidates` when a colour is what suggested the place, and it is kept so a
     reader can see that.
     """
+
+    def piece_of(self, category: MontessoriShapeCategory) -> KnownPiece:
+        """
+        The candidate of one kind.
+
+        :param category: The kind of piece.
+        :raises KeyError: If no candidate is of that kind.
+        """
+        return {piece.category: piece for piece in self.candidates}[category]
 
     @classmethod
     def of_color(

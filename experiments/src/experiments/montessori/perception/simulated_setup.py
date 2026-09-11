@@ -38,7 +38,7 @@ CAMERA_NAME = "camera"
 What this setup calls the camera it puts over the table.
 """
 
-CAMERA_HEIGHT_ABOVE_THE_TABLE = 0.935
+CAMERA_HEIGHT_ABOVE_THE_TABLE = 0.894
 """
 How high above the table top the camera stands, in metres.
 
@@ -63,16 +63,6 @@ Width of the picture the camera takes, in pixels: the captures' own.
 CAMERA_PICTURE_HEIGHT = 1080
 """
 Height of the picture the camera takes, in pixels: the captures' own.
-"""
-
-BOARD_SCALE_AGAINST_THE_MESH = 1.0
-"""
-How large the board in a simulated scene is against the mesh it is modelled by.
-
-A simulated board *is* the mesh, so it reads as the mesh's own size. The real board is
-smaller than the mesh that models it, which is why
-:mod:`~experiments.montessori.perception.recorded_setup` states a different number for
-the same thing.
 """
 
 
@@ -174,9 +164,7 @@ def board_detector() -> BoardDetector:
     """
     :return: The detector that looks for a simulated board, at the size such a board is.
     """
-    return BoardDetector(
-        layout=BoardHoleLayout.of_board_mesh(BOARD_SCALE_AGAINST_THE_MESH)
-    )
+    return BoardDetector(layout=BoardHoleLayout.of_board_mesh())
 
 
 def perception_pipeline(world: World) -> MontessoriPerceptionPipeline:
