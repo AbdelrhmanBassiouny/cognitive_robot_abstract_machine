@@ -55,3 +55,9 @@ Update 2026-09-11 (lab, v5): developer reverted Q8 to the control-constraints re
 look-quality-expectation dropped entirely (no quality gating, no BoardPartlyCovered, no rule family for
 the board); item C is control-constraints-and-degrees-of-freedom-queried (ActiveTasks.of(statechart,
 moment), Task constraints exposed, two Bucket.CONTROL questions, one per memory); prompt C rewritten.
+Update 2026-09-11 (lab, #316): item A (episode-observer) already exists as draft PR #316
+(claude/episode-observer-8mq3xv, stacked on #265). Checked against #265 head 4bf6694f1: the v5
+decisions need nothing from it (LightingChanged stays in code; its CLI choice may stay or go), but
+it is needs-resolution - its own krrood WrappedTable.parse_field fix duplicates 5d9049212 which
+#265 now carries from main (conflicts in wrapped_table.py and test/krrood_test/conftest.py), and
+observer.into does not keep the trial's motion statechart, which item C's long-term question needs.
