@@ -1,4 +1,4 @@
-## #265: the pickup demo runs on the perception pipeline, real and in MuJoCo (2026-09-12, in progress)
+## #265: the pickup demo runs on the perception pipeline, real and in MuJoCo (2026-09-12)
 
 **Session.** https://claude.ai/code/session_01GCgvcENQygfenibC73KQ1n -- resume here.
 
@@ -11,20 +11,45 @@ also don't forget to fetch any updates to pr 265 as it is being updated regularl
 will be using PR 316 (it is soon going to merge into PR 265) to record tomorrow so make
 everything ready for it."
 
-**Plan.**
-1. ROS-free scene publishing: `scene_publishing.py` (board + pieces a look found stood
-   in the world the robot publishes), `RepeatedLook` base for a source whose pipeline is
-   refreshed once the world holds the board. Tests on the `scaled_pieces_in_a_row`
-   capture against its tape truth.
-2. `perceived_sorting.py`: the demo's logic (perceive -> spawn -> release pose over the
-   perceived board's hole) with a `ShapeSorter` the real rig and the MuJoCo rig implement.
-3. `pickup_demo_real.py` rewritten on it (hand-placed constants gone).
-4. `pickup_demo_mujoco.py`: ground-truth world on Tracy's table at the tape layout
-   (smaller set, board centre (1.045, 0.159)), camera on `camera_link` at the capture's
-   optical pose, belief world = Tracy alone, perception publishes into the belief world,
-   actuator-driven sorting; videos (overview + robot camera) written by the run.
-5. Full headless test of the MuJoCo demo; commit, push; merge #265 into #316's branch so
-   tomorrow's recording has it.
+**Done.**
+- `scene_publishing.py` (was `board_publishing.py`): `look_for_board`, `hold_board`
+  (finds, stands, and hands the look a pipeline reading the lid), `PiecePublisher`
+  (stands each piece the look put on the table as the known piece, resting on the
+  surface -- the depth's own height reading is not used, it sinks a body into the
+  table). `RepeatedLook` in `scene_source.py` is the base of the node and of
+  `RecordedFrame`. `NoBoardInView` in `exceptions.py`.
+- `pickup/perceived_sorting.py`: `PerceivedSorting` (perceive -> stand -> release pose
+  over the perceived board's hole) with a `ShapeSorter` the real rig and the MuJoCo rig
+  implement. Tested on `scaled_pieces_in_a_row` against its tape truth: board corner and
+  all four pieces within 15 mm.
+- `pickup_demo_real.py` rewritten on it: no hand-placed constants, `_SortingRig` is a
+  `ShapeSorter`, main looks (30 looks for the board), prompts, sorts. Not run on the
+  robot (powered off).
+- `pickup_demo_mujoco.py`: reality (Tracy + board at tape centre (1.045, 0.159) +
+  smaller set at x 0.79, y 0/0.1/0.2/0.3) vs belief (Tracy alone); camera on
+  `camera_link` at the captures' optical pose (`CAMERA_LINK_T_OPTICAL`, pinned by a
+  test); perception publishes into the belief within 1 mm; actuator-driven sorting via
+  `PickUpActionMujoco`/`PlaceActionMujoco` on a `Context(belief)`, the belief's joints
+  following the simulation (`RealTimeSimulation.followers`); films (side view + robot
+  camera) and the detections picture written by `write_artifacts`.
+- Three MuJoCo fixes found on the way: the shoulder links sink 40 mm into the table's
+  pedestal box and pinned the pan joint (`LINKS_SUNK_INTO_THE_TABLE` in equipment.py);
+  `close_gripper_around` now aims at the narrowest width and stops on any shared
+  fingertip contact + 1 mm squeeze (the belief body's name is not the reality's);
+  `MujocoGeom.contact_dimensionality` (condim) new in sdt, loose pieces get 4.
+- Result: cube, cylinder, rectangular prism go through their holes every run (~60 s
+  unfilmed, ~85 s filmed). The triangular prism slips out of the parallel pads on the
+  carry (face + opposite edge; firmer squeeze ejects it; condim 6 dropped it on the
+  lowering). Strict xfail with that reason.
+
+**Open for the developer.** (1) Run `pickup_demo_real` on the robot: check the perceived
+board and pieces in rviz before pressing Enter; gripper close setpoints
+(`grasp_widths.py`) were tuned for the 30 mm set -- the 16 mm rectangular prism may need
+more than 0.6. (2) The triangular prism's simulated grasp. (3) #316's
+`record_episode --execution real` still builds its world from the URDF
+(`TracyOnItsOwnTable`), not from the fetched world + perception; wiring
+`PerceivedSorting` into a `MontessoriWorldBuilder` is the next step if tomorrow's
+recording should perceive.
 
 ## #265: live shape and hole detection is wrong on the new 80 % pieces (2026-09-11, done; bringup restarted 21:47)
 
