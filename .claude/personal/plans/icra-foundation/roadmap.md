@@ -2143,3 +2143,75 @@ Byte-compiled clean; this session's container still cannot import the `experimen
 package (`uv sync` fails on the same `pyproject.toml` parse error every session on this
 branch has reported), so CI remains what verifies both the working-memory and
 long-term-memory halves.
+
+## 2026-09-11 (later): main merged a third time, and a signature is the fourth instance of the hazard
+
+The branch had been unmergeable against `main` since 2026-09-07. The stack maintenance
+routine reports a conflict by labelling the fork pull request `needs-resolution` and
+skipping the branch on every later pass, so nothing moved it: twelve routine comments on
+#265, the conflict set changing under it as `main` moved, and no session picking it up.
+The manifest meanwhile said `in_progress` with no mention of it. That gap is why this
+resolve was needed, and it is now recorded on the item's own `blockers` rather than only
+in the pull request's comments.
+
+**The conflict itself was two files** (`b5e2e2669`):
+
+| file | what met | resolution |
+|---|---|---|
+| `test/coraplex_test/test_plan/test_executables.py` | two independent import additions, this branch's `ExecutionType` and main's `Context`, both used further down the file | both |
+| `world_description/geometry.py` | main's `f4c15c243` gave every `to_json` a `**kwargs` parameter; this branch's `Shape.to_json`, written with `SurfaceFinish` in `80100bd4d`, names its four fields rather than reading them off `_serialized_fields` | this branch's fields, main's keyword arguments |
+
+Why the branch names its fields at all is worth keeping, because a later merge will meet
+it again: a `finish` is a `StrEnum`, and the generic reading `_serialized_fields` drives
+hands a `StrEnum` straight back as the plain string it is, so a round trip loses the
+member. `Shape.arguments_from_json` exists for the same reason on the read side. Neither
+is a stylistic departure from main's design and neither should be resolved away in favour
+of it while `SurfaceFinish` is this branch's own.
+
+**And the standing hazard for the fourth time, in a form the recorded sweep cannot find.**
+`to_json(obj, **kwargs)` now calls `obj.to_json(**kwargs)`, and `Sphere`, `Cylinder` and
+`Box` each override `to_json` on this branch and on no ancestor of `f4c15c243` — so the
+two sides touched different regions of the file and git reported no conflict for them,
+exactly as `query.variable` and `failed_motions` reported none. `ShapeCollection.to_json`
+hands its shapes the keyword arguments it was given, so any shape of a body serialized
+for a reader who already has the world raised
+`TypeError: Box.to_json() got an unexpected keyword argument`.
+
+**So the hazard is restated wider again.** It was recorded as a rename whose only stale
+reader sits in a file main never touched. The general form is *any* change to a name's
+contract, a signature included: the cheap sweep this roadmap prescribes — diff the
+dataclass field lines main removed, grep for surviving readers — would never have found
+this one, because no field was removed and no name changed. What found it was reading
+what the conflicted commit actually did and asking which of this branch's own overrides
+implement the method it changed. That question is the one to ask on every merge of main
+from here on, beside the field sweep, which was run and came back clean: of the nine
+names in the diff, every one is still defined on `main`.
+
+`test_a_shape_is_serialized_where_its_frame_is_written_as_a_reference`
+(`test/semantic_digital_twin_test/test_adapters/test_json_parsing.py`) pins it — a body's
+collision box, written for a reader who has the world, comes back with its finish, its
+scale and its own frame — and was written before the migration, where it fails with that
+exact `TypeError`.
+
+**Measured**, in a Python 3.12 container with the workspace on the path and
+`CRAM_ORM_BUILD=never`: `test_json_parsing.py` 41 passed; `test/semantic_digital_twin_test`
+1097 passed against 1082 on the pre-merge tip `db9561fa6` with the identical 41 failures,
+the one added collection error being main's own new `test_ros_msg_serializer.py`, which
+imports `geometry_msgs`; `test/krrood_test` 2952 passed with the same four failures the
+pre-merge tip has here. The container note this roadmap has corrected four times holds in
+a fifth shape: a `python3.12 -m venv` with `trimesh`, `casadi~=3.7.0`, `sqlalchemy`,
+`ormatic`, `mujoco`, `manifold3d`, `vhacdx`, the `random_events`/`probabilistic_model`
+wheels and the genuine `giskardpy_bullet_bindings` wheel, plus a one-function `xacro`
+stub, runs both suites.
+
+**CI had said nothing at all about the previous tip.** `db9561fa6` carried zero check
+runs and no commit status — the `tracy_icra` merge, both `main` merges before this one
+and the #304 merge have therefore never been reported on by CI, which is what the
+convergence entries above each flagged as owed. The push of `b5e2e2669` started the run.
+Per the standing rule against scheduled checks nothing is armed to watch it.
+
+**One tooling artefact, reported rather than fixed.** Writing the pull request
+description through the GitHub MCP server escapes the backticks in the `## Promote`
+block's fenced link, so each write grows the run of stray backticks and quotes around the
+URL. The URL itself is untouched and the link still works; the block is the stack
+tooling's own and rewriting it is not this item's work.
