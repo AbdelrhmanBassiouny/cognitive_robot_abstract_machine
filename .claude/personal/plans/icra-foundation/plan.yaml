@@ -35,7 +35,7 @@ items:
   track: integration
   depends_on: []
   status: in_progress
-  session: https://claude.ai/code/session_019Fq3evDtc4fjPpCaNceNts
+  session: https://claude.ai/code/session_0155Lgy4BZ7QcZHiRuxxJJyA
   blockers:
     - >-
       Cross-plan: this item merges montessori-eql-stack's montessori_monitor_and_recording (#256)
@@ -49,6 +49,19 @@ items:
       the developer's call. The three coraplex failures and the hanging Tracy demo this blocker used
       to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on
       #169's c8bf6f05.
+    - >-
+      Merge conflict with main since 2026-09-07, and the stacked-PR maintenance routine has skipped
+      the branch on every pass since: #265 carries the needs-resolution label and mergeable_state is
+      dirty. Twelve routine comments name a conflict set that changed under it as main moved; as of
+      2026-09-11 it is two files, semantic_digital_twin/.../geometry.py and
+      test/coraplex_test/test_plan/test_executables.py, reproduced locally against origin/main at
+      696fa8329. The geometry.py half is the standing rename hazard in a new form - main's f4c15c243
+      gave every to_json a **kwargs parameter and to_json(obj, **kwargs) now calls
+      obj.to_json(**kwargs), while this branch's own Shape/Mesh/Sphere/Cylinder/Box overrides (added
+      with SurfaceFinish in 80100bd4d, which main does not have) still take no kwargs, so
+      ShapeCollection.to_json raises TypeError for any shape the moment a caller passes a
+      ReferenceWriter. No CI has run on the branch tip db9561fa6 at all: zero check runs, no commit
+      status.
   notes: >
     The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor
     stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a
