@@ -1,4 +1,5 @@
-"""Generate real SDT objects with sampled masses for the confidence-aware pipeline.
+"""
+Generate real SDT objects with sampled masses for the confidence-aware pipeline.
 
 The confidence model needs a population of "familiar" objects to fit on. Rather than
 hand-authoring them, this module drives EQL's :class:`ProbabilisticBackend` with a
@@ -22,19 +23,25 @@ from typing_extensions import Any, List, Type
 
 @dataclass
 class MassDistribution:
-    """The familiar mass distribution to sample one class' objects from."""
+    """
+    The familiar mass distribution to sample one class' objects from.
+    """
 
     object_class: Type
     """The semantic-annotation class to generate, e.g. ``Cup`` or ``Pot``."""
 
     mean: float
-    """The mean mass, in kilograms, familiar objects of this class are sampled around."""
+    """
+    The mean mass, in kilograms, familiar objects of this class are sampled around.
+    """
 
     standard_deviation: float
     """The standard deviation of the mass, in kilograms, familiar objects are sampled with."""
 
     number_of_samples: int
-    """How many objects of this class to generate."""
+    """
+    How many objects of this class to generate.
+    """
 
     def generate_objects(self) -> List[Any]:
         """
@@ -47,7 +54,7 @@ class MassDistribution:
         :return: The generated objects.
         """
         query = a(self.object_class)(root=a(Body)(inertial=an(Inertial)(mass=...)))
-        query.expression.limit(self.number_of_samples)
+        query.limit(self.number_of_samples)
         parameters = UnderspecifiedParameters(query)
         [mass_variable] = parameters.variables.values()
 
@@ -62,7 +69,8 @@ class MassDistribution:
 
 
 def generate_familiar_objects(mass_distributions: List[MassDistribution]) -> List[Any]:
-    """Generate real SDT objects with sampled masses via EQL's probabilistic backend.
+    """
+    Generate real SDT objects with sampled masses via EQL's probabilistic backend.
 
     :param mass_distributions: The per-class distributions to sample objects from.
     :return: The generated objects, grouped by distribution in the given order.
