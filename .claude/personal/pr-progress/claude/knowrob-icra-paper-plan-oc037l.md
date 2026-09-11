@@ -51,3 +51,7 @@ Update 2026-09-11 (lab, v4): developer dropped the dimmed/sunlight condition ent
 no lighting recorded, tuned or mentioned; LightingChanged stays in code but is not run; item C's
 trigger is a new BoardPartlyCovered perturbation (flat body over half the lid in sim, a sheet of
 paper on the robot), captures renamed clear_*/covered_*; prompts C and E updated accordingly.
+Update 2026-09-11 (lab, v5): developer reverted Q8 to the control-constraints read. Runbook v5:
+look-quality-expectation dropped entirely (no quality gating, no BoardPartlyCovered, no rule family for
+the board); item C is control-constraints-and-degrees-of-freedom-queried (ActiveTasks.of(statechart,
+moment), Task constraints exposed, two Bucket.CONTROL questions, one per memory); prompt C rewritten.
