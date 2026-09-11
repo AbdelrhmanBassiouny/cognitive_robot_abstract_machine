@@ -339,7 +339,7 @@ class NumericPose:
         """
         return float(np.linalg.norm(np.subtract(self.position, other.position)))
 
-    def rotational_error(self, other: NumericPose) -> float:
+    def rotational_distance(self, other: NumericPose) -> float:
         """
         The angle a pose would have to turn through to reach another's orientation.
 

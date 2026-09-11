@@ -109,7 +109,7 @@ def simulated_camera(montessori_world: MontessoriWorld) -> Iterator[SimulatedCam
     """
     The camera over that scene, looking for as long as a test needs it.
     """
-    with camera_over_the_table(montessori_world) as camera:
+    with camera_over_the_table(montessori_world.world) as camera:
         yield camera
 
 
@@ -229,13 +229,13 @@ def test_the_camera_stands_over_the_middle_of_the_stretch_it_searches(
     """
     A look is taken of the table the pipeline searches, not of wherever the camera fell.
     """
-    searched = table_surface(montessori_world).region
-    camera = camera_over_the_table(montessori_world)
+    searched = table_surface(montessori_world.world).region
+    camera = camera_over_the_table(montessori_world.world)
     standing = camera.reference_frame_T_camera[:3, 3]
     assert standing[0] == pytest.approx((searched.minimum_x + searched.maximum_x) / 2.0)
     assert standing[1] == pytest.approx((searched.minimum_y + searched.maximum_y) / 2.0)
     assert standing[2] == pytest.approx(
-        table_surface(montessori_world).height + CAMERA_HEIGHT_ABOVE_THE_TABLE
+        table_surface(montessori_world.world).height + CAMERA_HEIGHT_ABOVE_THE_TABLE
     )
 
 
@@ -284,7 +284,7 @@ def test_the_depth_where_the_board_is_seen_is_the_height_of_its_lid(
     Depth comes back in metres along the camera's own axis, so a point read off the
     board's middle stands exactly as high as the world says its lid does.
     """
-    lid = lid_surface(montessori_world)
+    lid = lid_surface(montessori_world.world)
     middle_of_the_board = montessori_world.world.compute_forward_kinematics_np(
         montessori_world.world.root, montessori_world.board.root
     )[:3, 3]
@@ -301,14 +301,14 @@ def test_a_look_reaching_past_everything_the_world_holds_measures_nothing_there(
     A pixel no surface falls in carries no reading, rather than the distance a renderer
     answers with where it sees nothing.
     """
-    table = table_surface(montessori_world)
+    table = table_surface(montessori_world.world)
     over_the_table = Point3(
         x=(table.region.minimum_x + table.region.maximum_x) / 2.0,
         y=(table.region.minimum_y + table.region.maximum_y) / 2.0,
         z=table.height,
     )
     with looking_down_at(
-        montessori_world,
+        montessori_world.world,
         over_the_table,
         height_above_the_target=FAR_ENOUGH_TO_SEE_PAST_THE_FLOOR,
     ) as camera:
@@ -342,7 +342,7 @@ def test_a_camera_that_was_never_started_answers_no_look(
     Asking a camera with no mirror behind it for a frame says so, rather than failing
     somewhere inside the renderer.
     """
-    camera = camera_over_the_table(montessori_world)
+    camera = camera_over_the_table(montessori_world.world)
     with pytest.raises(SimulatedCameraIsNotLooking):
         camera.frame()
 
@@ -403,7 +403,7 @@ def test_a_region_asked_for_is_drawn_see_through(
     """
     hole = square_hole(montessori_world)
     region_hue = hue_of(hole.root.area.shapes[0].color)
-    camera = camera_over_the_table(montessori_world)
+    camera = camera_over_the_table(montessori_world.world)
     with camera:
         hidden = hue_of_the_middle_of(montessori_world, hole, camera.frame())
     camera.region_appearance = RegionAppearance.TRANSPARENT
@@ -424,9 +424,9 @@ def test_every_piece_the_world_places_on_the_table_is_found(
     the table is reported standing on it.
     """
     scene = RecordedFrame(
-        pipeline=perception_pipeline(montessori_world), frame=simulated_frame
+        pipeline=perception_pipeline(montessori_world.world), frame=simulated_frame
     ).scene()
-    table = table_surface(montessori_world)
+    table = table_surface(montessori_world.world)
     reported = {
         shape.category
         for shape in scene.shapes
@@ -469,7 +469,7 @@ def test_the_board_is_found_by_the_holes_the_camera_measures_through_it(
     ten millimetres down.
     """
     scene = RecordedFrame(
-        pipeline=perception_pipeline(montessori_world), frame=simulated_frame
+        pipeline=perception_pipeline(montessori_world.world), frame=simulated_frame
     ).scene()
     cut = holes_cut_in(montessori_world)
 
@@ -502,7 +502,7 @@ def test_every_piece_on_the_table_is_reported_once_with_its_own_category(
     A look at the simulated scene reports what stands in it, and nothing else.
     """
     scene = RecordedFrame(
-        pipeline=perception_pipeline(montessori_world), frame=simulated_frame
+        pipeline=perception_pipeline(montessori_world.world), frame=simulated_frame
     ).scene()
     assert Counter(shape.category for shape in scene.shapes) == Counter(
         piece.shape_category for piece in pieces_in(montessori_world)

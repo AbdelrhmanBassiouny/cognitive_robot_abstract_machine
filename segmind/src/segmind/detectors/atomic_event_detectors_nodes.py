@@ -223,7 +223,7 @@ class MotionDetector(AbstractDetector):
         :param poses: The pose window of the body, oldest first.
         :return: True if the object is rotating, False otherwise.
         """
-        return poses[0].rotational_error(poses[-1]) > self.rotation_threshold
+        return poses[0].rotational_distance(poses[-1]) > self.rotation_threshold
 
     def _is_lifting(self, poses: List[NumericPose]) -> bool:
         """

@@ -319,8 +319,8 @@ def _hole_place_pose(
     footprint = _hole_footprint(category)
     board_top_z = _board_center_z(mounted_table_top_z) + BOARD_SCALE.z / 2
     return Pose.from_xyz_rpy(
-        BOARD_X + footprint.center[0],
-        BOARD_Y + footprint.center[1],
+        BOARD_X + footprint.center.x,
+        BOARD_Y + footprint.center.y,
         board_top_z + shape_half_height + PLACE_HOVER,
         reference_frame=world.root,
     )

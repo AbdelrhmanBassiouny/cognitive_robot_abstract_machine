@@ -151,6 +151,9 @@ class PiecePushedAway(Perturbation[RecordedWorld]):
     def apply(self, world: RecordedWorld) -> None:
         world.piece_was_pushed = True
 
+    def instruction_for_a_person(self) -> str:
+        return "Push the piece away."
+
 
 @dataclass
 class SortOnePiece(Scenario[RecordedWorld, TwoFingerGripper]):
