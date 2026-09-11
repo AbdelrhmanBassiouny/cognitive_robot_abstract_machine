@@ -40,6 +40,7 @@ from experiments.montessori.pieces import (
     KNOWN_PIECES,
     KnownPiece,
     hue_distance,
+    tallest,
 )
 from experiments.montessori.semantics import (
     MontessoriShapeCategory,
@@ -333,8 +334,6 @@ class DetectorAddedAfterTheRulesWereStated(PieceDetector):
     situation nobody foresaw can be given a rule without the rules being rewritten.
     """
 
-    piece_height: float = 0.0
-
     def capability(self, look: TargetOnSurface) -> ConditionType:
         """
         Answers any look for a piece whose outline is modelled.
@@ -512,8 +511,8 @@ def test_the_colour_blob_finds_on_a_matte_lid_what_the_edge_fit_finds(
         type(detector): detector.detect(
             SurfacePass(
                 orthophoto=rectified.at(lid.height),
-                top_orthophoto=rectified.at(lid.height + detector.piece_height),
-                edges=rectified.edges_at(lid.height + detector.piece_height),
+                top_orthophoto=rectified.at(lid.height + tallest(cyan)),
+                edges=rectified.edges_at(lid.height + tallest(cyan)),
                 frame=frame,
                 search=search,
                 imagined=ImaginedWorld.copied_from(None),

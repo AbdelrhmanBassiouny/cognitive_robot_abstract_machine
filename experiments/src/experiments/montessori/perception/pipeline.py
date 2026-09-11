@@ -78,13 +78,14 @@ from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.surface_finding import SurfaceRules
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import (
+    FULL_SIZE_PIECES,
     HUE_RANGE,
     HUE_TOLERANCE,
-    KNOWN_PIECES,
     KnownPiece,
+    KnownPieceSet,
     hues_of,
-    pieces_colored,
     rectangle_boundary,
+    tallest,
 )
 from experiments.montessori.planar_geometry import PlanarPoint, turned
 from experiments.montessori.semantics import ShapeSortingBoard
@@ -192,20 +193,22 @@ class SurfaceColors:
         )
         return mask.astype(np.uint8) * 255
 
-    def color_mask(self, orthophoto: Orthophoto, color: Color) -> np.ndarray:
+    def color_mask(
+        self, orthophoto: Orthophoto, pieces: Sequence[KnownPiece]
+    ) -> np.ndarray:
         """
-        Mark every pixel wearing a colour, whichever of this set's hues that colour is.
+        Mark every pixel wearing a colour some pieces wear.
 
         The pieces are still searched one hue at a time, for the reason
         :meth:`piece_mask` records; this is the whole of what a look asked for one
         colour has left to read, which is what a viewer draws.
 
         :param orthophoto: The rectified image to segment.
-        :param color: The colour to mark.
-        :return: A ``uint8`` mask, 255 on that colour and 0 elsewhere.
+        :param pieces: The pieces whose colours to mark.
+        :return: A ``uint8`` mask, 255 on those colours and 0 elsewhere.
         """
         marked = np.zeros(orthophoto.image.shape[:2], dtype=np.uint8)
-        for hue in hues_of(pieces_colored(color)):
+        for hue in hues_of(pieces):
             marked = cv2.bitwise_or(marked, self.piece_mask(orthophoto, hue))
         return marked
 
@@ -537,14 +540,18 @@ class BoardDetector:
     patches.
     """
 
-    seed_reach: float = 0.04
+    seed_reach: float = 0.06
     """
     How far, in metres, the fit may move the board from where the openings put it.
 
     The patches are whatever the lighting made dark or the depth found hollow and are
-    not the holes, so their middle is only ever a place to start: measured on the
-    shipped captures they lie within about ten millimetres of the board's true centre,
-    and this leaves room for several times that.
+    not the holes, so their middle is only ever a place to start. Measured on the
+    shipped captures rectified onto the lid where it really stands, that middle lies up
+    to about fifty millimetres from the board's centre: a piece standing in a hole takes
+    that hole's patch away, and the shadow the lid's front edge casts on the drawers
+    below adds patches in front of the board. This reaches past that with a little room,
+    at a fifth more of a look's time than the forty millimetres that left one capture's
+    board a row out.
     """
 
     def detect(
@@ -725,7 +732,11 @@ class BoardDetector:
 
         The surface is filled in first, so that an opening is a patch within a solid
         region rather than a gap that the surface's own outline has to enclose; a hole
-        broken open at the board's edge would otherwise be missed entirely.
+        broken open at the board's edge would otherwise be missed entirely. Its depth is
+        read against the height the surface itself was measured at rather than the
+        plane the world states, so a depth image that reads the whole lid a few
+        millimetres low -- the shipped captures read it seven below a lid measured with
+        a tape -- does not read as one opening the size of itself.
 
         :param surface: The candidate surface's own contour, in rectified pixels.
         :param orthophoto: The rectified view it was found in.
@@ -740,7 +751,11 @@ class BoardDetector:
             self.colors.dark_mask(orthophoto, region), orthophoto
         )
         hollow = self._hole_sized_parts(
-            orthophoto.opening_mask(self.minimum_hole_depth) & region, orthophoto
+            orthophoto.opening_mask(
+                self.minimum_hole_depth, orthophoto.surface_height_within(region)
+            )
+            & region,
+            orthophoto,
         )
         return PerforatedSurface(
             dark=dark,
@@ -1054,6 +1069,7 @@ class EdgeFitDetector(PieceDetector):
                             orthophoto, _filled(contour, orthophoto)
                         ),
                         source=self,
+                        candidates=surface_pass.sought_pieces,
                         hue_tolerance=self.hue_tolerance,
                     )
                 )
@@ -1107,7 +1123,7 @@ class EdgeFitDetector(PieceDetector):
             return None
         fitted = _to_rectified_contour(outline, orthophoto)
         height = _measure_height(
-            fitted, orthophoto, surface_pass.frame, self.piece_height
+            fitted, orthophoto, surface_pass.frame, surface_pass.piece_height
         )
         pose = Pose.from_xyz_rpy(
             match.center.x,
@@ -1228,6 +1244,7 @@ class ColorBlobDetector(PieceDetector):
             ),
             hue=self.colors.measure_hue(orthophoto, _filled(contour, orthophoto)),
             source=self,
+            candidates=surface_pass.sought_pieces,
             hue_tolerance=self.hue_tolerance,
         )
         fitted_pieces = self.matcher.match_at(
@@ -1251,7 +1268,7 @@ class ColorBlobDetector(PieceDetector):
         if not surface_pass.explanations.is_reported(account, *rivals):
             return None
         height = _measure_height(
-            contour, orthophoto, surface_pass.frame, self.piece_height
+            contour, orthophoto, surface_pass.frame, surface_pass.piece_height
         )
         pose = Pose.from_xyz_rpy(
             match.center.x,
@@ -1534,7 +1551,7 @@ class FindThePieces(SceneDetector):
         pieces = []
         for search in scene.searched_surfaces(board):
             for detector, candidates in self.detector_rules.detectors_for(
-                search.surface, KNOWN_PIECES
+                search.surface, scene.pieces.pieces
             ):
                 pieces.extend(
                     detector.detect(
@@ -1579,7 +1596,7 @@ class FindThePieces(SceneDetector):
         :param imagined: Where what is found comes to stand.
         :param expected: What is believed to be in the workspace already.
         """
-        top = search.surface.height + detector.piece_height
+        top = search.surface.height + tallest(candidates)
         return SurfacePass(
             orthophoto=scene.rectified.at(search.surface.height),
             top_orthophoto=scene.rectified.at(top),
@@ -1674,6 +1691,12 @@ class MontessoriPerceptionPipeline:
     None where a look has no world behind it at all, as a recorded frame does.
     """
 
+    pieces: KnownPieceSet = FULL_SIZE_PIECES
+    """
+    The loose pieces standing on the table: the ones a look fits and the colours it
+    looks for.
+    """
+
     look_rules: LookRules = field(default_factory=default_look_rules)
     """
     Says how a look is answered: which detectors run over which surfaces, concluded from
@@ -1710,7 +1733,9 @@ class MontessoriPerceptionPipeline:
     """
 
     @classmethod
-    def of_world(cls, world: World, table: Body) -> MontessoriPerceptionPipeline:
+    def of_world(
+        cls, world: World, table: Body, pieces: KnownPieceSet = FULL_SIZE_PIECES
+    ) -> MontessoriPerceptionPipeline:
         """
         Build the pipeline that looks at the Montessori scene a world describes.
 
@@ -1721,6 +1746,7 @@ class MontessoriPerceptionPipeline:
 
         :param world: The world the scene is described in.
         :param table: The body carrying the surface the scene is set up on.
+        :param pieces: The loose pieces standing on the table.
         :raises SurfaceHasNothingToMeasure: If a surface the scene needs has no shape.
         """
         return cls(
@@ -1728,6 +1754,7 @@ class MontessoriPerceptionPipeline:
             lid=cls._lid_of(world),
             reference_frame=world.root,
             world=world,
+            pieces=pieces,
         )
 
     @staticmethod
@@ -1849,6 +1876,7 @@ class MontessoriPerceptionPipeline:
             reference_frame=self.reference_frame,
             request=request,
             world=self.world,
+            pieces=self.pieces,
             explanations=self.explanations,
             headroom=self.headroom,
         )

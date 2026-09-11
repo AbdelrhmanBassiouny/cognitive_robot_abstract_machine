@@ -225,6 +225,30 @@ def test_a_plane_is_not_open_where_what_lies_below_it_is_nearer_than_asked_for()
     assert not orthophoto.opening_mask(OPENING_DEPTH * 2).any()
 
 
+def test_an_opening_is_a_drop_from_the_measured_surface_where_the_plane_is_stated_too_high():
+    frame, region = looking_down_at_an_opening()
+    stated_too_high = SURFACE_HEIGHT + OPENING_DEPTH / 2
+    orthophoto = OrthophotoProjector(region=region).project(frame, stated_too_high)
+
+    against_the_plane = orthophoto.opening_mask(OPENING_DEPTH / 2)
+    against_the_surface = orthophoto.opening_mask(
+        OPENING_DEPTH / 2, orthophoto.surface_height_within(np.ones_like(against_the_plane))
+    )
+
+    assert marked_at(against_the_plane, region, 0.07, 0.07)
+    assert marked_at(against_the_surface, region, 0.0, 0.0)
+    assert not marked_at(against_the_surface, region, 0.07, 0.07)
+
+
+def test_the_surface_height_within_a_patch_is_the_middle_reading():
+    frame, region = looking_down_at_an_opening()
+    orthophoto = OrthophotoProjector(region=region).project(frame, SURFACE_HEIGHT)
+
+    everywhere = np.ones(orthophoto.image.shape[:2], dtype=np.uint8)
+    assert orthophoto.surface_height_within(everywhere) == pytest.approx(SURFACE_HEIGHT)
+    assert orthophoto.surface_height_within(np.zeros_like(everywhere)) is None
+
+
 def test_a_look_carrying_no_depth_says_nowhere_is_open():
     frame, region = looking_down_at_an_opening(cut=False)
     frame.depth[:] = 0.0
@@ -232,6 +256,7 @@ def test_a_look_carrying_no_depth_says_nowhere_is_open():
 
     assert orthophoto.measured_height is None
     assert not orthophoto.opening_mask(OPENING_DEPTH / 2).any()
+    assert orthophoto.surface_height_within(np.ones((1, 1), dtype=np.uint8)) is None
 
 
 # %% drawing the detections onto the frame

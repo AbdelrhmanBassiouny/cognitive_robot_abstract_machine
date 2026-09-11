@@ -1,9 +1,13 @@
 """
-The loose Montessori pieces this lab's physical set actually contains.
+The loose Montessori pieces this lab's physical sets actually contain.
 
 Every measurement here was taken off the pieces themselves rather than derived from the
 board's own holes: a piece is cut smaller than the hole it drops through, so the hole's
 footprint is the wrong size to recognise a piece by or to build one from.
+
+There are two sets, and a look is told which one stands on the table: the set the
+captures of August 2026 hold, and a smaller set of the same four kinds printed at four
+fifths of it in different plastic, which is the one on the table since September 2026.
 
 Each piece is described by the outline it presents while resting on its own flat face,
 the colour it was measured to be, and how far it can be turned about its standing axis
@@ -19,7 +23,7 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
-from typing_extensions import Dict, Optional, Tuple
+from typing_extensions import Dict, Optional, Sequence, Tuple
 
 from experiments.montessori.planar_geometry import KnownOutline, points_along, turned
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -205,6 +209,28 @@ board's own lid does share it, but the lid is searched on its own plane and excl
 from the loose pieces by its outline.
 """
 
+# %% the smaller set
+
+SMALLER_SET_SCALE = 0.8
+"""
+How large the pieces of the smaller set are against the full-size set they were
+printed from: the cube measures 24 mm where the full-size one measures 30.
+"""
+
+SMALLER_SET_BLUE_HUE = 98
+"""
+Hue of the smaller set's blue pieces, measured off the rectified camera image: a sky
+blue where the full-size set's is a pale cyan.
+"""
+
+SMALLER_SET_YELLOW_HUE = 26
+"""
+Hue of the smaller set's yellow pieces, measured off the rectified camera image.
+
+Within :data:`HUE_TOLERANCE` of the board's own wooden lid, so a piece of this set on
+the lid is told from it by its outline alone.
+"""
+
 
 # %% one kind of piece
 
@@ -272,6 +298,21 @@ class KnownPiece(KnownOutline):
         reach = self.outline.max(axis=0) - self.outline.min(axis=0)
         return float(reach.max())
 
+    def scaled(self, factor: float, hue: int) -> KnownPiece:
+        """
+        The same kind of piece printed at another size and in another plastic.
+
+        :param factor: How large it is against this one.
+        :param hue: The colour it was measured to be, as OpenCV reports hue.
+        """
+        return KnownPiece(
+            category=self.category,
+            outline=self.outline * factor,
+            height=self.height * factor,
+            hue=hue,
+            rotation_period=self.rotation_period,
+        )
+
     def turned_outline(self, angle: float) -> np.ndarray:
         """
         Its outline turned about its own centre.
@@ -304,82 +345,184 @@ class KnownPiece(KnownOutline):
         return (angle + half) % self.rotation_period - half
 
 
-KNOWN_PIECES: Tuple[KnownPiece, ...] = (
-    KnownPiece(
-        category=MontessoriShapeCategory.CUBE,
-        outline=rectangle_boundary(CUBE_EDGE, CUBE_EDGE),
-        height=CUBE_EDGE,
-        hue=CYAN_HUE,
-        rotation_period=math.pi / 2,
-    ),
-    KnownPiece(
-        category=MontessoriShapeCategory.CYLINDER,
-        outline=circle_boundary(CYLINDER_DIAMETER),
-        height=CYLINDER_HEIGHT,
-        hue=CYAN_HUE,
-        rotation_period=None,
-    ),
-    KnownPiece(
-        category=MontessoriShapeCategory.RECTANGULAR_PRISM,
-        outline=rectangle_boundary(RECTANGULAR_PRISM_WIDTH, RECTANGULAR_PRISM_LENGTH),
-        height=RECTANGULAR_PRISM_HEIGHT,
-        hue=YELLOW_HUE,
-        rotation_period=math.pi,
-    ),
-    KnownPiece(
-        category=MontessoriShapeCategory.TRIANGULAR_PRISM,
-        outline=equilateral_triangle_boundary(TRIANGULAR_PRISM_SIDE),
-        height=TRIANGULAR_PRISM_HEIGHT,
-        hue=YELLOW_HUE,
-        rotation_period=2 * math.pi / 3,
-    ),
-)
-"""
-Every kind of loose piece this set contains.
-
-The disk and the sphere are left out because this physical set has neither.
-"""
-
-KNOWN_PIECE_BY_CATEGORY: Dict[MontessoriShapeCategory, KnownPiece] = {
-    piece.category: piece for piece in KNOWN_PIECES
-}
-"""
-:data:`KNOWN_PIECES` keyed by the shape each one is.
-"""
-
-LARGEST_PIECE_RADIUS: float = max(piece.radius for piece in KNOWN_PIECES)
-"""
-How far, in metres, the widest piece in this set reaches from its own centre.
-
-A piece is searched for by where its centre may be but recognised by its whole outline,
-so this is how far past that a picture has to reach for the fit to have anything to
-measure at the piece's far side.
-"""
-
-PIECE_HUES: Tuple[int, ...] = tuple(sorted({piece.hue for piece in KNOWN_PIECES}))
-"""
-Every colour a loose piece in this set wears.
-
-What a piece stands on is whatever the table happens to be covered with, so it is these
-that say a pixel belongs to a piece rather than anything about the surface under it.
-"""
-
-
-def pieces_colored(color: Optional[Color] = None) -> Tuple[KnownPiece, ...]:
+def tallest(pieces: Sequence[KnownPiece]) -> float:
     """
-    The pieces of this set wearing a colour.
+    Roughly how tall a loose piece among some stands, in metres: the tallest of them.
 
-    :param color: The colour to look for, or None for every piece whatever it wears.
+    What reads this only has to be forgiving of the difference between the pieces: it
+    is what cancels the parallax that would otherwise stretch a piece's outline, and
+    what a piece's own height is reported as wherever the depth image cannot resolve it.
+
+    :param pieces: The pieces to read.
     """
-    if color is None:
-        return KNOWN_PIECES
-    return tuple(piece for piece in KNOWN_PIECES if piece.color == color)
+    return max(piece.height for piece in pieces)
 
 
-def hues_of(pieces: Tuple[KnownPiece, ...]) -> Tuple[int, ...]:
+def hues_of(pieces: Sequence[KnownPiece]) -> Tuple[int, ...]:
     """
     Every colour a given set of pieces wears, as OpenCV reports hue.
 
     :param pieces: The pieces to read.
     """
     return tuple(sorted({piece.hue for piece in pieces}))
+
+
+# %% a set of pieces
+
+
+@dataclass(frozen=True)
+class KnownPieceSet:
+    """
+    Every kind of loose piece one physical set contains.
+
+    What a look is told stands on the table, so that the pieces it fits and the colours
+    it looks for are the set's own.
+    """
+
+    pieces: Tuple[KnownPiece, ...]
+    """
+    One entry per kind of piece the set contains.
+    """
+
+    @property
+    def by_category(self) -> Dict[MontessoriShapeCategory, KnownPiece]:
+        """
+        :attr:`pieces` keyed by the shape each one is.
+        """
+        return {piece.category: piece for piece in self.pieces}
+
+    @property
+    def largest_radius(self) -> float:
+        """
+        How far, in metres, the widest piece in this set reaches from its own centre.
+
+        A piece is searched for by where its centre may be but recognised by its whole
+        outline, so this is how far past that a picture has to reach for the fit to have
+        anything to measure at the piece's far side.
+        """
+        return max(piece.radius for piece in self.pieces)
+
+    @property
+    def height(self) -> float:
+        """
+        Roughly how tall a loose piece of this set stands, in metres, see
+        :func:`tallest`.
+        """
+        return tallest(self.pieces)
+
+    @property
+    def hues(self) -> Tuple[int, ...]:
+        """
+        Every colour a loose piece in this set wears.
+
+        What a piece stands on is whatever the table happens to be covered with, so it
+        is these that say a pixel belongs to a piece rather than anything about the
+        surface under it.
+        """
+        return hues_of(self.pieces)
+
+    def colored(self, color: Optional[Color] = None) -> Tuple[KnownPiece, ...]:
+        """
+        The pieces of this set wearing a colour.
+
+        :param color: The colour to look for, or None for every piece whatever it wears.
+        """
+        if color is None:
+            return self.pieces
+        return tuple(piece for piece in self.pieces if piece.color == color)
+
+    def scaled(self, factor: float, hue_by_hue: Dict[int, int]) -> KnownPieceSet:
+        """
+        The same kinds of piece printed at another size and in other plastics.
+
+        :param factor: How large the pieces are against this set's.
+        :param hue_by_hue: The colour each of this set's colours was printed in.
+        """
+        return KnownPieceSet(
+            pieces=tuple(
+                piece.scaled(factor, hue_by_hue[piece.hue]) for piece in self.pieces
+            )
+        )
+
+
+FULL_SIZE_PIECES = KnownPieceSet(
+    pieces=(
+        KnownPiece(
+            category=MontessoriShapeCategory.CUBE,
+            outline=rectangle_boundary(CUBE_EDGE, CUBE_EDGE),
+            height=CUBE_EDGE,
+            hue=CYAN_HUE,
+            rotation_period=math.pi / 2,
+        ),
+        KnownPiece(
+            category=MontessoriShapeCategory.CYLINDER,
+            outline=circle_boundary(CYLINDER_DIAMETER),
+            height=CYLINDER_HEIGHT,
+            hue=CYAN_HUE,
+            rotation_period=None,
+        ),
+        KnownPiece(
+            category=MontessoriShapeCategory.RECTANGULAR_PRISM,
+            outline=rectangle_boundary(
+                RECTANGULAR_PRISM_WIDTH, RECTANGULAR_PRISM_LENGTH
+            ),
+            height=RECTANGULAR_PRISM_HEIGHT,
+            hue=YELLOW_HUE,
+            rotation_period=math.pi,
+        ),
+        KnownPiece(
+            category=MontessoriShapeCategory.TRIANGULAR_PRISM,
+            outline=equilateral_triangle_boundary(TRIANGULAR_PRISM_SIDE),
+            height=TRIANGULAR_PRISM_HEIGHT,
+            hue=YELLOW_HUE,
+            rotation_period=2 * math.pi / 3,
+        ),
+    )
+)
+"""
+The set the captures of August 2026 hold.
+
+The disk and the sphere are left out because this physical set has neither.
+"""
+
+
+SMALLER_PIECES = FULL_SIZE_PIECES.scaled(
+    SMALLER_SET_SCALE,
+    {CYAN_HUE: SMALLER_SET_BLUE_HUE, YELLOW_HUE: SMALLER_SET_YELLOW_HUE},
+)
+"""
+The set on the table since September 2026: :data:`FULL_SIZE_PIECES` at
+:data:`SMALLER_SET_SCALE` in its own plastics.
+"""
+
+KNOWN_PIECES: Tuple[KnownPiece, ...] = FULL_SIZE_PIECES.pieces
+"""
+Every kind of loose piece the full-size set contains, which is the set a look is fitted
+with unless told otherwise.
+"""
+
+KNOWN_PIECE_BY_CATEGORY: Dict[MontessoriShapeCategory, KnownPiece] = (
+    FULL_SIZE_PIECES.by_category
+)
+"""
+:data:`KNOWN_PIECES` keyed by the shape each one is.
+"""
+
+LARGEST_PIECE_RADIUS: float = FULL_SIZE_PIECES.largest_radius
+"""
+How far, in metres, the widest piece of the full-size set reaches from its own centre.
+"""
+
+PIECE_HUES: Tuple[int, ...] = hues_of(KNOWN_PIECES)
+"""
+Every colour a loose piece of the full-size set wears.
+"""
+
+
+def pieces_colored(color: Optional[Color] = None) -> Tuple[KnownPiece, ...]:
+    """
+    The pieces of the full-size set wearing a colour.
+
+    :param color: The colour to look for, or None for every piece whatever it wears.
+    """
+    return FULL_SIZE_PIECES.colored(color)

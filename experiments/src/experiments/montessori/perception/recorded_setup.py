@@ -29,6 +29,7 @@ from experiments.montessori.perception.pipeline import (
     default_look_rules,
 )
 from experiments.montessori.perception.surfaces import WorkspaceSurface
+from experiments.montessori.pieces import FULL_SIZE_PIECES, KnownPieceSet
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -59,10 +60,13 @@ Read off the ``map`` to ``table`` transform the robot publishes into every recor
 """
 
 WIDEST_WORKSPACE = WorkspaceRegion(
-    minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
+    minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.85
 )
 """
 The whole stretch of that table the camera looks over, and the widest a run may search.
+
+Reaches past the table's own far edge, which stands 1.18 m along x, and past its sides at
+0.8 m either way, so a tuned workspace can be cut to the table itself.
 
 A workspace tuned for this setup is cut out of this one, so an edge brought in by
 :mod:`~experiments.montessori.perception.tune_workspace` can always be pushed back out
@@ -83,24 +87,6 @@ How far, in metres, a region built by :func:`region_over` reaches above the tabl
 
 Enough to hold the board and anything standing on it, which is what a statement naming a
 stretch of this table means to reach over.
-"""
-
-BOARD_SCALE_AGAINST_THE_MESH = 0.865
-"""
-How large the shape-sorting board on this table is, against ``resources/board.stl``.
-
-The mesh is not cut to the size of the board these recordings hold: laid over the lid at
-its own size, its holes miss the openings actually seen by about nineteen millimetres,
-and no plane the board could be rectified onto brings them together. Fitted at this size
-they land two to three millimetres from them, which is what
-:meth:`~experiments.montessori.perception.pipeline.BoardDetector.measure_scale` answers
-on each of the six shipped captures -- 0.82, 0.84, 0.86, 0.87, 0.90 and 0.92, whose
-middle this is. Measuring the board itself would settle it more tightly than six looks
-from one angle can.
-
-Stated here rather than on the detector because it is knowledge about a particular
-board, not about how a board is looked for: a scene built from the mesh is the mesh's
-own size, and reads one.
 """
 
 TUNED_WORKSPACE_FILE = (
@@ -175,12 +161,10 @@ def lid_surface(world: Optional[World] = None) -> WorkspaceSurface:
 
 def board_detector() -> BoardDetector:
     """
-    :return: The detector that looks for the board this setup holds, at the size that
-        board was measured to be.
+    :return: The detector that looks for the board this setup holds, which is the size
+        of the mesh that models it.
     """
-    return BoardDetector(
-        layout=BoardHoleLayout.of_board_mesh(BOARD_SCALE_AGAINST_THE_MESH)
-    )
+    return BoardDetector(layout=BoardHoleLayout.of_board_mesh())
 
 
 def recorded_world() -> World:
@@ -332,10 +316,9 @@ def board_holes_in(world: World, board: MontessoriBoardDetection) -> Dict[str, B
     they are placed from a detection rather than written down here: where this board
     stands has been measured to drift from where the world models it.
 
-    The look is also the only thing that says how far apart they stand, since the mesh is
-    not cut to the size of the board these recordings hold -- see
-    :data:`BOARD_SCALE_AGAINST_THE_MESH`. Reading their spacing off the mesh instead
-    leaves a body about twelve millimetres from the hole a statement means by it.
+    The look also says how far apart they stand, so a body stands on the hole a
+    statement means by it rather than on where the mesh puts that hole about a board
+    found a little off.
 
     :param world: The world to place them in, from :func:`recorded_world`.
     :param board: The board as a look found it.
@@ -367,19 +350,21 @@ def board_holes_in(world: World, board: MontessoriBoardDetection) -> Dict[str, B
 def lab_board() -> DescribedBoard:
     """
     The shape-sorting board on this table, described by what it measures: the board's
-    own mesh at :data:`BOARD_SCALE_AGAINST_THE_MESH`, standing as tall as the mesh, the
-    height :data:`LID_HEIGHT` raises the lid above the table by.
+    own mesh at its own size, standing as tall as the mesh, the height
+    :data:`LID_HEIGHT` raises the lid above the table by.
     """
     return DescribedBoard.of_layout(
-        BoardHoleLayout.of_board_mesh(BOARD_SCALE_AGAINST_THE_MESH),
-        height=float(BOARD_SCALE.z),
+        BoardHoleLayout.of_board_mesh(), height=float(BOARD_SCALE.z)
     )
 
 
-def perception_pipeline(world: Optional[World] = None) -> MontessoriPerceptionPipeline:
+def perception_pipeline(
+    world: Optional[World] = None, pieces: KnownPieceSet = FULL_SIZE_PIECES
+) -> MontessoriPerceptionPipeline:
     """
     :param world: The world to place the detections in, or None to report them in no
         frame, which is what a run that only reads the pictures needs.
+    :param pieces: The loose pieces standing on the table in what is read.
     :return: The pipeline that reads a recording of this setup.
     """
     return MontessoriPerceptionPipeline(
@@ -388,4 +373,5 @@ def perception_pipeline(world: Optional[World] = None) -> MontessoriPerceptionPi
         look_rules=default_look_rules(board_detector=board_detector()),
         reference_frame=None if world is None else world.root,
         world=world,
+        pieces=pieces,
     )

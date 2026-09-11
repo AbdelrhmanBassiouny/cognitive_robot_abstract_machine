@@ -126,9 +126,9 @@ class SceneCapture(SubclassJSONSerializer):
         """
         return capture_path(self.name, part, self.directory)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs: Any) -> Dict[str, Any]:
         return {
-            **super().to_json(),
+            **super().to_json(**kwargs),
             CaptureField.NAME.value: self.name,
             CaptureField.RECORDED_FROM.value: self.recorded_from,
             CaptureField.COLOR_FORMAT.value: self.color_format,
