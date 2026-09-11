@@ -583,12 +583,14 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         """
         return [field_ for field_ in fields(cls) if field_.init]
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
-            **super().to_json(),
-            "origin": to_json(self.origin),
-            "color": to_json(self.color),
-            "texture": to_json(self.texture) if self.texture is not None else None,
+            **super().to_json(**kwargs),
+            "origin": to_json(self.origin, **kwargs),
+            "color": to_json(self.color, **kwargs),
+            "texture": (
+                to_json(self.texture, **kwargs) if self.texture is not None else None
+            ),
             "finish": self.finish.value if self.finish is not None else None,
         }
 
@@ -767,7 +769,7 @@ class Mesh(Shape):
             if field_.name != "filename"
         ]
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, **kwargs) -> Dict[str, Any]:
         # Serialize the unscaled geometry and the scale separately. This is the same
         # mesh :attr:`mesh` exposes, so a deserialized mesh reproduces the original
         # rather than a differently tessellated version of the same file.
@@ -783,9 +785,9 @@ class Mesh(Shape):
             ).tolist()
         file_type = self.filename.split(".")[-1]
         return {
-            **super().to_json(),
+            **super().to_json(**kwargs),
             "mesh": mesh_dict,
-            "scale": to_json(self.scale),
+            "scale": to_json(self.scale, **kwargs),
             "file_type": file_type,
         }
 
@@ -1222,8 +1224,8 @@ class Sphere(Shape):
             self.numeric_origin,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "radius": self.radius}
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        return {**super().to_json(**kwargs), "radius": self.radius}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -1284,8 +1286,8 @@ class Cylinder(Shape):
             self.numeric_origin,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "width": self.width, "height": self.height}
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        return {**super().to_json(**kwargs), "width": self.width, "height": self.height}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -1294,6 +1296,7 @@ class Cylinder(Shape):
             height=data["height"],
             **cls.arguments_from_json(data, **kwargs),
         )
+
 
 @dataclass(eq=False)
 class Box(Shape):
@@ -1348,8 +1351,8 @@ class Box(Shape):
             self.numeric_origin,
         )
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "scale": to_json(self.scale)}
+    def to_json(self, **kwargs) -> Dict[str, Any]:
+        return {**super().to_json(**kwargs), "scale": to_json(self.scale, **kwargs)}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -1357,6 +1360,7 @@ class Box(Shape):
             scale=from_json(data["scale"], **kwargs),
             **cls.arguments_from_json(data, **kwargs),
         )
+
 
 T = TypeVar("T")
 
