@@ -43,3 +43,7 @@ expectation: LookQualityStandard, PerceptionDegraded(PlanFailure), BoardIsSeenCl
 BoardRules); Q12 needs only Expectation.check (belief-checked-against-perception); robot runs
 back in as robot-episodes-recorded. plan.yaml not yet edited: awaiting the developer's yes on
 the item list.
+Update 2026-09-11 (lab, later): developer said postgres, not sqlite (runbook v2), then asked for
+copyable prompts per item; runbook v3 carries ten session prompts (0 merge #304; A observer +
+record_episode; B answers rendered; C look quality; D1 belief check; D2 event rules port; E corpus +
+cross-episode; F question register; G extension cost + packaging; H VLM import with placeholders).
