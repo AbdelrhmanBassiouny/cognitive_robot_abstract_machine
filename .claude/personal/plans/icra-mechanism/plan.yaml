@@ -140,19 +140,11 @@ items:
   pull_request_number: 311
   track: failure
   depends_on: []
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_01MqrDfMMRbJNPZzHGDTj2jp
   notes: >-
     Perturbation instances the runner applies at a named step: the target hole moved 10 cm, a fixed offset added to a reported pose, a detection relabelled as another piece, an external body pushing a piece while the robot is idle. In simulation they act on the MuJoCo world or on the perception result; on the robot the same Perturbation renders a one-line instruction to the person at the table, so the protocol is the same object. Experiment B's ~30 injected events and Experiment C's perturbation conditions are drawn from these.
-  blockers:
-    - >-
-      Cut off #265 (`claude/icra-experiments-simulation-pipeline-w4ep7n`) rather than `tracy_icra`,
-      since `tracy_icra` does not yet carry the scenario model, the Montessori scenarios or the
-      simulated-camera perception this item builds on (checked live 2026-09-11). Needs restacking
-      onto `tracy_icra` once icra-foundation's `tracy-demo-takes-the-integrated-branch` lands there.
-      The two blockers recorded before this (cross-plan `montessori-scenarios`, and #302 having to
-      merge first) were checked and are no longer what stops anything - see roadmap.md's 2026-09-11
-      section.
+  blockers: []
 - id: expectation-checked-under-perturbation-in-simulation
   title: >-
     A robot plan run in simulation under a perturbation, and the violated expectation reported as the failure
