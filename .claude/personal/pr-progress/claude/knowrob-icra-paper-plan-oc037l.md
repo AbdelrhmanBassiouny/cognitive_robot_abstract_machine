@@ -32,3 +32,14 @@ simulated episodes with table and statistics. Not found in the repo, the fork br
 Drive (the SegMind IJCAI-W paper is single-episode, no VLM arm). Plan updated: VLM items
 become vlm-comparison-imported (existing results as ExperimentResult rows beside #304's
 accuracy rows); asked the developer where the data lives and which question set it used.
+Update 2026-09-11 (lab): developer is at the robot and will implement and merge into #265.
+Published the "KRROOD Lab Runbook" artifact (step order, items A-D, data checklist, query
+pictures, perturbation protocol). Surveys of #265 head 040e2daa7 found: #301/#303/#311 already
+merged; #304/#299/#286 open against it; nothing populates Tick/RecordedQuery/InsertionAttempt in
+production and no recording CLI exists (-> new must item episode-observer); no renderer of a
+query answer in the twin (-> answers-rendered-in-the-twin, MuJoCo offscreen + segmentation);
+board fit quality computed then discarded, no rule family for the board (-> look-quality-
+expectation: LookQualityStandard, PerceptionDegraded(PlanFailure), BoardIsSeenClearly,
+BoardRules); Q12 needs only Expectation.check (belief-checked-against-perception); robot runs
+back in as robot-episodes-recorded. plan.yaml not yet edited: awaiting the developer's yes on
+the item list.
