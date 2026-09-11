@@ -2215,3 +2215,56 @@ description through the GitHub MCP server escapes the backticks in the `## Promo
 block's fenced link, so each write grows the run of stray backticks and quotes around the
 URL. The URL itself is untouched and the link still works; the block is the stack
 tooling's own and rewriting it is not this item's work.
+
+## 2026-09-11 (evening): the position offset was the camera's calibration, and every capture carried it
+
+Asked to fix the shape and hole detection on the new, smaller pieces, with four tape-measured
+positions to check against. The offset the live node reported -- everything about 0.2 m
+toward the camera -- had been chased through extrinsics, intrinsics and table height already
+and ruled out, because the live transform equalled the one the captures carried. It did; both
+were wrong. The `table -> camera_link` joint in `iai_tracy_description` is a hand-eye
+calibration from 2026-04-30, and the camera has moved since: fitting a plane through the
+depth image's table points puts the camera 22.9 deg off the table's normal (published 11.0)
+and 0.894 m above the table (published 0.935), on every one of the seven captures alike, so
+the move predates the August recordings. Projecting the robot's own gripper into the picture
+settled it independently of any tape: with the published pose it lands 240 px above the
+fingers, with the fitted one on them.
+
+**What that pose had been explaining away.** `BOARD_SCALE_AGAINST_THE_MESH = 0.865` was
+the tilt's foreshortening of the lid -- 0.81 along x by 0.92 along y, mean 0.865 -- and is
+gone; the mesh is the board's size, and the layout fit now measures 0.95-0.99 of it on every
+capture. The tuned workspace stopped at x = 0.915, which is the table's far edge at 1.18 m
+foreshortened. The piece sizes in `pieces.py` were measured off the captures too, but at the
+pieces' distance the distortion is only 0.92 x 0.97, and the cube and cylinder read 30 and
+28 mm top-down under the corrected pose -- those numbers stand.
+
+**What corrected geometry then exposed.** Two things the fit had been getting right by luck:
+the board detector's depth reading takes an opening as a drop from the *stated* lid plane,
+which stands 7 mm above the lid the depth measures (73 mm above the table, not the twin's
+80), so the whole lid speckled into openings -- it now reads the drop from the surface it
+measures; and a piece standing in a hole plus the shadow the lid's front edge casts on the
+drawers move the layout's seed up to 5 cm from the board's centre, past the 40 mm the fit
+was allowed -- it is 60 mm now. Two detections the old pose found are lost with the honest
+geometry and recorded as strict expected failures owned by `competing-explanations`: the
+cylinder standing in its hole on `tracy_pickup_demo` (a cube outline on the hole's rim
+explains the edges nearly as well, 0.70 against 0.73 -- six narrowing tests read that cylinder
+and are xfailed with it) and `stuck_cube_in_hole`'s table cylinder seen with its side, read as
+a cube because the larger outline accounts for the side's edges. Two lid cubes the old pose
+missed are found now.
+
+**The pieces are a set a look is told about.** The table holds four-fifths-size pieces in
+different plastic since September (hue 98 and 26 against the full-size set's 86 and 21; the
+cube 22.4 mm as the developer measured it, the rest 0.8 of the full-size ones -- confirm the
+three). `KnownPieceSet` carries a set, the pipeline is handed one, and every reading of the
+module-level constants inside the pipeline reads the set it was given -- the shipped captures
+keep the full-size set, the new capture and the live node take the smaller one. Each
+`CaptureTruth` names its set, and the new capture also records where the tape put each piece
+and the board's front-left corner; all four pieces are reported within 15 mm of the tape,
+the board's corner within 15 mm.
+
+**Standing.** The URDF is outside this repository and still says April: the live node reads
+TF, so until `camera_link` is recalibrated (fitted origin in `table`: xyz 0.4264 -0.0206
+0.8938, rpy 0.0400 1.1716 0.0326; x/y from one gripper pixel, yaw kept) live positions stay
+0.2 m off, and the `icra_final` stopgap must not come back. `LiveCamera` and
+`capture_from_camera` make the next capture a one-line affair, and
+`MeasuredPlane.of_surface` says within a degree whether a stated pose still holds.

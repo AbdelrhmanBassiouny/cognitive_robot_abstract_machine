@@ -218,6 +218,16 @@ items:
     ReferenceWriter - the standing hazard's fourth instance, and the first that is a changed
     signature rather than a renamed field, which the recorded field-diff sweep cannot find. A test
     pins it. Full detail in roadmap.md.
+    2026-09-11 (evening): the ~0.2 m live position offset is the Tracy URDF's stale camera_link
+    calibration (2026-04-30): measured off every capture's depth the camera is pitched 22.9 deg off the
+    table's normal, not 11.0, and stands 0.894 m up, not 0.935. The seven captures now state the fitted
+    pose (746f8ea3c), a test fails on any capture whose pose does not level its table, the board is the
+    size of its mesh (0.865 was the foreshortening), the workspace reaches the table's far edge, and a
+    look is handed the set of pieces on the table (the smaller 0.8 set with its own hues since
+    September). scaled_pieces_in_a_row, taken off the live camera and tape-measured, has all four pieces
+    reported within 15 mm. Montessori suite 775 passed, 11 xfailed. Still the developer's: recalibrate
+    the URDF; the lid measures 73 mm above the table where the twin says 80.
+
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback
