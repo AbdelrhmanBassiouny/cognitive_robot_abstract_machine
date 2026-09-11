@@ -1,34 +1,4 @@
-## #265: the experiments CI job, red on a role taker the ORM dropped (2026-09-11 night, done, pushed)
-
-**Session.** https://claude.ai/code/session_0155Lgy4BZ7QcZHiRuxxJJyA
-
-**Asked.** "CI on experiments failed due to a role taker issue, fix it", with the
-`AttributeError: all_role_takers` traceback from run 34627474746's experiments job.
-
-**Plan, and what it turned out to be.** Read the job log rather than trust the error's own
-name: `all_role_takers` is a property reading `self.role_taker`, so an `AttributeError` from
-inside it is rewritten by the interpreter into one about the property. The field was simply
-never mapped — ORMatic skips any field typed as a generic with free parameters, and
-`RecordedQuery` is a `Role[Question]` where `Question` is generic. Reproduced in krrood's own
-dataset in four tries (plain role, role over a concrete JSON value, role over an
-unparameterized generic JSON value — the third reproduces), fixed in
-`WrappedTable.parse_field`, pinned by three krrood tests written first.
-
-**Done.** `5d9049212`, merged onto the branch's new head as `e976addc2` and pushed. PR
-description has a new section; `plan.yaml`'s CI blocker and `roadmap.md` are updated
-(2026-09-11 night section); dashboard republished.
-
-**Next steps.** Read the CI run on `e976addc2` directly — nothing is armed to watch it. The
-fix is in `krrood`'s generator rather than in anything #265 introduces, so if the developer
-would rather review it separately it is one commit and cherry-picks cleanly.
-
-**Container note, now out of date in every earlier entry.** This container *can* build the ORM
-interfaces now: `scratchpad/stubs/sitecustomize.py` stands in for the ROS packages and `pxr`,
-plus `piqp`, `rtree`, `scikit-image`, `transforms3d`, `opencv-python-headless`, `mypy` and a
-copy of the repo's own `random_events/plotting.py` into the installed wheel. `psycopg`, an
-`imageio` video backend and a real ROS install are still missing.
-
-## #265: live shape and hole detection is wrong on the new 80 % pieces (2026-09-11, done, pushed)
+## #265: live shape and hole detection is wrong on the new 80 % pieces (2026-09-11, done; bringup restart owed)
 
 **Session.** https://claude.ai/code/session_0186xZo3eqCDVcqhi1E3LHdY -- resume here if
 anything breaks. Memory note `perception-position-offset-stopgap` holds the earlier
@@ -104,19 +74,43 @@ reported). With the tape-refined pose (camera 9 mm lower in y) the cylinder in i
 on `tracy_pickup_demo` is fitted again, so all 27 narrowing tests pass unmarked. Suite:
 780 passed, 6 xfailed. Fitted optical pose: `~/workspace/T_new_camera_pose_20260911.npy`.
 
-**URDF line for the developer to apply** (the auto-mode classifier refused to write into
-`~/ros2_ws/src/iai_tracy`): `tracy.urdf.xacro` line 111 ->
-`<origin xyz="0.429417 0.002602 0.892603" rpy="0.040005 1.171431 0.032689"/>`, then
-`colcon build --packages-select iai_tracy_description` and restart the bringup.
-Composed through the live `camera_link -> camera_color_optical_frame` (3.2 cm offset).
+**URDF, applied 2026-09-11 22:00 -- bringup restart still owed.** Two ROS overlays exist
+and the sourced one is `~/workspace/ros/install` (first on `AMENT_PREFIX_PATH`, merged
+install, built from `~/workspace/ros/src/iai_tracy`); `~/ros2_ws` is second and its
+install was never rebuilt. The developer's edit went to `~/ros2_ws/src`, so the running
+`robot_state_publisher` (launched 18:53) still served the old numbers -- verified from
+its `robot_description` parameter and `tf2_echo table camera_link`. The new origin
+`<origin xyz="0.429417 0.002602 0.892603" rpy="0.040005 1.171431 0.032689"/>` is now in
+`~/workspace/ros/src/iai_tracy/iai_tracy_description/urdf/tracy.urdf.xacro` (old line
+kept as a comment) and `colcon build --packages-select iai_tracy_description
+--merge-install` installed it. Reloading it into the live publisher was refused by the
+classifier, so the developer restarts `ros2 launch iai_tracy_bringup tracy_ros2.launch.py`.
 
-**Open for the developer.** (1) Apply the URDF line above; until then the live node is ~0.2 m off in x -- do not resurrect the
-`icra_final` stopgap. (2) Answered: the board is 80 mm by tape, so the 7 mm the depth reads
+**Both symptoms of the 20:45 screenshot are the stale pose, not the code.** The
+screenshot predates the edit (21:16). Re-running `scaled_pieces_in_a_row` with the pose the
+live tree still publishes reproduces it exactly: the board box drawn below the lid's
+picture, and three extra yellow "pieces" (two triangles, a rectangle) on the drawer front
+inside the board outline at lid height -- the drawers are wood of hue 26, the smaller
+set's yellow. At the fitted pose the same capture draws the box on the lid and reports
+four pieces and nothing else. The overlay already draws each box with its parallax
+(`RectifiedView.to_pixels` at surface and top height).
+
+**Added so this cannot go unnoticed again** (commit after `d4e8edb41`):
+`CameraPoseError` in `measured_plane.py` (`tilt`, `height`, `within_tolerance` at
+`LEVEL_TOLERANCE` 1 deg / `HEIGHT_TOLERANCE` 1 cm, moved there from the captures test);
+`MontessoriPerceptionNode.check_camera_pose` runs it on the first placed look, keeps it as
+`camera_pose_error` and logs a ROS warning naming the tilt and height when it is off;
+`capture_from_camera` prints it after writing. Tests in `test_montessori_measured_plane`
+(leaned / lifted captures), `test_montessori_live_camera` (the node keeps the error).
+
+**Open for the developer.** (1) Restart the bringup, then run the node and check no
+"published pose is off" warning is logged (or take a capture: the CLI prints the error).
+Until then the live node is ~0.2 m off in x -- do not resurrect the `icra_final` stopgap.
+(2) Answered: the board is 80 mm by tape, so the 7 mm the depth reads
 the lid low is the sensor's (the opening-against-measured-surface change covers it).
 (3) Answered: the cube is 24, so the smaller set is a uniform 0.8 (commit after
-`58eb1f2f4`). (4) Whether the narrowing
-demonstration should move to `scaled_pieces_in_a_row` (all four pieces found) instead of
-staying xfailed on `tracy_pickup_demo`. (5) Untracked leftovers still in the tree:
+`58eb1f2f4`). (4) Answered: with the tape-refined pose all 27 narrowing tests pass on
+`tracy_pickup_demo` unmarked, so nothing moves. (5) Untracked leftovers still in the tree:
 `pickup_demo_perceived_board.py` + its test (collection error), `test_montessori_shape_bodies.py`,
 the 37 GB `.mcap` dir, `ganttchart.pdf`, `.mcp.json`, and an uncommitted edit to
 `semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql`.
