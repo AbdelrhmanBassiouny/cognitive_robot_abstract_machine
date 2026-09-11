@@ -653,6 +653,24 @@ class WrappedTable(TableLike):
 
         self.create_mapper_args()
 
+    def is_stored_as_a_value(self, type_endpoint: Type) -> bool:
+        """
+        Whether a custom type keeps this type in its owner's own row, rather than a table
+        of its own holding it.
+
+        A value is written whole - a :class:`SubclassJSONSerializer
+        <krrood.adapters.json_serializer.SubclassJSONSerializer>` names its own subclass
+        in the JSON it writes - so a free type parameter leaves nothing undecided about
+        how to store it.
+
+        :param type_endpoint: The type a field resolves to.
+        :return: True if a custom type stores it and no table maps it.
+        """
+        return (
+            type_endpoint not in self.ormatic.mapped_classes
+            and type_endpoint in self.ormatic.type_mappings
+        )
+
     def parse_field(self, wrapped_field: WrappedField):
         """
         Parses a given `WrappedField` and determines its type or relationship to create
@@ -674,6 +692,7 @@ class WrappedTable(TableLike):
         if (
             wrapped_field.is_underspecified_generic
             and isclass(type_endpoint)
+            and not self.is_stored_as_a_value(type_endpoint)
             and not any(
                 [
                     am
