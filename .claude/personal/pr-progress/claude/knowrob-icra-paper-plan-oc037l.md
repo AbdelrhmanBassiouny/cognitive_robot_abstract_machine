@@ -26,3 +26,9 @@ commits ahead, tracks a generated ormatic_interface.py, old event class names). 
 port ~60 lines (rule body of _find_interaction_events, event_time_difference,
 not_(exists(...)) dedup) onto #265; do not merge. Its krrood half already landed on main
 as InferenceExplanation's meta-query methods. Artifact item 1 rewritten accordingly.
+
+Update 2026-09-11 (later still): developer reports an existing VLM comparison on ~100
+simulated episodes with table and statistics. Not found in the repo, the fork branch, or
+Drive (the SegMind IJCAI-W paper is single-episode, no VLM arm). Plan updated: VLM items
+become vlm-comparison-imported (existing results as ExperimentResult rows beside #304's
+accuracy rows); asked the developer where the data lives and which question set it used.
