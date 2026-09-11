@@ -50,18 +50,14 @@ items:
       to name are fixed: the gripper round (7fa4b1936) cleared them and all 24 checks passed on
       #169's c8bf6f05.
     - >-
-      Merge conflict with main since 2026-09-07, and the stacked-PR maintenance routine has skipped
-      the branch on every pass since: #265 carries the needs-resolution label and mergeable_state is
-      dirty. Twelve routine comments name a conflict set that changed under it as main moved; as of
-      2026-09-11 it is two files, semantic_digital_twin/.../geometry.py and
-      test/coraplex_test/test_plan/test_executables.py, reproduced locally against origin/main at
-      696fa8329. The geometry.py half is the standing rename hazard in a new form - main's f4c15c243
-      gave every to_json a **kwargs parameter and to_json(obj, **kwargs) now calls
-      obj.to_json(**kwargs), while this branch's own Shape/Mesh/Sphere/Cylinder/Box overrides (added
-      with SurfaceFinish in 80100bd4d, which main does not have) still take no kwargs, so
-      ShapeCollection.to_json raises TypeError for any shape the moment a caller passes a
-      ReferenceWriter. No CI has run on the branch tip db9561fa6 at all: zero check runs, no commit
-      status.
+      CI has never reported on this lineage. The tip db9561fa6 carried zero check runs and no commit
+      status, so the tracy_icra merge, both earlier main merges and the #304 merge have none of them
+      been exercised by CI; every number recorded for them was measured in a session container that
+      cannot generate the ORM interfaces or import ROS. The third main merge (b5e2e2669, 2026-09-11)
+      cleared the branch's conflict - mergeable_state went from dirty to unstable - and its push
+      started the first run this lineage has had. Nothing is armed to watch it, per the standing
+      rule against scheduled checks: read the run directly. The needs-resolution label clears itself
+      on the next maintenance pass now that the branch merges cleanly again.
   notes: >
     The foot of the plan. Cut off main and merge in, in this order, the library half of the monitor
     stack (#244), the monitor half of #256 (the segmind event monitor, the attach and detach of a
@@ -105,33 +101,32 @@ items:
     InsideOf.compute_containment_ratio was kept in its older mesh-and-bounding-box form over
     01e454d7b's numeric one, alone among that commit's numeric readings, against the test asserting
     containment builds nothing symbolic. Thirteen of fifteen jobs were green before those two; what
-    is left is the four narrowing tests, which are now a blocker of their own.
-    Resolved 2026-09-06 by #292, and this is the item's first fully measured experiments job. The
-    RecordedLook collision is cleared by renaming recordings.py's to RecordedImages, with
-    RecordedCamera.looks()/look_at() following as images()/image_at() and its three readers with
-    them; step_by_step.py keeps RecordedLook. Renamed rather than ignored because generate_orm's
-    ignored_classes would have had to grow over watch_bag as well - BagReplay holds a RecordedCamera
-    - and over every later holder of one, leaving the duplicate name in place for the next class to
-    hit; the rename is also the only one of the two a session container can check, by grep rather
-    than by running a generation it cannot run. RecordedFrame, the obvious name, is already
-    scene_source.py's, which is part of why the namespace collided. test_montessori_orm.py now
-    asserts that no two mapped Montessori classes share a name with each other, beside the upstream
-    check it already made. Measured on CI: the parent e6c665cec runs 13 failed, 742 passed, 8 errors
-    with 51 mentions of the duplicated table; #292's 76e37a70 runs 4 failed, 758 passed, no errors
-    and no collision at all. What is left red is the four narrowing tests of the blocker above,
-    which fail identically on the parent and are untouched by this.
-    Resolved 2026-09-08: the four narrowing tests state what the corrected layout shows. Measured
-    over all six holes, left and right separate the cube from the cylinder from no hole on this
-    board, read from the camera or from the world, so three of the four needed a different pair
-    rather than a re-measurement and the fourth was not a test change at all. Which way a piece lies
-    now pairs Above with Below on the square hole (cube 18.6 mm up the picture, cylinder 45.4 mm
-    down); the two sides of a hole pairs InFrontOf with Behind on it (cube 16.2 mm in front,
-    cylinder 49.1 mm behind), which is one axis where the old pair crossed two; the reach moves to
-    the triangle hole with radii 0.07 and 0.12 (cube 50.0 mm, cylinder 93.8 mm), the square hole
-    separating them by 1.3 mm. The demonstration test is untouched: what was wrong was
-    watch_narrowing.look_for_the_cube_on_the_lid asking for LeftOf the square hole, now Above it,
-    and the step sequence the test asserts holds unchanged. Every replacement was run end to end
-    through MontessoriPerceptionBackend, and the sibling assertions over the demonstration
+    is left is the four narrowing tests, which are now a blocker of their own. Resolved 2026-09-06
+    by #292, and this is the item's first fully measured experiments job. The RecordedLook collision
+    is cleared by renaming recordings.py's to RecordedImages, with RecordedCamera.looks()/look_at()
+    following as images()/image_at() and its three readers with them; step_by_step.py keeps
+    RecordedLook. Renamed rather than ignored because generate_orm's ignored_classes would have had
+    to grow over watch_bag as well - BagReplay holds a RecordedCamera - and over every later holder
+    of one, leaving the duplicate name in place for the next class to hit; the rename is also the
+    only one of the two a session container can check, by grep rather than by running a generation
+    it cannot run. RecordedFrame, the obvious name, is already scene_source.py's, which is part of
+    why the namespace collided. test_montessori_orm.py now asserts that no two mapped Montessori
+    classes share a name with each other, beside the upstream check it already made. Measured on CI:
+    the parent e6c665cec runs 13 failed, 742 passed, 8 errors with 51 mentions of the duplicated
+    table; #292's 76e37a70 runs 4 failed, 758 passed, no errors and no collision at all. What is
+    left red is the four narrowing tests of the blocker above, which fail identically on the parent
+    and are untouched by this. Resolved 2026-09-08: the four narrowing tests state what the
+    corrected layout shows. Measured over all six holes, left and right separate the cube from the
+    cylinder from no hole on this board, read from the camera or from the world, so three of the
+    four needed a different pair rather than a re-measurement and the fourth was not a test change
+    at all. Which way a piece lies now pairs Above with Below on the square hole (cube 18.6 mm up
+    the picture, cylinder 45.4 mm down); the two sides of a hole pairs InFrontOf with Behind on it
+    (cube 16.2 mm in front, cylinder 49.1 mm behind), which is one axis where the old pair crossed
+    two; the reach moves to the triangle hole with radii 0.07 and 0.12 (cube 50.0 mm, cylinder 93.8
+    mm), the square hole separating them by 1.3 mm. The demonstration test is untouched: what was
+    wrong was watch_narrowing.look_for_the_cube_on_the_lid asking for LeftOf the square hole, now
+    Above it, and the step sequence the test asserts holds unchanged. Every replacement was run end
+    to end through MontessoriPerceptionBackend, and the sibling assertions over the demonstration
     statement still hold - areas 0.517 > 0.041 > 0.023, five distinct labels of non-decreasing
     length, the camera named exactly twice. Pushed as dae41889c on the item's own branch, since the
     scope check leaves the touched files on no other base. The roadmap's standing hazard that
@@ -176,42 +171,53 @@ items:
     green before these, and the two that were not are exactly krrood and experiments, which these
     fix; in a container krrood runs 3014 passed with 2 graphviz failures, sdt the same 45 failures
     as before the merge with its 45 added errors also present on plain main, and experiments 684
-    passed with the same 18 environment failures.
-    CI green apart from one field, 2026-09-08 (last): the main merge carried a second silent
-    rename beside query.variable, and only a full CI run could show it. main's 2664659b4 renamed
-    MotionDidNotFinish.failed_motions to unfinished_motions and followed both readers it could
-    see, each of which passes the field positionally; the reader it could not see is this branch's
-    own test_montessori_insertion_diagnosis.py, which names it by keyword and exists on no
-    ancestor of that commit, so git reported no conflict. Migrated in 06e7af3eb with the assertion
-    untouched, which is what AGENTS.md means by a rename being finished when every reader reads
-    the new name. On 0e0bacfad twenty-two of the twenty-three checks passed and this was the only
-    failure; CI on 06e7af3eb had not reported when this was written, and no check of it was armed.
-    The hazard is now three instances old and is recorded in roadmap.md as standing: every merge of main into this branch can carry a rename whose only stale reader
-    sits in a file main never touched, and none of them fails where it is written.
+    passed with the same 18 environment failures. CI green apart from one field, 2026-09-08 (last):
+    the main merge carried a second silent rename beside query.variable, and only a full CI run
+    could show it. main's 2664659b4 renamed MotionDidNotFinish.failed_motions to unfinished_motions
+    and followed both readers it could see, each of which passes the field positionally; the reader
+    it could not see is this branch's own test_montessori_insertion_diagnosis.py, which names it by
+    keyword and exists on no ancestor of that commit, so git reported no conflict. Migrated in
+    06e7af3eb with the assertion untouched, which is what AGENTS.md means by a rename being finished
+    when every reader reads the new name. On 0e0bacfad twenty-two of the twenty-three checks passed
+    and this was the only failure; CI on 06e7af3eb had not reported when this was written, and no
+    check of it was armed. The hazard is now three instances old and is recorded in roadmap.md as
+    standing: every merge of main into this branch can carry a rename whose only stale reader sits
+    in a file main never touched, and none of them fails where it is written.
 
     2026-09-09: tracy_icra merged in (c719c44a9) at the developer's request, ahead of
-    tracy-demo-takes-the-integrated-branch, eleven conflicted files resolved by reading both
-    sides. Found and fixed a real bug along the way, in neither branch's own version:
-    MotionDetector._is_lifting called NumericPose.to_position(), which does not exist. CI on
-    that tip showed two failing LongTermMemory tests in experiments; root cause was merging
-    #295's AgentInteractionEvent in as a second base broke ORMatic's joined-table mapping,
-    which maps to the first already-mapped MRO ancestor. Fixed per the developer's own
-    direction: AgentInteractionEvent now extends EventWithEffect directly (12d806e20),
-    verified in isolation. A fresh conflict against main then appeared; merged and resolved
-    (51fc40548), five files, adopting main's Context.ticks_per_motion design for the
-    simulated tick budget in full rather than keeping the old
-    GiskardExecutable.max_ticks_per_motion_mapping/tick_limit mechanism alongside it. Full
-    detail recorded in roadmap.md and in the PR description's own new section. Still not
-    CI-green on this tip - nothing armed to watch it, per the standing rule.
+    tracy-demo-takes-the-integrated-branch, eleven conflicted files resolved by reading both sides.
+    Found and fixed a real bug along the way, in neither branch's own version:
+    MotionDetector._is_lifting called NumericPose.to_position(), which does not exist. CI on that
+    tip showed two failing LongTermMemory tests in experiments; root cause was merging #295's
+    AgentInteractionEvent in as a second base broke ORMatic's joined-table mapping, which maps to
+    the first already-mapped MRO ancestor. Fixed per the developer's own direction:
+    AgentInteractionEvent now extends EventWithEffect directly (12d806e20), verified in isolation. A
+    fresh conflict against main then appeared; merged and resolved (51fc40548), five files, adopting
+    main's Context.ticks_per_motion design for the simulated tick budget in full rather than keeping
+    the old GiskardExecutable.max_ticks_per_motion_mapping/tick_limit mechanism alongside it. Full
+    detail recorded in roadmap.md and in the PR description's own new section. Still not CI-green on
+    this tip - nothing armed to watch it, per the standing rule.
 
-    2026-09-11: icra-evidence's question-set-answered-from-memory (#304) merged in
-    (db9561fa6). #304 was cut off this branch's tip before the tracy_icra merge, the two
-    main merges and the LongTermMemory fix above, but none of those touched the files #304
-    changed, so the merge applied with no conflicts; GitHub closed #304 as merged
-    automatically once its head became an ancestor of this branch. Adds RecordedQuery as
-    Role[Question], QuestionSet.answer_and_record, and the AccuracyByBucket/
-    AccuracyByBloomLevel paper figures. Byte-compiled clean; still CI-only for verification,
-    same standing container limitation. Full detail in the PR description's own new section.
+    2026-09-11: icra-evidence's question-set-answered-from-memory (#304) merged in (db9561fa6). #304
+    was cut off this branch's tip before the tracy_icra merge, the two main merges and the
+    LongTermMemory fix above, but none of those touched the files #304 changed, so the merge applied
+    with no conflicts; GitHub closed #304 as merged automatically once its head became an ancestor
+    of this branch. Adds RecordedQuery as Role[Question], QuestionSet.answer_and_record, and the
+    AccuracyByBucket/ AccuracyByBloomLevel paper figures. Byte-compiled clean; still CI-only for
+    verification, same standing container limitation. Full detail in the PR description's own new
+    section.
+
+    2026-09-11 (later): main merged a third time (b5e2e2669), clearing the conflict that had stalled
+    the branch since 2026-09-07 and kept the stack maintenance routine skipping it. Two files met -
+    an import union in test_executables.py, and geometry.py, where main gave every to_json a
+    **kwargs parameter while this branch's Shape.to_json names its four fields because a finish is a
+    StrEnum the generic reading does not restore. Kept this branch's fields and main's keyword
+    arguments. The half worth carrying is that Sphere, Cylinder and Box override to_json on this
+    branch and on no ancestor of main's commit, so git flagged no conflict for them and
+    ShapeCollection.to_json raised TypeError for any shape of a body serialized with a
+    ReferenceWriter - the standing hazard's fourth instance, and the first that is a changed
+    signature rather than a renamed field, which the recorded field-diff sweep cannot find. A test
+    pins it. Full detail in roadmap.md.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback
