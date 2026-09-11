@@ -797,3 +797,100 @@ Tests first, per `AGENTS.md`. One test per perturbation asserting the change it 
 not another, against the twin's own state or the returned `MontessoriScene` rather than
 against rendered text; one that every `Perturbation` renders a person-instruction; and one
 that a look step with no marker registered reports the scene undistorted.
+
+## 2026-09-11: `snapshot-working-memory` resolved, #301 — the pose-change threshold dropped per review
+
+Resolved by `/plan-item-resolve icra-mechanism snapshot-working-memory` in `auto` mode.
+
+### What was actually stalling the item
+
+Not the recorded blocker — that named `icra-foundation`'s `simulated-camera-feeds-perception`
+as `not_started`, and the 2026-09-09 kickoff entry above had already established that blocker
+was stale (the dependency is done, merged via #298 into #265) without ever clearing it from
+`plan.yaml`. Cleared here.
+
+The real blocker was an unresolved review thread the developer left on the PR
+(`r3970608055`, answered `r3976899473`/`r3976912789` on 2026-09-10 — a full day after the
+item's own session ended, so no session had read the answer yet): a design objection to the
+threshold-gated commit this item's own notes and PR description built as the deliverable.
+Quoted directly rather than paraphrased, since the two comments together settle the design:
+*"Ok, I think perception should can just update the world directly it is fine, translation
+event should happen by segmind... the translationdetector should also trigger in sudden big
+distance moves, It should adapt to the framerate or in our case it is a snap shot based
+update... Segmind should also be able to handle this case."* and *"perception shouldn't think
+about moved or not I guess, perception should just in this case tell use the current
+percieved pose and update the world, and segmind is the place to look for shifts and
+events."*
+
+### The design change, and why it's a contract change rather than a bug fix
+
+The item's own title, notes and PR description all named the threshold as the point of the
+mechanism — "a piece's pose is committed only when it differs from the believed pose by more
+than a threshold measured as three standard deviations", the PR's own "measured, not chosen"
+section. Removing it is a real change to what this item is, not a defect in what it already
+did (all 8 original tests passed; the design itself is what changed). Because the developer
+had already given the direction directly on the PR's own review thread, this was implemented
+rather than re-asked — asking again would have meant proposing back to the developer a
+decision he had already made in as many words. What genuinely stayed open, and was recorded
+rather than assumed, is scope: whether the `TranslationDetector` extension the second comment
+names belongs on this PR too.
+
+### `TranslationDetector` extension: deliberately left off this PR
+
+`segmind/src/segmind/detectors/atomic_event_detectors_nodes.py`'s `TranslationDetector`
+already exists (`MotionDetector` subclass, fires a `TranslationEvent` off a sliding window)
+but needs two changes to take on the "did it move" question this item's `_has_moved` used to
+answer: trigger on a sudden large jump between two positions rather than only a sustained
+motion trend, and work off one discrete snapshot-triggered look rather than a continuous
+per-tick window, since `SnapshotWorkingMemory` never runs perception continuously. Both are
+real design work in a different package (`segmind`) than this item's own track
+(`backend-routing`, `experiments`), so building them here would have widened this PR past
+what `snapshot-working-memory` owns. Not silently dropped: recorded as a named follow-up
+here and in the reply on the review thread (left the thread **unresolved** rather than
+resolved, since the developer's ask was answered differently on this one point — see
+`cram-notes.md`'s "Review comments" convention — so the developer can say whether it belongs
+on this PR, a new item, or an existing one such as `failure-taxonomy-and-typing`'s event
+work).
+
+### What changed in the code
+
+`SnapshotWorkingMemory._commit_matched_pieces` (renamed from `_commit_changed_pieces`) now
+writes every matched detection unconditionally; `_has_moved`, `pose_change_threshold` and
+`POSE_CHANGE_THRESHOLD_METERS` are removed entirely rather than kept unused. The matching
+logic (nearest believed piece of the same kind) is untouched — the developer's comments were
+about the commit gate, not matching. Module and class docstrings rewritten to say the "did it
+move" question belongs to the event system watching the twin over time, not to this class.
+
+Test file: the two threshold tests (`test_a_change_smaller/larger_than_the_threshold_is_...`)
+and the simulated-camera noise-measurement test (`test_repeated_looks_at_an_unchanging_scene_
+measure_negligible_position_noise`, which only existed to justify the threshold's default
+value) are replaced by two tests asserting the commit is unconditional regardless of how small
+the perceived difference is.
+
+### Verified against the real CI image, not a bare venv
+
+This container had neither ROS nor Python 3.12's workspace deps by default, same friction the
+original kickoff recorded. Rather than rebuild the fragile from-scratch venv that session
+used, `docker` was already present and a daemon could be started (`dockerd`, not running by
+default); pulled `ghcr.io/abdelrhmanbassiouny/cognitive_robot_abstract_machine:jazzy` — the
+exact image `ci_reusable.yml` runs tests in — and ran `uv sync --extra dev --active` then
+`pytest` inside it against this checkout mounted in, through the session's own HTTPS proxy
+(`--network host`, `SSL_CERT_FILE`/`HTTPS_PROXY` pointed at the proxy's CA and port). All 7
+tests in `test_montessori_snapshot_working_memory.py` pass; the 15 in
+`test_montessori_simulated_camera.py` show no regression. Worth reusing the same way for any
+session in this repo needing a real test run rather than treating the ROS/3.12 gap as
+unfixable.
+
+### The three failing checks on the PR are not this item's
+
+`experiments`, `robokudo` and `coraplex` were red on #301 before this session's push.
+Checked against #303 (`backends-declare-their-capabilities`, same base #265, touches only
+`krrood`) before assuming anything: `experiments` and `coraplex` fail identically there too,
+so both are base-branch failures, not something either PR's own diff caused. `robokudo`'s
+single failure (`test_query.py::TestQueryInterface::test_query — assert True is False`) is in
+a module neither PR touches, and #303's own `robokudo` job passed, which reads as a flake
+rather than a regression from this PR specifically. None of the three were re-diagnosed to a
+root cause or fixed here — flagged on the PR description rather than silently left unexplained,
+per the CI-red playbook's "rule out a failure that isn't this PR's" step; a fix, if one turns
+out to be needed, is `icra-foundation`'s or a `plan-tracking-skills`-type item's, not this
+one's.
