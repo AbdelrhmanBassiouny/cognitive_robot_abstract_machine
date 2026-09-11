@@ -61,3 +61,8 @@ decisions need nothing from it (LightingChanged stays in code; its CLI choice ma
 it is needs-resolution - its own krrood WrappedTable.parse_field fix duplicates 5d9049212 which
 #265 now carries from main (conflicts in wrapped_table.py and test/krrood_test/conftest.py), and
 observer.into does not keep the trial's motion statechart, which item C's long-term question needs.
+Update 2026-09-11 (lab, v6): #316 merged into #265 (d2a39f92b); the krrood conflict resolved for main's
+is_stored_as_a_value and #316's duplicate test dropped. Runbook v6: item A marked done, prompt A replaced by
+prompt A' (branch claude/trial-motion-recorded-*): fill RecordedTrial.motion_statechart from
+GiskardExecutable.motion_state_chart through the observer (list of RecordedMotion with moments if a trial runs
+several), prove histories survive the round trip, and delete PerturbationChoice.LIGHTING_CHANGED from the CLI.
