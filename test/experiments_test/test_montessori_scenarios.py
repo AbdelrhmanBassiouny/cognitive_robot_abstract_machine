@@ -13,6 +13,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy
 import pytest
 from typing_extensions import Dict, List, Type
 
@@ -22,23 +23,32 @@ from krrood.entity_query_language.verbalization.pipeline import verbalize_expres
 
 from experiments.montessori.scenarios import (
     BoardOnItsOwnTable,
+    CENTIMETRES_PER_METRE,
     CONTAINED_IN_ITS_LANDING_REGION,
     DEFAULT_VIDEO_DIRECTORY_NAME,
+    DetectionRelabelled,
+    HOW_FAR_A_MOVED_HOLE_GOES,
     LayoutArea,
     LightingChanged,
+    LookAtTheScene,
     MontessoriEnvironmentVariable,
     MountedRobot,
     PUSHER_NAME,
     PUSHER_RAIL_NAME,
     PUSHER_SCALE,
+    PerceivedPoseOffset,
+    PerturbationOfTheNextLook,
     PieceHeldWhileTheQuestionIsAsked,
     PieceLayout,
     PiecePlacement,
     PiecePushedWhileTheRobotIsIdle,
+    PieceShoved,
     RobotSortsAPiece,
     SceneRecording,
+    SimulatedScene,
     SortingScene,
     SortingStep,
+    TargetHoleMoved,
     TheSceneIsUndisturbed,
     ThePieceIsHeld,
     ThePieceIsInItsHole,
@@ -49,6 +59,9 @@ from experiments.montessori.scenarios import (
     TracyIsIdleWhileAPieceIsPushed,
     TracySortsAPiece,
     TracyWatchesTheSceneStandStill,
+)
+from experiments.montessori.perception.simulated_setup import (
+    camera_over_the_table,
 )
 from experiments.montessori.exceptions import (
     HoleHasNoLandingRegionError,
@@ -70,9 +83,13 @@ from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.connections import PrismaticConnection
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types import Point3
+from semantic_digital_twin.spatial_types.spatial_types import Vector3
 from semantic_digital_twin.world import World
 
+from .dataset import montessori_scene_fixtures
 from .dataset.synthetic_grasping_robot import SyntheticGraspingRobot
+
+pytest_plugins = [montessori_scene_fixtures.__name__]
 
 # %% what every scene here is built on
 
@@ -798,6 +815,301 @@ def test_the_lighting_change_gives_the_world_a_light_of_its_own(area):
         if isinstance(additional_property, MujocoLight)
     ]
     assert light.directional
+
+
+HOW_FAR_A_PERTURBATION_MOVES_SOMETHING = Vector3(0.0, HOW_FAR_A_MOVED_HOLE_GOES, 0.0)
+"""
+The displacement every perturbation in this module is given.
+
+The distance a moved hole is specified at, reused for the pieces and the reported places
+so a test says what moved rather than how far.
+"""
+
+
+def a_scene_to_perturb(area) -> World:
+    """
+    The world a perturbation is applied to: the static run's, which nothing else has
+    acted on, so what moved in it is the perturbation's doing.
+
+    :param area: The patch of table the pieces stand on.
+    """
+    return SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    ).build_world()
+
+
+def test_a_moved_target_hole_stands_the_displacement_away_from_where_it_was(area):
+    world = a_scene_to_perturb(area)
+    hole = SortingScene(world).hole_for(MontessoriShapeCategory.CUBE).root
+    stood_at = hole.global_transform.to_position().to_np()
+
+    TargetHoleMoved(
+        step=SortingStep.PUT_DOWN,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).apply(world)
+
+    moved_by = hole.global_transform.to_position().to_np() - stood_at
+    assert numpy.linalg.norm(moved_by[:3]) == pytest.approx(HOW_FAR_A_MOVED_HOLE_GOES)
+
+
+def test_a_moved_target_hole_carries_the_boards_other_holes_with_it(area):
+    """
+    A hole is cut into the board rather than standing beside it, so the board is what
+    moves and every hole in it travels the same distance. Naming one hole says which
+    displacement is being stated, not that the board bends around it.
+    """
+    world = a_scene_to_perturb(area)
+    scene = SortingScene(world)
+    alongside = MontessoriShapeCategory.CYLINDER
+    stood_at = scene.hole_for(alongside).root.global_transform.to_position().to_np()
+
+    TargetHoleMoved(
+        step=SortingStep.PUT_DOWN,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).apply(world)
+
+    moved_by = (
+        scene.hole_for(alongside).root.global_transform.to_position().to_np() - stood_at
+    )
+    assert numpy.linalg.norm(moved_by[:3]) == pytest.approx(HOW_FAR_A_MOVED_HOLE_GOES)
+
+
+def test_a_shoved_piece_stands_the_displacement_away_from_where_it_was(area):
+    world = a_scene_to_perturb(area)
+    scene = SortingScene(world)
+    stood_at = scene.position_of(MontessoriShapeCategory.CUBE).to_np()
+
+    PieceShoved(
+        step=SortingStep.SETTLE,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).apply(world)
+
+    moved_by = scene.position_of(MontessoriShapeCategory.CUBE).to_np() - stood_at
+    assert moved_by[:3].flatten() == pytest.approx(
+        HOW_FAR_A_PERTURBATION_MOVES_SOMETHING.to_np()[:3].flatten()
+    )
+
+
+# %% the change a run applies to what it is shown
+
+
+def test_a_perturbation_of_what_is_seen_waits_on_the_world_for_the_next_look(area):
+    """
+    A perturbation is handed the world and the look is taken by a later step, so the
+    world is what carries the one to the other.
+    """
+    world = a_scene_to_perturb(area)
+    perturbation = PerceivedPoseOffset(
+        step=SortingStep.LOOK,
+        category=MontessoriShapeCategory.CUBE,
+        offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    )
+
+    perturbation.apply(world)
+
+    [waiting] = world.get_semantic_annotations_by_type(PerturbationOfTheNextLook)
+    assert waiting.perturbation is perturbation
+
+
+def test_a_perturbation_of_what_is_seen_leaves_the_twin_alone(area):
+    """
+    What makes it a perturbation of perception rather than of the scene: the piece is
+    still where it was, and only what the robot is told about it differs.
+    """
+    world = a_scene_to_perturb(area)
+    scene = SortingScene(world)
+    stood_at = scene.position_of(MontessoriShapeCategory.CUBE).to_np()
+
+    PerceivedPoseOffset(
+        step=SortingStep.LOOK,
+        category=MontessoriShapeCategory.CUBE,
+        offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).apply(world)
+
+    assert scene.position_of(MontessoriShapeCategory.CUBE).to_np() == pytest.approx(
+        stood_at
+    )
+
+
+def test_a_perceived_pose_offset_reports_the_piece_the_offset_away_from_where_it_is(
+    scene,
+):
+    reported_at = {
+        shape.category: shape.pose.to_position().to_np() for shape in scene.shapes
+    }
+    offset = MontessoriShapeCategory.CUBE
+
+    PerceivedPoseOffset(
+        step=SortingStep.LOOK,
+        category=offset,
+        offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).change_what_was_seen(scene)
+
+    [moved] = [shape for shape in scene.shapes if shape.category is offset]
+    moved_by = moved.pose.to_position().to_np() - reported_at[offset]
+    assert moved_by[:3].flatten() == pytest.approx(
+        HOW_FAR_A_PERTURBATION_MOVES_SOMETHING.to_np()[:3].flatten()
+    )
+
+
+def test_a_perceived_pose_offset_reports_every_other_piece_where_it_found_it(scene):
+    reported_at = {
+        shape.category: shape.pose.to_position().to_np() for shape in scene.shapes
+    }
+
+    PerceivedPoseOffset(
+        step=SortingStep.LOOK,
+        category=MontessoriShapeCategory.CUBE,
+        offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).change_what_was_seen(scene)
+
+    for shape in scene.shapes:
+        if shape.category is MontessoriShapeCategory.CUBE:
+            continue
+        assert shape.pose.to_position().to_np() == pytest.approx(
+            reported_at[shape.category]
+        )
+
+
+def test_a_look_takes_the_perturbations_it_applied_off_the_world(area):
+    """
+    A perturbation strikes at the one look its step named, so the step clears what it
+    applied rather than leaving it to distort every later look as well.
+    """
+    world = a_scene_to_perturb(area)
+    PerceivedPoseOffset(
+        step=SortingStep.LOOK,
+        category=MontessoriShapeCategory.CUBE,
+        offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).apply(world)
+    looking = LookAtTheScene(
+        name=SortingStep.LOOK,
+        scene=SimulatedScene(world=world),
+        camera=camera_over_the_table(world),
+    )
+
+    looking.perform(world)
+
+    assert world.get_semantic_annotations_by_type(PerturbationOfTheNextLook) == []
+
+
+def test_a_relabelled_detection_is_reported_as_the_shape_it_is_not(scene):
+    actually_there = MontessoriShapeCategory.CUBE
+    reported_as = MontessoriShapeCategory.DISK
+    stood_at = [
+        shape.pose.to_position().to_np()
+        for shape in scene.shapes
+        if shape.category is actually_there
+    ]
+    assert stood_at, "the rendered scene holds no piece of the shape being relabelled"
+
+    DetectionRelabelled(
+        step=SortingStep.LOOK,
+        category=actually_there,
+        reported_as=reported_as,
+    ).change_what_was_seen(scene)
+
+    assert not [shape for shape in scene.shapes if shape.category is actually_there]
+    relabelled = [shape for shape in scene.shapes if shape.category is reported_as]
+    assert numpy.array(
+        [shape.pose.to_position().to_np() for shape in relabelled]
+    ) == pytest.approx(numpy.array(stood_at))
+
+
+# %% what a person at the table is asked to do instead
+
+
+@pytest.mark.parametrize(
+    "perturbation, names",
+    [
+        (
+            TargetHoleMoved(
+                step=SortingStep.PUT_DOWN,
+                category=MontessoriShapeCategory.CUBE,
+                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            ),
+            (MontessoriShapeCategory.CUBE,),
+        ),
+        (
+            PieceShoved(
+                step=SortingStep.SETTLE,
+                category=MontessoriShapeCategory.CYLINDER,
+                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            ),
+            (MontessoriShapeCategory.CYLINDER,),
+        ),
+        (
+            PerceivedPoseOffset(
+                step=SortingStep.LOOK,
+                category=MontessoriShapeCategory.DISK,
+                offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            ),
+            (MontessoriShapeCategory.DISK,),
+        ),
+        (
+            DetectionRelabelled(
+                step=SortingStep.LOOK,
+                category=MontessoriShapeCategory.CUBE,
+                reported_as=MontessoriShapeCategory.SPHERE,
+            ),
+            (MontessoriShapeCategory.CUBE, MontessoriShapeCategory.SPHERE),
+        ),
+    ],
+)
+def test_a_perturbation_tells_a_person_which_pieces_to_act_on(perturbation, names):
+    """
+    The same instance changes a simulated world and states what a person does at the
+    real table, so the instruction has to say which pieces it is about.
+    """
+    instruction = perturbation.instruction_for_a_person()
+
+    for named in names:
+        assert named in instruction
+
+
+@pytest.mark.parametrize(
+    "perturbation",
+    [
+        TargetHoleMoved(
+            step=SortingStep.PUT_DOWN,
+            category=MontessoriShapeCategory.CUBE,
+            displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+        ),
+        PieceShoved(
+            step=SortingStep.SETTLE,
+            category=MontessoriShapeCategory.CYLINDER,
+            displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+        ),
+        PerceivedPoseOffset(
+            step=SortingStep.LOOK,
+            category=MontessoriShapeCategory.DISK,
+            offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+        ),
+    ],
+)
+def test_a_perturbation_that_moves_something_tells_a_person_how_far(perturbation):
+    """
+    A person cannot bring about a displacement they are not told the size of, and the
+    table is measured in centimetres rather than in the metres every length is held in.
+    """
+    how_far = round(HOW_FAR_A_MOVED_HOLE_GOES * CENTIMETRES_PER_METRE)
+
+    assert f"{how_far} cm" in perturbation.instruction_for_a_person()
+
+
+def test_the_lighting_change_tells_a_person_to_light_the_table_differently():
+    """
+    The one perturbation that displaces nothing still says what a person does, since
+    every perturbation has to hold on the real robot as well as in simulation.
+    """
+    assert (
+        LightingChanged(step=SortingStep.SETTLE).instruction_for_a_person()
+        == "Light the table differently."
+    )
 
 
 # %% running one scenario more than once
