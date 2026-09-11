@@ -20,12 +20,7 @@ from typing_extensions import (
     TypeVar,
 )
 
-from experiments.episodes.episode import (
-    InsertionAttempt,
-    RecordedQuery,
-    RecordedTrial,
-    ScoredQuery,
-)
+from experiments.episodes.episode import InsertionAttempt, RecordedQuery, RecordedTrial
 from experiments.experiment_definitions import (
     DEFAULT_CONFIDENCE_LEVEL,
     ExperimentResult,
@@ -229,18 +224,21 @@ class PaperFigure(ABC):
         return [query for trial in trials for query in trial.queries]
 
     @classmethod
-    def scored_queries_of(cls, trials: Sequence[RecordedTrial]) -> List[ScoredQuery]:
+    def scored_queries_of(cls, trials: Sequence[RecordedTrial]) -> List[RecordedQuery]:
         """
-        Every query of the given trials that answers a question of the frozen set.
+        Every query of the given trials that was scored against a question of the frozen
+        set.
 
-        An ordinary query is a plain :class:`~experiments.episodes.episode.RecordedQuery`,
-        which is what tells it apart from a :class:`ScoredQuery`, the kind
-        :meth:`~experiments.questions.question_set.QuestionSet.answer_and_record` records.
+        A query :meth:`~experiments.questions.question_set.QuestionSet.answer_and_record`
+        recorded carries ``answered_correctly``; an ordinary query, asked outside that
+        scoring, does not.
 
         :param trials: The trials to read.
         """
         return [
-            query for query in cls.queries_of(trials) if isinstance(query, ScoredQuery)
+            query
+            for query in cls.queries_of(trials)
+            if query.answered_correctly is not None
         ]
 
     @staticmethod

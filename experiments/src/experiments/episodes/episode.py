@@ -97,15 +97,17 @@ class AnsweredPredicate:
     """
 
 
-@dataclass
-class RecordedQuery:
+@dataclass(eq=False)
+class RecordedQuery(Role[Question]):
     """
     One query asked during a trial, with how it was routed and what it answered.
-    """
 
-    text: str
-    """
-    The query as it was asked.
+    The question is the role taker: this row is the question, playing the part of one
+    query a trial asked and recorded. The instance that was actually asked, not only its
+    class, is what is held - a long-term-memory question's own fields (which episode it
+    is about) are part of what it asked - and ``Question`` is a
+    :class:`~krrood.adapters.json_serializer.SubclassJSONSerializer` so it round-trips
+    through the database as JSON.
     """
 
     answer: str
@@ -128,32 +130,25 @@ class RecordedQuery:
     Which backend answered each predicate of the query.
     """
 
-
-@dataclass(eq=False)
-class ScoredQuery(RecordedQuery, Role[Question]):
+    answered_correctly: Optional[bool] = None
     """
-    A recorded query that answers a question of the frozen set, scored against ground
-    truth.
-
-    The question is the role taker: this row is the question, playing the part of one
-    query a trial asked and recorded. The instance that was actually asked, not only its
-    class, is what is held - a long-term-memory question's own fields (which episode it
-    is about) are part of what it asked - and ``Question`` is a
-    :class:`~krrood.adapters.json_serializer.SubclassJSONSerializer` so it round-trips
-    through the database as JSON, the same mapping any other field of that type gets.
-    """
-
-    answered_correctly: bool = field(kw_only=True)
-    """
-    Whether this query's answer matched ground truth.
+    Whether this query's answer matched ground truth, or None if it was not scored
+    against the frozen set.
     """
 
     @property
     def question(self) -> Question:
         """
-        The question of the frozen set this query answers.
+        The question this query answers.
         """
         return self.role_taker
+
+    @property
+    def text(self) -> str:
+        """
+        The query as it was asked.
+        """
+        return self.question.english
 
     @property
     def bucket(self) -> Bucket:

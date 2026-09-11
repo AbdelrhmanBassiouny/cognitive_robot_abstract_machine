@@ -30,12 +30,11 @@ from experiments.episodes.episode import (
     InsertionOutcome,
     RecordedQuery,
     RecordedTrial,
-    ScoredQuery,
     Tick,
 )
 from experiments.orm.ormatic_interface import EpisodeDAO, RecordedTrialDAO
 from experiments.questions.question import Bucket
-from experiments.questions.working_memory import ObjectsSeen
+from experiments.questions.working_memory import ObjectColours, ObjectsSeen
 from experiments.scenarios.trial import TrialOutcome
 from krrood.ormatic.data_access_objects.helper import to_dao
 
@@ -162,7 +161,7 @@ def test_a_query_keeps_the_backend_that_answered_each_predicate(
         duration=12.5,
         queries=[
             RecordedQuery(
-                text="the cyan piece left of the triangle on the table",
+                role_taker=ObjectsSeen(),
                 answer="the cyan cube",
                 latency=0.42,
                 moment=3.0,
@@ -194,10 +193,10 @@ def test_a_scored_query_keeps_the_question_it_answered_apart_from_an_ordinary_on
     experiments_database_session,
 ):
     """
-    A scored query is the question it answers, held as its role taker rather than a
-    separately persisted field, so the instance - not only which subclass it is -
-    round-trips through the database as JSON and comes back distinct from an ordinary
-    query recorded in the same trial.
+    Every recorded query is the question it answers, held as its role taker rather than
+    a separately persisted text field, so the instance - not only which subclass it is -
+    round-trips through the database as JSON. A scored query is told apart from an
+    ordinary one by carrying ``answered_correctly``, not by a class of its own.
     """
     session = experiments_database_session
     trial = RecordedTrial(
@@ -206,14 +205,13 @@ def test_a_scored_query_keeps_the_question_it_answered_apart_from_an_ordinary_on
         duration=1.0,
         queries=[
             RecordedQuery(
-                text="the cyan piece left of the triangle on the table",
-                answer="the cyan cube",
+                role_taker=ObjectColours(),
+                answer="red, blue",
                 latency=0.42,
                 moment=3.0,
             ),
-            ScoredQuery(
+            RecordedQuery(
                 role_taker=ObjectsSeen(),
-                text="What objects do you see now?",
                 answer="cube, cylinder",
                 latency=0.1,
                 moment=4.0,
@@ -228,10 +226,10 @@ def test_a_scored_query_keeps_the_question_it_answered_apart_from_an_ordinary_on
     [recorded_trial] = session.scalars(select(RecordedTrialDAO)).all()
     restored: RecordedTrial = recorded_trial.from_dao()
 
-    scored = [query for query in restored.queries if isinstance(query, ScoredQuery)]
-    ordinary = [
-        query for query in restored.queries if not isinstance(query, ScoredQuery)
+    scored = [
+        query for query in restored.queries if query.answered_correctly is not None
     ]
+    ordinary = [query for query in restored.queries if query.answered_correctly is None]
     assert len(ordinary) == 1
     assert len(scored) == 1
     assert isinstance(scored[0].question, ObjectsSeen)

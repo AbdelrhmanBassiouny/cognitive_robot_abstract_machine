@@ -5,7 +5,7 @@ rows, and the two paper tables computed from what was recorded.
 
 from __future__ import annotations
 
-from experiments.episodes.episode import RecordedTrial, ScoredQuery
+from experiments.episodes.episode import RecordedTrial
 from experiments.paper.figure import FigureName
 from experiments.questions.long_term_memory import AnythingMovedInTheEpisode
 from experiments.questions.question import BloomLevel, Bucket
@@ -17,9 +17,9 @@ from semantic_digital_twin.testing import two_arm_robot_world
 from .test_paper_figures import (
     NO_ABLATION,
     TWIN_BACKEND,
-    WHAT_IS_ON_THE_TABLE,
     episode,
     query,
+    repeated_question,
     rows_of,
     trial,
 )
@@ -35,7 +35,6 @@ def test_answer_and_record_scores_every_question_of_the_set(
 
     assert len(recorded) == len(scene.question_set.questions)
     for question, row in zip(scene.question_set.questions, recorded):
-        assert isinstance(row, ScoredQuery)
         assert row.text == question.english
         assert row.question is question
         assert row.bucket is question.bucket
@@ -47,13 +46,12 @@ def test_answer_and_record_scores_every_question_of_the_set(
 def test_an_ordinary_query_is_not_mistaken_for_a_scored_question():
     """
     A query built the way any other query is recorded, not through
-    :meth:`~experiments.questions.question_set.QuestionSet.answer_and_record`, is a
-    plain :class:`~experiments.episodes.episode.RecordedQuery`, not a
-    :class:`~experiments.episodes.episode.ScoredQuery`.
+    :meth:`~experiments.questions.question_set.QuestionSet.answer_and_record`, still
+    names the question it asked but carries no ``answered_correctly``.
     """
-    ordinary = query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.1, TWIN_BACKEND)
+    ordinary = query(repeated_question(), "cube, cylinder", 0.1, TWIN_BACKEND)
 
-    assert not isinstance(ordinary, ScoredQuery)
+    assert ordinary.answered_correctly is None
 
 
 # %% accuracy per bucket and per level of Bloom's taxonomy
@@ -71,27 +69,24 @@ def scored_corpus() -> list[RecordedTrial]:
             TrialOutcome.SUCCEEDED,
             queries=[
                 query(
-                    "What objects do you see now?",
+                    ObjectsSeen(),
                     "cube, cylinder",
                     0.1,
-                    question=ObjectsSeen(),
                     answered_correctly=True,
                 ),
                 query(
-                    "What colours are they?",
+                    ObjectColours(),
                     "red, blue",
                     0.1,
-                    question=ObjectColours(),
                     answered_correctly=False,
                 ),
                 query(
-                    "Did any object move in the episode?",
+                    AnythingMovedInTheEpisode(episode_identifier="episode-1"),
                     "cube",
                     0.1,
-                    question=AnythingMovedInTheEpisode(episode_identifier="episode-1"),
                     answered_correctly=True,
                 ),
-                query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.1, TWIN_BACKEND),
+                query(repeated_question(), "cube, cylinder", 0.1, TWIN_BACKEND),
             ],
         )
     ]
@@ -124,7 +119,7 @@ def test_a_score_with_nothing_scored_is_left_out():
         trial(
             episode(NO_ABLATION),
             TrialOutcome.SUCCEEDED,
-            queries=[query(WHAT_IS_ON_THE_TABLE, "cube, cylinder", 0.1, TWIN_BACKEND)],
+            queries=[query(repeated_question(), "cube, cylinder", 0.1, TWIN_BACKEND)],
         )
     ]
 
