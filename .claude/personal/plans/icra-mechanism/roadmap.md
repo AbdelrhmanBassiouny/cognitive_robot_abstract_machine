@@ -1019,3 +1019,106 @@ checked here, so left alone rather than assumed to be the cause.
 a multiprocessing/action-client test with a 20 s readiness wait, the kind of thing
 contention under `-n auto` flakes. Confirmed via #303 too: its own `robokudo` job
 passed on the same base. No code change; a CI re-run is the fix.
+
+## 2026-09-11: the `test_orm_generation` failure was fixed, not a krrood limitation
+
+Asked directly in chat ("Fix the ci"), continuing the CI-fix pass recorded above. The
+previous entry reported `test_orm_generation.py::test_generation_needs_no_ros_message_package`
+as blocked on "a real, pre-existing gap in krrood.class_diagrams" needing a krrood-level
+decision. That was wrong, or at least not the whole story -- reproduced and root-caused
+directly in `ghcr.io/abdelrhmanbassiouny/cognitive_robot_abstract_machine:jazzy` (a
+container already running from the earlier session, reused rather than rebuilt) instead
+of guessed at again, and it needed no krrood change at all.
+
+**Root cause 1, giskardpy.** `giskardpy/scripts/generate_orm.py` maps the whole `giskardpy`
+package with no exclusion for `GiskardWrapper`/`GiskardWrapperNode` -- a live ROS2 action
+client and node handle, and `GiskardWrapper._goal_result` is typed through a `json_msgs`
+message that is genuinely unresolvable to a real class object wherever `json_msgs` is not
+installed, deferred import or not: `krrood.utils.get_scope_from_imports` walks the whole
+AST regardless of a `TYPE_CHECKING` guard, and `_handle_import_from_node` correctly skips
+a name whose module cannot be imported -- so the name is never bound to anything, and
+there is nothing to resolve. Neither class is a record a row could hold, so both -- and
+`GiskardTester`/`StretchTester` in `giskardpy/middleware/ros2/utils/utils_for_tests.py`,
+the only classes in the package referencing them as a field, confirmed by a workspace-wide
+grep -- are now excluded via `ignored_classes`, the same mechanism `experiments/scripts/
+generate_orm.py` already uses for `SimulatedCamera` ("a running system rather than
+anything a row could hold").
+
+**Root cause 2, segmind, found only because root cause 1 was fixed.** With `giskardpy`'s
+generation no longer crashing, `experiments/scripts/generate_orm.py`'s subprocess ran
+further and hit `sqlalchemy.exc.InvalidRequestError: Table 'FunctionMappingDAO' is already
+defined for this MetaData instance.` `FunctionMapping` is a krrood-shared
+`AlternativeMapping[FunctionType]`, independently rediscovered by every package's own
+`ORMatic.from_package` call via `recursive_subclasses(AlternativeMapping)` -- harmless
+when each package generates in its own subprocess, but `segmind/scripts/generate_orm.py`
+declared `dependencies = []` despite importing `semantic_digital_twin.orm.model` "for its
+alternative mappings", so it never told `ORMatic` that `semantic_digital_twin.orm
+.ormatic_interface` already mapped `FunctionMapping`. `experiments/scripts/generate_orm.py`
+imports both `coraplex.orm.ormatic_interface` (which pulls in `semantic_digital_twin`'s
+already-registered `FunctionMappingDAO` transitively through `giskardpy`) and `segmind
+.orm.ormatic_interface` in the same process, so the two independently-generated
+`FunctionMappingDAO` classes collided. Fixed by declaring the dependency segmind's own
+comment already said it needed.
+
+**Verification, not assertion.** Regenerated the whole chain by hand in dependency order
+(`giskardpy` -> `semantic_digital_twin` -> `coraplex` -> `segmind` -> `experiments`,
+`python <package>/scripts/generate_orm.py` for each) and confirmed each step's exit code
+and that `GiskardWrapperNode`/duplicate `FunctionMappingDAO` no longer appear in the
+generated files, then reran `test_orm_generation.py` -- passes. Also ran
+`test/giskardpy_test/test_orm` + `test/coraplex_test/test_orm` (4 passed, 2 skipped) and
+the whole `test/segmind_test` suite (92 passed, 1 skipped) for regressions from touching
+two generator scripts nothing else imports; none. Pushed as `9568922`.
+
+### coraplex's `DofNotInWorldStateError`, localized precisely this time
+
+Not fixed -- this is core `semantic_digital_twin.world`/`WorldState` machinery, well
+outside a generator-script fix, and the previous entry's "duplicated `_end_build`, not
+confirmed as cause" is now confirmed **not** the cause: the second definition simply
+shadows the first at class-body evaluation (Python keeps the last one), so it is dead code
+with zero runtime effect, not a bug reachable by anything.
+
+A debug script run in the same container (`PandaSimpleDemo.acquire_world()`, then read
+every `world.actuators[i].dofs[0]`) narrowed it to one exact fact: `MJCFParser
+.parse_tendons` registers the Panda gripper's coupling as a synthetic `DegreeOfFreedom`
+named after its MuJoCo tendon (`/split`, not any joint -- `panda.xml`'s two fingers move
+together through a `<tendon>`, not a direct per-joint actuator) via `self.world
+.add_degree_of_freedom(dof)`, on the very `self.world` that `.parse()` builds and returns
+throughout. Right after `PandaSimpleDemo.acquire_world()` returns -- before
+`populate_scene` even runs -- that same dof object already fails `dof._world is world`
+and is missing from `world.state`'s index, while the seven ordinary joint DOFs (`joint1`..
+`joint7`) are fine. So something between `.parse()` returning and `Panda.from_world(world)`
+finishing (both of which run inside `build_simulated_world`) drops it -- and given
+`add_degree_of_freedom` is decorated `@atomic_world_modification`, the likely place is
+`World`'s modification-tracking/undo machinery (`WorldModelUpdateContextManager`,
+`_model_manager`) rather than `MJCFParser` or `Panda.from_world` themselves, though
+reading those classes' `__exit__`/replay logic in full is where this stopped -- a real fix
+needs someone to trace what a nested `world.modify_world()` block does to a DOF that has
+no `Connection` of its own (every ordinary joint DOF has one; the tendon DOF doesn't),
+since that is the one structural way it differs from the seven that survive.
+
+### `RotationMatrix.rotational_error` AttributeError, confirmed pre-existing
+
+`semantic_digital_twin_test/test_spatial_types/test_numeric_pose.py
+::test_the_angle_between_two_numeric_poses_matches_the_symbolic_one` fails identically on
+#303 (touches only `krrood`, same base #265), so it is not this item's. Not investigated
+further -- the base branch pulled in a large upstream merge the same day (see below) that
+may already bear on it (a `rotational_error` method was added to `Quaternion` upstream),
+worth checking first before diagnosing from scratch.
+
+### giskardpy's and robokudo's flakes, reconfirmed
+
+`test_multiple_end_motion_monitors` (`MemoryError: ... more than 20 worlds in memory`) and
+robokudo's `test_query.py::test_query` both pass cleanly run alone in the same container --
+consistent with the previous entry's robokudo finding, extended to giskardpy's failure
+this run surfaced. Neither is code to change; a CI re-run is the fix, as before.
+
+### A large upstream merge landed on this branch mid-session, unrelated to any of the above
+
+Pushing `9568922` was rejected (non-fast-forward): another session had merged `origin/main`
+into `icra-experiments-simulation-pipeline-w4ep7n` (#265) and merged that into this PR's
+own branch while this session was working, bringing in roughly seventy unrelated upstream
+commits (causal-reasoning/mutagenesis work, QP braking-profile refactors, world-sync
+fixes, a `Quaternion.rotational_error` addition, and more). Fetched and merged cleanly --
+neither of this item's two touched files, nor anything under `test/experiments_test/`, was
+touched by that merge, so the CI-fix verification above stands unaffected. Pushed as
+`a391078`.
