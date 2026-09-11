@@ -1,3 +1,34 @@
+## #265: the board is found by describing it in EQL (2026-09-11)
+
+**State.** `040e2daa7` on `claude/icra-experiments-simulation-pipeline-w4ep7n`, pushed to
+`bass` (with `~/.ssh/id_ed25519_bass`, now pinned as `remote.bass.sshCommand`) and to
+`sorin`. Still a draft. PR description **not** updated -- no `gh`/token on this machine.
+
+**What.** `9ab372901` brings the ShapeSortingBoard fix over from `icra_final`'s
+`c3c5962c5` on its own: `node.py` died on `BoardMissingFromWorld` when the live world
+held no board. Now `DescribedBoard.statement()` is a `Match` over `ShapeSortingBoard`
+(lid_size, height, apertures of `ShapeSortingHole` with shape/size/place/turn on the
+lid); `MontessoriPerceptionBackend.read_request` reads it back as a `DescribedBoard`, the
+look fits that layout at `table height + stated height`, stands the board found in the
+look's world, and the match answers with it. `node.hold_board` publishes it into the
+robot's world via `BoardPublisher` and re-reads the lid. That `icra_final` commit was
+itself broken -- it imported `board_description.py`/`board_publishing.py` which were
+never committed (they sat untracked in this working tree); both are in now. Left out of
+that commit deliberately: the `LIVE_POSITION_CORRECTION` stopgap, the `world.py` piece
+scaling (+ untracked `test_montessori_shape_bodies.py`), coraplex/tracy_experiments
+changes. Two tidy-ups over `icra_final`: `stand_in` takes the lid `Pose`;
+`ShapeSortingBoard.held_by(world)` replaces three copies of the lookup.
+
+**Verified.** `test/experiments_test -k montessori`: 735 passed (only the untracked
+scaling test fails); `node.py` starts against the live robot and reports 6 holes.
+`040e2daa7` merges #303 (krrood backend `capability()`), which does not touch the
+perception backend (`GenerativeBackend` implements it).
+
+**Outstanding.** PR description needs the paragraph above. The live ~0.2-0.3 m position
+offset is uncorrected on this branch (stopgap stays on `icra_final`, root cause open).
+Untracked leftovers: `pickup_demo_perceived_board.py` + test, the `.mcap` bag dir,
+`ganttchart.pdf`, `.mcp.json`.
+
 ## #265: tracy_icra merged, LongTermMemory CI fix, main merged a second time
 
 **State.** `51fc40548` on `claude/icra-experiments-simulation-pipeline-w4ep7n`, a draft,
