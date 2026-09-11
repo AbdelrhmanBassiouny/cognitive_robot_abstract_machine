@@ -1,3 +1,50 @@
+## #265: live shape and hole detection is wrong on the new 80 % pieces (2026-09-11, in progress)
+
+**Session.** https://claude.ai/code/session_0186xZo3eqCDVcqhi1E3LHdY -- resume here if
+anything breaks. Memory note `perception-position-offset-stopgap` holds the earlier
+diagnosis (live detections ~0.3 m toward the camera; extrinsics/intrinsics/frame_id/
+table height ruled out; stopgap only on `icra_final`).
+
+**The task, in the developer's words (2026-09-11).** "We working on fixing the perception
+detection of the shapes issue ... the sample images I showed you where the detections are
+wrong, the objects btw are new they are scaled down to 80 % so for example the cube side
+length is now 22.4 mm instead of 30 mm. Also the ground truth positions of the current
+situation is as follows all at the same x value of 79 cm while the y values are (cylinder
+10 cm, triangle 20 cm, rectangle 30 cm, cube 40 cm). We want to take captures now and
+save them with tests that compare against the ground truth. The board front left corner
+is at (99, 40) cm where the side with the drawers and handles are toward the shapes and
+it is fairly horizontal along the y axis (same x value in each horizontal (long) side).
+We need to find the issue in the hole detections and the shape detections and fix them.
+Also save this prompt here in the repo and add this conversation and session in the
+history so I can resume later if something happens."
+
+**Ground truth of the table as set up on 2026-09-11** (reference frame, metres):
+pieces all at x = 0.79: cylinder y = 0.10, triangular prism y = 0.20, rectangular prism
+y = 0.30, cube y = 0.40. Board front-left corner at (0.99, 0.40); the drawers-and-handles
+side faces the pieces; long sides run along y at one x each. Pieces are the new set at
+0.8 of the measured ones (cube 22.4 mm instead of 30 mm).
+
+**What the two screenshots (17:46, 17:55) show.** The board box is found, but the hole
+labels (`cube`, `cylinder`, `disk`, `triangular_prism`) sit on the wrong holes and only
+four or so holes are boxed; of the pieces on the table only the triangular prism is
+detected (green), the cyan cube and yellow rectangular prism get no box at all.
+
+**Uncommitted at session start** (files 18:24): `perception/live_camera.py` (`LiveCamera`,
+`CameraPoseLookup`) and `perception/capture_from_camera.py` (CLI writing one live look as
+a `SceneCapture`). `node.py` still has its own duplicate subscriptions/`TFWrapper`. No
+tests for either yet. No new capture written yet.
+
+**Plan.**
+1. Finish `LiveCamera`: `MontessoriPerceptionNode` reads through it; mocked tests for
+   `LiveCamera`/`write_capture`. Commit.
+2. Take captures off the live camera with `capture_from_camera.py`, ship them under
+   `resources/captures/`.
+3. Extend `CaptureTruth` with per-piece positions and the board pose; write tests that
+   assert detected positions/categories against them (must fail on today's code).
+4. Diagnose and fix hole detection and shape detection (80 % pieces -- `KnownPiece`
+   sizes are the 100 % ones) one root cause at a time, each with its failing test first.
+5. Update this note and the PR description; push; keep #265 a draft.
+
 ## #265: the board is found by describing it in EQL (2026-09-11)
 
 **State.** `040e2daa7` on `claude/icra-experiments-simulation-pipeline-w4ep7n`, pushed to
