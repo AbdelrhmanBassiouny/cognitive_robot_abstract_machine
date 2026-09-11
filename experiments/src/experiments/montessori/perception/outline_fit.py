@@ -50,6 +50,27 @@ def offsets_within(radius: float, step: float) -> np.ndarray:
     return np.concatenate([-outwards[:0:-1], outwards])
 
 
+# %% where a known outline might stand
+
+
+@dataclass(frozen=True, eq=False)
+class CandidatePositions:
+    """
+    The places a known outline turned one way might stand at, named before the picture
+    is consulted.
+    """
+
+    yaw: float
+    """
+    How far the outline is turned, in radians about the world frame's z-axis.
+    """
+
+    positions: np.ndarray
+    """
+    The world-frame ``(n, 2)`` positions it might stand at, turned that far.
+    """
+
+
 # %% where a known outline turned out to stand
 
 
@@ -173,6 +194,53 @@ class OutlineFitter:
             self.coarse_reach,
             self.coarse_outline_spacing,
         )
+        return self._settle_around(outline, edges, coarse)
+
+    def fit_among(
+        self,
+        outline: KnownOutline,
+        edges: EdgeDistances,
+        candidates: Sequence[CandidatePositions],
+    ) -> Placement:
+        """
+        Place and turn one known outline at whichever of the candidate placements
+        follows the edges best, then settle it there.
+
+        For an outline whose possible placements are named beforehand rather than
+        believed to lie within some reach of one place: the candidates are compared as
+        the coarse search compares a grid, and the best is refined the same way.
+
+        :param outline: The outline to lay over the edges.
+        :param edges: The edges seen in the plane it lies in.
+        :param candidates: The placements worth trying, by turn.
+        :return: The best placement it reaches.
+        """
+        coarse = max(
+            (
+                self._best_position(
+                    outline,
+                    edges,
+                    candidate.positions,
+                    candidate.yaw,
+                    self.coarse_reach,
+                    self.coarse_outline_spacing,
+                )
+                for candidate in candidates
+            ),
+            key=lambda placement: placement.outline_agreement,
+        )
+        return self._settle_around(outline, edges, coarse)
+
+    def _settle_around(
+        self, outline: KnownOutline, edges: EdgeDistances, coarse: Placement
+    ) -> Placement:
+        """
+        The second, fine search around the placement the first one came back with.
+
+        :param outline: The outline to place.
+        :param edges: The edges seen in the plane it lies in.
+        :param coarse: The placement the coarse search settled on.
+        """
         return self._sweep(
             outline,
             edges,

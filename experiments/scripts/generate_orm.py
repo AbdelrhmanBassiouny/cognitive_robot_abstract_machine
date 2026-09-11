@@ -9,8 +9,13 @@ import experiments.scenarios.runner
 import experiments.scenarios.scenario
 import experiments.scenarios.trial
 import experiments.episodes.artifacts
+import experiments.episodes.observer
 import experiments.episodes.recording
 import experiments.episodes.long_term_memory
+import experiments.montessori.ask_episode
+import experiments.montessori.record_episode
+import experiments.montessori.watched_run
+import experiments.tracy_experiments.montessori.scene_builder
 import experiments.questions.long_term_memory
 import experiments.questions.question
 import experiments.questions.question_set
@@ -65,6 +70,18 @@ for episode_database_module in (
     experiments.episodes.long_term_memory,
 ):
     ignored_classes |= set(classes_of_module(episode_database_module))
+
+# what observes a trial, the run that is observed, the command lines that start one
+# and ask one back, and the scene builder they run on are machinery of the same kind:
+# what they observe is written onto the episode model's own rows
+for episode_machinery_module in (
+    experiments.episodes.observer,
+    experiments.montessori.watched_run,
+    experiments.montessori.record_episode,
+    experiments.montessori.ask_episode,
+    experiments.tracy_experiments.montessori.scene_builder,
+):
+    ignored_classes |= set(classes_of_module(episode_machinery_module))
 
 # an episode's artifacts are kept as files, so what this module holds is where they are
 # and how they are rendered - a path names a file rather than describing one, and the

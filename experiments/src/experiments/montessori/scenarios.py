@@ -60,10 +60,13 @@ from coraplex.datastructures.enums import (
 )
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.execution_environment import simulated_robot
+from coraplex.view_manager import ViewManager
 from coraplex.plans.factories import sequential
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
+
+from krrood.exceptions import DataclassException
 
 from experiments.montessori.exceptions import (
     HoleHasNoLandingRegionError,
@@ -116,7 +119,7 @@ from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.reasoning.robot_predicates import robot_holds_body
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -575,12 +578,19 @@ class SortingScene:
         return robot
 
     @property
+    def end_effector(self) -> EndEffector:
+        """
+        The end effector the robot sorts with: the one on the arm that sorts, which is
+        the only one a one-armed robot has.
+        """
+        return ViewManager.get_end_effector_view(THE_ARM_THAT_SORTS, self.robot)
+
+    @property
     def gripper(self) -> Body:
         """
         The frame the robot grasps with, which a held piece hangs from.
         """
-        [end_effector] = self.robot.get_end_effectors()
-        return end_effector.tool_frame
+        return self.end_effector.tool_frame
 
     @property
     def categories(self) -> Set[MontessoriShapeCategory]:
@@ -699,9 +709,8 @@ class SortingScene:
         How the robot takes hold of a piece: from above, since every piece here stands
         on a table and is posted down through a hole.
         """
-        [end_effector] = self.robot.get_end_effectors()
         return GraspDescription(
-            ApproachDirection.FRONT, VerticalAlignment.TOP, end_effector
+            ApproachDirection.FRONT, VerticalAlignment.TOP, self.end_effector
         )
 
     def stand_the_piece_at(
@@ -882,6 +891,27 @@ The directory filmed runs are written into when nothing says where they should g
 """
 
 
+@dataclass
+class TrialNotFilmedError(DataclassException):
+    """
+    Raised when a scenario is asked for the video of a trial it did not film.
+    """
+
+    scenario_name: str
+    """
+    The scenario that was asked.
+    """
+
+    def error_message(self) -> str:
+        return "No trial of %r was filmed." % self.scenario_name
+
+    def suggest_correction(self) -> str:
+        return (
+            "Build the scenario with filmed=True, and ask for the video only once a "
+            "trial has built its world."
+        )
+
+
 class MontessoriEnvironmentVariable(StrEnum):
     """
     What the environment can be asked about a run of these scenarios.
@@ -962,6 +992,15 @@ class SceneRecording:
         self.frames.extend(self._take.stop().frames)
         self._take = None
 
+    def video(self) -> RecordedVideo:
+        """
+        Every take filmed so far, as one video, ending the take that is running.
+        """
+        self.cut()
+        return RecordedVideo(
+            frames=self.frames, frames_per_second=self.frames_per_second
+        )
+
     def write(self, output_path: Path) -> Path:
         """
         Encode every take filmed so far as one video.
@@ -969,10 +1008,7 @@ class SceneRecording:
         :param output_path: The file to write it to.
         :return: The file it was written to.
         """
-        self.cut()
-        return RecordedVideo(
-            frames=self.frames, frames_per_second=self.frames_per_second
-        ).write(output_path)
+        return self.video().write(output_path)
 
     @property
     def frame_count(self) -> int:
@@ -1088,6 +1124,11 @@ class SimulatedScene:
     The video the run is being filmed as, when it is being filmed.
     """
 
+    headless: bool = True
+    """
+    Whether the simulation runs without opening a viewer window.
+    """
+
     physics: Optional[MujocoSim] = field(init=False, default=None, repr=False)
     """
     The MuJoCo simulation the scene is carried in, once there is one.
@@ -1143,7 +1184,7 @@ class SimulatedScene:
         if self.physics is not None:
             return self.physics
         self.physics = MujocoSim(
-            world=self.world, headless=True, step_size=self.step_size
+            world=self.world, headless=self.headless, step_size=self.step_size
         )
         self.physics.synchronizer.sync_rate_hz = (
             MujocoSynchronizer.UNTHROTTLED_SYNC_RATE_HZ
@@ -1847,6 +1888,11 @@ class MontessoriSortingScenario(
     Whether a video of the run is made while it is performed.
     """
 
+    headless: bool = field(kw_only=True, default=True)
+    """
+    Whether the run's simulation goes without a viewer window.
+    """
+
     simulation: Optional[SimulatedScene] = field(init=False, default=None)
     """
     The physics carrying the world this scenario built most recently.
@@ -1867,8 +1913,27 @@ class MontessoriSortingScenario(
         self.simulation = SimulatedScene(
             world=montessori.world,
             recording=(SceneRecording(world=montessori.world) if self.filmed else None),
+            headless=self.headless,
         )
         return montessori.world
+
+    @property
+    def acted_on_category(self) -> Optional[MontessoriShapeCategory]:
+        """
+        The shape of the piece this scenario's script acts on, or None for a script
+        that leaves every piece alone.
+        """
+        return None
+
+    def video_of_the_trial(self) -> RecordedVideo:
+        """
+        The video of the trial that ran in the world built most recently.
+
+        :raises TrialNotFilmedError: If that trial was not filmed.
+        """
+        if self.simulation is None or self.simulation.recording is None:
+            raise TrialNotFilmedError(scenario_name=self.name)
+        return self.simulation.recording.video()
 
     def add_what_the_script_acts_with(self, montessori: MontessoriWorld) -> None:
         """
@@ -1958,6 +2023,10 @@ class RobotSortsAPiece(
     The shape of the piece the robot sorts.
     """
 
+    @property
+    def acted_on_category(self) -> Optional[MontessoriShapeCategory]:
+        return self.sorted_category
+
     def goal(self, world: World) -> Goal[World]:
         """
         Success is that piece having gone through its own hole.
@@ -1998,6 +2067,10 @@ class PiecePushedWhileTheRobotIsIdle(
     """
     The shape of the piece that is pushed.
     """
+
+    @property
+    def acted_on_category(self) -> Optional[MontessoriShapeCategory]:
+        return self.pushed_category
 
     def add_what_the_script_acts_with(self, montessori: MontessoriWorld) -> None:
         """
@@ -2078,6 +2151,10 @@ class PieceHeldWhileTheQuestionIsAsked(
     """
     The shape of the piece the robot holds.
     """
+
+    @property
+    def acted_on_category(self) -> Optional[MontessoriShapeCategory]:
+        return self.held_category
 
     def goal(self, world: World) -> Goal[World]:
         """
