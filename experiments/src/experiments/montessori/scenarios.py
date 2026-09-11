@@ -61,7 +61,7 @@ from coraplex.datastructures.enums import (
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.execution_environment import simulated_robot
 from coraplex.view_manager import ViewManager
-from coraplex.plans.executables import ReceivesRunMotions
+from coraplex.plans.executables import ReceivesExecutedMotions
 from coraplex.plans.factories import sequential
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
@@ -562,7 +562,7 @@ class SortingScene:
     The world the trial is running in.
     """
 
-    motion_listener: Optional[ReceivesRunMotions] = None
+    motion_listener: Optional[ReceivesExecutedMotions] = None
     """
     Told about each motion state chart an action of this scene runs, or None for a
     scene nobody watches.
@@ -1299,7 +1299,9 @@ class HaveTheRobotAct(ScenePhysicsStep, ABC):
     run while it happens.
     """
 
-    motion_listener: Optional[ReceivesRunMotions] = field(default=None, kw_only=True)
+    motion_listener: Optional[ReceivesExecutedMotions] = field(
+        default=None, kw_only=True
+    )
     """
     Told about each motion state chart this step runs, or None for a step nobody
     watches.
@@ -1922,7 +1924,9 @@ class MontessoriSortingScenario(
     Whether the run's simulation goes without a viewer window.
     """
 
-    motion_listener: Optional[ReceivesRunMotions] = field(kw_only=True, default=None)
+    motion_listener: Optional[ReceivesExecutedMotions] = field(
+        kw_only=True, default=None
+    )
     """
     Told about each motion state chart this scenario's steps run, or None for a run
     nobody watches.

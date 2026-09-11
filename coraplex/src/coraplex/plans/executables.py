@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # %% who is told about a motion that has run
 
 
-class ReceivesRunMotions(Protocol):
+class ReceivesExecutedMotions(Protocol):
     """
     Something told about each motion state chart an executable has run.
     """
@@ -308,9 +308,9 @@ class GiskardExecutable(Executable):
                 self._execute_real()
             case _:
                 raise UnknownExecutionType(GiskardExecutable.execution_type)
-        self._tell_the_listener_what_ran(time.monotonic() - started_at)
+        self._hand_over_the_chart_that_ran(time.monotonic() - started_at)
 
-    def _tell_the_listener_what_ran(self, duration: float) -> None:
+    def _hand_over_the_chart_that_ran(self, duration: float) -> None:
         """
         Hand the chart that has just run to whoever the context says listens.
 
