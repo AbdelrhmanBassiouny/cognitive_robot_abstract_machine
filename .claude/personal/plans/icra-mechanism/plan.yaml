@@ -39,7 +39,7 @@ items:
   pull_request_number: 303
   track: backend-routing
   depends_on: []
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_015KwEoJ9rBZHtB8LYBxbD7v
   notes: >
     The capability table the memo publishes, as code rather than a table written by hand, and the
@@ -69,9 +69,7 @@ items:
     underspecified description out from the model, so that an asker naming a class -- his example is
     a MontessoriBoard -- has the features the twin already knows about one added to the description
     before any backend is chosen. Nothing does that second one today.
-  blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `integrated-simulation-pipeline` (in_progress, PR #265), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  blockers: []
 - id: query-routed-per-predicate
   title: >-
     A statement is routed per predicate by capability and knowledge state, and the routing is reported

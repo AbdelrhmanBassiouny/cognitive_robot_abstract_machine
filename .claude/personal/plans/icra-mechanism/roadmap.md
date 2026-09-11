@@ -1247,3 +1247,24 @@ run of the same suite and passing again alone in 38 s. It is a MuJoCo settling t
 four workers on four cores starve it. Real CI passes it. Recorded because it exercises the
 landing region this session changed, which makes it look like a regression until run
 alone.
+
+## 2026-09-11: `backends-declare-their-capabilities` merged into #265, #303
+
+Asked directly in chat, immediately after the CI investigation above: *"merge this into
+265"*. #303's base was already #265, so this is an ordinary merge rather than a restack.
+
+Before merging, another session had already fast-forwarded #303's branch with #265's
+latest tip (`98ffd37d0`, itself the just-merged `perturbations` result recorded above),
+bringing in every CI fix the two entries above describe — merge commit
+`07994be2f5c8a804e515bea460886224a1f62434`. That commit's own CI had not yet reported
+(`get_status` returned `pending`, 0 statuses, seconds after the push) when the merge
+instruction arrived; merged anyway on the explicit instruction, trusting the two
+preceding entries' independent confirmation that every failure this stack had seen on
+this same base was already fixed. Merged via `merge_pull_request` (merge commit,
+`791e154f2`), not squash or rebase, matching how `perturbations` merged into #265 above.
+
+Plan updated to `done` in the same turn: the item's own recorded blocker (cross-plan,
+icra-foundation's `integrated-simulation-pipeline` still `in_progress`) was what made the
+base unstable to build *from*; it is no longer what determines whether this item's own
+work is finished, since that work is now merged into it. Cleared rather than left stale,
+the same way `perturbations`' blockers were cleared on its own `done` transition above.
