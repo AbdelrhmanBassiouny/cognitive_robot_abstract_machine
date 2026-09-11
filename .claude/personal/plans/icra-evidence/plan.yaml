@@ -161,6 +161,21 @@ items:
     `ImportError` behind three collection errors); one real CI bug in this item's own test fixed
     (`test_question_scoring.py` was missing the `two_arm_robot_world` import `scene` needs). See
     roadmap's "resolved 2026-09-10" section for the full reasoning.
+
+    Resolved further 2026-09-11. The developer rejected the `ScoredQuery` split outright: "I
+    don't like that we have a new class now. I said RecordedQuestion should be a Role[Question]
+    and remove text because this is in the Question object." `RecordedQuery` is now merged back
+    into one class - `RecordedQuery(Role[Question])` itself, `role_taker` required by `Role`,
+    `ScoredQuery` gone. `text` is no longer a stored field; it is a property reading
+    `role_taker.english`. The "ordinary ad hoc query with no Question" case that justified keeping
+    `text` across two prior rounds turned out to be a test-fixture artifact only - nothing in
+    production constructs a `RecordedQuery` outside `QuestionSet.answer_and_record` - so every
+    fixture that built one now passes a real `Question` instead of a raw EQL string.
+    `scored_queries_of` now filters by `answered_correctly is not None` rather than an
+    `isinstance` check, since only one class exists now. Verified again against the real classes
+    via the pip-installed Python 3.12 venv; pushed in `86d40a450`; replied and resolved the
+    thread - the first round the full ask was carried out as stated. See roadmap's "resolved
+    further 2026-09-11" section for the full reasoning.
   blockers: []
 - id: objects-seen-asked-of-the-perception-system
   title: >-

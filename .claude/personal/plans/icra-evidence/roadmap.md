@@ -1368,3 +1368,61 @@ Still with the developer: whether `text` should also go, the long-term
 the two pre-existing base-branch CI failures above.
 
 Session: https://claude.ai/code/session_01SRx86WkcpXrGnNJdjXAHgm
+
+### `question-set-answered-from-memory` (#304), resolved further 2026-09-11
+
+The developer replied to the previous round's open thread minutes later, and rejected
+the design outright rather than asking for the remaining half: *"I don't like that we
+have a new class now. I said RecordedQuestion should be a Role[Question] and remove
+text because this is in the Question object."* Both parts of the round-4/5 ask,
+implemented literally this time.
+
+**`RecordedQuery` merged back into one class.** `RecordedQuery(Role[Question])`, with
+`role_taker` required — enforced by `Role` itself, nothing added here. `ScoredQuery` is
+deleted entirely. `text` is no longer a stored dataclass field; it is a property
+reading `role_taker.english` through a `question` property (`role_taker` itself),
+since that is genuinely the same information as before, read through the question
+rather than duplicated beside it.
+
+**The "ordinary ad hoc query" case that justified keeping `text` across rounds 4 and 5
+turned out to be a test-fixture concept, not a production one.** Grepped the whole
+`experiments` package before touching anything: nothing outside
+`QuestionSet.answer_and_record` constructs a `RecordedQuery` at all — there is no
+production code path that records a query with no `Question` behind it. The
+`QueryDeterminism`/`BackendLatency` conflict raised on this thread across three rounds
+was real only for `test_paper_figures.py`'s own fixtures, which built ad hoc queries
+from raw EQL string literals (`WHAT_IS_ON_THE_TABLE`, `WHERE_IS_THE_CUBE`), not for
+anything that ships. So making `question`/`role_taker` required costs nothing real.
+`PaperFigure.scored_queries_of` (the accuracy tables' own filter) now checks
+`answered_correctly is not None` instead of an `isinstance` check, which is what
+actually distinguishes a scored row from an unscored one now that only one class
+exists.
+
+**Every fixture that built a "text-only" ad hoc query now passes a real `Question`
+instead.** `test_paper_figures.py`'s `query()` helper takes `question: Question`
+(positional, required) in place of `text: str`; the old EQL-string constants are
+replaced by `repeated_question()` (`ObjectsSeen()`) and `single_question()`
+(`ObjectColours()`) helpers, used for exactly the two cases the determinism table
+needs (a question asked more than once, and one asked only once).
+`test_question_scoring.py`, `test_episodes.py`, and `test_episode_artifacts.py` follow
+the same pattern — each place that built a placeholder query now builds it from a real
+`Question` subclass.
+
+**Verified again against the real classes**, the same approach as the previous round
+(pip-installed workspace under a Python 3.12 venv, bypassing this container's still-
+broken `uv sync`): constructed `RecordedQuery` instances directly, checked
+`.text`/`.question`/`.bucket`/`.bloom_level` read correctly through the new
+properties, and ran `AccuracyByBucket`/`AccuracyByBloomLevel` over a small in-memory
+corpus built the same way the pytest fixtures now are — all match what the
+corresponding tests assert. The database round trip is still CI-only, same standing
+`rclpy`/`generate_orm.py` limitation as every round on this branch.
+
+Pushed in `86d40a450`. Replied on the thread and resolved it — the first round on this
+item where the full ask was carried out as stated, with nothing left standing on it.
+
+Still with the developer, unchanged from the previous round: the long-term
+`values_agree` sorted-vs-positional list-comparison question, and the two pre-existing
+base-branch CI failures (`test_park_arms_is_actually_reached`'s
+`DofNotInWorldStateError`, and the `AttachNode` `ImportError`).
+
+Session: https://claude.ai/code/session_01SRx86WkcpXrGnNJdjXAHgm
