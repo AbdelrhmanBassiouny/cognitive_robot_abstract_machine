@@ -47,3 +47,7 @@ Update 2026-09-11 (lab, later): developer said postgres, not sqlite (runbook v2)
 copyable prompts per item; runbook v3 carries ten session prompts (0 merge #304; A observer +
 record_episode; B answers rendered; C look quality; D1 belief check; D2 event rules port; E corpus +
 cross-episode; F question register; G extension cost + packaging; H VLM import with placeholders).
+Update 2026-09-11 (lab, v4): developer dropped the dimmed/sunlight condition entirely. Runbook v4:
+no lighting recorded, tuned or mentioned; LightingChanged stays in code but is not run; item C's
+trigger is a new BoardPartlyCovered perturbation (flat body over half the lid in sim, a sheet of
+paper on the robot), captures renamed clear_*/covered_*; prompts C and E updated accordingly.
