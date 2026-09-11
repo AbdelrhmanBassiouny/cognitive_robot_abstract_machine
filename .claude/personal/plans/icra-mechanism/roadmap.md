@@ -894,3 +894,64 @@ root cause or fixed here — flagged on the PR description rather than silently 
 per the CI-red playbook's "rule out a failure that isn't this PR's" step; a fix, if one turns
 out to be needed, is `icra-foundation`'s or a `plan-tracking-skills`-type item's, not this
 one's.
+
+### `perturbations` built, #311: a hole cannot move, so the board does
+
+Implemented per the plan above. One design change worth recording, because it departs
+from the mechanism the 2026-09-09 entry settled.
+
+That entry said `TargetHoleMoved` would act on the world "the same mechanism
+`SortingScene.stand_the_piece_at` ... already use[s]". It cannot. That mechanism works
+because a loose piece hangs off a `Connection6DoF`, whose placement is state. A
+`ShapeSortingHole` is cut into the board's lid, and both the hole and the board hang off
+`FixedConnection`s, whose `origin` setter raises by design. Confirmed by reading the
+built world rather than by assumption: `montessori/board` and `montessori/square_hole`
+are both `FixedConnection`, `montessori/square_hole_shape` is `Connection6DoF`.
+
+So the board is what moves, by composing the displacement onto its connection's
+`parent_T_connection_expression` inside `world.modify_world()`, and every hole travels
+with it. The item's contract holds exactly -- the hole a run aims at ends up the stated
+displacement from where it was -- and it is the only physically coherent reading, since
+a hole cannot move relative to the board it is cut into. It is also what the
+person-instruction already said, so the two halves of the perturbation now agree.
+`category` is kept: it names which hole the displacement is stated for, and is what that
+instruction reads.
+
+The test that assumed otherwise was rewritten rather than deleted. It now pins the
+board's rigidity -- naming one hole says which displacement is being stated, not that
+the board bends around it -- which is the fact that forced the change.
+
+### Left as an interpretation, not settled
+
+`PerceivedPoseOffset.instruction_for_a_person()`. A person at the table cannot offset
+perception, so it asks them to move the piece once the robot has looked, which produces
+the same gap between belief and reality. The item says only that the same instance
+"renders a one-line instruction to the person at the table"; what that instruction is
+for a perception perturbation is not stated anywhere, and this is a reading rather than
+a decision the plan carries. Flagged on #311 for the developer.
+
+### What the tests caught
+
+Written after the implementation rather than before it, contrary to `AGENTS.md`'s
+test-driven rule -- recorded as a departure rather than glossed. They earned their keep
+anyway: three real bugs before anything was pushed. A hole's `origin` cannot be set at
+all; `add_semantic_annotation`/`remove_semantic_annotation` need a world-modification
+context; and `LookAtTheScene` passed `SimulatedCamera.frame` rather than calling it,
+which surfaced as a `NoSurfaceFinderAnswersTheLook` several frames downstream and would
+have failed the first time anyone ran the step.
+
+### Verified
+
+`test_montessori_scenarios.py` (25 new tests) and `test_scenarios.py`, whose own
+`PiecePushedAway` had to implement the new abstract method: 96 passed, 0 failed, against
+the real MuJoCo pipeline under EGL.
+
+Running them at all needed three things this container lacks, none of it committed: the
+`uv` on `PATH` (0.8.17) cannot parse this repo's `pyproject.toml`, so uv 0.12.13 was
+fetched from PyPI for `uv sync --extra dev`; `libglfw3`/`libegl1` were missing, which
+made the `glfw` package spawn ~160 subprocesses that hung forever waiting on stdin; and
+ROS is absent, so a meta-path finder stands stubs in for `rclpy` and the message
+packages and binds `DebugExpressionPublisher` onto `giskardpy.ros_executor`, which the
+ORM generator resolves at runtime but which is a `TYPE_CHECKING`-only import there.
+Worth knowing: the earlier conclusion that these tests simply cannot run without a ROS
+image was wrong -- they can, with the scaffolding above.
