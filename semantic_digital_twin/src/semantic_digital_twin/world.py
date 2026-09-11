@@ -1151,15 +1151,10 @@ class World(HasSimulatorProperties):
 
         :param connection: The connection to be removed
 
-        .. warning::
+        .. note::
 
-            The reason self.is_connection_in_world is not checked before removing the connection, is because it is using
-            the self.connections internally, which accesses the live rustworkx kinematic_structure. The problem arises
-            if we want to remove the parent or child from the world, before removing the connection from the world.
-            In that case, rustworkx automatically removes the edge representing the connection, which results in
-            self.is_connection_in_world returning False, even though we have not cleaned up the connection properly on
-            our side. The ownership the connection itself records survives that,
-            which is what makes it usable as the check here.
+            A connection whose parent or child was removed first has already left the
+            world with it, so removing it afterwards does nothing.
         """
         if connection._world is not self:
             return
@@ -1202,9 +1197,19 @@ class World(HasSimulatorProperties):
         Do not call this function directly, use `remove_kinematic_structure_entity`
         instead.
 
+        Connections still attached to it leave the world with it, as removing its node
+        removes their edges from the kinematic structure.
+
         :param kinematic_structure_entity: The kinematic_structure_entity to remove.
         """
-        self.kinematic_structure.remove_node(kinematic_structure_entity.index)
+        index = kinematic_structure_entity.index
+        attached_edges = chain(
+            self.kinematic_structure.in_edges(index),
+            self.kinematic_structure.out_edges(index),
+        )
+        for _, _, connection in attached_edges:
+            connection.remove_from_world()
+        self.kinematic_structure.remove_node(index)
         kinematic_structure_entity.remove_from_world()
 
     def remove_degree_of_freedom(self, dof: DegreeOfFreedom) -> None:
@@ -1599,7 +1604,20 @@ class World(HasSimulatorProperties):
 
     def get_world_entity_with_id_by_id(self, id: UUID) -> WorldEntityWithID:
         """
-        Find this world's entity with the given id.
+        Get this world's entity with the given id.
+
+        :param id: The id of the entity to get.
+        :return: The entity of this world carrying that id.
+        :raises WorldEntityWithIDNotFoundError: If this world holds no such entity.
+        """
+        entity = self.find_world_entity_with_id(id)
+        if entity is None:
+            raise WorldEntityWithIDNotFoundError(id)
+        return entity
+
+    def find_world_entity_with_id(self, entity_id: UUID) -> Optional[WorldEntityWithID]:
+        """
+        Find this world's entity with the given id, if it holds one.
 
         .. note:: Semantic annotations are searched in :attr:`semantic_annotations`
             rather than in the hash table. Their hash describes their content instead
@@ -1607,16 +1625,19 @@ class World(HasSimulatorProperties):
             structure entities share one table key and all but the last one added are
             missing from it.
 
-        :param id: The id of the entity to find.
-        :return: The entity of this world carrying that id.
-        :raises WorldEntityWithIDNotFoundError: If this world holds no such entity.
+        :param entity_id: The id of the entity to find.
+        :return: The entity of this world carrying that id, or None if it holds none.
         """
-        for entity in chain(
-            self._world_entity_hash_table.values(), self.semantic_annotations
-        ):
-            if isinstance(entity, WorldEntityWithID) and entity.id == id:
-                return entity
-        raise WorldEntityWithIDNotFoundError(id)
+        return next(
+            (
+                entity
+                for entity in chain(
+                    self._world_entity_hash_table.values(), self.semantic_annotations
+                )
+                if isinstance(entity, WorldEntityWithID) and entity.id == entity_id
+            ),
+            None,
+        )
 
     def rebind_world_entities(self, obj: RelocatableType) -> RelocatableType:
         """
@@ -1632,10 +1653,8 @@ class World(HasSimulatorProperties):
 
         Walks `obj` recursively through dataclass fields, list like classes and dict values.
         A :class:`~semantic_digital_twin.world_description.world_entity.WorldEntityWithID`
-        is looked up here by its id and a
-        :class:`~semantic_digital_twin.world_description.world_entity.Connection`, which
-        has no id, by its rebound parent and child. Anything else is deep-copied, so
-        `obj` and the result never share mutable state.
+        is looked up here by its id. Anything else is deep-copied, so `obj` and the
+        result never share mutable state.
 
         An entity this world does not contain is left as it is: it is not this world's
         state to rebind, and leaving it behaves exactly as not rebinding at all.
@@ -1660,13 +1679,6 @@ class World(HasSimulatorProperties):
                     world=self, world_entity=found
                 )
             return found
-        if isinstance(obj, Connection):
-            parent, child = self.rebind_world_entities(
-                obj.parent
-            ), self.rebind_world_entities(obj.child)
-            if parent is obj.parent or child is obj.child:
-                return obj
-            return self.get_connection(parent, child)
         if isinstance(obj, list_like_classes):
             return type(obj)(self.rebind_world_entities(item) for item in obj)
         if isinstance(obj, dict):
