@@ -43,7 +43,7 @@ from typing_extensions import Optional, Type
 from experiments.montessori.semantics import MontessoriShape, NoMatchingHoleError
 from experiments.montessori.world import MontessoriWorld, robot_installed
 from krrood.entity_query_language.backends import ProbabilisticBackend
-from krrood.utils import clear_memoization_cache
+from krrood.patterns.caching import clear_memoization_cache
 from semantic_digital_twin.adapters.multi_sim import MujocoActuator, MujocoSim
 from coraplex.datastructures.enums import Arms
 from semantic_digital_twin.collision_checking.collision_rules import (

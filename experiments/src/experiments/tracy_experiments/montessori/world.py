@@ -33,6 +33,7 @@ from typing_extensions import Dict, List
 
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
+    HOLE_NAME_BY_CATEGORY,
     HoleFootprint,
     extrude_polygon,
 )
@@ -66,7 +67,6 @@ from experiments.montessori.world import (
     _DRAWER_POSITIONS,
     _HANDLE_OFFSET,
     _HOLE_FOOTPRINTS,
-    _HOLE_KEY_BY_CATEGORY,
     _SHAPE_COLORS,
     _HoleSpec,
     _board_body,
@@ -212,7 +212,7 @@ def _build_hole_specs_tracy(
             circular_hole_count += 1
             key = f"circular_hole_{circular_hole_count}"
         else:
-            key = _HOLE_KEY_BY_CATEGORY[footprint.category]
+            key = HOLE_NAME_BY_CATEGORY[footprint.category]
         hole_specs.append(
             _hole_spec_from_footprint_tracy(footprint, key, board_position, board_top_z)
         )
