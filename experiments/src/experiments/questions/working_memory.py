@@ -45,7 +45,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world_description.connections import ActiveConnection
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import Color
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body, WorldEntity
 from typing_extensions import Any, ClassVar, Generic, List, Tuple, Type
 
 from experiments.questions.question import (
@@ -126,6 +126,23 @@ def has_a_shape(body: Body) -> bool:
     :param body: The body to judge.
     """
     return body.has_collision()
+
+
+@symbolic_function
+def stands_in_the_scene_of(entity: WorldEntity, robot: AbstractRobot) -> bool:
+    """
+    Whether a body or connection belongs to the world the robot stands in.
+
+    The symbol graph tracks every entity ever made, a piece taken out of a scene and one
+    never put in one included, and two of the same name in two worlds are equal by the
+    twin's account; a question is about the robot's own scene. An entity the graph only
+    remembers, handed out as None once it has been garbage collected, stands in no scene
+    at all.
+
+    :param entity: The body or connection to judge, or None for one that is gone.
+    :param robot: The robot whose scene it is.
+    """
+    return entity is not None and entity._world is robot._world
 
 
 class Side(StrEnum):
@@ -220,7 +237,11 @@ class ObjectsSeen(WorkingMemoryQuestion[List[Body]]):
         """
         body = variable(Body)
         return an(
-            entity(body).where(has_a_shape(body), not_(contains(source.bodies, body)))
+            entity(body).where(
+                stands_in_the_scene_of(body, source),
+                has_a_shape(body),
+                not_(contains(source.bodies, body)),
+            )
         )
 
     def ground_truth(self, source: AbstractRobot) -> List[Body]:
@@ -271,7 +292,9 @@ class ObjectColours(WorkingMemoryQuestion[List[Color]]):
         body = variable(Body)
         return an(
             entity(body.collision.shapes).where(
-                has_a_shape(body), not_(contains(source.bodies, body))
+                stands_in_the_scene_of(body, source),
+                has_a_shape(body),
+                not_(contains(source.bodies, body)),
             )
         )
 
@@ -331,7 +354,9 @@ class ObjectPlaces(WorkingMemoryQuestion[List[Pose]]):
         body = variable(Body)
         return an(
             entity(body.global_pose).where(
-                has_a_shape(body), not_(contains(source.bodies, body))
+                stands_in_the_scene_of(body, source),
+                has_a_shape(body),
+                not_(contains(source.bodies, body)),
             )
         )
 
@@ -397,6 +422,7 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]]):
         surface = variable(Body)
         return an(
             entity(surface).where(
+                stands_in_the_scene_of(surface, source),
                 has_a_shape(surface),
                 not_(contains(source.bodies, surface)),
                 is_supported_by(self.subject, surface),
@@ -499,6 +525,7 @@ class SideOfAnotherObject(WorkingMemoryQuestion[bool]):
         body = variable(Body)
         return an(
             entity(body).where(
+                stands_in_the_scene_of(body, source),
                 body == self.subject,
                 is_on_side_of(body, self.other, self.side, self.point_of_view),
             )
@@ -829,6 +856,7 @@ class HeldInTheHand(WorkingMemoryQuestion[bool]):
         held = variable(Body)
         return an(
             entity(held).where(
+                stands_in_the_scene_of(held, source),
                 held == self.subject,
                 contains(source.bodies, held.parent_kinematic_structure_entity),
             )
@@ -903,7 +931,9 @@ class PlaceOfOwnBody(WorkingMemoryQuestion[Pose]):
         own = variable(Body)
         return an(
             entity(own.global_pose).where(
-                contains(source.bodies, own), own.name == self.body_name
+                stands_in_the_scene_of(own, source),
+                contains(source.bodies, own),
+                own.name == self.body_name,
             )
         )
 
@@ -1002,7 +1032,11 @@ class NumberOfOwnBodies(NumberOfOwnParts):
         :param source: The robot the question is put to.
         """
         own = variable(Body)
-        return an(entity(own).where(contains(source.bodies, own)))
+        return an(
+            entity(own).where(
+                stands_in_the_scene_of(own, source), contains(source.bodies, own)
+            )
+        )
 
 
 @dataclass
@@ -1059,6 +1093,7 @@ class NumberOfOwnDegreesOfFreedom(NumberOfOwnParts):
         degree_of_freedom = variable(DegreeOfFreedom)
         return an(
             entity(degree_of_freedom).where(
+                stands_in_the_scene_of(connection, source),
                 contains(source.bodies, connection.parent),
                 contains(source.bodies, connection.child),
                 contains(connection.active_dofs, degree_of_freedom),

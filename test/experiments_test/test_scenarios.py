@@ -9,6 +9,7 @@ runs without a simulator, a robot or a controller.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from io import StringIO
 
 import pytest
 from typing_extensions import ClassVar, Sequence
@@ -31,7 +32,11 @@ from experiments.experiment_definitions import (
     NoMeasurementsError,
 )
 from experiments.scenarios.report import GoalReached, Report, TrialDuration
-from experiments.scenarios.runner import ScenarioRunner
+from experiments.scenarios.runner import (
+    ConsoleOperatorPrompt,
+    RecordedOperatorPrompt,
+    ScenarioRunner,
+)
 from experiments.scenarios.scenario import (
     Goal,
     Perturbation,
@@ -543,3 +548,126 @@ class TestReport:
 
         with pytest.raises(NoMeasurementsError):
             report.summarize(GoalReached())
+
+
+# %% a trial on the real robot asks a person to bring the perturbation about
+
+
+@dataclass
+class TrialStartKeepingRunner(ScenarioRunner[SortOnePiece, RecordedWorld]):
+    """
+    A runner that keeps the world of every trial it is told has started, the way an
+    observing runner starts its clock there.
+    """
+
+    started_worlds: list[RecordedWorld] = field(default_factory=list)
+    """
+    The worlds of the trials that started, in order.
+    """
+
+    def trial_started(self, scenario: SortOnePiece, world: RecordedWorld) -> None:
+        self.started_worlds.append(world)
+
+
+@dataclass
+class PromptReadingThePiece:
+    """
+    A prompt that reads, each time it is shown an instruction, whether the piece of the
+    trial's world has been pushed yet.
+    """
+
+    scenario: SortOnePiece
+    """
+    The scenario whose latest world is read.
+    """
+
+    piece_was_pushed_when_shown: list[bool] = field(default_factory=list)
+    """
+    What the world said each time an instruction was shown.
+    """
+
+    def show(self, instruction: str) -> None:
+        self.piece_was_pushed_when_shown.append(
+            self.scenario.built_worlds[-1].piece_was_pushed
+        )
+
+
+class TestPromptingTheOperator:
+    """
+    A trial on the real robot has no world to write a perturbation into, so the person
+    at the table is told what to do before the perturbation is applied.
+    """
+
+    def test_the_operator_is_shown_the_perturbations_own_instruction(self):
+        perturbation = PiecePushedAway(step=SortingStep.PUT_DOWN)
+        prompt = RecordedOperatorPrompt()
+
+        ScenarioRunner(operator_prompt=prompt).run_trial(
+            SortOnePiece(execution_type=ExecutionType.REAL),
+            perturbations=[perturbation],
+        )
+
+        assert prompt.shown == [perturbation.instruction_for_a_person()]
+
+    def test_a_simulated_trial_asks_nobody(self):
+        prompt = RecordedOperatorPrompt()
+
+        ScenarioRunner(operator_prompt=prompt).run_trial(
+            SortOnePiece(), perturbations=[PiecePushedAway(step=SortingStep.PUT_DOWN)]
+        )
+
+        assert prompt.shown == []
+
+    def test_the_operator_is_asked_before_the_perturbation_is_applied(self):
+        """
+        The instruction is what brings the change about on the robot, so it is shown
+        before the trial goes on as if the change had happened.
+        """
+        scenario = SortOnePiece(execution_type=ExecutionType.REAL)
+        prompt = PromptReadingThePiece(scenario=scenario)
+
+        ScenarioRunner(operator_prompt=prompt).run_trial(
+            scenario, perturbations=[PiecePushedAway(step=SortingStep.PUT_DOWN)]
+        )
+
+        assert prompt.piece_was_pushed_when_shown == [False]
+        [world] = scenario.built_worlds
+        assert world.piece_was_pushed
+
+    def test_the_console_prompt_prints_the_instruction_and_waits_for_a_line(self):
+        instruction = PiecePushedAway(
+            step=SortingStep.PUT_DOWN
+        ).instruction_for_a_person()
+        output = StringIO()
+        keyboard = StringIO("\n")
+
+        ConsoleOperatorPrompt(output=output, keyboard=keyboard).show(instruction)
+
+        assert instruction in output.getvalue()
+        assert keyboard.read() == ""
+
+
+class TestTrialStart:
+    """
+    A runner that observes a trial has to know when it started, not only when it ended.
+    """
+
+    def test_a_runner_is_told_of_the_trials_world_as_it_starts(self):
+        runner = TrialStartKeepingRunner(repetitions=2)
+        scenario = SortOnePiece()
+
+        runner.run(scenario)
+
+        assert runner.started_worlds == scenario.built_worlds
+
+    def test_a_trial_starts_before_any_of_its_steps_ran(self):
+        steps_when_started: list[list[SortingStep]] = []
+
+        @dataclass
+        class StepsAtStartRunner(ScenarioRunner[SortOnePiece, RecordedWorld]):
+            def trial_started(self, scenario: SortOnePiece, world: RecordedWorld):
+                steps_when_started.append(list(world.performed_steps))
+
+        StepsAtStartRunner().run_trial(SortOnePiece())
+
+        assert steps_when_started == [[]]
