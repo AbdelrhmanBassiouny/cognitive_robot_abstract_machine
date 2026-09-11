@@ -4,10 +4,12 @@ Running the trials a report is measured over.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 
-from typing_extensions import Generic, List, Sequence, TypeVar
+from typing_extensions import Generic, List, Protocol, Sequence, TextIO, TypeVar
 
+from coraplex.datastructures.enums import ExecutionType
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
 from experiments.experiment_definitions import DEFAULT_CONFIDENCE_LEVEL
@@ -35,6 +37,63 @@ ScenarioType = TypeVar("ScenarioType", bound=Scenario)
 The scenario a runner runs.
 """
 
+# %% telling the person at the table what to do
+
+
+class OperatorPrompt(Protocol):
+    """
+    Where a trial on the real robot shows the person at the table what to do.
+    """
+
+    def show(self, instruction: str) -> None:
+        """
+        Show one instruction, returning once it has been carried out.
+
+        :param instruction: What the person is asked to do.
+        """
+
+
+@dataclass
+class ConsoleOperatorPrompt:
+    """
+    Shows each instruction on the console and waits for the person to confirm it with a
+    line of input.
+    """
+
+    output: TextIO = field(default_factory=lambda: sys.stdout)
+    """
+    Where the instruction is written.
+    """
+
+    keyboard: TextIO = field(default_factory=lambda: sys.stdin)
+    """
+    Where the confirmation is read from.
+    """
+
+    def show(self, instruction: str) -> None:
+        self.output.write("%s\nPress enter once that is done. " % instruction)
+        self.output.flush()
+        self.keyboard.readline()
+
+
+@dataclass
+class RecordedOperatorPrompt:
+    """
+    Keeps every instruction it is shown and waits for nobody, for a run that has no
+    person at the table.
+    """
+
+    shown: List[str] = field(default_factory=list)
+    """
+    The instructions shown so far, in order.
+    """
+
+    def show(self, instruction: str) -> None:
+        self.shown.append(instruction)
+
+
+# %% the runner
+
 
 @dataclass
 class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
@@ -58,6 +117,12 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
     confidence_level: float = DEFAULT_CONFIDENCE_LEVEL
     """
     Two-sided confidence level the report's intervals hold at.
+    """
+
+    operator_prompt: OperatorPrompt = field(default_factory=RecordedOperatorPrompt)
+    """
+    Where a trial on the real robot tells the person at the table to bring a
+    perturbation about.
     """
 
     def run(
@@ -109,6 +174,7 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
                 execution_type=scenario.execution_type,
             )
         )
+        self.trial_started(scenario, world)
         try:
             for condition in conditions:
                 condition.apply(world)
@@ -119,6 +185,10 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
                 for perturbation in perturbations:
                     if perturbation.step is not step.name:
                         continue
+                    if scenario.execution_type is ExecutionType.REAL:
+                        self.operator_prompt.show(
+                            perturbation.instruction_for_a_person()
+                        )
                     perturbation.apply(world)
                     log.record(
                         PerturbationApplied(
@@ -146,13 +216,24 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
         self.trial_finished(scenario, trial)
         return trial
 
+    def trial_started(self, scenario: ScenarioType, world: WorldType) -> None:
+        """
+        Take note of a trial that has just started, before any of its steps runs.
+
+        A runner that observes what happens inside a trial overrides this to start
+        watching the world the trial runs in; this one does nothing.
+
+        :param scenario: The scenario the trial runs.
+        :param world: The world the trial is about to run in.
+        """
+
     def trial_finished(self, scenario: ScenarioType, trial: Trial) -> None:
         """
         Take note of a trial that has just finished.
 
-        A runner that keeps its trials somewhere overrides this; this one keeps them only
-        in the report it returns. Called as each trial ends rather than once the run is
-        over, so a run that dies keeps what it had finished.
+        A runner that keeps its trials somewhere overrides this; this one keeps them
+        only in the report it returns. Called as each trial ends rather than once the
+        run is over, so a run that dies keeps what it had finished.
 
         :param scenario: The scenario the trial ran.
         :param trial: The trial that has finished.
