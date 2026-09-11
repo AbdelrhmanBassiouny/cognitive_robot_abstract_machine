@@ -7,7 +7,7 @@ from coraplex.execution_environment import simulated_robot
 from coraplex.plans.executables import Executable
 from coraplex.plans.factories import execute_single
 from krrood.entity_query_language.backends import ProbabilisticBackend
-from krrood.utils import clear_memoization_cache
+from krrood.patterns.caching import clear_memoization_cache
 
 from experiments.montessori.insert_shape_action import InsertMontessoriShapeAction
 from experiments.montessori.semantics import MontessoriShape, NoMatchingHoleError

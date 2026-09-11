@@ -29,12 +29,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import List
+from typing_extensions import Dict, List
 
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
     HoleFootprint,
-    _extrude_polygon,
+    extrude_polygon,
 )
 from experiments.montessori.pieces import (
     CUBE_EDGE,
@@ -74,9 +74,6 @@ from experiments.montessori.world import (
     _body_with_visual_only_shape,
     _drawer_body,
     _hole_marker_shape,
-    _landing_region,
-    _landing_region_height,
-    _landing_region_position,
     _name,
 )
 from experiments.montessori.world2 import SPAWNED_SHAPE_CATEGORIES
@@ -252,7 +249,7 @@ def _measured_shape_body(name: PrefixedName, category: MontessoriShapeCategory) 
             )
         case MontessoriShapeCategory.TRIANGULAR_PRISM:
             boundary = equilateral_triangle_boundary(TRIANGULAR_PRISM_SIDE)
-            solid = _extrude_polygon(boundary, TRIANGULAR_PRISM_HEIGHT)
+            solid = extrude_polygon(boundary, TRIANGULAR_PRISM_HEIGHT)
             shape = Mesh.from_trimesh(mesh=solid)
             shape.color = color
     return _body_with_shape(name, shape)
@@ -309,7 +306,7 @@ class TracyMontessoriWorld(MontessoriWorld):
         self._hole_specs = _build_hole_specs_tracy(
             _HOLE_FOOTPRINTS, board_position, board_top_z
         )
-        landing_region_height = _landing_region_height(self.table_top_z, board_top_z)
+        holes_by_key: Dict[str, ShapeSortingHole] = {}
         for hole_spec in self._hole_specs:
             hole = ShapeSortingHole(
                 name=_name(hole_spec.key),
@@ -327,19 +324,7 @@ class TracyMontessoriWorld(MontessoriWorld):
             )
             self._spawn(hole, hole_spec.position)
             board.add(hole)
-
-            landing_region = _landing_region(
-                _name(f"{hole_spec.key}_landing_region"),
-                hole_spec.shape,
-                landing_region_height,
-            )
-            self._spawn_region(
-                landing_region,
-                _landing_region_position(
-                    hole_spec.position, self.table_top_z, landing_region_height
-                ),
-            )
-            self.landing_regions[hole_spec.key] = landing_region
+            holes_by_key[hole_spec.key] = hole
 
         for index, (drawer_x, drawer_y) in enumerate(_DRAWER_XY_TRACY, start=1):
             drawer_position = Point3(drawer_x, drawer_y, board_position.z)
@@ -372,6 +357,11 @@ class TracyMontessoriWorld(MontessoriWorld):
             self._spawn(handle, handle_position)
             drawer.add(handle)
 
+        self._give_every_hole_its_landing_region(
+            holes_by_key,
+            table_top_z=self.table_top_z,
+            board_top_z=board_top_z,
+        )
         return board
 
     def _build_shapes(self) -> None:
