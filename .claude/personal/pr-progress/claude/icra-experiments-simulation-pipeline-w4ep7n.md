@@ -1,3 +1,109 @@
+## #265: live shape and hole detection is wrong on the new 80 % pieces (2026-09-11, done, pushed)
+
+**Session.** https://claude.ai/code/session_0186xZo3eqCDVcqhi1E3LHdY -- resume here if
+anything breaks. Memory note `perception-position-offset-stopgap` holds the earlier
+diagnosis (live detections ~0.3 m toward the camera; extrinsics/intrinsics/frame_id/
+table height ruled out; stopgap only on `icra_final`).
+
+**The task, in the developer's words (2026-09-11).** "We working on fixing the perception
+detection of the shapes issue ... the sample images I showed you where the detections are
+wrong, the objects btw are new they are scaled down to 80 % so for example the cube side
+length is now 22.4 mm instead of 30 mm. Also the ground truth positions of the current
+situation is as follows all at the same x value of 79 cm while the y values are (cylinder
+10 cm, triangle 20 cm, rectangle 30 cm, cube 40 cm). We want to take captures now and
+save them with tests that compare against the ground truth. The board front left corner
+is at (99, 40) cm where the side with the drawers and handles are toward the shapes and
+it is fairly horizontal along the y axis (same x value in each horizontal (long) side).
+We need to find the issue in the hole detections and the shape detections and fix them.
+Also save this prompt here in the repo and add this conversation and session in the
+history so I can resume later if something happens."
+
+**Ground truth of the table as set up on 2026-09-11** (reference frame, metres):
+pieces all at x = 0.79: cylinder y = 0.10, triangular prism y = 0.20, rectangular prism
+y = 0.30, cube y = 0.40. Board front-left corner at (0.99, 0.40); the drawers-and-handles
+side faces the pieces; long sides run along y at one x each. Pieces are the new set at
+0.8 of the measured ones (cube 22.4 mm instead of 30 mm).
+
+**What the two screenshots (17:46, 17:55) show.** The board box is found, but the hole
+labels (`cube`, `cylinder`, `disk`, `triangular_prism`) sit on the wrong holes and only
+four or so holes are boxed; of the pieces on the table only the triangular prism is
+detected (green), the cyan cube and yellow rectangular prism get no box at all.
+
+**Uncommitted at session start** (files 18:24): `perception/live_camera.py` (`LiveCamera`,
+`CameraPoseLookup`) and `perception/capture_from_camera.py` (CLI writing one live look as
+a `SceneCapture`). `node.py` still has its own duplicate subscriptions/`TFWrapper`. No
+tests for either yet. No new capture written yet.
+
+**Found 2026-09-11 evening (root cause).** The published `table -> camera_link` transform
+(`iai_tracy_description/urdf/tracy.urdf.xacro`, commit `db06ecf` of 2026-04-30, "new
+calibration for camera_link", xyz `0.410542 -0.015143 0.932933` rpy `-0.046277 1.378820
+-0.050299`) is stale: the camera has physically moved since. Measured off the depth of
+*every* shipped capture and the new one alike: the table's normal is 22.9-23.0 deg off
+the optical axis (published: 11.0 deg) and the camera stands 0.892-0.894 m above the
+table (published 0.935). Projecting the robot's own gripper (TF `l_gripper_tool_frame`)
+into the picture with the published pose lands ~240 px above the real fingers; with the
+fitted pose it lands on them. Fitted pose in `map` (optical frame, 4x4) is saved in the
+scratchpad as `T_new.npy`; as a `camera_link` origin in the `table` frame it is
+xyz `0.4264 -0.0206 0.8938` rpy `0.0400 1.1716 0.0326` (tilt+height from the table plane,
+x/y from the gripper pixel, yaw kept from the URDF). *The URDF must be recalibrated; that
+is outside this repo.* With the fitted pose: the pieces deproject to x 0.788-0.793 and
+y 0.014/0.111/0.209/0.305 against the tape's 0.79 and 0/0.10/0.20/0.30 (corrected by the
+developer: cylinder 0, triangle 0.10, rectangle 0.20, cube 0.30; board front-left corner
+(0.99, 0.30)); the board is found at x 0.986-1.100, y 0.021-0.305 with the mesh at scale
+1.0 and all six holes on their openings. `BOARD_SCALE_AGAINST_THE_MESH = 0.865` is an
+artefact: the wrong tilt reads the board at 0.81 (x) x 0.92 (y) of its size, mean 0.865.
+The tuned workspace (`tracy_workspace.json`, max x 0.915) also excludes the true board.
+The new pieces are 0.8 of the old set (cube 22.4 per the developer; cylinder 22.4,
+rectangle 16x32, triangle side 29.6, ~24 tall) and a different colour: hue 98 (was 86,
+cyan) and 26 (was 21; note 26 is also the board's wood). With pose + scale 1.0 + a 0.8
+set with those hues, all four pieces are detected within 1 cm of the tape.
+
+**State at the end of the session.** `58eb1f2f4` on the branch, pushed to `bass` (with the
+bass key, see memory `git-push-needs-bass-key`); the other session's main merge
+(`7af6ce068`) merged in. Commits: `1655b0e42` LiveCamera + capture_from_camera (+11
+tests); `746f8ea3c` the camera pose, board scale, workspace, opening-from-measured-
+surface, seed reach 0.06, KnownPieceSet (FULL_SIZE_PIECES / SMALLER_PIECES), CaptureTruth
+with tape places, tape tests; `58eb1f2f4` to_json kwargs. Montessori suite in this venv
+(`--orm-build=never`, ignoring the two untracked leftover test files): 775 passed, 11
+xfailed, 0 failed. PR description **not** updated (no gh here); PR still a draft.
+
+**Recorded as known misses (strict xfail, owned by competing-explanations):** the
+cylinder standing *in* its hole on `tracy_pickup_demo` (a cube outline on the hole's rim
+explains the edges nearly as well; six `test_montessori_search_narrowing` tests read
+that cylinder and are xfailed with `CYLINDER_IN_ITS_HOLE_NOT_REPORTED`), and
+`stuck_cube_in_hole`'s table cylinder read as a cube (side edges favour the larger
+outline; `TABLE_PIECES_STILL_MISREAD`). Two lid cubes the old pose missed are found now
+and left `LID_PIECES_STILL_MISSED`.
+
+**Open for the developer.** (1) Recalibrate `camera_link` in `iai_tracy_description`
+(numbers above); until then the live node is ~0.2 m off in x -- do not resurrect the
+`icra_final` stopgap. (2) The lid measures ~73 mm above the table on every capture where
+`BOARD_SCALE.z` says 80 mm -- measure the board's height; if 73, LID_HEIGHT and the twin's
+board follow. (3) Confirm the smaller set's sizes: cube stated 22.4 (taken as given), the
+others 0.8 x the full-size ones (cylinder 22.4, rectangle 16x32, triangle side 29.6,
+~24 tall) -- read off the capture to about a millimetre. (4) Whether the narrowing
+demonstration should move to `scaled_pieces_in_a_row` (all four pieces found) instead of
+staying xfailed on `tracy_pickup_demo`. (5) Untracked leftovers still in the tree:
+`pickup_demo_perceived_board.py` + its test (collection error), `test_montessori_shape_bodies.py`,
+the 37 GB `.mcap` dir, `ganttchart.pdf`, `.mcp.json`, and an uncommitted edit to
+`semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql`.
+
+**Plan as executed.**
+1. Finish `LiveCamera`: `MontessoriPerceptionNode` reads through it; mocked tests for
+   `LiveCamera`/`write_capture`. Commit.
+2. Take captures off the live camera with `capture_from_camera.py`, ship them under
+   `resources/captures/`.
+3. Table-plane fit module + a test that every capture's depth agrees with its stated
+   pose (fails today); rewrite all seven captures' `reference_frame_T_camera` to the
+   fitted pose.
+4. Board mesh at its own size (drop 0.865); workspace re-tuned to reach the board.
+5. A known-piece *set* the pipeline is handed (old set for the shipped captures, the
+   0.8 set with its hues for the new capture and the live node).
+6. `CaptureTruth` with positions; ground-truth tests on `scaled_pieces_in_a_row`.
+7. Re-run the whole montessori suite; re-measure whatever the corrected pose moves.
+8. Update this note and the PR description; push; keep #265 a draft. Tell the developer
+   the URDF numbers.
+
 # #265 — integrated-simulation-pipeline (plan icra-foundation)
 
 ## Plan for this session (/plan-item-resolve, auto mode)
