@@ -330,7 +330,7 @@ def test_an_attempt_keeps_the_failure_observed_the_one_predicted_and_the_resolut
     assert attempt.predicted_failure is SortingFailureType.OUT_OF_REACH
     assert attempt.observed_failure is SortingFailureType.WRONG_HOLE
     assert attempt.resolution is FailureResolution.RETRIED
-    assert attempt.plan_id is not None
+    assert attempt._plan_id is not None
 
 
 # %% the vocabularies the model leaves to the items that own them
