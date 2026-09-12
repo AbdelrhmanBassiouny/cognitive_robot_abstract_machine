@@ -1,0 +1,14 @@
+{
+  "40": {
+    "points": [
+      "Names the parent branch's one behaviour change, for a reader who has not seen the fork.",
+      "Says what it deliberately does not do."
+    ]
+  },
+  "41": {
+    "title": "[DevTools] A title written for the upstream, not the fork",
+    "points": [
+      "The child branch, summarised for the upstream reviewer."
+    ]
+  }
+}
