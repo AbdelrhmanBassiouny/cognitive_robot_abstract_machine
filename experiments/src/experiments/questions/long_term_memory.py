@@ -33,9 +33,25 @@ from segmind.datastructures.events import (
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Any, ClassVar, Generic, List, Tuple
+from typing_extensions import (
+    Any,
+    ClassVar,
+    Generic,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+)
 
-from experiments.episodes.episode import RecordedTrial, Tick
+from experiments.episodes.episode import (
+    FailureResolution,
+    FailureType,
+    InsertionAttempt,
+    InsertionOutcome,
+    RecordedTrial,
+    Tick,
+)
 from experiments.episodes.long_term_memory import LongTermMemory
 from experiments.questions.question import (
     AnswerType,
@@ -46,6 +62,26 @@ from experiments.questions.question import (
     RememberedThings,
     RequiredFact,
 )
+
+# %% one event, and which episode detected it
+
+
+@dataclass(frozen=True)
+class EpisodeEvent:
+    """
+    One event a recorded episode detected, and the episode that detected it.
+    """
+
+    episode_identifier: str
+    """
+    Which run detected it.
+    """
+
+    event: DetectionEvent
+    """
+    What was detected.
+    """
+
 
 # %% what a question of this kind is asked of
 
@@ -104,6 +140,24 @@ class LongTermMemoryQuestion(
         return [
             event
             for trial in source.recall_trials(self.episode_identifier)
+            for tick in trial.ticks
+            for event in tick.events
+        ]
+
+    @staticmethod
+    def every_recorded_event(source: LongTermMemory) -> List[EpisodeEvent]:
+        """
+        Every event every recorded episode detected, each naming the episode that
+        detected it.
+
+        What ground truth is read from for a question spanning the whole corpus, the way
+        :meth:`recorded_events` is for a question about one run.
+
+        :param source: The long-term memory holding what actually happened.
+        """
+        return [
+            EpisodeEvent(episode_identifier=trial.episode.identifier, event=event)
+            for trial in source.recall_every_trial()
             for tick in trial.ticks
             for event in tick.events
         ]
@@ -350,7 +404,35 @@ class ObjectsTheRobotMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
 
 
 @dataclass
-class PickedUpInTheEpisode(LongTermMemoryQuestion[bool]):
+class QuestionAboutOneObject(
+    LongTermMemoryQuestion[AnswerType], Generic[AnswerType], ABC
+):
+    """
+    A question about one named object of a recorded run.
+    """
+
+    object_name: str
+    """
+    What the object the question is about was called.
+    """
+
+    @classmethod
+    def asked_of(cls, things: RememberedThings) -> List[QuestionAboutOneObject]:
+        """
+        Asked about the one object the run singles out.
+
+        :param things: What the run fills in for the questions about one thing.
+        """
+        return [
+            cls(
+                episode_identifier=things.episode_identifier,
+                object_name=things.object_name,
+            )
+        ]
+
+
+@dataclass
+class PickedUpInTheEpisode(QuestionAboutOneObject[bool]):
     """
     Whether one object was picked up during one past run.
     """
@@ -364,25 +446,6 @@ class PickedUpInTheEpisode(LongTermMemoryQuestion[bool]):
     """
     Nothing but the pick-ups the run recorded.
     """
-
-    object_name: str
-    """
-    What the object the question is about was called.
-    """
-
-    @classmethod
-    def asked_of(cls, things: RememberedThings) -> List[PickedUpInTheEpisode]:
-        """
-        Asked about the one object the run singles out.
-
-        :param things: What the run fills in for the questions about one thing.
-        """
-        return [
-            cls(
-                episode_identifier=things.episode_identifier,
-                object_name=things.object_name,
-            )
-        ]
 
     @property
     def english(self) -> str:
@@ -432,6 +495,344 @@ class PickedUpInTheEpisode(LongTermMemoryQuestion[bool]):
             and event.tracked_object.name.name == self.object_name
             for event in self.recorded_events(source)
         )
+
+
+# %% what the whole corpus of episodes says
+
+
+@dataclass(frozen=True)
+class FailedInsertion:
+    """
+    One insertion a recorded episode attempted and did not get through its hole.
+    """
+
+    episode_identifier: str
+    """
+    Which run attempted it.
+    """
+
+    failure_type: Optional[FailureType]
+    """
+    The failure read off what happened, or None if none was typed.
+    """
+
+    resolution: Optional[FailureResolution]
+    """
+    What was done afterwards, or None if nothing was recorded.
+    """
+
+    @property
+    def ordering(self) -> Tuple[str, str, str]:
+        """
+        What sorts these into one order whether or not a failure was typed, so an answer
+        and its ground truth are read in the same order.
+        """
+        return (
+            self.episode_identifier,
+            str(self.failure_type),
+            str(self.resolution),
+        )
+
+    @classmethod
+    def over(cls, trials: Sequence[RecordedTrial]) -> List[FailedInsertion]:
+        """
+        Every insertion the given trials attempted and did not get through, each named
+        once.
+
+        :param trials: The recorded trials to read.
+        """
+        found = {
+            cls(
+                episode_identifier=trial.episode.identifier,
+                failure_type=attempt.observed_failure,
+                resolution=attempt.resolution,
+            )
+            for trial in trials
+            for attempt in trial.insertion_attempts
+            if attempt.outcome is InsertionOutcome.DID_NOT_FALL_THROUGH
+        }
+        return sorted(found, key=lambda failed: failed.ordering)
+
+
+@dataclass
+class EpisodesWhereInsertionFailed(LongTermMemoryQuestion[List[FailedInsertion]]):
+    """
+    Which past runs attempted an insertion that did not get through, how each failed and
+    what was done about it.
+    """
+
+    bucket: ClassVar[Bucket] = Bucket.TEMPORAL_AND_AGENCY
+    """
+    What happened and who did what about it, asked of every run at once.
+    """
+
+    required_facts: ClassVar[Tuple[RequiredFact, ...]] = ()
+    """
+    None, because this is scored over every recorded episode rather than over the one it
+    is asked of: what that one run happened to represent does not decide whether the
+    corpus can answer.
+    """
+
+    @property
+    def english(self) -> str:
+        """
+        The question as a person would ask it.
+        """
+        return "In which episodes did an insertion fail, and what was done about it?"
+
+    def query(self, source: LongTermMemory) -> Query:
+        """
+        Every trial of every episode that attempted an insertion which did not fall
+        through.
+
+        Selects the trial rather than the attempt, because the episode a failure belongs
+        to is reached through the trial and long-term memory answers with one object per
+        row.
+
+        :param source: The long-term memory the question is put to.
+        """
+        trial = variable(RecordedTrial, domain=[])
+        attempt = variable(InsertionAttempt, domain=[])
+        return an(
+            entity(trial).where(
+                contains(trial.insertion_attempts, attempt),
+                attempt.outcome == InsertionOutcome.DID_NOT_FALL_THROUGH,
+            )
+        )
+
+    def ask(self, source: LongTermMemory) -> List[FailedInsertion]:
+        """
+        The failures the found trials attempted.
+
+        :param source: The long-term memory the question is put to.
+        """
+        return FailedInsertion.over(self.solutions(source))
+
+    def ground_truth(self, source: LongTermMemory) -> List[FailedInsertion]:
+        """
+        The failures every recorded trial attempted, traversed off the trials directly.
+
+        :param source: The long-term memory holding what actually happened.
+        """
+        return FailedInsertion.over(source.recall_every_trial())
+
+
+@dataclass
+class HowOftenWasThePieceMoved(QuestionAboutOneObject[int]):
+    """
+    How many times one object moved, counted over every past run.
+    """
+
+    bucket: ClassVar[Bucket] = Bucket.TEMPORAL_AND_AGENCY
+    """
+    How often something happened, asked of every run at once.
+    """
+
+    required_facts: ClassVar[Tuple[RequiredFact, ...]] = ()
+    """
+    None, for the same reason :class:`EpisodesWhereInsertionFailed` declares none.
+    """
+
+    @property
+    def english(self) -> str:
+        """
+        The question as a person would ask it.
+        """
+        return "How often was the %s moved?" % self.object_name
+
+    def query(self, source: LongTermMemory) -> Query:
+        """
+        Every motion of the named object any episode recorded.
+
+        Selects the motions rather than counting them in the query, the way the
+        degrees-of-freedom question does: long-term memory answers with the objects a
+        run wrote, so an aggregate has no way back through it.
+
+        :param source: The long-term memory the question is put to.
+        """
+        trial = variable(RecordedTrial, domain=[])
+        tick = variable(Tick, domain=[])
+        motion = variable(MotionEvent, domain=[])
+        return an(
+            entity(motion).where(
+                contains(trial.ticks, tick),
+                contains(tick.events, motion),
+                motion.tracked_object.name.name == self.object_name,
+            )
+        )
+
+    def ask(self, source: LongTermMemory) -> int:
+        """
+        How many motions came back.
+
+        :param source: The long-term memory the question is put to.
+        """
+        return len(self.solutions(source))
+
+    def ground_truth(self, source: LongTermMemory) -> int:
+        """
+        How many motions of the named object the corpus recorded, counted off the trials
+        directly.
+
+        :param source: The long-term memory holding what actually happened.
+        """
+        return len(
+            [
+                detected
+                for detected in self.every_recorded_event(source)
+                if self.is_a_motion_of_the_object(detected)
+            ]
+        )
+
+    def is_a_motion_of_the_object(self, detected: EpisodeEvent) -> bool:
+        """
+        Whether one recorded event is a motion of the object this question is about.
+
+        :param detected: The event to read.
+        """
+        return (
+            isinstance(detected.event, MotionEvent)
+            and detected.event.tracked_object.name.name == self.object_name
+        )
+
+
+@dataclass
+class QuestionAboutPickingOneObjectUp(
+    QuestionAboutOneObject[AnswerType], Generic[AnswerType], ABC
+):
+    """
+    A question answered from the pick-ups of one object the whole corpus recorded.
+    """
+
+    required_facts: ClassVar[Tuple[RequiredFact, ...]] = ()
+    """
+    None, for the same reason :class:`EpisodesWhereInsertionFailed` declares none.
+    """
+
+    def episodes_that_picked_it_up(self, source: LongTermMemory) -> Set[str]:
+        """
+        Which recorded episodes detected a pick-up of the object this question is about,
+        traversed off the trials directly.
+
+        :param source: The long-term memory holding what actually happened.
+        """
+        return {
+            detected.episode_identifier
+            for detected in self.every_recorded_event(source)
+            if isinstance(detected.event, PickUpEvent)
+            and detected.event.tracked_object.name.name == self.object_name
+        }
+
+
+@dataclass
+class EpisodesWhereThePieceWasPickedUp(QuestionAboutPickingOneObjectUp[List[str]]):
+    """
+    Which past runs picked one object up.
+    """
+
+    bucket: ClassVar[Bucket] = Bucket.TEMPORAL_AND_AGENCY
+    """
+    Who did what, asked of every run at once.
+    """
+
+    @property
+    def english(self) -> str:
+        """
+        The question as a person would ask it.
+        """
+        return "In which episodes did you pick the %s up?" % self.object_name
+
+    def query(self, source: LongTermMemory) -> Query:
+        """
+        The episode of every trial whose ticks recorded a pick-up of the named object.
+
+        :param source: The long-term memory the question is put to.
+        """
+        trial = variable(RecordedTrial, domain=[])
+        tick = variable(Tick, domain=[])
+        pick_up = variable(PickUpEvent, domain=[])
+        return an(
+            entity(trial.episode).where(
+                contains(trial.ticks, tick),
+                contains(tick.events, pick_up),
+                pick_up.tracked_object.name.name == self.object_name,
+            )
+        )
+
+    def ask(self, source: LongTermMemory) -> List[str]:
+        """
+        The episodes that came back, each named once and in one order.
+
+        :param source: The long-term memory the question is put to.
+        """
+        return sorted({episode.identifier for episode in self.solutions(source)})
+
+    def ground_truth(self, source: LongTermMemory) -> List[str]:
+        """
+        The episodes whose recorded events name a pick-up of the object, traversed off
+        the trials directly.
+
+        :param source: The long-term memory holding what actually happened.
+        """
+        return sorted(self.episodes_that_picked_it_up(source))
+
+
+@dataclass
+class HasThisHappenedBefore(QuestionAboutPickingOneObjectUp[bool]):
+    """
+    Whether one object was picked up in a run other than the one being asked about.
+    """
+
+    bucket: ClassVar[Bucket] = Bucket.TEMPORAL_AND_AGENCY
+    """
+    Whether something has happened at all, asked of every other run at once.
+    """
+
+    @property
+    def english(self) -> str:
+        """
+        The question as a person would ask it.
+        """
+        return "Have you picked the %s up in an episode other than %s?" % (
+            self.object_name,
+            self.episode_identifier,
+        )
+
+    def query(self, source: LongTermMemory) -> Query:
+        """
+        The episode of every trial other than this question's own whose ticks recorded a
+        pick-up of the named object.
+
+        :param source: The long-term memory the question is put to.
+        """
+        trial = variable(RecordedTrial, domain=[])
+        tick = variable(Tick, domain=[])
+        pick_up = variable(PickUpEvent, domain=[])
+        return an(
+            entity(trial.episode).where(
+                trial.episode.identifier != self.episode_identifier,
+                contains(trial.ticks, tick),
+                contains(tick.events, pick_up),
+                pick_up.tracked_object.name.name == self.object_name,
+            )
+        )
+
+    def ask(self, source: LongTermMemory) -> bool:
+        """
+        Whether any other episode picked the object up.
+
+        :param source: The long-term memory the question is put to.
+        """
+        return bool(self.solutions(source))
+
+    def ground_truth(self, source: LongTermMemory) -> bool:
+        """
+        Whether any episode other than this question's own recorded a pick-up of the
+        object, traversed off the trials directly.
+
+        :param source: The long-term memory holding what actually happened.
+        """
+        return bool(self.episodes_that_picked_it_up(source) - {self.episode_identifier})
 
 
 # %% self-model

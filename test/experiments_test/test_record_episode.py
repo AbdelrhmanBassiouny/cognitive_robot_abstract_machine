@@ -26,10 +26,12 @@ from experiments.montessori.record_episode import (
     RecordingOption,
     ScenarioChoice,
     SceneChoice,
+    another_piece_than,
     main,
     parse_arguments,
     scene_of,
 )
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.results_database import (
     DATABASE_URI_ENVIRONMENT_VARIABLE,
     IN_MEMORY_DATABASE_URI,
@@ -280,12 +282,35 @@ def test_a_built_scene_can_find_its_pieces_too():
 
 
 @pytest.mark.parametrize(
-    "layout", [LayoutChoice.RANDOMIZED, LayoutChoice.NEARLY_AMBIGUOUS]
+    "layout",
+    [LayoutChoice.RANDOMIZED, LayoutChoice.PARTIAL, LayoutChoice.NEARLY_AMBIGUOUS],
 )
 def test_a_built_scene_draws_its_layout(layout: LayoutChoice):
     arguments = parse_arguments([RecordingOption.LAYOUT, layout.value])
 
     assert type(arguments.piece_layout()) is PieceLayout
+
+
+def test_a_partial_layout_stands_the_acted_on_piece_and_one_other():
+    arguments = parse_arguments([RecordingOption.LAYOUT, LayoutChoice.PARTIAL.value])
+
+    layout = arguments.piece_layout()
+
+    assert layout.categories == {
+        arguments.piece,
+        another_piece_than(arguments.piece),
+    }
+    assert layout.placements[0].piece.category is arguments.piece
+
+
+def test_a_randomized_layout_stands_every_piece_of_the_set():
+    """
+    The partial layout is the one that leaves pieces out, so the drawn layout beside it
+    has to keep standing the whole set.
+    """
+    arguments = parse_arguments([RecordingOption.LAYOUT, LayoutChoice.RANDOMIZED.value])
+
+    assert arguments.piece_layout().categories == set(KNOWN_PIECE_BY_CATEGORY)
 
 
 def test_a_built_scene_cannot_run_on_the_robot():

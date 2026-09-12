@@ -275,9 +275,4 @@ def test_every_question_of_the_long_term_set_answers_its_own_ground_truth(
         )
     )
     for question in question_set.questions:
-        answered = question.ask(memory)
-        true = question.ground_truth(memory)
-        if isinstance(answered, list):
-            assert names(answered) == names(true), question.english
-            continue
-        assert answered == true, question.english
+        assert question.matches_ground_truth(memory), question.english

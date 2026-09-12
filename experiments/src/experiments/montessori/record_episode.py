@@ -95,8 +95,26 @@ class LayoutChoice(StrEnum):
     """
 
     RANDOMIZED = "randomized"
+    """
+    Every piece of the set, drawn from the run's seed.
+    """
+
+    PARTIAL = "partial"
+    """
+    Only the piece the run acts on and one other, so the scene the questions single a
+    piece out of holds two pieces rather than the whole set.
+    """
+
     NEARLY_AMBIGUOUS = "nearly-ambiguous"
+    """
+    Every piece of the set, with the cube and the cylinder drawn at one depth.
+    """
+
     AS_FOUND = "as-found"
+    """
+    Wherever the pieces already stand, which is all a scene nobody here lays out can
+    say.
+    """
 
 
 class SceneChoice(StrEnum):
@@ -469,6 +487,12 @@ class RecordingArguments:
         if self.layout is LayoutChoice.AS_FOUND:
             return LayoutAsFound()
         area = layout_area_on_tracys_table()
+        if self.layout is LayoutChoice.PARTIAL:
+            return PieceLayout.partial(
+                seed=self.seed,
+                area=area,
+                categories=(self.piece, another_piece_than(self.piece)),
+            )
         if self.layout is LayoutChoice.NEARLY_AMBIGUOUS:
             return PieceLayout.nearly_ambiguous(
                 seed=self.seed, area=area, viewpoint=WHERE_TRACY_LOOKS_FROM
