@@ -33,6 +33,19 @@ The two runs it exists for both verified by rendering: the robot's own pick-up
 gets its plan item picked out in amber; the shoved piece gets a plan that was
 handling something else, nothing picked out.
 
+5. [x] 1a7849b, ca78610, 190551e - the user's five corrections:
+       - the "no" run is now the SAME piece and the SAME PickUpAction; what
+         differs is timing (robot idle at 3s, its pick-up runs 6-9s). It was
+         wrongly distinguished by the plan acting on a different piece.
+       - the ghost is a real see-through BODY in the scene (copy of the
+         object's own shapes), not an overlay composite. SceneRender.picked_out
+         + everything singled out is outlined in its own colour.
+       - camera images now exist: SimulatedFramesAround renders the twin's own
+         camera before/after when the run kept no rosbag.
+       - SceneRender.framed_on; the pose-change panel frames on object+ghost.
+       - BACKGROUND_COLOR default changed from see-through to opaque darker
+         grey (a real scene drawn see-through is unreadable).
+
 ## Outstanding / for the next session
 
 - CI has not reported. Nothing subscribed, no check-in armed, per my own rules.
@@ -58,6 +71,26 @@ handling something else, nothing picked out.
 - Drive-by fix still carried: MujocoEntityNotFoundError was not a @dataclass.
 - Example card PNGs still not committed (experiments/doc tracks only
   references.bib); they go to the session instead.
+
+## Rendering the REAL scene in this sandbox (the big win this session)
+
+Both cards were drawn end to end from the real Tracy + Montessori board, with
+a real coraplex PickUpAction and real segmind events. To redo it:
+- clone code-iai/iai_tracy and CHECK OUT THE ros2-jazzy BRANCH (main's xacro
+  produces robotiq_arg2f_* link names; semantic_digital_twin's Tracy binding
+  expects robotiq_85_*, which only ros2-jazzy produces).
+- clone UniversalRobots/Universal_Robots_ROS2_Description (ur_description) and
+  PickNikRobotics/ros2_robotiq_gripper (robotiq_description).
+- symlink all three into /home/user/ament_ws/share/<pkg>, touch marker files
+  in share/ament_index/resource_index/packages/, then set
+  AMENT_PREFIX_PATH=/home/user/ament_ws and
+  ROS_PACKAGE_PATH=<share>/iai_tracy_description:<share>/ur_description:<share>/robotiq_description
+  (ROS_PACKAGE_PATH entries must END in the package name).
+- pip install xacro pycollada vhacdx transforms3d; stub ament_index_python,
+  geometry_msgs et al, tf2_py, tf2_ros, rclpy_message_converter; the rclpy stub
+  now manufactures any rclpy.<submodule> via a meta-path finder.
+- build with TracyOnItsOwnTable().build(Tracy); scratch scripts are in the
+  session scratchpad (real_scene.py, real_card.py).
 
 ## Sandbox notes (not committed, would need redoing in a fresh session)
 
@@ -239,6 +272,19 @@ stacks on #265, which owns the recording pipeline the cards read.
 All four "done when" cards exist and are tested: ObjectsSeen,
 SideOfAnotherObject, PickedUpRecently, NumberOfOwnDegreesOfFreedom.
 
+5. [x] 1a7849b, ca78610, 190551e - the user's five corrections:
+       - the "no" run is now the SAME piece and the SAME PickUpAction; what
+         differs is timing (robot idle at 3s, its pick-up runs 6-9s). It was
+         wrongly distinguished by the plan acting on a different piece.
+       - the ghost is a real see-through BODY in the scene (copy of the
+         object's own shapes), not an overlay composite. SceneRender.picked_out
+         + everything singled out is outlined in its own colour.
+       - camera images now exist: SimulatedFramesAround renders the twin's own
+         camera before/after when the run kept no rosbag.
+       - SceneRender.framed_on; the pose-change panel frames on object+ghost.
+       - BACKGROUND_COLOR default changed from see-through to opaque darker
+         grey (a real scene drawn see-through is unreadable).
+
 ## Outstanding / for the next session
 
 - CI has not reported yet. Nothing has been subscribed and no check-in is armed,
@@ -258,6 +304,26 @@ SideOfAnotherObject, PickedUpRecently, NumberOfOwnDegreesOfFreedom.
   references.bib); the PR description carries the .typ and a description instead,
   and the images went to the session. Say the word if you want them committed so
   the description can show them inline.
+
+## Rendering the REAL scene in this sandbox (the big win this session)
+
+Both cards were drawn end to end from the real Tracy + Montessori board, with
+a real coraplex PickUpAction and real segmind events. To redo it:
+- clone code-iai/iai_tracy and CHECK OUT THE ros2-jazzy BRANCH (main's xacro
+  produces robotiq_arg2f_* link names; semantic_digital_twin's Tracy binding
+  expects robotiq_85_*, which only ros2-jazzy produces).
+- clone UniversalRobots/Universal_Robots_ROS2_Description (ur_description) and
+  PickNikRobotics/ros2_robotiq_gripper (robotiq_description).
+- symlink all three into /home/user/ament_ws/share/<pkg>, touch marker files
+  in share/ament_index/resource_index/packages/, then set
+  AMENT_PREFIX_PATH=/home/user/ament_ws and
+  ROS_PACKAGE_PATH=<share>/iai_tracy_description:<share>/ur_description:<share>/robotiq_description
+  (ROS_PACKAGE_PATH entries must END in the package name).
+- pip install xacro pycollada vhacdx transforms3d; stub ament_index_python,
+  geometry_msgs et al, tf2_py, tf2_ros, rclpy_message_converter; the rclpy stub
+  now manufactures any rclpy.<submodule> via a meta-path finder.
+- build with TracyOnItsOwnTable().build(Tracy); scratch scripts are in the
+  session scratchpad (real_scene.py, real_card.py).
 
 ## Sandbox notes (not committed, would need redoing in a fresh session)
 
