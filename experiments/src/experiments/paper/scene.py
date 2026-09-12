@@ -317,6 +317,15 @@ class SceneRender:
     Whether each thing the answer names is written over in the picture.
     """
 
+    framed_on: Tuple[KinematicStructureEntity, ...] = ()
+    """
+    What the picture is framed on when it places its own camera, or nothing to frame the
+    whole world.
+
+    A real scene stands on a floor far wider than the table its work happens on, and a
+    camera placed around all of it leaves the answer a few pixels across.
+    """
+
     picked_out: Tuple[PickedOut, ...] = ()
     """
     Anything else drawn in a colour of its own rather than in the highlight or the fade.
@@ -413,14 +422,49 @@ class SceneRender:
 
     def bounds(self) -> np.ndarray:
         """
-        The corners of the box the world's geometry stands in.
+        The corners of the box the picture is framed around: what :attr:`framed_on`
+        names, or the whole world's geometry where it names nothing.
 
-        :raises NothingToDrawError: If the world holds no geometry.
+        :raises NothingToDrawError: If there is no geometry to frame.
         """
+        if self.framed_on:
+            return self._bounds_of(self.framed_on)
         bounds = RayTracer(self.world).scene.bounds
         if bounds is None:
             raise NothingToDrawError(world=self.world)
         return np.asarray(bounds)
+
+    def _bounds_of(self, entities: Sequence[KinematicStructureEntity]) -> np.ndarray:
+        """
+        The corners of the box the given things stand in, in the world root frame.
+
+        :param entities: What to frame around.
+        :raises NothingToDrawError: If none of them states any geometry.
+        """
+        corners = [corner for entity in entities for corner in self._corners_of(entity)]
+        if not corners:
+            raise NothingToDrawError(world=self.world)
+        standing_in = np.vstack(corners)
+        return np.vstack((standing_in.min(axis=0), standing_in.max(axis=0)))
+
+    def _corners_of(self, entity: KinematicStructureEntity) -> List[np.ndarray]:
+        """
+        The eight corners of one thing's own box, placed in the world root frame.
+
+        :param entity: The thing to measure.
+        """
+        if entity.collision is None or not entity.collision.shapes:
+            return []
+        lowest, highest = np.asarray(entity.collision.combined_mesh.bounds)
+        root_T_entity = self.world.compute_forward_kinematics_np(
+            self.world.root, entity
+        )
+        return [
+            (root_T_entity @ np.array([x, y, z, 1.0]))[:3]
+            for x in (lowest[0], highest[0])
+            for y in (lowest[1], highest[1])
+            for z in (lowest[2], highest[2])
+        ]
 
     def is_lit(self) -> bool:
         """

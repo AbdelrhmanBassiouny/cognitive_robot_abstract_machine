@@ -36,6 +36,7 @@ from experiments.episodes.episode import (
 )
 from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import PanelKind
+from experiments.paper.scene import PointOfView
 from experiments.paper.plan_timeline import PlanTimeline
 from experiments.paper.query_card import (
     EventAgainstThePlanCard,
@@ -45,7 +46,10 @@ from experiments.paper.query_card import (
 from experiments.paper.run_plan import RunPlan
 from experiments.questions.working_memory import PickedUpRecently
 from experiments.scenarios.trial import TrialOutcome
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.world_entity import Body
@@ -115,6 +119,10 @@ def scene() -> World:
         world.add_connection(
             Connection6DoF.create_with_dofs(world=world, parent=stands, child=loose)
         )
+    PointOfView(
+        body=world.root,
+        pose=HomogeneousTransformationMatrix.from_xyz_rpy(x=-1.5, z=0.8, pitch=0.5),
+    ).camera()
     return world
 
 
@@ -385,19 +393,35 @@ def test_both_runs_are_drawn_as_cards(
 
 
 @needs_a_renderer
-def test_a_simulated_run_is_drawn_without_the_camera(
+def test_a_simulated_run_shows_what_the_twins_camera_saw(
     the_robot_picked_it_up: RecordedTrial, tmp_path: Path
 ) -> None:
     """
-    Only a run on the robot records a camera, so a simulated one is drawn with the three
-    levels it does have rather than failing on the one it does not.
+    A simulated run keeps no recording, but its robot still looked through a camera --
+    the one the twin states -- so the camera level is rendered rather than left out.
     """
     [written] = EventAgainstThePlanCard().write(the_robot_picked_it_up, tmp_path)
     assert set(written.panel_paths) == {
         PanelKind.TIMELINE,
         PanelKind.PLAN_TIMELINE,
+        PanelKind.CAMERA_BEFORE_AND_AFTER,
         PanelKind.POSE_CHANGE,
     }
+
+
+@needs_a_renderer
+def test_a_run_whose_twin_states_no_camera_shows_no_camera_level(
+    a_person_shoved_it: RecordedTrial, scene: World, tmp_path: Path
+) -> None:
+    """
+    A twin that states no camera says nothing about what was looked at, so that level is
+    left out rather than invented.
+    """
+    scene.root.simulator_additional_properties.clear()
+
+    [written] = EventAgainstThePlanCard().write(a_person_shoved_it, tmp_path)
+
+    assert PanelKind.CAMERA_BEFORE_AND_AFTER not in written.panel_paths
 
 
 @needs_a_renderer
@@ -430,13 +454,14 @@ def test_every_level_is_written_beside_the_stacked_figure(
 
 @needs_a_renderer
 def test_a_level_the_run_recorded_nothing_for_keeps_its_place(
-    a_person_shoved_it: RecordedTrial, tmp_path: Path
+    a_person_shoved_it: RecordedTrial, scene: World, tmp_path: Path
 ) -> None:
     """
-    A simulated run records no camera, so that level has no picture -- and it is still
-    stacked in its own place, because a reader shown three levels of four cannot tell
-    whether the fourth was left out or never existed.
+    A run whose twin states no camera has nothing to draw that level from -- and it is
+    still stacked in its own place, because a reader shown three levels of four cannot
+    tell whether the fourth was left out or never existed.
     """
+    scene.root.simulator_additional_properties.clear()
     card = EventAgainstThePlanCard()
 
     [written] = card.write(a_person_shoved_it, tmp_path)

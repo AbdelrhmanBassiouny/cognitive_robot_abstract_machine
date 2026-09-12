@@ -31,7 +31,12 @@ from experiments.paper.figure import FigureFile
 from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import CardPanel, PanelKind
 from experiments.paper.plan_timeline import PlanTimeline
-from experiments.paper.pose_change import PoseChange, PoseChangeRender
+from experiments.paper.pose_change import (
+    PoseChange,
+    PoseChangeRender,
+    SimulatedFramesAround,
+    can_be_stood_somewhere_else,
+)
 from experiments.paper.scene import PointOfView, SceneRender
 from experiments.paper.run_plan import plans_of
 from experiments.paper.timeline import EventTimeline
@@ -555,10 +560,9 @@ class QueryCard(ABC):
             return None
         world = self.world_of(trial)
         subject = world.get_body_by_name(change.subject.name.name)
-        render = PoseChangeRender(world=world)
-        if not render.can_be_stood_somewhere_else(subject.parent_connection):
+        if not can_be_stood_somewhere_else(subject.parent_connection):
             return None
-        return render.of(
+        return PoseChangeRender(world=world).of(
             PoseChange(subject=subject, before=change.before, after=change.after)
         )
 
@@ -590,24 +594,89 @@ class QueryCard(ABC):
         artifacts: Optional[EpisodeArtifacts],
     ) -> Optional[CardPanel]:
         """
-        What that camera saw either side of the answered event. None where the run
-        recorded none, or answered no event to take the frames around.
+        What the robot's camera saw either side of the answered event.
+
+        A run on the robot kept a recording, so the two frames are read back out of it. A
+        simulated run kept none, and its camera is the one the twin states, so what it saw
+        is rendered from the twin instead. None where the run answered no event to take
+        the frames around, or where neither camera is there to look through.
 
         :param trial: The trial the query was asked during.
         :param query: The query this card shows.
         :param artifacts: The episode's own files, or None.
         """
-        if artifacts is None:
-            return None
         answered = self.emphasise(query.question, trial)
         if not answered:
             return None
+        recorded = self._recorded_frames_around(answered[0], trial, artifacts, query)
+        if recorded is not None:
+            return recorded
+        return self._rendered_frames_around(answered[0], trial)
+
+    def _recorded_frames_around(
+        self,
+        answered: DetectionEvent,
+        trial: RecordedTrial,
+        artifacts: Optional[EpisodeArtifacts],
+        query: RecordedQuery,
+    ) -> Optional[CardPanel]:
+        """
+        The two frames read out of the recording a run on the robot kept, or None where
+        it kept none.
+
+        :param answered: The event the frames are taken either side of.
+        :param trial: The trial it was reported in.
+        :param artifacts: The episode's own files, or None.
+        :param query: The query this card shows.
+        """
+        if artifacts is None:
+            return None
         either_side = BagFramesAround(
             artifacts=artifacts,
-            moment=self.reported_at(answered[0], trial, query.moment),
+            moment=self.reported_at(answered, trial, query.moment),
             trial_duration=trial.duration,
         )
         return either_side if either_side.was_recorded else None
+
+    def _rendered_frames_around(
+        self, answered: DetectionEvent, trial: RecordedTrial
+    ) -> Optional[CardPanel]:
+        """
+        The two looks the twin's own camera takes either side of the event, for a run
+        that kept no recording.
+
+        :param answered: The event the looks are taken either side of.
+        :param trial: The trial it was reported in.
+        """
+        world = self.world_of(trial)
+        camera = self.camera_of(world)
+        change = PoseChange.around(answered, trial)
+        if camera is None or change is None:
+            return None
+        subject = world.get_body_by_name(change.subject.name.name)
+        if not can_be_stood_somewhere_else(subject.parent_connection):
+            return None
+        return SimulatedFramesAround(
+            world=world,
+            change=PoseChange(
+                subject=subject, before=change.before, after=change.after
+            ),
+            camera=camera,
+        )
+
+    @staticmethod
+    def camera_of(world: World) -> Optional[MujocoCamera]:
+        """
+        The camera the twin states, which is what a simulated run's robot looked through.
+
+        :param world: The twin the run happened in.
+        :return: The first camera the world states, or None where it states none.
+        """
+        for entity in world.kinematic_structure_entities:
+            for stated in entity.simulator_additional_properties:
+                if isinstance(stated, MujocoCamera):
+                    return stated
+        return None
 
     @staticmethod
     def reported_at(

@@ -428,3 +428,52 @@ def test_a_point_of_view_stands_where_its_pose_puts_it(
         body=body_named(scene_with_two_things, ANSWERED_NAME), pose=stood_at
     ).camera()
     assert camera.position == pytest.approx(stood_at.to_position().to_np()[:3].tolist())
+
+
+# %% framing the picture on what matters
+
+
+def test_a_render_frames_the_whole_world_by_default(
+    scene_with_two_things: World,
+) -> None:
+    """
+    Told nothing about what matters, a picture shows everything the world holds.
+    """
+    render = render_of(scene_with_two_things)
+    whole = render.bounds()
+    assert whole.shape == (2, 3)
+
+
+def test_a_render_can_be_framed_on_the_things_that_matter(
+    scene_with_two_things: World,
+) -> None:
+    """
+    A real scene stands on a floor far wider than the table its work happens on, and a
+    camera placed around all of it leaves the answer a few pixels across.
+
+    Framed on the bodies that matter, the picture is of those.
+    """
+    answered = body_named(scene_with_two_things, ANSWERED_NAME)
+    framed = SceneRender(world=scene_with_two_things, framed_on=(answered,)).bounds()
+    whole = render_of(scene_with_two_things).bounds()
+
+    assert np.all(framed[0] >= whole[0])
+    assert np.all(framed[1] <= whole[1])
+    assert np.any(framed[1] - framed[0] < whole[1] - whole[0])
+
+
+def test_framing_on_one_body_covers_that_body(
+    scene_with_two_things: World,
+) -> None:
+    """
+    The point of framing is that what it is framed on is inside the picture, so the box
+    the camera is placed around holds where that body stands.
+    """
+    answered = body_named(scene_with_two_things, ANSWERED_NAME)
+    framed = SceneRender(world=scene_with_two_things, framed_on=(answered,)).bounds()
+
+    stands_at = scene_with_two_things.compute_forward_kinematics_np(
+        scene_with_two_things.root, answered
+    )[:3, 3]
+    assert np.all(framed[0] <= stands_at)
+    assert np.all(stands_at <= framed[1])

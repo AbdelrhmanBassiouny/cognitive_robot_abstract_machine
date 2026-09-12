@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
+from pathlib import Path
 
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
@@ -21,14 +22,22 @@ from segmind.datastructures.events import (
 from typing_extensions import List, Optional
 
 from experiments.episodes.episode import RecordedTrial
-from experiments.paper.panel import ANSWER_COLOR
+import imageio.v2 as imageio
+import numpy as np
+
+from experiments.montessori.perception.simulated_camera import SimulatedCamera
+from experiments.paper.camera_frame import FRAME_GAP
+from experiments.paper.panel import ANSWER_COLOR, CardPanel
 from experiments.paper.scene import (
     BACKGROUND_COLOR,
     PickedOut,
     RenderedScene,
     SceneRender,
 )
-from semantic_digital_twin.adapters.multi_sim import MujocoCamera
+from semantic_digital_twin.adapters.multi_sim import (
+    MujocoCamera,
+    select_offscreen_rendering_backend,
+)
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -113,6 +122,60 @@ class ObjectHeldFixedError(DataclassException):
             "loose piece of the scene hangs from a Connection6DoF and can; a part welded "
             "to another body cannot, and its card is drawn without this panel."
         )
+
+
+# %% standing an object somewhere for the length of a picture
+
+
+def can_be_stood_somewhere_else(connection: Connection) -> bool:
+    """
+    Whether the twin lets this connection be given a new origin.
+
+    A connection that holds its child fixed refuses one, so a body hanging from it can
+    only be drawn where it already stands.
+
+    :param connection: The connection to ask.
+    """
+    return type(connection).origin.fset is not Connection.origin.fset
+
+
+def standing_pose(world: World, subject: Body) -> HomogeneousTransformationMatrix:
+    """
+    Where the given object stands, in the world root frame.
+
+    :param world: The twin it stands in.
+    :param subject: The object to look up.
+    """
+    return HomogeneousTransformationMatrix(
+        world.compute_forward_kinematics_np(world.root, subject),
+        reference_frame=world.root,
+        child_frame=subject,
+    )
+
+
+def stand(world: World, subject: Body, pose: HomogeneousTransformationMatrix) -> None:
+    """
+    Put the given object at the given pose and let the twin work the scene out again.
+
+    The connection is looked up afresh each time rather than held onto, because building
+    a MuJoCo mirror of the world re-creates the connections it is built from and leaves
+    an earlier one detached.
+
+    :param world: The twin the object stands in.
+    :param subject: The object to stand.
+    :param pose: Where to stand it, in the world root frame.
+    :raises ObjectHeldFixedError: If the twin holds the object fixed where it is.
+    """
+    connection = subject.parent_connection
+    if not can_be_stood_somewhere_else(connection):
+        raise ObjectHeldFixedError(
+            subject_name=subject.name.name,
+            connection_type=type(connection).__name__,
+        )
+    connection.origin = pose.copy_with_new_reference_frames(
+        new_reference_frame=world.root, new_child_frame=subject
+    )
+    world.notify_state_change()
 
 
 # %% where an object went
@@ -268,8 +331,8 @@ class PoseChangeRender:
         :raises NothingToDrawError: If a camera or a light has to be placed and the world
             holds no geometry to place it around.
         """
-        stood_at = self.standing_pose(change.subject)
-        self._stand(change.subject, change.after)
+        stood_at = standing_pose(self.world, change.subject)
+        stand(self.world, change.subject, change.after)
         ghost = self.stand_a_ghost_at(change.subject, change.before)
         try:
             return SceneRender(
@@ -282,7 +345,7 @@ class PoseChangeRender:
             ).of([change.subject])
         finally:
             self.take_the_ghost_away(ghost)
-            self._stand(change.subject, stood_at)
+            stand(self.world, change.subject, stood_at)
 
     # %% the body standing where the object used to be
 
@@ -339,50 +402,83 @@ class PoseChangeRender:
             [copy.copy(shape) for shape in shapes.shapes], reference_frame=worn_by
         )
 
-    def standing_pose(self, subject: Body) -> HomogeneousTransformationMatrix:
-        """
-        Where the given object stands, in the world root frame.
 
-        :param subject: The object to look up.
+# %% what the robot's own camera saw of it
+
+
+@dataclass
+class SimulatedFramesAround(CardPanel):
+    """
+    What the robot's camera saw either side of the change, rendered from the twin.
+
+    The counterpart of
+    :class:`~experiments.paper.camera_frame.BagFramesAround` for a run that kept no
+    recording: a simulated episode's camera is the one the twin states, so what it saw is
+    rendered rather than read back. Written as one picture with the earlier look on the
+    left.
+    """
+
+    world: World
+    """
+    The twin the camera stands in.
+    """
+
+    change: PoseChange
+    """
+    Where the object was and where it ended up, which is what the two looks are taken
+    either side of.
+    """
+
+    camera: MujocoCamera
+    """
+    The camera to look through, already attached to :attr:`world`.
+    """
+
+    gap: int = FRAME_GAP
+    """
+    How many pixels of blank are left between the two looks.
+    """
+
+    @property
+    def image(self) -> np.ndarray:
         """
-        return HomogeneousTransformationMatrix(
-            self.world.compute_forward_kinematics_np(self.world.root, subject),
-            reference_frame=self.world.root,
-            child_frame=subject,
+        The two looks side by side, as red, green and blue in that order.
+
+        The twin is left exactly as it was: the object is stood at each pose for the
+        length of one look and put back afterwards.
+        """
+        stood_at = standing_pose(self.world, self.change.subject)
+        try:
+            earlier = self._look_with_the_object_at(self.change.before)
+            later = self._look_with_the_object_at(self.change.after)
+        finally:
+            stand(self.world, self.change.subject, stood_at)
+        blank = np.zeros(
+            (earlier.shape[0], self.gap, earlier.shape[2]), dtype=earlier.dtype
         )
+        return np.hstack((earlier, blank, later))
 
-    def _stand(self, subject: Body, pose: HomogeneousTransformationMatrix) -> None:
+    def write(self, path: Path) -> Path:
         """
-        Put the given object at the given pose and let the twin work the scene out
-        again.
+        Leave the pair at the given path.
 
-        The connection is looked up afresh each time rather than held onto, because
-        building a MuJoCo mirror of the world re-creates the connections it is built
-        from and leaves an earlier one detached.
+        :param path: The file it is written to, its directory created if it is not
+            there.
+        :return:``path``.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        imageio.imwrite(str(path), self.image)
+        return path
 
-        :param subject: The object to stand.
+    def _look_with_the_object_at(
+        self, pose: HomogeneousTransformationMatrix
+    ) -> np.ndarray:
+        """
+        One look through the camera, with the object standing at the given pose.
+
         :param pose: Where to stand it, in the world root frame.
-        :raises ObjectHeldFixedError: If the twin holds the object fixed where it is.
         """
-        connection = subject.parent_connection
-        if not self.can_be_stood_somewhere_else(connection):
-            raise ObjectHeldFixedError(
-                subject_name=subject.name.name,
-                connection_type=type(connection).__name__,
-            )
-        connection.origin = pose.copy_with_new_reference_frames(
-            new_reference_frame=self.world.root, new_child_frame=subject
-        )
-        self.world.notify_state_change()
-
-    @staticmethod
-    def can_be_stood_somewhere_else(connection: Connection) -> bool:
-        """
-        Whether the twin lets this connection be given a new origin.
-
-        A connection that holds its child fixed refuses one, so a body hanging from it
-        can only be drawn where it already stands.
-
-        :param connection: The connection to ask.
-        """
-        return type(connection).origin.fset is not Connection.origin.fset
+        stand(self.world, self.change.subject, pose)
+        select_offscreen_rendering_backend()
+        with SimulatedCamera(world=self.world, camera=self.camera) as looking:
+            return np.ascontiguousarray(looking.frame().color)
