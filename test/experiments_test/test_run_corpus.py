@@ -278,9 +278,11 @@ def test_every_kept_row_is_scored_against_the_frozen_set(corpus: RecordedCorpus)
 def test_the_questions_about_one_object_ask_about_the_watched_piece(
     corpus: RecordedCorpus,
 ):
-    [episode, *rest] = corpus.record()
+    episodes = corpus.record()
 
-    assert corpus.object_watched_in(episode) == WATCHED_PIECE
+    assert {corpus.object_watched_in(episode) for episode in episodes} == {
+        WATCHED_PIECE
+    }
 
 
 def test_an_episode_that_watched_nothing_cannot_be_asked_about_a_piece(
