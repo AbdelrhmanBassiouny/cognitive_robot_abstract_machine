@@ -50,12 +50,18 @@ data" critique + the tighter-layout feedback list), commits d6647fcb, 9a79a38b:
        -> TimedFrame with its moment; captions + chart use the real instants).
        EITHER_SIDE removed. PickUpActionMujoco/PlaceActionMujoco now
        ManipulatesBodies so the plan chart picks the accounting item out.
-10. [ ] IN PROGRESS: both demo runs relaunched (scratchpad run4/, ~16 min each
-       + cards; the sim runs ~10x slower than real time here with two films).
-       Then: send the two layered cards, run test_tracy_pickup_demo_mujoco.py
-       fully (alone - two demo processes would OOM the 15 GB sandbox), redraft,
-       update the PR description (scratchpad pr_body.md drafted; fill
-       "Verified").
+10. [x] run4 card showed: ghost invisible (copied Mesh shapes kept origin on
+       the original body -> drawn on the object) and camera looked along the
+       carry (poses hid each other). Fixed: _copied re-frames origins on the
+       ghost; PoseChangeRender.hang_a_camera_across (viewpoint_across,
+       MujocoCamera.pose_looking_from, OVERVIEW_VIEWPOINT const). Also the
+       card now emphasises PickUpEvents only (PlacingEvent made the place item
+       amber too). RenderedScene.pixels_of. NOTE MujocoSim build re-roots the
+       world (world.root changes) - take a hung camera off camera.body.
+11. [ ] IN PROGRESS: final demo runs (scratchpad run5/). Then: send the two
+       layered cards, run test_tracy_pickup_demo_mujoco.py fully (alone),
+       redraft, update the PR description (scratchpad pr_body.md drafted;
+       fill "Verified").
 
 ## Outstanding / judgement calls (also in the PR description)
 
