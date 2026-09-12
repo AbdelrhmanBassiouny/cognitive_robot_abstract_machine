@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import math
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -170,20 +169,22 @@ The body of Tracy's description the camera hangs on.
 """
 
 CAMERA_LINK_T_OPTICAL = HomogeneousTransformationMatrix.from_xyz_rpy(
-    x=-0.00232,
-    y=-0.03218,
-    z=-0.00106,
-    roll=-math.pi / 2,
-    pitch=0.0,
-    yaw=-math.pi / 2,
+    x=0.041737,
+    y=-0.014025,
+    z=0.009141,
+    roll=-1.363448,
+    pitch=0.003959,
+    yaw=-1.546731,
 ).to_np()
 """
-Where the colour camera's optical frame stands on ``camera_link``.
+Where the colour camera's optical frame stands on the ``camera_link`` this scene is
+built on.
 
-The turn is the one every robot description states between a camera link and its optical
-frame; the offset is the colour sensor's own place in the camera housing, read off the
-shipped captures: every one of them places the optical frame here against the
-``camera_link`` the description was calibrated to.
+Read off the shipped captures, which agree on it to a ten-millionth of a metre. It is
+not the plain quarter turns a description states between a camera link and its optical
+frame: the lab calibrates the camera in the description in Tracy's own ROS workspace,
+not in the published one this scene is built from, and this pose carries the difference
+between the two so that the simulated camera looks where the real one looked.
 """
 
 OVERVIEW_VIDEO_RESOLUTION = VideoResolution(width=960, height=540)

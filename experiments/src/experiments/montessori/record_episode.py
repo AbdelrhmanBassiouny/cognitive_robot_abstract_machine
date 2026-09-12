@@ -52,7 +52,6 @@ from experiments.montessori.scenarios import (
     HOW_FAR_A_MOVED_HOLE_GOES,
     Layout,
     LayoutAsFound,
-    LightingChanged,
     MontessoriSortingScenario,
     MontessoriWorldBuilder,
     PerceivedPoseOffset,
@@ -124,7 +123,6 @@ class PerturbationChoice(StrEnum):
     The changes a run can apply to its trials, named for what they change.
     """
 
-    LIGHTING_CHANGED = "lighting-changed"
     TARGET_HOLE_MOVED = "target-hole-moved"
     PIECE_SHOVED = "piece-shoved"
     PERCEIVED_POSE_OFFSET = "perceived-pose-offset"
@@ -490,8 +488,6 @@ class RecordingArguments:
         The perturbation asked for, aimed at the piece the run acts on.
         """
         step = self.perturbation_step
-        if self.perturbation is PerturbationChoice.LIGHTING_CHANGED:
-            return LightingChanged(step=step)
         if self.perturbation is PerturbationChoice.TARGET_HOLE_MOVED:
             return TargetHoleMoved(
                 step=step,

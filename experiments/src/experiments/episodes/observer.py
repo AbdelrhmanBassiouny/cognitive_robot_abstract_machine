@@ -1,6 +1,6 @@
 """
 What a trial's runner cannot see, collected as it happens: the event monitor's ticks,
-the questions asked and the insertions attempted.
+the questions asked, the insertions attempted and the motions run.
 
 The runner knows when a trial starts and ends and what it measured; everything that
 happened inside a step reaches the episode through here, and is written onto the trial
@@ -12,11 +12,13 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
+from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import DetectionEvent
 from typing_extensions import Any, List, Sequence
 
 from experiments.episodes.episode import (
     InsertionAttempt,
+    RecordedMotion,
     RecordedQuery,
     RecordedTrial,
     Tick,
@@ -49,6 +51,11 @@ class EpisodeObserver:
     insertion_attempts: List[InsertionAttempt] = field(default_factory=list)
     """
     Every insertion attempted in the trial being observed, in the order they were made.
+    """
+
+    motions: List[RecordedMotion] = field(default_factory=list)
+    """
+    Every motion run in the trial being observed, in the order they ran.
     """
 
     started_at: float = field(default_factory=time.monotonic)
@@ -98,6 +105,33 @@ class EpisodeObserver:
         self.queries.extend(rows)
         return rows
 
+    def ran_the_motion(
+        self,
+        motion_statechart: MotionStatechart,
+        start_moment: float,
+        end_moment: float,
+    ) -> RecordedMotion:
+        """
+        Keep one motion the trial ran.
+
+        The chart itself is kept rather than a copy of it, so what a question about the
+        control program reaches is the history the controller wrote.
+
+        :param motion_statechart: The chart that ran.
+        :param start_moment: Seconds between the start of the trial and the moment it
+            began.
+        :param end_moment: Seconds between the start of the trial and the moment it
+            ended.
+        :return: The motion that was kept.
+        """
+        motion = RecordedMotion(
+            motion_statechart=motion_statechart,
+            start_moment=start_moment,
+            end_moment=end_moment,
+        )
+        self.motions.append(motion)
+        return motion
+
     def attempted(self, insertion_attempt: InsertionAttempt) -> None:
         """
         Keep one insertion attempt.
@@ -111,14 +145,16 @@ class EpisodeObserver:
         Write everything observed onto a recorded trial, and start afresh for the next.
 
         :param trial: The trial the runner recorded.
-        :return: The same trial, now carrying its ticks, queries and attempts.
+        :return: The same trial, now carrying its ticks, queries, attempts and motions.
         """
         trial.ticks = self.ticks
         trial.queries = self.queries
         trial.insertion_attempts = self.insertion_attempts
+        trial.motions = self.motions
         self.ticks = []
         self.queries = []
         self.insertion_attempts = []
+        self.motions = []
         self.restart()
         return trial
 
@@ -145,3 +181,31 @@ class ObserverListener:
         :param events: The newly detected events.
         """
         self.observer.tick(self.observer.elapsed_seconds, events)
+
+
+# %% the hook a plan is given
+
+
+@dataclass
+class ObserverMotionListener:
+    """
+    What an executable tells the chart it ran to, so each becomes a motion of the
+    observer spanning the moments it ran between.
+    """
+
+    observer: EpisodeObserver
+    """
+    The observer the motions go to.
+    """
+
+    def receive(self, motion_state_chart: MotionStatechart, duration: float) -> None:
+        """
+        Keep the chart that has just run, placing it on the trial's own clock.
+
+        :param motion_state_chart: The chart that ran.
+        :param duration: How long it ran, in seconds.
+        """
+        end_moment = self.observer.elapsed_seconds
+        self.observer.ran_the_motion(
+            motion_state_chart, end_moment - duration, end_moment
+        )
