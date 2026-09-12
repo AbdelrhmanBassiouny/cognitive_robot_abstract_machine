@@ -197,11 +197,13 @@ class EpisodeRecording(ScenarioRunner[ScenarioType, WorldType]):
 
     def trial_started(self, scenario: ScenarioType, world: WorldType) -> None:
         """
-        Start the observer's clock with the trial, so its moments and the trial's agree.
+        Keep the world the trial runs in as the episode's, and start the observer's
+        clock with the trial, so its moments and the trial's agree.
 
         :param scenario: The scenario the trial runs.
         :param world: The world the trial is about to run in.
         """
+        self.episode.world = world
         self.observer.restart()
 
     def trial_finished(self, scenario: ScenarioType, trial: Trial) -> None:
