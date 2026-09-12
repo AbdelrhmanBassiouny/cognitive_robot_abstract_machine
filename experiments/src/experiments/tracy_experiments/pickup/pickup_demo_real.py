@@ -130,6 +130,7 @@ from experiments.tracy_experiments.rosbag_recording import (
     DECIMATED_TOPICS,
     DEFAULT_BAG_DIRECTORY,
     RosbagRecorder,
+    RosbagRecordingProcess,
 )
 from segmind.datastructures.events import (
     DetectionEvent,
@@ -732,10 +733,12 @@ def main() -> None:
         # the last piece is placed. The trial's own clock starts with it, so the bag
         # and the trial agree.
         recorder = (
-            RosbagRecorder.timestamped(
-                BAG_NAME_PREFIX,
-                arguments.bag_directory,
-                keep_every_nth_frame=arguments.keep_every_nth_frame,
+            RosbagRecordingProcess(
+                RosbagRecorder.timestamped(
+                    BAG_NAME_PREFIX,
+                    arguments.bag_directory,
+                    keep_every_nth_frame=arguments.keep_every_nth_frame,
+                )
             )
             if arguments.record
             else contextlib.nullcontext()

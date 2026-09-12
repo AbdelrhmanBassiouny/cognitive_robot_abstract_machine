@@ -710,12 +710,19 @@ def recorded_bag() -> Iterator[Path]:
     Record a bag of the run's topics for as long as the block runs, and hand over the
     bag's directory once it is closed.
 
+    Written by a process of its own, so recording it costs the run's looks nothing.
+
     Imported here rather than at the top, so a run that records no bag needs no ROS.
     """
-    from experiments.tracy_experiments.rosbag_recording import RosbagRecorder
+    from experiments.tracy_experiments.rosbag_recording import (
+        RosbagRecorder,
+        RosbagRecordingProcess,
+    )
 
-    with RosbagRecorder.timestamped(BAG_NAME_PREFIX) as recorder:
-        yield Path(recorder.output_directory)
+    with RosbagRecordingProcess(
+        RosbagRecorder.timestamped(BAG_NAME_PREFIX)
+    ) as recording:
+        yield Path(recording.output_directory)
 
 
 def main(argument_list: Optional[Sequence[str]] = None) -> int:
