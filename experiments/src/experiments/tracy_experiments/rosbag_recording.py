@@ -86,11 +86,21 @@ DECIMATED_TOPICS = [
 Topics :attr:`RosbagRecorder.keep_every_nth_frame` thins.
 
 The image and cloud streams only -- they are effectively all of a bag's size. Joint
-states, transforms and camera infos are together well under a percent of it, and thinning
-them would cost motion fidelity and replayability to save nothing.
+states, transforms and camera infos are together well under a percent of it, and
+thinning them would cost motion fidelity and replayability to save nothing.
 
 ``camera_info`` is excluded deliberately: it is tiny and constant, and a consumer that
 cannot find one alongside a thinned image stream cannot use the images at all.
+"""
+
+DEFAULT_KEEP_EVERY_NTH_FRAME = 10
+"""
+How much of the camera streams a recorded run keeps unless told otherwise.
+
+Recording every frame costs around 230 MB of disk per second of wall clock: a sorting
+run fills tens of gigabytes, almost all of it registered depth and point cloud. One
+frame in ten still shows what the arm did, at roughly a ninth of the size. Ask for ``1``
+for a run that genuinely needs every frame.
 """
 
 SUBSCRIPTION_QUEUE_DEPTH = 100
@@ -109,7 +119,6 @@ Deliberately outside any source tree: a run of the demo produces tens of gigabyt
 writing that next to the code it was launched from puts it in reach of the next
 ``git add``.
 """
-
 
 # %% failures
 
@@ -136,7 +145,9 @@ class FrameCounter:
 
     keep_every_nth: int
     """
-    Keep one message in this many. ``1`` keeps everything.
+    Keep one message in this many.
+
+    ``1`` keeps everything.
     """
 
     seen: int = 0
@@ -175,24 +186,31 @@ class RosbagRecorder:
 
     output_directory: str
     """
-    Directory the bag is written to. Must not already exist.
+    Directory the bag is written to.
+
+    Must not already exist.
     """
 
     topics: List[str] = field(default_factory=lambda: list(DEFAULT_TOPICS))
     """
-    Topics to record. See :data:`DEFAULT_TOPICS`.
+    Topics to record.
+
+    See :data:`DEFAULT_TOPICS`.
     """
 
     keep_every_nth_frame: int = 1
     """
-    Keep only one in this many messages of each of :data:`DECIMATED_TOPICS`. ``1``, the
-    default, records every frame.
+    Keep only one in this many messages of each of :data:`DECIMATED_TOPICS`.
+
+    ``1``, the default, records every frame.
     """
 
     startup_timeout: float = 20.0
     """
-    Seconds to wait for the recorded topics to be discovered. A topic nobody publishes
-    within this is reported and left out rather than failing the run.
+    Seconds to wait for the recorded topics to be discovered.
+
+    A topic nobody publishes within this is reported and left out rather than failing
+    the run.
     """
 
     _node: Optional[Node] = field(init=False, default=None, repr=False)
@@ -211,8 +229,9 @@ class RosbagRecorder:
         init=False, default=None, repr=False
     )
     """
-    Spins :attr:`_node`. Single-threaded, so writes to the bag are serialised without a
-    lock.
+    Spins :attr:`_node`.
+
+    Single-threaded, so writes to the bag are serialised without a lock.
     """
 
     _thread: Optional[threading.Thread] = field(init=False, default=None, repr=False)
