@@ -67,7 +67,8 @@ rather than with a router or a cross-check class of its own.
 
 ## Next
 
-- Nothing outstanding on the branch itself. Awaiting review.
+- Nothing outstanding on the branch itself. Both commits pushed, PR #325 description
+  brought up to date, left as a draft. Awaiting review.
 
 ## Outstanding
 
