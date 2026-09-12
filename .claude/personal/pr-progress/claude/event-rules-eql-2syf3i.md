@@ -1,27 +1,31 @@
-## Branch claude/event-rules-eql-2syf3i — segmind composite detectors as EQL rules
+## Branch claude/event-rules-eql-2syf3i -- segmind composite detectors as EQL rules
 
 Base: origin/claude/icra-experiments-simulation-pipeline-w4ep7n (#265)
-
-### Plan
-1. segmind/src/segmind/detectors/rules.py — `event_time_difference` (@symbolic_function),
-   `interaction_event_detected_before` (not_/exists replacement for placing_pairs),
-   and the shared interaction rule with `inference(event_type)(...)`, shift_threshold 15 s.
-2. PickUpDetector / PlacingDetector rebuilt on that rule; `placing_pairs` removed from SegmindContext.
-3. InsertionDetector (spatial_relation_detector_nodes.py) as the same rule shape over
-   ContactEvent-with-a-hole + ContainmentEvent; `insertion_pairs` removed.
-4. `DetectionEvent.participating_events()` via explain_inference + get_variable_nodes_of_given_type.
-5. Tests: satisfied-conditions string, participating_events, verbalization sentence, timing.
+PR: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/324 (draft)
 
 ### Done
-- environment built (uv 0.12 sideloaded; .venv), baseline segmind suite green: 100 passed, 1 skipped.
-- branch cut, sorinar remote added and reference file read.
+- `segmind/src/segmind/detectors/rules.py`: `event_time_difference`, `objects_inserted_into`,
+  `interaction_event_detected_before`, `interaction_rule`, `insertion_rule`. shift_threshold 15 s.
+- PickUpDetector / PlacingDetector / InsertionDetector each one call to a rule;
+  `placing_pairs` and `insertion_pairs` removed from SegmindContext.
+- `DetectionEvent.participating_events()` via explain_inference.
+- `test/segmind_test/test_detectors/test_event_rules.py`: conditions string, participating
+  events, verbalization, inserted-into identity, timing vs. the scan (bounded by control_dt).
+- Suites green: test/segmind_test + test/experiments_test/test_montessori_event_monitoring.py
+  -> 127 passed, 1 skipped (`--orm-build=never`).
 
 ### Next
-- write failing tests first, then implement.
+- Nothing outstanding; PR is open as a draft. Await review.
 
-### Notes / deviations
-- sorinar's literal `contains(context.holes, contact.with_object)` cannot match here:
-  `SegmindContext.holes` holds `Aperture`s while a hole ContactEvent's `with_object` is the
-  aperture's `Region` root. Rule binds an `Aperture` variable over `context.holes` and
-  conditions `hole.root == contact.with_object`, which also supplies `through_hole`
-  (existing test asserts `through_hole is hole`).
+### Notes
+- Deviation from the sorinar port: `contains(context.holes, contact.with_object)` cannot match
+  (holes are Apertures, a hole ContactEvent's with_object is the aperture's Region root). Rule
+  binds an Aperture variable and conditions `hole.root == contact.with_object`, which also
+  supplies `through_hole`.
+- Defect found and fixed: `inference(...)(inserted_into_objects=[attr])` leaves the list element
+  symbolic. Built by a symbolic function now; asserted by identity (== is fooled by Attribute).
+- PickUpEvent now carries with_object (the lost support), which the scan left unset.
+- Local env: ROS message packages absent, so the ORM interface build fails (same on the base
+  branch). Ran with `--orm-build=never`; the rest of test/experiments_test needs rclpy.
+- Environment build: uv 0.12.13 sideloaded into the scratchpad (repo's pyproject needs > 0.8.17),
+  then `uv sync --extra dev`; interpreter at `.venv/bin/python`.
