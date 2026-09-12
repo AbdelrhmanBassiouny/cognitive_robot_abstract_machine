@@ -23,6 +23,7 @@ from itertools import product
 from pathlib import Path
 
 from krrood.exceptions import DataclassException
+from segmind.datastructures.events import EventWithTrackedObjects
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import List, Optional, Protocol, Sequence, Tuple
 
@@ -445,7 +446,8 @@ class RecordedCorpus:
         """
         for tick in trial.ticks:
             for event in tick.events:
-                return event.tracked_object
+                if isinstance(event, EventWithTrackedObjects):
+                    return event.tracked_object
         return None
 
 
