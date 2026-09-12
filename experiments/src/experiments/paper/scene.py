@@ -44,10 +44,15 @@ from semantic_digital_twin.world_description.world_entity import (
 
 # %% the colours a picture tells an answer apart in
 
-BACKGROUND_COLOR = Color(0.72, 0.72, 0.74, 0.45)
+BACKGROUND_COLOR = Color(0.55, 0.56, 0.60, 1.0)
 """
-What everything else is drawn in: one grey, see-through enough that the scene reads as
-context without competing with the answer.
+What everything else is drawn in: one grey, dark enough that the answer's own colour
+carries and light enough that the shapes around it still read.
+
+Opaque rather than see-through. A scene of a few bodies reads either way, but a real one
+-- a robot standing over a board on a table -- drawn see-through shows its far side
+through its near side, and what a reader then makes out is neither the scene nor the
+answer.
 """
 
 LABEL_COLOR = Color(1.0, 1.0, 1.0, 1.0)

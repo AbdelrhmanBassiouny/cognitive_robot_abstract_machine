@@ -19,7 +19,7 @@ from segmind.datastructures.events import (
     EventWithTrackedObjects,
     MotionEvent,
 )
-from typing_extensions import List, Optional
+from typing_extensions import List, Optional, Tuple
 
 from experiments.episodes.episode import RecordedTrial
 import imageio.v2 as imageio
@@ -341,11 +341,27 @@ class PoseChangeRender:
                 highlight=self.highlight,
                 faded=self.faded,
                 label_answers=False,
+                framed_on=self.framed_on(change.subject, ghost),
                 picked_out=(PickedOut(entity=ghost, color=self.ghost),),
             ).of([change.subject])
         finally:
             self.take_the_ghost_away(ghost)
             stand(self.world, change.subject, stood_at)
+
+    @staticmethod
+    def framed_on(subject: Body, ghost: Body) -> Tuple[Body, ...]:
+        """
+        What this panel's picture is framed on: the object and the ghost of where it
+        was.
+
+        A picture framed on the whole world leaves a piece on a table a few pixels
+        across; framed on the two poses, it is a picture of the move itself with as much
+        of the scene around it as that takes.
+
+        :param subject: The object, standing where it ended up.
+        :param ghost: The copy standing where it was.
+        """
+        return (subject, ghost)
 
     # %% the body standing where the object used to be
 

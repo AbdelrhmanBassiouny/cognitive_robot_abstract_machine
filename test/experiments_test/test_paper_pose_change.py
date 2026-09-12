@@ -19,6 +19,7 @@ from segmind.datastructures.events import (
 
 from experiments.episodes.episode import Episode, RecordedTrial, Tick
 from experiments.paper.panel import ANSWER_COLOR
+from experiments.paper.scene import SceneRender
 from experiments.paper.pose_change import (
     GHOST_COLOR,
     EventStatesNoPoseChangeError,
@@ -302,3 +303,28 @@ def test_the_render_leaves_nothing_hanging_on_the_world(
         entity.name: len(entity.simulator_additional_properties)
         for entity in stood_in_it
     } == hanging
+
+
+def test_the_panel_is_framed_on_the_move_rather_than_the_whole_world(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    A picture framed on everything the world holds leaves a piece on a table a few
+    pixels across, which says nothing about where it went.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    render = PoseChangeRender(world=scene_with_a_loose_piece)
+    ghost = render.stand_a_ghost_at(
+        subject, Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
+    )
+
+    assert render.framed_on(subject, ghost) == (subject, ghost)
+
+    framed = SceneRender(
+        world=scene_with_a_loose_piece, framed_on=render.framed_on(subject, ghost)
+    ).bounds()
+    for stands in (subject, ghost):
+        at = scene_with_a_loose_piece.compute_forward_kinematics_np(
+            scene_with_a_loose_piece.root, stands
+        )[:3, 3]
+        assert np.all(framed[0] <= at) and np.all(at <= framed[1])
