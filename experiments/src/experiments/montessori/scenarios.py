@@ -79,14 +79,19 @@ from krrood.exceptions import DataclassException
 from experiments.montessori.exceptions import (
     HoleHasNoLandingRegionError,
     NoSuchPieceError,
+    NothingHoldsThePieceUp,
     RealRunCannotBeFilmed,
     RealRunNeedsAPerceivedScene,
     ScenarioRunsOnlyInSimulation,
     SceneNotBuiltYet,
 )
 from experiments.montessori.perception.detections import MontessoriScene
+from experiments.montessori.perception.expectations import MontessoriExpectations
 from experiments.montessori.perception.simulated_camera import SimulatedCamera
-from experiments.montessori.perception.simulated_setup import perception_pipeline
+from experiments.montessori.perception.simulated_setup import (
+    camera_over_the_table,
+    perception_pipeline,
+)
 from experiments.montessori.pieces import (
     FULL_SIZE_PIECES,
     KNOWN_PIECE_BY_CATEGORY,
@@ -117,7 +122,9 @@ from experiments.scenarios.scenario import (
     StepName,
     WorldType,
 )
+from krrood.patterns.belief_source import BeliefSource
 from segmind.datastructures.events import ReproducibleEvent, TranslationEvent
+from segmind.expectations import ExpectationReport
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoCamera,
     MujocoLight,
@@ -133,10 +140,11 @@ from semantic_digital_twin.adapters.mujoco_video_recording import (
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.reasoning.predicates import InsideOf
+from semantic_digital_twin.reasoning.predicates import InsideOf, is_supported_by
 from semantic_digital_twin.reasoning.robot_predicates import robot_holds_body
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from semantic_digital_twin.robots.tracy import Tracy
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -203,6 +211,7 @@ class SortingStep(StepName):
     """
 
     SETTLE = "settle"
+    BELIEVE = "believe"
     PICK_UP = "pick up"
     PUT_DOWN = "put down"
     PUSH = "push"
@@ -688,6 +697,14 @@ class SortingScene:
         return board
 
     @property
+    def table(self) -> Table:
+        """
+        The table the scene is set on.
+        """
+        [table] = self.world.get_semantic_annotations_by_type(Table)
+        return table
+
+    @property
     def robot(self) -> AbstractRobot:
         """
         The robot mounted in the scene.
@@ -748,6 +765,23 @@ class SortingScene:
         :param category: The shape to look up.
         """
         return self.body_of(category).global_transform.to_position()
+
+    def surface_under(self, category: MontessoriShapeCategory) -> Body:
+        """
+        What the twin has the loose piece of the given shape resting on: the board where
+        it stands on the board's lid, and the table where it stands on the table.
+
+        The two surfaces a look at this scene reads, and named by the very bodies a look
+        says it found a piece on, so a belief about a piece and a sighting of it speak of
+        one surface rather than two descriptions of it.
+
+        :param category: The shape to look up.
+        :raises NothingHoldsThePieceUp: If the twin has it resting on neither.
+        """
+        for surface in (self.board.root, self.table.root):
+            if is_supported_by(self.body_of(category), surface):
+                return surface
+        raise NothingHoldsThePieceUp(shape_category=category)
 
     def hole_for(self, category: MontessoriShapeCategory) -> ShapeSortingHole:
         """
@@ -999,6 +1033,18 @@ where it was put.
 
 Expressed against the piece rather than in metres, so the same tolerance means the same
 thing for the widest piece of the set and the narrowest.
+"""
+
+HOW_FAR_A_LOOK_MAY_DISAGREE_ABOUT_A_PLACE = 0.01
+"""
+How far from where the robot has a piece a look may report it standing and still bear
+out what the robot believed, in metres.
+
+The scene comes to rest before a belief is taken and nothing in the looking run's own
+script touches a piece afterwards, so what this allows for is a camera and the twin
+disagreeing rather than anything having moved: a simulated look reports a piece within a
+hundredth of a millimetre of where the twin has it, and a centimetre is well inside the
+smallest displacement any of the perturbations applies.
 """
 
 
@@ -1479,6 +1525,35 @@ class LetTheSceneSettle(ScenePhysicsStep):
 
 
 @dataclass
+class BelieveWhatTheSceneShows(ScenePhysicsStep, BeliefSource):
+    """
+    Take what the scene shows, now that it has come to rest, as what the robot believes
+    of it: every loose piece resting on the surface the twin has it on, no further from
+    where the twin has it than the spread allows.
+
+    A step of its own, and before the look rather than inside it, because in simulation
+    the twin is the scene: a change someone else makes to a piece is written into the
+    very state a belief would otherwise be read from, so a belief taken afterwards would
+    agree with the change and nothing a look reported could differ from either.
+
+    It is itself what vouches for every belief it takes, since taking the scene in is
+    what put them there.
+    """
+
+    believed: MontessoriExpectations = field(kw_only=True)
+    """
+    Where what the robot believes of each piece is kept.
+    """
+
+    def perform(self, world: World) -> None:
+        scene = SortingScene(world)
+        for category in scene.categories:
+            self.believed.standing_on(
+                scene.body_of(category), scene.surface_under(category), self
+            )
+
+
+@dataclass
 class AskTheQuestion(ScenePhysicsStep):
     """
     The moment the scene is asked about, which is the state every goal here is about.
@@ -1620,6 +1695,11 @@ class LookAtTheScene(ScenePhysicsStep):
     The scene is let go of while the look is taken: a camera draws its picture from a
     mirror of the world built for it, and two simulations of one world are one too
     many.
+
+    Once the look has been taken it is also where what was believed of the scene is
+    checked against it. Nothing else is needed for that: an expectation is one statement
+    the twin and a look can both be asked, so asking whether the two agree is asking it
+    twice.
     """
 
     camera: SimulatedCamera = field(kw_only=True)
@@ -1627,9 +1707,21 @@ class LookAtTheScene(ScenePhysicsStep):
     The camera the look is taken through.
     """
 
+    believed: MontessoriExpectations = field(kw_only=True)
+    """
+    What the robot believes of each piece, which the look is checked against.
+    """
+
     seen: Optional[MontessoriScene] = field(init=False, default=None)
     """
     What the last look found, or None before one has been taken.
+    """
+
+    reports: Dict[MontessoriShapeCategory, ExpectationReport] = field(
+        init=False, default_factory=dict
+    )
+    """
+    What the last look said about the belief held about each piece.
     """
 
     def perform(self, world: World) -> None:
@@ -1642,6 +1734,26 @@ class LookAtTheScene(ScenePhysicsStep):
             waiting.perturbation.change_what_was_seen(self.seen)
             with world.modify_world():
                 world.remove_semantic_annotation(waiting)
+        self.reports = self._check_the_beliefs(SortingScene(world))
+
+    def _check_the_beliefs(
+        self, scene: SortingScene
+    ) -> Dict[MontessoriShapeCategory, ExpectationReport]:
+        """
+        Ask every belief the robot holds about a piece of the scene what the look just
+        taken makes of it.
+
+        :param scene: The scene the look was taken of.
+        """
+        checked: Dict[MontessoriShapeCategory, ExpectationReport] = {}
+        for category in scene.categories:
+            believed = self.believed.of(scene.body_of(category))
+            if believed is None:
+                continue
+            checked[category] = believed.check(
+                self.seen.shape_nearest_to(category, believed.believed_place)
+            )
+        return checked
 
 
 # %% what a run counts as success
@@ -1771,7 +1883,28 @@ the hole goes is settled, and which way it goes is the scene's to say.
 
 
 @dataclass
-class LightingChanged(Perturbation[World]):
+class SortingPerturbation(Perturbation[World], ABC):
+    """
+    A change someone other than the robot makes to a sorting run, saying which of the
+    scene's pieces it acts on.
+
+    A belief the robot formed about a piece is only worth checking against a look where
+    something could have made the two differ, and that is what every change here
+    answers: the piece it moves, or the piece it has misreported.
+    """
+
+    @property
+    def pieces_acted_on(self) -> Tuple[MontessoriShapeCategory, ...]:
+        """
+        The pieces this change acts on, whether by moving one or by altering what is
+        reported of it, and none for a change that leaves every piece where the robot
+        has it.
+        """
+        return ()
+
+
+@dataclass
+class LightingChanged(SortingPerturbation):
     """
     Light the scene differently, by giving the world a directional light of its own.
 
@@ -1789,7 +1922,7 @@ class LightingChanged(Perturbation[World]):
 
 
 @dataclass
-class TargetHoleMoved(EventBroughtAbout[World]):
+class TargetHoleMoved(EventBroughtAbout[World], SortingPerturbation):
     """
     The board slides, so the hole a piece is meant to drop through is no longer where
     the robot was going to let go of it.
@@ -1830,7 +1963,7 @@ class TargetHoleMoved(EventBroughtAbout[World]):
 
 
 @dataclass
-class PieceShoved(EventBroughtAbout[World]):
+class PieceShoved(EventBroughtAbout[World], SortingPerturbation):
     """
     A loose piece moves, as something other than the robot running into it would.
 
@@ -1860,6 +1993,14 @@ class PieceShoved(EventBroughtAbout[World]):
             ).to_pose(),
         )
 
+    @property
+    def pieces_acted_on(self) -> Tuple[MontessoriShapeCategory, ...]:
+        """
+        The piece that moves, which is where the robot then has a piece that is no
+        longer there.
+        """
+        return (self.category,)
+
     def instruction_for_a_person(self) -> str:
         return (
             f"Push the {self.category} {_in_centimetres(self.displacement)} "
@@ -1871,7 +2012,7 @@ class PieceShoved(EventBroughtAbout[World]):
 
 
 @dataclass
-class PerturbationOfWhatIsSeen(Perturbation[World], ABC):
+class PerturbationOfWhatIsSeen(SortingPerturbation, ABC):
     """
     A perturbation of what a look reports rather than of what stands in the scene.
 
@@ -1929,6 +2070,14 @@ class PerceivedPoseOffset(PerturbationOfWhatIsSeen):
     in.
     """
 
+    @property
+    def pieces_acted_on(self) -> Tuple[MontessoriShapeCategory, ...]:
+        """
+        The piece whose reported place is moved, which the robot then has somewhere its
+        own account does not put it.
+        """
+        return (self.category,)
+
     def change_what_was_seen(self, seen: MontessoriScene) -> None:
         for shape in seen.shapes:
             if shape.category is not self.category:
@@ -1969,6 +2118,17 @@ class DetectionRelabelled(PerturbationOfWhatIsSeen):
     """
     The shape it is reported as instead.
     """
+
+    @property
+    def pieces_acted_on(self) -> Tuple[MontessoriShapeCategory, ...]:
+        """
+        The piece that is really there, which the robot is then told nothing about.
+
+        Not the shape it is reported as: the robot's own account of that shape is of its
+        own piece standing where it stands, and a second sighting elsewhere leaves that
+        account exactly as true as it was.
+        """
+        return (self.category,)
 
     def change_what_was_seen(self, seen: MontessoriScene) -> None:
         for shape in seen.shapes:
@@ -2454,6 +2614,82 @@ class PiecePushedWhileTheRobotIsIdle(
         ]
 
 
+def _believing_nothing_yet() -> MontessoriExpectations:
+    """
+    A store holding no belief about any piece, with the spread a look at this scene is
+    allowed to disagree with the twin by.
+    """
+    return MontessoriExpectations(
+        release_spread=HOW_FAR_A_LOOK_MAY_DISAGREE_ABOUT_A_PLACE
+    )
+
+
+@dataclass
+class RobotLooksAtTheScene(
+    MontessoriSortingScenario[WorldType, RobotType], Generic[WorldType, RobotType]
+):
+    """
+    The looking run: the scene is stood, the robot takes in what it shows once it has
+    come to rest, and then looks at it through its camera, so what it believed of every
+    piece and what it sees of it are two accounts that can be held against each other.
+
+    The one script here whose steps leave every piece alone, which is what makes it the
+    one that can tell whether the robot's own account of the scene survived a look:
+    anything the two accounts disagree about is somebody else's doing.
+    """
+
+    name: ClassVar[str] = "the robot looks at the scene"
+
+    believed: MontessoriExpectations = field(
+        init=False, default_factory=_believing_nothing_yet
+    )
+    """
+    What the robot believes of each piece of the scene built most recently.
+    """
+
+    camera: Optional[SimulatedCamera] = field(init=False, default=None)
+    """
+    The camera the look is taken through, or None before a scene has been built.
+    """
+
+    def add_what_the_script_acts_with(self, world: World) -> None:
+        """
+        Hang the camera over the table and start the trial believing nothing.
+
+        The camera goes into the scene here because the simulation is compiled once, with
+        whatever the scene holds by then, and a camera added afterwards would not be in
+        the picture it draws.
+
+        :param world: The scene being built.
+        """
+        self.camera = camera_over_the_table(world)
+        self.believed = _believing_nothing_yet()
+
+    def goal(self, world: World) -> Goal[World]:
+        """
+        Success is the scene being exactly the one the trial started in, which is what
+        every piece the robot looks at is meant to bear out.
+
+        :param world: The world the trial is running in.
+        """
+        return TheSceneIsUndisturbed(world=world, layout=self.starting_layout)
+
+    def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
+        return [
+            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.physics),
+            BelieveWhatTheSceneShows(
+                name=SortingStep.BELIEVE, scene=self.physics, believed=self.believed
+            ),
+            LookAtTheScene(
+                name=SortingStep.LOOK,
+                scene=self.physics,
+                camera=self.camera,
+                believed=self.believed,
+            ),
+            AskTheQuestion(name=SortingStep.ANSWER, scene=self.physics),
+        ]
+
+
 @dataclass
 class PieceHeldWhileTheQuestionIsAsked(
     MontessoriSortingScenario[WorldType, RobotType], Generic[WorldType, RobotType]
@@ -2523,4 +2759,11 @@ class TracyIsIdleWhileAPieceIsPushed(PiecePushedWhileTheRobotIsIdle[World, Tracy
 class TracyHoldsAPiece(PieceHeldWhileTheQuestionIsAsked[World, Tracy]):
     """
     The in-gripper run, on the robot the simulated Montessori demo is built around.
+    """
+
+
+@dataclass
+class TracyLooksAtTheScene(RobotLooksAtTheScene[World, Tracy]):
+    """
+    The looking run, on the robot the simulated Montessori demo is built around.
     """

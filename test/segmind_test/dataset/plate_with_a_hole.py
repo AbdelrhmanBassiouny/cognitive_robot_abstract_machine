@@ -88,6 +88,22 @@ class HoleScene:
     The cube something acted on.
     """
 
+    def stand_the_cube_at(self, x: float, y: float, height: float) -> None:
+        """
+        Put the cube somewhere else in this world, as something other than the robot
+        moving it would.
+
+        :param x: Where its centre goes along the world's x-axis, in metres.
+        :param y: Where it goes along the world's y-axis, in metres.
+        :param height: Height of its centre above the world's origin, in metres.
+        """
+        self.world.move_branch_to(
+            self.cube,
+            HomogeneousTransformationMatrix.from_xyz_rpy(
+                x=x, y=y, z=height, reference_frame=self.world.root
+            ),
+        )
+
 
 def named(name: str) -> PrefixedName:
     """

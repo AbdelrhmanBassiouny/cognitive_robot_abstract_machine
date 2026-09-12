@@ -1,10 +1,11 @@
 """
 A sorting run watched while it happens: an event monitor ticks against the piece the
 script acts on, the frozen working-memory question set is asked at the step the scene is
-asked about, and every motion state chart a step runs is kept as it finishes.
+asked about, what a look made of the robot's own account of the scene is scored as the
+look is taken, and every motion state chart a step runs is kept as it finishes.
 
-All three go through the run's observer, so the trial the run records carries its ticks,
-its scored queries and the motions it ran rather than only its outcome.
+All of it goes through the run's observer, so the trial the run records carries its
+ticks, its scored queries and the motions it ran rather than only its outcome.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
 from semantic_digital_twin.world import World
-from typing_extensions import Optional
+from typing_extensions import List, Optional, Set
 
 from experiments.episodes.observer import ObserverListener, ObserverMotionListener
 from experiments.episodes.recording import EpisodeRecording
@@ -25,14 +26,17 @@ from experiments.montessori.event_monitoring import (
     build_shape_monitor_in_scene,
 )
 from experiments.montessori.scenarios import (
+    LookAtTheScene,
     MontessoriSortingScenario,
     HaveTheRobotAct,
+    SortingPerturbation,
     SortingScene,
     SortingStep,
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.questions.question import QuestionedThings
 from experiments.questions.question_set import QuestionSet
+from experiments.questions.working_memory import BeliefAgreesWithPerception
 from experiments.scenarios.scenario import ScenarioStep
 
 # %% the run
@@ -41,8 +45,9 @@ from experiments.scenarios.scenario import ScenarioStep
 @dataclass
 class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
     """
-    A recorded run of a sorting scenario whose trials are watched by an event monitor
-    and asked the working-memory question set when the scene is asked about.
+    A recorded run of a sorting scenario whose trials are watched by an event monitor,
+    scored on what each look made of the robot's own account of the scene, and asked the
+    working-memory question set when the scene is asked about.
     """
 
     monitor: Optional[MontessoriEventMonitor] = field(init=False, default=None)
@@ -55,6 +60,16 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
     What traces where every joint stands while the trial runs, or None between trials.
     """
 
+    pieces_acted_on: Set[MontessoriShapeCategory] = field(
+        init=False, default_factory=set
+    )
+    """
+    The pieces someone other than the robot has acted on in the trial that is running.
+
+    What the true answer to a question about the robot's own account of a piece rests
+    on: a piece nobody else touched is one the look and the belief ought to agree about.
+    """
+
     def trial_started(self, scenario: MontessoriSortingScenario, world: World) -> None:
         """
         Start watching the piece the script acts on, ticking the observer with every
@@ -65,6 +80,7 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         :param world: The world the trial is about to run in.
         """
         super().trial_started(scenario, world)
+        self.pieces_acted_on = set()
         scenario.motion_listener = ObserverMotionListener(observer=self.observer)
         self._stop_watching()
         scene = SortingScene(world)
@@ -85,8 +101,9 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         world: World,
     ) -> None:
         """
-        Perform the step, take one tick of the monitor after it, and ask the question
-        set once the scene is asked about.
+        Perform the step, take one tick of the monitor after it, and score what the step
+        left to be asked: what a look made of the robot's own account of the scene, and
+        the whole question set once the scene is asked about.
 
         The monitor is also ticked from the control cycle of whatever motion the step
         runs; the tick here is what watches a step no motion runs in, such as the scene
@@ -100,6 +117,13 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         self.monitor.tick()
         if isinstance(step, HaveTheRobotAct) and step.performed is not None:
             self.observer.performed(step.performed)
+        if isinstance(step, LookAtTheScene):
+            self.observer.ask(
+                self.belief_questions(step, world),
+                SortingScene(world).robot,
+                self.observer.elapsed_seconds,
+            )
+            return
         if step.name is not SortingStep.ANSWER:
             return
         self.observer.ask(
@@ -107,6 +131,45 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             SortingScene(world).robot,
             self.observer.elapsed_seconds,
         )
+
+    def apply_perturbation(
+        self,
+        scenario: MontessoriSortingScenario,
+        perturbation: SortingPerturbation,
+        world: World,
+    ) -> None:
+        """
+        Bring the perturbation about, and note which pieces it acted on.
+
+        The run is the only thing that sees both a perturbation and a look, so it is
+        where what the robot ought to have been wrong about is known.
+
+        :param scenario: The scenario the trial runs.
+        :param perturbation: The perturbation due at the step about to be performed.
+        :param world: The world the trial is running in.
+        """
+        super().apply_perturbation(scenario, perturbation, world)
+        self.pieces_acted_on.update(perturbation.pieces_acted_on)
+
+    def belief_questions(self, step: LookAtTheScene, world: World) -> QuestionSet:
+        """
+        One question per piece the look was asked about: whether what it reported of
+        that piece bore out what the robot believed of it.
+
+        :param step: The look that has just been taken and checked.
+        :param world: The world the trial is running in.
+        """
+        scene = SortingScene(world)
+        asked: List[BeliefAgreesWithPerception] = [
+            BeliefAgreesWithPerception(
+                subject=scene.body_of(category),
+                contradicted=[type(violated) for violated in report.violated],
+                nothing_was_found=report.nothing_was_found,
+                perturbed=category in self.pieces_acted_on,
+            )
+            for category, report in step.reports.items()
+        ]
+        return QuestionSet(questions=asked)
 
     def trial_finished(self, scenario: MontessoriSortingScenario, trial) -> None:
         """
