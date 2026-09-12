@@ -1,4 +1,7 @@
 import os
+import sys
+import threading
+import time
 
 import pytest
 
@@ -44,3 +47,70 @@ def test_memory_leak():
     assert result == []
 
     assert len(SymbolGraph().wrapped_instances) == 0
+
+
+# %% two threads at once
+
+SWEEPING_SECONDS = 2.0
+"""
+How long the threads race over the graph.
+"""
+
+INSTANCES_PER_BURST = 50
+"""
+How many instances a filling thread makes and drops at once, so the graph holds many
+dead nodes for the sweeps to meet on.
+"""
+
+FILLING_THREADS = 2
+"""
+How many threads fill the graph while it is swept.
+"""
+
+SWEEPING_THREADS = 4
+"""
+How many threads sweep the graph at once.
+"""
+
+SWITCH_INTERVAL_SECONDS = 1e-6
+"""
+How often the interpreter hands the threads over while they race, so the race is run
+many times over rather than left to chance.
+"""
+
+
+def test_the_graph_survives_being_swept_by_two_threads_while_a_third_fills_it():
+    """
+    Every query evaluation sweeps the dead instances out of the graph, and a perception
+    node answers queries on its own thread while the run asks its own: two sweeps at
+    once found the same dead node and the second could not remove it.
+    """
+    SymbolGraph().clear()
+    stop = threading.Event()
+    failures: list[BaseException] = []
+    usual_switch_interval = sys.getswitchinterval()
+    sys.setswitchinterval(SWITCH_INTERVAL_SECONDS)
+
+    def fill() -> None:
+        while not stop.is_set():
+            [KRROODPosition(1, 2, 3) for _ in range(INSTANCES_PER_BURST)]
+
+    def sweep() -> None:
+        try:
+            while not stop.is_set():
+                SymbolGraph().remove_dead_instances()
+        except BaseException as failure:
+            failures.append(failure)
+
+    threads = [threading.Thread(target=fill) for _ in range(FILLING_THREADS)] + [
+        threading.Thread(target=sweep) for _ in range(SWEEPING_THREADS)
+    ]
+    for thread in threads:
+        thread.start()
+    time.sleep(SWEEPING_SECONDS)
+    stop.set()
+    for thread in threads:
+        thread.join()
+    sys.setswitchinterval(usual_switch_interval)
+
+    assert failures == []

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import weakref
 from collections import defaultdict
 from dataclasses import InitVar, dataclass, field
@@ -257,6 +258,14 @@ class SymbolGraph(metaclass=SingletonMeta):
     List of packages to include in the symbol graph.
     """
 
+    _nodes_lock: threading.RLock = field(
+        default_factory=threading.RLock, init=False, repr=False
+    )
+    """
+    Held while nodes are added to or removed from the graph, since every thread that
+    creates a symbol adds to it and every query evaluation sweeps it.
+    """
+
     def __post_init__(self):
         if self._class_diagram is None:
             self._class_diagram = self._build_class_diagram()
@@ -295,12 +304,13 @@ class SymbolGraph(metaclass=SingletonMeta):
 
         :param wrapped_instance: The instance to add.
         """
-        wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
-        wrapped_instance.symbol_graph = self
-        self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
-        self._class_to_wrapped_instances[wrapped_instance.instance_type].append(
-            wrapped_instance
-        )
+        with self._nodes_lock:
+            wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
+            wrapped_instance.symbol_graph = self
+            self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
+            self._class_to_wrapped_instances[wrapped_instance.instance_type].append(
+                wrapped_instance
+            )
 
     def remove_node(self, wrapped_instance: WrappedInstance):
         """
@@ -308,16 +318,24 @@ class SymbolGraph(metaclass=SingletonMeta):
 
         :param wrapped_instance: The instance to remove.
         """
-        self._instance_index.pop(id(wrapped_instance.instance), None)
-        self._class_to_wrapped_instances[wrapped_instance.instance_type].remove(
-            wrapped_instance
-        )
-        self._instance_graph.remove_node(wrapped_instance.index)
+        with self._nodes_lock:
+            self._instance_index.pop(id(wrapped_instance.instance), None)
+            self._class_to_wrapped_instances[wrapped_instance.instance_type].remove(
+                wrapped_instance
+            )
+            self._instance_graph.remove_node(wrapped_instance.index)
 
     def remove_dead_instances(self):
-        for node in self._instance_graph.nodes():
-            if node.instance is None:
-                self.remove_node(node)
+        """
+        Remove every wrapped instance whose instance has been garbage collected.
+
+        One sweep at a time: two threads sweeping at once would each find the same dead
+        node and the second could not remove it.
+        """
+        with self._nodes_lock:
+            for node in self._instance_graph.nodes():
+                if node.instance is None:
+                    self.remove_node(node)
 
     def get_instances_of_type(self, type_: Type) -> Iterable:
         """
