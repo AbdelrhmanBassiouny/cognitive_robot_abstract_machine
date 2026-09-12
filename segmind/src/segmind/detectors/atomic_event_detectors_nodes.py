@@ -185,6 +185,16 @@ class MotionDetector(AbstractDetector):
             poses.pop(0)
         return events
 
+    @staticmethod
+    def _in_the_world_frame(pose: NumericPose, obj: Body) -> Pose:
+        """
+        A pose from the window, stated in the frame it was read in.
+
+        :param pose: One pose of the window, read in the world frame.
+        :param obj: The body it is the pose of.
+        """
+        return Pose.from_numeric_pose(pose, obj._world.root)
+
     @abstractmethod
     def _check_and_trigger_event(
         self, context: SegmindContext, obj: Body, poses: List[NumericPose]
@@ -255,8 +265,8 @@ class TranslationDetector(MotionDetector):
 
         new_event = TranslationEvent(
             tracked_object=obj,
-            start_pose=Pose.from_numeric_pose(poses[0], obj),
-            current_pose=Pose.from_numeric_pose(poses[-1], obj),
+            start_pose=self._in_the_world_frame(poses[0], obj),
+            current_pose=self._in_the_world_frame(poses[-1], obj),
         )
 
         context.latest_motion_events[obj] = new_event
@@ -296,7 +306,7 @@ class StopTranslationDetector(MotionDetector):
         stop_event = StopTranslationEvent(
             tracked_object=obj,
             start_pose=latest_motion_event.start_pose,
-            current_pose=Pose.from_numeric_pose(poses[-1], obj),
+            current_pose=self._in_the_world_frame(poses[-1], obj),
         )
 
         context.latest_motion_events.pop(obj, None)
@@ -335,8 +345,8 @@ class RotationDetector(MotionDetector):
 
         new_event = RotationEvent(
             tracked_object=obj,
-            start_pose=Pose.from_numeric_pose(poses[0], obj),
-            current_pose=Pose.from_numeric_pose(poses[-1], obj),
+            start_pose=self._in_the_world_frame(poses[0], obj),
+            current_pose=self._in_the_world_frame(poses[-1], obj),
         )
 
         context.latest_rotation_events[obj] = new_event
@@ -376,7 +386,7 @@ class StopRotationDetector(MotionDetector):
         stop_event = StopRotationEvent(
             tracked_object=obj,
             start_pose=latest_rotation_event.start_pose,
-            current_pose=Pose.from_numeric_pose(poses[-1], obj),
+            current_pose=self._in_the_world_frame(poses[-1], obj),
         )
 
         context.latest_rotation_events.pop(obj, None)
