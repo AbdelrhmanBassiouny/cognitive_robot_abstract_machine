@@ -9,6 +9,7 @@ what the camera was looking at while it was.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -67,6 +68,8 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
 )
+
+logger = logging.getLogger(__name__)
 
 # %% which card of the paper a card is
 
@@ -1176,6 +1179,11 @@ class QueryCardSet:
         trials one inside that, so a corpus of runs is written in one pass without any of
         them writing over another.
 
+        An episode that kept no world has nothing a scene panel can draw, and is passed
+        over rather than stopping every other episode's cards: the paper's figures are
+        regenerated from the whole database, episodes recorded before runs kept their
+        world included.
+
         :param trials: The trials to draw, of however many episodes.
         :param output_directory: Where the episodes' directories go, created if they are
             not there.
@@ -1186,6 +1194,11 @@ class QueryCardSet:
         written: List[WrittenQueryCard] = []
         for recorded in self._by_episode(trials):
             episode = recorded[0].episode
+            if episode.world is None:
+                logger.warning(
+                    "%s", EpisodeKeptNoWorldError(episode_identifier=episode.identifier)
+                )
+                continue
             episode_directory = output_directory / episode.identifier
             for trial in recorded:
                 written.extend(
