@@ -230,6 +230,44 @@ def test_only_the_object_the_run_picked_up_and_moved_is_one_it_moved_itself(
     assert names(question.ask(memory)) == names(question.ground_truth(memory))
 
 
+def test_an_object_the_robot_handled_twice_is_named_once_among_the_ones_it_moved(
+    results_database: ResultsDatabase, memory: LongTermMemory
+):
+    """
+    The query pairs every recorded motion with every recorded pick-up of the same
+    object, so an object handled twice comes back twice; the question asks which objects
+    the robot moved, not how often it handled them.
+    """
+    episode = sorting_episode()
+    moved = Body(name=PrefixedName(MOVED_OBJECT_NAME))
+    recording = open_recording(results_database)
+    recording.record(
+        RecordedTrial(
+            episode=episode,
+            outcome=TrialOutcome.SUCCEEDED,
+            duration=12.5,
+            ticks=[
+                Tick(
+                    moment=FIRST_TICK,
+                    events=[
+                        PickUpEvent(tracked_object=moved),
+                        PickUpEvent(tracked_object=moved),
+                    ],
+                ),
+                Tick(
+                    moment=SECOND_TICK,
+                    events=[TranslationEvent(tracked_object=moved)],
+                ),
+            ],
+        )
+    )
+    recording.close()
+    question = ObjectsTheRobotMovedInTheEpisode(episode_identifier=episode.identifier)
+
+    assert names(question.ask(memory)) == [MOVED_OBJECT_NAME]
+    assert question.matches_ground_truth(memory)
+
+
 def test_only_the_object_with_a_recorded_pick_up_was_picked_up(
     recorded_episode: Episode, memory: LongTermMemory
 ):
@@ -275,9 +313,4 @@ def test_every_question_of_the_long_term_set_answers_its_own_ground_truth(
         )
     )
     for question in question_set.questions:
-        answered = question.ask(memory)
-        true = question.ground_truth(memory)
-        if isinstance(answered, list):
-            assert names(answered) == names(true), question.english
-            continue
-        assert answered == true, question.english
+        assert question.matches_ground_truth(memory), question.english
