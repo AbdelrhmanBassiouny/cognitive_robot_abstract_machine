@@ -65,6 +65,7 @@ from coraplex.datastructures.enums import (
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.execution_environment import simulated_robot
 from coraplex.view_manager import ViewManager
+from coraplex.plans.executables import ReceivesExecutedMotions
 from coraplex.plans.factories import sequential
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
@@ -666,6 +667,12 @@ class SortingScene:
     The world the trial is running in.
     """
 
+    motion_listener: Optional[ReceivesExecutedMotions] = None
+    """
+    Told about each motion state chart an action of this scene runs, or None for a
+    scene nobody watches.
+    """
+
     @property
     def board(self) -> ShapeSortingBoard:
         """
@@ -801,7 +808,7 @@ class SortingScene:
 
         :param action: The action to run.
         """
-        context = Context(self.world, self.robot)
+        context = Context(self.world, self.robot, motion_listener=self.motion_listener)
         # The conditions a coraplex action states are about a robot that perceives and
         # navigates; a scripted scene states its own preconditions as its layout.
         context.evaluate_conditions = False
@@ -1486,7 +1493,31 @@ class AskTheQuestion(ScenePhysicsStep):
 
 
 @dataclass
-class PickThePieceUp(ScenePhysicsStep):
+class HaveTheRobotAct(ScenePhysicsStep, ABC):
+    """
+    A step that has the robot perform an action, so a motion state chart is built and
+    run while it happens.
+    """
+
+    motion_listener: Optional[ReceivesExecutedMotions] = field(
+        default=None, kw_only=True
+    )
+    """
+    Told about each motion state chart this step runs, or None for a step nobody
+    watches.
+    """
+
+    def scene_of(self, world: World) -> SortingScene:
+        """
+        The scene this step acts on, watching on behalf of whoever watches this step.
+
+        :param world: The world the trial is running in.
+        """
+        return SortingScene(world, self.motion_listener)
+
+
+@dataclass
+class PickThePieceUp(HaveTheRobotAct):
     """
     Have the robot take hold of a loose piece, so that from here on the piece travels
     with it.
@@ -1503,11 +1534,11 @@ class PickThePieceUp(ScenePhysicsStep):
     """
 
     def perform(self, world: World) -> None:
-        SortingScene(world).pick_the_piece_up(self.category)
+        self.scene_of(world).pick_the_piece_up(self.category)
 
 
 @dataclass
-class PutThePieceInItsHole(ScenePhysicsStep):
+class PutThePieceInItsHole(HaveTheRobotAct):
     """
     Have the robot carry a held piece over the board's hole for its own shape and let go
     of it there.
@@ -1527,7 +1558,7 @@ class PutThePieceInItsHole(ScenePhysicsStep):
     """
 
     def perform(self, world: World) -> None:
-        scene = SortingScene(world)
+        scene = self.scene_of(world)
         hole = scene.hole_for(self.category).root.global_transform.to_position()
         scene.put_the_piece_down_at(
             self.category,
@@ -2121,6 +2152,14 @@ class MontessoriSortingScenario(
     Whether the run's simulation goes without a viewer window.
     """
 
+    motion_listener: Optional[ReceivesExecutedMotions] = field(
+        kw_only=True, default=None
+    )
+    """
+    Told about each motion state chart this scenario's steps run, or None for a run
+    nobody watches.
+    """
+
     physics: Optional[ScenePhysics] = field(init=False, default=None)
     """
     The physics carrying the world this scenario built most recently.
@@ -2271,11 +2310,13 @@ class RobotSortsAPiece(
                 name=SortingStep.PICK_UP,
                 category=self.sorted_category,
                 scene=self.physics,
+                motion_listener=self.motion_listener,
             ),
             PutThePieceInItsHole(
                 name=SortingStep.PUT_DOWN,
                 category=self.sorted_category,
                 scene=self.physics,
+                motion_listener=self.motion_listener,
             ),
             AskTheQuestion(name=SortingStep.ANSWER, scene=self.physics),
         ]
@@ -2399,6 +2440,7 @@ class PieceHeldWhileTheQuestionIsAsked(
                 name=SortingStep.PICK_UP,
                 category=self.held_category,
                 scene=self.physics,
+                motion_listener=self.motion_listener,
             ),
             AskTheQuestion(name=SortingStep.ANSWER, scene=self.physics),
         ]

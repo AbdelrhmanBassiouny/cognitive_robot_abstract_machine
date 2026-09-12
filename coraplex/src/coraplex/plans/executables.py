@@ -4,7 +4,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Dict, ClassVar, Optional, TYPE_CHECKING
+from typing_extensions import List, Dict, ClassVar, Optional, Protocol, TYPE_CHECKING
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.exceptions import (
@@ -37,6 +37,26 @@ if TYPE_CHECKING:
     from coraplex.datastructures.dataclasses import Context
 
 logger = logging.getLogger(__name__)
+
+
+# %% who is told about a motion that has run
+
+
+class ReceivesExecutedMotions(Protocol):
+    """
+    Something told about each motion state chart an executable has run.
+    """
+
+    def receive(self, motion_state_chart: MotionStatechart, duration: float) -> None:
+        """
+        Take the chart of a motion that has just finished.
+
+        :param motion_state_chart: The chart that ran, holding the history it wrote.
+        :param duration: How long it ran, in seconds.
+        """
+
+
+# %% the executables
 
 
 @dataclass
@@ -272,7 +292,7 @@ class GiskardExecutable(Executable):
     def execute(self) -> None:
         """
         Completes the motion state chart and executes it according to the execution
-        type.
+        type, then tells the context's listener about the chart that ran.
         """
         if len(self.motion_mappings) == 0:
             return
@@ -280,6 +300,7 @@ class GiskardExecutable(Executable):
             return
         self.prepare_for_execution()
 
+        started_at = time.monotonic()
         match GiskardExecutable.execution_type:
             case ExecutionType.SIMULATED:
                 self._execute_simulation()
@@ -287,6 +308,20 @@ class GiskardExecutable(Executable):
                 self._execute_real()
             case _:
                 raise UnknownExecutionType(GiskardExecutable.execution_type)
+        self._hand_over_the_chart_that_ran(time.monotonic() - started_at)
+
+    def _hand_over_the_chart_that_ran(self, duration: float) -> None:
+        """
+        Hand the chart that has just run to whoever the context says listens.
+
+        The chart itself is handed over rather than a copy of it, so what the listener
+        keeps is the history the controller wrote into it.
+
+        :param duration: How long the chart ran, in seconds.
+        """
+        if self.context.motion_listener is None:
+            return
+        self.context.motion_listener.receive(self.motion_state_chart, duration)
 
     def _build_pacer(self) -> Pacer:
         """
