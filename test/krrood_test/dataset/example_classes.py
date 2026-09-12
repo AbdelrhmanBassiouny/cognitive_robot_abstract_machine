@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import uuid
+from abc import ABC
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
@@ -25,6 +26,7 @@ from krrood.ormatic.data_access_objects.alternative_mappings import (
     AlternativeMapping,
     T,
 )
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.symbol_graph.symbol_graph import Symbol
 from krrood import logger
 
@@ -638,6 +640,50 @@ class JSONSerializableClass(SubclassJSONSerializer):
 class JSONWrapper:
     json_serializable_object: JSONSerializableClass
     more_objects: List[JSONSerializableClass] = field(default_factory=list)
+
+
+JSONSerializableAnswer = TypingTypeVar("JSONSerializableAnswer")
+"""
+What a :class:`GenericJSONSerializableClass` answers with.
+"""
+
+
+@dataclass
+class GenericJSONSerializableClass(
+    SubclassJSONSerializer, Generic[JSONSerializableAnswer], SubClassSafeGeneric, ABC
+):
+    """
+    A JSON-serializable base that is used as a field type without binding its parameter,
+    so the field says only that some subclass of it is stored.
+    """
+
+    label: str = ""
+    """
+    What this value stands for.
+    """
+
+    def to_json(self) -> Dict[str, Any]:
+        return {**super().to_json(), "label": to_json(self.label)}
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(label=from_json(data["label"]))
+
+
+@dataclass
+class TextJSONSerializableClass(GenericJSONSerializableClass[str]): ...
+
+
+@dataclass
+class GenericJSONWrapper:
+    """
+    Holds the generic JSON value under a field that leaves the parameter free.
+    """
+
+    json_serializable_object: GenericJSONSerializableClass
+    """
+    The value, whose own JSON names which subclass it is.
+    """
 
 
 @dataclass
