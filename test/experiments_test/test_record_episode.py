@@ -8,11 +8,13 @@ database that would only live in memory is refused before a world is built.
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 
 import pytest
 from coraplex.datastructures.enums import ExecutionType
 
 from experiments.montessori.record_episode import (
+    BuiltSceneCannotRunOnTheRobot,
     CHOICES_CLASH_EXIT_CODE,
     DEFAULT_REPETITIONS,
     ExecutionChoice,
@@ -37,6 +39,7 @@ from experiments.montessori.scenarios import (
     LayoutAsFound,
     LightingChanged,
     PerceivedPoseOffset,
+    PerceivingWorldBuilder,
     PieceLayout,
     PieceShoved,
     SortingStep,
@@ -197,13 +200,34 @@ def test_the_execution_choice_names_the_execution_type():
     assert ExecutionChoice.REAL.execution_type is ExecutionType.REAL
 
 
+@dataclass
+class TracyTableAsIfPerceived(TracyOnItsOwnTable, PerceivingWorldBuilder):
+    """
+    Tracy's table as its description builds it, standing in for a perceived scene: a
+    look at it finds nothing changed.
+    """
+
+    def perceive(self) -> None:
+        """
+        Nothing to look with, and nothing has changed.
+        """
+
+
 def test_a_real_run_is_a_real_scenario_and_is_not_filmed():
     scenario = parse_arguments(
         [RecordingOption.EXECUTION, ExecutionChoice.REAL.value]
-    ).scenario_instance(TracyOnItsOwnTable())
+    ).scenario_instance(TracyTableAsIfPerceived())
 
     assert scenario.execution_type is ExecutionType.REAL
     assert scenario.filmed is False
+
+
+def test_a_real_run_is_set_in_the_perceived_scene_unless_told_otherwise():
+    arguments = parse_arguments([RecordingOption.EXECUTION, ExecutionChoice.REAL.value])
+
+    assert arguments.scene is SceneChoice.PERCEIVED
+    assert arguments.layout is LayoutChoice.AS_FOUND
+    assert arguments.needs_ros is True
 
 
 def test_a_simulated_run_is_filmed():
@@ -249,6 +273,36 @@ def test_a_built_scene_draws_its_layout(layout: LayoutChoice):
     arguments = parse_arguments([RecordingOption.LAYOUT, layout.value])
 
     assert type(arguments.piece_layout()) is PieceLayout
+
+
+def test_a_built_scene_cannot_run_on_the_robot():
+    with pytest.raises(BuiltSceneCannotRunOnTheRobot):
+        parse_arguments(
+            [
+                RecordingOption.SCENE,
+                SceneChoice.BUILT.value,
+                RecordingOption.EXECUTION,
+                ExecutionChoice.REAL.value,
+            ]
+        )
+
+
+def test_a_built_scene_asked_for_on_the_robot_ends_the_run_naming_the_perceived_one(
+    capsys,
+):
+    exit_code = main(
+        [
+            RecordingOption.SCENE,
+            SceneChoice.BUILT.value,
+            RecordingOption.EXECUTION,
+            ExecutionChoice.REAL.value,
+        ]
+    )
+
+    assert exit_code == CHOICES_CLASH_EXIT_CODE
+    printed = capsys.readouterr()
+    assert printed.out == ""
+    assert SceneChoice.PERCEIVED.value in printed.err
 
 
 def test_a_perceived_scene_needs_the_robot():

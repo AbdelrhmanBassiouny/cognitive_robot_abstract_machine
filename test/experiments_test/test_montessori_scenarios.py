@@ -40,6 +40,7 @@ from experiments.montessori.scenarios import (
     PUSHER_RAIL_NAME,
     PUSHER_SCALE,
     PerceivedPoseOffset,
+    PerceivingWorldBuilder,
     PerturbationOfTheNextLook,
     PieceHeldWhileTheQuestionIsAsked,
     PieceLayout,
@@ -71,6 +72,7 @@ from experiments.montessori.exceptions import (
     HoleHasNoLandingRegionError,
     NoSuchPieceError,
     RealRunCannotBeFilmed,
+    RealRunNeedsAPerceivedScene,
     ScenarioRunsOnlyInSimulation,
     SceneNotBuiltYet,
 )
@@ -78,7 +80,9 @@ from experiments.montessori.world import MontessoriWorld
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.world import BOARD_POSITION, BOARD_SCALE
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
-from experiments.scenarios.runner import RecordedOperatorPrompt, ScenarioRunner
+from experiments.scenarios.runner import ScenarioRunner
+from experiments.scenarios.scenario import AbsentPerson
+from segmind.datastructures.events import TranslationEvent
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.adapters.multi_sim import MujocoLight
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -180,6 +184,52 @@ class WorldBuilderThatKeepsWhatItBuilt(BoardOnItsOwnTable):
         built = super().build(robot_type)
         self.built.append(built)
         return built
+
+
+@dataclass
+class WorldBuilderWhoseLookFindsTheCubeShoved(
+    BoardOnItsOwnTable, PerceivingWorldBuilder
+):
+    """
+    A scene builder standing in for one whose scene is perceived: every look it takes
+    after the first finds the cube shoved by a stated displacement, as a camera would
+    once the person at the table had shoved it, and the world holds the cube there.
+
+    A displacement of nothing stands in for a person who did nothing.
+    """
+
+    shoved_by: Vector3 = field(kw_only=True)
+    """
+    How far each look finds the cube from where the look before found it.
+    """
+
+    built: List[World] = field(default_factory=list)
+    """
+    Every scene this has been asked for, in the order it was asked for them.
+    """
+
+    looks_taken: int = 0
+    """
+    How often the scene has been looked at again since it was built.
+    """
+
+    def build(self, robot_type: Type[AbstractRobot]) -> World:
+        built = super().build(robot_type)
+        self.built.append(built)
+        return built
+
+    def perceive(self) -> None:
+        self.looks_taken += 1
+        scene = SortingScene(self.built[-1])
+        found_at = scene.position_of(MontessoriShapeCategory.CUBE)
+        scene.stand_the_piece_at(
+            MontessoriShapeCategory.CUBE,
+            Point3(
+                float(found_at.x) + float(self.shoved_by.x),
+                float(found_at.y) + float(self.shoved_by.y),
+                float(found_at.z) + float(self.shoved_by.z),
+            ),
+        )
 
 
 @dataclass
@@ -530,17 +580,34 @@ def test_a_piece_fixed_where_it_stands_is_moved_by_restating_where_it_is_fixed()
 # %% a run on the robot
 
 
+def a_run_on_the_robot(
+    area, shoved_by: Vector3 = Vector3(0.0, 0.0, 0.0)
+) -> tuple[TheSceneStandsStill, WorldBuilderWhoseLookFindsTheCubeShoved]:
+    """
+    The static run on the robot, in a scene whose every later look finds the cube shoved
+    by the given displacement.
+
+    :param area: The patch of table the pieces stand on.
+    :param shoved_by: How far the person at the table is found to have shoved the cube.
+    """
+    builder = WorldBuilderWhoseLookFindsTheCubeShoved(
+        robot=mounted_arm(), shoved_by=shoved_by
+    )
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=builder,
+        execution_type=ExecutionType.REAL,
+    )
+    return scenario, builder
+
+
 def test_a_run_on_the_robot_is_carried_by_the_real_world(area):
     """
     Nothing simulates a scene on the robot: the trial runs with no simulation built and
     no synchronizer left on the world.
     """
-    scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area),
-        world_builder=board_and_the_arm(),
-        execution_type=ExecutionType.REAL,
-    )
-    runner = ScenarioRunner(operator_prompt=RecordedOperatorPrompt())
+    scenario, _ = a_run_on_the_robot(area)
+    runner = ScenarioRunner(person=AbsentPerson())
 
     trial = runner.run_trial(scenario)
 
@@ -555,25 +622,61 @@ def test_a_run_on_the_robot_is_carried_by_the_real_world(area):
     )
 
 
-def test_a_perturbation_on_the_robot_is_asked_of_the_person_and_moves_the_scene(area):
-    scenario = SyntheticGrasperWatchesTheSceneStandStill(
-        layout=PieceLayout.randomized(seed=SEED, area=area),
-        world_builder=board_and_the_arm(),
-        execution_type=ExecutionType.REAL,
+def test_a_run_on_the_robot_needs_a_scene_it_can_look_at(area):
+    """
+    What the person at the table changes reaches the world only through a look, so a
+    scene that is built rather than perceived cannot be run on the robot.
+    """
+    with pytest.raises(RealRunNeedsAPerceivedScene) as refused:
+        SyntheticGrasperWatchesTheSceneStandStill(
+            layout=PieceLayout.randomized(seed=SEED, area=area),
+            world_builder=board_and_the_arm(),
+            execution_type=ExecutionType.REAL,
+        )
+
+    assert refused.value.scenario_name == TheSceneStandsStill.name
+
+
+def test_a_shove_on_the_robot_is_the_persons_and_is_learned_of_by_looking(area):
+    scenario, builder = a_run_on_the_robot(
+        area, shoved_by=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING
     )
-    prompt = RecordedOperatorPrompt()
+    person = AbsentPerson()
     shove = PieceShoved(
         step=SortingStep.SETTLE,
         category=MontessoriShapeCategory.CUBE,
         displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
     )
 
-    trial = ScenarioRunner(operator_prompt=prompt).run_trial(
+    trial = ScenarioRunner(person=person).run_trial(scenario, perturbations=[shove])
+
+    assert person.asked == [shove.instruction_for_a_person()]
+    assert builder.looks_taken == 1
+    assert trial.outcome is TrialOutcome.FAILED
+
+
+def test_a_shove_the_look_does_not_find_leaves_the_world_as_it_was(area):
+    """
+    The run never writes the shove into the world itself: where the look finds the cube
+    where it stood, the scene counts as undisturbed however the person was asked.
+    """
+    scenario, builder = a_run_on_the_robot(area)
+    shove = PieceShoved(
+        step=SortingStep.SETTLE,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    )
+
+    trial = ScenarioRunner(person=AbsentPerson()).run_trial(
         scenario, perturbations=[shove]
     )
 
-    assert prompt.shown == [shove.instruction_for_a_person()]
-    assert trial.outcome is TrialOutcome.FAILED
+    assert builder.looks_taken == 1
+    assert trial.outcome is TrialOutcome.SUCCEEDED
+    stood_at = scenario.starting_layout.placement_of(MontessoriShapeCategory.CUBE)
+    assert SortingScene(builder.built[-1]).stands_at(
+        MontessoriShapeCategory.CUBE, stood_at
+    )
 
 
 def test_a_run_on_the_robot_cannot_be_filmed(area):
@@ -1089,8 +1192,10 @@ def test_a_moved_target_hole_stands_the_displacement_away_from_where_it_was(area
 def test_a_moved_target_hole_carries_the_boards_other_holes_with_it(area):
     """
     A hole is cut into the board rather than standing beside it, so the board is what
-    moves and every hole in it travels the same distance. Naming one hole says which
-    displacement is being stated, not that the board bends around it.
+    moves and every hole in it travels the same distance.
+
+    Naming one hole says which displacement is being stated, not that the board bends
+    around it.
     """
     world = a_scene_to_perturb(area)
     scene = SortingScene(world)
@@ -1107,6 +1212,47 @@ def test_a_moved_target_hole_carries_the_boards_other_holes_with_it(area):
         scene.hole_for(alongside).root.global_transform.to_position().to_np() - stood_at
     )
     assert numpy.linalg.norm(moved_by[:3]) == pytest.approx(HOW_FAR_A_MOVED_HOLE_GOES)
+
+
+def test_a_shove_is_the_translation_of_the_piece_by_its_displacement(area):
+    world = a_scene_to_perturb(area)
+    scene = SortingScene(world)
+    cube = scene.body_of(MontessoriShapeCategory.CUBE)
+    stood_at = cube.global_transform.to_np()
+
+    event = PieceShoved(
+        step=SortingStep.SETTLE,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).event_in(world)
+
+    assert type(event) is TranslationEvent
+    assert event.tracked_object is cube
+    assert numpy.allclose(event.start_pose.to_homogeneous_matrix().to_np(), stood_at)
+    ended_at = event.current_pose.to_homogeneous_matrix().to_np()
+    assert numpy.allclose(ended_at[:3, :3], stood_at[:3, :3])
+    assert (ended_at[:3, 3] - stood_at[:3, 3]) == pytest.approx(
+        HOW_FAR_A_PERTURBATION_MOVES_SOMETHING.to_np()[:3].flatten()
+    )
+
+
+def test_a_moved_target_hole_is_the_translation_of_the_board(area):
+    world = a_scene_to_perturb(area)
+    board = SortingScene(world).board.root
+
+    event = TargetHoleMoved(
+        step=SortingStep.PUT_DOWN,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).event_in(world)
+
+    assert type(event) is TranslationEvent
+    assert event.tracked_object is board
+    moved_by = (
+        event.current_pose.to_homogeneous_matrix().to_np()[:3, 3]
+        - board.global_transform.to_np()[:3, 3]
+    )
+    assert numpy.linalg.norm(moved_by) == pytest.approx(HOW_FAR_A_MOVED_HOLE_GOES)
 
 
 def test_a_shoved_piece_stands_the_displacement_away_from_where_it_was(area):

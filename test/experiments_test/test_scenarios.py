@@ -23,6 +23,7 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Noun,
     Adjective,
 )
+from segmind.datastructures.events import ReproducibleEvent
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 
@@ -32,15 +33,15 @@ from experiments.experiment_definitions import (
     NoMeasurementsError,
 )
 from experiments.scenarios.report import GoalReached, Report, TrialDuration
-from experiments.scenarios.runner import (
-    ConsoleOperatorPrompt,
-    RecordedOperatorPrompt,
-    ScenarioRunner,
-)
+from experiments.scenarios.runner import ScenarioRunner
 from experiments.scenarios.scenario import (
+    AbsentPerson,
+    EventBroughtAbout,
     Goal,
+    PersonAtTheConsole,
     Perturbation,
     Scenario,
+    ScenarioCannotPerceive,
     ScenarioCondition,
     ScenarioStep,
     StepName,
@@ -96,6 +97,11 @@ class RecordedWorld(World):
     is_released: bool = False
     """
     Whether the trial that ran in this world has released it again.
+    """
+
+    looks_taken: int = 0
+    """
+    How often the scenario has looked at this world's scene.
     """
 
 
@@ -161,6 +167,30 @@ class PiecePushedAway(Perturbation[RecordedWorld]):
 
 
 @dataclass
+class PushRecordedAsHappened(ReproducibleEvent):
+    """
+    An event whose reproduction is recorded by the world it happens in.
+    """
+
+    def reproduce(self, world: RecordedWorld) -> None:
+        world.piece_was_pushed = True
+
+
+@dataclass
+class PiecePushedAwayAsAnEvent(EventBroughtAbout[RecordedWorld]):
+    """
+    The piece pushed away as an event of the scene, so on the robot the run looks at
+    the scene once the person has pushed it.
+    """
+
+    def event_in(self, world: RecordedWorld) -> ReproducibleEvent:
+        return PushRecordedAsHappened()
+
+    def instruction_for_a_person(self) -> str:
+        return "Push the piece away."
+
+
+@dataclass
 class SortOnePiece(Scenario[RecordedWorld, TwoFingerGripper]):
     """
     A scenario that picks the piece up and puts it down again.
@@ -186,6 +216,16 @@ class SortOnePiece(Scenario[RecordedWorld, TwoFingerGripper]):
 
     def goal(self, world: RecordedWorld) -> Goal[RecordedWorld]:
         return PieceWasSorted(world=world)
+
+
+@dataclass
+class SortOnePieceWithACamera(SortOnePiece):
+    """
+    The same scenario with a way of looking at its scene, which counts the looks.
+    """
+
+    def perceive(self, world: RecordedWorld) -> None:
+        world.looks_taken += 1
 
 
 class StepFailed(Exception):
@@ -550,7 +590,7 @@ class TestReport:
             report.summarize(GoalReached())
 
 
-# %% a trial on the real robot asks a person to bring the perturbation about
+# %% a trial on the robot has the person at the scene bring the perturbation about
 
 
 @dataclass
@@ -570,10 +610,10 @@ class TrialStartKeepingRunner(ScenarioRunner[SortOnePiece, RecordedWorld]):
 
 
 @dataclass
-class PromptReadingThePiece:
+class PersonReadingTheWorld:
     """
-    A prompt that reads, each time it is shown an instruction, whether the piece of the
-    trial's world has been pushed yet.
+    A person who reads, each time they are asked to do something, how often the
+    trial's world has been looked at so far.
     """
 
     scenario: SortOnePiece
@@ -581,70 +621,123 @@ class PromptReadingThePiece:
     The scenario whose latest world is read.
     """
 
-    piece_was_pushed_when_shown: list[bool] = field(default_factory=list)
+    looks_taken_when_asked: list[int] = field(default_factory=list)
     """
-    What the world said each time an instruction was shown.
-    """
-
-    def show(self, instruction: str) -> None:
-        self.piece_was_pushed_when_shown.append(
-            self.scenario.built_worlds[-1].piece_was_pushed
-        )
-
-
-class TestPromptingTheOperator:
-    """
-    A trial on the real robot has no world to write a perturbation into, so the person
-    at the table is told what to do before the perturbation is applied.
+    What the world said each time an instruction was given.
     """
 
-    def test_the_operator_is_shown_the_perturbations_own_instruction(self):
+    def carry_out(self, instruction: str) -> None:
+        self.looks_taken_when_asked.append(self.scenario.built_worlds[-1].looks_taken)
+
+
+class TestThePersonAtTheScene:
+    """
+    A perturbation is made by someone other than the robot: the run itself in
+    simulation, the person at the scene on the robot.
+    """
+
+    def test_the_person_is_given_the_perturbations_own_instruction(self):
         perturbation = PiecePushedAway(step=SortingStep.PUT_DOWN)
-        prompt = RecordedOperatorPrompt()
+        person = AbsentPerson()
 
-        ScenarioRunner(operator_prompt=prompt).run_trial(
+        ScenarioRunner(person=person).run_trial(
             SortOnePiece(execution_type=ExecutionType.REAL),
             perturbations=[perturbation],
         )
 
-        assert prompt.shown == [perturbation.instruction_for_a_person()]
+        assert person.asked == [perturbation.instruction_for_a_person()]
 
-    def test_a_simulated_trial_asks_nobody(self):
-        prompt = RecordedOperatorPrompt()
+    def test_a_simulated_trial_asks_nobody_and_makes_the_change_itself(self):
+        person = AbsentPerson()
+        scenario = SortOnePiece()
 
-        ScenarioRunner(operator_prompt=prompt).run_trial(
-            SortOnePiece(), perturbations=[PiecePushedAway(step=SortingStep.PUT_DOWN)]
-        )
-
-        assert prompt.shown == []
-
-    def test_the_operator_is_asked_before_the_perturbation_is_applied(self):
-        """
-        The instruction is what brings the change about on the robot, so it is shown
-        before the trial goes on as if the change had happened.
-        """
-        scenario = SortOnePiece(execution_type=ExecutionType.REAL)
-        prompt = PromptReadingThePiece(scenario=scenario)
-
-        ScenarioRunner(operator_prompt=prompt).run_trial(
+        ScenarioRunner(person=person).run_trial(
             scenario, perturbations=[PiecePushedAway(step=SortingStep.PUT_DOWN)]
         )
 
-        assert prompt.piece_was_pushed_when_shown == [False]
+        assert person.asked == []
         [world] = scenario.built_worlds
         assert world.piece_was_pushed
 
-    def test_the_console_prompt_prints_the_instruction_and_waits_for_a_line(self):
+    def test_what_the_person_did_is_never_written_into_the_world(self):
+        scenario = SortOnePiece(execution_type=ExecutionType.REAL)
+
+        ScenarioRunner(person=AbsentPerson()).run_trial(
+            scenario, perturbations=[PiecePushedAway(step=SortingStep.PUT_DOWN)]
+        )
+
+        [world] = scenario.built_worlds
+        assert not world.piece_was_pushed
+
+    def test_the_console_person_is_shown_the_instruction_and_confirms_with_a_line(
+        self,
+    ):
         instruction = PiecePushedAway(
             step=SortingStep.PUT_DOWN
         ).instruction_for_a_person()
         output = StringIO()
         keyboard = StringIO("\n")
 
-        ConsoleOperatorPrompt(output=output, keyboard=keyboard).show(instruction)
+        PersonAtTheConsole(output=output, keyboard=keyboard).carry_out(instruction)
 
         assert instruction in output.getvalue()
         assert keyboard.read() == ""
+
+
+class TestAnEventBroughtAbout:
+    """
+    A perturbation that is an event of the scene is reproduced in a simulated world,
+    and on the robot the scene is looked at once the person has brought it about.
+    """
+
+    def test_a_simulated_trial_reproduces_the_event_in_its_world(self):
+        scenario = SortOnePieceWithACamera()
+        person = AbsentPerson()
+
+        ScenarioRunner(person=person).run_trial(
+            scenario,
+            perturbations=[PiecePushedAwayAsAnEvent(step=SortingStep.PUT_DOWN)],
+        )
+
+        [world] = scenario.built_worlds
+        assert world.piece_was_pushed
+        assert world.looks_taken == 0
+        assert person.asked == []
+
+    def test_on_the_robot_the_scene_is_looked_at_once_the_person_has_acted(self):
+        scenario = SortOnePieceWithACamera(execution_type=ExecutionType.REAL)
+        person = PersonReadingTheWorld(scenario=scenario)
+
+        ScenarioRunner(person=person).run_trial(
+            scenario,
+            perturbations=[PiecePushedAwayAsAnEvent(step=SortingStep.PUT_DOWN)],
+        )
+
+        assert person.looks_taken_when_asked == [0]
+        [world] = scenario.built_worlds
+        assert world.looks_taken == 1
+        assert not world.piece_was_pushed
+
+    def test_a_perturbation_that_is_no_event_has_the_scene_left_unlooked_at(self):
+        scenario = SortOnePieceWithACamera(execution_type=ExecutionType.REAL)
+
+        ScenarioRunner(person=AbsentPerson()).run_trial(
+            scenario, perturbations=[PiecePushedAway(step=SortingStep.PUT_DOWN)]
+        )
+
+        [world] = scenario.built_worlds
+        assert world.looks_taken == 0
+
+    def test_a_scenario_that_cannot_look_at_its_scene_says_so(self):
+        scenario = SortOnePiece(execution_type=ExecutionType.REAL)
+
+        with pytest.raises(ScenarioCannotPerceive) as refused:
+            ScenarioRunner(person=AbsentPerson()).run_trial(
+                scenario,
+                perturbations=[PiecePushedAwayAsAnEvent(step=SortingStep.PUT_DOWN)],
+            )
+
+        assert refused.value.scenario_name == SortOnePiece.name
 
 
 class TestTrialStart:

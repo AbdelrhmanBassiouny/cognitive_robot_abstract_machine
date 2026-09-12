@@ -35,6 +35,7 @@ from experiments.montessori.pieces import KnownPieceSet
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShape,
+    MontessoriShapeCategory,
     ShapeSortingBoard,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -95,12 +96,13 @@ def hold_board(
     period: float = BOARD_SEARCH_PERIOD_SECONDS,
 ) -> ShapeSortingBoard:
     """
-    Have the world the robot publishes hold the shape-sorting board on this table, and
-    the look read that board's lid from then on.
+    Have the world the robot publishes hold the shape-sorting board on this table where
+    a look finds it now, and the look read that board's lid from then on.
 
-    A world holding no board has the board looked for by its description, and the board
-    found stood in the world where it was found; the look's pipeline is then handed one
-    reading the lid of the board the world holds, whichever way it came to hold it.
+    The board is looked for by its description. A world holding no board has the board
+    found stood in it; a world already holding one has that board moved to where it is
+    found now, or kept where it was if no look shows it. The look's pipeline is then
+    handed one reading the lid of the board the world holds.
 
     :param world: The world the robot publishes.
     :param look: The source to look through, which is handed the pipeline reading the
@@ -114,10 +116,11 @@ def hold_board(
     :raises NoBoardInView: If the world holds no board and none is in view.
     """
     board = ShapeSortingBoard.held_by(world)
-    for look_taken in range(looks if board is None else 0):
+    publisher = BoardPublisher(world=world)
+    for look_taken in range(looks):
         found = look_for_board(look, described)
         if found is not None:
-            board = BoardPublisher(world=world).publish(described, found)
+            board = publisher.publish(described, found)
             logger.info("Found the board and published it as %s.", board.name)
             break
         logger.info("No board answering the description is in view yet.")
@@ -137,8 +140,8 @@ def hold_board(
 @dataclass
 class BoardPublisher:
     """
-    Stands the board a look found in the world the robot publishes, unless that world
-    already holds one.
+    Stands the board a look found in the world the robot publishes, or, where that world
+    already holds one, moves it to where the look found it now.
     """
 
     world: World
@@ -152,13 +155,15 @@ class BoardPublisher:
         """
         :param described: The board the look was asked for.
         :param found: That board, as the look stood it where it was found.
-        :return: The board the published world holds: the one it already held, or the
-            found one newly stood there.
+        :return: The board the published world holds: the one it already held, now
+            standing where the look found it, or the found one newly stood there.
         """
+        lid_pose = self.lid_pose_of(found)
         held = ShapeSortingBoard.held_by(self.world)
-        if held is not None:
-            return held
-        return described.stand_in(self.world, self.lid_pose_of(found), PUBLISHED_PREFIX)
+        if held is None:
+            return described.stand_in(self.world, lid_pose, PUBLISHED_PREFIX)
+        described.move_in(self.world, held, lid_pose)
+        return held
 
     @staticmethod
     def lid_pose_of(found: ShapeSortingBoard) -> Pose:
@@ -186,6 +191,10 @@ class PiecePublisher:
     own reading of how tall the piece stands is not used: a depth image that barely
     resolves a piece reads it far shorter than it is, and a body stood on that reading
     would sink into the table.
+
+    A piece taken down before a look and found again by it is stood as the body it
+    already was, so whatever kept it -- a monitor watching it, a question about it --
+    keeps the piece the new look found.
     """
 
     world: World
@@ -199,27 +208,36 @@ class PiecePublisher:
     were stood.
     """
 
+    taken_down: List[MontessoriShape] = field(init=False, default_factory=list)
+    """
+    The pieces taken down since the last look, each waiting to be stood again if that
+    look finds a piece of its kind.
+    """
+
     stood: int = field(init=False, default=0)
     """
-    How many pieces have ever been stood, which is what gives each its own name.
+    How many pieces have ever been stood anew, which is what gives each its own name.
     """
 
     def publish(
         self, scene: MontessoriScene, resting_on: PrefixedName
     ) -> List[MontessoriShape]:
         """
-        Stand every piece one look put on one surface.
+        Stand every piece one look put on one surface; a piece taken down and not found
+        again is gone for good.
 
         :param scene: What the look found.
         :param resting_on: What the look calls the surface a piece must rest on to be
             stood; a piece on any other surface is left out.
         :return: The pieces stood, in the order the look reported them.
         """
-        return [
+        stood = [
             self.publish_piece(shape)
             for shape in scene.shapes
             if shape.supporting_surface == resting_on
         ]
+        self.taken_down = []
+        return stood
 
     def take_down(self) -> None:
         """
@@ -230,25 +248,27 @@ class PiecePublisher:
             for piece in self.published:
                 self.world.remove_semantic_annotation(piece)
                 self.world.remove_kinematic_structure_entity(piece.root)
+        self.taken_down = self.published
         self.published = []
 
     def publish_piece(self, shape: DetectedMontessoriShape) -> MontessoriShape:
         """
-        Stand one piece where a look saw it.
+        Stand one piece where a look saw it: the piece of its kind taken down before the
+        look, if there is one, or a new one.
 
         :param shape: The piece as the look found it.
         :return: The piece as the published world now holds it.
         """
-        name = PrefixedName(f"{shape.category}_{self.stood}", PUBLISHED_PREFIX)
-        self.stood += 1
+        piece = self._taken_down_piece_of(shape.category)
+        if piece is None:
+            piece = self._new_piece(shape)
         known = shape.hypothesis.piece_of(shape.category)
-        body = Body.from_shape_collection(name, ShapeCollection([piece_mesh(known)]))
         seen_at = self.world.transform(shape.pose, self.world.root).to_position()
         with self.world.modify_world():
             self.world.add_connection(
                 FixedConnection(
                     parent=self.world.root,
-                    child=body,
+                    child=piece.root,
                     parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                         x=float(seen_at.x),
                         y=float(seen_at.y),
@@ -258,10 +278,36 @@ class PiecePublisher:
                     ),
                 )
             )
-            piece = MONTESSORI_SHAPE_CLASSES[shape.category](name=name, root=body)
             self.world.add_semantic_annotation(piece)
         self.published.append(piece)
         return piece
+
+    def _taken_down_piece_of(
+        self, category: MontessoriShapeCategory
+    ) -> Optional[MontessoriShape]:
+        """
+        The piece of a kind taken down before the look, taken out of the waiting ones.
+
+        :param category: The kind of piece.
+        :return: The piece, or None where none of that kind is waiting.
+        """
+        for piece in self.taken_down:
+            if piece.shape_category is category:
+                self.taken_down.remove(piece)
+                return piece
+        return None
+
+    def _new_piece(self, shape: DetectedMontessoriShape) -> MontessoriShape:
+        """
+        A piece never stood before, under a name of its own.
+
+        :param shape: The piece as the look found it.
+        """
+        name = PrefixedName(f"{shape.category}_{self.stood}", PUBLISHED_PREFIX)
+        self.stood += 1
+        known = shape.hypothesis.piece_of(shape.category)
+        body = Body.from_shape_collection(name, ShapeCollection([piece_mesh(known)]))
+        return MONTESSORI_SHAPE_CLASSES[shape.category](name=name, root=body)
 
 
 # %% the scene a look stands
@@ -273,8 +319,9 @@ class PerceivedScene:
     The Montessori scene as the camera finds it, stood in the world the robot publishes.
 
     That world holds the robot and its table; the board and the loose pieces are stood
-    in it by looking. Every look stands the pieces afresh, so a scene perceived again
-    after the table was changed holds the pieces where they stand now.
+    in it by looking. Every look stands them where the camera finds them now, so a scene
+    perceived again after the table was changed holds the same board and the same pieces
+    where they stand now.
     """
 
     world: World
@@ -347,9 +394,9 @@ class PerceivedScene:
 
         The pieces an earlier look stood are taken down first, so the look is not told
         to expect them where they stood; the board is then looked for by its description
-        and stood where it was found unless the world already holds one; and once the
-        pipeline is handed the board's lid, one look stands every piece resting on the
-        bare table.
+        and stood, or moved to, where it is found; and once the pipeline is handed the
+        board's lid, one look stands every piece resting on the bare table -- each piece
+        found again as the body it already was.
 
         :raises NoBoardInView: If the world holds no board and none is in view.
         """

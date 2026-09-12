@@ -221,3 +221,29 @@ class RealRunCannotBeFilmed(DataclassException):
             "A trial is filmed from the simulation carrying it; on the robot, record a "
             "bag of the camera instead."
         )
+
+
+@dataclass
+class RealRunNeedsAPerceivedScene(DataclassException):
+    """
+    Raised when a scenario running on the robot is given a scene that is built rather
+    than perceived: what the person at the table changes reaches the world only through
+    a look, and a built scene has nothing to look with.
+    """
+
+    scenario_name: str
+    """
+    The name of the scenario that was given the scene.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"'{self.scenario_name}' runs on the robot, so its scene has to be one the "
+            f"robot's camera finds."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Give the scenario a scene builder that perceives the scene, or run it in "
+            "simulation."
+        )

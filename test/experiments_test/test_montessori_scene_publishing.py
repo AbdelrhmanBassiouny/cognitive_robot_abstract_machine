@@ -1,15 +1,17 @@
 """
 Tests for :mod:`experiments.montessori.perception.scene_publishing`: the board a look
-found is stood in the world the robot publishes, once, where the look found it, the
-pieces a look found are stood there as the pieces they were seen as, and a scene
-perceived again stands them afresh.
+found is stood in the world the robot publishes where the look found it, the pieces a
+look found are stood there as the pieces they were seen as, and a scene perceived again
+holds the same board and the same pieces where the camera finds them now.
 """
 
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass, field
 
 import pytest
+from typing_extensions import List
 
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.hole_geometry import BoardHoleLayout
@@ -27,13 +29,23 @@ from experiments.montessori.perception.scene_publishing import (
     PiecePublisher,
     look_for_board,
 )
+from experiments.montessori.perception.detections import MontessoriScene
+from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import RecordedFrame
 from experiments.montessori.pieces import SMALLER_PIECES
 from experiments.montessori.perception.surfaces import WorkspaceSurface
-from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
+from experiments.montessori.semantics import (
+    MontessoriShape,
+    MontessoriShapeCategory,
+    ShapeSortingBoard,
+)
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+    Vector3,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -176,21 +188,47 @@ def test_taking_the_pieces_down_leaves_none_of_them_in_the_world(
     assert not {piece.root for piece in stood} & set(live.bodies)
 
 
-def test_pieces_stood_after_a_take_down_keep_their_own_names(
+def test_a_piece_found_again_after_a_take_down_is_stood_as_the_same_piece(
     look: RecordedFrame,
 ) -> None:
     """
-    A name is never given twice, so nothing that kept a piece of the first look can
-    mistake one of the second for it.
+    Whatever kept a piece of the first look -- a monitor watching it, a question about
+    it -- keeps the piece the second look finds, so a piece is stood again as the body
+    it already was.
     """
     scene = look.scene()
-    publisher = PiecePublisher(world=look.pipeline.world)
+    live = look.pipeline.world
+    publisher = PiecePublisher(world=live)
     first = publisher.publish(scene, resting_on=look.pipeline.table.name)
 
     publisher.take_down()
     second = publisher.publish(scene, resting_on=look.pipeline.table.name)
 
-    assert not {piece.name for piece in first} & {piece.name for piece in second}
+    assert second == first
+    assert all(piece.root in live.bodies for piece in second)
+    assert live.get_semantic_annotations_by_type(MontessoriShape) == second
+
+
+def test_a_piece_the_next_look_no_longer_finds_stays_taken_down(
+    look: RecordedFrame,
+) -> None:
+    scene = look.scene()
+    live = look.pipeline.world
+    publisher = PiecePublisher(world=live)
+    first = publisher.publish(scene, resting_on=look.pipeline.table.name)
+    gone, *still_there = scene.shapes
+
+    publisher.take_down()
+    second = publisher.publish(
+        MontessoriScene(shapes=still_there, board=scene.board, imagined=scene.imagined),
+        resting_on=look.pipeline.table.name,
+    )
+
+    assert [piece.shape_category for piece in second] == [
+        shape.category for shape in still_there
+    ]
+    assert set(second) < set(first)
+    assert live.get_semantic_annotations_by_type(MontessoriShape) == second
 
 
 # %% the scene a look stands
@@ -215,25 +253,145 @@ def test_a_perceived_scene_holds_the_board_and_the_pieces_the_look_found(
     assert scene.table_height == pytest.approx(TABLE_HEIGHT)
 
 
-def test_a_scene_perceived_again_stands_the_pieces_afresh_and_keeps_the_board(
-    look: RecordedFrame,
+A_SHOVE = Vector3(0.05, -0.02, 0.0)
+"""
+How far the look below finds the cube from where it stood, as a person's shove would
+leave it.
+"""
+
+A_SLIDE = Vector3(0.0, 0.04, 0.0)
+"""
+How far the look below finds the board from where it stood.
+"""
+
+
+@dataclass
+class RecordedFrameWhoseSceneCanBeMoved(RecordedFrame):
+    """
+    A look at one frame that reports, once told the scene has moved, the cube shoved and
+    the board slid by stated displacements -- what a camera reports once the person at
+    the table has moved them.
+    """
+
+    cube_shoved_by: Vector3 = field(kw_only=True)
+    """
+    How far the cube is found from where it stood, once the scene has moved.
+    """
+
+    board_slid_by: Vector3 = field(kw_only=True)
+    """
+    How far the board is found from where it stood, once the scene has moved.
+    """
+
+    moved: bool = False
+    """
+    Whether the person has moved the cube and the board yet.
+    """
+
+    def scene(self, request: SceneRequest = SceneRequest()) -> MontessoriScene:
+        seen = super().scene(request)
+        if not self.moved:
+            return seen
+        for shape in seen.shapes:
+            if shape.category is MontessoriShapeCategory.CUBE:
+                shape.pose = _moved(shape.pose, self.cube_shoved_by)
+        if seen.stood_board is not None:
+            imagined = seen.imagined.world
+            imagined.move_branch_to(
+                seen.stood_board.root,
+                _moved(
+                    seen.stood_board.root.global_pose, self.board_slid_by
+                ).to_homogeneous_matrix(),
+            )
+        return seen
+
+
+def _moved(pose: Pose, by: Vector3) -> Pose:
+    """
+    :return: The pose moved by a displacement in the frame it is stated in.
+    """
+    return (
+        HomogeneousTransformationMatrix.from_xyz_rpy(
+            x=float(by.x),
+            y=float(by.y),
+            z=float(by.z),
+            reference_frame=pose.reference_frame,
+        )
+        @ pose.to_homogeneous_matrix()
+    ).to_pose()
+
+
+@pytest.fixture
+def moving_look() -> RecordedFrameWhoseSceneCanBeMoved:
+    """
+    The capture, which can be told the cube was shoved and the board slid.
+    """
+    return RecordedFrameWhoseSceneCanBeMoved(
+        pipeline=perception_pipeline(world=recorded_world(), pieces=SMALLER_PIECES),
+        frame=SceneCapture.load(MEASURED_CAPTURE).to_frame(),
+        cube_shoved_by=A_SHOVE,
+        board_slid_by=A_SLIDE,
+    )
+
+
+def _position_of(body: Body) -> List[float]:
+    """
+    :return: Where a body stands, as ``[x, y]`` in the world root frame.
+    """
+    return body.global_transform.to_position().to_np()[:2].flatten().tolist()
+
+
+def test_a_scene_perceived_again_holds_the_same_pieces_where_the_look_finds_them_now(
+    moving_look: RecordedFrameWhoseSceneCanBeMoved,
 ) -> None:
-    """
-    The pieces of the first look are gone from the world, the second look's stand in
-    their place, and the board found once is the board the world holds.
-    """
-    live = look.pipeline.world
-    scene = PerceivedScene(world=live, look=look, described_board=lab_board())
+    live = moving_look.pipeline.world
+    scene = PerceivedScene(world=live, look=moving_look, described_board=lab_board())
     scene.perceive()
-    board, first = scene.board, list(scene.pieces)
+    first = list(scene.pieces)
+    stood_at = {piece: _position_of(piece.root) for piece in first}
+    [cube] = [
+        piece for piece in first if piece.shape_category is MontessoriShapeCategory.CUBE
+    ]
+    moving_look.moved = True
+
+    scene.perceive()
+
+    assert scene.pieces == first
+    assert live.get_semantic_annotations_by_type(MontessoriShape) == first
+    assert all(piece.root in live.bodies for piece in first)
+    assert _position_of(cube.root) == pytest.approx(
+        [stood_at[cube][0] + float(A_SHOVE.x), stood_at[cube][1] + float(A_SHOVE.y)]
+    )
+    for piece in first:
+        if piece is not cube:
+            assert _position_of(piece.root) == pytest.approx(stood_at[piece])
+
+
+def test_a_scene_perceived_again_holds_the_same_board_where_the_look_finds_it_now(
+    moving_look: RecordedFrameWhoseSceneCanBeMoved,
+) -> None:
+    live = moving_look.pipeline.world
+    scene = PerceivedScene(world=live, look=moving_look, described_board=lab_board())
+    scene.perceive()
+    board = scene.board
+    stood_at = _position_of(board.root)
+    holes_stood_at = [_position_of(hole.root) for hole in board.apertures]
+    moving_look.moved = True
 
     scene.perceive()
 
     assert scene.board is board
     assert ShapeSortingBoard.held_by(live) is board
-    assert live.get_semantic_annotations_by_type(MontessoriShape) == scene.pieces
-    assert len(scene.pieces) == len(first)
-    assert not {piece.root for piece in first} & set(live.bodies)
+    assert _position_of(board.root) == pytest.approx(
+        [stood_at[0] + float(A_SLIDE.x), stood_at[1] + float(A_SLIDE.y)]
+    )
+    for hole, hole_stood_at in zip(board.apertures, holes_stood_at):
+        assert _position_of(hole.root) == pytest.approx(
+            [hole_stood_at[0] + float(A_SLIDE.x), hole_stood_at[1] + float(A_SLIDE.y)]
+        )
+    assert moving_look.pipeline.lid == WorkspaceSurface.of(
+        board, moving_look.pipeline.reference_frame
+    )
 
 
 # %% looking for the board

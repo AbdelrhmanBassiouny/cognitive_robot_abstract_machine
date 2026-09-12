@@ -15,9 +15,11 @@ A simulated run is carried in MuJoCo (:class:`SimulatedScene`), and what a step 
 does through the simulation: a scene comes to rest because gravity settles it, a piece
 is shoved because a body runs into it, and a piece goes through a hole because it falls
 through it. A run on the robot is carried by nothing (:class:`RealScene`): the scene
-runs itself, and what changes it is the person at the table. What the robot does it does
-through coraplex's own actions, which giskard executes as motions. What a goal then
-reads it reads with the twin's own predicates rather than by measuring the scene itself.
+runs itself, what changes it is the person at the table, and what the world learns of
+that it learns by looking, which is why such a run is set in a scene its camera finds
+(:class:`PerceivingWorldBuilder`). What the robot does it does through coraplex's own
+actions, which giskard executes as motions. What a goal then reads it reads with the
+twin's own predicates rather than by measuring the scene itself.
 """
 
 from __future__ import annotations
@@ -76,6 +78,7 @@ from experiments.montessori.exceptions import (
     HoleHasNoLandingRegionError,
     NoSuchPieceError,
     RealRunCannotBeFilmed,
+    RealRunNeedsAPerceivedScene,
     ScenarioRunsOnlyInSimulation,
     SceneNotBuiltYet,
 )
@@ -103,6 +106,7 @@ from experiments.montessori.world import (
     MontessoriWorld,
 )
 from experiments.scenarios.scenario import (
+    EventBroughtAbout,
     Goal,
     Perturbation,
     RobotType,
@@ -111,6 +115,7 @@ from experiments.scenarios.scenario import (
     StepName,
     WorldType,
 )
+from segmind.datastructures.events import ReproducibleEvent, TranslationEvent
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoCamera,
     MujocoLight,
@@ -868,22 +873,10 @@ class SortingScene:
         """
         Put a loose piece's body somewhere, whichever connection it hangs from.
 
-        A piece on a free connection is moved by its degrees of freedom; a piece fixed
-        where a look stood it can only be moved by restating where it is fixed, which
-        is a change to the world's model.
-
         :param body: The piece's body.
         :param root_T_body: Where the body is to stand, in the world root frame.
         """
-        connection = body.parent_connection
-        if connection.dofs:
-            connection.origin = root_T_body
-            return
-        parent_T_body = self.world.transform(root_T_body, connection.parent)
-        with self.world.modify_world():
-            connection.parent_T_connection_expression = (
-                parent_T_body @ connection.connection_T_child_expression.inverse()
-            )
+        self.world.move_branch_to(body, root_T_body)
 
     def is_held(self, category: MontessoriShapeCategory) -> bool:
         """
@@ -1754,16 +1747,16 @@ class LightingChanged(Perturbation[World]):
 
 
 @dataclass
-class TargetHoleMoved(Perturbation[World]):
+class TargetHoleMoved(EventBroughtAbout[World]):
     """
-    Slide the board, so the hole a piece is meant to drop through is no longer where
+    The board slides, so the hole a piece is meant to drop through is no longer where
     the robot was going to let go of it.
 
     The board is what moves, because a hole is cut into its lid rather than standing
     beside it: the board and every hole in it hang off connections with no degree of
-    freedom, so the one thing that can be moved is the board itself, and every hole
-    travels with it. The named hole therefore ends up exactly this displacement from
-    where it was, which is what a run aiming at it has to cope with.
+    freedom, so the one thing that can move is the board itself, and every hole travels
+    with it. The named hole therefore ends up exactly this displacement from where it
+    was, which is what a run aiming at it has to cope with.
     """
 
     category: MontessoriShapeCategory
@@ -1774,20 +1767,18 @@ class TargetHoleMoved(Perturbation[World]):
 
     displacement: Vector3
     """
-    How far the board is moved and which way, in the board's own frame.
+    How far the board slides and which way, in the board's own frame.
     """
 
-    def apply(self, world: World) -> None:
-        board = SortingScene(world).board.root.parent_connection
-        with world.modify_world():
-            board.parent_T_connection_expression = (
-                board.parent_T_connection_expression
-                @ HomogeneousTransformationMatrix.from_xyz_rpy(
-                    x=float(self.displacement.x),
-                    y=float(self.displacement.y),
-                    z=float(self.displacement.z),
-                )
-            )
+    def event_in(self, world: World) -> ReproducibleEvent:
+        board = SortingScene(world).board.root
+        return TranslationEvent(
+            tracked_object=board,
+            start_pose=board.global_pose,
+            current_pose=(
+                board.global_transform @ _translation_by(self.displacement)
+            ).to_pose(),
+        )
 
     def instruction_for_a_person(self) -> str:
         return (
@@ -1797,9 +1788,9 @@ class TargetHoleMoved(Perturbation[World]):
 
 
 @dataclass
-class PieceShoved(Perturbation[World]):
+class PieceShoved(EventBroughtAbout[World]):
     """
-    Move a loose piece, as something other than the robot running into it would.
+    A loose piece moves, as something other than the robot running into it would.
 
     Where the piece ends up is what this states; the shove itself, as a contact a body
     sliding along its rail makes, is :class:`PushThePiece`'s, which the one scenario
@@ -1809,24 +1800,22 @@ class PieceShoved(Perturbation[World]):
 
     category: MontessoriShapeCategory
     """
-    The shape of the piece that is moved.
+    The shape of the piece that moves.
     """
 
     displacement: Vector3
     """
-    How far the piece is moved and which way, in the world root frame.
+    How far the piece moves and which way, in the world root frame.
     """
 
-    def apply(self, world: World) -> None:
-        scene = SortingScene(world)
-        stands_at = scene.position_of(self.category)
-        scene.stand_the_piece_at(
-            self.category,
-            Point3(
-                float(stands_at.x) + float(self.displacement.x),
-                float(stands_at.y) + float(self.displacement.y),
-                float(stands_at.z) + float(self.displacement.z),
-            ),
+    def event_in(self, world: World) -> ReproducibleEvent:
+        piece = SortingScene(world).body_of(self.category)
+        return TranslationEvent(
+            tracked_object=piece,
+            start_pose=piece.global_pose,
+            current_pose=(
+                _translation_by(self.displacement, world.root) @ piece.global_transform
+            ).to_pose(),
         )
 
     def instruction_for_a_person(self) -> str:
@@ -1951,6 +1940,24 @@ class DetectionRelabelled(PerturbationOfWhatIsSeen):
         )
 
 
+def _translation_by(
+    displacement: Vector3, reference_frame: Optional[Body] = None
+) -> HomogeneousTransformationMatrix:
+    """
+    The transform that moves something by a displacement without turning it.
+
+    :param displacement: How far and which way.
+    :param reference_frame: The frame the displacement is stated in, where the
+        transform is applied in that frame rather than composed onto another.
+    """
+    return HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=float(displacement.x),
+        y=float(displacement.y),
+        z=float(displacement.z),
+        reference_frame=reference_frame,
+    )
+
+
 def _in_centimetres(displacement: Vector3) -> str:
     """
     How far a displacement reaches, worded for the person asked to bring it about.
@@ -2042,6 +2049,24 @@ class MontessoriWorldBuilder(ABC):
         """
         lowest_point_of_the_body = float(body.collision.combined_mesh.bounds[0][2])
         return self.table_top_z - lowest_point_of_the_body
+
+
+@dataclass
+class PerceivingWorldBuilder(MontessoriWorldBuilder, ABC):
+    """
+    A builder whose scene is the world the robot publishes with what its camera finds
+    stood in it, and which can look at that scene again.
+
+    The one kind of scene a run on the robot can be set in: what the person at the
+    table changes reaches the world only through a look.
+    """
+
+    @abstractmethod
+    def perceive(self) -> None:
+        """
+        Look at the scene again, so the world holds the board and the pieces where the
+        camera finds them now.
+        """
 
 
 @dataclass
@@ -2143,6 +2168,19 @@ class MontessoriSortingScenario(
             raise ScenarioRunsOnlyInSimulation(scenario_name=self.name)
         if self.filmed:
             raise RealRunCannotBeFilmed(scenario_name=self.name)
+        if not isinstance(self.world_builder, PerceivingWorldBuilder):
+            raise RealRunNeedsAPerceivedScene(scenario_name=self.name)
+
+    def perceive(self, world: World) -> None:
+        """
+        Have the scene looked at again, so the world holds the pieces where the camera
+        finds them now.
+
+        Only a run on the robot asks this, and such a run is set in a perceived scene.
+
+        :param world: The world the trial is running in.
+        """
+        self.world_builder.perceive()
 
     @property
     def starting_layout(self) -> PieceLayout:

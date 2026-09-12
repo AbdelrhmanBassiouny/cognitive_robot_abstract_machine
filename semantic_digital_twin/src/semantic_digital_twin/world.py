@@ -2051,6 +2051,42 @@ class World(HasSimulatorProperties, BeliefSource):
                 self.state[degree_of_freedom.id].jerk = 0
             self.notify_state_change()
 
+    def move_branch_to(
+        self,
+        branch_root: KinematicStructureEntity,
+        reference_T_branch_root: HomogeneousTransformationMatrix,
+    ) -> None:
+        """
+        Put a branch of the kinematic structure where a transform says, whichever
+        connection its root hangs from.
+
+        A branch on a connection with degrees of freedom is moved through them and keeps
+        its connection. A branch on a fixed connection has nothing to move it by, so its
+        connection is replaced by one stating the new place -- a change to the world's
+        model, which the world's history records as such.
+
+        :param branch_root: The root of the branch to move.
+        :param reference_T_branch_root: Where its root is to stand, in the frame the
+            transform states.
+        :raises NotImplementedError: If the connection's degrees of freedom cannot be
+            set to a transform.
+        """
+        connection = branch_root.parent_connection
+        if not isinstance(connection, FixedConnection):
+            connection.origin = reference_T_branch_root
+            return
+        parent_T_branch_root = self.transform(
+            reference_T_branch_root, connection.parent
+        )
+        parent_T_connection = (
+            parent_T_branch_root @ connection.connection_T_child_expression.inverse()
+        )
+        with self.modify_world():
+            self.remove_connection(connection)
+            self.add_connection(
+                connection.copy_with_new_parent(connection.parent, parent_T_connection)
+            )
+
     def move_branch_to_new_world(self, new_root: KinematicStructureEntity) -> World:
         """
         Copies the subgraph of the kinematic structure from the root body to a new world

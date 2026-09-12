@@ -72,7 +72,9 @@ from semantic_digital_twin.world_description.world_entity import (
     WorldEntityWithID,
 )
 from semantic_digital_twin.world_description.world_modification import (
+    AddConnectionModification,
     AttributeUpdateModification,
+    RemoveConnectionModification,
 )
 from semantic_digital_twin.world_description.world_state import (
     WorldStateTrajectory,
@@ -2178,6 +2180,70 @@ def test_move_branch_resets_free_connection_derivatives():
         assert world.state[dof.id].velocity == 0
         assert world.state[dof.id].acceleration == 0
         assert world.state[dof.id].jerk == 0
+
+
+# %% putting a branch somewhere, whichever connection it hangs from
+
+
+def test_a_branch_on_a_free_connection_is_put_somewhere_through_its_degrees_of_freedom():
+    world, free_child, _ = create_world_with_free_floating_child()
+    connection = free_child.parent_connection
+    blocks_before = len(world._model_manager.model_modification_blocks)
+    root_T_child = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=0.9, y=0.1, z=0.5, yaw=-0.4, reference_frame=world.root
+    )
+
+    world.move_branch_to(free_child, root_T_child)
+
+    assert free_child.parent_connection is connection
+    assert np.allclose(free_child.global_transform, root_T_child.to_np())
+    assert len(world._model_manager.model_modification_blocks) == blocks_before
+
+
+def test_a_branch_on_a_fixed_connection_is_put_somewhere_by_restating_the_connection():
+    """
+    A fixed connection has nothing to move a branch by, so the connection is replaced by
+    one stating the new place -- a change to the world's model that its history records
+    as the removal of the old connection and the addition of the new one.
+    """
+    world, _, fixed_child = create_world_with_free_floating_child()
+    old_connection = fixed_child.parent_connection
+    parent = old_connection.parent
+    blocks_before = len(world._model_manager.model_modification_blocks)
+    root_T_child = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=-0.2, y=0.6, z=0.3, yaw=0.8, reference_frame=world.root
+    )
+
+    world.move_branch_to(fixed_child, root_T_child)
+
+    new_connection = fixed_child.parent_connection
+    assert isinstance(new_connection, FixedConnection)
+    assert new_connection is not old_connection
+    assert new_connection.parent is parent
+    assert np.allclose(fixed_child.global_transform, root_T_child.to_np())
+    [block] = world._model_manager.model_modification_blocks[blocks_before:]
+    assert [type(modification) for modification in block.modifications] == [
+        RemoveConnectionModification,
+        AddConnectionModification,
+    ]
+
+
+def test_a_branch_is_put_where_a_transform_in_another_frame_says():
+    """
+    The place may be stated in any frame the world holds; here in the frame of a body
+    standing elsewhere, and the branch ends up at that body's own place offset by it.
+    """
+    world, free_child, elsewhere = create_world_with_free_floating_child()
+    elsewhere_T_child = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=0.5, reference_frame=elsewhere
+    )
+
+    world.move_branch_to(free_child, elsewhere_T_child)
+
+    assert np.allclose(
+        free_child.global_transform,
+        (elsewhere.global_transform @ elsewhere_T_child).to_np(),
+    )
 
 
 # %% re-parenting a driven branch

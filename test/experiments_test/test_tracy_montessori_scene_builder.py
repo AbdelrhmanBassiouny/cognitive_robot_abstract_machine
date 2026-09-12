@@ -11,6 +11,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from coraplex.datastructures.enums import ExecutionType
+from dataclasses import dataclass, field
+from typing_extensions import List
+
 from semantic_digital_twin.adapters.multi_sim import MultiSimSynchronizer
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
@@ -40,7 +43,7 @@ from experiments.montessori.semantics import (
 )
 from experiments.montessori.watched_run import WatchedSortingRun
 from experiments.questions.question import Memory
-from experiments.scenarios.runner import RecordedOperatorPrompt
+from experiments.scenarios.scenario import AbsentPerson
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.equipment import parse_tracy
 from experiments.tracy_experiments.montessori.scene_builder import (
@@ -52,6 +55,7 @@ from .dataset.montessori_capture_truths import CAPTURE_TRUTHS, CaptureTruth
 from .dataset.synthetic_grasping_robot import SyntheticGraspingRobot
 from .test_episode_recording import TrialsKeptInMemory
 from .test_montessori_detection_on_captures import TAPE_TOLERANCE
+from .test_montessori_scene_publishing import RecordedFrameWhoseSceneCanBeMoved
 
 MEASURED_CAPTURE = "scaled_pieces_in_a_row"
 """
@@ -192,8 +196,8 @@ def test_the_perceived_scene_is_looked_at_afresh_every_time_it_is_built(
     perceived: TracyLookingAtItsOwnTable, published_world: World
 ):
     """
-    The second build stands the pieces again -- the first build's are gone from the
-    world -- and keeps the board the first build found.
+    The second build looks again: it stands the pieces the look finds -- the same
+    pieces, found again -- and keeps the board the first build found.
     """
     perceived.build(Tracy)
     board, first = perceived.scene.board, list(perceived.scene.pieces)
@@ -204,8 +208,8 @@ def test_the_perceived_scene_is_looked_at_afresh_every_time_it_is_built(
     assert world.get_semantic_annotations_by_type(MontessoriShape) == (
         perceived.scene.pieces
     )
-    assert len(perceived.scene.pieces) == len(first)
-    assert not {piece.root for piece in first} & set(world.bodies)
+    assert perceived.scene.pieces == first
+    assert {piece.root for piece in first} <= set(world.bodies)
 
 
 def test_the_perceived_scene_refuses_a_robot_the_published_world_does_not_hold(
@@ -243,32 +247,69 @@ def test_the_layout_found_on_tracys_table_is_where_the_tape_put_the_pieces(
 # %% a run on the robot over the perceived scene
 
 
+@dataclass
+class PersonWhoMovesTheScene:
+    """
+    A person at the table who, whatever they are asked, moves the scene the way the
+    look they stand beside can then report, noting which pieces the world held as they
+    were asked.
+    """
+
+    look: RecordedFrameWhoseSceneCanBeMoved
+    """
+    The look that reports the scene as this person leaves it.
+    """
+
+    scene: PerceivedScene
+    """
+    The scene as the world holds it.
+    """
+
+    asked: List[str] = field(default_factory=list)
+    """
+    The instructions given so far, in order.
+    """
+
+    pieces_when_asked: List[MontessoriShape] = field(default_factory=list)
+    """
+    The pieces the world held when the last instruction was given.
+    """
+
+    def carry_out(self, instruction: str) -> None:
+        self.asked.append(instruction)
+        self.pieces_when_asked = list(self.scene.pieces)
+        self.look.moved = True
+
+
 def _run_on_the_robot(
-    perceived: TracyLookingAtItsOwnTable, repetitions: int = 1
-) -> tuple[TracyWatchesTheSceneStandStill, WatchedSortingRun, RecordedOperatorPrompt]:
+    perceived: TracyLookingAtItsOwnTable, person=None, repetitions: int = 1
+) -> tuple[TracyWatchesTheSceneStandStill, WatchedSortingRun]:
     """
     The static run on the robot, set in the perceived scene, watched and recorded in
-    memory, with nobody at the table.
+    memory.
+
+    :param perceived: The scene the run is set in.
+    :param person: Who is at the table; nobody unless said otherwise.
+    :param repetitions: How many trials the run is measured over.
     """
     scenario = TracyWatchesTheSceneStandStill(
         layout=LayoutAsFound(),
         world_builder=perceived,
         execution_type=ExecutionType.REAL,
     )
-    prompt = RecordedOperatorPrompt()
     run = WatchedSortingRun(
         episode=Episode.from_run(scenario),
         records_trials=TrialsKeptInMemory(),
-        operator_prompt=prompt,
+        person=AbsentPerson() if person is None else person,
         repetitions=repetitions,
     )
-    return scenario, run, prompt
+    return scenario, run
 
 
 def test_a_run_on_the_robot_is_asked_of_the_perceived_scene_without_a_simulation(
     perceived: TracyLookingAtItsOwnTable, published_world: World
 ):
-    scenario, run, _ = _run_on_the_robot(perceived)
+    scenario, run = _run_on_the_robot(perceived)
 
     run.run(scenario)
 
@@ -286,20 +327,68 @@ def test_a_run_on_the_robot_is_asked_of_the_perceived_scene_without_a_simulation
     assert all(query.answered_correctly is not None for query in trial.queries)
 
 
-def test_a_shove_on_the_robot_is_asked_of_the_person_and_disturbs_the_scene(
-    perceived: TracyLookingAtItsOwnTable,
+def test_a_shove_on_the_robot_is_asked_of_the_person_and_learned_of_by_looking(
+    published_world: World, truth: CaptureTruth
 ):
-    scenario, run, prompt = _run_on_the_robot(perceived)
+    """
+    The run never moves the piece itself: the person is asked, the scene is looked at
+    again, and the piece the world holds -- the same body the run has been watching --
+    stands where the look found it.
+    """
+    look = RecordedFrameWhoseSceneCanBeMoved(
+        pipeline=pipeline_of(published_world),
+        frame=SceneCapture.load(MEASURED_CAPTURE).to_frame(),
+        cube_shoved_by=A_SHOVE.displacement,
+        board_slid_by=Vector3(0.0, 0.0, 0.0),
+    )
+    perceived = TracyLookingAtItsOwnTable(
+        scene=PerceivedScene(
+            world=published_world, look=look, described_board=lab_board()
+        )
+    )
+    person = PersonWhoMovesTheScene(look=look, scene=perceived.scene)
+    scenario, run = _run_on_the_robot(perceived, person=person)
 
     run.run(scenario, perturbations=[A_SHOVE])
 
-    assert prompt.shown == [A_SHOVE.instruction_for_a_person()]
+    assert person.asked == [A_SHOVE.instruction_for_a_person()]
     [trial] = run.records_trials.trials
     assert trial.outcome is TrialOutcome.FAILED
+    scene = SortingScene(scenario.physics.world)
     stood_at = scenario.starting_layout.placement_of(SHOVED_PIECE)
-    stands_at = SortingScene(scenario.physics.world).position_of(SHOVED_PIECE)
+    stands_at = scene.position_of(SHOVED_PIECE)
     assert float(stands_at.x) - stood_at.x == pytest.approx(HOW_FAR_A_MOVED_HOLE_GOES)
     assert float(stands_at.y) - stood_at.y == pytest.approx(0.0)
+    assert perceived.scene.pieces == person.pieces_when_asked
+    assert scene.body_of(SHOVED_PIECE) in [
+        piece.root for piece in person.pieces_when_asked
+    ]
+
+
+def test_a_shove_nobody_makes_leaves_the_scene_as_the_look_finds_it(
+    perceived: TracyLookingAtItsOwnTable, truth: CaptureTruth
+):
+    """
+    With nobody at the table the second look finds the cube where the tape put it, and
+    the scene counts as undisturbed however the run asked.
+    """
+    scenario, run = _run_on_the_robot(perceived)
+
+    run.run(scenario, perturbations=[A_SHOVE])
+
+    assert run.person.asked == [A_SHOVE.instruction_for_a_person()]
+    [trial] = run.records_trials.trials
+    assert trial.outcome is TrialOutcome.SUCCEEDED
+    [measured] = [
+        measured
+        for measured in truth.tape_measured
+        if measured.category is SHOVED_PIECE
+    ]
+    stands_at = SortingScene(scenario.physics.world).position_of(SHOVED_PIECE).to_np()
+    assert (
+        _distance_on_the_table(stands_at, measured.place.x, measured.place.y)
+        <= TAPE_TOLERANCE
+    )
 
 
 def test_every_trial_on_the_robot_looks_at_the_table_afresh(
@@ -309,15 +398,15 @@ def test_every_trial_on_the_robot_looks_at_the_table_afresh(
     A shove in the first trial does not carry into the second: the second trial's
     scene is stood by a fresh look, so its layout is the tape's again.
     """
-    scenario, run, prompt = _run_on_the_robot(perceived, repetitions=2)
+    scenario, run = _run_on_the_robot(perceived, repetitions=2)
 
     run.run(scenario, perturbations=[A_SHOVE])
 
-    assert len(prompt.shown) == 2
+    assert len(run.person.asked) == 2
     first, second = run.records_trials.trials
     assert (first.outcome, second.outcome) == (
-        TrialOutcome.FAILED,
-        TrialOutcome.FAILED,
+        TrialOutcome.SUCCEEDED,
+        TrialOutcome.SUCCEEDED,
     )
     assert len(published_world.get_semantic_annotations_by_type(MontessoriShape)) == (
         len(scenario.starting_layout.placements)

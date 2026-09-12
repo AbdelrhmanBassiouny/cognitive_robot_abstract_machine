@@ -68,7 +68,7 @@ from experiments.montessori.scenarios import (
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.watched_run import WatchedSortingRun
-from experiments.scenarios.runner import ConsoleOperatorPrompt
+from experiments.scenarios.scenario import PersonAtTheConsole
 from experiments.tracy_experiments.montessori.scene_builder import (
     TracyLookingAtItsOwnTable,
     TracyOnItsOwnTable,
@@ -147,6 +147,16 @@ class ExecutionChoice(StrEnum):
         if self is ExecutionChoice.REAL:
             return ExecutionType.REAL
         return ExecutionType.SIMULATED
+
+    @property
+    def default_scene(self) -> SceneChoice:
+        """
+        Where the scene comes from unless the command line says otherwise: a run on the
+        robot is set in the scene its camera finds, a simulated run in a built one.
+        """
+        if self is ExecutionChoice.REAL:
+            return SceneChoice.PERCEIVED
+        return SceneChoice.BUILT
 
 
 class RecordingOption(StrEnum):
@@ -308,6 +318,27 @@ class PerceivedSceneCannotBeLaidOut(DataclassException):
         )
 
 
+@dataclass
+class BuiltSceneCannotRunOnTheRobot(DataclassException):
+    """
+    Raised when a run on the robot is asked for a built scene: what the person at the
+    table changes reaches the world only through the robot's camera, and a built scene
+    has nothing to look with.
+    """
+
+    def error_message(self) -> str:
+        return (
+            "A run on the robot is set in the scene its camera finds, not a built one."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Leave %s out, or pass %s %s." % (
+            RecordingOption.SCENE.value,
+            RecordingOption.SCENE.value,
+            SceneChoice.PERCEIVED,
+        )
+
+
 # %% what one run is asked to do
 
 
@@ -379,6 +410,8 @@ class RecordingArguments:
 
     def __post_init__(self) -> None:
         if self.scene is not SceneChoice.PERCEIVED:
+            if self.execution is ExecutionChoice.REAL:
+                raise BuiltSceneCannotRunOnTheRobot()
             return
         if self.execution is not ExecutionChoice.REAL:
             raise PerceivedSceneNeedsTheRobot(execution=self.execution)
@@ -511,7 +544,7 @@ def parse_arguments(
         RecordingOption.SCENE,
         type=SceneChoice,
         choices=list(SceneChoice),
-        default=SceneChoice.BUILT,
+        default=None,
     )
     parser.add_argument(
         RecordingOption.LAYOUT,
@@ -551,12 +584,11 @@ def parse_arguments(
     parser.add_argument(RecordingOption.HEADLESS, action="store_true")
     parser.add_argument(RecordingOption.DATABASE_URI, default=None)
     parsed = parser.parse_args(argument_list)
+    scene = parsed.execution.default_scene if parsed.scene is None else parsed.scene
     return RecordingArguments(
         scenario=parsed.scenario,
-        scene=parsed.scene,
-        layout=(
-            parsed.scene.default_layout if parsed.layout is None else parsed.layout
-        ),
+        scene=scene,
+        layout=scene.default_layout if parsed.layout is None else parsed.layout,
         perturbation=parsed.perturbation,
         perturbation_step=parsed.perturbation_step,
         execution=parsed.execution,
@@ -607,7 +639,7 @@ def record_episode(arguments: RecordingArguments, episode: Episode) -> Path:
             scenario = arguments.scenario_instance(world_builder)
             run = WatchedSortingRun(
                 repetitions=arguments.repetitions,
-                operator_prompt=ConsoleOperatorPrompt(),
+                person=PersonAtTheConsole(),
                 episode=episode,
                 records_trials=recording,
                 artifacts=artifacts,
@@ -694,7 +726,11 @@ def main(argument_list: Optional[Sequence[str]] = None) -> int:
     """
     try:
         arguments = parse_arguments(argument_list)
-    except (PerceivedSceneNeedsTheRobot, PerceivedSceneCannotBeLaidOut) as clash:
+    except (
+        PerceivedSceneNeedsTheRobot,
+        PerceivedSceneCannotBeLaidOut,
+        BuiltSceneCannotRunOnTheRobot,
+    ) as clash:
         print(clash, file=sys.stderr)
         return CHOICES_CLASH_EXIT_CODE
     episode = Episode.planned(

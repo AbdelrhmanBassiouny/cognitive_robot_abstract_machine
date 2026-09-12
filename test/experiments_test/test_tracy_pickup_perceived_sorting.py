@@ -195,14 +195,15 @@ def test_the_look_reads_the_lid_of_the_board_it_stood(
     )
 
 
-def test_a_board_the_world_already_holds_is_sorted_into_without_looking(
-    look: _LookKeepingItsRequests, world: World
+def test_a_board_the_world_already_holds_is_moved_to_where_the_look_finds_it(
+    look: _LookKeepingItsRequests, world: World, truth: CaptureTruth
 ) -> None:
     """
-    A world holding a board is not asked to find one again: the only look taken is the
-    one for the pieces.
+    A world holding a board keeps that board, and the look for the board moves it to
+    where the camera finds it now: a fetch may hold a board from a table since changed.
     """
     held = _held_board(world)
+    stood_by_hand = held.root.global_transform.to_position().to_np()[:2]
     run = PerceivedSorting(
         scene=PerceivedScene(world=world, look=look, described_board=lab_board()),
         sorter=_SorterKeepingWhatItWasHanded(),
@@ -211,7 +212,28 @@ def test_a_board_the_world_already_holds_is_sorted_into_without_looking(
     run.perceive()
 
     assert run.board is held
-    assert [request.described_board for request in look.requests] == [None]
+    assert [request.described_board for request in look.requests] == [
+        lab_board(),
+        None,
+    ]
+    centre_T_front_left_corner = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=-held.lid_size.x / 2, y=held.lid_size.y / 2
+    )
+    corner_xy = (
+        (held.root.global_transform @ centre_T_front_left_corner)
+        .to_position()
+        .to_np()[:2]
+    )
+    assert (
+        float(
+            np.hypot(
+                corner_xy[0] - truth.board_front_left_corner.x,
+                corner_xy[1] - truth.board_front_left_corner.y,
+            )
+        )
+        <= TAPE_TOLERANCE
+    ), corner_xy
+    assert not np.allclose(held.root.global_transform.to_position().to_np()[:2], stood_by_hand)
 
 
 def test_a_run_with_no_board_in_view_says_so(

@@ -22,6 +22,7 @@ from experiments.montessori.pieces import FULL_SIZE_PIECES, KnownPieceSet
 from experiments.montessori.scenarios import (
     LayoutArea,
     MontessoriWorldBuilder,
+    PerceivingWorldBuilder,
     WIDEST_PIECE_REACH,
 )
 from experiments.montessori.world import BOARD_SCALE
@@ -112,14 +113,14 @@ class TracyOnItsOwnTable(MontessoriWorldBuilder):
 
 
 @dataclass
-class TracyLookingAtItsOwnTable(MontessoriWorldBuilder):
+class TracyLookingAtItsOwnTable(PerceivingWorldBuilder):
     """
     The scene as Tracy's own camera finds it: the world the robot publishes, which
     already holds Tracy and its table, with the board and the pieces stood in it by
     looking.
 
-    Every trial looks afresh, so a table the person changed between two trials is
-    perceived as it stands now; the board, once found, is kept.
+    Every trial looks afresh, and a trial looks again once the person at the table has
+    changed the scene, so what the world holds is the table as it stands now.
     """
 
     scene: PerceivedScene
@@ -140,8 +141,11 @@ class TracyLookingAtItsOwnTable(MontessoriWorldBuilder):
         world = self.scene.world
         if len(world.get_semantic_annotations_by_type(robot_type)) != 1:
             raise WorldHoldsNoSuchRobot(robot_type=robot_type, world=world)
-        self.scene.perceive()
+        self.perceive()
         return world
+
+    def perceive(self) -> None:
+        self.scene.perceive()
 
     @property
     def table_top_z(self) -> float:

@@ -4,10 +4,9 @@ Running the trials a report is measured over.
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass, field
 
-from typing_extensions import Generic, List, Protocol, Sequence, TextIO, TypeVar
+from typing_extensions import Generic, List, Sequence, TypeVar
 
 from coraplex.datastructures.enums import ExecutionType
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
@@ -15,6 +14,8 @@ from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from experiments.experiment_definitions import DEFAULT_CONFIDENCE_LEVEL
 from experiments.scenarios.report import Metric, Report
 from experiments.scenarios.scenario import (
+    AbsentPerson,
+    Person,
     Perturbation,
     Scenario,
     ScenarioCondition,
@@ -36,61 +37,6 @@ ScenarioType = TypeVar("ScenarioType", bound=Scenario)
 """
 The scenario a runner runs.
 """
-
-# %% telling the person at the table what to do
-
-
-class OperatorPrompt(Protocol):
-    """
-    Where a trial on the real robot shows the person at the table what to do.
-    """
-
-    def show(self, instruction: str) -> None:
-        """
-        Show one instruction, returning once it has been carried out.
-
-        :param instruction: What the person is asked to do.
-        """
-
-
-@dataclass
-class ConsoleOperatorPrompt:
-    """
-    Shows each instruction on the console and waits for the person to confirm it with a
-    line of input.
-    """
-
-    output: TextIO = field(default_factory=lambda: sys.stdout)
-    """
-    Where the instruction is written.
-    """
-
-    keyboard: TextIO = field(default_factory=lambda: sys.stdin)
-    """
-    Where the confirmation is read from.
-    """
-
-    def show(self, instruction: str) -> None:
-        self.output.write("%s\nPress enter once that is done. " % instruction)
-        self.output.flush()
-        self.keyboard.readline()
-
-
-@dataclass
-class RecordedOperatorPrompt:
-    """
-    Keeps every instruction it is shown and waits for nobody, for a run that has no
-    person at the table.
-    """
-
-    shown: List[str] = field(default_factory=list)
-    """
-    The instructions shown so far, in order.
-    """
-
-    def show(self, instruction: str) -> None:
-        self.shown.append(instruction)
-
 
 # %% the runner
 
@@ -119,10 +65,10 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
     Two-sided confidence level the report's intervals hold at.
     """
 
-    operator_prompt: OperatorPrompt = field(default_factory=RecordedOperatorPrompt)
+    person: Person = field(default_factory=AbsentPerson)
     """
-    Where a trial on the real robot tells the person at the table to bring a
-    perturbation about.
+    The person at the scene, who brings a perturbation about when a trial runs on the
+    robot.
     """
 
     def run(
@@ -185,11 +131,7 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
                 for perturbation in perturbations:
                     if perturbation.step is not step.name:
                         continue
-                    if scenario.execution_type is ExecutionType.REAL:
-                        self.operator_prompt.show(
-                            perturbation.instruction_for_a_person()
-                        )
-                    perturbation.apply(world)
+                    self.apply_perturbation(scenario, perturbation, world)
                     log.record(
                         PerturbationApplied(
                             moment=log.elapsed_seconds, perturbation=perturbation
@@ -215,6 +157,25 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
         )
         self.trial_finished(scenario, trial)
         return trial
+
+    def apply_perturbation(
+        self,
+        scenario: ScenarioType,
+        perturbation: Perturbation[WorldType],
+        world: WorldType,
+    ) -> None:
+        """
+        Bring one perturbation about in the trial's world: the run does it itself in
+        simulation, and the person at the scene does it on the robot.
+
+        :param scenario: The scenario the trial runs.
+        :param perturbation: The perturbation due at the step about to be performed.
+        :param world: The world the trial is running in.
+        """
+        if scenario.execution_type is ExecutionType.REAL:
+            perturbation.carried_out_by(self.person, scenario, world)
+            return
+        perturbation.apply(world)
 
     def trial_started(self, scenario: ScenarioType, world: WorldType) -> None:
         """
