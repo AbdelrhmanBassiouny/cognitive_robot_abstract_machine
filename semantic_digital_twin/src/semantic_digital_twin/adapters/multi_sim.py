@@ -2116,6 +2116,10 @@ class MujocoBuilder(MultiSimBuilder):
             connection = self.world.get_connection_by_name(joint_name)
             if compiled_model.jnt_type[joint_id] == mujoco.mjtJoint.mjJNT_FREE:
                 qpos += self._keyframe_qpos_for_free_connection(connection)
+            elif isinstance(connection, ActiveConnection1DOF):
+                # The joint's own angle: a connection following a shared degree of
+                # freedom scales and offsets it.
+                qpos.append(connection.position)
             else:
                 qpos += [
                     self.world.state[dof.id].position
@@ -3755,15 +3759,18 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         :param connection: The 1DoF connection whose DoF is written.
         :param qpos_address: Index of the joint's single qpos slot.
         """
-        self._world.state[connection.raw_dof.id].position = float(
-            self.simulator._mj_data.qpos[qpos_address]
-        )
+        # The joint holds the connection's own angle; the shared degree of freedom
+        # behind a following connection is the angle with the scaling and offset
+        # taken off again.
+        self._world.state[connection.raw_dof.id].position = (
+            float(self.simulator._mj_data.qpos[qpos_address]) - connection.offset
+        ) / connection.multiplier
         if connection.raw_dof not in self.physically_simulated_dofs:
             return
         dof_adr = self._resolve_dof_adr(connection)
         if dof_adr is not None:
-            self._world.state[connection.raw_dof.id].velocity = float(
-                self.simulator._mj_data.qvel[dof_adr]
+            self._world.state[connection.raw_dof.id].velocity = (
+                float(self.simulator._mj_data.qvel[dof_adr]) / connection.multiplier
             )
 
     def _sim_to_world(self) -> None:
@@ -3899,7 +3906,11 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         ctrl_adr = None if actuator is None else self._resolve_ctrl_adr(connection)
         physically_simulated = connection.raw_dof in self.physically_simulated_dofs
         if not physically_simulated:
-            self.simulator._mj_data.qpos[qpos_address] = positions[idx]
+            # The joint takes the connection's own angle, scaled and offset from the
+            # shared degree of freedom; the actuator drives that degree of freedom.
+            self.simulator._mj_data.qpos[qpos_address] = (
+                positions[idx] * connection.multiplier + connection.offset
+            )
             setpoint = positions[idx]
         else:
             setpoint = self._integrate_desired_position(

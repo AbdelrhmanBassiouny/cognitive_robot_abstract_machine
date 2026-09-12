@@ -1481,3 +1481,161 @@ def test_builder_gives_a_geom_the_contact_dimensionality_its_shape_declares(tmp_
         if body.name == "block"
     ]
     assert geom_spec.condim == 4
+
+
+# %% joints that follow a shared degree of freedom
+
+
+@dataclass
+class TwoFingerWorld:
+    """
+    A world with two finger joints driven by one degree of freedom, the second finger
+    turning the opposite way, as a parallel gripper's do.
+    """
+
+    world: World
+    """
+    The world the fingers are in.
+    """
+
+    shared: DegreeOfFreedom
+    """
+    The one degree of freedom both fingers follow.
+    """
+
+    leading: RevoluteConnection
+    """
+    The finger joint named after the degree of freedom, so it is the joint itself.
+    """
+
+    following: RevoluteConnection
+    """
+    The finger joint turning the opposite way, tied to the leading one.
+    """
+
+
+FOLLOWING_MULTIPLIER = -1.0
+"""
+How the following finger's angle relates to the shared degree of freedom.
+"""
+
+FOLLOWING_OFFSET = 0.1
+"""
+What is added to the following finger's angle on top of the scaled shared value.
+"""
+
+
+def _build_two_finger_world() -> TwoFingerWorld:
+    world = World()
+    palm = Body(name=PrefixedName("palm"))
+    left_finger = Body(name=PrefixedName("left_finger"))
+    right_finger = Body(name=PrefixedName("right_finger"))
+    shared = DegreeOfFreedom(name=PrefixedName("left_finger_joint"))
+    with world.modify_world():
+        world.add_body(palm)
+        world.add_degree_of_freedom(shared)
+        leading = RevoluteConnection(
+            name=shared.name,
+            parent=palm,
+            child=left_finger,
+            axis=Vector3.Z(reference_frame=left_finger),
+            raw_dof=shared,
+        )
+        following = RevoluteConnection(
+            name=PrefixedName("right_finger_joint"),
+            parent=palm,
+            child=right_finger,
+            axis=Vector3.Z(reference_frame=right_finger),
+            raw_dof=shared,
+            multiplier=FOLLOWING_MULTIPLIER,
+            offset=FOLLOWING_OFFSET,
+        )
+        world.add_connection(leading)
+        world.add_connection(following)
+    return TwoFingerWorld(world, shared, leading, following)
+
+
+def _joint_position_in(multi_sim: MujocoSim, connection: RevoluteConnection) -> float:
+    """
+    The angle the simulator holds the joint backing the connection at.
+    """
+    model, data = multi_sim.simulator._mj_model, multi_sim.simulator._mj_data
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, connection.name.name)
+    return float(data.qpos[model.jnt_qposadr[joint_id]])
+
+
+def _set_joint_position_in(
+    multi_sim: MujocoSim, connection: RevoluteConnection, position: float
+) -> None:
+    """
+    Put the joint backing the connection at the given angle in the simulator.
+    """
+    model, data = multi_sim.simulator._mj_model, multi_sim.simulator._mj_data
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, connection.name.name)
+    data.qpos[model.jnt_qposadr[joint_id]] = position
+
+
+def test_a_following_joint_is_built_at_its_own_angle():
+    """
+    A joint that follows a shared degree of freedom stands at its own angle, scaled and
+    offset from the shared value, not at the shared value itself.
+    """
+    fingers = _build_two_finger_world()
+    closed = 0.6
+    with fingers.world.modify_world():
+        fingers.world.state[fingers.shared.id].position = closed
+
+    multi_sim = MujocoSim(world=fingers.world, headless=headless, step_size=STEP_SIZE)
+    try:
+        assert _joint_position_in(multi_sim, fingers.leading) == closed
+        assert _joint_position_in(multi_sim, fingers.following) == pytest.approx(
+            fingers.following.position
+        )
+    finally:
+        stop_multisim_if_running(multi_sim)
+
+
+def test_a_following_joint_is_moved_to_its_own_angle():
+    """
+    Moving the shared degree of freedom after the build moves the following joint to
+    its own angle.
+    """
+    fingers = _build_two_finger_world()
+    multi_sim = MujocoSim(world=fingers.world, headless=headless, step_size=STEP_SIZE)
+    try:
+        closed = 0.6
+        with fingers.world.modify_world():
+            fingers.world.state[fingers.shared.id].position = closed
+
+        assert _joint_position_in(multi_sim, fingers.leading) == closed
+        assert _joint_position_in(multi_sim, fingers.following) == pytest.approx(
+            fingers.following.position
+        )
+    finally:
+        stop_multisim_if_running(multi_sim)
+
+
+def test_a_following_joint_read_back_gives_the_shared_value():
+    """
+    Reading the simulator's joints back into the world puts the shared degree of
+    freedom at the value the following joint's own angle stands for, so both fingers
+    agree on it.
+    """
+    fingers = _build_two_finger_world()
+    multi_sim = MujocoSim(world=fingers.world, headless=headless, step_size=STEP_SIZE)
+    try:
+        shared_value = 0.6
+        _set_joint_position_in(multi_sim, fingers.leading, shared_value)
+        _set_joint_position_in(
+            multi_sim,
+            fingers.following,
+            shared_value * FOLLOWING_MULTIPLIER + FOLLOWING_OFFSET,
+        )
+
+        multi_sim.synchronizer._read_connections_from_qpos()
+
+        assert fingers.world.state[fingers.shared.id].position == pytest.approx(
+            shared_value
+        )
+    finally:
+        stop_multisim_if_running(multi_sim)
