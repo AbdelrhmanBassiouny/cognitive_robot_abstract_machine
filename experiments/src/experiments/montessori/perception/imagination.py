@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from typing_extensions import Optional
 
+from experiments.episodes.artifacts import keep_mesh
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.hole_geometry import extrude_polygon
 from experiments.montessori.pieces import KnownPiece
@@ -55,7 +56,7 @@ def piece_mesh(piece: KnownPiece) -> Mesh:
         own colour, with its origin at the middle of its height.
     """
     solid = extrude_polygon(piece.outline, piece.height)
-    mesh = Mesh.from_trimesh(mesh=solid)
+    mesh = keep_mesh(solid)
     mesh.color = piece.color
     return mesh
 

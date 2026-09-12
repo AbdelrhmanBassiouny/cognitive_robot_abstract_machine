@@ -17,6 +17,7 @@ from functools import cached_property
 
 from typing_extensions import Any, Dict, Optional, Tuple
 
+from experiments.episodes.artifacts import keep_mesh
 from experiments.montessori.exceptions import BoardDescriptionIncomplete
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
@@ -39,7 +40,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import Box, Mesh, Scale
+from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -183,11 +184,7 @@ class DescribedHole:
             root=Region(
                 name=name,
                 area=ShapeCollection(
-                    [
-                        Mesh.from_trimesh(
-                            mesh=self.footprint.extrude(HOLE_MARKER_THICKNESS)
-                        )
-                    ]
+                    [keep_mesh(self.footprint.extrude(HOLE_MARKER_THICKNESS))]
                 ),
             ),
             shape_category=self.shape_category,

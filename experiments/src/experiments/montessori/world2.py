@@ -1,8 +1,8 @@
 """
 Alternate layout for the Montessori shape-sorting scene: the shape-sorting board sits
 directly in front of the mounted robot, and the loose shapes sit off to its side on
-their own stand, instead of both sharing the single table :mod:`~experiments.montessori.world`
-lays them out on.
+their own stand, instead of both sharing the single table
+:mod:`~experiments.montessori.world` lays them out on.
 
 :mod:`~experiments.montessori.world` is left untouched (this is a separate, parallel
 layout to compare against it, not a replacement); :class:`MontessoriWorld2` subclasses
@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from typing_extensions import Dict, List
 
+from experiments.episodes.artifacts import keep_mesh
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
     HOLE_NAME_BY_CATEGORY,
@@ -70,7 +71,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Table,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Point3
-from semantic_digital_twin.world_description.geometry import Box, Color, Mesh, Scale
+from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
@@ -165,9 +166,9 @@ _BOARD_POSITION_DELTA_Y = float(BOARD_POSITION_2.y) - float(BOARD_POSITION.y)
 _BOARD_POSITION_DELTA_Z = float(BOARD_POSITION_2.z) - float(BOARD_POSITION.z)
 """
 Offset from :const:`~experiments.montessori.world.BOARD_POSITION` to
-:const:`BOARD_POSITION_2`, used to carry :const:`~experiments.montessori.world._DRAWER_POSITIONS`
-(hand-placed relative to the original board position) over to this layout without
-re-deriving them from scratch.
+:const:`BOARD_POSITION_2`, used to carry
+:const:`~experiments.montessori.world._DRAWER_POSITIONS` (hand-placed relative to the
+original board position) over to this layout without re-deriving them from scratch.
 """
 
 _DRAWER_POSITIONS_2: List[Point3] = [
@@ -273,7 +274,7 @@ class MontessoriWorld2(MontessoriWorld):
         self._spawn(shape_stand, SHAPE_STAND_POSITION)
 
     def _build_shape_sorting_board(self) -> ShapeSortingBoard:
-        board_shape = Mesh.from_trimesh(mesh=_BOARD_MESH)
+        board_shape = keep_mesh(_BOARD_MESH)
         board_shape.color = BOARD_COLOR
         board = ShapeSortingBoard(
             name=_name("board"),
