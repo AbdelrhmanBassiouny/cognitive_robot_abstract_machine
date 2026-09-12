@@ -26,6 +26,7 @@ one detector's capability and nothing more.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field, replace
 
 from krrood.entity_query_language.backends import DetectorChoice, PerceptionDetector
@@ -212,7 +213,24 @@ class SceneToSearch:
         :return: A copy of the world this look reads, reporting in the frame this look
             places its detections in.
         """
-        return ImaginedWorld.copied_from(self.world, self.reference_frame)
+        with self.world_at_rest():
+            return ImaginedWorld.copied_from(self.world, self.reference_frame)
+
+    def world_at_rest(self) -> AbstractContextManager:
+        """
+        Hold the world still while this look reads it.
+
+        A look is taken on the camera's own thread while the run stands and moves things
+        in the world on another; a body already annotated but not yet placed by the
+        world's kinematics is half stood, and reading it raises. The world's own lock is
+        what a modification holds, so a read under it waits for the modification to
+        finish.
+
+        :return: The world's lock, or nothing to hold where the look has no world.
+        """
+        if self.world is None:
+            return nullcontext()
+        return self.world.state.world_lock
 
     def searched_surfaces(
         self, board: Optional[MontessoriBoardDetection]
@@ -352,9 +370,15 @@ class SceneToSearch:
         """
         if self.world is None:
             return []
+        with self.world_at_rest():
+            standing = [
+                (shape, shape.root.global_pose.to_position().to_np()[:2])
+                for shape in self.world.get_semantic_annotations_by_type(
+                    MontessoriShape
+                )
+            ]
         placed = []
-        for shape in self.world.get_semantic_annotations_by_type(MontessoriShape):
-            position = shape.root.global_pose.to_position().to_np()[:2]
+        for shape, position in standing:
             if not self.table.region.contains(float(position[0]), float(position[1])):
                 continue
             placed.extend(
