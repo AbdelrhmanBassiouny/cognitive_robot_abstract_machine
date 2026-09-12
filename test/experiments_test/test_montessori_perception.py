@@ -6,6 +6,7 @@ finds, on which surface, and how tall it says a piece stands.
 from __future__ import annotations
 
 import math
+import threading
 
 import cv2
 import numpy as np
@@ -24,6 +25,7 @@ from experiments.montessori.perception.hypotheses import (
 )
 from experiments.montessori.perception.explanations import Explanation
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
+from experiments.montessori.perception.imagination import piece_mesh
 from experiments.montessori.perception.look_choice import SceneToSearch
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
@@ -33,12 +35,21 @@ from experiments.montessori.pieces import (
     hue_distance,
 )
 from experiments.montessori.planar_geometry import PlanarPoint
-from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
+from experiments.montessori.semantics import (
+    CubeShape,
+    MontessoriShape,
+    MontessoriShapeCategory,
+)
 from experiments.montessori.world import MontessoriWorld
 from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.world_entity import Body
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_belief_sources import SomethingThatAskedForALook
@@ -355,6 +366,65 @@ def test_a_look_expects_the_piece_the_world_says_it_placed(
             *shape.root.global_pose.to_position().to_np()[:2]
         )
     }
+
+
+def test_a_look_waits_for_a_piece_being_stood_rather_than_reading_it_half_stood(
+    renderer: MontessoriSceneRenderer,
+):
+    """
+    A look runs on the camera's thread while the run stands pieces in the world on its
+    own; a piece already annotated but not yet placed by the world's kinematics must be
+    waited for, not read.
+    """
+    montessori = MontessoriWorld()
+    world = montessori.world
+    table = WorkspaceSurface(
+        entity=Body(name=PrefixedName("table", "world_expectations")),
+        region=SCENE_REGION,
+        height=renderer.table_height,
+    )
+    scene = SceneToSearch(frame=renderer.render([]), table=table, lid=None, world=world)
+    piece_annotated = threading.Event()
+    may_finish_standing = threading.Event()
+
+    def stand_a_cube() -> None:
+        name = PrefixedName("cube_being_stood", "world_expectations")
+        cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+        body = Body.from_shape_collection(name, ShapeCollection([piece_mesh(cube)]))
+        with world.modify_world():
+            world.add_connection(
+                FixedConnection(
+                    parent=world.root,
+                    child=body,
+                    parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        x=SCENE_REGION.minimum_x + 0.1,
+                        y=SCENE_REGION.minimum_y + 0.1,
+                        z=renderer.table_height + cube.height / 2,
+                        reference_frame=world.root,
+                    ),
+                )
+            )
+            world.add_semantic_annotation(CubeShape(name=name, root=body))
+            piece_annotated.set()
+            may_finish_standing.wait()
+
+    standing = threading.Thread(target=stand_a_cube)
+    standing.start()
+    piece_annotated.wait()
+    threading.Timer(0.2, may_finish_standing.set).start()
+
+    expected_while_standing = {
+        hypothesis.candidates for hypothesis in scene.expected_pieces()
+    }
+
+    standing.join()
+    expected_once_stood = {
+        hypothesis.candidates for hypothesis in scene.expected_pieces()
+    }
+    assert (
+        KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE],
+    ) in expected_once_stood
+    assert expected_while_standing == expected_once_stood
 
 
 def test_a_look_with_no_world_behind_it_expects_nothing_of_its_own(
