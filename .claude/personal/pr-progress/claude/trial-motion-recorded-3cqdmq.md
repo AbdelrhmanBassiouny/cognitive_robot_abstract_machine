@@ -215,6 +215,24 @@ mapping from a detector to the features/predicates/attributes it tried to answer
 read is that perception spawns new instances, so it fits EQL's inference explanation
 mechanism (`Symbol._inference_explanation_`, `InferenceExplanation`). Not started.
 
+## Merged into #265 (2026-09-12, asked for)
+
+Merged `claude/trial-motion-recorded-3cqdmq` (5c058219d) into
+`claude/icra-experiments-simulation-pipeline-w4ep7n`, which had moved on to 3e41b69e2
+(#325, belief checked against perception). No conflicts - the two sides' file lists are
+disjoint, 265 having touched only experiments/segmind and this branch only giskardpy plus
+two test files. Merge commit 1425c5df9, pushed. Nothing pushed to #323's own branch, since
+the developer took it out of draft.
+
+Verified on the merge (ROS sourced): the four constraint-question tests plus the modules
+265 changed (test_montessori_expectations, test_questions, test_question_scoring,
+segmind test_expectations) 102 passed; test_long_term_memory with
+test_montessori_watched_run, test_montessori_scenarios and test_record_episode 185 passed.
+
+#265's description gained a "#323 merged in" section and this session's link; it is still
+a draft and was left one. It reports `mergeable_state: dirty` against `main` and carries
+`needs-resolution`, both from before this merge.
+
 ## Local test environment notes
 
 `pytest` must be run with ROS sourced (`source /opt/ros/jazzy/setup.bash`), otherwise ORM
