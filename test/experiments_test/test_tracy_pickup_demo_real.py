@@ -396,4 +396,7 @@ def test_the_episode_is_kept_in_the_database_the_run_was_checked_against(
     artifacts = keep_the_episode(trial, JointTrace(), None, database)
 
     assert recorded_count(database, RecordedTrialDAO) == 1
-    assert Transcript(episode=trial.episode, trials=[trial]).render() == artifacts.transcript().read_text()
+    assert (
+        Transcript(episode=trial.episode, trials=[trial]).render()
+        == artifacts.transcript.read_text()
+    )

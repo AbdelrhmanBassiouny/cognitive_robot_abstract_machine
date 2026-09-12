@@ -18,7 +18,6 @@ from experiments.montessori.record_episode import (
     CHOICES_CLASH_EXIT_CODE,
     DEFAULT_REPETITIONS,
     ExecutionChoice,
-    InMemoryDatabaseRefused,
     LayoutChoice,
     PerceivedSceneCannotBeLaidOut,
     PerceivedSceneNeedsTheRobot,
@@ -33,6 +32,7 @@ from experiments.montessori.record_episode import (
 from experiments.montessori.results_database import (
     DATABASE_URI_ENVIRONMENT_VARIABLE,
     IN_MEMORY_DATABASE_URI,
+    InMemoryDatabaseRefused,
 )
 from experiments.montessori.scenarios import (
     DetectionRelabelled,
