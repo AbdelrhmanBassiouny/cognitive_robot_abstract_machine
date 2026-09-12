@@ -1,5 +1,5 @@
 # claude/trial-motion-recorded-3cqdmq - PR #319 merged into #265; branch restarted
-# for the EQL coverage round (2026-09-12)
+# from the base for PR #323, the EQL coverage round (2026-09-12)
 
 Base: `claude/icra-experiments-simulation-pipeline-w4ep7n` (#265).
 Session: https://claude.ai/code/session_013HepqhoucZF2H2cCjSizFP
@@ -111,7 +111,9 @@ Measured, not guessed (scratchpad `probe_motion_eql.py`, `probe_constraints_eql.
   (`contains(trial.motions, motion)` plus `trial.episode.identifier == ...`, which
   translates into a join across the association table) and a range condition on the
   spans. Untested before this round, so it is now two tests in
-  `test/experiments_test/test_long_term_memory.py` under `# %% the motions a run ran`.
+  `test/experiments_test/test_long_term_memory.py` under `# %% the motions a run ran`,
+  pushed as `829f514c0` on the branch restarted from base `bb1bd5095`, draft PR #323
+  (19 passed with test_long_term_questions.py alongside).
 - Controller constraints: EQL can range over a built chart's `Task` nodes and its
   `GiskardEqualityConstraint`s when the variable is handed the domain (the chart's nodes
   or `combine_constraint_collections_of_nodes()`), including `contains` across a node's
