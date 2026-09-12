@@ -215,14 +215,16 @@ class Keywords(VocabEnum):
 class Directive(VocabEnum):
     """
     The opening phrase of a request: *"Find"* a match in the domain, *"Generate"* an
-    underspecified one, or *"The distribution over"* one whose free variables'
-    distribution is wanted instead of a concrete match -- the two imperatives ask for
-    rows, the third asks for a description of the query, so it takes the same slot
-    without being one itself.
+    underspecified one, *"Look for"* one that is not recorded anywhere yet and has to be
+    observed, or *"The distribution over"* one whose free variables' distribution is
+    wanted instead of a concrete match -- the three imperatives ask for rows, the fourth
+    asks for a description of the query, so it takes the same slot without being one
+    itself.
     """
 
     FIND = KeyWord("Find")
     GENERATE = KeyWord("Generate")
+    LOOK_FOR = KeyWord("Look for")
     DISTRIBUTION_OVER = KeyWord("The distribution over")
 
 
@@ -667,6 +669,16 @@ class RangePhrases(VocabEnum):
     """
 
     BETWEEN = OperatorWord("between")
+
+
+class ConditionalPhrases(VocabEnum):
+    """
+    Fixed phrases for an inline conditional value (``case_when``): the *"if"*
+    introducing its condition and the *"otherwise"* introducing its fallback.
+    """
+
+    IF = PlainWord("if")
+    OTHERWISE = PlainWord("otherwise")
 
 
 class CoindexedPhrases(VocabEnum):

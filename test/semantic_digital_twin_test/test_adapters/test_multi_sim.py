@@ -47,6 +47,7 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoSim,
     MujocoActuator,
     MujocoBuilder,
+    MujocoGeom,
     MujocoLight,
     MujocoSynchronizer,
 )
@@ -510,6 +511,41 @@ def test_builder_assigns_material_to_a_textured_primitive_shape(tmp_path):
     assert texture.file == str(texture_file)
 
 
+def test_builder_converts_cylinder_full_height_to_mujocos_half_height_convention(
+    tmp_path,
+):
+    """
+    Regression test: MujocoCylinderConverter passed Cylinder.height (the shape's full.
+
+    height) straight through as MuJoCo's own cylinder size[1], which MuJoCo defines as a
+    half-length, not a full length - every cylinder synchronized into MuJoCo rendered
+    and collided at twice its intended height.
+    """
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        cylinder_shape = Cylinder(width=0.028, height=0.03)
+        piece = Body(
+            name=PrefixedName("piece"),
+            visual=ShapeCollection([cylinder_shape]),
+            collision=ShapeCollection([cylinder_shape]),
+        )
+        world.add_kinematic_structure_entity(piece)
+        world.add_connection(FixedConnection(parent=root, child=piece))
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    [geom] = [
+        geom
+        for body in builder.spec.bodies
+        for geom in body.geoms
+        if body.name == "piece"
+    ]
+    assert list(geom.size) == pytest.approx([0.014, 0.015, 0.0])
+
+
 def test_mujoco_with_tracy_dae_files():
     try:
         dae_world = URDFParser.from_file(file_path=TEST_URDF_TRACY).parse()
@@ -858,9 +894,32 @@ def test_world_sim_state_sync():
         stop_multisim_if_running(multi_sim)
 
 
+def test_stop_simulation_stops_simulator_before_tearing_down_synchronizer():
+    """
+    Regression test: ``MultiSim.stop_simulation`` used to call ``synchronizer.stop()``
+    (which nulls ``_state_callback``, read by the physics thread on every step) before
+    ``simulator.stop()`` (which stops the physics thread and joins it).
+
+    A still-running physics thread reading ``_state_callback`` in that window raised an
+    uncaught ``AttributeError`` on the now-``None`` callback, silently killing the
+    thread instead of surfacing to the caller. The simulator must therefore be stopped
+    (and its thread joined) *before* the synchronizer tears down the callback.
+    """
+    world = World()
+    multi_sim = MujocoSim(world=world, headless=headless)
+    call_order = []
+    multi_sim.simulator.stop = lambda: call_order.append("simulator")
+    multi_sim.synchronizer.stop = lambda: call_order.append("synchronizer")
+
+    multi_sim.stop_simulation()
+
+    assert call_order == ["simulator", "synchronizer"]
+
+
 def _write_thin_slab_mesh(directory) -> str:
     """
-    Writes a minimal OBJ mesh for a closed box thin enough (1e-5 units) that MuJoCo's
+    Writes a minimal OBJ mesh for a closed box thin enough (1e-5 units) that MuJoCo's.
+
     default ("legacy") volume-based inertia estimator used to reject it as "mesh volume
     is too small" (fixed upstream as of MuJoCo 3.11) - the shape of real CAD furniture
     panels (a door slab, a backing panel), reproduced with an actual ArtVIP dataset
@@ -1061,8 +1120,8 @@ def test_thicken_if_near_planar_regenerates_instead_of_reusing_a_stale_file(tmp_
 @dataclass
 class BoxOnPlaneWorld:
     """
-    A world holding a ground plane and one free-floating box, together with the
-    pieces of it a test needs to address afterwards.
+    A world holding a ground plane and one free-floating box, together with the pieces
+    of it a test needs to address afterwards.
     """
 
     world: World
@@ -1083,8 +1142,8 @@ class BoxOnPlaneWorld:
 
 def _build_box_on_plane_world() -> BoxOnPlaneWorld:
     """
-    Build a ground plane plus a single free-floating box, authored directly
-    into a :class:`World` so a simulator can be built from it without spawning.
+    Build a ground plane plus a single free-floating box, authored directly into a
+    :class:`World` so a simulator can be built from it without spawning.
 
     :return: The world and the box handles the caller needs.
     """
@@ -1204,7 +1263,8 @@ def test_pose_written_during_sim_to_world_pull_reaches_the_simulator():
         qpos_address = synchronizer._resolve_qpos_address(box_connection)
         assert qpos_address is not None, "free joint is missing from the MuJoCo model"
         written_xyz = numpy.asarray(
-            multi_sim.simulator._mj_data.qpos[qpos_address : qpos_address + 3], dtype=float
+            multi_sim.simulator._mj_data.qpos[qpos_address : qpos_address + 3],
+            dtype=float,
         )
         assert numpy.allclose(written_xyz, target_xyz, atol=1e-6), (
             "pose written during the sim → world pull never reached MuJoCo: "
@@ -1218,9 +1278,8 @@ def test_pose_written_during_sim_to_world_pull_reaches_the_simulator():
 
 def test_pose_write_waits_for_the_running_physics_step():
     """
-    The *world → sim* push must write ``qpos`` under the simulator's model
-    lock, the same lock :meth:`MujocoSimulator.step_callback` holds across
-    ``mj_step``.
+    The *world → sim* push must write ``qpos`` under the simulator's model lock, the
+    same lock :meth:`MujocoSimulator.step_callback` holds across ``mj_step``.
 
     The scene integrates with RK4, which saves the state at the top of the step
     and writes the integrated ``qpos`` back at the end. A pose written into
@@ -1286,7 +1345,8 @@ def test_pose_write_waits_for_the_running_physics_step():
         qpos_address = synchronizer._resolve_qpos_address(box_connection)
         assert qpos_address is not None, "free joint is missing from the MuJoCo model"
         written_xyz = numpy.asarray(
-            multi_sim.simulator._mj_data.qpos[qpos_address : qpos_address + 3], dtype=float
+            multi_sim.simulator._mj_data.qpos[qpos_address : qpos_address + 3],
+            dtype=float,
         )
         assert numpy.allclose(written_xyz, target_xyz, atol=1e-6), (
             "pose never reached MuJoCo once the model lock was free: "
@@ -1396,3 +1456,28 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
             )
     finally:
         stop_multisim_if_running(multi_sim)
+
+
+def test_builder_gives_a_geom_the_contact_dimensionality_its_shape_declares(tmp_path):
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        shape = Box(scale=Scale(0.1, 0.1, 0.1))
+        shape.simulator_additional_properties.append(
+            MujocoGeom(contact_dimensionality=4)
+        )
+        block = Body(name=PrefixedName("block"), collision=ShapeCollection([shape]))
+        world.add_kinematic_structure_entity(block)
+        world.add_connection(FixedConnection(parent=root, child=block))
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    [geom_spec] = [
+        geom
+        for body in builder.spec.bodies
+        for geom in body.geoms
+        if body.name == "block"
+    ]
+    assert geom_spec.condim == 4

@@ -1,0 +1,213 @@
+"""
+Runs a world's MuJoCo mirror at wall-clock speed, so the motion can be watched as it
+happens.
+
+The background-threaded :class:`~semantic_digital_twin.adapters.multi_sim.MujocoSim`
+this repo's other demos use makes a caller's own reads of ``world.state`` a race against
+that thread's own writes -- confirmed in the cube-stacking demo as the reason Giskard's
+``ParkArmsAction`` could believe a physically-simulated joint had reached its target
+without the joint having actually moved. Stepping physics from the calling thread
+instead sidesteps that race entirely.
+"""
+
+from __future__ import annotations
+
+import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+
+from typing_extensions import List, Optional, Self
+
+from semantic_digital_twin.adapters.multi_sim import MujocoSim, RegionAppearance
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import Actuator
+
+
+class SimulationNotStartedError(RuntimeError):
+    """
+    Raised when a :class:`RealTimeSimulation` is advanced before it was started.
+    """
+
+    def __init__(self, world: World):
+        super().__init__(
+            f"The simulation of {world} has to be started before it can be advanced."
+        )
+        self.world = world
+        """
+        The world whose simulation was advanced too early.
+        """
+
+
+class SimulationObserver(ABC):
+    """
+    Something told how far a :class:`RealTimeSimulation` has advanced, after every
+    advance.
+    """
+
+    @abstractmethod
+    def simulation_advanced(self, simulated_time: float) -> None:
+        """
+        :param simulated_time: Seconds of simulated time advanced since the simulation
+            started.
+        """
+
+
+@dataclass
+class RealTimeSimulation:
+    """
+    A MuJoCo simulation of a world, stepped by its owner and paced to the wall clock.
+
+    MuJoCo's own run loop steps as fast as the machine allows, which makes anything
+    watchable only by accident, and runs on a background thread, which makes the state a
+    caller reads back a race. This steps the physics from the calling thread instead and
+    waits out the difference between simulated and elapsed time, so a caller can drive
+    the world between advances and still watch it move at life speed.
+    """
+
+    world: World
+    """
+    The world to simulate.
+
+    Its state is kept in sync with the simulation both ways.
+    """
+
+    step_size: float = 1e-3
+    """
+    The physics time step, in seconds.
+    """
+
+    headless: bool = False
+    """
+    Whether to run without opening MuJoCo's viewer window.
+    """
+
+    paced_to_the_wall_clock: bool = True
+    """
+    Whether an advance waits out the difference between simulated and elapsed time, so
+    the motion runs at life speed; off, the physics runs as fast as the machine allows,
+    for a run nobody watches.
+    """
+
+    region_appearance: RegionAppearance = RegionAppearance.TRANSPARENT
+    """
+    How much of the regions the world holds the simulation draws.
+    """
+
+    followers: List[World] = field(default_factory=list)
+    """
+    Worlds kept in step with the simulated robot: after every advance, each joint of a
+    follower that shares its name with a simulated joint takes the simulated position.
+
+    What a follower holds beyond those joints -- what its robot believes stands on the
+    table -- is its own, which is what lets a plan be made in a world that knows only
+    what it was told while the physics runs in one that knows everything.
+    """
+
+    observers: List[SimulationObserver] = field(default_factory=list)
+    """
+    Told how far the simulation has advanced, after every advance.
+    """
+
+    multi_sim: MujocoSim = field(init=False)
+    """
+    The MuJoCo mirror of :attr:`world`.
+    """
+
+    _simulated_time: float = field(init=False, default=0.0, repr=False)
+    """
+    Seconds of simulated time advanced since :meth:`start`.
+    """
+
+    _start_time: Optional[float] = field(init=False, default=None, repr=False)
+    """
+    Wall-clock time :meth:`start` was called at, or ``None`` while not running.
+    """
+
+    def __post_init__(self):
+        self.multi_sim = MujocoSim(
+            world=self.world,
+            headless=self.headless,
+            step_size=self.step_size,
+            region_appearance=self.region_appearance,
+        )
+
+    def __enter__(self) -> Self:
+        self.start()
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback) -> None:
+        self.stop()
+
+    def start(self) -> None:
+        """
+        Open the viewer and reset the simulation to the world's built pose.
+        """
+        self.multi_sim.simulator.start(simulate_in_thread=False, render_in_thread=False)
+        self._simulated_time = 0.0
+        self._start_time = time.time()
+
+    def stop(self) -> None:
+        """
+        Close the viewer and tear the simulation down.
+        """
+        self.multi_sim.stop_simulation()
+        self._start_time = None
+
+    @property
+    def is_running(self) -> bool:
+        """
+        Whether the simulation is still being displayed, i.e. the viewer window is open.
+        """
+        return self.multi_sim.simulator.renderer.is_running()
+
+    def command(self, actuator: Actuator, set_point: float) -> None:
+        """
+        Hand an actuator a new set point, which it drives towards from the next
+        :meth:`advance` on.
+
+        :param actuator: The actuator to command. It has to belong to :attr:`world`.
+        :param set_point: The value the actuator should drive towards.
+        """
+        self.multi_sim.simulator.set_actuator_control(
+            actuator_name=actuator.name.name, value=set_point
+        )
+
+    def advance(self, duration: float) -> None:
+        """
+        Step the physics forward, refresh the viewer, and wait until the wall clock has
+        caught up.
+
+        Call this in short slices - around a frame's worth - so the world can be driven
+        in between and the viewer stays smooth.
+
+        :param duration: How many simulated seconds to advance.
+        """
+        if self._start_time is None:
+            raise SimulationNotStartedError(world=self.world)
+
+        simulator = self.multi_sim.simulator
+        for _ in range(round(duration / simulator.step_size)):
+            simulator.step()
+            self._simulated_time += simulator.step_size
+        simulator.renderer.sync()
+        self._update_followers()
+        for observer in self.observers:
+            observer.simulation_advanced(self._simulated_time)
+
+        if not self.paced_to_the_wall_clock:
+            return
+        remaining = self._start_time + self._simulated_time - time.time()
+        if remaining > 0:
+            time.sleep(remaining)
+
+    def _update_followers(self) -> None:
+        """
+        Hand every follower the simulated position of each joint it shares a name with.
+        """
+        for follower in self.followers:
+            for dof in follower.degrees_of_freedom:
+                simulated = self.world.get_degree_of_freedom_by_name(dof.name)
+                follower.state[dof.id].position = self.world.state[
+                    simulated.id
+                ].position
+            follower.notify_state_change()

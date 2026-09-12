@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import atexit
+import contextlib
 import logging
 import time
 from dataclasses import dataclass, field
@@ -69,6 +70,19 @@ class SimulatorRenderer:
         Update the renderer.
         """
         pass
+
+    def lock(self):
+        """
+        Context manager synchronizing model/data access with the renderer's own
+        rendering thread, if it has one.
+
+        A no-op here (headless has no rendering thread to race with);
+        subclasses backed by a real, actively-rendering viewer (e.g.
+        MujocoRenderer) must override this with their viewer's own lock, since
+        that thread reads the live model/data independently of anything
+        :class:`BaseSimulator` itself does.
+        """
+        return contextlib.nullcontext()
 
     def close(self):
         """
@@ -177,6 +191,17 @@ class BaseSimulator:
     _headless: bool = field(repr=False)
 
     _step_size: float = field(default=1e-3, repr=False)
+
+    _real_time_factor: Optional[float] = field(default=1.0, repr=False, kw_only=True)
+    """
+    Speed of the simulation clock relative to the wall clock: 1.0 paces
+    simulation_time 1:1 with real time, 0.5 runs at half speed (slow motion),
+    2.0 at double speed. ``None`` disables throttling entirely, letting the
+    simulation run as fast as the CPU allows.
+
+    Only changes how :meth:`run` throttles itself; it does not change
+    ``step_size`` or physics accuracy.
+    """
 
     _callbacks: List[SimulatorCallback] = field(default_factory=list, repr=False)
 
@@ -342,6 +367,16 @@ class BaseSimulator:
                         if self.current_simulation_time == 0.0:
                             self.reset()
                         self.step()
+                        # step() never blocks, so without this the loop steps
+                        # as fast as the CPU allows instead of advancing
+                        # step_size per simulated second; sleep off however far
+                        # the simulation clock has pulled ahead of the real one.
+                        if self.real_time_factor is not None:
+                            ahead_by = self.current_simulation_time / self.real_time_factor - (
+                                self.current_real_time - self.start_real_time
+                            )
+                            if ahead_by > 0:
+                                time.sleep(ahead_by)
 
                     case SimulatorState.PAUSED:
                         self.pause_callback()
@@ -554,6 +589,10 @@ class BaseSimulator:
     @property
     def step_size(self) -> float:
         return self._step_size
+
+    @property
+    def real_time_factor(self) -> Optional[float]:
+        return self._real_time_factor
 
     @property
     def state(self) -> SimulatorState:

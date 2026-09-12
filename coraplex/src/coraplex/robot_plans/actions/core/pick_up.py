@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict, Optional
+from typing_extensions import Any, Dict, List, Optional
 
 from coraplex.locations.pose_validator import AreReachableBy, IsObjectReachableBy
 from coraplex.plans.attachment_nodes import ReAttachNode
@@ -30,6 +30,7 @@ from coraplex.querying.predicates import GripperIsFree
 from coraplex.exceptions import PerceptionTargetMissing
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.mixins import (
+    ManipulatesBodies,
     HasGraspDetectionThreshold,
     HasTcpGoalThresholds,
     PickUpTuningParameters,
@@ -204,6 +205,7 @@ class PickUpAction(
     PickUpTuningParameters,
     HasGraspDetectionThreshold,
     HasTcpGoalThresholds,
+    ManipulatesBodies,
 ):
     """
     Let the robot pick up an object.
@@ -248,38 +250,51 @@ class PickUpAction(
         :return: One reach-and-close attempt at grasping :attr:`object_designator`,
             without lifting it.
         """
-        return sequential(
-            children=[
-                # defining the target_pose relative to the object ensures it stays correct even if the object pose is
-                # updated after defining the goal
-                ReachAction(
-                    target_pose=Pose(reference_frame=self.object_designator.root),
-                    object_designator=self.object_designator,
-                    arm=self.arm,
-                    grasp_description=self.grasp_description,
-                    pre_approach_linear_velocity=self.pre_approach_linear_velocity,
-                    final_approach_linear_velocity=self.final_approach_linear_velocity,
-                    open_gripper_at_pre_pose=True,
-                    position_threshold=self.position_threshold,
-                    orientation_threshold=self.orientation_threshold,
-                    perceive_before_grasp=self.perceive_before_grasp,
-                ),
-                MoveGripperMotion(
-                    motion=GripperState.CLOSE,
-                    gripper=self.arm,
-                    allow_gripper_collision=True,
-                    finger_velocity=self.grasp_closing_velocity,
-                    stall_minimum_time=self.grasp_stall_minimum_time,
-                    tolerate_stall=self.tolerate_grasp_stall,
-                ),
+        children = [
+            # defining the target_pose relative to the object ensures it stays correct even if the object pose is
+            # updated after defining the goal
+            ReachAction(
+                target_pose=Pose(reference_frame=self.object_designator.root),
+                object_designator=self.object_designator,
+                arm=self.arm,
+                grasp_description=self.grasp_description,
+                pre_approach_linear_velocity=self.pre_approach_linear_velocity,
+                final_approach_linear_velocity=self.final_approach_linear_velocity,
+                open_gripper_at_pre_pose=True,
+                position_threshold=self.position_threshold,
+                orientation_threshold=self.orientation_threshold,
+                perceive_before_grasp=self.perceive_before_grasp,
+            ),
+            MoveGripperMotion(
+                motion=GripperState.CLOSE,
+                gripper=self.arm,
+                allow_gripper_collision=True,
+                finger_velocity=self.grasp_closing_velocity,
+                stall_minimum_time=self.grasp_stall_minimum_time,
+                tolerate_stall=self.tolerate_grasp_stall,
+                # Size the close to the object instead of the gripper's
+                # nominal fully-closed state, which a grasped object makes
+                # unreachable and which therefore squeezes it back out.
+                grasped_object=self.object_designator.root,
+            ),
+        ]
+        if self.context.update_world_model_attachment:
+            children.append(
                 ReAttachNode(
                     body=self.object_designator.root,
                     new_parent=ViewManager.get_end_effector_view(
                         self.arm, self.robot
                     ).tool_frame,
-                ),
-            ],
-        )
+                )
+            )
+        return sequential(children=children)
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator.root]
 
     @property
     def _action_plan(self) -> PlanNode:
@@ -347,7 +362,7 @@ class PickUpAction(
 
 
 @dataclass
-class GraspingAction(ActionDescription, HasTcpGoalThresholds):
+class GraspingAction(ActionDescription, HasTcpGoalThresholds, ManipulatesBodies):
     """
     Grasps an object described by the given Object Designator description.
     """
@@ -366,6 +381,13 @@ class GraspingAction(ActionDescription, HasTcpGoalThresholds):
     """
     The grasp description that should be used to grasp the object.
     """
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator]
 
     @property
     def _action_plan(self) -> PlanNode:

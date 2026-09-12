@@ -1,0 +1,629 @@
+"""
+Detect the Montessori shape-sorting board's hole footprints directly from its mesh
+(``resources/board.stl``), instead of hand-authoring their positions and sizes as
+constants.
+
+The six holes are also read as one rigid layout, which is how they are found in a
+picture: their positions relative to one another are cut into the board and cannot vary,
+so the whole set has three degrees of freedom between them rather than three each.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+
+import numpy as np
+import trimesh
+from typing_extensions import Callable, Dict, List, Self, Sequence, Tuple
+
+from experiments.montessori.pieces import (
+    circle_boundary,
+    equilateral_triangle_boundary,
+    rectangle_boundary,
+)
+from experiments.montessori.planar_geometry import (
+    KnownOutline,
+    PlanarPoint,
+    PlanarSize,
+    points_along,
+    turned,
+)
+from experiments.montessori.semantics import MontessoriShapeCategory
+from semantic_digital_twin.world_description.geometry import Scale
+
+BOARD_MESH_PATH = Path(__file__).parent / "resources" / "board.stl"
+"""
+Path to the shape-sorting board's mesh, cut with its six real shape holes.
+"""
+
+DESCRIBED_OUTLINE_POINT_SPACING = 0.003
+"""
+How far apart, in metres, the points along the outline of a hole built from a
+description stand.
+
+A hole cut into the board's mesh is outlined by every bend of its cut edge, while a hole
+built from a description has only its shape's corners. The board fit's rough pass
+compares an outline at its corners and at a coarse spacing along each edge, so a layout
+of corners alone gives it too few points to tell the right turn from a wrong one on a lid
+with pieces lying on it. At this spacing the described layout was fitted correctly on
+every shipped capture, where its bare corners missed one.
+"""
+
+HOLE_MARKER_THICKNESS = 0.005
+"""
+Thickness (along the board's z-axis) of the thin box used to mark each hole's footprint;
+the marker's top face sits flush with the board's top surface.
+"""
+
+_CIRCLE_VERTEX_COUNT_THRESHOLD = 20
+"""
+Circular hole boundaries are tessellated into far more polygon vertices than the
+straight-edged holes (~65 vs.
+
+9-13 in the source mesh); above this count a loop is classified as circular.
+"""
+
+_TRIANGLE_FILL_RATIO_THRESHOLD = 0.7
+"""
+A polygon's area divided by its bounding box's area.
+
+A triangle inscribed in its bounding box fills at most half of it; the box-shaped holes
+fill all of it.
+"""
+
+_DISK_ASPECT_RATIO_THRESHOLD = 5.0
+"""
+Ratio of a polygon's bounding box's longer side to its shorter side.
+
+The disk hole is a narrow slot (~10:1); the square and rectangular holes are much closer
+to square.
+"""
+
+_RECTANGLE_ASPECT_RATIO_THRESHOLD = 1.3
+"""
+Bounding-box aspect ratio above which a box-shaped hole is classified as rectangular
+rather than square.
+"""
+
+
+@dataclass(frozen=True)
+class PolygonMeasurement:
+    """
+    How much of the plane a simple polygon covers, and where that area balances.
+    """
+
+    area: float
+    """
+    The area the polygon encloses, in square metres, however its vertices are wound.
+    """
+
+    centroid: PlanarPoint
+    """
+    The point the enclosed area is balanced about, which for an asymmetric outline is
+    not the middle of its bounding box.
+    """
+
+    @classmethod
+    def of(cls, points_xy: np.ndarray) -> PolygonMeasurement:
+        """
+        Measure a simple polygon with the shoelace formula.
+
+        :param points_xy: Ordered boundary vertices, shape ``(n, 2)``.
+        """
+        x, y = points_xy[:, 0], points_xy[:, 1]
+        x_next, y_next = np.roll(x, -1), np.roll(y, -1)
+        cross = x * y_next - x_next * y
+        signed_area = cross.sum() / 2.0
+        return cls(
+            area=abs(signed_area),
+            centroid=PlanarPoint(
+                float(((x + x_next) * cross).sum() / (6 * signed_area)),
+                float(((y + y_next) * cross).sum() / (6 * signed_area)),
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class HoleFootprint:
+    """
+    A single hole's position and 2D footprint, detected from the board mesh.
+    """
+
+    category: MontessoriShapeCategory
+    """
+    The geometric shape of the hole.
+    """
+
+    center: PlanarPoint
+    """
+    The hole's center, in the board mesh's local ``(x, y)`` frame.
+    """
+
+    size: PlanarSize
+    """
+    The hole's axis-aligned bounding box size, along the board mesh's local ``(x, y)``
+    axes.
+    """
+
+    boundary: Tuple[PlanarPoint, ...]
+    """
+    The hole's true cross-section outline: an ordered, closed polygon of ``(x, y)``
+    points relative to :attr:`center` (as opposed to its bounding box).
+    """
+
+    turn: float = 0.0
+    """
+    How far the hole's own axes are turned from the board mesh's local axes, in radians.
+    """
+
+    @classmethod
+    def of_description(
+        cls,
+        category: MontessoriShapeCategory,
+        size: PlanarSize,
+        center: PlanarPoint,
+        turn: float,
+    ) -> HoleFootprint:
+        """
+        The hole a description states: its shape at its own size, turned where it stands.
+
+        :param category: The shape the hole is cut in.
+        :param size: How far it reaches along its own axes; see
+            :attr:`~experiments.montessori.semantics.ShapeSortingHole.footprint_size`.
+        :param center: Where its centre stands, about the lid's centre.
+        :param turn: How far it is turned, in radians.
+        """
+        outline = turned(
+            points_along(
+                _OUTLINE_OF_HOLE_SHAPE[category](size), DESCRIBED_OUTLINE_POINT_SPACING
+            ),
+            turn,
+        )
+        extent = outline.max(axis=0) - outline.min(axis=0)
+        return cls(
+            category=category,
+            center=center,
+            size=PlanarSize(float(extent[0]), float(extent[1])),
+            boundary=tuple(PlanarPoint(float(x), float(y)) for x, y in outline),
+            turn=turn,
+        )
+
+    @property
+    def own_size(self) -> PlanarSize:
+        """
+        How far the hole reaches along its own axes, before :attr:`turn` turns it.
+        """
+        outline = turned(
+            np.array([(point.x, point.y) for point in self.boundary]), -self.turn
+        )
+        extent = outline.max(axis=0) - outline.min(axis=0)
+        return PlanarSize(float(extent[0]), float(extent[1]))
+
+    @property
+    def cross_section_size(self) -> float:
+        """
+        The larger of this hole's two extents, in metres: how wide a piece may be and
+        still pass through it.
+        """
+        return max(self.size.x, self.size.y)
+
+    def extrude(self, thickness: float) -> trimesh.Trimesh:
+        """
+        Extrude this hole's true boundary polygon into a solid of the given thickness,
+        centered on its own local origin (i.e. on :attr:`center`, once translated
+        there).
+
+        :param thickness: Extrusion depth along z.
+        """
+        return extrude_polygon(
+            np.asarray([(point.x, point.y) for point in self.boundary]), thickness
+        )
+
+
+def extrude_polygon(boundary: np.ndarray, thickness: float) -> trimesh.Trimesh:
+    """
+    Extrude a closed 2D polygon that is star-shaped with respect to its own centroid
+    (true of every hole shape on this board) into a solid, via fan triangulation from
+    that centroid.
+
+    :param boundary: Ordered polygon vertices, shape ``(n, 2)``; a closing vertex that
+        duplicates the first is dropped if present.
+    :param thickness: Extrusion depth along z.
+    """
+    if np.allclose(boundary[0], boundary[-1]):
+        boundary = boundary[:-1]
+    centroid = boundary.mean(axis=0)
+    vertices = np.vstack([boundary, centroid])
+    center_index = len(boundary)
+    faces = np.array(
+        [[i, (i + 1) % len(boundary), center_index] for i in range(len(boundary))]
+    )
+    mesh = trimesh.creation.extrude_triangulation(
+        vertices=vertices, faces=faces, height=thickness
+    )
+    mesh.apply_translation([0.0, 0.0, -thickness / 2])
+    return mesh
+
+
+def cut_board_mesh(
+    board_scale: Scale, footprints: List[HoleFootprint]
+) -> trimesh.Trimesh:
+    """
+    Cut every hole in ``footprints`` all the way through a solid board blank, using each
+    hole's true cross-section shape rather than its bounding box.
+
+    :param board_scale: Size of the uncut board blank.
+    :param footprints: The holes to cut, as detected by :func:`detect_hole_footprints`.
+    :return: The board blank with all holes cut clean through it.
+    """
+    board = trimesh.creation.box(extents=(board_scale.x, board_scale.y, board_scale.z))
+    cut_depth = board_scale.z * 2
+    for footprint in footprints:
+        cutter = footprint.extrude(cut_depth)
+        cutter.apply_translation([footprint.center.x, footprint.center.y, 0.0])
+        board = board.difference(cutter, engine=None)
+    return board
+
+
+def _classify_hole_shape(
+    vertex_count: int, fill_ratio: float, aspect_ratio: float
+) -> MontessoriShapeCategory:
+    """
+    Classify a hole's :class:`MontessoriShapeCategory` from its cross-section polygon's
+    signature.
+    """
+    if vertex_count > _CIRCLE_VERTEX_COUNT_THRESHOLD:
+        return MontessoriShapeCategory.CYLINDER
+    if fill_ratio < _TRIANGLE_FILL_RATIO_THRESHOLD:
+        return MontessoriShapeCategory.TRIANGULAR_PRISM
+    if aspect_ratio > _DISK_ASPECT_RATIO_THRESHOLD:
+        return MontessoriShapeCategory.DISK
+    if aspect_ratio > _RECTANGLE_ASPECT_RATIO_THRESHOLD:
+        return MontessoriShapeCategory.RECTANGULAR_PRISM
+    return MontessoriShapeCategory.CUBE
+
+
+def _find_perforated_body(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    """
+    Find the connected part of ``mesh`` that has through-holes cut into it (the board's
+    lid), identified as the watertight part with negative genus.
+
+    :raises ValueError: If no such part exists.
+    """
+    for body in mesh.split(only_watertight=False):
+        if body.is_watertight and body.euler_number < 2:
+            return body
+    raise ValueError("No part of the board mesh has holes cut into it.")
+
+
+HOLE_NAME_BY_CATEGORY = {
+    MontessoriShapeCategory.CUBE: "square_hole",
+    MontessoriShapeCategory.TRIANGULAR_PRISM: "triangle_hole",
+    MontessoriShapeCategory.RECTANGULAR_PRISM: "rectangular_hole",
+    MontessoriShapeCategory.DISK: "disk_hole",
+}
+"""
+What a hole of a given shape is called, for the shapes the board carries at most one
+hole of.
+
+The :attr:`~experiments.montessori.semantics.MontessoriShapeCategory.CYLINDER` category
+occurs twice and is numbered instead (``circular_hole_1``, ``circular_hole_2``).
+"""
+
+
+def hole_names(categories: List[MontessoriShapeCategory]) -> List[str]:
+    """
+    What each of the board's holes is called, in the order they were detected.
+
+    :param categories: The shape of each hole, in that order.
+    """
+    circular_hole_count = 0
+    names = []
+    for category in categories:
+        if category is MontessoriShapeCategory.CYLINDER:
+            circular_hole_count += 1
+            names.append(f"circular_hole_{circular_hole_count}")
+        else:
+            names.append(HOLE_NAME_BY_CATEGORY[category])
+    return names
+
+
+# %% the outline a hole's stated shape and size give it
+
+
+def _rectangle_outline(size: PlanarSize) -> np.ndarray:
+    """
+    :param size: The rectangle's width along x and length along y.
+    :return: Its corners about its own middle.
+    """
+    return rectangle_boundary(size.x, size.y)
+
+
+def _circle_outline(size: PlanarSize) -> np.ndarray:
+    """
+    :param size: The circle's diameter, along x.
+    :return: The polygon standing in for it, about its own middle.
+    """
+    return circle_boundary(size.x)
+
+
+def _triangle_outline(size: PlanarSize) -> np.ndarray:
+    """
+    :param size: The equilateral triangle's side, along x.
+    :return: Its corners about its own centroid, apex along +y.
+    """
+    return equilateral_triangle_boundary(size.x)
+
+
+_OUTLINE_OF_HOLE_SHAPE: Dict[
+    MontessoriShapeCategory, Callable[[PlanarSize], np.ndarray]
+] = {
+    MontessoriShapeCategory.CUBE: _rectangle_outline,
+    MontessoriShapeCategory.RECTANGULAR_PRISM: _rectangle_outline,
+    MontessoriShapeCategory.DISK: _rectangle_outline,
+    MontessoriShapeCategory.CYLINDER: _circle_outline,
+    MontessoriShapeCategory.TRIANGULAR_PRISM: _triangle_outline,
+}
+"""
+The outline, about its own centre and along its own axes, a hole of each shape is cut
+with at a stated size. A disk's hole is the slot its edge drops through.
+"""
+
+
+def _turn_of_outline(category: MontessoriShapeCategory, outline: np.ndarray) -> float:
+    """
+    How far a hole cut in the mesh is turned from the outline its shape is stated with.
+
+    On this board only the triangle is cut turned; every other hole runs along the
+    mesh's own axes, where its size along each axis says everything. A triangle looks
+    the same under a third of a turn, so any of its corners points where the stated
+    outline's apex does.
+
+    :param category: The shape the hole is cut in.
+    :param outline: The mesh's outline of the hole, about its own centre.
+    :return: The turn, in radians.
+    """
+    if category is not MontessoriShapeCategory.TRIANGULAR_PRISM:
+        return 0.0
+    corner = outline[np.argmax(np.linalg.norm(outline, axis=1))]
+    return float(math.atan2(corner[1], corner[0]) - math.pi / 2)
+
+
+def detect_hole_footprints() -> List[HoleFootprint]:
+    """
+    Detect the shape-sorting board's holes by slicing its mesh horizontally through the
+    lid and analyzing each interior boundary loop's polygon.
+
+    :return: One :class:`HoleFootprint` per hole cut into the board, ordered by
+        ascending y-position.
+    """
+    mesh = trimesh.load(BOARD_MESH_PATH)
+    lid = _find_perforated_body(mesh)
+
+    mid_z = (lid.bounds[0][2] + lid.bounds[1][2]) / 2
+    section = lid.section(plane_origin=[0.0, 0.0, mid_z], plane_normal=[0.0, 0.0, 1.0])
+    loops = [np.asarray(loop)[:, :2] for loop in section.discrete]
+    outer_boundary_index = max(
+        range(len(loops)),
+        key=lambda index: np.prod(loops[index].max(axis=0) - loops[index].min(axis=0)),
+    )
+
+    footprints = []
+    for index, loop in enumerate(loops):
+        if index == outer_boundary_index:
+            continue
+        minimum, maximum = loop.min(axis=0), loop.max(axis=0)
+        size_x, size_y = maximum - minimum
+        measurement = PolygonMeasurement.of(loop)
+        aspect_ratio = max(size_x, size_y) / min(size_x, size_y)
+        fill_ratio = measurement.area / (size_x * size_y)
+        category = _classify_hole_shape(len(loop), fill_ratio, aspect_ratio)
+        boundary = loop[:-1] if np.allclose(loop[0], loop[-1]) else loop
+        about_center = boundary - np.array(
+            [measurement.centroid.x, measurement.centroid.y]
+        )
+        footprints.append(
+            HoleFootprint(
+                category=category,
+                center=measurement.centroid,
+                size=PlanarSize(float(size_x), float(size_y)),
+                boundary=tuple(
+                    PlanarPoint(float(x), float(y)) for x, y in about_center
+                ),
+                turn=_turn_of_outline(category, about_center),
+            )
+        )
+
+    return sorted(footprints, key=lambda footprint: footprint.center.y)
+
+
+# %% the holes as one rigid layout
+
+
+@dataclass(frozen=True, eq=False)
+class PlacedHole:
+    """
+    One of the board's holes, put where the board was found to stand.
+    """
+
+    footprint: HoleFootprint
+    """
+    The hole the board mesh is cut with, which says what shape it is.
+    """
+
+    center: PlanarPoint
+    """
+    Where the hole's centre falls, in world-frame coordinates on the lid's plane.
+    """
+
+    outline: np.ndarray
+    """
+    Its boundary there, as ``(n, 2)`` world-frame ``(x, y)`` points.
+    """
+
+
+@dataclass(frozen=True, eq=False)
+class BoardHoleLayout(KnownOutline):
+    """
+    Every hole cut through the board's lid, as one outline about the board's own origin.
+
+    A hole searched for on its own has three degrees of freedom and takes whichever
+    placement the picture happens to agree with; the six of them together have three
+    between them, which is what the mesh actually says. Fitting the layout therefore
+    cannot invent a hole, put two of them in one place, or land on the drawer fronts
+    below the lid -- and it settles where the board itself stands, since six outlines
+    constrain that where one does not.
+    """
+
+    holes: Tuple[HoleFootprint, ...]
+    """
+    The holes, in the order :func:`detect_hole_footprints` reports them.
+    """
+
+    size: PlanarSize
+    """
+    How far the lid reaches along the board's own axes, in metres.
+    """
+
+    scale: float = 1.0
+    """
+    How large the board this layout describes is, against the mesh it was read from.
+
+    One is the mesh itself, which is what a scene built from that mesh shows. A real
+    board is whatever size it is, and :meth:`~BoardScale.of_look` measures that rather
+    than assuming the mesh was cut to it.
+    """
+
+    @classmethod
+    @lru_cache(maxsize=8)
+    def of_board_mesh(cls, scale: float = 1.0) -> Self:
+        """
+        Read the layout out of the board's own mesh, at the size a board of that mesh's
+        shape is known to be.
+
+        Cached, since finding the holes slices that mesh and a look is taken every frame.
+
+        :param scale: How large the board is against the mesh.
+        """
+        lid = _find_perforated_body(trimesh.load(BOARD_MESH_PATH))
+        reach = (lid.bounds[1] - lid.bounds[0]) * scale
+        return cls(
+            holes=tuple(
+                _scaled_footprint(footprint, scale)
+                for footprint in detect_hole_footprints()
+            ),
+            size=PlanarSize(float(reach[0]), float(reach[1])),
+            scale=scale,
+        )
+
+    def outline_points(self, angle: float, spacing: float) -> np.ndarray:
+        """
+        The points every hole's boundary covers, turned together about the board's own
+        origin.
+
+        :param angle: How far the board is turned, in radians about the world frame's
+            z-axis.
+        :param spacing: How far apart, in metres, the points stand.
+        """
+        return turned(
+            np.vstack(
+                [
+                    points_along(_boundary_about_the_board(hole), spacing)
+                    for hole in self.holes
+                ]
+            ),
+            angle,
+        )
+
+    def smallest_equivalent_turn(self, angle: float) -> float:
+        """
+        The smallest turn that leaves the layout looking the way the given one does.
+
+        Six holes of five different shapes look alike under no turn but a whole one, so
+        this only brings a turn within half a circle of zero.
+
+        :param angle: A turn about the world frame's z-axis, in radians.
+        """
+        return (angle + math.pi) % (2 * math.pi) - math.pi
+
+    def origins_with_a_hole_at(
+        self, openings: Sequence[PlanarPoint], yaw: float
+    ) -> np.ndarray:
+        """
+        Where the board's own origin stands for one of its holes to stand at one of
+        the openings seen, with the board turned one way.
+
+        An opening cut through a lid is one of the holes, whichever one it is, so each
+        opening names as many places for the board as the layout has holes -- and the
+        place named by the hole the opening really is, is named by every other opening
+        too.
+
+        :param openings: Where the openings stand, on the lid's plane.
+        :param yaw: How far the board is turned, in radians about the world frame's
+            z-axis.
+        :return: The world-frame ``(n, 2)`` origins, one per opening and hole.
+        """
+        seen = np.array([(opening.x, opening.y) for opening in openings]).reshape(-1, 2)
+        holes = turned(
+            np.array([(hole.center.x, hole.center.y) for hole in self.holes]), yaw
+        )
+        return (seen[:, None, :] - holes[None, :, :]).reshape(-1, 2)
+
+    def placed(self, center: PlanarPoint, yaw: float) -> List[PlacedHole]:
+        """
+        Where each hole falls with the board standing at one placement.
+
+        :param center: Where the board's own origin stands, on the lid's plane.
+        :param yaw: How far it is turned, in radians about the world frame's z-axis.
+        """
+        board = np.array([center.x, center.y])
+        placed = []
+        for hole in self.holes:
+            at = turned(np.array([[hole.center.x, hole.center.y]]), yaw)[0] + board
+            placed.append(
+                PlacedHole(
+                    footprint=hole,
+                    center=PlanarPoint(float(at[0]), float(at[1])),
+                    outline=turned(
+                        np.array([(point.x, point.y) for point in hole.boundary]), yaw
+                    )
+                    + at,
+                )
+            )
+        return placed
+
+
+def _boundary_about_the_board(hole: HoleFootprint) -> np.ndarray:
+    """
+    One hole's boundary measured from the board's own origin rather than from the hole's
+    centre, which is what makes the six of them one rigid outline.
+
+    :param hole: The hole to read.
+    """
+    return np.array([(point.x, point.y) for point in hole.boundary]) + np.array(
+        [hole.center.x, hole.center.y]
+    )
+
+
+def _scaled_footprint(footprint: HoleFootprint, scale: float) -> HoleFootprint:
+    """
+    The same hole on a board of a different size.
+
+    :param footprint: The hole as the mesh cuts it.
+    :param scale: How large the board is against the mesh.
+    """
+    if scale == 1.0:
+        return footprint
+    return HoleFootprint(
+        category=footprint.category,
+        center=PlanarPoint(footprint.center.x * scale, footprint.center.y * scale),
+        size=PlanarSize(footprint.size.x * scale, footprint.size.y * scale),
+        boundary=tuple(
+            PlanarPoint(point.x * scale, point.y * scale)
+            for point in footprint.boundary
+        ),
+        turn=footprint.turn,
+    )

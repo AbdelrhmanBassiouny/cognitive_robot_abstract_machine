@@ -920,6 +920,18 @@ def test_verbalize_sum():
     assert "sum" in text and "Integers" in text
 
 
+def test_verbalize_case_when_without_else():
+    x = variable(int, [1, 2])
+    text = verbalize_expression(eql.case_when(x > 1, "yes"))
+    assert text == "'yes' if an Integer is greater than 1"
+
+
+def test_verbalize_case_when_with_else():
+    x = variable(int, [1, 2])
+    text = verbalize_expression(eql.case_when(x > 1, "yes", "no"))
+    assert text == "'yes' if an Integer is greater than 1, otherwise 'no'"
+
+
 def test_verbalize_max_min():
     # MAX/MIN use SINGULAR_OF: child is verbalized via regular chain form, not plural.
     x = variable(int, [1, 2])
@@ -1444,8 +1456,8 @@ def test_verbalize_nested_rule(doors_and_drawers_world):
         parent=prismatic_connection.child, child=handle
     ).from_(world.connections)
     drawer_var = inference(Drawer)(
-        container=fixed_connection.expression.parent,
-        handle=fixed_connection.expression.child,
+        container=fixed_connection.parent,
+        handle=fixed_connection.child,
     )
     # Wrap in entity() to trigger the if/then rule form
     text = verbalize_expression(entity(drawer_var))
@@ -1483,8 +1495,8 @@ def test_verbalize_inference_rule_golden(doors_and_drawers_world):
         parent=prismatic_connection.child, child=handle
     ).from_(world.connections)
     drawer_var = inference(Drawer)(
-        container=fixed_connection.expression.parent,
-        handle=fixed_connection.expression.child,
+        container=fixed_connection.parent,
+        handle=fixed_connection.child,
     )
     assert verbalize_expression(entity(drawer_var)) == (
         "If there's a FixedConnection whose parent is the child of a PrismaticConnection, "
@@ -1892,8 +1904,8 @@ def test_verbalize_inference_repeated_entity_article(doors_and_drawers_world):
         parent=prismatic_connection.child, child=handle
     ).from_(world.connections)
     drawer = inference(Drawer)(
-        container=fixed_connection.expression.parent,
-        handle=fixed_connection.expression.child,
+        container=fixed_connection.parent,
+        handle=fixed_connection.child,
     )
     text = verbalize_expression(drawer)
 
@@ -1940,8 +1952,8 @@ def test_verbalize_double_nested_constraint_stack(doors_and_drawers_world):
         parent=prismatic_connection.child, child=handle
     ).from_(world.connections)
     drawer_var = inference(Drawer)(
-        container=fixed_connection.expression.parent,
-        handle=fixed_connection.expression.child,
+        container=fixed_connection.parent,
+        handle=fixed_connection.child,
     )
     wrapper_var = inference(Wrapper)(drawer=drawer_var)
     text = verbalize_expression(wrapper_var)
@@ -1977,8 +1989,8 @@ def test_verbalize_double_nested_with_outer_entity(doors_and_drawers_world):
         parent=prismatic_connection.child, child=handle
     ).from_(world.connections)
     drawer_var = inference(Drawer)(
-        container=fixed_connection.expression.parent,
-        handle=fixed_connection.expression.child,
+        container=fixed_connection.parent,
+        handle=fixed_connection.child,
     )
 
     # A second entity used directly by the outer Wrapper
@@ -1986,9 +1998,7 @@ def test_verbalize_double_nested_with_outer_entity(doors_and_drawers_world):
     pc2 = variable(PrismaticConnection, world.connections)
     fc2 = a(FixedConnection)(parent=pc2.child, child=handle2).from_(world.connections)
 
-    wrapper_var = inference(Wrapper)(
-        drawer=drawer_var, connection=fc2.expression.parent
-    )
+    wrapper_var = inference(Wrapper)(drawer=drawer_var, connection=fc2.parent)
     text = verbalize_expression(wrapper_var)
 
     assert "a Wrapper" in text

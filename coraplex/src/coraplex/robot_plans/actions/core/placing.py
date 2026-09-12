@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, TYPE_CHECKING
+from typing_extensions import Any, Dict, List, Optional, TYPE_CHECKING
 
 from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.plan_node import PlanNode
@@ -23,6 +23,7 @@ from coraplex.querying.predicates import GripperIsFree
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.mixins import (
+    ManipulatesBodies,
     HasGraspDetectionThreshold,
     HasTcpGoalThresholds,
     PlaceTuningParameters,
@@ -48,6 +49,7 @@ class PlaceAction(
     PlaceTuningParameters,
     HasGraspDetectionThreshold,
     HasTcpGoalThresholds,
+    ManipulatesBodies,
 ):
     """
     Places an Object at a position using an arm.
@@ -74,37 +76,55 @@ class PlaceAction(
     :func:`~semantic_digital_twin.reasoning.robot_predicates.is_body_gripped`).
     """
 
+    grasp_description: Optional[GraspDescription] = field(default=None, kw_only=True)
+    """
+    How :attr:`object_designator` is held, which is what the poses this action moves
+    through are computed from.
+
+    Optional because a place that follows its own pick-up reads the grasp off it; state
+    it when the object was picked up in a plan of its own, or the place would work from
+    a grasp that never happened.
+    """
+
     def _retract_plan(self, retract_pose: Pose) -> PlanNode:
         """
-        :return: The plan that re-parents the placed object back to the world and
-            retracts the end effector away from it.
+        :return: The plan that retracts the end effector away from the placed object,
+            re-parenting the object back to the world first unless the context leaves
+            attachment to a physics simulator.
         """
-        return sequential(
-            [
-                ReAttachNode(body=self.object_designator, new_parent=self.world.root),
-                MoveToolCenterPointMotion(
-                    retract_pose,
-                    self.arm,
-                    max_linear_velocity=self.retract_linear_velocity,
-                    position_threshold=self.position_threshold,
-                    orientation_threshold=self.orientation_threshold,
-                ),
-            ],
+        children = []
+        if self.context.update_world_model_attachment:
+            children.append(
+                ReAttachNode(body=self.object_designator, new_parent=self.world.root)
+            )
+        children.append(
+            MoveToolCenterPointMotion(
+                retract_pose,
+                self.arm,
+                max_linear_velocity=self.retract_linear_velocity,
+                position_threshold=self.position_threshold,
+                orientation_threshold=self.orientation_threshold,
+            )
         )
+        return sequential(children)
 
     def _grasp_description(self, end_effector: EndEffector) -> GraspDescription:
         """
         Describe how the object to place is held.
 
-        Read from the world whenever the object is really in the gripper, which is the
-        ground truth and needs no earlier action to have recorded it. A plan is built
-        before it runs, though, so an action plan built ahead of the pick-up that fills
-        the gripper has nothing to measure yet; the grasp that pick-up intends is used
-        then.
+        Prefers a grasp this action was explicitly told about, since a place that
+        follows its own pick-up in a different plan has nothing here to read it from.
+        Otherwise reads the world whenever the object is really in the gripper, which
+        is the ground truth and needs no earlier action to have recorded it. A plan is
+        built before it runs, though, so an action plan built ahead of the pick-up that
+        fills the gripper has nothing to measure yet; the grasp the previous pick-up in
+        this plan intends is used then.
 
         :param end_effector: The end effector holding the object.
         :return: The grasp the object is held in.
         """
+        if self.grasp_description is not None:
+            return self.grasp_description
         if (
             self.object_designator
             in end_effector.tool_frame.child_kinematic_structure_entities
@@ -119,6 +139,13 @@ class PlaceAction(
         if previous_pick is None:
             raise BodyIsNotHeld(self.object_designator, end_effector)
         return previous_pick.designator.grasp_description
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator]
 
     @property
     def _action_plan(self) -> PlanNode:

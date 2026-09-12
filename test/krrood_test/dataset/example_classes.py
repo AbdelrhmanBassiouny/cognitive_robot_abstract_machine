@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib
 import uuid
+from abc import ABC
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
@@ -11,7 +13,7 @@ from typing import Set, Generic, TypeVar as TypingTypeVar
 
 from sqlalchemy import types, TypeDecorator
 from typing_extensions import Dict, Any, Sequence, Self
-from typing_extensions import List, Optional, Type
+from typing_extensions import List, Optional, Tuple, Type
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.class_diagrams.mocking import MockedClass
@@ -25,6 +27,7 @@ from krrood.ormatic.data_access_objects.alternative_mappings import (
     AlternativeMapping,
     T,
 )
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.symbol_graph.symbol_graph import Symbol
 from krrood import logger
 
@@ -115,6 +118,15 @@ class KRROODPositions(Symbol):
 @dataclass
 class KRROODPositionsSubclassWithAnotherKRROODPosition(KRROODPositions):
     positions2: KRROODPosition
+
+
+# check that a many-to-many relationship typed as a tuple (immutable, unlike list) also
+# maps cleanly -- SQLAlchemy's relationship() only accepts a mutable collection_class
+# (list/set/dict, or a custom @collection-decorated class), so this must not be passed
+# tuple directly
+@dataclass
+class KRROODPositionsAsTuple(Symbol):
+    positions: Tuple[KRROODPosition, ...]
 
 
 # check that one to many relationships work where the many side is of the same type
@@ -640,6 +652,50 @@ class JSONWrapper:
     more_objects: List[JSONSerializableClass] = field(default_factory=list)
 
 
+JSONSerializableAnswer = TypingTypeVar("JSONSerializableAnswer")
+"""
+What a :class:`GenericJSONSerializableClass` answers with.
+"""
+
+
+@dataclass
+class GenericJSONSerializableClass(
+    SubclassJSONSerializer, Generic[JSONSerializableAnswer], SubClassSafeGeneric, ABC
+):
+    """
+    A JSON-serializable base that is used as a field type without binding its parameter,
+    so the field says only that some subclass of it is stored.
+    """
+
+    label: str = ""
+    """
+    What this value stands for.
+    """
+
+    def to_json(self) -> Dict[str, Any]:
+        return {**super().to_json(), "label": to_json(self.label)}
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(label=from_json(data["label"]))
+
+
+@dataclass
+class TextJSONSerializableClass(GenericJSONSerializableClass[str]): ...
+
+
+@dataclass
+class GenericJSONWrapper:
+    """
+    Holds the generic JSON value under a field that leaves the parameter free.
+    """
+
+    json_serializable_object: GenericJSONSerializableClass
+    """
+    The value, whose own JSON names which subclass it is.
+    """
+
+
 @dataclass
 class HolderOfSimpleInterval:
     """
@@ -784,6 +840,37 @@ class GenericClassAssociation:
     associated_value_not_parametrized_list: List[GenericClass] = field(
         default_factory=list
     )
+
+
+# %% a generic whose alias carries no attributes of its own
+
+
+@dataclass
+class GenericContextManager(AbstractContextManager, Generic[T]):
+    """
+    A generic class that is also a context manager.
+
+    Being a context manager is what makes subscripting it answer a
+    :class:`types.GenericAlias` rather than a ``typing`` one, and an alias of that kind
+    holds no attributes of its own -- so nothing may be written onto it.
+    """
+
+    value: T
+    """
+    Whatever the class was specialized for.
+    """
+
+
+@dataclass
+class GenericContextManagerAssociation:
+    """
+    Holds a specialization of a generic whose alias carries no attributes.
+    """
+
+    associated_context_manager: GenericContextManager[float]
+    """
+    The specialization a class diagram has to build a dataclass for.
+    """
 
 
 # %% Test TypeVar field resolution in DAO generation
@@ -984,3 +1071,23 @@ class ActionWithMissingAggregationsMixin:
     """
 
     domain_object: Cabinet
+
+
+# %% Builtin types SQLAlchemy has no column type for
+
+
+@dataclass
+class HoldsAnException:
+    """
+    Class with a field whose type lives in ``builtins`` yet cannot be a column.
+    """
+
+    name: str
+    """
+    A field that does map to a column, so a skipped neighbour is visibly the exception.
+    """
+
+    cause: Optional[BaseException] = None
+    """
+    The exception that was raised, kept only while the object is alive.
+    """

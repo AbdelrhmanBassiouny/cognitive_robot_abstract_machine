@@ -4,8 +4,6 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
-from json_msgs.action import JsonAction
-
 from giskardpy.executor import Executor
 from giskardpy.middleware.ros2.action_server import ActionServerHandler
 
@@ -94,6 +92,11 @@ class ActionFeedbackPublisher:
         """
         Publish the given data as action feedback.
         """
+        # Deferred: json_msgs is a ROS2 message package, not installed everywhere this
+        # module is imported (e.g. ORM generation) -- see ros_executor.py's identical
+        # deferral of DebugExpressionPublisher for the same reason.
+        from json_msgs.action import JsonAction
+
         message = JsonAction.Feedback()
         message.feedback = json.dumps(data)
         self.action_server.send_feedback(message)

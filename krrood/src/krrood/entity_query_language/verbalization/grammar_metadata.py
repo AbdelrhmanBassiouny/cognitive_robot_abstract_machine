@@ -31,8 +31,14 @@ class GrammarMetadata(FieldMetadata):
 
     is_identifying_field: bool = False
     """
-    ``True`` when this field identifies its instance for verbalization (*"a specific <Type> with
-    <field> '<value>'"*).
+    ``True`` when this field identifies its instance for verbalization (*"a specific
+    <Type> with <field> '<value>'"*).
+    """
+
+    stands_for_its_owner: bool = False
+    """
+    ``True`` when its owner is a wrapper around this field alone, so reading it says the
+    owner and stops (*"the name of the Body"*, not *"the name of its name"*).
     """
 
     display_name: Optional[str] = None
@@ -43,8 +49,8 @@ class GrammarMetadata(FieldMetadata):
 
     boolean_predicate: Optional[BooleanPredicate] = None
     """
-    How a boolean field reads as a predicate — *"has milk"* / *"produces milk"* / *"is operational"*
-    — overriding the default heuristic.
+    How a boolean field reads as a predicate — *"has milk"* / *"produces milk"* / *"is
+    operational"* — overriding the default heuristic.
 
     ``None`` lets the verbalizer infer the form from the attribute name's shape.
     """

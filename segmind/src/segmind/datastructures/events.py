@@ -5,21 +5,39 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import cached_property
 
-from geometry_msgs.msg import PoseStamped
-from typing_extensions import Optional, List
+from typing_extensions import Any, Optional, List, Tuple
 
+from krrood.entity_query_language.backends import relation_asserted_about
+from krrood.entity_query_language.factories import an
+from krrood.entity_query_language.predicate import Relation
+from krrood.entity_query_language.query.match import Match
+from krrood.symbol_graph.symbol_graph import Symbol
 from segmind.datastructures.object_tracker import (
     ObjectEventTracker,
     ObjectTrackerFactory,
 )
+from segmind.exceptions import EventNamesNoObject
+from semantic_digital_twin.reasoning.predicates import InsideRegion, SupportedBy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    KinematicStructureEntity,
+    Region,
+)
 
 
 @dataclass
-class DetectionEvent(ABC):
+class DetectionEvent(Symbol, ABC):
+    """
+    Something the segmentation saw happen.
+
+    A symbol, so that what the robot has seen is part of what it can be asked about
+    without anyone having to hand the events to the question.
+    """
+
     timestamp: datetime = field(default_factory=datetime.now)
     """
     The time at which the event occurred, defaults to current time.
@@ -53,11 +71,20 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
     tracked_object: Body
     """The primary object involved in this event."""
 
-    with_object: Optional[Body] = None
-    """The secondary object involved in this event, if any."""
+    with_object: Optional[KinematicStructureEntity] = None
+    """
+    The secondary object involved in this event, if any.
+
+    Usually a :class:`~semantic_digital_twin.world_description.world_entity.Body`; a
+    hole-related event (e.g. contact with an
+    :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture`)
+    sets this to that aperture's own
+    :class:`~semantic_digital_twin.world_description.world_entity.Region` root instead,
+    since an aperture is a virtual opening rather than a collidable body.
+    """
 
     @property
-    def tracked_objects(self) -> List[Body]:
+    def tracked_objects(self) -> List[KinematicStructureEntity]:
         """
         :return: the primary object, plus the secondary object when present.
         """
@@ -109,19 +136,174 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
         return hash((self.__class__, tuple(self.tracked_objects), self.timestamp))
 
 
+# %% what an event says now holds
+
+
+@dataclass(frozen=True)
+class Effect:
+    """
+    What an event says about the object it is about once it has happened, in the
+    world's own vocabulary: the relations that hold of it from then on, the ones that
+    stop holding, and the ones it is evidence about without settling.
+
+    Each is stated about the object without the object standing in it, so what an
+    event says can be applied to whatever was believed of the object before it.
+    Everything an event says nothing about is left exactly as it was.
+    """
+
+    begins: Tuple[Match[Relation], ...] = ()
+    """
+    The relations that hold of the object once the event has happened.
+    """
+
+    ends: Tuple[Match[Relation], ...] = ()
+    """
+    The relations that stop holding of it, each read as covering every relation
+    believed *before* the event that it states: one stating no operand ends every
+    relation of its kind. What the event itself begins is never ended by it.
+    """
+
+    checks: Tuple[Match[Relation], ...] = ()
+    """
+    The relations the event is a reason to look at again rather than to settle: every
+    believed relation one of these covers is asked of the object as it now stands, and
+    kept only where it still holds.
+    """
+
+    def applied_to(
+        self, held: Tuple[Match[Relation], ...], subject: Any
+    ) -> Tuple[Match[Relation], ...]:
+        """
+        What holds of the object after this effect, given what was believed of it
+        before.
+
+        :param held: The relations believed to hold before the event.
+        :param subject: The object the event is about, as it stands once the event has
+            happened, which is what a relation the effect checks is asked of.
+        """
+        kept = [
+            relation
+            for relation in held
+            if not self._ends(relation) and self._still_holds(relation, subject)
+        ]
+        return (
+            *kept,
+            *(
+                begun
+                for begun in self.begins
+                if not any(begun.states_the_same(relation) for relation in kept)
+            ),
+        )
+
+    def _ends(self, relation: Match[Relation]) -> bool:
+        """
+        :param relation: One relation believed before the event.
+        """
+        return any(ended.covers(relation) for ended in self.ends)
+
+    def _still_holds(self, relation: Match[Relation], subject: Any) -> bool:
+        """
+        :param relation: One relation believed before the event.
+        :param subject: The object the event is about, as it stands now.
+        :return: Whether the belief survives being checked, which every belief this
+            effect does not check does.
+        """
+        if not any(checked.covers(relation) for checked in self.checks):
+            return True
+        return bool(relation_asserted_about(relation, subject)())
+
+
+@dataclass(kw_only=True)
+class EventWithEffect(EventWithTrackedObjects, ABC):
+    """
+    An event that says what holds of its :attr:`tracked_object` once it has happened.
+
+    An event is what was seen to happen, at a time, between the things it names; its
+    effect is what is true of the world from then on. For an event named after the
+    relation it detects the two nearly coincide, and for one named after what happened
+    -- a pick-up, an insertion -- they do not, which is why the effect is stated on
+    the event rather than read off its name.
+    """
+
+    @abstractmethod
+    def effect(self) -> Effect:
+        """
+        What this event says holds of the object it is about, and what stops holding.
+        """
+
+    def _entity_it_names(self) -> KinematicStructureEntity:
+        """
+        The entity this event saw its object involved with.
+
+        :raises EventNamesNoObject: If the event names none.
+        """
+        if self.with_object is None:
+            raise EventNamesNoObject(event=str(self))
+        return self.with_object
+
+    def _region_it_names(self) -> Region:
+        """
+        The region this event saw its object involved with.
+
+        :raises EventNamesNoObject: If the event names none, or names something that is
+            not a region.
+        """
+        if not isinstance(self.with_object, Region):
+            raise EventNamesNoObject(event=str(self))
+        return self.with_object
+
+
+SUPPORTED_BY_ANYTHING = an(SupportedBy)()
+"""
+Resting on anything at all: every support believed before the event, whatever it
+named, which an event that says what the object now rests on ends, and a pick-up ends
+without saying what it rests on instead.
+"""
+
+INSIDE_ANY_REGION = an(InsideRegion)()
+"""
+Lying in any region at all: every containment believed before the event, which a
+pick-up is a reason to check.
+"""
+
+
+@dataclass(kw_only=True)
+class ComesToRestEvent(EventWithEffect, ABC):
+    """
+    An event after which the object rests on what the event names, and on nothing else.
+    """
+
+    def effect(self) -> Effect:
+        """
+        The object rests on what this event names, instead of whatever it rested on
+        before.
+        """
+        return Effect(
+            begins=(an(SupportedBy)(supporting=self._entity_it_names()),),
+            ends=(SUPPORTED_BY_ANYTHING,),
+        )
+
+
 @dataclass(unsafe_hash=True)
-class SupportEvent(EventWithTrackedObjects):
+class SupportEvent(ComesToRestEvent):
     """
     The SupportEvent class is used to represent an event that involves an object that is supported by another object.
     """
 
 
 @dataclass(unsafe_hash=True)
-class LossOfSupportEvent(EventWithTrackedObjects):
+class LossOfSupportEvent(EventWithEffect):
     """
     The LossOfSupportEvent class is used to represent an event that involves an object that was supported by another
     object and then lost support.
     """
+
+    def effect(self) -> Effect:
+        """
+        The object no longer rests on what this event names; what else it may rest on
+        is left as it was.
+        """
+        return Effect(ends=(an(SupportedBy)(supporting=self._entity_it_names()),))
 
 
 @dataclass(unsafe_hash=True)
@@ -177,6 +359,24 @@ class StopRotationEvent(MotionEvent):
     ...
 
 
+@dataclass(init=False, unsafe_hash=True)
+class LiftEvent(MotionEvent):
+    """
+    Represents an event where a grasped object starts moving upward along the Z axis.
+    """
+
+    ...
+
+
+@dataclass(init=False, unsafe_hash=True)
+class StopLiftEvent(MotionEvent):
+    """
+    Represents an event where a lifted object stops moving upward.
+    """
+
+    ...
+
+
 @dataclass(unsafe_hash=True)
 class AbstractContactEvent(EventWithTrackedObjects, ABC):
     """
@@ -198,9 +398,9 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     Bounding box of the object.
     """
 
-    pose: Pose = field(init=False)
+    pose: NumericPose = field(init=False)
     """
-    Pose of the object.
+    Pose of the object, read out into numbers so a detector thread can record it.
     """
 
     with_object_bounding_box: Optional[VolumetricBoundingBox] = field(
@@ -210,24 +410,32 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     Bounding box of the second object in contact.
     """
 
-    with_object_pose: Optional[PoseStamped] = field(init=False, default=None)
+    with_object_pose: Optional[NumericPose] = field(init=False, default=None)
     """
-    Pose of the second object in contact.
+    Pose of the second object in contact, read out into numbers.
     """
 
     def __post_init__(self):
+        # an event read back from a record is about a body that stands in no world any
+        # more, so there is nothing to read its pose off; the numbers it read when it
+        # happened are the record's
+        if self.tracked_object._world is None:
+            return
+        # combined_mesh (not tracked_object.collision.combined_mesh directly) so this
+        # also works when with_object is a hole's Region root, which exposes its
+        # geometry via .area rather than .collision.
         self.bounding_box = VolumetricBoundingBox.from_mesh(
-            self.tracked_object.collision.combined_mesh,
-            origin=self.tracked_object.global_pose.to_homogeneous_matrix(),
+            self.tracked_object.combined_mesh,
+            origin=self.tracked_object.numeric_global_transform,
         )
-        self.pose = self.tracked_object.global_pose
+        self.pose = self.tracked_object.numeric_global_pose
 
         if self.with_object is not None:
             self.with_object_bounding_box = VolumetricBoundingBox.from_mesh(
-                self.with_object.collision.combined_mesh,
-                origin=self.with_object.global_pose.to_homogeneous_matrix(),
+                self.with_object.combined_mesh,
+                origin=self.with_object.numeric_global_transform,
             )
-            self.with_object_pose = self.with_object.global_pose
+            self.with_object_pose = self.with_object.numeric_global_pose
 
 
 @dataclass(init=False, unsafe_hash=True)
@@ -248,38 +456,116 @@ class LossOfContactEvent(AbstractContactEvent):
     ...
 
 
+@dataclass
+class AgentInteractionEvent(EventWithEffect, ABC):
+    """
+    An event in which an agent acted on the tracked object rather than one where the
+    object was only observed.
+
+    What separates what the agent did from what merely happened around it, which is the
+    difference an agency question is about. The object acted on is the one the event
+    already tracks, so asking which objects an agent acted on is asking these events for
+    their :attr:`tracked_object`.
+
+    Extends :class:`EventWithEffect` rather than :class:`EventWithTrackedObjects`
+    directly: an agent's action always changes what holds of the object, and a single
+    inheritance chain is what lets ORMatic map :class:`PickUpEvent` and
+    :class:`InsertionEvent` without the two-parent joined-table ambiguity multiple
+    inheritance from unrelated bases would otherwise create.
+    """
+
+
 @dataclass(unsafe_hash=True)
-class PickUpEvent(EventWithTrackedObjects):
+class GraspEvent(EventWithTrackedObjects):
+    """
+    Represents an event where an object starts being held by a gripper: in contact with
+    both of the gripper's fingers, and close to its tool center point.
+
+    :attr:`~EventWithTrackedObjects.with_object` is the gripper's own tool center point
+    body (its ``tool_frame``), not either finger individually.
+    """
+
+    ...
+
+
+@dataclass(unsafe_hash=True)
+class LossOfGraspEvent(EventWithTrackedObjects):
+    """
+    Represents an event where an object previously held by a gripper (see
+    :class:`GraspEvent`) is no longer in contact with both of its fingers and close to
+    its tool center point.
+    """
+
+    ...
+
+
+@dataclass(unsafe_hash=True)
+class PickUpEvent(AgentInteractionEvent):
     """
     Represents an event where an object is picked up by another object.
     """
 
-    ...
+    def effect(self) -> Effect:
+        """
+        Picked up, the object is held rather than supported, so it rests on nothing
+        whatever it rested on before. Whether it still lies in a region it was believed
+        in is not settled by the pick-up but checked against where the object now is: a
+        piece lifted clear of a hole is no longer in it, one nudged within it still is.
+        """
+        return Effect(ends=(SUPPORTED_BY_ANYTHING,), checks=(INSIDE_ANY_REGION,))
 
 
 @dataclass(unsafe_hash=True)
-class PlacingEvent(EventWithTrackedObjects):
+class PlacingEvent(AgentInteractionEvent, ComesToRestEvent):
     """
     Represents an event where an object is placed on another object.
-    """
 
-    ...
+    Inherits :class:`ComesToRestEvent` too, for its :meth:`~ComesToRestEvent.effect`:
+    unlike :class:`PickUpEvent`/:class:`InsertionEvent`, placing an object has the same
+    physical effect whether or not an agent caused it, so that effect lives on
+    :class:`ComesToRestEvent` and is shared with plain :class:`SupportEvent` rather than
+    being an :class:`AgentInteractionEvent` of its own. :class:`AgentInteractionEvent` is
+    listed first so ORMatic - which maps a class to the joined-table parent of the first
+    mapped ancestor its MRO reaches - still lets a query for ``AgentInteractionEvent``
+    find placement rows.
+    """
 
 
 @dataclass(unsafe_hash=True)
-class InsertionEvent(EventWithTrackedObjects):
+class InsertionEvent(AgentInteractionEvent):
     """
     Represents an event where an object is inserted into another object.
     """
 
-    inserted_into_objects: List[Body] = field(default_factory=list)
+    inserted_into_objects: List[KinematicStructureEntity] = field(default_factory=list)
     """
     List of objects into which the object was inserted.
+
+    A hole-related insertion sets this to the hole's own ``Region`` root (see
+    :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture`),
+    not a ``Body``, which is why this is stated over their common base.
     """
 
-    @property
-    def through_hole(self) -> Aperture:
-        return self.with_object.get_semantic_annotations_by_type(type_=Aperture)[0]
+    through_hole: Optional[Aperture] = None
+    """
+    The aperture :attr:`~EventWithTrackedObjects.with_object` (its own ``Region`` root)
+    was detected passing through.
+
+    Set directly by the detector that builds this event, which already has the
+    aperture in hand (via ``SegmindContext.hole_regions``) rather than derived from
+    ``with_object`` here: a hole's root is a virtual ``Region``, not a ``Body``, and has
+    no reliable way to look its owning annotation back up on its own.
+    """
+
+    def effect(self) -> Effect:
+        """
+        The object lies in the region it was inserted into, and rests on nothing it
+        rested on before it went in.
+        """
+        return Effect(
+            begins=(an(InsideRegion)(region=self._region_it_names()),),
+            ends=(SUPPORTED_BY_ANYTHING,),
+        )
 
     def __str__(self) -> str:
         with_object_name = " - " + " - ".join(

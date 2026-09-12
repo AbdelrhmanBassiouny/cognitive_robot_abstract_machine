@@ -39,9 +39,13 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
+from coraplex.datastructures.enums import (
+    ApproachDirection,
+    Arms,
+    ExecutionType,
+    VerticalAlignment,
+)
 from coraplex.datastructures.grasp import GraspDescription
-from coraplex.datastructures.enums import ExecutionType
 from coraplex.execution_environment import (
     ExecutionEnvironment,
     real_robot,
@@ -300,3 +304,33 @@ def test_the_tick_budget_is_not_class_state(reach_action_executable):
     """
     assert not hasattr(GiskardExecutable, "ticks_per_motion")
     assert reach_action_executable.context.ticks_per_motion
+
+
+# %% whether the executable's own motions are paused or interrupted
+
+
+def test_is_paused_reflects_a_paused_motion_mapping(reach_action_executable):
+    """
+    The tick loop reads this to decide whether to keep ticking, so it must see a motion
+    node's own pause rather than only the executable's.
+    """
+    [first_node, _] = reach_action_executable.motion_mappings.keys()
+
+    assert not reach_action_executable.is_paused
+
+    first_node.pause()
+    assert reach_action_executable.is_paused
+
+    first_node.resume()
+    assert not reach_action_executable.is_paused
+
+
+def test_is_interrupted_reflects_an_interrupted_motion_mapping(
+    reach_action_executable,
+):
+    [first_node, _] = reach_action_executable.motion_mappings.keys()
+
+    assert not reach_action_executable.is_interrupted
+
+    first_node.interrupt()
+    assert reach_action_executable.is_interrupted

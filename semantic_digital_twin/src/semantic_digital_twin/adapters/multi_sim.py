@@ -11,7 +11,7 @@ import trimesh
 import PIL.ImageFile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import IntEnum
+from enum import Enum, IntEnum, StrEnum
 from types import NoneType
 from typing_extensions import (
     Dict,
@@ -19,8 +19,10 @@ from typing_extensions import (
     Any,
     ClassVar,
     Iterator,
+    Set,
     Type,
     Optional,
+    Set,
     Union,
 )
 
@@ -80,11 +82,14 @@ from semantic_digital_twin.world_description.world_entity import (
     WorldEntity,
     Actuator,
 )
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.mixin import SimulatorAdditionalProperty
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_modification import (
     AddKinematicStructureEntityModification,
     AddActuatorModification,
     AddConnectionModification,
+    RemoveConnectionModification,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,6 +154,39 @@ class GeomVisibilityAndCollisionType(IntEnum):
     """
     Undefined geometry type (variant 2).
     """
+
+
+class RegionAppearance(Enum):
+    """
+    How much of a region a simulator draws.
+
+    A region names a volume of space rather than a thing standing in it, so drawing its
+    area as ordinary geometry puts something in the picture that nothing in the world
+    holds.
+    """
+
+    TRANSPARENT = 0.3
+    """
+    Drawn see-through, so a region shows where it is without hiding what stands inside it.
+    """
+
+    HIDDEN = 0.0
+    """
+    Not drawn at all, so a camera into the simulator sees only the things the world holds.
+    """
+
+    @property
+    def opacity(self) -> float:
+        """
+        :return: The share of its own opacity a region's area keeps when it is drawn.
+        """
+        return self.value
+
+
+FULLY_OPAQUE = 1.0
+"""
+The opacity a shape is drawn at when nothing asked for it to be faded.
+"""
 
 
 @dataclass(eq=False)
@@ -330,9 +368,17 @@ class KinematicStructureEntityConverter(EntityConverter, ABC):
         kinematic_structure_entity_props = EntityConverter._convert(self, entity)
         # The simulator joint supplies the variable part, so the static frame must
         # exclude it (see Connection.reference_origin_expression).
-        [px, py, pz, qx, qy, qz, qw] = (
-            entity.parent_connection.reference_origin_as_position_quaternion().evaluate()[0]
-        )
+        [
+            px,
+            py,
+            pz,
+            qx,
+            qy,
+            qz,
+            qw,
+        ] = entity.parent_connection.reference_origin_as_position_quaternion().evaluate()[
+            0
+        ]
         kinematic_structure_entity_pos = [px, py, pz]
         kinematic_structure_entity_quat = [qw, qx, qy, qz]
         kinematic_structure_entity_props.update(
@@ -463,7 +509,7 @@ class ShapeConverter(EntityConverter, ABC):
             entity.color.R,
             entity.color.G,
             entity.color.B,
-            entity.color.A,
+            entity.color.A * kwargs.get("opacity", FULLY_OPAQUE),
         )
         geom_color = [r, g, b, a]
         geom_props.update(
@@ -598,7 +644,18 @@ class Connection1DOFConverter(ConnectionConverter, ABC):
         px, py, pz, qw, qx, qy, qz = cas_pose_to_list(child_T_connection_transform)
         joint_pos = [px, py, pz]
         joint_quat = [qw, qx, qy, qz]
-        joint_range = [dof.limits.lower.position, dof.limits.upper.position]
+        # entity.dof (not the raw dof) applies this connection's own multiplier/offset,
+        # including swapping lower/upper for a negative multiplier: a mimic connection's
+        # own compiled joint range must be expressed in its own displayed value, not the
+        # shared raw dof's, or a negative-multiplier mimic (e.g. a gripper's own second
+        # finger, or any other -1-multiplier joint) gets a range that can never
+        # simultaneously satisfy both its own limit and the equality constraint tying it
+        # to the raw dof except at the single point where both ranges touch (0 here) --
+        # confirmed directly: every one of a Robotiq gripper's mimic joints compiled to
+        # the same [0, 0.8] range regardless of sign, making the whole linkage unable to
+        # move away from 0 no matter how hard its actuator pushed.
+        adjusted_limits = entity.dof.limits
+        joint_range = [adjusted_limits.lower.position, adjusted_limits.upper.position]
         if any([r is None for r in joint_range]):
             joint_range = [0, 0]
         joint_props.update(
@@ -824,6 +881,49 @@ class MujocoActuator(SimulatorAdditionalProperty):
     mujoco.mjtGain.mjGAIN_MUSCLE:   gain_term = mju_muscleGain(…)
     mujoco.mjtGain.mjGAIN_USER:     gain_term = mjcb_act_gain(…)
     """
+
+
+class MujocoRenderingBackend(StrEnum):
+    """
+    The graphics backends MuJoCo can draw through, by the name it answers to.
+    """
+
+    EGL = "egl"
+    """
+    Draws without a window, on a machine with a graphics device but no display.
+    """
+
+    OSMESA = "osmesa"
+    """
+    Draws without a window and without a graphics device, in software.
+    """
+
+
+MUJOCO_RENDERING_BACKEND_VARIABLE = "MUJOCO_GL"
+"""
+The environment variable MuJoCo reads its backend from, which it does once, at the
+moment something first draws.
+"""
+
+
+def select_offscreen_rendering_backend() -> None:
+    """
+    Ask MuJoCo for a backend that can draw with no window, unless one was already asked
+    for.
+
+    MuJoCo's own default where a display is present is a windowed backend, which cannot
+    make a context on a machine with no display and aborts a render with no context at
+    all. A backend already named is left alone, since it is the caller's own choice.
+
+    ..warning:: MuJoCo reads this variable when Python first imports it and holds to
+        what it read, so this only reaches a process that has not imported it yet. A run
+        that has to draw with no display names the backend in the environment it is
+        started from, which is what the test workflow does.
+    """
+    already_chosen = os.environ.get(MUJOCO_RENDERING_BACKEND_VARIABLE, "").lower()
+    if already_chosen in tuple(MujocoRenderingBackend):
+        return
+    os.environ[MUJOCO_RENDERING_BACKEND_VARIABLE] = MujocoRenderingBackend.EGL
 
 
 @dataclass
@@ -1200,10 +1300,32 @@ class MujocoGeom(SimulatorAdditionalProperty):
 
     friction: List[float] = field(default_factory=lambda: [1, 0.005, 0.0001])
     """
-    Contact friction parameters for dynamically generated contact pairs. 
-    The first number is the sliding friction, acting along both axes of the tangent plane. 
-    The second number is the torsional friction, acting around the contact normal. 
-    The third number is the rolling friction, acting around both axes of the tangent plane. 
+    Contact friction parameters for dynamically generated contact pairs.
+    The first number is the sliding friction, acting along both axes of the tangent plane.
+    The second number is the torsional friction, acting around the contact normal.
+    The third number is the rolling friction, acting around both axes of the tangent plane.
+    """
+
+    contype: int = 1
+    """
+    Bitmask enabling contact generation for this geom as the acting side of a pair: a
+    contact between geoms A and B is generated only if ``A.contype & B.conaffinity`` or
+    ``B.contype & A.conaffinity`` is nonzero. Matches MuJoCo's own default of 1, so a
+    geom with no other bit set behaves exactly as if this were never specified.
+    """
+
+    conaffinity: int = 1
+    """
+    Bitmask enabling contact generation for this geom as the receiving side of a pair;
+    see :attr:`contype`. Matches MuJoCo's own default of 1.
+    """
+
+    contact_dimensionality: int = 3
+    """
+    How many directions a contact with this geom resists motion in, MuJoCo's ``condim``:
+    3 for sliding friction alone, 4 to add torsional friction about the contact normal,
+    6 to add rolling friction as well. A pair of geoms takes the larger of the two.
+    Matches MuJoCo's own default of 3.
     """
 
 
@@ -1349,7 +1471,7 @@ class MujocoCylinderConverter(MujocoGeomConverter, CylinderConverter):
         shape_props.update(
             MujocoGeomConverter._post_convert(self, entity, shape_props, **kwargs)
         )
-        shape_props.update({"size": [entity.width / 2, entity.height, 0.0]})
+        shape_props.update({"size": [entity.width / 2, entity.height / 2, 0.0]})
         return shape_props
 
 
@@ -1562,6 +1684,11 @@ class MultiSimBuilder(ABC):
     The world to be built.
     """
 
+    region_appearance: RegionAppearance = RegionAppearance.TRANSPARENT
+    """
+    How much of every region of the built world is drawn.
+    """
+
     _ignore_connection_types: ClassVar[Tuple[Type, ...]] = (
         FixedConnection,
         OmniDrive,
@@ -1662,9 +1789,15 @@ class MultiSimBuilder(ABC):
         :param region: The region to build.
         """
         self._build_region(region=region)
+        if self.region_appearance is RegionAppearance.HIDDEN:
+            return
         for shape in region.area:
             self._build_shape(
-                parent=region, shape=shape, is_visible=True, is_collidable=False
+                parent=region,
+                shape=shape,
+                is_visible=True,
+                is_collidable=False,
+                opacity=self.region_appearance.opacity,
             )
 
     @abstractmethod
@@ -1710,6 +1843,7 @@ class MultiSimBuilder(ABC):
         shape: Shape,
         is_visible: bool,
         is_collidable: bool,
+        opacity: float = FULLY_OPAQUE,
     ):
         """
         Builds a shape in the simulator and attaches it to its parent body or region.
@@ -1718,6 +1852,7 @@ class MultiSimBuilder(ABC):
         :param shape: The shape to build.
         :param is_visible: Whether the shape is visible.
         :param is_collidable: Whether the shape is collidable.
+        :param opacity: The share of its own opacity the shape is drawn at.
         """
         raise NotImplementedError
 
@@ -1796,12 +1931,20 @@ class MujocoBuilder(MultiSimBuilder):
         self.spec = mujoco.MjSpec()
         self.spec.modelname = "scene"
         self.spec.compiler.degree = 0
+        # MuJoCo's own auto-sizing (njmax=-1) has been observed to under-allocate by
+        # as little as one row ("mj_makeConstraint: nefc under-allocation") on a world
+        # with two arms' worth of self-collision-excluded geometry plus a couple of
+        # loose bodies -- a fatal, unrecoverable crash of the simulator's own stepping
+        # thread. A fixed, generous ceiling costs a small, one-time memory reservation
+        # and is never smaller than auto-sizing's own estimate for any scene this
+        # repository currently builds.
+        self.spec.njmax = 2000
         self._thickened_mesh_paths = {}
 
     def _end_build(self, file_path: str):
         self._build_equalities()
         self._build_tendons()
-        self.spec.compile()
+        compiled_model = self.spec.compile()
         self.spec.to_file(file_path)
         import xml.etree.ElementTree as ET
 
@@ -1829,33 +1972,129 @@ class MujocoBuilder(MultiSimBuilder):
         key_element = ET.SubElement(keyframe_element, "key")
         key_element.set("name", "home")
         key_element.set("time", "0")
-        qpos = []
-        for body in self.world.bodies_topologically_sorted:
-            parent_connection = body.parent_connection
-            if (
-                isinstance(parent_connection, self._ignore_connection_types)
-                or parent_connection is None
-            ):
+        qpos = self._compute_keyframe_qpos(compiled_model)
+        key_element.set("qpos", " ".join(map(str, qpos)))
+        # Every actuated DOF needs a matching `ctrl=` setpoint in the keyframe:
+        # MuJoCo defaults an unset `ctrl` to 0, so a position-servo actuator
+        # would immediately start pulling its joint toward 0 rad the instant
+        # physics steps, regardless of the pose baked into `qpos` above.
+        ctrl = [0.0] * compiled_model.nu
+        for actuator in self.world.actuators:
+            actuator_id = mujoco.mj_name2id(
+                compiled_model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator.name.name
+            )
+            if actuator_id == -1:
                 continue
-            if isinstance(parent_connection, Connection6DoF):
-                # A free joint's DOF state is relative to the connection frame
-                # and stays at the identity by default; the body's actual
-                # placement lives in parent_T_connection_expression instead.
-                # Reading the raw DOF state here would bake a zero pose into
-                # the keyframe regardless of where the body is actually
-                # placed, so use the fully evaluated origin instead.
-                px, py, pz, qx, qy, qz, qw = (
-                    parent_connection.origin_as_position_quaternion().evaluate()[0]
-                )
-                qpos += [px, py, pz, qw, qx, qy, qz]
+            ctrl[actuator_id] = MujocoSynchronizer._ctrl_for_position(
+                actuator, self._transmission_length(actuator)
+            )
+        if ctrl:
+            key_element.set("ctrl", " ".join(map(str, ctrl)))
+        tree.write(file_path, encoding="utf-8", xml_declaration=True)
+
+    def _transmission_length(self, actuator: Actuator) -> float:
+        """
+        The length of what ``actuator`` pulls on, which is what a position servo's
+        setpoint is stated against.
+
+        A joint transmission is as long as the degree of freedom the actuator names, a
+        tendon as long as the joints it wraps together, each weighted by its own
+        coefficient. The degree of freedom an actuator names for a tendon stands for
+        the tendon rather than for anything the world holds a state for, since a degree
+        of freedom belonging to no connection is deleted as orphaned.
+
+        :param actuator: The actuator whose transmission to measure.
+        """
+        transmission = actuator.dofs[0]
+        tendon = self._tendon_named(transmission.name.name)
+        if tendon is None:
+            return self.world.state[transmission.id].position
+        return sum(
+            coefficient
+            * self.world.state[
+                self.world.get_connection_by_name(joint_name).dofs[0].id
+            ].position
+            for joint_name, coefficient in tendon.joints.items()
+        )
+
+    def _tendon_named(self, name: str) -> Optional[MujocoTendon]:
+        """
+        This world's tendon of that name, or ``None`` when it has none.
+
+        :param name: The name the tendon was built under.
+        """
+        return next(
+            (
+                tendon
+                for tendon in self.world.simulator_additional_properties
+                if isinstance(tendon, MujocoTendon) and tendon.name == name
+            ),
+            None,
+        )
+
+    def _compute_keyframe_qpos(self, compiled_model: mujoco.MjModel) -> List[float]:
+        """
+        Builds the ``home`` keyframe's qpos vector in the exact joint order
+        the compiled MuJoCo model expects.
+
+        Deliberately walks ``compiled_model``'s own joints rather than
+        ``self.world.bodies``: the two orders do not generally match (e.g.
+        this was found to reverse the order of a scene's free-floating
+        bodies), and getting that order wrong silently assigns one body's
+        qpos values to a different body. Every generated MuJoCo joint is
+        named after its owning Connection (see e.g.
+        MujocoSynchronizer._resolve_qpos_address, which relies on the same
+        invariant), so each joint is resolved back to its Connection by
+        name rather than by position.
+        """
+        qpos = []
+        for joint_id in range(compiled_model.njnt):
+            joint_name = mujoco.mj_id2name(
+                compiled_model, mujoco.mjtObj.mjOBJ_JOINT, joint_id
+            )
+            connection = self.world.get_connection_by_name(joint_name)
+            if compiled_model.jnt_type[joint_id] == mujoco.mjtJoint.mjJNT_FREE:
+                qpos += self._keyframe_qpos_for_free_connection(connection)
             else:
                 qpos += [
                     self.world.state[dof.id].position
-                    for dof in parent_connection.active_dofs
-                    + parent_connection.passive_dofs
+                    for dof in connection.active_dofs + connection.passive_dofs
                 ]
-        key_element.set("qpos", " ".join(map(str, qpos)))
-        tree.write(file_path, encoding="utf-8", xml_declaration=True)
+        return qpos
+
+    def _keyframe_qpos_for_free_connection(
+        self, connection: Connection6DoF
+    ) -> List[float]:
+        """
+        Returns a free joint's qpos: the child body's ABSOLUTE pose
+        relative to its parent -- position, then a scalar-first
+        ``(w, x, y, z)`` quaternion -- which is what MuJoCo expects for a
+        freejoint.
+
+        This is *not* the same as the connection's own DOF values. Those
+        DOFs are relative to the connection's own
+        ``parent_T_connection_expression`` baseline (e.g. a prop's parsed
+        MJCF ``<body pos="...">``), so for any body that hasn't moved since
+        being parsed they're all zero/identity. Exporting them directly
+        would place every never-moved free body at its parent's origin
+        instead of its actual spawn pose -- the cause of free bodies
+        (props, unattached objects, ...) spawning at (0, 0, 0) regardless
+        of where their MJCF placed them.
+        """
+        parent_T_child = self.world.compute_forward_kinematics_np(
+            connection.parent, connection.child
+        )
+        xyz = parent_T_child[:3, 3]
+        quat_xyzw = Rotation.from_matrix(parent_T_child[:3, :3]).as_quat()
+        return [
+            float(xyz[0]),
+            float(xyz[1]),
+            float(xyz[2]),
+            float(quat_xyzw[3]),
+            float(quat_xyzw[0]),
+            float(quat_xyzw[1]),
+            float(quat_xyzw[2]),
+        ]
 
     def _build_body(self, body: Body):
         self._build_mujoco_body(body=body)
@@ -1869,9 +2108,10 @@ class MujocoBuilder(MultiSimBuilder):
         shape: Shape,
         is_visible: bool,
         is_collidable: bool,
+        opacity: float = FULLY_OPAQUE,
     ):
         geom_props = MujocoGeomConverter.convert(
-            shape, visible=is_visible, collidable=is_collidable
+            shape, visible=is_visible, collidable=is_collidable, opacity=opacity
         )
         parent_body_name = parent.name.name
         parent_body_spec = self._find_entity(
@@ -1902,6 +2142,9 @@ class MujocoBuilder(MultiSimBuilder):
                 geom_props["solimp"] = mujoco_geom.solver_impedance
                 geom_props["solref"] = mujoco_geom.solver_reference
                 geom_props["friction"] = mujoco_geom.friction
+                geom_props["contype"] = mujoco_geom.contype
+                geom_props["conaffinity"] = mujoco_geom.conaffinity
+                geom_props["condim"] = mujoco_geom.contact_dimensionality
                 break
         geom_spec = parent_body_spec.add_geom(**geom_props)
         if geom_spec.type == mujoco.mjtGeom.mjGEOM_BOX and geom_spec.size[2] == 0:
@@ -2423,6 +2666,7 @@ class KinematicStructureEntitySpawner(EntitySpawner):
         shape: Shape,
         visible: bool,
         collidable: bool,
+        opacity: float = FULLY_OPAQUE,
     ) -> bool:
         """
         Spawns a shape in the Multiverse simulator and attaches it to its parent body or region.
@@ -2432,6 +2676,7 @@ class KinematicStructureEntitySpawner(EntitySpawner):
         :param shape: The shape to spawn.
         :param visible: Whether the shape is visible.
         :param collidable: Whether the shape is collidable.
+        :param opacity: The share of its own opacity the shape is drawn at.
 
         :return: True if the shape was spawned successfully, False otherwise.
         """
@@ -2483,6 +2728,7 @@ class RegionSpawner(KinematicStructureEntitySpawner, ABC):
                 shape=shape,
                 visible=True,
                 collidable=False,
+                opacity=RegionAppearance.TRANSPARENT.opacity,
             )
             for shape in parent.area
         )
@@ -2663,9 +2909,10 @@ class MujocoKinematicStructureEntitySpawner(
         shape: Shape,
         visible: bool,
         collidable: bool,
+        opacity: float = FULLY_OPAQUE,
     ) -> bool:
         shape_props = MujocoGeomConverter.convert(
-            shape, visible=visible, collidable=collidable
+            shape, visible=visible, collidable=collidable, opacity=opacity
         )
         shape_name = shape_props.pop("name")
         result = simulator.add_entity(
@@ -2905,6 +3152,36 @@ class MultiSimSynchronizer(ModelChangeCallback, ABC):
         raise NotImplementedError
 
 
+MAXIMUM_CONTROL_SETPOINT_RAMP_INTERVAL: float = 0.5
+"""
+Longest interval, in simulated seconds, over which a control setpoint step is
+ramped.
+
+Guards against stretching a ramp across a pause or the first command of a run,
+where the gap since the previous command says nothing about when the next one
+will arrive.
+"""
+
+
+@dataclass
+class ControlSetpointRamp:
+    """
+    A control setpoint in transit from its previous value to a newly commanded
+    one.
+    """
+
+    target: float
+    """
+    The commanded setpoint, in actuator control units.
+    """
+
+    slew_rate: float
+    """
+    How fast the setpoint approaches :attr:`target`, in control units per
+    simulated second.
+    """
+
+
 @dataclass
 class JointBackedConnection:
     """
@@ -2957,11 +3234,153 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     opposite extreme: sync on every call, with no throttling at all.
     """
 
+    mirror_attachments: bool = field(default=False, kw_only=True)
+    """
+    Whether AttachNode/DetachNode-style re-parents in the world model are
+    mirrored into MuJoCo's own kinematic tree (see :meth:`on_model_change`).
+
+    When True, grasping welds the object to the gripper and placing restores
+    it as a free body, so a carried object follows the arm regardless of
+    whether contact and friction would actually have held it. That is what
+    makes ``AttachNode`` mean the same thing here as it does in a
+    physics-free Coraplex world.
+
+    Leave False to keep the grasp genuinely physical -- the object is then
+    held only by real contact and friction, so a poor grasp visibly fails
+    instead of being silently rescued by the weld. Also note that attaching
+    and detaching recompile the MuJoCo model, which invalidates existing
+    ``mjModel``/``mjData`` pointers.
+
+    Defaults to False so that enabling it is a deliberate choice: without it
+    the simulator behaves exactly as it did before this was available.
+    """
+
+    physically_simulated_dofs: Set[DegreeOfFreedom] = field(
+        default_factory=set, kw_only=True
+    )
+    """
+    DOFs that are driven purely by the MuJoCo actuator/contact model (via
+    ``ctrl``) rather than kinematically teleported every tick. Used by
+    :meth:`_write_1dof_to_qpos` to skip the ``qpos`` overwrite (``ctrl`` is
+    still updated) for these DOFs, so real contact/friction dynamics (e.g. a
+    gripper's fingers closing on a grasped object) are not fought by a
+    kinematic snap every control tick.
+    """
+
     _last_sync_time: float = field(init=False, default=0.0, repr=False)
+
+    _desired_positions: Dict[Any, float] = field(
+        init=False, default_factory=dict, repr=False
+    )
+    """
+    Per-DOF integrated position setpoint for ``physically_simulated_dofs``,
+    keyed by DOF id.
+
+    A controller commanding "keep pushing" against a contact writes ``measured
+    + one_step_increment`` into ``world.state`` each tick, because
+    :meth:`_sim_to_world` resets the belief to the measured position in
+    between. Mapping that belief straight to ``ctrl`` pins the position
+    servo's setpoint at the contact surface (near-zero force), so instead the
+    commanded increments are accumulated here -- immune to the measurement
+    resets, since the diff in :meth:`_on_state_change` is taken against a
+    snapshot that :meth:`_sim_to_world` rebases after every readback -- and
+    the setpoint latches past the contact, letting the servo keep pressing
+    (e.g. a gripper actually squeezing a grasped object).
+    """
+
+    _control_setpoint_ramps: Dict[int, ControlSetpointRamp] = field(
+        init=False, default_factory=dict, repr=False
+    )
+    """
+    In-progress control setpoint ramps for physically simulated DOFs, keyed by
+    actuator control address.
+    """
+
+    _last_command_simulation_time: float = field(init=False, default=0.0, repr=False)
+    """
+    Simulation time at which the previous batch of commands arrived, used to
+    measure how long the current one has before its successor.
+    """
+
+    _command_interval: float = field(init=False, default=0.0, repr=False)
+    """
+    Simulated seconds between the last two batches of commands, over which the
+    setpoint steps of the current batch are ramped.
+    """
 
     def __post_init__(self):
         super().__post_init__()
         self.simulator.read_data_from_simulator = self._sim_to_world
+        self.simulator.write_data_to_simulator = self._advance_control_setpoints
+
+    def on_model_change(self, **kwargs):
+        """
+        Like :meth:`MultiSimSynchronizer.on_model_change`, but -- when
+        :attr:`mirror_attachments` is set -- additionally detects an
+        AttachNode/DetachNode-style re-parent -- a
+        ``RemoveConnectionModification`` immediately followed, in the same
+        ``modify_world()`` block, by an ``AddConnectionModification`` for the
+        *same* child -- and mirrors it into MuJoCo's own kinematic tree via
+        :meth:`MujocoSimulator.attach`/:meth:`MujocoSimulator.detach`, instead
+        of the normal (no-op, for ``FixedConnection``) entity spawn.
+
+        Without that mirroring, re-parenting only updates the world model
+        (used by RViz/planning), so a body that MuJoCo is genuinely,
+        physically simulating (e.g. a grasped object held by real
+        contact/friction) keeps behaving as an independent free body in
+        MuJoCo, oblivious to being "attached" -- it gets left behind the
+        instant the (kinematically teleported) arm carrying it moves, since
+        friction can't react to an instantaneous position jump the way it
+        reacts to continuous motion.
+
+        With :attr:`mirror_attachments` left False this reduces exactly to the
+        base implementation: no child counts as re-parented, so every
+        modification takes the normal spawn path.
+        """
+        modifications = self._world._model_manager.model_modification_blocks[-1]
+        reparented_child_ids = (
+            {
+                modification.child_id
+                for modification in modifications
+                if isinstance(modification, RemoveConnectionModification)
+            }
+            if self.mirror_attachments
+            else set()
+        )
+        for modification in modifications:
+            if isinstance(modification, AddKinematicStructureEntityModification):
+                entity = modification.kinematic_structure_entity
+                self.entity_spawner.spawn(simulator=self.simulator, entity=entity)
+            elif isinstance(modification, AddConnectionModification):
+                connection = modification.connection
+                if connection.child.id in reparented_child_ids:
+                    self._reparent_in_simulator(connection)
+                else:
+                    self.entity_spawner.spawn(
+                        simulator=self.simulator, entity=connection
+                    )
+            elif isinstance(modification, AddActuatorModification):
+                entity = modification.actuator
+                self.entity_spawner.spawn(simulator=self.simulator, entity=entity)
+
+    def _reparent_in_simulator(self, connection: Connection) -> None:
+        """
+        Weld (or un-weld) ``connection``'s child body in MuJoCo to mirror an
+        AttachNode/DetachNode-style re-parent, using the body's *actual,
+        physically-settled* pose (both :meth:`MujocoSimulator.attach` and
+        :meth:`MujocoSimulator.detach` read live ``_mj_data`` poses when no
+        explicit transform is given), not an idealized/kinematic one.
+        """
+        child_name = connection.child.name.name
+        if connection.parent.id == self._world.root.id:
+            # DetachNode: placed back down -- restore free dynamics.
+            self.simulator.detach(body_name=child_name, add_freejoint=True)
+        else:
+            # AttachNode: weld to the new parent at the current real pose.
+            self.simulator.attach(
+                body_1_name=child_name,
+                body_2_name=connection.parent.name.name,
+            )
 
     def _resolve_qpos_address(self, connection: Connection) -> Optional[int]:
         """
@@ -2975,6 +3394,121 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         if joint_id == -1:
             return None
         return mj_model.jnt_qposadr[joint_id]
+
+    def _resolve_dof_adr(self, connection: Connection) -> Optional[int]:
+        """
+        Resolve the qvel/dof address for the MuJoCo joint backing
+        ``connection``, or ``None`` if the joint is not present in the model.
+        """
+        mj_model = self.simulator._mj_model
+        joint_id = mujoco.mj_name2id(
+            mj_model, mujoco.mjtObj.mjOBJ_JOINT, connection.name.name
+        )
+        if joint_id == -1:
+            return None
+        return mj_model.jnt_dofadr[joint_id]
+
+    def _resolve_actuator(self, connection: ActiveConnection1DOF) -> Optional[Actuator]:
+        """
+        Find the MuJoCo actuator driving ``connection``'s DOF, or ``None`` if
+        no actuator is associated with it.
+
+        Handles both transmission kinds:
+
+        * a **direct joint** transmission, where the actuator lists the
+          connection's own DOF (e.g. the Panda arm's ``joint1``..``joint7``);
+        * a **tendon** transmission, where the actuator lists the *tendon's*
+          DOF instead of any joint's. The Panda gripper is the motivating
+          case: ``/actuator8`` claims a DOF named ``/split``, and it is the
+          ``/split`` tendon that wraps ``/finger_joint1`` and
+          ``/finger_joint2``. Matching only on the connection's own DOF finds
+          nothing for either finger, which silently leaves ``ctrl`` for the
+          entire gripper unwritten -- the actuator then holds whatever
+          setpoint it was last given (the keyframe's) no matter what the
+          controller commands, so the gripper never opens or closes.
+        """
+        direct = next(
+            (a for a in self._world.actuators if connection.raw_dof in a.dofs),
+            None,
+        )
+        if direct is not None:
+            return direct
+
+        tendon_names = {
+            tendon.name
+            for tendon in self._world.simulator_additional_properties
+            if isinstance(tendon, MujocoTendon)
+            and connection.name.name in tendon.joints
+        }
+        if not tendon_names:
+            return None
+        return next(
+            (
+                actuator
+                for actuator in self._world.actuators
+                if any(dof.name.name in tendon_names for dof in actuator.dofs)
+            ),
+            None,
+        )
+
+    def _resolve_ctrl_adr(self, connection: ActiveConnection1DOF) -> Optional[int]:
+        """
+        Resolve the ctrl index of the MuJoCo actuator driving ``connection``'s
+        DOF, or ``None`` if no actuator is associated with it.
+
+        Needed so :meth:`_write_1dof_to_qpos` can keep the actuator's position
+        setpoint aligned with the kinematically pushed ``qpos``: MuJoCo's
+        actuators keep servoing toward whatever ``ctrl`` last held (the scene's
+        ``home`` keyframe by default) independently of direct ``qpos`` writes,
+        so leaving ``ctrl`` stale makes the actuator fight every teleport.
+        """
+        actuator = self._resolve_actuator(connection)
+        if actuator is None:
+            return None
+        actuator_id = mujoco.mj_name2id(
+            self.simulator._mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator.name.name
+        )
+        return None if actuator_id == -1 else actuator_id
+
+    @staticmethod
+    def _ctrl_for_position(actuator: Actuator, position: float) -> float:
+        """
+        Solve MuJoCo's affine actuator equation ``force = gainprm[0]*ctrl +
+        biasprm[0] + biasprm[1]*length + biasprm[2]*velocity`` for the
+        ``ctrl`` value that gives zero force at ``length == position`` and
+        ``velocity == 0``, i.e. the position-servo setpoint:
+        ``ctrl = -(biasprm[0] + biasprm[1]*position) / gainprm[0]``.
+
+        For a direct per-joint actuator (e.g. the Panda arm's,
+        ``gainprm=2000, biasprm=(0,-2000,-200)``) this reduces to ``ctrl ==
+        position``. For a tendon-driven actuator remapping to a different
+        control range (e.g. the Panda gripper's, ``gainprm=0.0156863,
+        biasprm=(0,-100,-10)``, remapping 0-0.04m to a 0-255 ctrl range) it
+        does not, and copying ``position`` into ``ctrl`` directly would
+        command the wrong setpoint.
+
+        Falls back to ``position`` unchanged if the actuator isn't an affine
+        position servo (``mjBIAS_AFFINE`` with nonzero gain) or has no
+        :class:`MujocoActuator` additional property.
+        """
+        mj_actuator = next(
+            (
+                p
+                for p in actuator.simulator_additional_properties
+                if isinstance(p, MujocoActuator)
+            ),
+            None,
+        )
+        if (
+            mj_actuator is None
+            or mj_actuator.bias_type != mujoco.mjtBias.mjBIAS_AFFINE
+            or mj_actuator.gain_parameters[0] == 0.0
+        ):
+            return position
+        bias0 = mj_actuator.bias_parameters[0]
+        bias1 = mj_actuator.bias_parameters[1]
+        gain0 = mj_actuator.gain_parameters[0]
+        return -(bias0 + bias1 * position) / gain0
 
     @staticmethod
     def _make_pose_matrix(
@@ -3043,22 +3577,22 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         post-step state rather than a mixture of poses from either side of an
         ``mj_step`` running on the physics thread.
 
+        ``renderer.lock()`` is taken alongside it: a non-headless viewer
+        renders on its own native thread, which reads the live model and data
+        independently of anything on the Python side.
+
         :return: Whether any connection was read.
         """
         changed = False
-        with self.simulator._model_lock:
+        with self.simulator._model_lock, self.simulator.renderer.lock():
             for joint_backed in self._joint_backed_connections():
                 connection = joint_backed.connection
                 match connection:
                     case Connection6DoF():
-                        self._read_6dof_from_qpos(
-                            connection, joint_backed.qpos_address
-                        )
+                        self._read_6dof_from_qpos(connection, joint_backed.qpos_address)
                         changed = True
                     case ActiveConnection1DOF():
-                        self._read_1dof_from_qpos(
-                            connection, joint_backed.qpos_address
-                        )
+                        self._read_1dof_from_qpos(connection, joint_backed.qpos_address)
                         changed = True
                     case _:
                         self._warn_unsupported_connection("sim→world", connection)
@@ -3080,12 +3614,16 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         ``_world_lock`` to match the order ``modify_world`` already
         establishes.
 
+        ``renderer.lock()`` is taken alongside it: a non-headless viewer
+        renders on its own native thread, which reads the live model and data
+        independently of anything on the Python side.
+
         :param positions: The current ``world.state`` positions.
         :param previous_positions: The positions as of the last notification,
             used to find what changed. Must be the same length as ``positions``.
         """
         state_index = self._world.state._index
-        with self.simulator._model_lock:
+        with self.simulator._model_lock, self.simulator.renderer.lock():
             for joint_backed in self._joint_backed_connections():
                 connection = joint_backed.connection
                 match connection:
@@ -3108,7 +3646,9 @@ class MujocoSynchronizer(MultiSimSynchronizer):
                     case _:
                         self._warn_unsupported_connection("world→sim", connection)
 
-    def _read_6dof_from_qpos(self, connection: Connection6DoF, qpos_address: int) -> None:
+    def _read_6dof_from_qpos(
+        self, connection: Connection6DoF, qpos_address: int
+    ) -> None:
         """
         Copy a 6DoF MuJoCo free-joint qpos block into ``world.state`` for
         ``connection``.
@@ -3144,12 +3684,26 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         """
         Copy a single MuJoCo qpos slot into ``world.state`` for ``connection``.
 
+        For a DOF in ``physically_simulated_dofs`` the measured qvel is copied
+        into the state's velocity as well: a stall detector watching
+        ``world.state`` velocities (e.g. ``JointPositionList``'s
+        ``tolerate_stall``) must see the joint's real, physical settling, not
+        the controller's still-nonzero commanded velocity -- otherwise a
+        joint physically stopped by contact never registers as stalled.
+
         :param connection: The 1DoF connection whose DoF is written.
         :param qpos_address: Index of the joint's single qpos slot.
         """
         self._world.state[connection.raw_dof.id].position = float(
             self.simulator._mj_data.qpos[qpos_address]
         )
+        if connection.raw_dof not in self.physically_simulated_dofs:
+            return
+        dof_adr = self._resolve_dof_adr(connection)
+        if dof_adr is not None:
+            self._world.state[connection.raw_dof.id].velocity = float(
+                self.simulator._mj_data.qvel[dof_adr]
+            )
 
     def _sim_to_world(self) -> None:
         """
@@ -3257,7 +3811,18 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     ) -> None:
         """
         Push the 1DoF world state for ``connection`` into the MuJoCo qpos slot
-        at ``qpos_address``. No-op if the DoF value is unchanged.
+        at ``qpos_address``, and into its actuator's ``ctrl`` setpoint if it has
+        one, so the actuator's PD controller tracks the commanded position
+        instead of continuing to servo toward a stale setpoint. No-op if the
+        DoF value is unchanged.
+
+        The ``qpos`` write is skipped (``ctrl`` is still updated) for DOFs in
+        ``physically_simulated_dofs``: those are meant to be driven purely by
+        the actuator/contact model, not kinematically teleported every tick.
+        For those DOFs the ``ctrl`` setpoint comes from the accumulated
+        commanded increments (see ``_desired_positions``), not the raw belief
+        position, so a controller pushing against a contact builds up an
+        actual servo force instead of chasing the measured stall position.
 
         :param connection: The 1DoF connection whose value is pushed.
         :param qpos_address: Index of the joint's single qpos slot.
@@ -3269,7 +3834,171 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         idx = state_index[connection.raw_dof.id]
         if positions[idx] == previous_positions[idx]:
             return
-        self.simulator._mj_data.qpos[qpos_address] = positions[idx]
+        actuator = self._resolve_actuator(connection)
+        ctrl_adr = None if actuator is None else self._resolve_ctrl_adr(connection)
+        physically_simulated = connection.raw_dof in self.physically_simulated_dofs
+        if not physically_simulated:
+            self.simulator._mj_data.qpos[qpos_address] = positions[idx]
+            setpoint = positions[idx]
+        else:
+            setpoint = self._integrate_desired_position(
+                connection.raw_dof,
+                commanded_increment=positions[idx] - previous_positions[idx],
+                fallback_position=previous_positions[idx],
+                measured_position=float(self.simulator._mj_data.qpos[qpos_address]),
+                maximum_lead=(
+                    None
+                    if ctrl_adr is None
+                    else self._maximum_setpoint_lead(
+                        ctrl_adr,
+                        self._commanded_velocity(
+                            positions[idx] - previous_positions[idx]
+                        ),
+                    )
+                ),
+            )
+        if ctrl_adr is None:
+            return
+        target = self._ctrl_for_position(actuator, setpoint)
+        if physically_simulated:
+            self._schedule_control_setpoint(ctrl_adr, target)
+            return
+        self.simulator._mj_data.ctrl[ctrl_adr] = target
+
+    def _measure_command_interval(self) -> None:
+        """
+        Record how much simulated time has passed since the previous command, which
+        is the interval :meth:`_schedule_control_setpoint` spreads a setpoint step
+        across.
+        """
+        simulation_time = float(self.simulator._mj_data.time)
+        self._command_interval = simulation_time - self._last_command_simulation_time
+        self._last_command_simulation_time = simulation_time
+
+    def _schedule_control_setpoint(self, ctrl_adr: int, target: float) -> None:
+        """
+        Spread the step from the actuator's current setpoint to ``target``
+        across the interval the next command is expected in, rather than
+        applying it all at once.
+
+        A position servo turns an instantaneous setpoint step into an
+        instantaneous force step of gain times that step, which for a stiff
+        actuator exceeds its force limit and saturates it -- the joint is
+        slammed and rebounds instead of tracking. Ramping keeps the setpoint
+        continuous at the physics rate, so commanded force stays proportional
+        to the tracking error the joint actually has.
+        """
+        if not 0.0 < self._command_interval <= MAXIMUM_CONTROL_SETPOINT_RAMP_INTERVAL:
+            self._control_setpoint_ramps.pop(ctrl_adr, None)
+            self.simulator._mj_data.ctrl[ctrl_adr] = target
+            return
+        current = float(self.simulator._mj_data.ctrl[ctrl_adr])
+        self._control_setpoint_ramps[ctrl_adr] = ControlSetpointRamp(
+            target=target,
+            slew_rate=(target - current) / self._command_interval,
+        )
+
+    def _advance_control_setpoints(self) -> None:
+        """
+        Move every ramping control setpoint one physics step toward its target.
+
+        Bound to the simulator's per-step write hook, so actuators see a
+        setpoint that changes at the physics rate instead of jumping at the far
+        slower control rate.
+        """
+        control = self.simulator._mj_data.ctrl
+        step_size = self.simulator.step_size
+        for ctrl_adr, ramp in list(self._control_setpoint_ramps.items()):
+            remaining = ramp.target - float(control[ctrl_adr])
+            increment = ramp.slew_rate * step_size
+            if remaining == 0.0 or abs(increment) >= abs(remaining):
+                control[ctrl_adr] = ramp.target
+                del self._control_setpoint_ramps[ctrl_adr]
+                continue
+            control[ctrl_adr] = float(control[ctrl_adr]) + increment
+
+    def _commanded_velocity(self, commanded_increment: float) -> float:
+        """
+        The velocity the controller is asking for, from its position increment
+        over the interval that increment covers.
+
+        Deliberately derived from the command rather than from the measured
+        velocity: the result bounds the setpoint, so feeding a measurement back
+        into it would close a loop of measurement onto command and let the two
+        chase each other.
+        """
+        if self._command_interval <= 0.0:
+            return 0.0
+        return commanded_increment / self._command_interval
+
+    def _maximum_setpoint_lead(self, ctrl_adr: int, velocity: float) -> Optional[float]:
+        """
+        How far an affine position servo's setpoint can usefully lead its
+        measured position before the actuator saturates, or ``None`` if the
+        actuator has no force limit to saturate against.
+
+        Solved from MuJoCo's affine actuator law ``force = stiffness * lead -
+        damping * velocity`` for the lead at which ``force`` reaches the
+        actuator's force limit. The damping term is what makes this depend on
+        velocity: sustaining motion already spends part of the force budget on
+        damping, so a moving joint needs a proportionally larger lead to reach
+        the same net force.
+        """
+        model = self.simulator._mj_model
+        if not model.actuator_forcelimited[ctrl_adr]:
+            return None
+        stiffness = abs(float(model.actuator_biasprm[ctrl_adr][1]))
+        if stiffness == 0.0:
+            return None
+        damping = abs(float(model.actuator_biasprm[ctrl_adr][2]))
+        force_range = model.actuator_forcerange[ctrl_adr]
+        force_limit = max(abs(float(force_range[0])), abs(float(force_range[1])))
+        if force_limit == 0.0:
+            return None
+        return (force_limit + damping * abs(velocity)) / stiffness
+
+    def _integrate_desired_position(
+        self,
+        dof: DegreeOfFreedom,
+        commanded_increment: float,
+        fallback_position: float,
+        measured_position: float,
+        maximum_lead: Optional[float],
+    ) -> float:
+        """
+        Advance and return ``dof``'s accumulated position setpoint (see
+        ``_desired_positions``) by one commanded increment, clamped to the
+        DOF's position limits so the setpoint cannot wind up arbitrarily far
+        past what the joint could ever reach.
+
+        Also clamped to within ``maximum_lead`` of the measured position: past
+        the point where the actuator already saturates, further accumulation
+        buys no additional force and only has to be unwound later, driving the
+        joint past its target once it finally catches up.
+
+        :param dof: The physically simulated DOF being commanded.
+        :param commanded_increment: The controller's pure position increment
+            since the last state notification.
+        :param fallback_position: Starting point for a DOF commanded for the
+            first time.
+        :param measured_position: The DOF's current simulated position.
+        :param maximum_lead: Largest useful distance ahead of
+            ``measured_position``, or ``None`` to leave the lead unbounded.
+        :return: The new setpoint.
+        """
+        desired = self._desired_positions.get(dof.id, fallback_position)
+        desired += commanded_increment
+        if maximum_lead is not None:
+            desired = min(desired, measured_position + maximum_lead)
+            desired = max(desired, measured_position - maximum_lead)
+        lower = dof.limits.lower.position
+        upper = dof.limits.upper.position
+        if lower is not None:
+            desired = max(lower, desired)
+        if upper is not None:
+            desired = min(upper, desired)
+        self._desired_positions[dof.id] = desired
+        return desired
 
     def _on_state_change(self) -> None:
         """
@@ -3294,12 +4023,15 @@ class MujocoSynchronizer(MultiSimSynchronizer):
                 self._state_callback.update_previous_world_state()
                 return
 
+            self._measure_command_interval()
             self._write_connections_to_qpos(positions, previous_positions)
             self._state_callback.update_previous_world_state()
 
     def stop(self):
         if "read_data_from_simulator" in self.simulator.__dict__:
             del self.simulator.read_data_from_simulator
+        if "write_data_to_simulator" in self.simulator.__dict__:
+            del self.simulator.write_data_to_simulator
         super().stop()
 
 
@@ -3343,6 +4075,11 @@ class MultiSim(ABC):
         world: World,
         headless: bool = False,
         step_size: float = 1e-3,
+        real_time_factor: Optional[float] = 1.0,
+        physically_simulated_dofs: Optional[Set[DegreeOfFreedom]] = None,
+        sync_rate_hz: float = 30,
+        mirror_attachments: bool = False,
+        region_appearance: RegionAppearance = RegionAppearance.TRANSPARENT,
         **kwargs,
     ):
         """
@@ -3352,17 +4089,40 @@ class MultiSim(ABC):
         :param viewer: The MultiverseViewer to read/write objects.
         :param headless: Whether to run the simulation in headless mode.
         :param step_size: The step size for the simulation.
+        :param real_time_factor: Speed of the simulation clock relative to the
+            wall clock; 1.0 is real-time, values below 1.0 run in slow motion,
+            ``None`` runs as fast as the CPU allows.
+        :param physically_simulated_dofs: DOFs that should be driven purely by
+            the simulator's actuator/contact model rather than kinematically
+            teleported every tick (e.g. a gripper's fingers, to let real
+            contact/friction hold a grasped object).
+        :param sync_rate_hz: Wall-clock rate at which physically_simulated_dofs'
+            actual, physics-driven positions are read back into world.state (see
+            MujocoSynchronizer._sim_to_world). Should comfortably exceed the
+            control loop's own tick rate so it isn't planning against stale
+            feedback of where those DOFs have actually settled.
+        :param mirror_attachments: Whether AttachNode/DetachNode re-parents are
+            mirrored into the simulator's own kinematic tree, so a grasped
+            object is welded to the gripper instead of being held purely by
+            contact and friction.
+        :param region_appearance: How much of every region of the world is drawn.
         """
-        self.builder_class().build_world(world=world, file_path=self.default_file_path)
+        self.builder_class(region_appearance=region_appearance).build_world(
+            world=world, file_path=self.default_file_path
+        )
         self.simulator = self.simulator_class(
             file_path=self.default_file_path,
             _headless=headless,
             _step_size=step_size,
+            _real_time_factor=real_time_factor,
             config=kwargs,
         )
         self.synchronizer = self.synchronizer_class(
             _world=world,
             simulator=self.simulator,
+            physically_simulated_dofs=physically_simulated_dofs or set(),
+            sync_rate_hz=sync_rate_hz,
+            mirror_attachments=mirror_attachments,
         )
 
     def start_simulation(self, constraints: Optional[SimulatorConstraints] = None):
@@ -3379,9 +4139,15 @@ class MultiSim(ABC):
     def stop_simulation(self):
         """
         Stops the simulation. This will stop the physics simulation and the rendering.
+
+        The simulator is stopped (and its physics thread joined) before the
+        synchronizer tears down the state callback: the physics thread reads
+        ``synchronizer._state_callback`` on every step, so tearing it down
+        first would race a still-running physics thread and crash it with an
+        ``AttributeError`` on the now-``None`` callback.
         """
-        self.synchronizer.stop()
         self.simulator.stop()
+        self.synchronizer.stop()
 
     def pause_simulation(self):
         """

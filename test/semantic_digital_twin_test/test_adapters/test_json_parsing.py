@@ -44,7 +44,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Box
+from semantic_digital_twin.world_description.geometry import Box, SurfaceFinish
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -275,6 +275,26 @@ def test_a_connection_written_as_a_reference_is_read_as_the_connection_of_the_wo
     tracker = WorldEntityWithIDKwargsTracker.from_world(world)
 
     assert from_json(json_data, **tracker.create_kwargs()) is connection
+
+
+def test_a_shape_is_serialized_where_its_frame_is_written_as_a_reference():
+    world = World()
+    body = Body(name=PrefixedName("lid"))
+    box = Box(
+        origin=HomogeneousTransformationMatrix.from_xyz_rpy(0, 1, 0, 0, 0, 1, body),
+        finish=SurfaceFinish.MATTE,
+    )
+    body.collision = ShapeCollection([box], reference_frame=body)
+    with world.modify_world():
+        world.add_kinematic_structure_entity(body)
+
+    json_data = to_json(body.collision, **WorldEntityReferenceWriter().create_kwargs())
+
+    tracker = WorldEntityWithIDKwargsTracker.from_world(world)
+    parsed_box = from_json(json_data, **tracker.create_kwargs()).shapes[0]
+    assert parsed_box.finish is SurfaceFinish.MATTE
+    assert parsed_box.scale == box.scale
+    assert parsed_box.origin.reference_frame is body
 
 
 def test_world_entity_missing_from_the_world_is_an_untracked_object():

@@ -18,13 +18,14 @@ import segmind
 # imported for its alternative mappings, which are collected through a global subclass
 # scan: without it segmind's spatial fields degrade to JSON columns
 import semantic_digital_twin.orm.model
+import semantic_digital_twin.orm.ormatic_interface
 from krrood.ormatic.custom_types import NumpyType
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from krrood.ormatic.ormatic import ORMatic
 
 ignored_classes = {SubclassJSONSerializer}
 
-dependencies = []
+dependencies = [semantic_digital_twin.orm.ormatic_interface]
 
 type_mappings = {np.ndarray: NumpyType}
 

@@ -1,6 +1,10 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import Optional
+from typing_extensions import List, Optional
+
+from krrood.symbol_graph.symbol_graph import Symbol
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass
@@ -251,3 +255,23 @@ class HasTcpGoalThresholds:
         if self.orientation_threshold is not None:
             return self.orientation_threshold
         return self.context.motion_tolerances.tool_orientation_threshold
+
+
+@dataclass
+class ManipulatesBodies(Symbol, ABC):
+    """
+    An action that acts on bodies rather than only moving the robot.
+
+    What separates what the robot did to the scene from what it did with itself, which
+    is the difference an agency question is about. Inherits :class:`Symbol` so a query
+    can range over these actions: an action the symbol graph has no node for is one
+    nothing can ask about.
+    """
+
+    @property
+    @abstractmethod
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The bodies this action acts on.
+        """
+        ...

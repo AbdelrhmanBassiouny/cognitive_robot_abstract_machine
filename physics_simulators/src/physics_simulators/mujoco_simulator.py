@@ -743,6 +743,40 @@ class MujocoSimulator(BaseSimulator):
         )
 
     @BaseSimulator.simulator_callback
+    def set_actuator_control(
+        self, actuator_name: str, value: float
+    ) -> SimulatorCallbackResult:
+        """
+        Set the control input of an actuator by its name.
+
+        Unlike :meth:`set_joint_value`, which moves a joint to a value outright, this
+        hands the value to the actuator as a set point and leaves the actuator's own
+        dynamics to reach it.
+
+        :param actuator_name: The name of the actuator
+        :param value: The new control input
+        :return: A SimulatorCallbackResult indicating the success or failure of the
+            operation
+        """
+        get_actuator = self.get_actuator(actuator_name)
+        if (
+            get_actuator.type
+            != SimulatorCallbackResult.ResultType.SUCCESS_WITHOUT_EXECUTION
+        ):
+            return get_actuator
+        actuator = get_actuator.result
+        if numpy.isclose(actuator.ctrl[0], value):
+            return SimulatorCallbackResult(
+                type=SimulatorCallbackResult.ResultType.SUCCESS_WITHOUT_EXECUTION,
+                info=f"Actuator {actuator_name} is already controlled to {value}",
+            )
+        actuator.ctrl[0] = value
+        return SimulatorCallbackResult(
+            type=SimulatorCallbackResult.ResultType.SUCCESS_AFTER_EXECUTION_ON_DATA,
+            info=f"Set control of actuator {actuator_name} to {value}",
+        )
+
+    @BaseSimulator.simulator_callback
     def attach(
         self,
         body_1_name: str,

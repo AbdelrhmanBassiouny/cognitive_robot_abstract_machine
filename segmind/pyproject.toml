@@ -11,6 +11,7 @@ dependencies = [
     "giskardpy",
     "krrood",
     "random_events",
+    "rosbags",
     "semantic_digital_twin",
 ]
 description = "Annotates activitiy episodes represented by meshes moving in a 3D environment with the corresponding events, actions and activities."
