@@ -58,10 +58,17 @@ data" critique + the tighter-layout feedback list), commits d6647fcb, 9a79a38b:
        card now emphasises PickUpEvents only (PlacingEvent made the place item
        amber too). RenderedScene.pixels_of. NOTE MujocoSim build re-roots the
        world (world.root changes) - take a hung camera off camera.body.
-11. [ ] IN PROGRESS: final demo runs (scratchpad run5/). Then: send the two
+11. [x] user feedback on the preview: images+simulation at the translation's
+       start/end (done via MotionStretch), the question asked directly after
+       the translation ends, a view showing ghost+object+trail. Done:
+       questions/after_the_move.QuestionAfterTheMove (both pickup demos; asks
+       on StopTranslationEvent of the asked piece, else at the end);
+       viewpoint_across(away_from=robot base); framed on subject+ghost+dots+
+       boards (other pieces dropped from scene_around).
+12. [ ] IN PROGRESS: demo runs scratchpad run6/ (~35 min). Then: send both
        layered cards, run test_tracy_pickup_demo_mujoco.py fully (alone),
-       redraft, update the PR description (scratchpad pr_body.md drafted;
-       fill "Verified").
+       redraft, update the PR description (pr_body.md drafted; fill
+       "Verified").
 
 ## Outstanding / judgement calls (also in the PR description)
 
