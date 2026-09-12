@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from matplotlib.axes import Axes
@@ -64,6 +65,42 @@ class TimelineSpan:
 # %% one moment of a trial, marked on the chart
 
 
+class Side(Enum):
+    """
+    Which side of a rule its name is written on.
+    """
+
+    LEFT = "right"
+    """
+    The name ends at the rule, so it is aligned to its right edge.
+    """
+
+    RIGHT = "left"
+    """
+    The name starts at the rule, so it is aligned to its left edge.
+    """
+
+    @property
+    def alignment(self) -> str:
+        """
+        How the name is aligned horizontally, as matplotlib spells it.
+        """
+        return self.value
+
+    @property
+    def inset(self) -> int:
+        """
+        How far from the rule the name starts, in points, signed the way it is offset.
+        """
+        return -RULE_LABEL_INSET if self is Side.LEFT else RULE_LABEL_INSET
+
+
+RULE_LABEL_INSET = 3
+"""
+How far a rule's name stands off the rule, in points.
+"""
+
+
 @dataclass(frozen=True)
 class MarkedMoment:
     """
@@ -83,6 +120,12 @@ class MarkedMoment:
     color: Color
     """
     What the rule and its label are drawn in.
+    """
+
+    side: Side = Side.RIGHT
+    """
+    Which side of the rule the name is written on, so two rules close together can
+    each be named without the names running into one another.
     """
 
 
@@ -292,10 +335,11 @@ class TrialChart:
             marked.label,
             xy=(marked.moment, 1.0),
             xycoords=("data", "axes fraction"),
-            xytext=(3, 1),
+            xytext=(marked.side.inset, 1),
             textcoords="offset points",
             fontsize=self.label_size,
             color=marked.color.to_hex(),
+            horizontalalignment=marked.side.alignment,
             verticalalignment="bottom",
         )
 

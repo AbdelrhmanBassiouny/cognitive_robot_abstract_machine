@@ -20,6 +20,7 @@ from experiments.paper.run_timeline import (
     RenderedRunTimeline,
     RunTimeline,
 )
+from experiments.paper.chart import Side
 from experiments.paper.panel import ANSWER_COLOR
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -151,6 +152,23 @@ def test_the_moments_are_named_once_over_the_upper_chart(
     assert "reported at %.1f s" % HAPPENED_AT in written
     assert "asked at %.1f s" % ASKED_AT in written
     assert not lower.texts
+
+
+def test_the_two_names_are_written_on_opposite_sides_of_their_rules(
+    trial: RecordedTrial, cube: Body
+) -> None:
+    """
+    The query is asked right after the event it is about, so the two rules stand close
+    together; the earlier name ends at its rule and the later starts at its, so they
+    never run into one another.
+    """
+    upper = drawn(trial, cube).figure.axes[0]
+    alignment_of = {
+        text.get_text(): text.get_horizontalalignment() for text in upper.texts
+    }
+
+    assert alignment_of["reported at %.1f s" % HAPPENED_AT] == Side.LEFT.alignment
+    assert alignment_of["asked at %.1f s" % ASKED_AT] == Side.RIGHT.alignment
 
 
 def test_the_axis_says_when_the_pictures_below_were_taken(

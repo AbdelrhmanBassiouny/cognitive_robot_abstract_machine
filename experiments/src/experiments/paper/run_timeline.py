@@ -20,6 +20,7 @@ from experiments.paper.chart import (
     ASKED_COLOR,
     MarkedMoment,
     RenderedChart,
+    Side,
     TimelineSpan,
     TrialChart,
 )
@@ -204,7 +205,9 @@ class RunTimeline:
     ) -> List[MarkedMoment]:
         """
         The moments both charts draw a rule at: when the answered event was reported,
-        and when the query was asked.
+        and when the query was asked. Where there are two, the earlier is named on the
+        left of its rule and the later on the right, so the two names never run into one
+        another however close the rules stand.
 
         :param asked_at: Seconds into the trial the query was asked, or None.
         :param happened_at: Seconds into the trial the event was reported, or None.
@@ -220,7 +223,13 @@ class RunTimeline:
             marks.append(
                 MarkedMoment(asked_at, "asked at %.1f s" % asked_at, ASKED_COLOR)
             )
-        return marks
+        if len(marks) < 2:
+            return marks
+        earlier, later = sorted(marks, key=lambda mark: mark.moment)
+        return [
+            MarkedMoment(earlier.moment, earlier.label, earlier.color, Side.LEFT),
+            MarkedMoment(later.moment, later.label, later.color, Side.RIGHT),
+        ]
 
     def _key(self, figure, ran: Sequence[PlanRow]) -> None:
         """
