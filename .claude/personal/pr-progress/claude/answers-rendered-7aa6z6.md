@@ -26,17 +26,25 @@ data" critique + the tighter-layout feedback list), commits d6647fcb, 9a79a38b:
        trace, camera film with moments), Shove option; pickup_demo_real and
        WatchedSortingRun record plans + traces. Script
        experiments/scripts/pickup_demo_cards.py runs either variant.
-5. [ ] IN PROGRESS: the event card stalled ~28 min on the demo's world - every
-       modify_world for the ghost/dots woke CollisionManager -> pybullet
-       vhacd of Tracy. Fixed (uncommitted): pose_change.ModelChangesUnannounced
-       pauses every ModelChangeCallback except ForwardKinematicsManager while
-       the ghost and dots stand; Callback.paused property added in
-       semantic_digital_twin. --from-recording dropped from the script
-       (recalled worlds point at the finished process's /tmp mesh files).
-       Both demo runs relaunched sequentially (scratchpad run2/); waiting for
-       the layered cards, then: send to user, run
-       test_tracy_pickup_demo_mujoco.py fully, commit, push, redraft, update PR
-       description (still says end-to-end verification pending).
+5. [x] a1c216f - event card stalled on the demo's world: every modify_world
+       for the ghost/dots woke CollisionManager -> pybullet vhacd of Tracy.
+       pose_change.ModelChangesUnannounced pauses every ModelChangeCallback
+       except ForwardKinematicsManager while they stand; Callback.paused
+       property in semantic_digital_twin. --from-recording dropped from the
+       script (recalled worlds point at the finished process's /tmp meshes).
+6. [x] dbf02c0 - merged the moved base (RecordedMotion/ObserverMotionListener,
+       HaveTheRobotAct steps with motion_listener, LiveTracy.connected,
+       PerceivedScene). HaveTheRobotAct now also carries `performed` (my
+       PlanStep folded into it); real demo main = LiveTracy + my recording.
+7. [x] 0e78af8 - first relaunched demo run was OOM-killed at 13.8 GB drawing
+       the card: TimedFrames.read loaded all 2946 film frames (4.4 GB) on top
+       of the run's own copy. TimedFramesFile reads one frame at a time;
+       TrialArtifacts.camera returns it; FramesByMoment ABC.
+8. [x] 49cb3de - unit tests for SamePiece/kind_of.
+9. [ ] IN PROGRESS: both demo runs relaunched sequentially (scratchpad run3/,
+       ~16 min each + cards). Then: send the two layered cards to the user,
+       run test_tracy_pickup_demo_mujoco.py fully, push, redraft, update the
+       PR description (scratchpad pr_body.md already drafted; fill "Verified").
 
 ## Outstanding / judgement calls (also in the PR description)
 
