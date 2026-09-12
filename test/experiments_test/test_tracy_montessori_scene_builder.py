@@ -8,6 +8,8 @@ table was laid out with a tape, in the world Tracy's own description gives.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from coraplex.datastructures.enums import ExecutionType
@@ -18,7 +20,13 @@ from semantic_digital_twin.adapters.multi_sim import MultiSimSynchronizer
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.geometry import Mesh
+from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
+from experiments.episodes.artifacts import (
+    ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    configured_mesh_directory,
+)
 from experiments.episodes.episode import Episode
 from experiments.montessori.exceptions import WorldHoldsNoSuchRobot
 from experiments.montessori.perception.captures import SceneCapture
@@ -164,6 +172,25 @@ def test_the_built_scenes_table_is_tracys_own():
     scene = SortingScene(world)
     assert scene.table.root is scene.robot.root
     assert table_surface(world).height == pytest.approx(builder.table_top_z)
+
+
+def test_the_built_scene_keeps_its_meshes_beside_the_artifacts(monkeypatch, tmp_path):
+    """
+    A recorded episode keeps the world it ran in, which refers to the board and the
+    pieces by the files they were exported to, so none of them may live in the
+    directory this process removes when it exits.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+
+    world = TracyOnItsOwnTable().build(Tracy)
+
+    shapes = [
+        *(shape for body in world.bodies for shape in [*body.visual, *body.collision]),
+        *(shape for region in world.regions for shape in region.area),
+    ]
+    meshes = [Path(shape.filename) for shape in shapes if isinstance(shape, Mesh)]
+    assert any(path.is_relative_to(configured_mesh_directory()) for path in meshes)
+    assert not any(path.is_relative_to(MeshFileStorage().root) for path in meshes)
 
 
 # %% the scene Tracy's camera finds

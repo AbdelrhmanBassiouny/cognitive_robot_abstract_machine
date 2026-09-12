@@ -16,7 +16,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+import trimesh
 from krrood.exceptions import DataclassException
+from semantic_digital_twin.world_description.geometry import Mesh
 from typing_extensions import TYPE_CHECKING, List, Sequence
 
 from experiments.episodes.episode import Episode, RecordedTrial
@@ -85,6 +87,39 @@ def configured_artifact_directory() -> Path:
     if from_environment is None:
         return DEFAULT_ARTIFACT_DIRECTORY
     return Path(from_environment)
+
+
+# %% the meshes a recorded world refers to
+
+MESH_DIRECTORY_NAME = "meshes"
+"""
+What the directory holding the meshes a scene is built from is called, inside the
+directory episodes keep their artifacts in.
+"""
+
+
+def configured_mesh_directory() -> Path:
+    """
+    The directory the meshes a scene is built from are written to.
+
+    A recorded world refers to its meshes by path and is read back by a later process,
+    so they are kept beside the episodes' artifacts rather than in the directory
+    :class:`~semantic_digital_twin.world_description.mesh_file_storage.MeshFileStorage`
+    removes when the process that built the scene exits.
+    """
+    return configured_artifact_directory() / MESH_DIRECTORY_NAME
+
+
+def keep_mesh(mesh: trimesh.Trimesh) -> Mesh:
+    """
+    Export a mesh to a file a recorded world can refer to after this process has exited.
+
+    :param mesh: The mesh to export.
+    :return: The shape reading from the exported file.
+    """
+    directory = configured_mesh_directory()
+    directory.mkdir(parents=True, exist_ok=True)
+    return Mesh.from_trimesh(mesh=mesh, directory=directory)
 
 
 @dataclass

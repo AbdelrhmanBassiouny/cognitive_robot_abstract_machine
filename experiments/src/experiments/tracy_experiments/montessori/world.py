@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Dict, List
 
+from experiments.episodes.artifacts import keep_mesh
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
     HOLE_NAME_BY_CATEGORY,
@@ -74,7 +75,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Point3
-from semantic_digital_twin.world_description.geometry import Box, Color, Mesh
+from semantic_digital_twin.world_description.geometry import Box, Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
@@ -253,7 +254,7 @@ class TracyMontessoriWorld(MontessoriWorld):
         )
         board_top_z = float(board_position.z) + BOARD_SCALE.z / 2
 
-        board_shape = Mesh.from_trimesh(mesh=_BOARD_MESH)
+        board_shape = keep_mesh(_BOARD_MESH)
         board_shape.color = BOARD_COLOR
         board = ShapeSortingBoard(
             name=_name("board"),

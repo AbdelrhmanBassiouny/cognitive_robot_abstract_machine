@@ -17,6 +17,7 @@ import numpy as np
 import trimesh
 from typing_extensions import Dict, List, Optional, Tuple, Type
 
+from experiments.episodes.artifacts import keep_mesh
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
     HoleFootprint,
@@ -625,7 +626,7 @@ def _measured_piece_mesh(footprint: HoleFootprint, piece: KnownPiece) -> Mesh:
     solid = footprint.extrude(piece.height)
     scale = piece.cross_section_size / footprint.cross_section_size
     solid.apply_transform(np.diag([scale, scale, 1.0, 1.0]))
-    mesh = Mesh.from_trimesh(mesh=solid)
+    mesh = keep_mesh(solid)
     mesh.color = piece.color
     return mesh
 
@@ -635,7 +636,7 @@ def _hole_marker_shape(footprint: HoleFootprint, color: Color) -> Mesh:
     Build a thin :class:`Mesh` matching a hole's true cross-section shape, for its
     :class:`~experiments.montessori.semantics.ShapeSortingHole` region.
     """
-    marker = Mesh.from_trimesh(mesh=footprint.extrude(HOLE_MARKER_THICKNESS))
+    marker = keep_mesh(footprint.extrude(HOLE_MARKER_THICKNESS))
     marker.color = color
     return marker
 
@@ -1067,7 +1068,7 @@ class MontessoriWorld:
         self._spawn(table, TABLE_POSITION)
 
     def _build_shape_sorting_board(self) -> ShapeSortingBoard:
-        board_shape = Mesh.from_trimesh(mesh=_BOARD_MESH)
+        board_shape = keep_mesh(_BOARD_MESH)
         board_shape.color = BOARD_COLOR
         board_shape.finish = BOARD_FINISH
         board = ShapeSortingBoard(

@@ -8,17 +8,24 @@ by its identifier and come back from it.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy
 import pytest
+import trimesh
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
+from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
 from experiments.episodes.artifacts import (
     ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    MESH_DIRECTORY_NAME,
     ArtifactDirectory,
     ArtifactNotKept,
     EpisodeArtifact,
     Transcript,
     configured_artifact_directory,
+    configured_mesh_directory,
+    keep_mesh,
 )
 from experiments.episodes.episode import Episode, RecordedQuery, RecordedTrial
 from experiments.questions.working_memory import ObjectColours, ObjectsSeen
@@ -128,6 +135,25 @@ def test_the_directory_artifacts_are_kept_in_is_read_from_the_environment(
     monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
 
     assert configured_artifact_directory() == tmp_path
+
+
+# %% the meshes a recorded world refers to
+
+
+def test_a_kept_mesh_is_written_beside_the_artifacts(monkeypatch, tmp_path):
+    """
+    A recorded world refers to its meshes by path and is read back by a later process,
+    so a kept mesh cannot live in the directory this process removes when it exits.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+
+    mesh = keep_mesh(trimesh.creation.box((0.1, 0.1, 0.1)))
+
+    written_to = Path(mesh.filename)
+    assert written_to.is_file()
+    assert written_to.is_relative_to(configured_mesh_directory())
+    assert configured_mesh_directory() == tmp_path / MESH_DIRECTORY_NAME
+    assert not written_to.is_relative_to(MeshFileStorage().root)
 
 
 # %% the video
