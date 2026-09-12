@@ -9,8 +9,13 @@ from experiments.episodes.episode import RecordedTrial
 from experiments.paper.figure import FigureName
 from experiments.questions.long_term_memory import AnythingMovedInTheEpisode
 from experiments.questions.question import BloomLevel, Bucket
-from experiments.questions.working_memory import ObjectColours, ObjectsSeen
+from experiments.questions.working_memory import (
+    BeliefAgreesWithPerception,
+    ObjectColours,
+    ObjectsSeen,
+)
 from experiments.scenarios.trial import TrialOutcome
+from semantic_digital_twin.reasoning.predicates import Near
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.testing import two_arm_robot_world
 
@@ -112,6 +117,51 @@ def test_accuracy_by_bloom_level_reports_only_scored_levels_in_taxonomy_order():
     ]
     assert [row.accuracy.measurement_count for row in rows] == [1, 2]
     assert [row.accuracy.average.mean for row in rows] == [1.0, 0.5]
+
+
+def test_what_a_look_made_of_a_belief_is_reported_under_support_and_spatial_relations(
+    scene: QuestionedScene,
+):
+    """
+    Where the paper's own table says whether the robot's account of the scene survived
+    a look at it: among the questions about what holds a thing up and where it stands.
+    """
+    corpus = [
+        trial(
+            episode(NO_ABLATION),
+            TrialOutcome.SUCCEEDED,
+            queries=[
+                query(
+                    BeliefAgreesWithPerception(
+                        subject=scene.cube,
+                        contradicted=[],
+                        nothing_was_found=False,
+                        perturbed=False,
+                    ),
+                    str(True),
+                    0.1,
+                    answered_correctly=True,
+                ),
+                query(
+                    BeliefAgreesWithPerception(
+                        subject=scene.cylinder,
+                        contradicted=[Near],
+                        nothing_was_found=False,
+                        perturbed=True,
+                    ),
+                    str(False),
+                    0.1,
+                    answered_correctly=True,
+                ),
+            ],
+        )
+    ]
+
+    [row] = rows_of(FigureName.ACCURACY_BY_BUCKET, corpus)
+
+    assert row.bucket is Bucket.SUPPORT_AND_SPATIAL_RELATIONS
+    assert row.accuracy.measurement_count == 2
+    assert row.accuracy.average.mean == 1.0
 
 
 def test_a_score_with_nothing_scored_is_left_out():

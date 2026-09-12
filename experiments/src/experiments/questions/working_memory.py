@@ -21,7 +21,7 @@ from krrood.entity_query_language.factories import (
     not_,
     variable,
 )
-from krrood.entity_query_language.predicate import symbolic_function
+from krrood.entity_query_language.predicate import Relation, symbolic_function
 from krrood.entity_query_language.query.query import Query
 from krrood.symbol_graph.symbol_graph import SymbolGraph
 from segmind.datastructures.events import (
@@ -551,6 +551,107 @@ class SideOfAnotherObject(WorkingMemoryQuestion[bool]):
             self.point_of_view,
         )
         return bool(relation())
+
+
+@dataclass
+class BeliefAgreesWithPerception(WorkingMemoryQuestion[bool]):
+    """
+    Whether what a look reported of an object bore out everything believed of it.
+
+    The one question of the set that is about two accounts of the same thing rather than
+    about one: a look at the object, and what was believed of it before the look was
+    taken. What the look made of the belief is carried here, since a look is not
+    something the twin holds and cannot be read back off it afterwards.
+    """
+
+    bucket: ClassVar[Bucket] = Bucket.SUPPORT_AND_SPATIAL_RELATIONS
+    """
+    The relations a belief about a resting object is stated in: what holds it up, and
+    where it stands.
+    """
+
+    required_facts: ClassVar[Tuple[RequiredFact, ...]] = (
+        RequiredFact.OBJECT_SHAPES,
+        RequiredFact.OBJECT_PLACES,
+        RequiredFact.SUPPORT_RELATIONS,
+    )
+    """
+    Both accounts are of a shape resting somewhere, so neither can be had without all
+    three.
+    """
+
+    subject: Body
+    """
+    The object both accounts are of, as the twin holds it.
+    """
+
+    contradicted: List[Type[Relation]]
+    """
+    The kinds of relation believed of the subject that what the look found does not
+    stand in, in the order they were believed.
+
+    The kinds rather than the relations themselves, because a relation names the place
+    it is read against by the frame that place was measured in, and the world holding
+    that frame is gone by the time a recorded query is read back.
+    """
+
+    nothing_was_found: bool
+    """
+    Whether the look reported nothing at all where the subject was believed, which
+    contradicts no relation in particular and is a disagreement nonetheless.
+    """
+
+    perturbed: bool
+    """
+    Whether someone other than the robot acted on the subject, or on what the look
+    reported of it.
+    """
+
+    @classmethod
+    def asked_of(cls, things: QuestionedThings) -> List[BeliefAgreesWithPerception]:
+        """
+        Asked of no scene on its own: a belief and the look that checked it are what
+        this question is about, and a scene holds neither, so it joins the set wherever
+        such a check happened.
+
+        :param things: What the scene fills in for the questions about one thing.
+        """
+        return []
+
+    @property
+    def english(self) -> str:
+        """
+        The question as a person would ask it.
+        """
+        return "Does what you see of the %s agree with what you believed of it?" % (
+            self.subject.name.name
+        )
+
+    def query(self, source: AbstractRobot) -> Query:
+        """
+        Every kind of relation believed of the subject that the look did not bear out.
+
+        :param source: The robot the question is put to.
+        """
+        contradicted = variable(type, self.contradicted)
+        return an(entity(contradicted))
+
+    def ask(self, source: AbstractRobot) -> bool:
+        """
+        Whether the look and the belief agree about the subject.
+
+        :param source: The robot the question is put to.
+        """
+        return not self.nothing_was_found and not self.solutions(source)
+
+    def ground_truth(self, source: AbstractRobot) -> bool:
+        """
+        Whether the two accounts ought to agree, which in simulation is settled by
+        whether anyone other than the robot acted on the subject.
+
+        :param source: The robot whose scene it is.
+        """
+        return not self.perturbed
 
 
 # %% temporal and agency
