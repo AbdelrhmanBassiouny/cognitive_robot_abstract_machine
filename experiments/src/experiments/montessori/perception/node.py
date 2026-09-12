@@ -29,9 +29,6 @@ from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from typing_extensions import Callable, List, Optional, TypeVar
 
-from experiments.montessori.board_description import DescribedBoard
-from experiments.montessori.perception.backend import MontessoriPerceptionBackend
-from experiments.montessori.perception.board_publishing import BoardPublisher
 from experiments.montessori.perception.camera import CameraTopic, RgbdFrame
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import NoSceneAvailable
@@ -43,12 +40,12 @@ from experiments.montessori.perception.overlay import (
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import lab_board
+from experiments.montessori.perception.scene_publishing import hold_board
 from experiments.montessori.perception.scene_request import SceneRequest
-from experiments.montessori.perception.scene_source import MontessoriSceneSource
+from experiments.montessori.perception.scene_source import RepeatedLook
 from experiments.montessori.perception.scene_windows import SceneWindows
 from experiments.montessori.perception.viewer import CameraFrameViewer
 from experiments.montessori.pieces import SMALLER_PIECES
-from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.network_limits import check_large_messages_can_arrive
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
 from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
@@ -70,10 +67,9 @@ REPORT_PERIOD_SECONDS = 1.0
 How often the scene is logged while the node runs.
 """
 
-BOARD_SEARCH_PERIOD_SECONDS = 1.0
+LOOKS_FOR_THE_BOARD = 30
 """
-How long the node waits before looking for the described board again, while no board
-answering the description is in view.
+How many looks the camera is given to show the board before the node gives up.
 """
 
 Held = TypeVar("Held")
@@ -85,7 +81,7 @@ Whatever the node holds that a caller waits to arrive: a look, or a frame.
 
 
 @dataclass
-class MontessoriPerceptionNode(MontessoriSceneSource):
+class MontessoriPerceptionNode(RepeatedLook):
     """
     Watches the Montessori scene continuously and serves the newest result.
 
@@ -95,14 +91,9 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     running, and a result that is one frame old beats blocking a plan on a fresh capture.
     """
 
-    node: Node
+    node: Node = field(kw_only=True)
     """
     The node subscriptions and transform lookups are made on.
-    """
-
-    pipeline: MontessoriPerceptionPipeline
-    """
-    Turns a frame into detections.
     """
 
     minimum_period: float = 0.5
@@ -258,13 +249,6 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
 
     # %% serving results
 
-    @property
-    def reference_frame(self) -> Optional[KinematicStructureEntity]:
-        """
-        The frame this node's pipeline places its detections in.
-        """
-        return self.pipeline.reference_frame
-
     def scene(self, request: SceneRequest = SceneRequest()) -> MontessoriScene:
         """
         Serve the newest look, whatever the request narrowed it to.
@@ -376,51 +360,6 @@ def pipeline_of(world: World) -> MontessoriPerceptionPipeline:
     return MontessoriPerceptionPipeline.of_world(world, robot.root, SMALLER_PIECES)
 
 
-def find_board(
-    perception: MontessoriPerceptionNode, described: DescribedBoard
-) -> ShapeSortingBoard:
-    """
-    Look until a board answering a description is in view.
-
-    :param perception: The node to look through.
-    :param described: The board to look for.
-    :return: The board, standing where it was found in the world the look brought its
-        findings into.
-    """
-    looking = MontessoriPerceptionBackend(source=perception)
-    while True:
-        found = list(described.statement().evaluate(backend=looking))
-        if found:
-            return found[0]
-        logger.info("No board answering the description is in view yet.")
-        time.sleep(BOARD_SEARCH_PERIOD_SECONDS)
-
-
-def hold_board(world: World, perception: MontessoriPerceptionNode) -> ShapeSortingBoard:
-    """
-    Have the world the robot publishes hold the shape-sorting board on this table.
-
-    A world holding no board has the board looked for by the description of the board on
-    this table, and the board found published into it, so every process keeping that
-    world in step holds it too.
-
-    :param world: The world the robot publishes.
-    :param perception: The node to look through, whose pipeline then reads the published
-        board's lid.
-    :return: The board the world holds.
-    """
-    held = ShapeSortingBoard.held_by(world)
-    if held is not None:
-        return held
-    described = lab_board()
-    published = BoardPublisher(world=world).publish(
-        described, find_board(perception, described)
-    )
-    logger.info("Found the board and published it as %s.", published.name)
-    perception.pipeline = pipeline_of(world)
-    return published
-
-
 def parse_arguments() -> Namespace:
     """
     Read the options this node is run with.
@@ -474,7 +413,7 @@ def main() -> None:
     world = fetch_world_from_service(node=node, timeout_seconds=300)
     WorldSynchronizer(_world=world, node=node)
     perception = build_node(node, world, show_images=arguments.show_images)
-    hold_board(world, perception)
+    hold_board(world, perception, lab_board(), looks=LOOKS_FOR_THE_BOARD)
     report(perception.wait_for_scene())
     next_report = time.monotonic() + REPORT_PERIOD_SECONDS
     while rclpy.ok():

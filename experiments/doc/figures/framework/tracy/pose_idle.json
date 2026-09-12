@@ -1,0 +1,16 @@
+{
+  "left_shoulder_pan_joint": 2.319,
+  "left_shoulder_lift_joint": -1.1,
+  "left_elbow_joint": 2.114,
+  "left_wrist_1_joint": 1.426,
+  "left_wrist_2_joint": 0.929,
+  "left_wrist_3_joint": -0.0,
+  "right_shoulder_pan_joint": 0.171,
+  "right_shoulder_lift_joint": -1.504,
+  "right_elbow_joint": 2.346,
+  "right_wrist_1_joint": -2.1,
+  "right_wrist_2_joint": -2.595,
+  "right_wrist_3_joint": -0.0,
+  "left_finger_joint": 0.3,
+  "right_finger_joint": 0.3
+}

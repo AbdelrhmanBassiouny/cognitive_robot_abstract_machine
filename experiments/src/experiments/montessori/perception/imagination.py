@@ -45,6 +45,21 @@ What every body a look brings into the world of its own is named under, which is
 tells one apart from a body the world already held.
 """
 
+
+def piece_mesh(piece: KnownPiece) -> Mesh:
+    """
+    The solid a body standing for a known piece is built from.
+
+    :param piece: The piece that was recognised.
+    :return: Its measured outline standing as tall as it was measured to stand, in its
+        own colour, with its origin at the middle of its height.
+    """
+    solid = extrude_polygon(piece.outline, piece.height)
+    mesh = Mesh.from_trimesh(mesh=solid)
+    mesh.color = piece.color
+    return mesh
+
+
 # %% the world a look's findings stand in
 
 
@@ -123,7 +138,7 @@ class ImaginedWorld:
             IMAGINATION_PREFIX,
         )
         self.spawned += 1
-        body = Body.from_shape_collection(name, ShapeCollection([self._mesh_of(piece)]))
+        body = Body.from_shape_collection(name, ShapeCollection([piece_mesh(piece)]))
         parent = self._frame_of(pose)
         with self.world.modify_world():
             connection = Connection6DoF.create_with_dofs(
@@ -155,17 +170,6 @@ class ImaginedWorld:
         :return: The board as the world holds it, ready to be a detection's role taker.
         """
         return described.stand_in(self.world, pose, IMAGINATION_PREFIX)
-
-    @staticmethod
-    def _mesh_of(piece: KnownPiece) -> Mesh:
-        """
-        :param piece: The piece that was recognised.
-        :return: Its measured outline standing as tall as it was measured to stand.
-        """
-        solid = extrude_polygon(piece.outline, piece.height)
-        mesh = Mesh.from_trimesh(mesh=solid)
-        mesh.color = piece.color
-        return mesh
 
     def _frame_of(self, pose: Pose) -> KinematicStructureEntity:
         """

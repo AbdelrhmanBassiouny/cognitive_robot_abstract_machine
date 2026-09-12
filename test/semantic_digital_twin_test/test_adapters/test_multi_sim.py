@@ -47,6 +47,7 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoSim,
     MujocoActuator,
     MujocoBuilder,
+    MujocoGeom,
     MujocoLight,
     MujocoSynchronizer,
 )
@@ -514,7 +515,8 @@ def test_builder_converts_cylinder_full_height_to_mujocos_half_height_convention
     tmp_path,
 ):
     """
-    Regression test: MujocoCylinderConverter passed Cylinder.height (the shape's full
+    Regression test: MujocoCylinderConverter passed Cylinder.height (the shape's full.
+
     height) straight through as MuJoCo's own cylinder size[1], which MuJoCo defines as a
     half-length, not a full length - every cylinder synchronized into MuJoCo rendered
     and collided at twice its intended height.
@@ -1454,3 +1456,28 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
             )
     finally:
         stop_multisim_if_running(multi_sim)
+
+
+def test_builder_gives_a_geom_the_contact_dimensionality_its_shape_declares(tmp_path):
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        shape = Box(scale=Scale(0.1, 0.1, 0.1))
+        shape.simulator_additional_properties.append(
+            MujocoGeom(contact_dimensionality=4)
+        )
+        block = Body(name=PrefixedName("block"), collision=ShapeCollection([shape]))
+        world.add_kinematic_structure_entity(block)
+        world.add_connection(FixedConnection(parent=root, child=block))
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    [geom_spec] = [
+        geom
+        for body in builder.spec.bodies
+        for geom in body.geoms
+        if body.name == "block"
+    ]
+    assert geom_spec.condim == 4
