@@ -83,12 +83,12 @@ data" critique + the tighter-layout feedback list), commits d6647fcb, 9a79a38b:
        in watched_run.py + its test, keep both sides). PR description updated,
        draft. User asked at the lab whether #318 can merge into #265: told
        them yes once this merge landed; the real demo is untested on the robot.
-16. [ ] NEXT (cosmetic, cards only): RecordedFramesAround.after = frame
-       nearest the stretch's end (FramesByMoment.nearest_to -> TimedFrame, at
-       delegates); drop first_at_or_after (+ its test lines); update
-       test_paper_camera_frames_around. Answering the question set blocks the
-       film ~3 s so first_at_or_after landed after the ask. Then rerun both
-       demos for final PNGs, run test_tracy_pickup_demo_mujoco.py alone.
+16. [x] MERGED: on the user's word, #318 was marked ready and merged into
+       #265's branch (b2fb895). This session's job on #318 is over. The
+       remaining cosmetic item (RecordedFramesAround.after = frame nearest the
+       stretch's end; drop first_at_or_after; final card PNGs; full
+       test_tracy_pickup_demo_mujoco.py) is a NEW change on top of #265 for
+       a later session, not this PR.
 
 ## Outstanding / judgement calls (also in the PR description)
 
