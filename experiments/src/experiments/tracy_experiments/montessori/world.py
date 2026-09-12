@@ -35,19 +35,9 @@ from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
     HOLE_NAME_BY_CATEGORY,
     HoleFootprint,
-    extrude_polygon,
 )
-from experiments.montessori.pieces import (
-    CUBE_EDGE,
-    CYLINDER_DIAMETER,
-    CYLINDER_HEIGHT,
-    RECTANGULAR_PRISM_HEIGHT,
-    RECTANGULAR_PRISM_LENGTH,
-    RECTANGULAR_PRISM_WIDTH,
-    TRIANGULAR_PRISM_HEIGHT,
-    TRIANGULAR_PRISM_SIDE,
-    equilateral_triangle_boundary,
-)
+from experiments.montessori.planar_geometry import PlanarPoint
+from experiments.montessori.pieces import FULL_SIZE_PIECES, KnownPieceSet
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
@@ -74,23 +64,17 @@ from experiments.montessori.world import (
     _body_with_visual_only_shape,
     _drawer_body,
     _hole_marker_shape,
+    _measured_piece_mesh,
     _name,
 )
 from experiments.montessori.world2 import SPAWNED_SHAPE_CATEGORIES
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Drawer,
     Floor,
     Handle,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Point3
-from semantic_digital_twin.world_description.geometry import (
-    Box,
-    Color,
-    Cylinder,
-    Mesh,
-    Scale,
-)
+from semantic_digital_twin.world_description.geometry import Box, Color, Mesh
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
@@ -153,28 +137,26 @@ SKIPPED_HOLE_KEYS = frozenset({"circular_hole_2"})
 Hole keys with no matching loose piece in this scene, even though their
 :class:`~experiments.montessori.semantics.MontessoriShapeCategory` is otherwise spawned
 (see :data:`~experiments.montessori.world2.SPAWNED_SHAPE_CATEGORIES`): this scene's
-physical set has only one cylindrical piece, sized to :const:`CYLINDER_DIAMETER`, so the
-board's second, differently-sized circular hole is left without a matching piece.
+physical set has only one cylindrical piece, so the board's second, differently-sized
+circular hole is left without a matching piece.
 """
 
-_BOARD_POSITION_DELTA_X = float(BOARD_POSITION_TRACY.x) - float(BOARD_POSITION.x)
-_BOARD_POSITION_DELTA_Y = float(BOARD_POSITION_TRACY.y) - float(BOARD_POSITION.y)
-_DRAWER_XY_TRACY: List[tuple[float, float]] = [
-    (
-        float(position.x) + _BOARD_POSITION_DELTA_X,
-        float(position.y) + _BOARD_POSITION_DELTA_Y,
+_DRAWER_OFFSETS: List[PlanarPoint] = [
+    PlanarPoint(
+        float(position.x) - float(BOARD_POSITION.x),
+        float(position.y) - float(BOARD_POSITION.y),
     )
     for position in _DRAWER_POSITIONS
 ]
 """
-X/Y of :const:`~experiments.montessori.world._DRAWER_POSITIONS` (hand-placed relative to
-:const:`~experiments.montessori.world.BOARD_POSITION`), carried over to
-:const:`BOARD_POSITION_TRACY` by the same x/y offset -- mirrors
-:mod:`~experiments.montessori.world2`'s own ``_DRAWER_POSITIONS_2``.
+Where each drawer stands from the board's centre, along x and y: read off
+:const:`~experiments.montessori.world._DRAWER_POSITIONS`, which are hand-placed relative
+to :const:`~experiments.montessori.world.BOARD_POSITION`, so a board stood anywhere
+carries its drawers with it.
 
 Z is filled in by
-:meth:`TracyMontessoriWorld._build_shape_sorting_board` once :attr:`TracyMontessoriWorld.table_top_z`
-is known.
+:meth:`TracyMontessoriWorld._build_shape_sorting_board` once
+:attr:`TracyMontessoriWorld.table_top_z` is known.
 """
 
 
@@ -219,42 +201,6 @@ def _build_hole_specs_tracy(
     return hole_specs
 
 
-def _measured_shape_body(name: PrefixedName, category: MontessoriShapeCategory) -> Body:
-    """
-    Build the :class:`Body` of a loose Montessori shape from this scene's own measured
-    physical dimensions, rather than :func:`~experiments.montessori.world._shape_body`'s
-    scaled-down copy of the board's own hole footprint.
-
-    :param category: Which measured shape to build; must be one of
-        :attr:`~MontessoriShapeCategory.CUBE`, :attr:`~MontessoriShapeCategory.CYLINDER`,
-        :attr:`~MontessoriShapeCategory.RECTANGULAR_PRISM`, or
-        :attr:`~MontessoriShapeCategory.TRIANGULAR_PRISM`.
-    """
-    color = _SHAPE_COLORS[category]
-    match category:
-        case MontessoriShapeCategory.CUBE:
-            shape = Box(scale=Scale(CUBE_EDGE, CUBE_EDGE, CUBE_EDGE), color=color)
-        case MontessoriShapeCategory.CYLINDER:
-            shape = Cylinder(
-                width=CYLINDER_DIAMETER, height=CYLINDER_HEIGHT, color=color
-            )
-        case MontessoriShapeCategory.RECTANGULAR_PRISM:
-            shape = Box(
-                scale=Scale(
-                    RECTANGULAR_PRISM_WIDTH,
-                    RECTANGULAR_PRISM_LENGTH,
-                    RECTANGULAR_PRISM_HEIGHT,
-                ),
-                color=color,
-            )
-        case MontessoriShapeCategory.TRIANGULAR_PRISM:
-            boundary = equilateral_triangle_boundary(TRIANGULAR_PRISM_SIDE)
-            solid = extrude_polygon(boundary, TRIANGULAR_PRISM_HEIGHT)
-            shape = Mesh.from_trimesh(mesh=solid)
-            shape.color = color
-    return _body_with_shape(name, shape)
-
-
 @dataclass(eq=False)
 class TracyMontessoriWorld(MontessoriWorld):
     """
@@ -270,6 +216,18 @@ class TracyMontessoriWorld(MontessoriWorld):
     :func:`~experiments.tracy_experiments.equipment.tracy_table_mount_position`),
     computed by the caller before constructing this class since Tracy is mounted only
     afterward.
+    """
+
+    pieces: KnownPieceSet = field(kw_only=True, default=FULL_SIZE_PIECES)
+    """
+    The physical set the loose shapes are built as: each shape is its hole's own cross-
+    section at the size and in the colour the piece of that kind was measured to be.
+    """
+
+    board_position: Point3 = field(kw_only=True, default=BOARD_POSITION_TRACY)
+    """
+    X/Y of the shape-sorting board's centre on Tracy's own table; its z is ignored and
+    filled in from :attr:`table_top_z`.
     """
 
     _hole_specs: List[_HoleSpec] = field(init=False, default_factory=list)
@@ -289,8 +247,8 @@ class TracyMontessoriWorld(MontessoriWorld):
 
     def _build_shape_sorting_board(self) -> ShapeSortingBoard:
         board_position = Point3(
-            BOARD_POSITION_TRACY.x,
-            BOARD_POSITION_TRACY.y,
+            self.board_position.x,
+            self.board_position.y,
             self.table_top_z + BOARD_SCALE.z / 2,
         )
         board_top_z = float(board_position.z) + BOARD_SCALE.z / 2
@@ -326,8 +284,12 @@ class TracyMontessoriWorld(MontessoriWorld):
             board.add(hole)
             holes_by_key[hole_spec.key] = hole
 
-        for index, (drawer_x, drawer_y) in enumerate(_DRAWER_XY_TRACY, start=1):
-            drawer_position = Point3(drawer_x, drawer_y, board_position.z)
+        for index, drawer_offset in enumerate(_DRAWER_OFFSETS, start=1):
+            drawer_position = Point3(
+                float(board_position.x) + drawer_offset.x,
+                float(board_position.y) + drawer_offset.y,
+                board_position.z,
+            )
             drawer = Drawer(
                 name=_name(f"drawer_{index}"),
                 root=_drawer_body(
@@ -373,7 +335,12 @@ class TracyMontessoriWorld(MontessoriWorld):
         ]
         for index, hole_spec in enumerate(spawned_holes):
             shape_key = f"{hole_spec.key}_shape"
-            body = _measured_shape_body(_name(shape_key), hole_spec.category)
+            body = _body_with_shape(
+                _name(shape_key),
+                _measured_piece_mesh(
+                    hole_spec.shape, self.pieces.by_category[hole_spec.category]
+                ),
+            )
             shape_class = MONTESSORI_SHAPE_CLASSES[hole_spec.category]
             shape = shape_class(name=_name(shape_key), root=body)
             y = SHAPE_ROW_START_Y + index * SHAPE_ROW_SPACING
