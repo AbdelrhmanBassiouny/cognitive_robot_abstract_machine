@@ -331,6 +331,7 @@ class TracyMontessoriWorld(MontessoriWorld):
             hole_spec
             for hole_spec in self._hole_specs
             if hole_spec.category in SPAWNED_SHAPE_CATEGORIES
+            and hole_spec.category in self.pieces.by_category
             and hole_spec.key not in SKIPPED_HOLE_KEYS
         ]
         for index, hole_spec in enumerate(spawned_holes):
