@@ -531,6 +531,41 @@ def test_the_move_is_looked_at_from_the_side_away_from_the_robot() -> None:
     assert viewpoint[2] == ACROSS_ELEVATION
 
 
+def test_a_short_move_is_looked_at_from_as_close_as_a_long_one(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    The camera is hung to frame the move itself, not the rest of the scene: whatever
+    else stands in the world, however far off, does not pull the camera back from the
+    two poses and the way between them.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    change = PoseChange.of(moved(subject))
+    render = PoseChangeRender(world=scene_with_a_loose_piece)
+    ghost = render.stand_a_ghost_at(subject, change.before)
+    dots = render.stand_dots_along(subject, change.straight_way())
+    midpoint = (change.before.to_np()[:3, 3] + change.after.to_np()[:3, 3]) / 2
+
+    def stands_off() -> float:
+        camera = render.hang_a_camera_across(change, ghost, dots)
+        camera.body.simulator_additional_properties.remove(camera)
+        return float(np.linalg.norm(np.array(camera.position) - midpoint))
+
+    alone = stands_off()
+    with scene_with_a_loose_piece.modify_world():
+        scene_with_a_loose_piece.add_connection(
+            FixedConnection(
+                parent=scene_with_a_loose_piece.root,
+                child=standing_box("far_off"),
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=5.0, reference_frame=scene_with_a_loose_piece.root
+                ),
+            )
+        )
+
+    assert stands_off() == alone
+
+
 def test_a_lift_is_looked_at_from_the_overviews_side() -> None:
     before = Pose.from_xyz_rpy(z=0.0).to_homogeneous_matrix()
     after = Pose.from_xyz_rpy(z=0.3).to_homogeneous_matrix()

@@ -28,7 +28,6 @@ from experiments.episodes.episode import RecordedQuery, RecordedTrial
 from experiments.experiment_definitions import TypstRenderer
 from experiments.episodes.trace import JointPositions, JointTrace
 from experiments.montessori.same_piece import SamePiece
-from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.paper.camera_frame import (
     BagFrameAt,
     BagFramesAround,
@@ -712,9 +711,7 @@ class QueryCard(ABC):
                 self._way_of(change.subject, world, trace, change.over)
             )
         return PoseChangeRender(world=world).of(
-            change,
-            robot_at=None if trace is None else trace.at(change.over.end),
-            among=self.scene_around(change.subject, world),
+            change, robot_at=None if trace is None else trace.at(change.over.end)
         )
 
     @staticmethod
@@ -775,24 +772,6 @@ class QueryCard(ABC):
         finally:
             stood.restore_into(world)
         return way
-
-    @staticmethod
-    def scene_around(
-        subject: Body, world: World
-    ) -> Tuple[KinematicStructureEntity, ...]:
-        """
-        What the picture of an object's move is framed on besides the object and its
-        way: the boards of the scene, so the move is seen with what it was made
-        towards rather than alone, and close enough that the two poses and the way
-        between them are read.
-
-        :param subject: The object that moved.
-        :param world: The twin it stands in.
-        """
-        return tuple(
-            board.root
-            for board in world.get_semantic_annotations_by_type(ShapeSortingBoard)
-        )
 
     def _camera_frame(
         self,

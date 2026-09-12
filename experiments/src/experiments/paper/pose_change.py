@@ -49,11 +49,7 @@ from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import (
-    Body,
-    Connection,
-    KinematicStructureEntity,
-)
+from semantic_digital_twin.world_description.world_entity import Body, Connection
 from semantic_digital_twin.world_description.geometry import Color, Sphere
 
 # %% how the earlier pose is told from the later one
@@ -607,10 +603,7 @@ class PoseChangeRender:
     """
 
     def of(
-        self,
-        change: PoseChange,
-        robot_at: Optional[JointPositions] = None,
-        among: Sequence[KinematicStructureEntity] = (),
+        self, change: PoseChange, robot_at: Optional[JointPositions] = None
     ) -> RenderedScene:
         """
         Draw the given change of pose as one picture.
@@ -631,9 +624,6 @@ class PoseChangeRender:
         :param robot_at: Where every joint of the world stood at the moment drawn, so
             the robot is shown as it was -- reaching for the piece, or holding it --
             rather than as the run left it. None leaves the joints where they are.
-        :param among: What else the picture is framed on, so the move is seen with
-            the scene it happened in -- the gripper that took the piece, the board it
-            went to -- rather than alone.
         :raises ObjectHeldFixedError: If the twin holds the object fixed where it is.
         :raises NothingToDrawError: If a camera or a light has to be placed and the world
             holds no geometry to place it around.
@@ -654,12 +644,10 @@ class PoseChangeRender:
             dots = self.stand_dots_along(
                 change.subject, change.way or change.straight_way()
             )
-            framed_on = (
-                self.framed_on(change.subject, ghost) + tuple(dots) + tuple(among)
-            )
+            framed_on = self.framed_on(change.subject, ghost) + tuple(dots)
             camera = self.camera
             if camera is None:
-                camera = self.hang_a_camera_across(change, framed_on)
+                camera = self.hang_a_camera_across(change, ghost, dots)
             try:
                 return SceneRender(
                     world=self.world,
@@ -692,19 +680,25 @@ class PoseChangeRender:
         )[:3, 3]
 
     def hang_a_camera_across(
-        self, change: PoseChange, framed_on: Sequence[KinematicStructureEntity]
+        self, change: PoseChange, ghost: Body, dots: Sequence[Body]
     ) -> MujocoCamera:
         """
-        Hang a camera on the world's root that looks across the move from the side,
-        framing everything the picture is about.
+        Hang a camera on the world's root that looks across the move from the side.
+
+        It frames the move itself -- the object, the ghost and the dots along the way
+        -- and stands no closer than a move's length or so, so a short move is still
+        seen with the scene around it while nothing farther off pulls the camera back
+        from it.
 
         :param change: The move to look across.
-        :param framed_on: What the picture is framed on.
+        :param ghost: The copy of the object standing where it was.
+        :param dots: The dots standing along its way.
         :return: The camera, already attached, to be taken off again once the picture is
             drawn.
         """
+        framed_on = self.framed_on(change.subject, ghost) + tuple(dots)
         pose = MujocoCamera.pose_looking_from(
-            SceneRender(world=self.world, framed_on=tuple(framed_on)).bounds(),
+            SceneRender(world=self.world, framed_on=framed_on).bounds(),
             viewpoint_across(
                 change.before, change.after, self.where_the_robot_stands()
             ),
