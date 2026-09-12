@@ -25,6 +25,13 @@ this matters:
    the pagination window), fall back to `${GITHUB_PULL_REQUEST_READ_TOOL}`
    with `method: "get"` for that specific `pullNumber`.
 
+A cross-plan dependency (`depends_on: [<plan-id>/<item-id>]`, see
+`plan-schema.md`) widens that: the dashboard shows the foreign item's own
+live state, so its pull request has to be in this data too. It resolves
+against **its own plan's** `default_repository`, not the rendered plan's, so
+a reference into a plan tracking a different repository adds that repository
+to the list above.
+
 ## Fields
 
 Every entry needs `state`, `draft`, `merged_at` and `labels`. If you narrow

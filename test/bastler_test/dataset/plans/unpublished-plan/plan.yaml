@@ -1,0 +1,18 @@
+schema_version: 1
+id: unpublished-plan
+title: The Plan With No Dashboard
+description: A manifest whose plan has never been published, so the URL cache has no entry for it.
+default_repository: third/owner-repo
+waves:
+- id: wave-1
+  name: Wave One
+tracks:
+- id: track-1
+  name: Track One
+  wave: wave-1
+items:
+- id: unpublished-item
+  title: An item in a plan with no published dashboard
+  branch: unpublished-item
+  track: track-1
+  status: done

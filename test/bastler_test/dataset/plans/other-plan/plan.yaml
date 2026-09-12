@@ -1,0 +1,42 @@
+schema_version: 1
+id: other-plan
+title: The Other Plan
+description: A second manifest, so a cross-plan reference has something real to resolve against.
+default_repository: other/owner-repo
+waves:
+- id: wave-1
+  name: Wave One
+tracks:
+- id: track-1
+  name: Track One
+  wave: wave-1
+items:
+- id: foreign-ready
+  title: A foreign item whose pull request is out of draft
+  branch: foreign-ready
+  pull_request_number: 91
+  track: track-1
+  status: in_progress
+- id: foreign-draft
+  title: A foreign item whose pull request is still a draft
+  branch: foreign-draft
+  pull_request_number: 92
+  track: track-1
+  status: in_progress
+- id: foreign-done
+  title: A foreign item that has landed
+  branch: foreign-done
+  track: track-1
+  status: done
+- id: foreign-not-started
+  title: A foreign item nobody has begun
+  branch: foreign-not-started
+  track: track-1
+  status: not_started
+- id: foreign-depending-back
+  title: A foreign item that depends on the plan under validation
+  branch: foreign-depending-back
+  track: track-1
+  status: not_started
+  depends_on:
+  - test-plan/a
