@@ -709,8 +709,8 @@ def scene_of(arguments: RecordingArguments) -> Iterator[MontessoriWorldBuilder]:
 
 def episode_bag_recorder(parent_directory: Optional[str] = None) -> RosbagRecorder:
     """
-    The recorder of an episode's bag: the run's topics, keeping one camera frame in :dat
-    a:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`.
+    The recorder of an episode's bag: the run's topics, keeping one camera frame in
+    :data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`.
 
     Imported here rather than at the top, so a run that records no bag needs no ROS.
 
