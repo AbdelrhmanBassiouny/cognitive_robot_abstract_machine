@@ -31,6 +31,7 @@ from experiments.montessori.perception.scene_source import (
     RepeatedLook,
 )
 from experiments.montessori.perception.surfaces import WorkspaceSurface
+from experiments.montessori.pieces import KnownPieceSet
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShape,
@@ -58,6 +59,12 @@ BOARD_SEARCH_PERIOD_SECONDS = 1.0
 """
 How long is waited before looking for the described board again, while no board
 answering the description is in view.
+"""
+
+LOOKS_FOR_THE_BOARD = 30
+"""
+How many looks a camera watching the table is given to show the board before a run gives
+up on finding it.
 """
 
 # %% the board
@@ -96,7 +103,8 @@ def hold_board(
     reading the lid of the board the world holds, whichever way it came to hold it.
 
     :param world: The world the robot publishes.
-    :param look: The source to look through, whose pipeline is replaced.
+    :param look: The source to look through, which is handed the pipeline reading the
+        lid.
     :param described: The board on this table, as a look is asked for it.
     :param looks: How many looks are taken for the board before giving up -- one for a
         look that shows the whole scene at once, more for a camera whose first frames
@@ -117,8 +125,11 @@ def hold_board(
             time.sleep(period)
     if board is None:
         raise NoBoardInView(looks=looks)
-    look.pipeline = replace(
-        look.pipeline, lid=WorkspaceSurface.of(board, look.pipeline.reference_frame)
+    look.read_with(
+        replace(
+            look.pipeline,
+            lid=WorkspaceSurface.of(board, look.pipeline.reference_frame),
+        )
     )
     return board
 
@@ -182,9 +193,15 @@ class PiecePublisher:
     The world the robot publishes.
     """
 
-    published: int = field(init=False, default=0)
+    published: List[MontessoriShape] = field(init=False, default_factory=list)
     """
-    How many pieces have been stood, which is what gives each its own name.
+    Every piece this publisher has stood and not taken down again, in the order they
+    were stood.
+    """
+
+    stood: int = field(init=False, default=0)
+    """
+    How many pieces have ever been stood, which is what gives each its own name.
     """
 
     def publish(
@@ -204,6 +221,17 @@ class PiecePublisher:
             if shape.supporting_surface == resting_on
         ]
 
+    def take_down(self) -> None:
+        """
+        Take every piece this publisher stood out of the world again, so a fresh look
+        can stand the pieces as it finds them.
+        """
+        with self.world.modify_world():
+            for piece in self.published:
+                self.world.remove_semantic_annotation(piece)
+                self.world.remove_kinematic_structure_entity(piece.root)
+        self.published = []
+
     def publish_piece(self, shape: DetectedMontessoriShape) -> MontessoriShape:
         """
         Stand one piece where a look saw it.
@@ -211,8 +239,8 @@ class PiecePublisher:
         :param shape: The piece as the look found it.
         :return: The piece as the published world now holds it.
         """
-        name = PrefixedName(f"{shape.category}_{self.published}", PUBLISHED_PREFIX)
-        self.published += 1
+        name = PrefixedName(f"{shape.category}_{self.stood}", PUBLISHED_PREFIX)
+        self.stood += 1
         known = shape.hypothesis.piece_of(shape.category)
         body = Body.from_shape_collection(name, ShapeCollection([piece_mesh(known)]))
         seen_at = self.world.transform(shape.pose, self.world.root).to_position()
@@ -232,4 +260,125 @@ class PiecePublisher:
             )
             piece = MONTESSORI_SHAPE_CLASSES[shape.category](name=name, root=body)
             self.world.add_semantic_annotation(piece)
+        self.published.append(piece)
         return piece
+
+
+# %% the scene a look stands
+
+
+@dataclass
+class PerceivedScene:
+    """
+    The Montessori scene as the camera finds it, stood in the world the robot publishes.
+
+    That world holds the robot and its table; the board and the loose pieces are stood
+    in it by looking. Every look stands the pieces afresh, so a scene perceived again
+    after the table was changed holds the pieces where they stand now.
+    """
+
+    world: World
+    """
+    The world the robot publishes, and the board and pieces are stood in.
+    """
+
+    look: RepeatedLook
+    """
+    The camera, as something a look is taken through.
+
+    Its pipeline is handed one reading the board's lid once the world holds the board.
+    """
+
+    described_board: DescribedBoard
+    """
+    The board on this table, as a look is asked for it.
+    """
+
+    looks_for_board: int = 1
+    """
+    How many looks are taken for the board before giving up, one every
+    :attr:`board_search_period` seconds.
+
+    One for a look that shows the whole scene at once; more for a camera whose first
+    frames may not show the board yet.
+    """
+
+    board_search_period: float = BOARD_SEARCH_PERIOD_SECONDS
+    """
+    Seconds between two looks for the board.
+    """
+
+    board: ShapeSortingBoard = field(init=False)
+    """
+    The board as the world holds it, once :meth:`perceive` has run.
+    """
+
+    pieces: List[MontessoriShape] = field(init=False, default_factory=list)
+    """
+    The pieces the last look put on the table, as the world holds them.
+    """
+
+    _publisher: PiecePublisher = field(init=False)
+    """
+    What stands the pieces, and takes them down again before the next look.
+    """
+
+    def __post_init__(self) -> None:
+        self._publisher = PiecePublisher(world=self.world)
+
+    @property
+    def piece_set(self) -> KnownPieceSet:
+        """
+        The set of loose pieces the look is told stands on the table.
+        """
+        return self.look.pipeline.pieces
+
+    @property
+    def table_height(self) -> float:
+        """
+        How high the surface the pieces rest on stands, in the world root frame.
+        """
+        return self.look.pipeline.table.height
+
+    def perceive(self) -> None:
+        """
+        Have the world hold the board and the pieces on the table as the camera finds
+        them now.
+
+        The pieces an earlier look stood are taken down first, so the look is not told
+        to expect them where they stood; the board is then looked for by its description
+        and stood where it was found unless the world already holds one; and once the
+        pipeline is handed the board's lid, one look stands every piece resting on the
+        bare table.
+
+        :raises NoBoardInView: If the world holds no board and none is in view.
+        """
+        self._publisher.take_down()
+        self.board = hold_board(
+            self.world,
+            self.look,
+            self.described_board,
+            looks=self.looks_for_board,
+            period=self.board_search_period,
+        )
+        self.pieces = self._publisher.publish(
+            self.look.scene(), resting_on=self.look.pipeline.table.name
+        )
+        logger.info(
+            "Perceived %s and %d piece(s) on the table: %s.",
+            self.board.name,
+            len(self.pieces),
+            ", ".join(self.describe(piece) for piece in self.pieces),
+        )
+
+    @staticmethod
+    def describe(piece: MontessoriShape) -> str:
+        """
+        :param piece: A piece the world holds.
+        :return: Its kind and where it stands, for a log line.
+        """
+        position = piece.root.global_transform.to_position()
+        return (
+            f"{piece.shape_category} at ({float(position.x):.3f}, "
+            f"{float(position.y):.3f})"
+        )

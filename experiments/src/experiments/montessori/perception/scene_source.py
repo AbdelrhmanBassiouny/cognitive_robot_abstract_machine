@@ -71,6 +71,14 @@ class RepeatedLook(MontessoriSceneSource):
     def reference_frame(self) -> Optional[KinematicStructureEntity]:
         return self.pipeline.reference_frame
 
+    def read_with(self, pipeline: MontessoriPerceptionPipeline) -> None:
+        """
+        Take every later look through the given pipeline.
+
+        :param pipeline: What takes the looks from now on.
+        """
+        self.pipeline = pipeline
+
 
 @dataclass
 class FixedScene(MontessoriSceneSource):

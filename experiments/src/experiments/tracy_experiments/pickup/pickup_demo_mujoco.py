@@ -49,6 +49,7 @@ from experiments.montessori.perception.overlay import CameraView, DetectionOverl
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import lab_board
 from experiments.montessori.perception.scene_request import SceneRequest
+from experiments.montessori.perception.scene_publishing import PerceivedScene
 from experiments.montessori.perception.scene_source import RepeatedLook
 from experiments.montessori.perception.simulated_camera import (
     CAMERA_T_OPTICAL,
@@ -768,9 +769,9 @@ class SimulatedPickupDemo:
             self.lab.belief, self.lab.believed_robot, evaluate_conditions=False
         )
         self.sorting = PerceivedSorting(
-            world=self.lab.belief,
-            look=self.look,
-            described_board=lab_board(),
+            scene=PerceivedScene(
+                world=self.lab.belief, look=self.look, described_board=lab_board()
+            ),
             sorter=MujocoSortingRig(
                 simulation=simulation,
                 actuators=self.lab.actuators,

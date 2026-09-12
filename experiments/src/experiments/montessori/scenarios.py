@@ -2,19 +2,22 @@
 The Montessori sorting scenes, and the scripted runs over them, as instances of the
 scenario domain model.
 
-A scene is a :class:`PieceLayout` — which pieces stand on the table, where, and turned
-how far — and a run is what is then done to it. The two compose: every run here takes a
-layout, so a random scene and a near-ambiguous one are the same four scripts over
-different scenes rather than eight scenarios. What the layout stands its pieces in is a
-:class:`MontessoriWorldBuilder` the scenario is given, so the same scripts run on the
-board this package builds and on the one a demo brings with it.
+A scene is a :class:`Layout` — which pieces stand on the table, where, and turned how
+far, whether stated as a :class:`PieceLayout` or read off the scene as it was found
+(:class:`LayoutAsFound`) — and a run is what is then done to it. The two compose: every
+run here takes a layout, so a random scene and a near-ambiguous one are the same four
+scripts over different scenes rather than eight scenarios. What the layout stands its
+pieces in is a :class:`MontessoriWorldBuilder` the scenario is given, so the same
+scripts run on the board this package builds, on the one a demo brings with it, and on
+the one the robot's own camera finds.
 
-Every run is carried in MuJoCo (:class:`SimulatedScene`), and what a step does it does
-through the simulation: a scene comes to rest because gravity settles it, a piece is
-shoved because a body runs into it, and a piece goes through a hole because it falls
-through it. What the robot does it does through coraplex's own actions, which giskard
-executes as motions. What a goal then reads it reads with the twin's own predicates
-rather than by measuring the scene itself.
+A simulated run is carried in MuJoCo (:class:`SimulatedScene`), and what a step does it
+does through the simulation: a scene comes to rest because gravity settles it, a piece
+is shoved because a body runs into it, and a piece goes through a hole because it falls
+through it. A run on the robot is carried by nothing (:class:`RealScene`): the scene
+runs itself, and what changes it is the person at the table. What the robot does it does
+through coraplex's own actions, which giskard executes as motions. What a goal then
+reads it reads with the twin's own predicates rather than by measuring the scene itself.
 """
 
 from __future__ import annotations
@@ -56,6 +59,7 @@ from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import (
     ApproachDirection,
     Arms,
+    ExecutionType,
     VerticalAlignment,
 )
 from coraplex.datastructures.grasp import GraspDescription
@@ -71,14 +75,19 @@ from krrood.exceptions import DataclassException
 from experiments.montessori.exceptions import (
     HoleHasNoLandingRegionError,
     NoSuchPieceError,
+    RealRunCannotBeFilmed,
+    ScenarioRunsOnlyInSimulation,
+    SceneNotBuiltYet,
 )
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from experiments.montessori.perception.simulated_setup import perception_pipeline
 from experiments.montessori.pieces import (
+    FULL_SIZE_PIECES,
     KNOWN_PIECE_BY_CATEGORY,
     KNOWN_PIECES,
     KnownPiece,
+    KnownPieceSet,
 )
 from experiments.montessori.semantics import (
     MontessoriShape,
@@ -351,16 +360,90 @@ class PiecePlacement:
         return TABLE_TOP_Z + self.piece.height / 2
 
 
-@dataclass
-class PieceLayout:
+class Layout(ABC):
     """
-    Which pieces a scene holds and where each of them stands.
+    How the loose pieces come to stand in a scene: stated in advance, or read off the
+    scene as it was built.
+    """
+
+    @abstractmethod
+    def stand_in(self, world: World, builder: MontessoriWorldBuilder) -> PieceLayout:
+        """
+        Have the pieces stand in a freshly built scene as this layout says, and say
+        where each of them then stands.
+
+        :param world: The scene, as the builder built it.
+        :param builder: What built the scene, which knows the table its pieces rest on
+            and the set they are drawn from.
+        :return: Where every piece of the scene stands, and how far it is turned.
+        """
+
+
+@dataclass
+class PieceLayout(Layout):
+    """
+    Which pieces a scene holds and where each of them stands, stated in advance.
     """
 
     placements: List[PiecePlacement]
     """
     One placement per piece the scene holds, in the order the layout drew them.
     """
+
+    @classmethod
+    def read_from(cls, world: World, pieces: KnownPieceSet) -> PieceLayout:
+        """
+        The layout a scene already stands in: one placement per loose piece of the set
+        the world holds, where it stands and how far it is turned, in the order the
+        world holds them.
+
+        A loose shape of a kind the set does not know is no piece of this layout: a
+        layout says where the set's pieces stand, and such a shape is left standing
+        where it is.
+
+        :param world: The scene to read.
+        :param pieces: The set the scene's pieces belong to.
+        """
+        placements: List[PiecePlacement] = []
+        for shape in world.get_semantic_annotations_by_type(MontessoriShape):
+            if shape.shape_category not in pieces.by_category:
+                continue
+            stands_at = shape.root.global_transform
+            position = stands_at.to_position()
+            _, _, yaw = stands_at.to_rotation_matrix().to_rpy()
+            placements.append(
+                PiecePlacement(
+                    piece=pieces.by_category[shape.shape_category],
+                    x=float(position.x),
+                    y=float(position.y),
+                    yaw=float(yaw),
+                )
+            )
+        return cls(placements=placements)
+
+    def stand_in(self, world: World, builder: MontessoriWorldBuilder) -> PieceLayout:
+        """
+        Take out every loose piece this layout does not stand, so a partial scene really
+        holds two or three pieces rather than the whole set with some of them tidied
+        away, and move each remaining piece to its placement, resting on the table.
+
+        :param world: The scene, as the builder built it.
+        :param builder: What built the scene, whose table the pieces rest on.
+        :return: This layout, which is where the pieces now stand.
+        """
+        scene = SortingScene(world)
+        for shape in list(world.get_semantic_annotations_by_type(MontessoriShape)):
+            if shape.shape_category in self.categories:
+                continue
+            with world.modify_world():
+                world.remove_semantic_annotation(shape)
+                world.remove_kinematic_structure_entity(shape.root)
+        for placement in self.placements:
+            body = scene.body_of(placement.piece.category)
+            scene.stand_the_piece_as_placed(
+                placement, resting_height=builder.resting_height_of(body)
+            )
+        return self
 
     @classmethod
     def randomized(cls, seed: int, area: LayoutArea) -> PieceLayout:
@@ -543,6 +626,28 @@ class PieceLayout:
         )
 
 
+@dataclass
+class LayoutAsFound(Layout):
+    """
+    The pieces stand wherever the scene already has them.
+
+    The layout of a scene whose pieces nobody here stands — a table the robot's camera
+    looked at, or a scene built with its own row of pieces — read off the scene once it
+    is built, so a goal that asks whether a piece still stands where it did has
+    somewhere to read that from.
+    """
+
+    def stand_in(self, world: World, builder: MontessoriWorldBuilder) -> PieceLayout:
+        """
+        Leave every piece where it stands and read off where that is.
+
+        :param world: The scene, as the builder built it.
+        :param builder: What built the scene, whose set the pieces belong to.
+        :return: Where every piece stands.
+        """
+        return PieceLayout.read_from(world, builder.piece_set)
+
+
 # %% reading the scene back out of the world a trial runs in
 
 
@@ -723,12 +828,62 @@ class SortingScene:
         :param position: Where to put it, in the world root frame.
         """
         body = self.body_of(category)
-        body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=float(position.x),
-            y=float(position.y),
-            z=float(position.z),
-            reference_frame=self.world.root,
+        self._stand(
+            body,
+            HomogeneousTransformationMatrix.from_point_rotation_matrix(
+                point=Point3(
+                    float(position.x),
+                    float(position.y),
+                    float(position.z),
+                    reference_frame=self.world.root,
+                ),
+                rotation_matrix=body.global_transform.to_rotation_matrix(),
+                reference_frame=self.world.root,
+            ),
         )
+
+    def stand_the_piece_as_placed(
+        self, placement: PiecePlacement, resting_height: float
+    ) -> None:
+        """
+        Put a loose piece where a placement says, turned as it says, resting on the
+        table.
+
+        :param placement: Where the piece stands and how far it is turned.
+        :param resting_height: The height the piece's own origin sits at when it rests
+            on the table, in the world root frame.
+        """
+        self._stand(
+            self.body_of(placement.piece.category),
+            HomogeneousTransformationMatrix.from_xyz_rpy(
+                x=placement.x,
+                y=placement.y,
+                z=resting_height,
+                yaw=placement.yaw,
+                reference_frame=self.world.root,
+            ),
+        )
+
+    def _stand(self, body: Body, root_T_body: HomogeneousTransformationMatrix) -> None:
+        """
+        Put a loose piece's body somewhere, whichever connection it hangs from.
+
+        A piece on a free connection is moved by its degrees of freedom; a piece fixed
+        where a look stood it can only be moved by restating where it is fixed, which
+        is a change to the world's model.
+
+        :param body: The piece's body.
+        :param root_T_body: Where the body is to stand, in the world root frame.
+        """
+        connection = body.parent_connection
+        if connection.dofs:
+            connection.origin = root_T_body
+            return
+        parent_T_body = self.world.transform(root_T_body, connection.parent)
+        with self.world.modify_world():
+            connection.parent_T_connection_expression = (
+                parent_T_body @ connection.connection_T_child_expression.inverse()
+            )
 
     def is_held(self, category: MontessoriShapeCategory) -> bool:
         """
@@ -1100,8 +1255,53 @@ class _LetGoOfTheSimulationCallback(ModelChangeCallback):
         self.scene.stop()
 
 
+class ScenePhysics(ABC):
+    """
+    The physics the scene of one trial runs under, which is what carries it from one
+    step to the next.
+    """
+
+    @abstractmethod
+    def settle(self) -> None:
+        """
+        Let the scene come to rest.
+        """
+
+    @abstractmethod
+    def stop(self) -> None:
+        """
+        Stop carrying the scene, so the world is free to change under it.
+        """
+
+
 @dataclass
-class SimulatedScene:
+class RealScene(ScenePhysics):
+    """
+    The scene of a trial on the robot, which the real world carries by itself.
+
+    Nothing here settles or advances it: a real scene is at rest by the time a step is
+    performed on it, since the person who changed it says so before the run goes on,
+    and there is no simulation to let go of.
+    """
+
+    world: World
+    """
+    The world the robot publishes, which the trial is running in.
+    """
+
+    def settle(self) -> None:
+        """
+        A real scene is already at rest.
+        """
+
+    def stop(self) -> None:
+        """
+        Nothing carries a real scene, so there is nothing to stop.
+        """
+
+
+@dataclass
+class SimulatedScene(ScenePhysics):
     """
     The MuJoCo simulation carrying the scene of one trial.
 
@@ -1252,9 +1452,9 @@ class ScenePhysicsStep(ScenarioStep[World], ABC):
     A step of a scripted run, performed on a scene that is running under physics.
     """
 
-    scene: SimulatedScene = field(kw_only=True)
+    scene: ScenePhysics = field(kw_only=True)
     """
-    The simulation carrying the scene this step acts on.
+    The physics carrying the scene this step acts on.
     """
 
 
@@ -1352,6 +1552,11 @@ class PushThePiece(ScenePhysicsStep):
     category: MontessoriShapeCategory
     """
     The shape of the piece to push.
+    """
+
+    scene: SimulatedScene = field(kw_only=True)
+    """
+    The simulation carrying the scene: the pusher is a body only a simulation drives.
     """
 
     def perform(self, world: World) -> None:
@@ -1795,16 +2000,18 @@ class MontessoriWorldBuilder(ABC):
     """
 
     @abstractmethod
-    def build(self, robot_type: Type[AbstractRobot]) -> MontessoriWorld:
+    def build(self, robot_type: Type[AbstractRobot]) -> World:
         """
         Build a fresh scene with a robot of the given type mounted in it.
 
-        Asked once per trial rather than a built scene being handed round, so two trials
-        of one scenario are two scenes. The loose pieces have to be movable
+        Asked once per trial rather than a built scene being handed round, so every
+        trial starts from a scene stood for it -- built anew, or looked at anew. The
+        loose pieces of a simulated scene have to be movable
         (:attr:`~experiments.montessori.world.MontessoriWorld.shapes_are_movable`),
         since the runs pick them up.
 
         :param robot_type: The robot the scenario runs on, as its own binding names it.
+        :return: The world holding the scene.
         """
 
     @property
@@ -1813,6 +2020,13 @@ class MontessoriWorldBuilder(ABC):
         """
         The height of the surface this scene's loose pieces stand on, in the world root
         frame.
+        """
+
+    @property
+    @abstractmethod
+    def piece_set(self) -> KnownPieceSet:
+        """
+        The set the loose pieces of this scene belong to.
         """
 
     def resting_height_of(self, body: Body) -> float:
@@ -1843,7 +2057,7 @@ class BoardOnItsOwnTable(MontessoriWorldBuilder):
     Where the robot is bolted in the scene.
     """
 
-    def build(self, robot_type: Type[AbstractRobot]) -> MontessoriWorld:
+    def build(self, robot_type: Type[AbstractRobot]) -> World:
         montessori = MontessoriWorld(shapes_are_movable=True)
         montessori.mount_stationary_robot(
             robot_type,
@@ -1851,11 +2065,15 @@ class BoardOnItsOwnTable(MontessoriWorldBuilder):
             self.robot.position,
             self.robot.yaw,
         )
-        return montessori
+        return montessori.world
 
     @property
     def table_top_z(self) -> float:
         return TABLE_TOP_Z
+
+    @property
+    def piece_set(self) -> KnownPieceSet:
+        return FULL_SIZE_PIECES
 
 
 # %% the scenarios themselves
@@ -1873,9 +2091,18 @@ class MontessoriSortingScenario(
     scene and what its goal then asks about it.
     """
 
-    layout: PieceLayout = field(kw_only=True)
+    runs_on_the_robot: ClassVar[bool] = False
     """
-    Which pieces stand in the scene and where.
+    Whether this scenario's script can be performed on the real scene.
+
+    A script whose steps drive the scene through the simulation — a pusher on a rail,
+    a grasp the simulated fingers close — has nothing to perform on the robot, and says
+    so here rather than failing at the step.
+    """
+
+    layout: Layout = field(kw_only=True)
+    """
+    How the pieces come to stand in each trial's scene.
     """
 
     world_builder: MontessoriWorldBuilder = field(kw_only=True)
@@ -1885,7 +2112,8 @@ class MontessoriSortingScenario(
 
     filmed: bool = field(kw_only=True, default=False)
     """
-    Whether a video of the run is made while it is performed.
+    Whether a video of the run is made while it is performed, which only a simulated
+    run can be.
     """
 
     headless: bool = field(kw_only=True, default=True)
@@ -1893,7 +2121,7 @@ class MontessoriSortingScenario(
     Whether the run's simulation goes without a viewer window.
     """
 
-    simulation: Optional[SimulatedScene] = field(init=False, default=None)
+    physics: Optional[ScenePhysics] = field(init=False, default=None)
     """
     The physics carrying the world this scenario built most recently.
 
@@ -1902,20 +2130,55 @@ class MontessoriSortingScenario(
     compiles the scene once, so everything a run acts with has to be in it by then.
     """
 
+    _starting_layout: Optional[PieceLayout] = field(init=False, default=None)
+    """
+    Where the pieces stood when the world built most recently was built, or None
+    before one has been.
+    """
+
+    def __post_init__(self) -> None:
+        if self.execution_type is not ExecutionType.REAL:
+            return
+        if not self.runs_on_the_robot:
+            raise ScenarioRunsOnlyInSimulation(scenario_name=self.name)
+        if self.filmed:
+            raise RealRunCannotBeFilmed(scenario_name=self.name)
+
+    @property
+    def starting_layout(self) -> PieceLayout:
+        """
+        Where every piece stood when the trial in the world built most recently began,
+        which is what a goal asking whether the scene changed compares against.
+
+        :raises SceneNotBuiltYet: Before any world has been built.
+        """
+        if self._starting_layout is None:
+            raise SceneNotBuiltYet(scenario_name=self.name)
+        return self._starting_layout
+
     def build_world(self) -> World:
-        if self.simulation is not None:
-            self.simulation.stop()
-        montessori = self.world_builder.build(self.robot_type)
-        self._keep_only_the_layouts_pieces(montessori)
-        self._stand_the_pieces_where_the_layout_says(montessori)
-        self.add_what_the_script_acts_with(montessori)
-        montessori.world.update_forward_kinematics()
-        self.simulation = SimulatedScene(
-            world=montessori.world,
-            recording=(SceneRecording(world=montessori.world) if self.filmed else None),
+        if self.physics is not None:
+            self.physics.stop()
+        world = self.world_builder.build(self.robot_type)
+        self._starting_layout = self.layout.stand_in(world, self.world_builder)
+        self.add_what_the_script_acts_with(world)
+        world.update_forward_kinematics()
+        self.physics = self._physics_carrying(world)
+        return world
+
+    def _physics_carrying(self, world: World) -> ScenePhysics:
+        """
+        What carries the scene through this run: a simulation, or the real world.
+
+        :param world: The freshly built scene.
+        """
+        if self.execution_type is ExecutionType.REAL:
+            return RealScene(world=world)
+        return SimulatedScene(
+            world=world,
+            recording=(SceneRecording(world=world) if self.filmed else None),
             headless=self.headless,
         )
-        return montessori.world
 
     @property
     def acted_on_category(self) -> Optional[MontessoriShapeCategory]:
@@ -1931,56 +2194,20 @@ class MontessoriSortingScenario(
 
         :raises TrialNotFilmedError: If that trial was not filmed.
         """
-        if self.simulation is None or self.simulation.recording is None:
+        if (
+            not isinstance(self.physics, SimulatedScene)
+            or self.physics.recording is None
+        ):
             raise TrialNotFilmedError(scenario_name=self.name)
-        return self.simulation.recording.video()
+        return self.physics.recording.video()
 
-    def add_what_the_script_acts_with(self, montessori: MontessoriWorld) -> None:
+    def add_what_the_script_acts_with(self, world: World) -> None:
         """
         Put anything this scenario's script needs into the scene, beyond the board, the
         pieces and the robot every scenario here has.
 
-        :param montessori: The scene being built.
+        :param world: The scene being built.
         """
-
-    def _keep_only_the_layouts_pieces(self, montessori: MontessoriWorld) -> None:
-        """
-        Take out every loose piece the layout does not stand, so a partial scene really
-        holds two or three pieces rather than the whole set with some of them tidied
-        away.
-
-        :param montessori: The freshly built scene.
-        """
-        wanted = self.layout.categories
-        for shape in list(
-            montessori.world.get_semantic_annotations_by_type(MontessoriShape)
-        ):
-            if shape.shape_category in wanted:
-                continue
-            with montessori.world.modify_world():
-                montessori.world.remove_semantic_annotation(shape)
-                montessori.world.remove_kinematic_structure_entity(shape.root)
-
-    def _stand_the_pieces_where_the_layout_says(
-        self, montessori: MontessoriWorld
-    ) -> None:
-        """
-        Move each remaining piece to its placement, resting on the table.
-
-        :param montessori: The freshly built scene.
-        """
-        scene = SortingScene(montessori.world)
-        for placement in self.layout.placements:
-            body = scene.body_of(placement.piece.category)
-            body.parent_connection.origin = (
-                HomogeneousTransformationMatrix.from_xyz_rpy(
-                    x=placement.x,
-                    y=placement.y,
-                    z=self.world_builder.resting_height_of(body),
-                    yaw=placement.yaw,
-                    reference_frame=montessori.world.root,
-                )
-            )
 
 
 @dataclass
@@ -1993,18 +2220,20 @@ class TheSceneStandsStill(
 
     name: ClassVar[str] = "the scene stands still"
 
+    runs_on_the_robot: ClassVar[bool] = True
+
     def goal(self, world: World) -> Goal[World]:
         """
-        Success is the scene being exactly the one the layout described.
+        Success is the scene being exactly the one the trial started in.
 
         :param world: The world the trial is running in.
         """
-        return TheSceneIsUndisturbed(world=world, layout=self.layout)
+        return TheSceneIsUndisturbed(world=world, layout=self.starting_layout)
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
-            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.simulation),
-            AskTheQuestion(name=SortingStep.ANSWER, scene=self.simulation),
+            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.physics),
+            AskTheQuestion(name=SortingStep.ANSWER, scene=self.physics),
         ]
 
 
@@ -2037,18 +2266,18 @@ class RobotSortsAPiece(
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
-            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.simulation),
+            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.physics),
             PickThePieceUp(
                 name=SortingStep.PICK_UP,
                 category=self.sorted_category,
-                scene=self.simulation,
+                scene=self.physics,
             ),
             PutThePieceInItsHole(
                 name=SortingStep.PUT_DOWN,
                 category=self.sorted_category,
-                scene=self.simulation,
+                scene=self.physics,
             ),
-            AskTheQuestion(name=SortingStep.ANSWER, scene=self.simulation),
+            AskTheQuestion(name=SortingStep.ANSWER, scene=self.physics),
         ]
 
 
@@ -2072,13 +2301,12 @@ class PiecePushedWhileTheRobotIsIdle(
     def acted_on_category(self) -> Optional[MontessoriShapeCategory]:
         return self.pushed_category
 
-    def add_what_the_script_acts_with(self, montessori: MontessoriWorld) -> None:
+    def add_what_the_script_acts_with(self, world: World) -> None:
         """
         Stand the pusher on its rail beside the piece it is going to shove.
 
-        :param montessori: The scene being built.
+        :param world: The scene being built.
         """
-        world = montessori.world
         scene = SortingScene(world)
         stands_at = scene.position_of(self.pushed_category)
         reach = KNOWN_PIECE_BY_CATEGORY[self.pushed_category].radius
@@ -2121,18 +2349,18 @@ class PiecePushedWhileTheRobotIsIdle(
         :param world: The world the trial is running in.
         """
         return ThePieceMovedAndTheRobotDidNot(
-            world=world, category=self.pushed_category, layout=self.layout
+            world=world, category=self.pushed_category, layout=self.starting_layout
         )
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
-            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.simulation),
+            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.physics),
             PushThePiece(
                 name=SortingStep.PUSH,
                 category=self.pushed_category,
-                scene=self.simulation,
+                scene=self.physics,
             ),
-            AskTheQuestion(name=SortingStep.ANSWER, scene=self.simulation),
+            AskTheQuestion(name=SortingStep.ANSWER, scene=self.physics),
         ]
 
 
@@ -2166,13 +2394,13 @@ class PieceHeldWhileTheQuestionIsAsked(
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
-            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.simulation),
+            LetTheSceneSettle(name=SortingStep.SETTLE, scene=self.physics),
             PickThePieceUp(
                 name=SortingStep.PICK_UP,
                 category=self.held_category,
-                scene=self.simulation,
+                scene=self.physics,
             ),
-            AskTheQuestion(name=SortingStep.ANSWER, scene=self.simulation),
+            AskTheQuestion(name=SortingStep.ANSWER, scene=self.physics),
         ]
 
 

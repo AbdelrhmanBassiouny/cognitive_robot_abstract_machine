@@ -8,6 +8,7 @@ ROS but no camera and no robot.
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from experiments.montessori.perception.camera import (
     CameraIntrinsics,
     CameraTopic,
     DepthQuantization,
+    RgbdFrame,
 )
 from experiments.montessori.perception.capture_from_camera import (
     LIVE_CAMERA_TAKE,
@@ -38,7 +40,9 @@ from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.live_camera import LiveCamera
 from experiments.montessori.perception.node import MontessoriPerceptionNode
+from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import perception_pipeline
+from experiments.montessori.perception.scene_request import SceneRequest
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -367,3 +371,86 @@ def test_the_node_reports_how_far_the_stated_pose_is_off_on_its_first_placed_loo
     assert perception.camera_pose_error is error
     assert not error.within_tolerance
     assert error.tilt == pytest.approx(LEAN, abs=0.5)
+
+
+# %% the newest result is one taken through the pipeline the node reads with
+
+A_LOOK = "tracy_pickup_demo"
+"""
+A capture any pipeline of the recorded setup can look at.
+"""
+
+A_SHORT_WAIT = 0.1
+"""
+How long a test waits for a result: long enough for one the node already holds, and
+short enough not to hold up a test for one it expects the node not to have.
+"""
+
+
+@dataclass
+class _PipelineHandingOverAnotherMidLook(MontessoriPerceptionPipeline):
+    """
+    A pipeline that, while it takes a look, hands the node another pipeline to read
+    with -- what a board being held while a look is under way does.
+    """
+
+    node: MontessoriPerceptionNode = field(kw_only=True)
+    """
+    The node to hand the other pipeline to.
+    """
+
+    handed_over: MontessoriPerceptionPipeline = field(kw_only=True)
+    """
+    The pipeline handed over.
+    """
+
+    def detect(self, frame: RgbdFrame, request: SceneRequest = SceneRequest()):
+        self.node.read_with(self.handed_over)
+        return super().detect(frame, request)
+
+
+def test_a_look_taken_is_the_newest_result_the_node_serves(node: Node):
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+    frame = SceneCapture.load(A_LOOK).to_frame()
+
+    seen = perception.look_at(frame)
+
+    assert perception.wait_for_scene(A_SHORT_WAIT) is seen
+    assert perception.wait_for_frame(A_SHORT_WAIT) is frame
+
+
+def test_a_node_handed_another_pipeline_forgets_the_result_of_the_old_one(node: Node):
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+    perception.look_at(SceneCapture.load(A_LOOK).to_frame())
+    lidless = replace(perception.pipeline, lid=None)
+
+    perception.read_with(lidless)
+
+    assert perception.pipeline is lidless
+    with pytest.raises(NoSceneAvailable):
+        perception.wait_for_scene(A_SHORT_WAIT)
+    with pytest.raises(NoSceneAvailable):
+        perception.wait_for_frame(A_SHORT_WAIT)
+
+
+def test_a_look_begun_through_a_pipeline_since_replaced_is_not_kept(node: Node):
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+    handed_over = perception_pipeline()
+    read_with_now = perception.pipeline
+    perception.read_with(
+        _PipelineHandingOverAnotherMidLook(
+            table=read_with_now.table,
+            lid=read_with_now.lid,
+            reference_frame=read_with_now.reference_frame,
+            world=read_with_now.world,
+            pieces=read_with_now.pieces,
+            node=perception,
+            handed_over=handed_over,
+        )
+    )
+
+    perception.look_at(SceneCapture.load(A_LOOK).to_frame())
+
+    assert perception.pipeline is handed_over
+    with pytest.raises(NoSceneAvailable):
+        perception.wait_for_scene(A_SHORT_WAIT)
