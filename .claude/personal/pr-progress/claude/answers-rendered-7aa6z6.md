@@ -41,10 +41,21 @@ data" critique + the tighter-layout feedback list), commits d6647fcb, 9a79a38b:
        of the run's own copy. TimedFramesFile reads one frame at a time;
        TrialArtifacts.camera returns it; FramesByMoment ABC.
 8. [x] 49cb3de - unit tests for SamePiece/kind_of.
-9. [ ] IN PROGRESS: both demo runs relaunched sequentially (scratchpad run3/,
-       ~16 min each + cards). Then: send the two layered cards to the user,
-       run test_tracy_pickup_demo_mujoco.py fully, push, redraft, update the
-       PR description (scratchpad pr_body.md already drafted; fill "Verified").
+9. [x] e4a17f0 - first real card showed two defects: PoseChange.around read
+       the object's whole life (pick-up drawn ending inside the board) and the
+       camera frames were +-1 wall-clock s (identical in a 10x-slow sim). Now
+       MotionStretch (Translation..StopTranslation of the object, the one the
+       event falls in / nearest) drives the ghost+dots+robot_at(over.end) and
+       the camera frames (FramesByMoment.last_at_or_before / first_at_or_after
+       -> TimedFrame with its moment; captions + chart use the real instants).
+       EITHER_SIDE removed. PickUpActionMujoco/PlaceActionMujoco now
+       ManipulatesBodies so the plan chart picks the accounting item out.
+10. [ ] IN PROGRESS: both demo runs relaunched (scratchpad run4/, ~16 min each
+       + cards; the sim runs ~10x slower than real time here with two films).
+       Then: send the two layered cards, run test_tracy_pickup_demo_mujoco.py
+       fully (alone - two demo processes would OOM the 15 GB sandbox), redraft,
+       update the PR description (scratchpad pr_body.md drafted; fill
+       "Verified").
 
 ## Outstanding / judgement calls (also in the PR description)
 
