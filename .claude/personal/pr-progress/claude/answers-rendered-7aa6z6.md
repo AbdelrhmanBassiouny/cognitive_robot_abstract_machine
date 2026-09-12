@@ -65,10 +65,14 @@ data" critique + the tighter-layout feedback list), commits d6647fcb, 9a79a38b:
        on StopTranslationEvent of the asked piece, else at the end);
        viewpoint_across(away_from=robot base); framed on subject+ghost+dots+
        boards (other pieces dropped from scene_around).
-12. [ ] IN PROGRESS: demo runs scratchpad run6/ (~35 min). Then: send both
-       layered cards, run test_tracy_pickup_demo_mujoco.py fully (alone),
-       redraft, update the PR description (pr_body.md drafted; fill
-       "Verified").
+12. [x] run6 picked_up card verified and sent to the user: asked 0.7 s after
+       the stop, frames at carry start/end, ghost+trail+piece from across the
+       move. Its one defect (rule names overlapping now the rules are close)
+       fixed in 6373bde: MarkedMoment.side (chart.Side), earlier name left.
+13. [ ] IN PROGRESS: shoved run of run6 drawing (old label code). Then:
+       send it, rerun BOTH demos for final PNGs (label fix), run
+       test_tracy_pickup_demo_mujoco.py fully (alone, after), redraft, update
+       the PR description (pr_body.md drafted; fill "Verified").
 
 ## Outstanding / judgement calls (also in the PR description)
 
