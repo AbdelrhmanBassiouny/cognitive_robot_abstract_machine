@@ -9,6 +9,7 @@ back off the rule that ran (see
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 
 from krrood.entity_query_language.factories import (
@@ -20,8 +21,19 @@ from krrood.entity_query_language.factories import (
     not_,
     variable,
 )
-from krrood.entity_query_language.predicate import symbolic_function
+from krrood.entity_query_language.predicate import (
+    RenderedFields,
+    SymbolicFunction,
+)
 from krrood.entity_query_language.query.query import Entity
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
+from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    FunctionVerbalizationTemplates,
+    Noun,
+)
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -36,35 +48,63 @@ from segmind.datastructures.events import (
     InsertionEvent,
 )
 
-# %% conditions the rules are stated with
+# %% the vocabulary the rules are stated in
 
 
-@symbolic_function
-def event_time_difference(
-    first_event: DetectionEvent, second_event: DetectionEvent
-) -> timedelta:
+@dataclass(eq=False)
+class TimeDifference(SymbolicFunction):
     """
     How far apart in time two events happened.
-
-    :param first_event: One of the two events.
-    :param second_event: The other one.
-    :return: The absolute difference between their timestamps.
     """
-    return abs(first_event.timestamp - second_event.timestamp)
+
+    first_event: DetectionEvent
+    """
+    One of the two events.
+    """
+
+    second_event: DetectionEvent
+    """
+    The other one.
+    """
+
+    def __call__(self) -> timedelta:
+        return abs(self.first_event.timestamp - self.second_event.timestamp)
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        :param fields: The rendered fragment for each field.
+        :return: The noun phrase *"the time difference between <first_event> and
+            <second_event>"*.
+        """
+        return FunctionVerbalizationTemplates.custom_relation(
+            cls, Prepositions.BETWEEN, fields["first_event"], fields["second_event"]
+        )
 
 
-@symbolic_function
-def objects_inserted_into(
-    containing_object: KinematicStructureEntity,
-) -> List[KinematicStructureEntity]:
+@dataclass(eq=False)
+class ObjectsInsertedInto(SymbolicFunction):
     """
     What an insertion says the tracked object ended up inside, in the list form the
     event states it in.
-
-    :param containing_object: The entity the tracked object came to be contained in.
-    :return: That entity alone, as a list.
     """
-    return [containing_object]
+
+    containing_object: KinematicStructureEntity
+    """
+    The entity the tracked object came to be contained in.
+    """
+
+    def __call__(self) -> List[KinematicStructureEntity]:
+        return [self.containing_object]
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        :param fields: The rendered fragment for each field.
+        :return: The noun phrase for the containing object itself -- the one-item list
+            it is stated in adds nothing to say.
+        """
+        return Noun(fields["containing_object"]).as_fragment()
 
 
 def interaction_event_detected_before(
@@ -133,7 +173,7 @@ def interaction_rule(
         )
         .where(
             secondary_event.tracked_object == primary_event.tracked_object,
-            event_time_difference(primary_event, secondary_event) <= shift_threshold,
+            TimeDifference(primary_event, secondary_event) <= shift_threshold,
             not_(
                 interaction_event_detected_before(
                     event_type, tracked_object, with_object, logged_events
@@ -174,7 +214,7 @@ def insertion_rule(
             inference(InsertionEvent)(
                 tracked_object=tracked_object,
                 with_object=with_object,
-                inserted_into_objects=objects_inserted_into(
+                inserted_into_objects=ObjectsInsertedInto(
                     containment_event.with_object
                 ),
                 through_hole=hole,
@@ -183,7 +223,7 @@ def insertion_rule(
         .where(
             hole.root == with_object,
             containment_event.tracked_object == tracked_object,
-            event_time_difference(contact_event, containment_event) <= shift_threshold,
+            TimeDifference(contact_event, containment_event) <= shift_threshold,
             not_(
                 interaction_event_detected_before(
                     InsertionEvent, tracked_object, with_object, logged_events

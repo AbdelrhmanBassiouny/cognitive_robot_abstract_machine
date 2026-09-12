@@ -16,7 +16,9 @@ import numpy as np
 import pytest
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from krrood.entity_query_language.explanation.explanation import explain_inference
+from krrood.entity_query_language.factories import a, set_of, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, Callable, List, Tuple, Type, TypeVar
 
 from segmind.datastructures.events import (
@@ -41,7 +43,11 @@ from segmind.detectors.coarse_event_detector_nodes import (
     PickUpDetector,
     PlacingDetector,
 )
-from segmind.detectors.rules import interaction_rule
+from segmind.detectors.rules import (
+    interaction_rule,
+    ObjectsInsertedInto,
+    TimeDifference,
+)
 from segmind.detectors.spatial_relation_detector_nodes import (
     ContainmentDetector,
     HoleContactDetector,
@@ -250,7 +256,7 @@ def test_the_pick_up_rule_states_the_conditions_it_satisfied(picked_up_milk):
     explanation = explain_inference(picked_up_milk.the_event_of(PickUpEvent))
     assert explanation.get_satisfied_conditions_as_string() == (
         "(LossOfSupportEvent.tracked_object == TranslationEvent.tracked_object)"
-        "\nAND (event_time_difference <= Literal(timedelta, ...))"
+        "\nAND (TimeDifference <= Literal(timedelta, ...))"
     )
 
 
@@ -258,7 +264,7 @@ def test_the_placing_rule_states_the_conditions_it_satisfied(placed_milk):
     explanation = explain_inference(placed_milk.the_event_of(PlacingEvent))
     assert explanation.get_satisfied_conditions_as_string() == (
         "(SupportEvent.tracked_object == StopTranslationEvent.tracked_object)"
-        "\nAND (event_time_difference <= Literal(timedelta, ...))"
+        "\nAND (TimeDifference <= Literal(timedelta, ...))"
     )
 
 
@@ -267,7 +273,7 @@ def test_the_insertion_rule_states_the_conditions_it_satisfied(inserted_shape):
     assert explanation.get_satisfied_conditions_as_string() == (
         "(Aperture.root == ContactEvent.with_object)"
         "\nAND (ContainmentEvent.tracked_object == ContactEvent.tracked_object)"
-        "\nAND (event_time_difference <= Literal(timedelta, ...))"
+        "\nAND (TimeDifference <= Literal(timedelta, ...))"
     )
 
 
@@ -320,16 +326,13 @@ def test_the_pick_up_rule_verbalizes_as_a_sentence(picked_up_milk):
     explanation = explain_inference(picked_up_milk.the_event_of(PickUpEvent))
     assert verbalize_expression(explanation.query_root) == (
         "If there's a LossOfSupportEvent whose tracked_object is the tracked_object "
-        "of a TranslationEvent, an event_time_difference, where the first_event of "
-        "the event_time_difference is the TranslationEvent, and the second_event of "
-        "the event_time_difference is the LossOfSupportEvent is at most "
-        "datetime.timedelta(seconds=15), not (there exists a PickUpEvent such that "
-        "its tracked_object is the tracked_object of the first_event of the "
-        "event_time_difference, and its with_object is the with_object of the "
-        "second_event of the event_time_difference), then there's a PickUpEvent "
-        "whose tracked_object is the tracked_object of the first_event of the "
-        "event_time_difference, and whose with_object is the with_object of the "
-        "second_event of the event_time_difference"
+        "of a TranslationEvent, the time difference between the TranslationEvent and "
+        "the LossOfSupportEvent is at most datetime.timedelta(seconds=15), not (there "
+        "exists a PickUpEvent such that its tracked_object is the tracked_object of "
+        "the TranslationEvent, and its with_object is the with_object of the "
+        "LossOfSupportEvent), then there's a PickUpEvent whose tracked_object is the "
+        "tracked_object of the TranslationEvent, and whose with_object is the "
+        "with_object of the LossOfSupportEvent"
     )
 
 
@@ -337,16 +340,13 @@ def test_the_placing_rule_verbalizes_as_a_sentence(placed_milk):
     explanation = explain_inference(placed_milk.the_event_of(PlacingEvent))
     assert verbalize_expression(explanation.query_root) == (
         "If there's a SupportEvent whose tracked_object is the tracked_object of a "
-        "StopTranslationEvent, an event_time_difference, where the first_event of "
-        "the event_time_difference is the StopTranslationEvent, and the "
-        "second_event of the event_time_difference is the SupportEvent is at most "
-        "datetime.timedelta(seconds=15), not (there exists a PlacingEvent such that "
-        "its tracked_object is the tracked_object of the first_event of the "
-        "event_time_difference, and its with_object is the with_object of the "
-        "second_event of the event_time_difference), then there's a PlacingEvent "
-        "whose tracked_object is the tracked_object of the first_event of the "
-        "event_time_difference, and whose with_object is the with_object of the "
-        "second_event of the event_time_difference"
+        "StopTranslationEvent, the time difference between the StopTranslationEvent "
+        "and the SupportEvent is at most datetime.timedelta(seconds=15), not (there "
+        "exists a PlacingEvent such that its tracked_object is the tracked_object of "
+        "the StopTranslationEvent, and its with_object is the with_object of the "
+        "SupportEvent), then there's a PlacingEvent whose tracked_object is the "
+        "tracked_object of the StopTranslationEvent, and whose with_object is the "
+        "with_object of the SupportEvent"
     )
 
 
@@ -355,20 +355,41 @@ def test_the_insertion_rule_verbalizes_as_a_sentence(inserted_shape):
     assert verbalize_expression(explanation.query_root) == (
         "If there's an Aperture whose root is the with_object of a ContactEvent, "
         "the tracked_object of a ContainmentEvent is the tracked_object of the "
-        "ContactEvent, an event_time_difference, where the first_event of the "
-        "event_time_difference is the ContactEvent, and the second_event of the "
-        "event_time_difference is the ContainmentEvent is at most "
-        "datetime.timedelta(seconds=15), not (there exists an InsertionEvent such "
-        "that its tracked_object is the tracked_object of the first_event of the "
-        "event_time_difference, and its with_object is the with_object of the "
-        "first_event of the event_time_difference), then there's an InsertionEvent "
-        "whose tracked_object is the tracked_object of the first_event of the "
-        "event_time_difference, whose with_object is the with_object of the "
-        "first_event of the event_time_difference, whose inserted_into_objects are "
-        "an objects_inserted_into, where the containing_object of the "
-        "objects_inserted_into is the with_object of the second_event of the "
-        "event_time_difference, and whose through_hole is the Aperture"
+        "ContactEvent, the time difference between the ContactEvent and the "
+        "ContainmentEvent is at most datetime.timedelta(seconds=15), not (there "
+        "exists an InsertionEvent such that its tracked_object is the tracked_object "
+        "of the ContactEvent, and its with_object is the with_object of the "
+        "ContactEvent), then there's an InsertionEvent whose tracked_object is the "
+        "tracked_object of the ContactEvent, whose with_object is the with_object of "
+        "the ContactEvent, whose inserted_into_objects are the with_object of the "
+        "ContainmentEvent, and whose through_hole is the Aperture"
     )
+
+
+# %% how the rules' own vocabulary reads
+
+
+def test_the_time_difference_between_two_events_reads_as_a_noun_phrase():
+    """
+    :class:`~segmind.detectors.rules.TimeDifference` names the gap between the two
+    events it is taken over, rather than spelling out which event each of its fields
+    holds.
+    """
+    time_difference = TimeDifference(
+        variable(TranslationEvent, []), variable(LossOfSupportEvent, [])
+    )
+    assert verbalize_expression(a(set_of(time_difference))) == (
+        "Find the time difference between a TranslationEvent and a LossOfSupportEvent"
+    )
+
+
+def test_the_objects_an_insertion_ends_in_read_as_the_containing_object():
+    """
+    :class:`~segmind.detectors.rules.ObjectsInsertedInto` names the containing object
+    itself: the one-item list the event states it in has nothing of its own to say.
+    """
+    objects_inserted_into = ObjectsInsertedInto(variable(Body, []))
+    assert verbalize_expression(a(set_of(objects_inserted_into))) == "Find a Body"
 
 
 # %% what the rule costs
