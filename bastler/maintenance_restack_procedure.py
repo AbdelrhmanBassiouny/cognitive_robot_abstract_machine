@@ -21,6 +21,7 @@ from bastler.maintenance_restack_steps import (
     IntegrateParent,
     PublishBranch,
     RefuseAnUnsafeMove,
+    ReportAParentThatIsGone,
     RestackStep,
     SkipBranchAlreadyCurrent,
     WithholdBranchStillConflicting,
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
 
 RESTACK_STEPS: tuple[RestackStep, ...] = (
     WithholdBranchStillConflicting(),
+    ReportAParentThatIsGone(),
     SkipBranchAlreadyCurrent(),
     IntegrateParent(),
     RefuseAnUnsafeMove(),
@@ -210,6 +212,9 @@ def restack(
                     branch=by_name[entry["branch"]],
                     parent=entry["parent"],
                     strategy=IntegrationStrategy(entry["strategy"]),
+                    situation=stack.effective_parent(
+                        by_name[entry["branch"]]
+                    ).situation,
                     stack=stack,
                     git=switching,
                     fork=fork,

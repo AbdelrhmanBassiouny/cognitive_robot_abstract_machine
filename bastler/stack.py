@@ -527,6 +527,34 @@ class Branch:
     """URL of the Claude session working this PR, if any."""
 
 
+class ParentSituation(StrEnum):
+    """Where a parent branch's commits are, which is what decides its child's base."""
+
+    TRACKED = "tracked"
+    """It is the upstream base, or a branch this stack still tracks."""
+
+    LANDED = "landed"
+    """Its commits are in the upstream base."""
+
+    IN_ANOTHER_BRANCH = "in-another-branch"
+    """Its commits are in another branch of this stack, having merged there rather than
+    upstream."""
+
+    GONE = "gone"
+    """Its commits are in nothing this stack can see, so no base follows from them."""
+
+
+@dataclass(frozen=True)
+class EffectiveParent:
+    """The branch a child has to build on now, and what became of the one it names."""
+
+    branch: str
+    """The branch to build on, which is the named parent again when nothing carries it."""
+
+    situation: ParentSituation
+    """What became of the named parent."""
+
+
 @dataclass
 class Stack:
     """The whole stack: configuration plus the branches derived from GitHub and git."""
@@ -541,11 +569,46 @@ class Stack:
     """Maps any branch name - tracked by this stack or not - to whether it has landed
     upstream."""
 
+    is_contained_by: Callable[[str, str], bool]
+    """Maps a pair of branch names to whether the first's commits are in the second."""
+
+    placed_parents: dict[str, EffectiveParent] = field(default_factory=dict)
+    """Each branch's parent, once placed, keyed by branch name.
+
+    Placing one costs a git call per candidate carrier, and every consumer of the stack
+    asks for the same answer.
+    """
+
     def needs_resolution(self, branch: Branch) -> bool:
         """:param branch: The branch to check.
         :return: Whether the branch is withheld from promotion pending conflict resolution.
         """
         return self.configuration.needs_resolution_label in branch.labels
+
+    def tracks(self, branch_name: str) -> bool:
+        """:param branch_name: The branch to look for.
+        :return: Whether an open pull request on the board describes it."""
+        return any(branch.name == branch_name for branch in self.branches)
+
+    def is_stacked_on(self, branch: Branch, ancestor_name: str) -> bool:
+        """Whether a branch sits above another in the stack the board records.
+
+        Read from the bases rather than from git ancestry, which cannot tell a branch
+        stacked on another from one merged into it.
+
+        :param branch: The branch to walk up from.
+        :param ancestor_name: The branch to look for, itself included.
+        :return: Whether that branch is this one or something it is stacked on.
+        """
+        by_name = {candidate.name: candidate for candidate in self.branches}
+        seen: set[str] = set()
+        current: Branch | None = branch
+        while current is not None and current.name not in seen:
+            if current.name == ancestor_name:
+                return True
+            seen.add(current.name)
+            current = by_name.get(current.parent)
+        return False
 
     def has_landed_upstream(self, branch_name: str) -> bool:
         """Whether a branch's commits are already in the upstream base.
@@ -559,6 +622,52 @@ class Stack:
         return branch_name == self.configuration.upstream_base or self.is_merged(
             branch_name
         )
+
+    def effective_parent(self, branch: Branch) -> EffectiveParent:
+        """Where a branch's parent went, and what it therefore has to build on.
+
+        A parent no open pull request describes has left the board, and the board alone
+        cannot say why. Its commits can: they are in the upstream base, in another branch
+        of this stack that it merged into instead, or in nothing at all - and only the
+        last is something a pass has to hand back to the branch's owner.
+
+        A branch cut from its parent contains that parent, and so does everything
+        stacked on it in turn, so neither is somewhere it can move to. Containment alone
+        does not say which those are - a branch merged up into its own grandparent is
+        contained in it too, and that grandparent is exactly where it belongs - so they
+        are found from the bases the board records rather than from git.
+
+        :param branch: The branch whose parent to place.
+        :return: The branch to build on, and what became of the named parent.
+        """
+        if branch.name not in self.placed_parents:
+            self.placed_parents[branch.name] = self._place_parent(branch)
+        return self.placed_parents[branch.name]
+
+    def _place_parent(self, branch: Branch) -> EffectiveParent:
+        """:param branch: The branch whose parent to place.
+        :return: Where that parent went, asked of git rather than remembered."""
+        parent = branch.parent
+        if parent == self.configuration.upstream_base:
+            return EffectiveParent(parent, ParentSituation.TRACKED)
+        if self.is_merged(parent):
+            return EffectiveParent(
+                self.configuration.upstream_base, ParentSituation.LANDED
+            )
+        if self.tracks(parent):
+            return EffectiveParent(parent, ParentSituation.TRACKED)
+        carrier = next(
+            (
+                candidate.name
+                for candidate in order(self)
+                if not self.is_stacked_on(candidate, branch.name)
+                and self.is_contained_by(parent, candidate.name)
+            ),
+            None,
+        )
+        if carrier is not None:
+            return EffectiveParent(carrier, ParentSituation.IN_ANOTHER_BRANCH)
+        return EffectiveParent(parent, ParentSituation.GONE)
 
 
 class BoardUnavailable(RuntimeError):
@@ -611,13 +720,16 @@ def build_stack(
     configuration: Configuration,
     prs: list[PullRequest],
     is_merged: Callable[[str], bool],
+    is_contained_by: Callable[[str, str], bool],
 ) -> Stack:
-    """Assemble the :class:`Stack` from the PR export and a merged-branch predicate.
+    """Assemble the :class:`Stack` from the PR export and the two git facts it needs.
 
     :param configuration: The static configuration.
     :param prs: The exported pull requests.
     :param is_merged: Maps a branch name to whether it has landed upstream; injected so the pure
         assembly logic can be tested without git.
+    :param is_contained_by: Maps a pair of branch names to whether the first's commits are
+        in the second, injected for the same reason.
     :return: The assembled stack.
     """
     branches = [
@@ -639,7 +751,12 @@ def build_stack(
         )
         for pr in prs
     ]
-    return Stack(configuration=configuration, branches=branches, is_merged=is_merged)
+    return Stack(
+        configuration=configuration,
+        branches=branches,
+        is_merged=is_merged,
+        is_contained_by=is_contained_by,
+    )
 
 
 # %% label writes
@@ -803,25 +920,114 @@ def _git_succeeds(*args: str) -> bool:
     return result.returncode == 0
 
 
-def _merged_predicate(configuration: Configuration):
+@dataclass
+class GitCommandFailedError(RuntimeError):
+    """Raised when a git command this pass depends on did not succeed."""
+
+    command: tuple[str, ...]
+    """The git subcommand and its arguments, as they were run."""
+
+    status: int
+    """The status git exited with."""
+
+    detail: str
+    """What git said about it."""
+
+    def __str__(self) -> str:
+        """:return: The command, its status, and the reason git gave."""
+        return f"git {' '.join(self.command)} exited {self.status}: {self.detail}"
+
+
+@dataclass
+class UnresolvableBranchError(LookupError):
+    """Raised when a branch this pass has to answer a question about has no ref.
+
+    A ref that was never fetched is not evidence that the branch has not landed - it is
+    the absence of evidence either way, so every question about it is refused rather
+    than answered.
+    """
+
+    branch: str
+    """The branch that was asked about."""
+
+    reference: str
+    """The ref that does not resolve."""
+
+    def __str__(self) -> str:
+        """:return: Which branch could not be answered for, and which ref is missing."""
+        return (
+            f"cannot tell where {self.branch!r} stands: {self.reference} does not "
+            f"resolve, so it was never fetched"
+        )
+
+
+def _git_checked(*args: str) -> str:
+    """Run a git command that has to succeed, and return its stripped stdout.
+
+    :param args: The git subcommand and its arguments.
+    :raises GitCommandFailedError: If git exits non-zero.
+    :return: The command's stripped stdout.
+    """
+    result = subprocess.run(
+        ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
+    )
+    if result.returncode != 0:
+        raise GitCommandFailedError(args, result.returncode, result.stderr.strip())
+    return result.stdout.strip()
+
+
+def _require_reference(configuration: Configuration, branch: str) -> str:
     """:param configuration: The static configuration.
-    :return: A predicate testing whether a fork branch is an ancestor of the upstream base.
+    :param branch: The branch to resolve on the fork.
+    :raises UnresolvableBranchError: If the fork's copy of it has no ref here.
+    :return: The ref, once it is known to resolve."""
+    reference = resolve_ref(configuration, branch)
+    if not _git_succeeds("rev-parse", "--verify", "--quiet", f"{reference}^{{commit}}"):
+        raise UnresolvableBranchError(branch, reference)
+    return reference
+
+
+def merged_predicate(configuration: Configuration) -> Callable[[str], bool]:
+    """:param configuration: The static configuration.
+    :return: A predicate testing whether a fork branch is an ancestor of the upstream base,
+        which refuses a branch whose ref does not resolve rather than answering for it.
     """
     upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
 
     def is_merged(name: str) -> bool:
-        ref = f"{configuration.fork_remote}/{name}"
-        return _git_succeeds("merge-base", "--is-ancestor", ref, upstream)
+        reference = _require_reference(configuration, name)
+        return _git_succeeds("merge-base", "--is-ancestor", reference, upstream)
 
     return is_merged
+
+
+def containment_predicate(configuration: Configuration) -> Callable[[str, str], bool]:
+    """:param configuration: The static configuration.
+    :return: A predicate testing whether one fork branch's commits are contained in
+        another's, which refuses either branch whose ref does not resolve.
+    """
+
+    def is_contained_by(candidate: str, container: str) -> bool:
+        candidate_reference = _require_reference(configuration, candidate)
+        container_reference = _require_reference(configuration, container)
+        return _git_succeeds(
+            "merge-base", "--is-ancestor", candidate_reference, container_reference
+        )
+
+    return is_contained_by
 
 
 def load_stack() -> Stack:
     """:return: the full live stack: configuration + board export + git merged-detection."""
     configuration = load_configuration()
     prs = load_board()
-    fetch(configuration, [pr.head for pr in prs])
-    return build_stack(configuration, prs, _merged_predicate(configuration))
+    fetch(configuration, referenced_branches(prs))
+    return build_stack(
+        configuration,
+        prs,
+        merged_predicate(configuration),
+        containment_predicate(configuration),
+    )
 
 
 def resolve_ref(configuration: Configuration, name: str) -> str:
@@ -831,14 +1037,34 @@ def resolve_ref(configuration: Configuration, name: str) -> str:
     return f"{configuration.fork_remote}/{name}"
 
 
+def referenced_branches(prs: list[PullRequest]) -> list[str]:
+    """Every fork branch the stack derived from an export reads a ref for.
+
+    Both ends of each pull request, not just its head: a parent whose own pull request
+    has closed is nobody's head, and leaving its ref unfetched is indistinguishable from
+    that parent never having landed.
+
+    :param prs: The exported pull requests.
+    :return: The branch names, heads before bases, each named once.
+    """
+    return list(dict.fromkeys([pr.head for pr in prs] + [pr.base for pr in prs]))
+
+
 def fetch(configuration: Configuration, branches: list[str]) -> None:
     """Refresh the refs the stack references so drift and merged-detection are current.
 
+    A fetch of several branches is all-or-nothing, so one name the remote no longer has
+    leaves every other ref at whatever it already was - which is why a failure here stops
+    the pass rather than letting it compute on stale refs.
+
     :param configuration: The static configuration.
     :param branches: The fork branch names to fetch.
+    :raises GitCommandFailedError: If either fetch fails.
     """
-    _git("fetch", configuration.upstream_remote, configuration.upstream_base, "-q")
-    _git("fetch", configuration.fork_remote, "-q", *branches)
+    _git_checked(
+        "fetch", configuration.upstream_remote, configuration.upstream_base, "-q"
+    )
+    _git_checked("fetch", configuration.fork_remote, "-q", *branches)
 
 
 def _count(rev_range: str) -> int | None:
@@ -885,9 +1111,12 @@ def parent_landed(stack: Stack, branch: Branch, by_name: dict[str, Branch]) -> b
     :param by_name: Every branch in the stack, keyed by name.
     :return: Whether the branch's parent has landed.
     """
+    effective_parent = stack.effective_parent(branch)
+    if effective_parent.situation is not ParentSituation.TRACKED:
+        return effective_parent.situation is ParentSituation.LANDED
     parent = by_name.get(branch.parent)
     if parent is None:
-        return stack.has_landed_upstream(branch.parent)
+        return True
     return parent.status in {
         BranchStatus.IN_REVIEW,
         BranchStatus.MERGED,
@@ -947,15 +1176,11 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
     for branch in order(stack):
         if branch.status == BranchStatus.MERGED:
             continue
-        effective_parent = (
-            stack.configuration.upstream_base
-            if stack.has_landed_upstream(branch.parent)
-            else branch.parent
-        )
+        effective_parent = stack.effective_parent(branch)
         plan.append(
             {
                 "branch": branch.name,
-                "parent": effective_parent,
+                "parent": effective_parent.branch,
                 "strategy": branch.strategy,
             }
         )
@@ -996,18 +1221,17 @@ def reparents(stack: Stack) -> list[Reparent]:
     :param stack: The stack to sweep.
     :return: The children to retarget, parent before child.
     """
-    base = stack.configuration.upstream_base
+    retargeting = {ParentSituation.LANDED, ParentSituation.IN_ANOTHER_BRANCH}
     return [
         Reparent(
             branch=branch.name,
             pull_request_number=branch.pull_request_number,
             current_base=branch.parent,
-            target_base=base,
+            target_base=stack.effective_parent(branch).branch,
         )
         for branch in order(stack)
         if branch.status != BranchStatus.MERGED
-        and branch.parent != base
-        and stack.has_landed_upstream(branch.parent)
+        and stack.effective_parent(branch).situation in retargeting
     ]
 
 
