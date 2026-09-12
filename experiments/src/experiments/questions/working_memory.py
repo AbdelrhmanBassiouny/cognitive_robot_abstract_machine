@@ -21,6 +21,7 @@ from krrood.entity_query_language.factories import (
     not_,
     variable,
 )
+from krrood.entity_query_language.backends import EntityQueryLanguageBackend
 from krrood.entity_query_language.predicate import symbolic_function
 from krrood.entity_query_language.query.query import Query
 from krrood.symbol_graph.symbol_graph import SymbolGraph
@@ -54,6 +55,7 @@ from experiments.questions.question import (
     Bucket,
     Memory,
     Question,
+    QueryBackend,
     QuestionedThings,
     RequiredFact,
 )
@@ -83,6 +85,12 @@ class WorkingMemoryQuestion(
     """
     Everything asked here is already represented, so answering it is interpretation
     rather than recall.
+    """
+
+    backend: ClassVar[Type[QueryBackend]] = EntityQueryLanguageBackend
+    """
+    A live query selects in this process, which is what evaluating it without naming a
+    backend does.
     """
 
     def solutions(self, source: AbstractRobot) -> List[Any]:

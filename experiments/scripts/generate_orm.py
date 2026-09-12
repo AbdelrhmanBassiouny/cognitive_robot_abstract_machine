@@ -14,6 +14,7 @@ import experiments.episodes.recording
 import experiments.episodes.long_term_memory
 import experiments.montessori.ask_episode
 import experiments.montessori.record_episode
+import experiments.montessori.run_corpus
 import experiments.montessori.watched_run
 import experiments.tracy_experiments.montessori.scene_builder
 import experiments.questions.long_term_memory
@@ -70,13 +71,15 @@ for episode_database_module in (
 ):
     ignored_classes |= set(classes_of_module(episode_database_module))
 
-# what observes a trial, the run that is observed, the command lines that start one
-# and ask one back, and the scene builder they run on are machinery of the same kind:
-# what they observe is written onto the episode model's own rows
+# what observes a trial, the run that is observed, the command lines that start one,
+# record a whole corpus of them and ask one back, and the scene builder they run on are
+# machinery of the same kind: what they observe is written onto the episode model's own
+# rows
 for episode_machinery_module in (
     experiments.episodes.observer,
     experiments.montessori.watched_run,
     experiments.montessori.record_episode,
+    experiments.montessori.run_corpus,
     experiments.montessori.ask_episode,
     experiments.tracy_experiments.montessori.scene_builder,
 ):

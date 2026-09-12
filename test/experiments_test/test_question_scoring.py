@@ -5,6 +5,9 @@ rows, and the two paper tables computed from what was recorded.
 
 from __future__ import annotations
 
+from krrood.entity_query_language.backends import EntityQueryLanguageBackend
+from semantic_digital_twin.reasoning.predicates import SupportedBy
+
 from experiments.episodes.episode import RecordedTrial
 from experiments.paper.figure import FigureName
 from experiments.questions.long_term_memory import AnythingMovedInTheEpisode
@@ -41,6 +44,22 @@ def test_answer_and_record_scores_every_question_of_the_set(
         assert row.bloom_level is question.bloom_level
         assert row.answered_correctly is True
         assert row.latency >= 0.0
+
+
+def test_a_scored_question_records_which_backend_answered_each_predicate(
+    scene: QuestionedScene, robot: AbstractRobot
+):
+    """
+    A live question is selected in this process, and the predicates its query puts are
+    what the latency of answering it is attributed to.
+    """
+    recorded = scene.question_set.answer_and_record(robot)
+
+    routed = [answered for row in recorded for answered in row.answered_predicates]
+    assert {answered.backend_name for answered in routed} == {
+        EntityQueryLanguageBackend.__name__
+    }
+    assert SupportedBy.__name__ in {answered.predicate_name for answered in routed}
 
 
 def test_an_ordinary_query_is_not_mistaken_for_a_scored_question():

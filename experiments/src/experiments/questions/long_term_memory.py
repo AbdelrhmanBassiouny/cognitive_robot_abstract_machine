@@ -17,6 +17,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
+from krrood.entity_query_language.backends import SQLAlchemyBackend
 from krrood.entity_query_language.factories import (
     an,
     contains,
@@ -42,6 +43,7 @@ from typing_extensions import (
     Sequence,
     Set,
     Tuple,
+    Type,
 )
 
 from experiments.episodes.episode import (
@@ -59,6 +61,7 @@ from experiments.questions.question import (
     Bucket,
     Memory,
     Question,
+    QueryBackend,
     RememberedThings,
     RequiredFact,
 )
@@ -102,6 +105,13 @@ class LongTermMemoryQuestion(
     bloom_level: ClassVar[BloomLevel] = BloomLevel.REMEMBERING
     """
     Nothing asked here is in front of the robot any more, so answering it is recall.
+    """
+
+    backend: ClassVar[Type[QueryBackend]] = SQLAlchemyBackend
+    """
+    Recorded episodes are selected out of a database, which is what
+    :meth:`~experiments.episodes.long_term_memory.LongTermMemory.answer` translates a
+    query into.
     """
 
     episode_identifier: str
