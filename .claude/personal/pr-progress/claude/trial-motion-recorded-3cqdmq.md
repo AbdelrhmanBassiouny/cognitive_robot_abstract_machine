@@ -1,4 +1,5 @@
-# claude/trial-motion-recorded-3cqdmq - PR #319 (merged into #265, 2026-09-12)
+# claude/trial-motion-recorded-3cqdmq - PR #319 merged into #265; branch restarted
+# for the EQL coverage round (2026-09-12)
 
 Base: `claude/icra-experiments-simulation-pipeline-w4ep7n` (#265).
 Session: https://claude.ai/code/session_013HepqhoucZF2H2cCjSizFP
@@ -91,6 +92,39 @@ world (load the plan from long-term memory, convert DAOs to domain objects and e
 or build the chart in the program). So the database gap is a gap in the reading, not lost
 information, and what the recording still owes is the plan and the world. PR's "What is not
 done" reframed accordingly.
+
+## Answered this round: what the database holds and what EQL reaches (2026-09-12)
+
+Asked: do the motions go to long-term memory as JSON, is the EQL/SQL reading tested, and
+can EQL reach the controller's constraints from working memory?
+
+Measured, not guessed (scratchpad `probe_motion_eql.py`, `probe_constraints_eql.py`):
+
+- Not JSON. `to_dao` writes rows: `RecordedMotionDAO(database_id, start_moment,
+  end_moment, polymorphic_type, _motion_statechart_id)`, joined to the trial through
+  `RecordedTrialDAO_motions_association`; `MotionStatechartDAO` has only `database_id`
+  and `polymorphic_type`. The schema does have JSON columns for scalar arrays (including
+  `GiskardConstraintDAO.expression` and `NodeArtifactsDAO.observation`), but nothing
+  writes a chart as a JSON document - `MotionStatechart.to_json` is the ROS wire
+  (`motion_goal.py`, `feedback_publisher.py`, the inspector), not the recording path.
+- EQL over the SQL backend does reach the motions. Verified both the to-many join
+  (`contains(trial.motions, motion)` plus `trial.episode.identifier == ...`, which
+  translates into a join across the association table) and a range condition on the
+  spans. Untested before this round, so it is now two tests in
+  `test/experiments_test/test_long_term_memory.py` under `# %% the motions a run ran`.
+- Controller constraints: EQL can range over a built chart's `Task` nodes and its
+  `GiskardEqualityConstraint`s when the variable is handed the domain (the chart's nodes
+  or `combine_constraint_collections_of_nodes()`), including `contains` across a node's
+  constraint collection. Two limits: nothing in the controller is a `Symbol`
+  (`MotionStatechartNode`, `Task`, `GiskardConstraint`, `ConstraintCollection`,
+  `MotionStatechart` all `issubclass(Symbol) == False`), so a working-memory question,
+  which ranges over the symbol graph with `domain=[]`, finds nothing; and a condition on
+  a symbolic field (`quadratic_weight`, `expression`, the bounds) raises
+  `HasFreeVariablesError`, because EQL's truth test evaluates a casadi expression that
+  still has free variables. Plain fields (`name`, `weight`) work.
+- So the working-memory constraint question is not askable today. Two routes, developer's
+  call: hand the question the chart as its domain, or make the controller's nodes and
+  constraints symbols so the graph tracks them.
 
 ## Local test environment notes
 
