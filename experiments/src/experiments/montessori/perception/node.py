@@ -186,20 +186,24 @@ class MontessoriPerceptionNode(RepeatedLook):
         """
         Run the pipeline on one look and keep the result as the newest.
 
-        A result is kept only if the look was taken through the pipeline this node
-        still reads with: a look begun before :meth:`read_with` handed over another
-        pipeline was taken through the old one, and serving it would answer a request
-        with what that pipeline made of the scene.
+        The frame is kept before the pipeline runs on it, so whoever waits for a frame
+        is served as soon as one is built rather than once the look is over -- a first
+        look under load can outlast that wait. A result is kept only if the look was
+        taken through the pipeline this node still reads with: a look begun before
+        :meth:`read_with` handed over another pipeline was taken through the old one,
+        and serving it would answer a request with what that pipeline made of the scene.
 
         :param frame: The look, in the pipeline's own reference frame.
         :return: What the look found.
         """
         pipeline = self.pipeline
+        with self._lock:
+            if pipeline is self.pipeline:
+                self._frame = frame
         scene = pipeline.detect(frame)
         with self._lock:
             if pipeline is self.pipeline:
                 self._scene = scene
-                self._frame = frame
         return scene
 
     def read_with(self, pipeline: MontessoriPerceptionPipeline) -> None:
