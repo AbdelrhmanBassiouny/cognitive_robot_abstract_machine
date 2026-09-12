@@ -217,13 +217,23 @@ class ObjectsSeenInTheEpisode(LongTermMemoryQuestion[List[Body]]):
             )
         )
 
+    def ask(self, source: LongTermMemory) -> List[Body]:
+        """
+        The objects that were seen, each named once however many events were about it.
+
+        :param source: The long-term memory the question is put to.
+        """
+        return self.distinct(self.solutions(source))
+
     def ground_truth(self, source: LongTermMemory) -> List[Body]:
         """
         The objects the recorded events name, traversed off them directly.
 
         :param source: The long-term memory holding what actually happened.
         """
-        return [event.tracked_object for event in self.recorded_events(source)]
+        return self.distinct(
+            [event.tracked_object for event in self.recorded_events(source)]
+        )
 
 
 # %% temporal and agency
@@ -328,17 +338,27 @@ class ObjectsThatMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
             )
         )
 
+    def ask(self, source: LongTermMemory) -> List[Body]:
+        """
+        The objects that moved, each named once however often it moved.
+
+        :param source: The long-term memory the question is put to.
+        """
+        return self.distinct(self.solutions(source))
+
     def ground_truth(self, source: LongTermMemory) -> List[Body]:
         """
         The objects the recorded motions name, traversed off them directly.
 
         :param source: The long-term memory holding what actually happened.
         """
-        return [
-            event.tracked_object
-            for event in self.recorded_events(source)
-            if isinstance(event, MotionEvent)
-        ]
+        return self.distinct(
+            [
+                event.tracked_object
+                for event in self.recorded_events(source)
+                if isinstance(event, MotionEvent)
+            ]
+        )
 
 
 @dataclass
@@ -393,6 +413,17 @@ class ObjectsTheRobotMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
             )
         )
 
+    def ask(self, source: LongTermMemory) -> List[Body]:
+        """
+        The objects the robot moved, each named once however often it handled them.
+
+        The query pairs every recorded motion with every recorded pick-up of the same
+        object, so an object handled twice comes back twice.
+
+        :param source: The long-term memory the question is put to.
+        """
+        return self.distinct(self.solutions(source))
+
     def ground_truth(self, source: LongTermMemory) -> List[Body]:
         """
         The objects the run recorded both a pick-up and a motion of, traversed off what
@@ -406,11 +437,13 @@ class ObjectsTheRobotMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
             for event in events
             if isinstance(event, AgentInteractionEvent)
         }
-        return [
-            event.tracked_object
-            for event in events
-            if isinstance(event, MotionEvent) and event.tracked_object in acted_on
-        ]
+        return self.distinct(
+            [
+                event.tracked_object
+                for event in events
+                if isinstance(event, MotionEvent) and event.tracked_object in acted_on
+            ]
+        )
 
 
 @dataclass
