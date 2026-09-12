@@ -656,8 +656,8 @@ def scene_of(arguments: RecordingArguments) -> Iterator[MontessoriWorldBuilder]:
 
 def episode_bag_recorder(parent_directory: Optional[str] = None) -> RosbagRecorder:
     """
-    The recorder of an episode's bag: the run's topics, keeping one camera frame in :dat
-    a:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`.
+    The recorder of an episode's bag: the run's topics, keeping one camera frame in
+    :data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`.
 
     Imported here rather than at the top, so a run that records no bag needs no ROS.
 
@@ -682,9 +682,15 @@ def recorded_bag() -> Iterator[Path]:
     """
     Record a bag of the run's topics for as long as the block runs, and hand over the
     bag's directory once it is closed.
+
+    Written by a process of its own, so recording it costs the run's looks nothing.
+
+    Imported here rather than at the top, so a run that records no bag needs no ROS.
     """
-    with episode_bag_recorder() as recorder:
-        yield Path(recorder.output_directory)
+    from experiments.tracy_experiments.rosbag_recording import RosbagRecordingProcess
+
+    with RosbagRecordingProcess(episode_bag_recorder()) as recording:
+        yield Path(recording.output_directory)
 
 
 def main(argument_list: Optional[Sequence[str]] = None) -> int:
