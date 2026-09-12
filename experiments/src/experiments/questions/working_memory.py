@@ -203,6 +203,33 @@ def objects_of_the_scene(robot: AbstractRobot) -> List[Body]:
     ]
 
 
+def moving_parts_of(robot: AbstractRobot) -> List[Body]:
+    """
+    The robot's bodies apart from its root.
+
+    A fixed robot's description bolts its arms to what it stands on, so its root body is
+    the table its scene is set on rather than a part of the robot.
+
+    :param robot: The robot whose parts they are.
+    """
+    return [body for body in robot.bodies if body is not robot.root]
+
+
+def surfaces_of_the_scene(robot: AbstractRobot) -> List[Body]:
+    """
+    The bodies something in the robot's scene can stand on, read off the twin directly:
+    every body with a shape that is not one of the robot's moving parts.
+
+    :param robot: The robot whose scene it is.
+    """
+    moving_parts = moving_parts_of(robot)
+    return [
+        body
+        for body in robot._world.bodies
+        if body.has_collision() and body not in moving_parts
+    ]
+
+
 # %% scene
 
 
@@ -415,7 +442,10 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]]):
 
     def query(self, source: AbstractRobot) -> Query:
         """
-        Every object the subject stands on.
+        Every surface of the scene the subject stands on.
+
+        The robot's own root is a surface like any other: a fixed robot is bolted to the
+        table its scene is set on, and that table is what its pieces stand on.
 
         :param source: The robot the question is put to.
         """
@@ -424,7 +454,7 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]]):
             entity(surface).where(
                 stands_in_the_scene_of(surface, source),
                 has_a_shape(surface),
-                not_(contains(source.bodies, surface)),
+                not_(contains(moving_parts_of(source), surface)),
                 is_supported_by(self.subject, surface),
             )
         )
@@ -437,7 +467,7 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]]):
         """
         return [
             surface
-            for surface in objects_of_the_scene(source)
+            for surface in surfaces_of_the_scene(source)
             if is_supported_by(self.subject, surface)
         ]
 

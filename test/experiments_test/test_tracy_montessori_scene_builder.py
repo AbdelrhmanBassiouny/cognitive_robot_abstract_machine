@@ -43,6 +43,7 @@ from experiments.montessori.semantics import (
 )
 from experiments.montessori.watched_run import WatchedSortingRun
 from experiments.questions.question import Memory
+from experiments.questions.working_memory import SupportingSurfaces
 from experiments.scenarios.scenario import AbsentPerson
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.equipment import parse_tracy
@@ -155,6 +156,25 @@ def test_the_built_scene_is_the_full_size_set_unless_told_otherwise():
 
 
 # %% the scene Tracy's camera finds
+
+
+def test_a_perceived_piece_stands_on_tracys_own_table(
+    perceived: TracyLookingAtItsOwnTable,
+):
+    """
+    Tracy's description bolts its arms to the table, so the table is the robot's own
+    root body; it is still the surface a piece on it stands on.
+    """
+    world = perceived.build(Tracy)
+    [robot] = world.get_semantic_annotations_by_type(Tracy)
+    [cube] = [
+        piece
+        for piece in perceived.scene.pieces
+        if piece.shape_category is MontessoriShapeCategory.CUBE
+    ]
+
+    assert SupportingSurfaces(subject=cube.root).ask(robot) == [robot.root]
+    assert SupportingSurfaces(subject=cube.root).ground_truth(robot) == [robot.root]
 
 
 def test_the_perceived_scene_is_the_published_world_with_what_the_look_found(
