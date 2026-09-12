@@ -42,6 +42,21 @@ Also: `psycopg2-binary` needed in `.venv` for the postgres URI; `service postgre
 then provision with `semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql`
 (db `montessori_sorting`, user/password `montessori`).
 
+## CI state (2026-09-12 06:38)
+
+All 23 checks green on #319. The robokudo failure in between was
+`test_query.py::TestQueryInterface::test_query` timing its 20 s action client out on a
+loaded runner; one re-run of failed jobs passed it.
+
+## Also proved this round
+
+The headless Tracy run now works here: `record_episode.py --scenario robot-sorts-a-piece
+--headless` against postgres recorded 4 motions with spans 7.35-443.70, 443.85-444.07,
+444.33-446.03, 446.06-446.33 - the same count as the fixture. `MotionStatechartDAO` came
+back with only `database_id` and `polymorphic_type`, confirming the database gap on Tracy
+rather than only on the fixture. Local `test/experiments_test`: 1282 passed, 0 failed,
+2 errors (both identical on base).
+
 ## Still open
 
 A trial's chart does not survive the database (`MotionStatechartDAO` has no columns;
