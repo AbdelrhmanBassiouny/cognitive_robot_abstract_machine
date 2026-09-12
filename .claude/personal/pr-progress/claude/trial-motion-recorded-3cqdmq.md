@@ -3,43 +3,48 @@
 Base: `claude/icra-experiments-simulation-pipeline-w4ep7n` (#265).
 Session: https://claude.ai/code/session_013HepqhoucZF2H2cCjSizFP
 
-## Done
+## Done (original task)
 
-1. giskardpy: `MotionStatechart.to_json`/`_from_json` carry `StateHistory`;
-   `StateHistory`/`StateHistoryItem` are now `SubclassJSONSerializer`s. giskardpy test added.
-2. experiments: `RecordedTrial.motions: List[RecordedMotion]` replaces the single optional
-   `motion_statechart`. Observer gained `ran_the_motion` + `ObserverMotionListener`.
-   coraplex `GiskardExecutable.execute` tells `Context.motion_listener`
-   (`ReceivesExecutedMotions`). Listener threaded scenario -> `HaveTheRobotAct` step ->
-   `SortingScene` -> `Context`. `WatchedSortingRun.trial_started` installs it.
-3. record_episode: `PerturbationChoice.LIGHTING_CHANGED` dropped; argparse rejects it.
-4. Draft PR #319 opened, description names the field shape and the reason.
-5. Regression runs done for experiments, coraplex, giskardpy - every remaining failure
-   is identical on the base branch (missing robot description packages on this runner).
+1. giskardpy: `MotionStatechart.to_json`/`_from_json` carry `StateHistory`.
+2. experiments: `RecordedTrial.motions: List[RecordedMotion]`; observer `ran_the_motion` +
+   `ObserverMotionListener`; coraplex `GiskardExecutable.execute` tells
+   `Context.motion_listener` (`ReceivesExecutedMotions`).
+3. record_episode: `PerturbationChoice.LIGHTING_CHANGED` dropped.
 
-## Established
+## Done (CI round, 2026-09-12)
 
-A sorting trial runs **four** GiskardExecutables (pick up 2, put down 2 - coraplex splits
-an action's plan at every execution boundary). Held-piece run: 2. Pushed run: 0.
-Hence the list shape.
+Both red jobs on #319 were red on the base branch too, byte-identical, and came from base
+commits after the merge base. Fixed both here anyway:
 
-## Open, reported on the PR
+4. `test_each_lib (version)`: `experiments` imports `physics_simulators` (base's
+   `simulated_camera.py`) without declaring it. Declared it in `[project] dependencies`
+   and the workspace group. Green in CI.
+5. `test_each_lib (experiments)`: 4 failures in base's new `test_tracy_pickup_demo_mujoco.py`,
+   all one root cause. `CAMERA_LINK_T_OPTICAL` assumed the plain link->optical quarter
+   turns; against the `camera_link` `iai_tracy_description` states, all 8 shipped captures
+   agree the real camera looked ~12 deg flatter and ~40 mm further along it. The simulated
+   camera therefore looked too steeply, the board fell to the edge of the picture, and the
+   look found 2 pieces instead of 4. Re-derived the constant from the captures against the
+   frame the camera reports in (`tracy_mount`). File now 6 passed, 1 xfailed locally.
+   Only `camera_on_tracy` reads the constant, so the real-robot demo is untouched.
+   Open question for the author: why the real camera sits 12 deg off `camera_link`.
 
-A trial's chart does **not** survive the database (verified against real postgres: 4
-motions and their spans come back, charts come back with 0 nodes / 0 history). Causes:
-`MotionStatechartDAO` has no columns (every `MotionStatechart` field is `init=False`);
-storing as JSON would need a world in `from_json` kwargs, which the engine's
-`json_deserializer` does not pass; and nothing fills `Episode.world` yet. Separate change.
+## Environment breakthrough (this container)
 
-Tracy's URDF (`iai_tracy_description`) is not resolvable on this runner, so the headless
-`record_episode.py --scenario robot-sorts-a-piece` cannot build its world here; the motion
-counts and histories are proved on `SyntheticGrasperSortsAPiece` in the existing
-simulation fixture instead.
+`iai_tracy_description` IS obtainable here after all: clone `code-iai/iai_tracy` (branch
+`ros2-jazzy`), `UniversalRobots/Universal_Robots_ROS2_Description` (`jazzy`) and
+`code-iai/ros2_robotiq_gripper` (`iai_dualarm`), then build a fake ament prefix with
+`share/<pkg>` symlinks plus `share/ament_index/resource_index/packages/<pkg>` markers and
+prepend it to `AMENT_PREFIX_PATH`. Tracy then parses and the Tracy tests run.
+Scratchpad: `.../scratchpad/fake_prefix`.
 
-## Environment notes (this container)
+Also: `psycopg2-binary` needed in `.venv` for the postgres URI; `service postgresql start`
+then provision with `semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql`
+(db `montessori_sorting`, user/password `montessori`).
 
-No ROS/venv on start. Set up with: newer `uv` (`pip install -U uv`), `uv sync --extra dev`,
-ROS 2 Jazzy apt repo + `ros-jazzy-rclpy`, `-rclpy-message-converter`, `-std-srvs`, `-tf2-*`,
-`-rosbag2-py`, `-nav2-msgs`, message packages, plus `xvfb` and `postgresql`.
-Run tests as `source /opt/ros/jazzy/setup.bash && xvfb-run -a .venv/bin/python -m pytest ...`.
-`docformatter`/`black` installed into `.venv` for `scripts/format_docstrings.py`.
+## Still open
+
+A trial's chart does not survive the database (`MotionStatechartDAO` has no columns;
+`from_json` needs a world the engine's JSON deserializer cannot pass; nothing fills
+`Episode.world`). Reported on the PR; separate change.
+
