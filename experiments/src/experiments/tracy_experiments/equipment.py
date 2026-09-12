@@ -190,8 +190,7 @@ def _servo_tuning_for(joint_name: str) -> ServoGains:
     :param joint_name: Name of the joint, e.g. ``"left_shoulder_pan_joint"``.
     :return: Its own tuning from :data:`ARM_JOINT_SERVO`.
     """
-    unprefixed = joint_name.removeprefix("left_").removeprefix("right_")
-    return ARM_JOINT_SERVO[unprefixed]
+    return ARM_JOINT_SERVO[_unprefixed(joint_name)]
 
 
 def joint_state_of_type(robot_part: AbstractRobotPart, state_type) -> JointState:
@@ -350,6 +349,20 @@ def _mujoco_geom_for(shape: Shape) -> MujocoGeom:
     return mujoco_geom
 
 
+LINKS_SUNK_INTO_THE_TABLE = frozenset({"shoulder_link"})
+"""
+The links of each arm whose collision geometry the description sinks into the table's
+own, by their name with the ``left_``/``right_`` prefix stripped.
+
+Each arm's shoulder link stands 40 mm deep in the box the table's description raises
+where the arms are bolted on -- measured directly off the parked robot's contacts. A
+contact that deep pins the shoulder pan joint: MuJoCo pushes back with more torque than
+the joint's own servo may exert, so the arm turns by a fraction of what it was told and
+every reach lands centimetres off. A link bolted into the table can touch nothing but
+the table, so it is excused from colliding at all.
+"""
+
+
 def exclude_self_collision(world: World, robot: Tracy) -> None:
     """
     Let the robot's own links pass through each other, without also excusing them from
@@ -368,7 +381,9 @@ def exclude_self_collision(world: World, robot: Tracy) -> None:
     ``robot.bodies_with_collision`` also includes ``robot.root`` itself -- Tracy's own
     table, since both arms are rooted there rather than at a separate torso link -- which
     must be skipped: it is exactly the kind of thing this function's own docstring says
-    the robot should keep colliding with, not one of the robot's own moving links.
+    the robot should keep colliding with, not one of the robot's own moving links. The
+    links the description sinks into that table (:data:`LINKS_SUNK_INTO_THE_TABLE`) are
+    the exception, and collide with nothing.
 
     :param world: The world to relax, modified in place.
     :param robot: The robot to exclude self-collision on.
@@ -377,10 +392,19 @@ def exclude_self_collision(world: World, robot: Tracy) -> None:
         for body in robot.bodies_with_collision:
             if body is robot.root:
                 continue
+            sunk = _unprefixed(body.name.name) in LINKS_SUNK_INTO_THE_TABLE
             for shape in body.collision:
                 mujoco_geom = _mujoco_geom_for(shape)
-                mujoco_geom.contype = ROBOT_COLLISION_BIT
-                mujoco_geom.conaffinity = EXTERNAL_COLLISION_BIT
+                mujoco_geom.contype = 0 if sunk else ROBOT_COLLISION_BIT
+                mujoco_geom.conaffinity = 0 if sunk else EXTERNAL_COLLISION_BIT
+
+
+def _unprefixed(name: str) -> str:
+    """
+    :param name: The name of one of Tracy's links or joints.
+    :return: The name without the ``left_``/``right_`` prefix that tells the arms apart.
+    """
+    return name.removeprefix("left_").removeprefix("right_")
 
 
 def _servo_actuator(gains: ServoGains, dof: DegreeOfFreedom) -> MujocoActuator:

@@ -1,8 +1,8 @@
 """
-Tests for :mod:`experiments.tracy_experiments.pickup.pickup_demo_real`: loose shapes are
-spawned resting on the table with the grasp target lifted back to where the pick aimed
-before the spawn was lowered, and while a shape is carried the gripper is re-closed and
-watched for the shape slipping out.
+Tests for :mod:`experiments.tracy_experiments.pickup.pickup_demo_real`: a perceived
+piece is grasped with the target lifted back to where the pick aimed before the spawn
+was lowered, and while a piece is carried the gripper is re-closed and watched for the
+piece slipping out.
 """
 
 from __future__ import annotations
@@ -24,35 +24,14 @@ from experiments.tracy_experiments.montessori.grasp_widths import (
 )
 from experiments.tracy_experiments.pickup.pickup_demo_real import (
     GRASP_HEIGHT_OFFSET,
-    PICK_TARGETS,
     POST_LIFT_SETTLE_SECONDS,
-    _add_montessori_shape,
     _grasp_target_pose,
     _SortingRig,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
-TABLE_TOP_Z = 0.75
-"""
-An arbitrary table-top height to spawn against.
-"""
-
-
-def _world_with_root() -> World:
-    """
-    A world holding only its root body, ready for a shape to be added.
-    """
-    world = World()
-    with world.modify_world():
-        world.add_kinematic_structure_entity(
-            Body(name=PrefixedName(name="root", prefix="world"))
-        )
-    return world
-
-
-# %% spawn height and grasp offset
+# %% the grasp offset
 
 
 def test_grasp_target_pose_sits_the_offset_above_the_body_origin():
@@ -67,29 +46,6 @@ def test_grasp_target_pose_sits_the_offset_above_the_body_origin():
         GRASP_HEIGHT_OFFSET,
     ]
     assert pose.reference_frame is body
-
-
-def test_a_loose_shape_is_spawned_resting_on_the_table():
-    world = _world_with_root()
-    target = PICK_TARGETS[0]
-
-    body = _add_montessori_shape(world, TABLE_TOP_Z, target)
-
-    spawned_z = float(world.compute_forward_kinematics_np(world.root, body)[2, 3])
-    assert spawned_z == TABLE_TOP_Z + target.half_height
-
-
-def test_the_grasp_is_aimed_where_the_pre_offset_spawn_put_it():
-    world = _world_with_root()
-    target = PICK_TARGETS[0]
-    body = _add_montessori_shape(world, TABLE_TOP_Z, target)
-
-    grasp_target = _grasp_target_pose(body, GRASP_HEIGHT_OFFSET)
-
-    world_grasp_z = float(
-        world.transform(grasp_target.to_homogeneous_matrix(), world.root)[2, 3]
-    )
-    assert world_grasp_z == TABLE_TOP_Z + target.half_height + GRASP_HEIGHT_OFFSET
 
 
 # %% slip watch while carrying
@@ -182,7 +138,6 @@ def _slip_watch_rig(
         gripper_listener=listener,
         grasp_description=None,
         tool_frame=None,
-        table_top_z=0.0,
         slip_watch_interval=0.01,
         post_lift_settle=0.0,
     )
@@ -280,9 +235,7 @@ def test_the_grasp_is_left_to_settle_after_the_lift_before_it_is_read():
     rig.post_lift_settle = 0.2
 
     started = time.monotonic()
-    rig._carry_watching_for_slip(
-        Body(name=PrefixedName("cube")), 0.5, lambda: None
-    )
+    rig._carry_watching_for_slip(Body(name=PrefixedName("cube")), 0.5, lambda: None)
 
     assert time.monotonic() - started >= 0.2
     assert gripper.close_to_setpoints[0] == 0.5

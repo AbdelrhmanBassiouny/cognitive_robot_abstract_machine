@@ -23,6 +23,8 @@ msg/_*.py
 !.claude/hooks/tests/fixtures/set-up-clone/**/*.txt
 *.png
 !.claude/skills/plan-dashboard/example/screenshots/*.png
+# the framework figure's two rendered robot pictures are the figure's inputs, not outputs
+!experiments/doc/figures/framework/tracy_*.png
 *.lprof
 tmp_data/
 tmp/

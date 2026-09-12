@@ -1348,6 +1348,14 @@ class MujocoGeom(SimulatorAdditionalProperty):
     see :attr:`contype`. Matches MuJoCo's own default of 1.
     """
 
+    contact_dimensionality: int = 3
+    """
+    How many directions a contact with this geom resists motion in, MuJoCo's ``condim``:
+    3 for sliding friction alone, 4 to add torsional friction about the contact normal,
+    6 to add rolling friction as well. A pair of geoms takes the larger of the two.
+    Matches MuJoCo's own default of 3.
+    """
+
 
 @dataclass(eq=False)
 class MujocoJoint(SimulatorAdditionalProperty):
@@ -2164,6 +2172,7 @@ class MujocoBuilder(MultiSimBuilder):
                 geom_props["friction"] = mujoco_geom.friction
                 geom_props["contype"] = mujoco_geom.contype
                 geom_props["conaffinity"] = mujoco_geom.conaffinity
+                geom_props["condim"] = mujoco_geom.contact_dimensionality
                 break
         geom_spec = parent_body_spec.add_geom(**geom_props)
         if geom_spec.type == mujoco.mjtGeom.mjGEOM_BOX and geom_spec.size[2] == 0:

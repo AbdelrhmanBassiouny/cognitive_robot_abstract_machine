@@ -36,6 +36,8 @@ import experiments.paper.questions
 import experiments.paper.run_plan
 import experiments.paper.scene
 import experiments.paper.timeline
+import experiments.tracy_experiments.pickup.perceived_sorting
+import experiments.tracy_experiments.pickup.pickup_demo_mujoco
 import coraplex.orm.ormatic_interface
 import segmind.orm.ormatic_interface
 
@@ -132,6 +134,15 @@ for paper_module in (
     experiments.paper.timeline,
 ):
     ignored_classes |= set(classes_of_module(paper_module))
+
+# the pickup demo's run is performed rather than recorded: it holds the worlds, the
+# camera and the simulation it is performed in and the arm that sorts, none of which is
+# a row; what such a run leaves behind is its films
+for pickup_demo_module in (
+    experiments.tracy_experiments.pickup.perceived_sorting,
+    experiments.tracy_experiments.pickup.pickup_demo_mujoco,
+):
+    ignored_classes |= set(classes_of_module(pickup_demo_module))
 
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(
