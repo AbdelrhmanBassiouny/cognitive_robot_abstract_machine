@@ -15,7 +15,18 @@ import pytest
 from coraplex.datastructures.enums import Arms
 from segmind.datastructures.events import PickUpEvent
 
+from experiments.episodes.artifacts import (
+    ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    Transcript,
+)
+from experiments.episodes.trace import JointTrace
+from experiments.montessori.results_database import (
+    IN_MEMORY_DATABASE_URI,
+    InMemoryDatabaseRefused,
+    ResultsDatabase,
+)
 from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.orm.ormatic_interface import RecordedTrialDAO
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
@@ -30,14 +41,24 @@ from experiments.tracy_experiments.montessori.grasp_widths import (
 from experiments.tracy_experiments.pickup.pickup_demo_real import (
     GRASP_HEIGHT_OFFSET,
     POST_LIFT_SETTLE_SECONDS,
+    DemoOption,
     PieceNotSeenError,
     _grasp_target_pose,
     _SortingRig,
+    keep_the_episode,
+    main,
     outcome_of,
     piece_asked_about,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.world_entity import Body
+
+from .test_episode_recording import (
+    UNREACHABLE_URI,
+    finished_trial,
+    recorded_count,
+    sorting_episode,
+)
 
 # %% the grasp offset
 
@@ -346,3 +367,33 @@ class LookedAndFound:
     """
     The pieces, as the world holds them.
     """
+
+
+# %% the database the sorting is recorded to
+
+
+def test_the_demo_refuses_a_database_that_dies_with_the_run():
+    """
+    A sorting run against a stopped database used to be sorted anyway and recorded to
+    memory, so the episode was lost without anyone being told.
+    """
+    with pytest.raises(InMemoryDatabaseRefused):
+        main([DemoOption.DATABASE_URI, UNREACHABLE_URI])
+
+
+def test_the_demo_refuses_an_in_memory_database_asked_for_by_name():
+    with pytest.raises(InMemoryDatabaseRefused):
+        main([DemoOption.DATABASE_URI, IN_MEMORY_DATABASE_URI])
+
+
+def test_the_episode_is_kept_in_the_database_the_run_was_checked_against(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "episodes.db"))
+    trial = finished_trial(sorting_episode())
+
+    artifacts = keep_the_episode(trial, JointTrace(), None, database)
+
+    assert recorded_count(database, RecordedTrialDAO) == 1
+    assert Transcript(episode=trial.episode, trials=[trial]).render() == artifacts.transcript().read_text()
