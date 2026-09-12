@@ -108,6 +108,29 @@ def drawn(color: Color) -> Tuple[int, int, int]:
     return tuple(round(channel * 255) for channel in color.to_rgb())
 
 
+# %% something the picture singles out
+
+
+@dataclass(frozen=True)
+class PickedOut:
+    """
+    One thing a picture singles out, and what it is drawn in.
+    """
+
+    entity: KinematicStructureEntity
+    """
+    The body or region to draw.
+    """
+
+    color: Color
+    """
+    What to draw it in.
+
+    An opacity below one leaves it see-through, so whatever stands behind it still
+    shows.
+    """
+
+
 # %% asking for a picture of nothing
 
 
@@ -294,6 +317,14 @@ class SceneRender:
     Whether each thing the answer names is written over in the picture.
     """
 
+    picked_out: Tuple[PickedOut, ...] = ()
+    """
+    Anything else drawn in a colour of its own rather than in the highlight or the fade.
+
+    What lets a picture single out something beside the answer -- a ghost of where the
+    answer used to stand -- without that thing having to be an answer itself.
+    """
+
     line_width: int = 2
     """
     Thickness of the outline drawn around the answer, in pixels.
@@ -354,6 +385,8 @@ class SceneRender:
             scene.recolor(entity, self.faded)
         for answer in answers:
             scene.recolor(answer, self.highlight)
+        for singled_out in self.picked_out:
+            scene.recolor(singled_out.entity, singled_out.color)
 
     # %% placing the camera
 
@@ -478,7 +511,13 @@ class SceneRender:
 
         picture = np.ascontiguousarray(colors)
         covered = self._covered_by(segmentation, scene, answers)
-        self._outline(picture, covered)
+        self._outline(picture, covered, self.highlight)
+        for singled_out in self.picked_out:
+            self._outline(
+                picture,
+                self._covered_by(segmentation, scene, [singled_out.entity]),
+                singled_out.color,
+            )
         if self.label_answers:
             self._label(picture, viewpoint, answers)
         return RenderedScene(image=picture, answer_mask=covered)
@@ -505,20 +544,22 @@ class SceneRender:
             segmentation[:, :, 1] == mujoco.mjtObj.mjOBJ_GEOM
         )
 
-    def _outline(self, picture: np.ndarray, covered: np.ndarray) -> None:
+    def _outline(self, picture: np.ndarray, covered: np.ndarray, color: Color) -> None:
         """
-        Draw the edge of every pixel the answer covers.
+        Draw the edge of every pixel one of the things the picture singles out covers.
 
-        The recolouring alone leaves an answer standing behind something else with no
-        edge to read it by.
+        The recolouring alone leaves something standing behind another body with no edge
+        to read it by, and a lit surface is never exactly the colour it was given, so
+        the edge is also what states that colour plainly.
 
         :param picture: The picture to draw on, changed in place.
-        :param covered: Which pixels the answer covers.
+        :param covered: Which pixels the thing covers.
+        :param color: What to draw the edge in.
         """
         edges, _ = cv2.findContours(
             covered.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
-        cv2.drawContours(picture, edges, -1, drawn(self.highlight), self.line_width)
+        cv2.drawContours(picture, edges, -1, drawn(color), self.line_width)
 
     def _label(
         self,

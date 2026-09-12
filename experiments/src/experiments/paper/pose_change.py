@@ -9,9 +9,9 @@ change in the world rather than a label on a chart.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import copy
+from dataclasses import dataclass
 
-import numpy as np
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
     DetectionEvent,
@@ -22,31 +22,39 @@ from typing_extensions import List, Optional
 
 from experiments.episodes.episode import RecordedTrial
 from experiments.paper.panel import ANSWER_COLOR
-from experiments.paper.scene import BACKGROUND_COLOR, RenderedScene, SceneRender
+from experiments.paper.scene import (
+    BACKGROUND_COLOR,
+    PickedOut,
+    RenderedScene,
+    SceneRender,
+)
 from semantic_digital_twin.adapters.multi_sim import MujocoCamera
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Connection
 from semantic_digital_twin.world_description.geometry import Color
 
 # %% how the earlier pose is told from the later one
 
-GHOST_COLOR = Color(0.36, 0.42, 0.90, 1.0)
+GHOST_COLOR = Color(0.36, 0.42, 0.90, 0.55)
 """
 What the object is drawn in where it used to be.
 
 A colour of its own rather than a fainter answer colour, so that the two poses are read
-as *then* and *now* rather than as one object and a smudge of it.
+as *then* and *now* rather than as one object and a smudge of it. Its opacity is what
+makes the ghost see-through: it is a body of the scene like any other, so the renderer
+lets whatever stands behind it show through and hides the part of it that stands behind
+something else.
 """
 
-GHOST_OPACITY = 0.55
+GHOST_NAME = "%s_where_it_was"
 """
-How much of the earlier pose is let through where it is laid over the scene.
-
-Solid enough to read as the object's own shape, thin enough that what it is standing in
-front of still shows through and it is not mistaken for the object itself.
+What the body standing at the object's earlier pose is called, after the object itself.
 """
 
 # %% an event that says nothing about where its object went
@@ -242,64 +250,94 @@ class PoseChangeRender:
     What everything else is drawn in.
     """
 
-    ghost_opacity: float = field(default=GHOST_OPACITY)
-    """
-    How much of the earlier pose is let through where it is laid over the scene.
-    """
-
     def of(self, change: PoseChange) -> RenderedScene:
         """
         Draw the given change of pose as one picture.
 
-        The twin is left exactly as it was: the object is put back where it came from for
-        the length of one render and returned afterwards.
+        Both poses stand in the one scene: the object itself where it ended up, and a
+        see-through copy of it where it was. Being a body of the scene rather than a
+        picture laid over one, the ghost is lit, shaded and occluded like everything
+        else -- a piece now held in the gripper shows its old place on the table through
+        whatever happens to stand in front of it.
+
+        The twin is left exactly as it was: the object goes back where it came from and
+        the ghost is taken out again.
 
         :param change: Where the object was and where it ended up.
+        :raises ObjectHeldFixedError: If the twin holds the object fixed where it is.
         :raises NothingToDrawError: If a camera or a light has to be placed and the world
             holds no geometry to place it around.
         """
-        scene = SceneRender(world=self.world, camera=self.camera)
-        placed = scene.place_around_the_scene()
-        camera = self.camera if self.camera is not None else placed[0]
-        try:
-            was = self._drawn_at(change, change.before, camera, self.ghost)
-            now = self._drawn_at(change, change.after, camera, self.highlight)
-            return RenderedScene(
-                image=self._ghosted(was, now), answer_mask=now.answer_mask
-            )
-        finally:
-            for own in placed:
-                own.body.simulator_additional_properties.remove(own)
-
-    # %% one of the two poses
-
-    def _drawn_at(
-        self,
-        change: PoseChange,
-        pose: HomogeneousTransformationMatrix,
-        camera: MujocoCamera,
-        color: Color,
-    ) -> RenderedScene:
-        """
-        The scene with the object standing at the given pose.
-
-        :param change: The change being drawn, which says which object moves.
-        :param pose: Where to stand it, in the world root frame.
-        :param camera: The camera both poses are drawn through.
-        :param color: What the object is drawn in.
-        """
         stood_at = self.standing_pose(change.subject)
-        self._stand(change.subject, pose)
+        self._stand(change.subject, change.after)
+        ghost = self.stand_a_ghost_at(change.subject, change.before)
         try:
             return SceneRender(
                 world=self.world,
-                camera=camera,
-                highlight=color,
+                camera=self.camera,
+                highlight=self.highlight,
                 faded=self.faded,
                 label_answers=False,
+                picked_out=(PickedOut(entity=ghost, color=self.ghost),),
             ).of([change.subject])
         finally:
+            self.take_the_ghost_away(ghost)
             self._stand(change.subject, stood_at)
+
+    # %% the body standing where the object used to be
+
+    def stand_a_ghost_at(
+        self, subject: Body, pose: HomogeneousTransformationMatrix
+    ) -> Body:
+        """
+        Put a copy of the given object into the scene at the given pose.
+
+        The copy wears the object's own shapes rather than a box standing for it, so
+        what the reader sees where it used to be is the piece itself. Each shape is
+        copied rather than shared, because a scene built from the same shape twice draws
+        it once.
+
+        :param subject: The object to copy.
+        :param pose: Where to stand the copy, in the world root frame.
+        :return: The body that was added, to be taken away again once the picture is
+            drawn.
+        """
+        ghost = Body(name=PrefixedName(GHOST_NAME % subject.name.name))
+        ghost.visual = self._copied(subject.visual, ghost)
+        ghost.collision = self._copied(subject.collision, ghost)
+        with self.world.modify_world():
+            self.world.add_connection(
+                FixedConnection(
+                    parent=self.world.root,
+                    child=ghost,
+                    parent_T_connection_expression=pose.copy_with_new_reference_frames(
+                        new_reference_frame=self.world.root, new_child_frame=ghost
+                    ),
+                )
+            )
+        return ghost
+
+    def take_the_ghost_away(self, ghost: Body) -> None:
+        """
+        Take the copy back out of the scene, so the next question is answered from the
+        world the run recorded rather than from one with a spare piece in it.
+
+        :param ghost: The body :meth:`stand_a_ghost_at` added.
+        """
+        with self.world.modify_world():
+            self.world.remove_kinematic_structure_entity(ghost)
+
+    @staticmethod
+    def _copied(shapes: ShapeCollection, worn_by: Body) -> ShapeCollection:
+        """
+        One body's shapes, copied so that a scene built from both draws both.
+
+        :param shapes: The shapes to copy.
+        :param worn_by: The body the copies belong to.
+        """
+        return ShapeCollection(
+            [copy.copy(shape) for shape in shapes.shapes], reference_frame=worn_by
+        )
 
     def standing_pose(self, subject: Body) -> HomogeneousTransformationMatrix:
         """
@@ -348,20 +386,3 @@ class PoseChangeRender:
         :param connection: The connection to ask.
         """
         return type(connection).origin.fset is not Connection.origin.fset
-
-    # %% laying the one over the other
-
-    def _ghosted(self, was: RenderedScene, now: RenderedScene) -> np.ndarray:
-        """
-        The later picture with the earlier pose laid over it.
-
-        :param was: The scene with the object where it used to be.
-        :param now: The scene with the object where it ended up.
-        """
-        picture = now.image.copy()
-        covered = was.answer_mask
-        picture[covered] = (
-            was.image[covered] * self.ghost_opacity
-            + picture[covered] * (1.0 - self.ghost_opacity)
-        ).astype(np.uint8)
-        return picture

@@ -1,18 +1,22 @@
 """
 The card that says why the answer is yes or no, not only what it is.
 
-Two runs are drawn here, and they are the two the card exists for. In one the robot
-picked the piece up: a pick-up was reported, an item of the plan that acts on that piece
-was running at the time, and the piece ended up somewhere else. In the other a person
-shoved it: a translation was reported, nothing in the plan acts on that piece at all, and
-the piece still ended up somewhere else. The four levels are what lets a reader tell the
-two apart.
+Two runs are drawn here, and they are the two the card exists for. Both are about the
+same piece and both end with it somewhere else; what tells them apart is *when*.
+
+In one the robot picked it up: a pick-up was reported while the item of the plan that
+picks that piece up was running. In the other a person shoved it while the robot was
+still idle -- the plan's pick-up of that same piece does not start until later -- so a
+translation was reported at a moment nothing was running to account for it. The four
+levels are what lets a reader see that difference.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
+
+from typing_extensions import Tuple
 
 import imageio.v2 as imageio
 import pytest
@@ -62,19 +66,23 @@ TRIAL_DURATION = 12.0
 How long each recorded trial ran, in seconds.
 """
 
-HANDLING_STARTED_AT = 2.0
-"""
-Seconds into the trial the item of the plan that handles a piece started.
-"""
-
-HANDLING_ENDED_AT = 5.0
-"""
-Seconds into the trial that item finished.
-"""
-
 SOMETHING_HAPPENED_AT = 3.0
 """
 Seconds into the trial the monitor reported what the card is about.
+"""
+
+PICKING_WHILE_IT_HAPPENED = (2.0, 5.0)
+"""
+The seconds of the trial the plan's pick-up ran over in the run the robot did it, which
+is a stretch the reported moment falls inside.
+"""
+
+PICKING_LONG_AFTERWARDS = (6.0, 9.0)
+"""
+The seconds of the trial the plan's pick-up ran over in the run a person did it.
+
+The robot has not reached the piece yet when the piece moves, so nothing at all is
+running at the reported moment -- which is what makes the answer no.
 """
 
 ASKED_AT = 8.0
@@ -133,39 +141,41 @@ def moved(subject: Body, moment: float) -> TranslationEvent:
     )
 
 
-def ran_a_plan_handling(handled: Body) -> InsertionAttempt:
+def ran_a_plan_picking_up(piece: Body, over: Tuple[float, float]) -> InsertionAttempt:
     """
-    One attempt whose plan ran a single item, acting on the given piece.
+    One attempt whose plan picks the given piece up over the given stretch of the trial.
 
-    :param handled: The piece the plan's item acts on.
+    :param piece: The piece the plan's item acts on.
+    :param over: The seconds of the trial it ran between.
     """
     plan = Plan()
     root = PlanNode()
     root.start_time = TRIAL_BEGAN_AT
     plan.add_node(root)
     item = item_ran(
-        ActsOnOneBody(subject=handled),
-        HANDLING_STARTED_AT,
-        HANDLING_ENDED_AT,
-        LifeCycleValues.SUCCEEDED,
+        ActsOnOneBody(subject=piece), over[0], over[1], LifeCycleValues.SUCCEEDED
     )
     plan.add_node(item)
     root.add_child(item)
     return InsertionAttempt(
-        shape_name=handled.name.name,
-        plan=plan,
-        outcome=InsertionOutcome.FELL_THROUGH,
+        shape_name=piece.name.name, plan=plan, outcome=InsertionOutcome.FELL_THROUGH
     )
 
 
-def run_that(scene: World, piece: Body, saw, handled: Body, answer: str):
+def run_that(
+    scene: World,
+    piece: Body,
+    saw,
+    picking_up_over: Tuple[float, float],
+    answer: str,
+):
     """
     One recorded trial of the shape-sorting scenario.
 
     :param scene: The world it ran in.
-    :param piece: The piece the query is about.
+    :param piece: The piece the query is about, which its plan also picks up.
     :param saw: The events its monitor reported, in one tick.
-    :param handled: The piece its plan's one item acts on.
+    :param picking_up_over: The seconds of the trial its plan's pick-up ran between.
     :param answer: What the query answered.
     """
     return RecordedTrial(
@@ -177,7 +187,7 @@ def run_that(scene: World, piece: Body, saw, handled: Body, answer: str):
         outcome=TrialOutcome.SUCCEEDED,
         duration=TRIAL_DURATION,
         ticks=[Tick(moment=SOMETHING_HAPPENED_AT, events=list(saw))],
-        insertion_attempts=[ran_a_plan_handling(handled)],
+        insertion_attempts=[ran_a_plan_picking_up(piece, picking_up_over)],
         queries=[
             RecordedQuery(
                 role_taker=PickedUpRecently(subject=piece),
@@ -192,29 +202,34 @@ def run_that(scene: World, piece: Body, saw, handled: Body, answer: str):
 @pytest.fixture
 def the_robot_picked_it_up(scene: World, piece: Body) -> RecordedTrial:
     """
-    The run the answer is yes in: the robot's own plan handled the piece and a pick-up of
-    it was reported while that item was running.
+    The run the answer is yes in: a pick-up of the piece was reported while the plan's
+    own pick-up of it was running.
     """
     picked_up = PickUpEvent(
         tracked_object=piece,
         timestamp=TRIAL_BEGAN_AT + timedelta(seconds=SOMETHING_HAPPENED_AT),
     )
     return run_that(
-        scene, piece, [picked_up, moved(piece, SOMETHING_HAPPENED_AT)], piece, "yes"
+        scene,
+        piece,
+        [picked_up, moved(piece, SOMETHING_HAPPENED_AT)],
+        PICKING_WHILE_IT_HAPPENED,
+        "yes",
     )
 
 
 @pytest.fixture
 def a_person_shoved_it(scene: World, piece: Body) -> RecordedTrial:
     """
-    The run the answer is no in: the piece moved, but the plan was handling something
-    else entirely and no pick-up of it was ever reported.
+    The run the answer is no in: the same piece moved, but the robot was still idle --
+    its plan does not reach that piece until seconds later -- and no pick-up of it was
+    ever reported.
     """
     return run_that(
         scene,
         piece,
         [moved(piece, SOMETHING_HAPPENED_AT)],
-        scene.get_body_by_name(ANSWERED_NAME),
+        PICKING_LONG_AFTERWARDS,
         "no",
     )
 
@@ -289,12 +304,12 @@ def test_nothing_in_the_plan_accounts_for_what_a_person_did(
     assert not any(row.accounts_for_the_event for row in drawn.rows)
 
 
-def test_the_two_runs_disagree_only_about_the_plan(
+def test_the_two_runs_disagree_only_about_when(
     the_robot_picked_it_up: RecordedTrial, a_person_shoved_it: RecordedTrial
 ) -> None:
     """
-    Both runs saw the piece end up somewhere else; what tells them apart is whether
-    anything the robot was running accounts for it.
+    Both runs saw the same piece end up somewhere else, and in both the plan picks that
+    same piece up; what tells them apart is whether the robot was doing it at the time.
     """
     card = EventAgainstThePlanCard()
     acted = card.emphasise(
@@ -303,6 +318,31 @@ def test_the_two_runs_disagree_only_about_the_plan(
     shoved = card.emphasise(a_person_shoved_it.queries[0].question, a_person_shoved_it)
     assert RunPlan.of(the_robot_picked_it_up).accounts_for(acted[0]) is not None
     assert RunPlan.of(a_person_shoved_it).accounts_for(shoved[0]) is None
+
+
+def test_the_plan_of_the_shoved_run_acts_on_that_very_piece(
+    a_person_shoved_it: RecordedTrial, piece: Body
+) -> None:
+    """
+    The answer is not no because the robot never touches this piece -- it does, seconds
+    later. It is no because the piece moved while the robot was still idle, which is the
+    only thing the card has to show.
+    """
+    [picking_up] = RunPlan.of(a_person_shoved_it).items
+    assert picking_up.acts_on(piece)
+
+
+def test_the_robot_was_running_nothing_when_the_piece_was_shoved(
+    a_person_shoved_it: RecordedTrial,
+) -> None:
+    """
+    Idle is the point: at the moment the piece moved, no item of the plan was running at
+    all, so the plan chart under that event is empty.
+    """
+    plan = RunPlan.of(a_person_shoved_it)
+    assert not any(
+        item.covers(SOMETHING_HAPPENED_AT, plan.just_finished) for item in plan.items
+    )
 
 
 # %% where the event falls in the run

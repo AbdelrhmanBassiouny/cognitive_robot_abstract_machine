@@ -21,16 +21,15 @@ from experiments.episodes.episode import Episode, RecordedTrial, Tick
 from experiments.paper.panel import ANSWER_COLOR
 from experiments.paper.pose_change import (
     GHOST_COLOR,
-    GHOST_OPACITY,
     EventStatesNoPoseChangeError,
     PoseChange,
     PoseChangeRender,
 )
-from experiments.paper.scene import SceneRender
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import Body
 
 from .offscreen_rendering import needs_a_renderer
@@ -197,58 +196,89 @@ def test_the_motions_read_off_the_run_are_the_ones_about_that_object(
 # %% drawing both poses in one view
 
 
+SOLID_GHOST = Color(GHOST_COLOR.R, GHOST_COLOR.G, GHOST_COLOR.B, 1.0)
+"""
+The ghost's own colour with nothing let through it, which is what a picture can be
+checked for by colour.
+"""
+
+
 @needs_a_renderer
 def test_both_poses_are_drawn_in_one_picture(scene_with_a_loose_piece: World) -> None:
     """
     The point of the panel is the two poses in one view, so one picture holds the object
     where it ended up and the object where it was, each in its own colour.
 
-    Drawn with the earlier pose let through fully, so that what it is drawn in is the
-    colour itself rather than a mixture of it and what it covers.
+    Drawn with nothing let through the earlier pose, so that what it is drawn in is the
+    colour itself rather than a mixture of it and what is behind it.
     """
     subject = loose_piece(scene_with_a_loose_piece)
-    drawn = PoseChangeRender(world=scene_with_a_loose_piece, ghost_opacity=1.0).of(
+    drawn = PoseChangeRender(world=scene_with_a_loose_piece, ghost=SOLID_GHOST).of(
         PoseChange.of(moved(subject))
     )
     assert drawn.holds(ANSWER_COLOR)
-    assert drawn.holds(GHOST_COLOR)
+    assert drawn.holds(SOLID_GHOST)
 
 
 @needs_a_renderer
-def test_the_earlier_pose_is_let_through_rather_than_painted_on(
-    scene_with_a_loose_piece: World,
-) -> None:
+def test_the_earlier_pose_is_see_through(scene_with_a_loose_piece: World) -> None:
     """
-    A ghost that covered what it stands in front of would read as the object itself, so
-    the earlier pose is mixed with the scene rather than laid solidly over it.
+    A ghost that hid whatever it stands in front of would read as the object itself, so
+    it is drawn see-through -- which is a property of the body in the scene rather than
+    of a picture laid over one, and so shows up as a different picture entirely.
     """
     subject = loose_piece(scene_with_a_loose_piece)
     change = PoseChange.of(moved(subject))
 
-    def drawn_with(opacity: float) -> np.ndarray:
-        return (
-            PoseChangeRender(world=scene_with_a_loose_piece, ghost_opacity=opacity)
-            .of(change)
-            .image
-        )
+    see_through = PoseChangeRender(world=scene_with_a_loose_piece).of(change)
+    solid = PoseChangeRender(world=scene_with_a_loose_piece, ghost=SOLID_GHOST).of(
+        change
+    )
 
-    faint = drawn_with(GHOST_OPACITY)
-    assert not np.array_equal(faint, drawn_with(1.0))
-    assert not np.array_equal(faint, drawn_with(0.0))
+    assert not np.array_equal(see_through.image, solid.image)
 
 
-@needs_a_renderer
-def test_the_twin_is_left_exactly_as_it_was(scene_with_a_loose_piece: World) -> None:
+def test_the_ghost_is_a_body_of_the_scene_wearing_the_objects_own_shapes(
+    scene_with_a_loose_piece: World,
+) -> None:
     """
-    Drawing where an object used to be means putting it back there for the length of one
-    render, so the world the next query is answered from has to come out unchanged.
+    The earlier pose is a thing standing in the scene rather than a picture laid over
+    one, which is what lets the renderer light it and hide it behind whatever is in
+    front of it.
+
+    It wears the object's own shapes, so what stands there is the piece itself.
     """
     subject = loose_piece(scene_with_a_loose_piece)
-    stood_at = subject.parent_connection.origin.to_np().copy()
+    render = PoseChangeRender(world=scene_with_a_loose_piece)
 
-    PoseChangeRender(world=scene_with_a_loose_piece).of(PoseChange.of(moved(subject)))
+    ghost = render.stand_a_ghost_at(
+        subject, Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
+    )
 
-    assert np.array_equal(subject.parent_connection.origin.to_np(), stood_at)
+    assert ghost in scene_with_a_loose_piece.kinematic_structure_entities
+    assert len(ghost.visual.shapes) == len(subject.visual.shapes)
+    assert all(
+        theirs is not ours
+        for theirs, ours in zip(ghost.visual.shapes, subject.visual.shapes)
+    )
+
+
+def test_the_ghost_is_taken_back_out_of_the_scene(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    The next question is answered from the world the run recorded, so the scene cannot
+    be left with a spare piece standing in it.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    render = PoseChangeRender(world=scene_with_a_loose_piece)
+    ghost = render.stand_a_ghost_at(
+        subject, Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
+    )
+
+    render.take_the_ghost_away(ghost)
+
+    assert ghost not in scene_with_a_loose_piece.kinematic_structure_entities
 
 
 @needs_a_renderer
@@ -272,24 +302,3 @@ def test_the_render_leaves_nothing_hanging_on_the_world(
         entity.name: len(entity.simulator_additional_properties)
         for entity in stood_in_it
     } == hanging
-
-
-@needs_a_renderer
-def test_both_poses_are_drawn_from_the_same_viewpoint(
-    scene_with_a_loose_piece: World,
-) -> None:
-    """
-    A ghost is only readable as the same object moved if the two are drawn from one
-    place, so an object that ended up exactly where it started is drawn exactly as the
-    scene itself is.
-    """
-    subject = loose_piece(scene_with_a_loose_piece)
-    render = PoseChangeRender(world=scene_with_a_loose_piece, ghost=ANSWER_COLOR)
-    stands_at = render.standing_pose(subject)
-
-    ghosted = render.of(PoseChange(subject=subject, before=stands_at, after=stands_at))
-    plain = SceneRender(world=scene_with_a_loose_piece, label_answers=False).of(
-        [subject]
-    )
-
-    assert np.array_equal(ghosted.image, plain.image)
