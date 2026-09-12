@@ -8,6 +8,7 @@ from functools import cached_property
 from typing_extensions import Any, Optional, List, Tuple
 
 from krrood.entity_query_language.backends import relation_asserted_about
+from krrood.entity_query_language.explanation.explanation import explain_inference
 from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.predicate import Relation
 from krrood.entity_query_language.query.match import Match
@@ -58,6 +59,21 @@ class DetectionEvent(Symbol, ABC):
 
     def __repr__(self):
         return self.__str__()
+
+    def participating_events(self) -> List[DetectionEvent]:
+        """
+        The events a rule consumed to conclude this one.
+
+        Empty for an event no rule produced, such as one an atomic detector built
+        directly.
+        """
+        explanation = explain_inference(self)
+        if explanation is None:
+            return []
+        consumed = explanation.get_values_of_variable_nodes_of_given_type(
+            DetectionEvent
+        )
+        return [event for event in consumed.tolist() if event is not self]
 
 
 @dataclass(kw_only=True)

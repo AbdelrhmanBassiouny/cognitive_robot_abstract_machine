@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Set, List, Any, Callable
+from typing import Optional, Dict, Set, List, Callable
 
 from giskardpy.motion_statechart.context import (
     MotionStatechartContext,
@@ -94,11 +94,6 @@ class SegmindContext(ContextExtension):
     The event logger used to record detected events.
     """
 
-    placing_pairs: set[Any] = field(default_factory=set)
-    """
-    Set of placing pairs, to avoid duplicate events
-    """
-
     holes: List[Aperture] = field(default_factory=list)
     """
     List of bodies that can be considered holes
@@ -126,11 +121,6 @@ class SegmindContext(ContextExtension):
     :class:`~segmind.detectors.atomic_event_detectors_nodes.LossOfContactDetector`
     (which only ever recomputes real contact) immediately -- and incorrectly -- drop
     every hole entry the very next tick.
-    """
-
-    insertion_pairs: set[Any] = field(default_factory=set)
-    """
-    List of insertion pairs, to avoid duplicate events
     """
 
     tracker_registry: ObjectTrackerFactory = field(default_factory=ObjectTrackerFactory)
@@ -184,7 +174,6 @@ class AbstractDetector(MotionStatechartNode, ABC):
                 e, segmind_context_extension.tracker_registry
             )
         return ObservationStateValues.TRUE if events else ObservationStateValues.FALSE
-
 
     def get_relation(
         self,

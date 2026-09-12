@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import List, Dict, Set
@@ -14,7 +13,6 @@ from segmind.datastructures.events import (
     LossOfContainmentEvent,
     ContactEvent,
     LossOfContactEvent,
-    InsertionEvent,
 )
 
 from semantic_digital_twin.reasoning.predicates import (
@@ -30,6 +28,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 from segmind.detectors.base import AbstractDetector, SegmindContext
+from segmind.detectors.rules import insertion_rule
 
 HOLE_CONTACT_OVERLAP_THRESHOLD = 0.02
 """
@@ -479,63 +478,17 @@ class InsertionDetector(AbstractDetector):
         tracked_objs: List[Body],
     ) -> List[DetectionEvent]:
         """
-        Updates context and processes tracked objects to generate a list of events.
-
-        This method analyzes contact and containment events within the tracked objects,
-        compares their timestamps with a threshold, and generates insertion events if
-        specific conditions are met. It modifies the context state to track insertion
-        pairs that have already been processed and ensures exclusivity during event
-        generation.
+        Concludes an insertion event for every object that touched a hole and came to be
+        contained in something within :attr:`shift_threshold`, and that was not already
+        inserted through that same hole.
 
         :param context: The current motion statechart context.
         :param segmind_context: The shared SegmindContext containing the information required to track events.
         :param tracked_objs: List of Body objects to analyze for insertion events.
-        :return List of InsertionEvent objects representing detected insertions.
+        :return: List of InsertionEvent objects representing detected insertions.
         """
-        events = []
-        hole_by_root = {
-            hole_root: aperture
-            for aperture, hole_root in segmind_context.hole_regions.items()
-        }
-        contact_events = [
-            i
-            for i in segmind_context.logger.get_events()
-            if isinstance(i, ContactEvent)
-        ]
-        contact_events_with_holes = [
-            i
-            for i in contact_events
-            if i.with_object in segmind_context.holes or i.with_object in hole_by_root
-        ]
-        containment_event = [
-            i
-            for i in segmind_context.logger.get_events()
-            if isinstance(i, ContainmentEvent)
-        ]
-
-        by_object = defaultdict(list)
-        for i in contact_events_with_holes:
-            by_object[i.tracked_object].append(i)
-
-        for j in containment_event:
-            for i in by_object.get(j.tracked_object, []):
-                if abs(i.timestamp - j.timestamp) >= self.shift_threshold:
-                    continue
-
-                key = (i.tracked_object.id, i.with_object.id)
-                if key in segmind_context.insertion_pairs:
-                    continue
-
-                segmind_context.insertion_pairs.add(key)
-
-                events.append(
-                    InsertionEvent(
-                        tracked_object=i.tracked_object,
-                        with_object=i.with_object,
-                        inserted_into_objects=[j.with_object],
-                        through_hole=hole_by_root.get(i.with_object),
-                    )
-                )
-                break
-
-        return events
+        return insertion_rule(
+            logged_events=segmind_context.logger.get_events(),
+            holes=segmind_context.holes,
+            shift_threshold=self.shift_threshold,
+        ).tolist()
