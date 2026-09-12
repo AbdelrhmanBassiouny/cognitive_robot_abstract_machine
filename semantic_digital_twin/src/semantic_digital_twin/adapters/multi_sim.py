@@ -22,6 +22,7 @@ from typing_extensions import (
     Set,
     Type,
     Optional,
+    Sequence,
     Set,
     Union,
 )
@@ -155,6 +156,21 @@ class GeomVisibilityAndCollisionType(IntEnum):
     Undefined geometry type (variant 2).
     """
 
+    @property
+    def is_drawn(self) -> bool:
+        """
+        Whether a renderer draws a geom of this group without being asked to.
+
+        MuJoCo's own default shows the first three groups and hides the rest, so geometry
+        a body only takes up space with is built into the scene without appearing in any
+        picture of it.
+        """
+        return self in (
+            GeomVisibilityAndCollisionType.VISIBLE_AND_COLLIDABLE_1,
+            GeomVisibilityAndCollisionType.VISIBLE_AND_COLLIDABLE_2,
+            GeomVisibilityAndCollisionType.ONLY_VISIBLE,
+        )
+
 
 class RegionAppearance(Enum):
     """
@@ -186,6 +202,13 @@ class RegionAppearance(Enum):
 FULLY_OPAQUE = 1.0
 """
 The opacity a shape is drawn at when nothing asked for it to be faded.
+"""
+
+
+OVERVIEW_VIEWPOINT = (1.0, -1.0, 1.0)
+"""
+Which way from a scene's centre the overview camera stands: diagonally off it and
+above, so the whole scene is seen at once.
 """
 
 
@@ -1024,6 +1047,19 @@ class MujocoCamera(MultiSimCamera):
         x_axis.scale(1)
         return RotationMatrix.from_vectors(x=x_axis, z=z_axis)
 
+    @staticmethod
+    def quaternion_of(pose: HomogeneousTransformationMatrix) -> List[float]:
+        """
+        A pose's turn, ordered the way :attr:`quaternion` states one.
+
+        MuJoCo puts a quaternion's real part first while the twin puts it last, so the
+        two are the same turn written two ways.
+
+        :param pose: The pose whose turn is wanted.
+        """
+        x, y, z, real = pose.to_quaternion().to_np().tolist()
+        return [real, x, y, z]
+
     @classmethod
     def overview_pose(
         cls,
@@ -1040,13 +1076,38 @@ class MujocoCamera(MultiSimCamera):
         :param distance_factor: Multiplier applied to the box's bounding diagonal to place the camera.
         :return: The framing camera's world-frame pose.
         """
+        return cls.pose_looking_from(
+            bounds, OVERVIEW_VIEWPOINT, minimum_distance, distance_factor
+        )
+
+    @classmethod
+    def pose_looking_from(
+        cls,
+        bounds: numpy.ndarray,
+        viewpoint: Sequence[float],
+        minimum_distance: float = 1.0,
+        distance_factor: float = 1.5,
+    ) -> HomogeneousTransformationMatrix:
+        """
+        Computes a viewpoint from the given side that frames an axis-aligned bounding
+        box: the camera stands off the box's centre along the given direction and
+        looks back at it.
+
+        :param bounds: A ``(2, 3)`` array of the scene's ``[minimum, maximum]`` corners.
+        :param viewpoint: Which way from the box's centre the camera stands, as a
+            direction in the world frame; its length does not matter.
+        :param minimum_distance: Floor (in meters) for the camera's distance to the box center,
+            so a box that collapses to a point still gets a sensibly framed camera.
+        :param distance_factor: Multiplier applied to the box's bounding diagonal to place the camera.
+        :return: The framing camera's world-frame pose.
+        """
         minimum = Point3.from_iterable(bounds[0])
         maximum = Point3.from_iterable(bounds[1])
         diagonal_vector = maximum - minimum
         center = minimum + diagonal_vector * 0.5
         diagonal = float(diagonal_vector.norm().to_np().item())
         distance = max(diagonal, minimum_distance) * distance_factor
-        direction = Vector3.from_iterable([1.0, -1.0, 1.0])
+        direction = Vector3.from_iterable(list(viewpoint))
         direction.scale(1)
         position = center + direction * distance
         rotation = cls._look_at_rotation(position, center)
@@ -2055,6 +2116,10 @@ class MujocoBuilder(MultiSimBuilder):
             connection = self.world.get_connection_by_name(joint_name)
             if compiled_model.jnt_type[joint_id] == mujoco.mjtJoint.mjJNT_FREE:
                 qpos += self._keyframe_qpos_for_free_connection(connection)
+            elif isinstance(connection, ActiveConnection1DOF):
+                # The joint's own angle: a connection following a shared degree of
+                # freedom scales and offsets it.
+                qpos.append(connection.position)
             else:
                 qpos += [
                     self.world.state[dof.id].position
@@ -3694,15 +3759,18 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         :param connection: The 1DoF connection whose DoF is written.
         :param qpos_address: Index of the joint's single qpos slot.
         """
-        self._world.state[connection.raw_dof.id].position = float(
-            self.simulator._mj_data.qpos[qpos_address]
-        )
+        # The joint holds the connection's own angle; the shared degree of freedom
+        # behind a following connection is the angle with the scaling and offset
+        # taken off again.
+        self._world.state[connection.raw_dof.id].position = (
+            float(self.simulator._mj_data.qpos[qpos_address]) - connection.offset
+        ) / connection.multiplier
         if connection.raw_dof not in self.physically_simulated_dofs:
             return
         dof_adr = self._resolve_dof_adr(connection)
         if dof_adr is not None:
-            self._world.state[connection.raw_dof.id].velocity = float(
-                self.simulator._mj_data.qvel[dof_adr]
+            self._world.state[connection.raw_dof.id].velocity = (
+                float(self.simulator._mj_data.qvel[dof_adr]) / connection.multiplier
             )
 
     def _sim_to_world(self) -> None:
@@ -3838,7 +3906,11 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         ctrl_adr = None if actuator is None else self._resolve_ctrl_adr(connection)
         physically_simulated = connection.raw_dof in self.physically_simulated_dofs
         if not physically_simulated:
-            self.simulator._mj_data.qpos[qpos_address] = positions[idx]
+            # The joint takes the connection's own angle, scaled and offset from the
+            # shared degree of freedom; the actuator drives that degree of freedom.
+            self.simulator._mj_data.qpos[qpos_address] = (
+                positions[idx] * connection.multiplier + connection.offset
+            )
             setpoint = positions[idx]
         else:
             setpoint = self._integrate_desired_position(
@@ -4180,3 +4252,77 @@ class MujocoSim(MultiSim):
     simulator: MujocoSimulator
     synchronizer: Type[MultiSimSynchronizer] = MujocoSynchronizer
     default_file_path: str = "/tmp/scene.xml"
+
+    # %% what the scene draws an entity with
+
+    def geoms_of(self, entity: KinematicStructureEntity) -> Tuple[int, ...]:
+        """
+        The geoms the scene draws one entity with, in the order the model holds them.
+
+        Empty for an entity the scene holds a frame for but draws nothing of, which is
+        what a region hidden by :attr:`RegionAppearance.HIDDEN` is.
+
+        :param entity: The body or region whose geoms are wanted.
+        :raises MujocoEntityNotFoundError: If the scene holds no body of that name.
+        """
+        model = self.simulator._mj_model
+        body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, entity.name.name)
+        if body < 0:
+            raise MujocoEntityNotFoundError(
+                entity_name=entity.name.name, entity_type=mujoco.mjtObj.mjOBJ_BODY
+            )
+        return tuple(
+            geom for geom in range(model.ngeom) if model.geom_bodyid[geom] == body
+        )
+
+    def make_room_for_a_picture(self, width: int, height: int) -> None:
+        """
+        Widen the scene's offscreen buffer to a picture of the given size.
+
+        A model states how large a picture may be drawn away from a window, and its
+        default is smaller than a camera's picture usually is; a renderer asked for more
+        than the model allows refuses outright.
+
+        :param width: Width of the picture to be drawn, in pixels.
+        :param height: Height of the picture to be drawn, in pixels.
+        """
+        model = self.simulator._mj_model
+        model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
+        model.vis.global_.offheight = max(model.vis.global_.offheight, height)
+
+    def make_visible(self, entity: KinematicStructureEntity) -> None:
+        """
+        Draw an entity the scene holds geometry for but draws nothing of.
+
+        A body stated with collision geometry and no visual geometry is built into a
+        group a renderer hides, so a picture that has to show that body needs its geoms
+        moved into one a renderer draws. An entity the scene already draws is left
+        alone, so nothing is drawn a second time over its own visual geometry.
+
+        :param entity: The body or region to draw.
+        :raises MujocoEntityNotFoundError: If the scene holds no body of that name.
+        """
+        model = self.simulator._mj_model
+        geoms = self.geoms_of(entity)
+        if any(
+            GeomVisibilityAndCollisionType(model.geom_group[geom]).is_drawn
+            for geom in geoms
+        ):
+            return
+        for geom in geoms:
+            model.geom_group[geom] = GeomVisibilityAndCollisionType.ONLY_VISIBLE
+
+    def recolor(self, entity: KinematicStructureEntity, color: Color) -> None:
+        """
+        Draw one entity in the given colour from the next render on.
+
+        Changes what the scene is drawn in without changing the world it mirrors, so a
+        picture can single an entity out while the twin keeps the colour it states.
+
+        :param entity: The body or region to recolor.
+        :param color: The colour to draw every geom of it in.
+        :raises MujocoEntityNotFoundError: If the scene holds no body of that name.
+        """
+        model = self.simulator._mj_model
+        for geom in self.geoms_of(entity):
+            model.geom_rgba[geom] = color.to_rgba()

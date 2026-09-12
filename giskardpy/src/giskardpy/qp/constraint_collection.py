@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from typing_extensions import Optional, TYPE_CHECKING
+from typing_extensions import Iterable, Iterator, Optional, TYPE_CHECKING
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.data_types.exceptions import (
@@ -66,6 +66,12 @@ class ConstraintCollection:
                 result[c.enforcement_strategy].append(c)
         return result
 
+    def __iter__(self) -> Iterator[GiskardConstraint]:
+        """
+        Iterates the collected constraints in insertion order.
+        """
+        return iter(self._constraints)
+
     @property
     def equality_constraints(self) -> list[GiskardEqualityConstraint]:
         """
@@ -84,14 +90,13 @@ class ConstraintCollection:
             c for c in self._constraints if isinstance(c, GiskardInequalityConstraint)
         ]
 
-    def merge(self, name_prefix: str, other: ConstraintCollection) -> None:
+    def merge(self, name_prefix: str, constraints: Iterable[GiskardConstraint]) -> None:
         """
-        Adds the constraints of another collection, prefixing their names to keep them
-        unique.
+        Adds the given constraints, prefixing their names to keep them unique.
         """
-        for constraint in other._constraints:
+        for constraint in constraints:
             constraint.name = f"{name_prefix}/{constraint.name}"
-        self._constraints.extend(other._constraints)
+            self._constraints.append(constraint)
         self._are_names_unique()
 
     def add_constraint(self, constraint: GiskardConstraint) -> None:

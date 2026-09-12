@@ -11,7 +11,12 @@ import threading
 import time
 from dataclasses import dataclass, field
 
+import pytest
 from coraplex.datastructures.enums import Arms
+from segmind.datastructures.events import PickUpEvent
+
+from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
     RECLOSE_MARGIN,
@@ -25,8 +30,11 @@ from experiments.tracy_experiments.montessori.grasp_widths import (
 from experiments.tracy_experiments.pickup.pickup_demo_real import (
     GRASP_HEIGHT_OFFSET,
     POST_LIFT_SETTLE_SECONDS,
+    PieceNotSeenError,
     _grasp_target_pose,
     _SortingRig,
+    outcome_of,
+    piece_asked_about,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.world_entity import Body
@@ -262,3 +270,79 @@ def test_a_slip_streams_a_gripper_slip_event_to_the_feed():
     assert isinstance(first_event, GripperSlipEvent)
     assert first_event.tracked_object is body
     assert _no_slip_watch_thread_left_running()
+
+
+# %% what the run records of itself
+
+
+def test_an_event_a_monitor_reports_reaches_the_dashboard_and_the_episode():
+    """
+    An event goes to the live dashboard as before, and is kept as a tick of the trial
+    the run records, stamped with the moment it arrived.
+    """
+    feed = RecordingFeed()
+    rig = _slip_watch_rig(RecordingGripper(), _held(), feed)
+    piece = Body(name=PrefixedName("shape"))
+    picked_up = PickUpEvent(tracked_object=piece)
+
+    rig.note_event(piece.name.name, picked_up)
+
+    assert [published.event for published in feed.published] == [picked_up]
+    [tick] = rig.observer.ticks
+    assert tick.events == [picked_up]
+    assert 0.0 <= tick.moment <= rig.observer.elapsed_seconds
+
+
+def test_a_plan_the_rig_performed_is_kept_for_the_episode():
+    rig = _slip_watch_rig(RecordingGripper(), _held())
+    plan = PerformedNothing()
+
+    rig.perform_and_record(plan)
+
+    assert plan.performed
+    assert [performed.plan for performed in rig.observer.plans] == [plan]
+
+
+@dataclass
+class PerformedNothing:
+    """
+    Stands in for a plan, remembering that it was performed.
+    """
+
+    performed: bool = False
+    """
+    Whether :meth:`perform` was called.
+    """
+
+    def perform(self) -> None:
+        self.performed = True
+
+
+def test_the_run_succeeded_when_its_monitors_saw_the_asked_piece_picked_up():
+    piece = Body(name=PrefixedName("shape"))
+    another = Body(name=PrefixedName("another"))
+
+    assert outcome_of([PickUpEvent(tracked_object=piece)], piece) is (
+        TrialOutcome.SUCCEEDED
+    )
+    assert outcome_of([PickUpEvent(tracked_object=another)], piece) is (
+        TrialOutcome.FAILED
+    )
+
+
+def test_asking_about_a_piece_the_look_did_not_find_says_so():
+    with pytest.raises(PieceNotSeenError) as raised:
+        piece_asked_about(LookedAndFound(pieces=[]), MontessoriShapeCategory.CUBE)
+    assert raised.value.category is MontessoriShapeCategory.CUBE
+
+
+@dataclass
+class LookedAndFound:
+    """
+    Stands in for a run that has looked, holding the pieces the look found.
+    """
+
+    pieces: list
+    """
+    The pieces, as the world holds them.
+    """

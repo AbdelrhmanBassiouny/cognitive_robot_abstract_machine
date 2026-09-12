@@ -13,9 +13,13 @@ from dataclasses import dataclass
 
 import pytest
 from krrood.adapters.json_serializer import from_json, to_json
+from krrood.entity_query_language.predicate import Relation
+from typing_extensions import Type
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.reasoning.predicates import Near, SupportedBy
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
+    Point3,
 )
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
@@ -44,6 +48,7 @@ from experiments.questions.question_set import QuestionSet
 from experiments.questions.long_term_memory import AnythingMovedInTheEpisode
 from experiments.questions.working_memory import (
     AnythingMoved,
+    BeliefAgreesWithPerception,
     HeldInTheHand,
     NumberOfOwnBodies,
     NumberOfOwnDegreesOfFreedom,
@@ -60,6 +65,8 @@ from experiments.questions.working_memory import (
     stands_in_the_scene_of,
 )
 from krrood.adapters.json_serializer import from_json, to_json
+from krrood.entity_query_language.predicate import Relation
+from typing_extensions import Type
 
 TABLE_COLOUR = Color(0.5, 0.3, 0.1)
 """
@@ -393,6 +400,130 @@ def test_the_cube_is_left_of_the_cylinder_and_not_right_of_it(
     )
     assert left.ask(robot) is True
     assert right.ask(robot) is False
+
+
+# %% whether the eyes and the belief agree
+
+
+def believed_of(
+    scene: QuestionedScene, *contradicted: Type[Relation]
+) -> BeliefAgreesWithPerception:
+    """
+    What a look made of the belief about the cube: it bore out everything unless the
+    test names a relation it did not, in which case someone else acted on the cube.
+
+    :param scene: The scene the cube stands in.
+    :param contradicted: The kinds of relation the look did not bear out.
+    """
+    return BeliefAgreesWithPerception(
+        subject=scene.cube,
+        contradicted=list(contradicted),
+        nothing_was_found=False,
+        perturbed=bool(contradicted),
+    )
+
+
+def test_whether_the_eyes_and_the_belief_agree_is_a_spatial_question(
+    scene: QuestionedScene,
+):
+    asked = believed_of(scene)
+
+    assert asked.bucket is Bucket.SUPPORT_AND_SPATIAL_RELATIONS
+    assert asked.answer_type is bool
+
+
+def test_a_scene_on_its_own_is_not_asked_whether_its_eyes_and_belief_agree(
+    scene: QuestionedScene,
+):
+    """
+    A belief and the look that checked it are what this question is about, and a scene
+    holds neither, so it joins the set only where such a check happened.
+    """
+    assert (
+        BeliefAgreesWithPerception.asked_of(
+            QuestionedThings(
+                object_asked_about=scene.cube,
+                object_compared_against=scene.cylinder,
+                object_in_the_hand=scene.held_cube,
+                own_body_asked_about=scene.own_body_name,
+                point_of_view=scene.point_of_view,
+            )
+        )
+        == []
+    )
+    assert BeliefAgreesWithPerception not in [
+        type(question) for question in scene.question_set.questions
+    ]
+
+
+def test_a_look_that_bore_out_every_believed_relation_agrees_with_the_belief(
+    scene: QuestionedScene, robot: AbstractRobot
+):
+    asked = believed_of(scene)
+
+    assert asked.ask(robot) is True
+    assert asked.solutions(robot) == []
+    assert asked.matches_ground_truth(robot)
+
+
+def test_a_look_that_contradicts_a_believed_relation_disagrees_with_the_belief(
+    scene: QuestionedScene, robot: AbstractRobot
+):
+    asked = believed_of(scene, SupportedBy, Near)
+
+    assert asked.ask(robot) is False
+    assert asked.solutions(robot) == [SupportedBy, Near]
+    assert asked.matches_ground_truth(robot)
+
+
+def test_a_look_that_found_nothing_disagrees_though_it_contradicts_no_relation(
+    scene: QuestionedScene, robot: AbstractRobot
+):
+    """
+    An absence contradicts no relation in particular and is still the two accounts
+    failing to agree, which is what a relabelled detection leaves behind.
+    """
+    asked = BeliefAgreesWithPerception(
+        subject=scene.cube, contradicted=[], nothing_was_found=True, perturbed=True
+    )
+
+    assert asked.ask(robot) is False
+    assert asked.matches_ground_truth(robot)
+
+
+def test_an_object_nobody_else_acted_on_is_meant_to_agree(
+    scene: QuestionedScene, robot: AbstractRobot
+):
+    """
+    Ground truth in simulation: the two accounts differ exactly when someone other than
+    the robot acted on the object, or on what the look reported of it.
+    """
+    unperturbed = BeliefAgreesWithPerception(
+        subject=scene.cube, contradicted=[], nothing_was_found=False, perturbed=False
+    )
+    perturbed = BeliefAgreesWithPerception(
+        subject=scene.cube, contradicted=[], nothing_was_found=False, perturbed=True
+    )
+
+    assert unperturbed.ground_truth(robot) is True
+    assert perturbed.ground_truth(robot) is False
+
+
+def test_whether_the_eyes_and_the_belief_agree_round_trips_with_what_failed(
+    scene: QuestionedScene,
+):
+    """
+    Which relations the look did not bear out is part of what was asked, so a recorded
+    query keeps them rather than only the verdict.
+    """
+    asked = believed_of(scene, SupportedBy, Near)
+
+    restored = from_json(to_json(asked))
+
+    assert type(restored) is BeliefAgreesWithPerception
+    assert restored.contradicted == [SupportedBy, Near]
+    assert restored.subject.name == scene.cube.name
+    assert restored.perturbed is True
 
 
 # %% temporal and agency

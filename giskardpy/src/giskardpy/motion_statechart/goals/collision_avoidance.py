@@ -46,9 +46,12 @@ from semantic_digital_twin.world_description.world_entity import (
 
 
 @dataclass(eq=False, repr=False)
-class _CollisionAvoidanceTask(Task):
+class CollisionAvoidanceTask(Task):
     """
     Superclass with helper methods for collision avoidance tasks.
+
+    Public because it is the type a question about what the robot was constrained by
+    names to tell keeping clear of things apart from the rest.
     """
 
 
@@ -58,7 +61,7 @@ class _CancelBecauseCollisionViolated(CancelMotion):
     Cancels the motion when one of the collision avoidance tasks it watches is violated.
     """
 
-    tasks: list[_CollisionAvoidanceTask] = field(kw_only=True)
+    tasks: list[CollisionAvoidanceTask] = field(kw_only=True)
     """
     The list of collision avoidance tasks to check for collisions.
     """
@@ -87,7 +90,7 @@ class _CancelBecauseCollisionViolated(CancelMotion):
 
 
 @dataclass(eq=False, repr=False)
-class _ExternalCollisionAvoidanceNode(_CollisionAvoidanceTask):
+class _ExternalCollisionAvoidanceNode(CollisionAvoidanceTask):
     """
     Avoids external collisions between a collision group and its collision_index-closest
     object in the environment.
@@ -508,7 +511,7 @@ class ExternalCollisionDistanceMonitor(MotionStatechartNode):
 
 
 @dataclass(eq=False, repr=False)
-class _SelfCollisionAvoidanceNode(_CollisionAvoidanceTask):
+class _SelfCollisionAvoidanceNode(CollisionAvoidanceTask):
     """
     Avoids self collisions between two collision groups.
 

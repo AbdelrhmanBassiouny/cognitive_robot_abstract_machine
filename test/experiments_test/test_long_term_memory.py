@@ -16,6 +16,7 @@ from experiments.episodes.episode import (
     Episode,
     InsertionAttempt,
     InsertionOutcome,
+    RecordedMotion,
     RecordedTrial,
 )
 from experiments.episodes.long_term_memory import (
@@ -26,7 +27,8 @@ from experiments.episodes.recording import EpisodeRecording, open_recording
 from experiments.montessori.results_database import ResultsDatabase
 from experiments.scenarios.report import GoalReached, Metric, Report, TrialDuration
 from experiments.scenarios.trial import TrialOutcome
-from krrood.entity_query_language.factories import an, entity, variable
+from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from krrood.entity_query_language.factories import an, contains, entity, variable
 
 from .test_episode_recording import sorting_episode
 from .test_episodes import SortingFailureType, minimal_plan
@@ -41,6 +43,33 @@ ROUND_HOLE = "circular_hole_1"
 """
 The shape the other recorded attempt was made at, so a question about the square one has
 something to leave out.
+"""
+
+MOMENT_THE_REACH_BEGAN = 1.5
+"""
+When the first of the two recorded motions began, in seconds from the start of the
+trial.
+"""
+
+MOMENT_THE_REACH_ENDED = 4.0
+"""
+When it ended, leaving a gap before the next one that neither of them ran in.
+"""
+
+MOMENT_THE_GRASP_BEGAN = 4.5
+"""
+When the second recorded motion began.
+"""
+
+MOMENT_THE_GRASP_ENDED = 9.0
+"""
+When it ended, which is before the trial did.
+"""
+
+MOMENT_ONLY_THE_GRASP_RAN_AT = 5.0
+"""
+A moment the second motion ran at and the first did not, which is what a question about
+one moment has to single it out by.
 """
 
 
@@ -178,6 +207,87 @@ def test_a_question_about_the_history_is_answered_with_domain_objects(
     assert isinstance(answered, InsertionAttempt)
     assert answered.shape_name == SQUARE_HOLE
     assert answered.observed_failure is SortingFailureType.WRONG_HOLE
+
+
+# %% the motions a run ran
+
+
+def trial_that_ran_two_motions(episode: Episode) -> RecordedTrial:
+    """
+    One trial that ran a motion, waited, and ran another.
+
+    :param episode: The episode the trial belongs to.
+    """
+    return RecordedTrial(
+        episode=episode,
+        outcome=TrialOutcome.SUCCEEDED,
+        duration=10.0,
+        motions=[
+            RecordedMotion(
+                motion_statechart=MotionStatechart(),
+                start_moment=MOMENT_THE_REACH_BEGAN,
+                end_moment=MOMENT_THE_REACH_ENDED,
+            ),
+            RecordedMotion(
+                motion_statechart=MotionStatechart(),
+                start_moment=MOMENT_THE_GRASP_BEGAN,
+                end_moment=MOMENT_THE_GRASP_ENDED,
+            ),
+        ],
+    )
+
+
+def test_the_motions_of_one_episode_are_answered_from_the_database(results_database):
+    """
+    A trial holds its motions in a collection, so asking which motions a run made
+    crosses the association table the generated interface reaches that collection
+    through.
+    """
+    episode = sorting_episode()
+    trial = trial_that_ran_two_motions(episode)
+    record(results_database, trial)
+
+    recorded_trial = variable(type_=RecordedTrial, domain=[])
+    motion = variable(type_=RecordedMotion, domain=[])
+    answered = LongTermMemory(results_database).answer(
+        an(
+            entity(motion).where(
+                recorded_trial.episode.identifier == episode.identifier,
+                contains(recorded_trial.motions, motion),
+            )
+        )
+    )
+
+    assert sorted(one.start_moment for one in answered) == [
+        one.start_moment for one in trial.motions
+    ]
+    assert sorted(one.end_moment for one in answered) == [
+        one.end_moment for one in trial.motions
+    ]
+
+
+def test_the_motion_that_was_running_at_a_moment_is_the_one_answered(results_database):
+    """
+    What the spans are recorded for: the motion a question about a moment is about is
+    the one whose span holds that moment, which is asked as a condition on the spans
+    rather than by reading every motion back and picking one out afterwards.
+    """
+    trial = trial_that_ran_two_motions(sorting_episode())
+    record(results_database, trial)
+    _, grasp = trial.motions
+
+    motion = variable(type_=RecordedMotion, domain=[])
+    [answered] = LongTermMemory(results_database).answer(
+        an(
+            entity(motion).where(
+                motion.start_moment <= MOMENT_ONLY_THE_GRASP_RAN_AT,
+                motion.end_moment >= MOMENT_ONLY_THE_GRASP_RAN_AT,
+            )
+        )
+    )
+
+    assert answered.start_moment == grasp.start_moment
+    assert answered.end_moment == grasp.end_moment
 
 
 # %% the report a run rendered, rebuilt from what it recorded

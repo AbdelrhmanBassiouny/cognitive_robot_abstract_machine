@@ -247,3 +247,28 @@ class RealRunNeedsAPerceivedScene(DataclassException):
             "Give the scenario a scene builder that perceives the scene, or run it in "
             "simulation."
         )
+
+
+@dataclass
+class NothingHoldsThePieceUp(DataclassException):
+    """
+    Raised when the surface a loose piece rests on is asked for and the twin has it
+    resting on neither of the scene's two.
+    """
+
+    shape_category: MontessoriShapeCategory
+    """
+    The shape whose piece was asked about.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The twin has the {self.shape_category} resting on neither the table nor "
+            f"the board, so nothing in the scene holds it up."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Let the scene settle before reading what holds a piece up, and ask this "
+            "of a loose piece rather than one the robot is holding."
+        )

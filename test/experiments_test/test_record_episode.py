@@ -47,6 +47,7 @@ from experiments.montessori.scenarios import (
     TargetHoleMoved,
     TracyHoldsAPiece,
     TracyIsIdleWhileAPieceIsPushed,
+    TracyLooksAtTheScene,
     TracySortsAPiece,
     TracyWatchesTheSceneStandStill,
 )
@@ -160,6 +161,7 @@ def test_the_flags_are_read(tmp_path):
         (ScenarioChoice.ROBOT_SORTS_A_PIECE, TracySortsAPiece),
         (ScenarioChoice.PIECE_PUSHED_WHILE_IDLE, TracyIsIdleWhileAPieceIsPushed),
         (ScenarioChoice.PIECE_HELD_WHEN_ASKED, TracyHoldsAPiece),
+        (ScenarioChoice.ROBOT_LOOKS_AT_THE_SCENE, TracyLooksAtTheScene),
     ],
 )
 def test_a_scenario_choice_names_the_scenario_it_builds(choice, scenario_class):

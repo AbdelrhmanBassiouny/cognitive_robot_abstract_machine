@@ -15,15 +15,26 @@ import numpy as np
 
 import segmind
 
+# imported so that every symbolic operation segmind declares is declared by the time the
+# ignored classes below are read
+import segmind.detectors.rules
+
 # imported for its alternative mappings, which are collected through a global subclass
 # scan: without it segmind's spatial fields degrade to JSON columns
 import semantic_digital_twin.orm.model
 import semantic_digital_twin.orm.ormatic_interface
 from krrood.ormatic.custom_types import NumpyType
 from krrood.adapters.json_serializer import SubclassJSONSerializer
+from krrood.entity_query_language.predicate import SymbolicCallable
 from krrood.ormatic.ormatic import ORMatic
+from krrood.utils import recursive_subclasses
 
-ignored_classes = {SubclassJSONSerializer}
+ignored_classes = {
+    SubclassJSONSerializer,
+    # A symbolic operation is a step of a rule, not something an episode stores, so none
+    # of them is mapped.
+    *recursive_subclasses(SymbolicCallable),
+}
 
 dependencies = [semantic_digital_twin.orm.ormatic_interface]
 

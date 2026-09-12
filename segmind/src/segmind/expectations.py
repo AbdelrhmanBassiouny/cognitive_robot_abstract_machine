@@ -25,6 +25,7 @@ from typing_extensions import Any, Dict, List, Optional, Tuple, Type, TypeVar
 
 from krrood.entity_query_language.backends import (
     LookRequest,
+    object_stated_by,
     relation_asserted_about,
     relations_stated_in,
 )
@@ -33,10 +34,18 @@ from krrood.entity_query_language.predicate import Relation
 from krrood.entity_query_language.query.match import Match
 from krrood.patterns.belief_source import BeliefSource
 from segmind.datastructures.events import DetectionEvent, Effect, EventWithEffect
-from semantic_digital_twin.reasoning.predicates import Colored, InsideRegion, Near
+from segmind.exceptions import NothingSaysWhereItStands
+from semantic_digital_twin.reasoning.predicates import (
+    Colored,
+    InsideRegion,
+    Near,
+    PlacementRelation,
+    SupportedBy,
+)
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootKinematicStructureEntity,
 )
+from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -108,6 +117,20 @@ class Expectation(Match[Body]):
         standing in the subject's place.
         """
         return tuple(relations_stated_in(self))
+
+    @property
+    def believed_place(self) -> Point3:
+        """
+        Where the subject is believed to stand, as the first placement expected of it
+        says.
+
+        :raises NothingSaysWhereItStands: If nothing expected of the subject says where
+            it stands.
+        """
+        for stated in self.holds:
+            if issubclass(stated._type_, PlacementRelation):
+                return object_stated_by(stated).to_position()
+        raise NothingSaysWhereItStands(subject=str(self.subject.name))
 
     @property
     def colors(self) -> Tuple[Color, ...]:
@@ -334,6 +357,35 @@ class Expectations(BeliefSource):
             (
                 an(InsideRegion)(region=hole),
                 a(Near)(place=hole, radius=self.release_spread),
+            ),
+            source,
+        )
+
+    def standing_on(
+        self, subject: Body, surface: Body, source: BeliefSource
+    ) -> Expectation:
+        """
+        Expect a thing to rest on a surface, no further from where the world has it than
+        the spread allows.
+
+        What can be believed of a thing nothing has acted on, and the one belief a look
+        can be asked about before any action has declared an effect. The place is read
+        once, here, rather than every time the belief is answered: a belief that
+        followed the world would agree with whatever the world was made to say, and then
+        nothing a look reported could differ from it.
+
+        :param subject: The thing, as the world holds it.
+        :param surface: What the world has it resting on.
+        :param source: Whoever the belief is held on behalf of.
+        """
+        return self.expect(
+            subject,
+            (
+                an(SupportedBy)(supporting=surface),
+                a(Near)(
+                    place=subject.global_transform.to_position(),
+                    radius=self.release_spread,
+                ),
             ),
             source,
         )

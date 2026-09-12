@@ -1654,20 +1654,33 @@ class QuaternionConversionError(MultiSimError):
         return ""
 
 
+@dataclass
 class MujocoError(MultiSimError):
     """
     Base class for all MuJoCo-related exceptions.
     """
 
 
+@dataclass
 class MujocoEntityNotFoundError(MujocoError):
     """
     Raised when a MuJoCo entity of a given type and name cannot be found.
     """
 
     entity_name: str
+    """
+    The name the entity was looked for under.
+    """
+
     entity_type: mujoco.mjtObj
+    """
+    The kind of entity it was looked for as.
+    """
+
     action: str = "find"
+    """
+    What was being done with it when it could not be found.
+    """
 
     def error_message(self) -> str:
         return f"Failed to {self.action}: type={self.entity_type}, name='{self.entity_name}'"

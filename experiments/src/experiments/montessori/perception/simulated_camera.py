@@ -184,7 +184,7 @@ class SimulatedCamera:
             through a mirror of its own.
         """
         if self.drawn_by is not None:
-            self._make_room_for_the_picture(self.drawn_by.simulator._mj_model)
+            self.drawn_by.make_room_for_a_picture(self.width, self.height)
             return
         if self._mirror is not None:
             raise SimulatedCameraIsAlreadyLooking(self.camera.name)
@@ -199,7 +199,7 @@ class SimulatedCamera:
             MujocoSynchronizer.UNTHROTTLED_SYNC_RATE_HZ
         )
         self._mirror.simulator.start(simulate_in_thread=False, render_in_thread=False)
-        self._make_room_for_the_picture(self._mirror.simulator._mj_model)
+        self._mirror.make_room_for_a_picture(self.width, self.height)
 
     def stop(self) -> None:
         """
@@ -268,19 +268,6 @@ class SimulatedCamera:
             intrinsics=self.intrinsics,
             reference_frame_T_camera=self.reference_frame_T_camera,
         )
-
-    def _make_room_for_the_picture(self, model: mujoco.MjModel) -> None:
-        """
-        Widen a model's offscreen buffer to the picture this camera takes.
-
-        A model states how large a picture may be drawn away from a window, and its
-        default is smaller than a camera's picture usually is; a renderer asked for more
-        than the model allows refuses outright.
-
-        :param model: The MuJoCo model the pictures are drawn from.
-        """
-        model.vis.global_.offwidth = max(model.vis.global_.offwidth, self.width)
-        model.vis.global_.offheight = max(model.vis.global_.offheight, self.height)
 
     @staticmethod
     def _far_plane(model: mujoco.MjModel) -> float:

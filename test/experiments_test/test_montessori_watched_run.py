@@ -10,35 +10,48 @@ Every scene here is built headless on the test dataset's own grasping robot, the
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 
 import pytest
 from giskardpy.motion_statechart.graph_node import Task
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from krrood.ormatic.data_access_objects.helper import to_dao
+from giskardpy.motion_statechart.data_types import LifeCycleValues
 from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
 from sqlalchemy import select
+from typing_extensions import List, Set
 
-from experiments.episodes.episode import Episode
+from experiments.episodes.artifacts import ArtifactDirectory
+from experiments.episodes.episode import Episode, RecordedQuery, RecordedTrial
 from experiments.montessori.scenarios import (
+    DetectionRelabelled,
     LayoutArea,
     MontessoriSortingScenario,
+    PerceivedPoseOffset,
     PieceLayout,
+    PieceShoved,
+    SortingScene,
+    SortingStep,
     TrialNotFilmedError,
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.watched_run import WatchedSortingRun
 from experiments.orm.ormatic_interface import RecordedTrialDAO
-from experiments.questions.question import Memory
+from experiments.questions.question import BloomLevel, Bucket, Memory
+from experiments.questions.working_memory import BeliefAgreesWithPerception
+from semantic_digital_twin.reasoning.predicates import Near
 
 from .test_episode_recording import TrialsKeptInMemory
 from .test_montessori_scenarios import (
+    HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
     SEED,
     SyntheticGrasperHoldsAPiece,
     SyntheticGrasperIsIdleWhileAPieceIsPushed,
+    SyntheticGrasperLooksAtTheScene,
     SyntheticGrasperSortsAPiece,
     SyntheticGrasperWatchesTheSceneStandStill,
     board_and_the_arm,
@@ -139,6 +152,68 @@ def test_the_monitor_of_one_trial_is_stopped_before_the_next_starts(area):
 
     assert run.monitor is None
     assert len(run.records_trials.trials) == 2
+
+
+# %% the plans the robot performed, and where its joints stood
+
+
+def test_a_watched_run_records_the_plans_its_steps_performed(area):
+    """
+    A sorting run picks a piece up and puts it down as two plans, and each is kept on
+    the trial with its nodes carrying when they ran.
+    """
+    scenario = SyntheticGrasperSortsAPiece(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+        sorted_category=HELD_PIECE,
+    )
+    run = watched(scenario)
+
+    run.run(scenario)
+
+    [trial] = run.records_trials.trials
+    assert len(trial.plans) == 2
+    assert all(
+        any(node.status is LifeCycleValues.SUCCEEDED for node in performed.plan.nodes)
+        for performed in trial.plans
+    )
+
+
+def test_a_watched_run_keeps_a_trace_of_its_joints_with_the_episode(area, tmp_path):
+    """
+    Where every joint stood along the trial is what puts a moment of it back in front
+    of a reader, so it is kept beside the episode's other artifacts, under the trial's
+    own number.
+    """
+    scenario = SyntheticGrasperSortsAPiece(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+        sorted_category=HELD_PIECE,
+    )
+    run = watched(scenario)
+    run.artifacts = ArtifactDirectory(path=tmp_path).open_for(run.episode)
+
+    run.run(scenario)
+
+    [trial] = run.records_trials.trials
+    kept = run.artifacts.trial(trial.number)
+    assert kept.kept_a_joint_trace
+    trace = kept.joint_trace
+    assert not trace.is_empty
+    assert all(0.0 <= moment <= trial.duration for moment in trace.moments)
+
+
+def test_the_joint_trace_of_one_trial_is_stopped_before_the_next_starts(area):
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+    run = watched(scenario)
+    run.repetitions = 2
+
+    run.run(scenario)
+
+    assert run.joints is None
 
 
 # %% the video of a filmed trial
@@ -359,3 +434,242 @@ def test_a_motion_read_back_from_its_json_still_answers_for_the_task_that_ran(ar
             assert read_back.history.get_observation_history_of_node(
                 task_read_back
             ) == chart.history.get_observation_history_of_node(task)
+
+
+# %% whether a look bore out what the robot believed
+
+
+ANOTHER_SHAPE_THAN_THE_CUBE = MontessoriShapeCategory.CYLINDER
+"""
+The shape a relabelled cube is reported as.
+
+Any other shape of the set serves; this one shares the cube's colour, so nothing about
+the case rests on a colour telling the two apart.
+"""
+
+
+@dataclass
+class ALookAtTheScene:
+    """
+    One recorded looking trial, and the scene its look was taken of.
+
+    The scene is kept because a piece's body is named after the hole it belongs in
+    rather than after its own shape, so which piece a recorded question singles out is
+    read by asking the scene for that shape's body.
+    """
+
+    trial: RecordedTrial
+    """
+    The trial, with everything observed inside it.
+    """
+
+    scene: SortingScene
+    """
+    The scene its look was taken of.
+    """
+
+    def about(self, category: MontessoriShapeCategory) -> RecordedQuery:
+        """
+        What the look said about the belief held about one piece.
+
+        :param category: The shape whose piece the question singles out.
+        """
+        [about_it] = [
+            query
+            for query in self.trial.queries
+            if isinstance(query.question, BeliefAgreesWithPerception)
+            and query.question.subject is self.scene.body_of(category)
+        ]
+        return about_it
+
+    def about_every_piece_but(
+        self, category: MontessoriShapeCategory
+    ) -> List[RecordedQuery]:
+        """
+        What the look said about every piece other than one.
+
+        :param category: The shape to leave out.
+        """
+        return [
+            self.about(other)
+            for other in self.scene.categories
+            if other is not category
+        ]
+
+    @property
+    def pieces_asked_about(self) -> Set[MontessoriShapeCategory]:
+        """
+        The shapes the look was asked about.
+        """
+        asked_about = {
+            query.question.subject
+            for query in self.trial.queries
+            if isinstance(query.question, BeliefAgreesWithPerception)
+        }
+        return {
+            category
+            for category in self.scene.categories
+            if self.scene.body_of(category) in asked_about
+        }
+
+
+def looked_at(perturbation, area) -> ALookAtTheScene:
+    """
+    One trial of the looking run, with a change applied before the step it names,
+    recorded with everything observed inside it.
+
+    :param perturbation: The change applied, or None for a trial nothing acts on.
+    :param area: The patch of table the pieces stand on.
+    """
+    scenario = SyntheticGrasperLooksAtTheScene(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+    run = watched(scenario)
+    run.run(scenario, perturbations=[] if perturbation is None else [perturbation])
+    [trial] = run.records_trials.trials
+    return ALookAtTheScene(trial=trial, scene=SortingScene(scenario.physics.world))
+
+
+def shoved(category: MontessoriShapeCategory) -> PieceShoved:
+    """
+    Something other than the robot running into a piece just before the robot looks.
+
+    :param category: The shape of the piece that moves.
+    """
+    return PieceShoved(
+        step=SortingStep.LOOK,
+        category=category,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    )
+
+
+@pytest.fixture(scope="module")
+def an_unperturbed_look() -> ALookAtTheScene:
+    """
+    One looking trial nothing acts on, performed once: a look renders a picture of the
+    scene and reads it, which is not worth doing twice for one outcome.
+    """
+    return looked_at(None, LayoutArea.on_the_table_beside_the_board())
+
+
+@pytest.fixture(scope="module")
+def a_look_at_a_shoved_piece() -> ALookAtTheScene:
+    """
+    One looking trial whose cube something ran into while the robot was idle.
+    """
+    return looked_at(
+        shoved(MontessoriShapeCategory.CUBE),
+        LayoutArea.on_the_table_beside_the_board(),
+    )
+
+
+def test_a_look_is_asked_about_every_piece_the_robot_believes_something_of(
+    an_unperturbed_look: ALookAtTheScene,
+):
+    assert (
+        an_unperturbed_look.pieces_asked_about == an_unperturbed_look.scene.categories
+    )
+
+
+def test_a_look_at_a_scene_nobody_touched_bears_out_every_belief(
+    an_unperturbed_look: ALookAtTheScene,
+):
+    """
+    The case everything else is read against: the robot took the scene in, looked at it
+    again, and found it as it had it.
+    """
+    about_the_pieces = [
+        an_unperturbed_look.about(category)
+        for category in an_unperturbed_look.scene.categories
+    ]
+
+    assert [query.answer for query in about_the_pieces] == [
+        str(True) for _ in about_the_pieces
+    ]
+    assert all(query.answered_correctly for query in about_the_pieces)
+
+
+def test_a_belief_about_a_shoved_piece_is_contradicted_about_where_it_stands(
+    a_look_at_a_shoved_piece: ALookAtTheScene,
+):
+    """
+    Something ran into the piece while the robot was idle, so the look finds it away
+    from where the robot has it and says which claim that breaks.
+    """
+    about_the_cube = a_look_at_a_shoved_piece.about(MontessoriShapeCategory.CUBE)
+
+    assert about_the_cube.question.contradicted == [Near]
+    assert about_the_cube.answer == str(False)
+    assert about_the_cube.answered_correctly
+
+
+def test_a_belief_about_a_piece_nobody_acted_on_survives_a_perturbed_look(
+    a_look_at_a_shoved_piece: ALookAtTheScene,
+):
+    """
+    A change is aimed at one piece, and what the robot has of the others is borne out by
+    the same look, which is what keeps the measure about the piece the change names.
+    """
+    untouched = a_look_at_a_shoved_piece.about_every_piece_but(
+        MontessoriShapeCategory.CUBE
+    )
+
+    assert [query.answer for query in untouched] == [str(True) for _ in untouched]
+    assert all(query.answered_correctly for query in untouched)
+
+
+def test_a_belief_is_contradicted_when_only_the_report_of_the_piece_moved(area):
+    """
+    Nothing moved: the piece is where the robot has it and the look is told otherwise,
+    which the robot can only find out by holding the two accounts against each other.
+    """
+    looked = looked_at(
+        PerceivedPoseOffset(
+            step=SortingStep.LOOK,
+            category=MontessoriShapeCategory.CUBE,
+            offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+        ),
+        area,
+    )
+
+    about_the_cube = looked.about(MontessoriShapeCategory.CUBE)
+
+    assert about_the_cube.question.contradicted == [Near]
+    assert about_the_cube.answer == str(False)
+    assert about_the_cube.answered_correctly
+
+
+def test_a_relabelled_detection_leaves_the_belief_with_nothing_to_check(area):
+    """
+    The piece is reported as another shape, so the look reports none of the shape the
+    robot believed something of - an absence rather than a claim that failed.
+    """
+    looked = looked_at(
+        DetectionRelabelled(
+            step=SortingStep.LOOK,
+            category=MontessoriShapeCategory.CUBE,
+            reported_as=ANOTHER_SHAPE_THAN_THE_CUBE,
+        ),
+        area,
+    )
+
+    about_the_cube = looked.about(MontessoriShapeCategory.CUBE)
+
+    assert about_the_cube.question.nothing_was_found
+    assert about_the_cube.question.contradicted == []
+    assert about_the_cube.answer == str(False)
+    assert about_the_cube.answered_correctly
+
+
+def test_what_a_look_made_of_a_belief_is_scored_in_the_spatial_bucket(
+    an_unperturbed_look: ALookAtTheScene,
+):
+    """
+    Where the paper reports it: alongside the other questions about what holds a thing
+    up and where it stands.
+    """
+    about_the_cube = an_unperturbed_look.about(MontessoriShapeCategory.CUBE)
+
+    assert about_the_cube.bucket is Bucket.SUPPORT_AND_SPATIAL_RELATIONS
+    assert about_the_cube.bloom_level is BloomLevel.UNDERSTANDING

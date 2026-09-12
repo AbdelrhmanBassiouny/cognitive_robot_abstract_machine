@@ -62,6 +62,7 @@ from experiments.montessori.scenarios import (
     TargetHoleMoved,
     TracyHoldsAPiece,
     TracyIsIdleWhileAPieceIsPushed,
+    TracyLooksAtTheScene,
     TracySortsAPiece,
     TracyWatchesTheSceneStandStill,
 )
@@ -87,6 +88,7 @@ class ScenarioChoice(StrEnum):
     ROBOT_SORTS_A_PIECE = "robot-sorts-a-piece"
     PIECE_PUSHED_WHILE_IDLE = "piece-pushed-while-idle"
     PIECE_HELD_WHEN_ASKED = "piece-held-when-asked"
+    ROBOT_LOOKS_AT_THE_SCENE = "robot-looks-at-the-scene"
 
 
 class LayoutChoice(StrEnum):
@@ -453,6 +455,8 @@ class RecordingArguments:
             return TracyIsIdleWhileAPieceIsPushed
         if self.scenario is ScenarioChoice.PIECE_HELD_WHEN_ASKED:
             return TracyHoldsAPiece
+        if self.scenario is ScenarioChoice.ROBOT_LOOKS_AT_THE_SCENE:
+            return TracyLooksAtTheScene
         return TracyWatchesTheSceneStandStill
 
     def scenario_instance(
@@ -478,6 +482,8 @@ class RecordingArguments:
             return TracyIsIdleWhileAPieceIsPushed(pushed_category=self.piece, **scene)
         if self.scenario is ScenarioChoice.PIECE_HELD_WHEN_ASKED:
             return TracyHoldsAPiece(held_category=self.piece, **scene)
+        if self.scenario is ScenarioChoice.ROBOT_LOOKS_AT_THE_SCENE:
+            return TracyLooksAtTheScene(**scene)
         return TracyWatchesTheSceneStandStill(**scene)
 
     def piece_layout(self) -> Layout:

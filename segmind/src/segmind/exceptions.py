@@ -90,3 +90,31 @@ class EventNamesNoObject(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Build the event with the entity its object was seen involved with."
+
+
+# %% expectations
+
+
+@dataclass
+class NothingSaysWhereItStands(DataclassException):
+    """
+    Raised when an expectation is asked where its subject is believed to stand and
+    nothing expected of it says.
+    """
+
+    subject: str
+    """
+    The thing the expectation is about, as the world names it.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Nothing believed of {self.subject} says where it stands, so there is no "
+            f"believed place to read."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Expect a placement of it -- that it lies in a region, or stands near a "
+            "place -- or ask what is believed of it instead of where."
+        )

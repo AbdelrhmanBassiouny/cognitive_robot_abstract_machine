@@ -20,15 +20,17 @@ from typing_extensions import Dict, List, Type
 from coraplex.datastructures.enums import ExecutionType
 
 from experiments.montessori.pieces import FULL_SIZE_PIECES, KNOWN_PIECES
-from krrood.entity_query_language.factories import variable
+from krrood.entity_query_language.factories import an, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 
 from experiments.montessori.scenarios import (
+    BelieveWhatTheSceneShows,
     BoardOnItsOwnTable,
     CENTIMETRES_PER_METRE,
     CONTAINED_IN_ITS_LANDING_REGION,
     DEFAULT_VIDEO_DIRECTORY_NAME,
     DetectionRelabelled,
+    HOW_FAR_A_LOOK_MAY_DISAGREE_ABOUT_A_PLACE,
     HOW_FAR_A_MOVED_HOLE_GOES,
     LayoutArea,
     LayoutAsFound,
@@ -48,6 +50,7 @@ from experiments.montessori.scenarios import (
     PiecePushedWhileTheRobotIsIdle,
     PieceShoved,
     RealScene,
+    RobotLooksAtTheScene,
     RobotSortsAPiece,
     SceneRecording,
     SimulatedScene,
@@ -62,15 +65,18 @@ from experiments.montessori.scenarios import (
     TheSceneStandsStill,
     TracyHoldsAPiece,
     TracyIsIdleWhileAPieceIsPushed,
+    TracyLooksAtTheScene,
     TracySortsAPiece,
     TracyWatchesTheSceneStandStill,
 )
+from experiments.montessori.perception.expectations import MontessoriExpectations
 from experiments.montessori.perception.simulated_setup import (
     camera_over_the_table,
 )
 from experiments.montessori.exceptions import (
     HoleHasNoLandingRegionError,
     NoSuchPieceError,
+    NothingHoldsThePieceUp,
     RealRunCannotBeFilmed,
     RealRunNeedsAPerceivedScene,
     ScenarioRunsOnlyInSimulation,
@@ -86,7 +92,7 @@ from segmind.datastructures.events import TranslationEvent
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.adapters.multi_sim import MujocoLight
 from semantic_digital_twin.adapters.urdf import URDFParser
-from semantic_digital_twin.reasoning.predicates import InsideOf
+from semantic_digital_twin.reasoning.predicates import InsideOf, SupportedBy
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.adapters.multi_sim import MultiSimSynchronizer
 from semantic_digital_twin.world_description.connections import (
@@ -274,6 +280,14 @@ class SyntheticGrasperHoldsAPiece(
 ):
     """
     The piece-in-the-gripper run, on the robot this test suite can actually build.
+    """
+
+
+class SyntheticGrasperLooksAtTheScene(
+    RobotLooksAtTheScene[World, SyntheticGraspingRobot]
+):
+    """
+    The looking run, on the robot this test suite can actually build.
     """
 
 
@@ -1368,6 +1382,9 @@ def test_a_look_takes_the_perturbations_it_applied_off_the_world(area):
         name=SortingStep.LOOK,
         scene=SimulatedScene(world=world),
         camera=camera_over_the_table(world),
+        believed=MontessoriExpectations(
+            release_spread=HOW_FAR_A_LOOK_MAY_DISAGREE_ABOUT_A_PLACE
+        ),
     )
 
     looking.perform(world)
@@ -1490,6 +1507,171 @@ def test_the_lighting_change_tells_a_person_to_light_the_table_differently():
     )
 
 
+# %% what the robot believes of the scene it took in
+
+HOW_FAR_ABOVE_EVERYTHING_A_HELD_PIECE_HANGS = 0.2
+"""
+How far above where it stood a piece is lifted to stand for one hanging off the gripper,
+in metres.
+
+Clear of both the table and the board, which is what makes it a piece nothing in the
+scene holds up.
+"""
+
+
+@dataclass
+class ABelievedScene:
+    """
+    One looking run whose script has got as far as taking the scene in, so what the
+    robot believes of each piece is there to be read.
+    """
+
+    scenario: SyntheticGrasperLooksAtTheScene
+    """
+    The run, holding what it believes.
+    """
+
+    scene: SortingScene
+    """
+    The scene it believes that of.
+    """
+
+
+def a_believed_scene(area) -> ABelievedScene:
+    """
+    The looking run, performed up to the step that takes the scene in.
+
+    :param area: The patch of table the pieces stand on.
+    """
+    scenario = SyntheticGrasperLooksAtTheScene(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+    world = scenario.build_world()
+    for step in scenario.steps(world):
+        step.perform(world)
+        if isinstance(step, BelieveWhatTheSceneShows):
+            return ABelievedScene(scenario=scenario, scene=SortingScene(world))
+    raise AssertionError("the looking run's script takes in no belief")
+
+
+def test_the_robot_believes_something_of_every_piece_of_the_scene(area):
+    believed = a_believed_scene(area)
+
+    assert {
+        category
+        for category in believed.scene.categories
+        if believed.scenario.believed.of(believed.scene.body_of(category)) is not None
+    } == believed.scene.categories
+
+
+def test_a_piece_is_believed_to_rest_on_the_surface_the_twin_has_it_on(area):
+    believed = a_believed_scene(area)
+    category = MontessoriShapeCategory.CUBE
+
+    expected = believed.scenario.believed.of(believed.scene.body_of(category))
+
+    assert expected.expects(
+        an(SupportedBy)(supporting=believed.scene.surface_under(category))
+    )
+
+
+def test_a_piece_is_believed_where_the_twin_has_it(area):
+    believed = a_believed_scene(area)
+    category = MontessoriShapeCategory.CUBE
+
+    expected = believed.scenario.believed.of(believed.scene.body_of(category))
+
+    assert expected.believed_place.to_np() == pytest.approx(
+        believed.scene.position_of(category).to_np()
+    )
+
+
+def test_a_belief_is_vouched_for_by_the_step_that_took_the_scene_in(area):
+    """
+    A look armed with a belief is taken on the say-so of whoever formed it, so the
+    belief names the step that did.
+    """
+    believed = a_believed_scene(area)
+
+    expected = believed.scenario.believed.of(
+        believed.scene.body_of(MontessoriShapeCategory.CUBE)
+    )
+
+    assert isinstance(expected.source, BelieveWhatTheSceneShows)
+
+
+def test_a_piece_nothing_in_the_scene_holds_up_rests_on_no_surface_it_can_name(area):
+    """
+    A piece hanging off the gripper rests on neither of the scene's surfaces, and the
+    scene says so rather than answering the table.
+    """
+    scene = SortingScene(a_scene_to_perturb(area))
+    lifted = MontessoriShapeCategory.CUBE
+    stands_at = scene.position_of(lifted)
+    scene.stand_the_piece_at(
+        lifted,
+        Point3(
+            float(stands_at.x),
+            float(stands_at.y),
+            float(stands_at.z) + HOW_FAR_ABOVE_EVERYTHING_A_HELD_PIECE_HANGS,
+        ),
+    )
+
+    with pytest.raises(NothingHoldsThePieceUp):
+        scene.surface_under(lifted)
+
+
+# %% which pieces a change leaves the robot wrong about
+
+
+@pytest.mark.parametrize(
+    "perturbation, acts_on",
+    [
+        (LightingChanged(step=SortingStep.LOOK), ()),
+        (
+            TargetHoleMoved(
+                step=SortingStep.PUT_DOWN,
+                category=MontessoriShapeCategory.CUBE,
+                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            ),
+            (),
+        ),
+        (
+            PieceShoved(
+                step=SortingStep.LOOK,
+                category=MontessoriShapeCategory.CUBE,
+                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            ),
+            (MontessoriShapeCategory.CUBE,),
+        ),
+        (
+            PerceivedPoseOffset(
+                step=SortingStep.LOOK,
+                category=MontessoriShapeCategory.DISK,
+                offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            ),
+            (MontessoriShapeCategory.DISK,),
+        ),
+        (
+            DetectionRelabelled(
+                step=SortingStep.LOOK,
+                category=MontessoriShapeCategory.CUBE,
+                reported_as=MontessoriShapeCategory.SPHERE,
+            ),
+            (MontessoriShapeCategory.CUBE,),
+        ),
+    ],
+)
+def test_a_change_says_which_pieces_it_acts_on(perturbation, acts_on):
+    """
+    A belief about a piece is only worth scoring against a look where something could
+    have made the two differ: the light and the board leave every piece where the robot
+    has it, and the rest name the piece they act on.
+    """
+    assert perturbation.pieces_acted_on == acts_on
+
+
 # %% running one scenario more than once
 
 
@@ -1522,6 +1704,7 @@ def test_every_trial_of_a_seeded_scenario_builds_the_same_scene(area):
         TracySortsAPiece,
         TracyIsIdleWhileAPieceIsPushed,
         TracyHoldsAPiece,
+        TracyLooksAtTheScene,
     ],
 )
 def test_every_demo_scenario_runs_on_tracy(scenario_class, area):
