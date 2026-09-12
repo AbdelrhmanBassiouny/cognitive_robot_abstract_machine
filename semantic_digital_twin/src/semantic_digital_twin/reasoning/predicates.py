@@ -484,7 +484,11 @@ class SupportedBy(Triple):
         """
         Answered from numeric geometry alone, since support is asked on every detector
         tick from a thread that does not own the world.
+
+        A body does not rest on itself, however its box meets its own.
         """
+        if self.supported is self.supporting:
+            return False
         if self._supported_stands_below_supporting():
             return False
         supported_origin = NumericTransform.identity(self.supported)

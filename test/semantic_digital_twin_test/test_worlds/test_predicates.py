@@ -440,6 +440,30 @@ def test_supporting(two_block_world):
     assert not is_supported_by(center, top)
 
 
+def test_a_body_does_not_support_itself():
+    """
+    A body's box meets itself along its whole height, which for a body shorter than the
+    clipping tolerance read as support.
+    """
+    piece = Body(name=PrefixedName("piece"))
+    piece.collision = ShapeCollection(
+        [
+            Box(
+                scale=Scale(0.024, 0.024, 0.024),
+                origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    reference_frame=piece
+                ),
+            )
+        ],
+        reference_frame=piece,
+    )
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(piece)
+
+    assert not is_supported_by(piece, piece)
+
+
 def test_is_body_in_gripper(pr2_world_copy):
     pr2 = pr2_world_copy.get_semantic_annotations_by_type(PR2)[0]
 
