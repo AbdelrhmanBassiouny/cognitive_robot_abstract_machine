@@ -11,13 +11,16 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 
+from coraplex.plans.plan import Plan
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import DetectionEvent
 from typing_extensions import Any, List, Sequence
 
 from experiments.episodes.episode import (
     InsertionAttempt,
+    PerformedPlan,
     RecordedMotion,
     RecordedQuery,
     RecordedTrial,
@@ -48,6 +51,11 @@ class EpisodeObserver:
     Every query asked of the trial being observed, in the order they were asked.
     """
 
+    plans: List[PerformedPlan] = field(default_factory=list)
+    """
+    Every plan performed in the trial being observed, in the order they were performed.
+    """
+
     insertion_attempts: List[InsertionAttempt] = field(default_factory=list)
     """
     Every insertion attempted in the trial being observed, in the order they were made.
@@ -63,6 +71,12 @@ class EpisodeObserver:
     Reading of the monotonic clock the trial being observed began at.
     """
 
+    began_at: datetime = field(default_factory=datetime.now)
+    """
+    When the trial being observed began, on the clock a plan's nodes and a monitor's
+    events are stamped with.
+    """
+
     @property
     def elapsed_seconds(self) -> float:
         """
@@ -75,6 +89,7 @@ class EpisodeObserver:
         Start observing a new trial, measuring its moments from now.
         """
         self.started_at = time.monotonic()
+        self.began_at = datetime.now()
 
     def tick(self, moment: float, events: Sequence[DetectionEvent]) -> Tick:
         """
@@ -104,6 +119,17 @@ class EpisodeObserver:
             row.moment = moment
         self.queries.extend(rows)
         return rows
+
+    def performed(self, plan: Plan) -> PerformedPlan:
+        """
+        Keep one plan the robot performed.
+
+        :param plan: The plan, once it has been performed.
+        :return: The record that was kept.
+        """
+        performed = PerformedPlan(plan=plan)
+        self.plans.append(performed)
+        return performed
 
     def ran_the_motion(
         self,
@@ -145,14 +171,18 @@ class EpisodeObserver:
         Write everything observed onto a recorded trial, and start afresh for the next.
 
         :param trial: The trial the runner recorded.
-        :return: The same trial, now carrying its ticks, queries, attempts and motions.
+        :return: The same trial, now carrying when it began, its ticks, queries, plans,
+            attempts and motions.
         """
+        trial.began_at = self.began_at
         trial.ticks = self.ticks
         trial.queries = self.queries
+        trial.plans = self.plans
         trial.insertion_attempts = self.insertion_attempts
         trial.motions = self.motions
         self.ticks = []
         self.queries = []
+        self.plans = []
         self.insertion_attempts = []
         self.motions = []
         self.restart()

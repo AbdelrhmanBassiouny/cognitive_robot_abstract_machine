@@ -81,6 +81,13 @@ class Callback(WorldEntityWithClassBasedID, SubclassJSONSerializer, ABC):
         """
         pass
 
+    @property
+    def paused(self) -> bool:
+        """
+        Whether the callback is currently paused, so that a change goes by without it.
+        """
+        return self._is_paused
+
     def pause(self):
         """
         Pause the callback such that notify does not trigger anymore.

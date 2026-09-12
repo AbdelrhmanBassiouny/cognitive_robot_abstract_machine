@@ -217,6 +217,7 @@ class EpisodeRecording(ScenarioRunner[ScenarioType, WorldType]):
         :param trial: The trial that has finished.
         """
         recorded = self.observer.into(RecordedTrial.from_trial(trial, self.episode))
+        recorded.number = len(self.recorded_trials) + 1
         self.records_trials.record(recorded)
         self.recorded_trials.append(recorded)
         if self.film is not None:

@@ -20,6 +20,7 @@ from typing_extensions import List, Optional, Set
 
 from experiments.episodes.observer import ObserverListener, ObserverMotionListener
 from experiments.episodes.recording import EpisodeRecording
+from experiments.episodes.trace import JointTraceRecorder
 from experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_shape_monitor_in_scene,
@@ -27,6 +28,7 @@ from experiments.montessori.event_monitoring import (
 from experiments.montessori.scenarios import (
     LookAtTheScene,
     MontessoriSortingScenario,
+    HaveTheRobotAct,
     SortingPerturbation,
     SortingScene,
     SortingStep,
@@ -53,6 +55,11 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
     The monitor watching the trial that is running, or None between trials.
     """
 
+    joints: Optional[JointTraceRecorder] = field(init=False, default=None)
+    """
+    What traces where every joint stands while the trial runs, or None between trials.
+    """
+
     pieces_acted_on: Set[MontessoriShapeCategory] = field(
         init=False, default_factory=set
     )
@@ -66,7 +73,8 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
     def trial_started(self, scenario: MontessoriSortingScenario, world: World) -> None:
         """
         Start watching the piece the script acts on, ticking the observer with every
-        detection, and have the steps hand their motions to the observer as they finish.
+        detection, tracing where every joint of the world stands, and have the steps
+        hand their motions to the observer as they finish.
 
         :param scenario: The scenario the trial runs.
         :param world: The world the trial is about to run in.
@@ -82,6 +90,9 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             listener=ObserverListener(observer=self.observer),
         )
         self.monitor.start()
+        self.joints = JointTraceRecorder(
+            _world=world, clock=lambda: self.observer.elapsed_seconds
+        )
 
     def perform_step(
         self,
@@ -104,6 +115,8 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         """
         super().perform_step(scenario, step, world)
         self.monitor.tick()
+        if isinstance(step, HaveTheRobotAct) and step.performed is not None:
+            self.observer.performed(step.performed)
         if isinstance(step, LookAtTheScene):
             self.observer.ask(
                 self.belief_questions(step, world),
@@ -160,13 +173,17 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
 
     def trial_finished(self, scenario: MontessoriSortingScenario, trial) -> None:
         """
-        Stop watching, then record the trial with everything observed inside it.
+        Stop watching, record the trial with everything observed inside it, and keep the
+        trace of its joints beside the episode's other artifacts.
 
         :param scenario: The scenario the trial ran.
         :param trial: The trial that has finished.
         """
-        self._stop_watching()
+        traced = self._stop_watching()
         super().trial_finished(scenario, trial)
+        if self.artifacts is None or traced is None:
+            return
+        self.artifacts.trial(self.recorded_trials[-1].number).keep_joint_trace(traced)
 
     @staticmethod
     def watched_category(
@@ -217,11 +234,19 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             )
         )
 
-    def _stop_watching(self) -> None:
+    def _stop_watching(self):
         """
-        Stop the monitor of the trial that ran, if one is still watching.
+        Stop the monitor and the joint trace of the trial that ran, if they are still
+        watching.
+
+        :return: The trace of the joints, or None where nothing was being watched.
         """
-        if self.monitor is None:
-            return
-        self.monitor.stop()
-        self.monitor = None
+        if self.monitor is not None:
+            self.monitor.stop()
+            self.monitor = None
+        if self.joints is None:
+            return None
+        self.joints.stop()
+        traced = self.joints.trace
+        self.joints = None
+        return traced

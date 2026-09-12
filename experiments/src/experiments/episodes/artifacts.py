@@ -20,6 +20,7 @@ from krrood.exceptions import DataclassException
 from typing_extensions import TYPE_CHECKING, List, Sequence
 
 from experiments.episodes.episode import Episode, RecordedTrial
+from experiments.episodes.trace import JointTrace, TimedFrames, TimedFramesFile
 
 if TYPE_CHECKING:
     from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
@@ -38,6 +39,26 @@ class EpisodeArtifact(StrEnum):
     RUN_FILES = "files"
     """
     Directory holding the files the run itself produced, rather than a file of its own.
+    """
+    TRIALS = "trials"
+    """
+    Directory holding what each trial kept of its own, one directory per trial.
+    """
+
+
+class TrialArtifact(StrEnum):
+    """
+    What one trial keeps of its own, each under this name in the trial's directory.
+    """
+
+    JOINT_TRACE = "joints.npz"
+    """
+    Where every joint stood along the trial.
+    """
+
+    CAMERA = "camera.mp4"
+    """
+    What the robot's camera saw along the trial, with the moments beside it.
     """
 
 
@@ -185,6 +206,18 @@ class EpisodeArtifacts:
         written.write_text(transcript.render())
         return written
 
+    def trial(self, number: int) -> TrialArtifacts:
+        """
+        What one trial of this episode keeps of its own.
+
+        :param number: Which trial, counted from one in the order they ran.
+        """
+        return TrialArtifacts(
+            episode=self.episode,
+            number=number,
+            directory=self.directory / EpisodeArtifact.TRIALS / str(number),
+        )
+
     @property
     def video(self) -> Path:
         """
@@ -228,6 +261,135 @@ class EpisodeArtifacts:
         if not path.is_file():
             raise ArtifactNotKept(
                 episode_identifier=self.episode.identifier, artifact=artifact
+            )
+        return path
+
+
+# %% what one trial keeps of its own
+
+
+@dataclass
+class TrialArtifactNotKept(DataclassException):
+    """
+    Raised when a trial is asked for something it never kept.
+    """
+
+    episode_identifier: str
+    """
+    The episode the trial belongs to.
+    """
+
+    number: int
+    """
+    Which trial was asked, counted from one.
+    """
+
+    artifact: TrialArtifact
+    """
+    What it does not have.
+    """
+
+    def error_message(self) -> str:
+        return "Trial %d of episode %s kept no %s." % (
+            self.number,
+            self.episode_identifier,
+            self.artifact.name,
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "A run keeps a trial's trace and camera as the trial goes, so a trial "
+            "without them was recorded by a run that was not asked to trace it."
+        )
+
+
+@dataclass
+class TrialArtifacts:
+    """
+    What one trial of an episode keeps of its own: where its joints stood and what
+    its camera saw, along its seconds.
+
+    Made by :meth:`EpisodeArtifacts.trial`, which is what settles where they go.
+    """
+
+    episode: Episode
+    """
+    The run the trial belongs to.
+    """
+
+    number: int
+    """
+    Which trial this is, counted from one in the order they ran.
+    """
+
+    directory: Path
+    """
+    Where the trial's own files are kept.
+    """
+
+    def keep_joint_trace(self, trace: JointTrace) -> Path:
+        """
+        Keep where every joint stood along the trial.
+
+        :param trace: The trace the run took.
+        :return: The file it was written to.
+        """
+        return trace.write(self.directory / TrialArtifact.JOINT_TRACE)
+
+    def keep_camera(self, frames: TimedFrames) -> Path:
+        """
+        Keep what the robot's camera saw along the trial.
+
+        :param frames: The frames the run took, with their moments.
+        :return: The video they were written to.
+        """
+        return frames.write(self.directory / TrialArtifact.CAMERA)
+
+    @property
+    def kept_a_joint_trace(self) -> bool:
+        """
+        Whether the run traced the trial's joints.
+        """
+        return (self.directory / TrialArtifact.JOINT_TRACE).is_file()
+
+    @property
+    def kept_a_camera(self) -> bool:
+        """
+        Whether the run kept what the robot's camera saw.
+        """
+        return (self.directory / TrialArtifact.CAMERA).is_file()
+
+    @property
+    def joint_trace(self) -> JointTrace:
+        """
+        Where every joint stood along the trial.
+
+        :raises TrialArtifactNotKept: When the run traced no joints.
+        """
+        return JointTrace.read(self._kept(TrialArtifact.JOINT_TRACE))
+
+    @property
+    def camera(self) -> TimedFramesFile:
+        """
+        What the robot's camera saw along the trial, read a frame at a time.
+
+        :raises TrialArtifactNotKept: When the run kept no camera.
+        """
+        return TimedFramesFile(self._kept(TrialArtifact.CAMERA))
+
+    def _kept(self, artifact: TrialArtifact) -> Path:
+        """
+        One of this trial's files, insisting it is actually there.
+
+        :param artifact: The artifact to find.
+        :raises TrialArtifactNotKept: When it was never kept.
+        """
+        path = self.directory / artifact
+        if not path.is_file():
+            raise TrialArtifactNotKept(
+                episode_identifier=self.episode.identifier,
+                number=self.number,
+                artifact=artifact,
             )
         return path
 

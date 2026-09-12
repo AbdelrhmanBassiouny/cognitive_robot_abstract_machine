@@ -8,19 +8,18 @@ which a camera rendering the world then reports as an object.
 
 from __future__ import annotations
 
-import os
-import tempfile
-
 import mujoco
 import numpy as np
 import pytest
-from typing_extensions import Iterator, Tuple
+from typing_extensions import Tuple
 
 from semantic_digital_twin.adapters.multi_sim import (
-    MujocoBuilder,
+    GeomVisibilityAndCollisionType,
+    MujocoSim,
     RegionAppearance,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import MujocoEntityNotFoundError
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -28,7 +27,11 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body, Region
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    KinematicStructureEntity,
+    Region,
+)
 
 # %% a world holding one thing and one named volume of space
 
@@ -52,6 +55,17 @@ The name of the body the world holds, which its geom is named after.
 REGION_NAME = "named_volume"
 """
 The name of the region the world names, which its geom is named after.
+"""
+
+ONLY_COLLIDED_WITH_NAME = "only_collided_with"
+"""
+The name of the body the world states a shape for without stating how it looks.
+"""
+
+RECOLORED = Color(0.0, 0.0, 1.0, 0.5)
+"""
+A colour nothing in the world states, so that a geom wearing it can only have been
+recolored.
 """
 
 
@@ -83,43 +97,60 @@ def world_with_a_region() -> World:
     return world
 
 
-def built_as(world: World, appearance: RegionAppearance) -> mujoco.MjModel:
+def built_as(world: World, appearance: RegionAppearance) -> MujocoSim:
     """
-    The MuJoCo model a world builds when its regions are drawn that much.
+    The MuJoCo scene a world builds when its regions are drawn that much.
 
     :param world: The world to build.
     :param appearance: How much of every region is drawn.
     """
-    with tempfile.TemporaryDirectory() as directory:
-        scene = os.path.join(directory, "scene.xml")
-        MujocoBuilder(region_appearance=appearance).build_world(
-            world=world, file_path=scene
-        )
-        return mujoco.MjModel.from_xml_path(scene)
+    return MujocoSim(world=world, headless=True, region_appearance=appearance)
 
 
-def geoms_of(model: mujoco.MjModel, name: str) -> Tuple[int, ...]:
+def thing_of(world: World) -> KinematicStructureEntity:
     """
-    The geoms a model draws the named entity with.
+    The body the world holds.
 
-    :param model: The model to read.
-    :param name: The name of the body or region the geoms hang on.
+    :param world: The world to read.
     """
-    body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
-    return tuple(geom for geom in range(model.ngeom) if model.geom_bodyid[geom] == body)
+    return world.get_kinematic_structure_entity_by_name(THING_NAME)
 
 
-def one_geom_of(model: mujoco.MjModel, name: str) -> int:
+def region_of(world: World) -> KinematicStructureEntity:
     """
-    The one geom a model draws the named entity with.
+    The region the world names.
 
-    :param model: The model to read.
-    :param name: The name of the body or region the geom hangs on.
-    :raises AssertionError: If the model draws it with any other number of geoms.
+    :param world: The world to read.
     """
-    geoms = geoms_of(model, name)
-    assert len(geoms) == 1, f"expected one geom of {name}, found {len(geoms)}"
+    return world.get_kinematic_structure_entity_by_name(REGION_NAME)
+
+
+def one_geom_of(scene: MujocoSim, entity: KinematicStructureEntity) -> int:
+    """
+    The one geom a scene draws the given entity with.
+
+    :param scene: The scene to read.
+    :param entity: The body or region the geom hangs on.
+    :raises AssertionError: If the scene draws it with any other number of geoms.
+    """
+    geoms = scene.geoms_of(entity)
+    assert len(geoms) == 1, f"expected one geom of {entity.name}, found {len(geoms)}"
     return geoms[0]
+
+
+def drawn_colors_of(
+    scene: MujocoSim, entity: KinematicStructureEntity
+) -> Tuple[Tuple[float, ...], ...]:
+    """
+    The colour the scene draws each of an entity's geoms in.
+
+    :param scene: The scene to read.
+    :param entity: The body or region whose geoms are read.
+    """
+    return tuple(
+        tuple(scene.simulator._mj_model.geom_rgba[geom])
+        for geom in scene.geoms_of(entity)
+    )
 
 
 # %% what a region is drawn at
@@ -130,8 +161,10 @@ def test_a_region_is_drawn_see_through(world_with_a_region: World) -> None:
     A region is drawn at a share of the opacity it states, so what stands inside it is
     seen through it.
     """
-    model = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
-    drawn = model.geom_rgba[one_geom_of(model, REGION_NAME)]
+    scene = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
+    drawn = scene.simulator._mj_model.geom_rgba[
+        one_geom_of(scene, region_of(world_with_a_region))
+    ]
     assert drawn[3] == pytest.approx(
         REGION_COLOR.A * RegionAppearance.TRANSPARENT.opacity
     )
@@ -142,8 +175,8 @@ def test_a_hidden_region_is_not_drawn_at_all(world_with_a_region: World) -> None
     """
     A region nobody asked to see leaves nothing in the model to be seen.
     """
-    model = built_as(world_with_a_region, RegionAppearance.HIDDEN)
-    assert geoms_of(model, REGION_NAME) == ()
+    scene = built_as(world_with_a_region, RegionAppearance.HIDDEN)
+    assert scene.geoms_of(region_of(world_with_a_region)) == ()
 
 
 def test_a_hidden_region_is_still_a_body_of_the_model(
@@ -153,8 +186,13 @@ def test_a_hidden_region_is_still_a_body_of_the_model(
     Only the drawing of a region is dropped, not the frame it names: what the world
     hangs off a region still has a body to hang off.
     """
-    model = built_as(world_with_a_region, RegionAppearance.HIDDEN)
-    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, REGION_NAME) >= 0
+    scene = built_as(world_with_a_region, RegionAppearance.HIDDEN)
+    assert (
+        mujoco.mj_name2id(
+            scene.simulator._mj_model, mujoco.mjtObj.mjOBJ_BODY, REGION_NAME
+        )
+        >= 0
+    )
 
 
 def test_a_thing_keeps_the_opacity_it_states(world_with_a_region: World) -> None:
@@ -163,7 +201,152 @@ def test_a_thing_keeps_the_opacity_it_states(world_with_a_region: World) -> None
     however much of a region is drawn.
     """
     for appearance in RegionAppearance:
-        model = built_as(world_with_a_region, appearance)
-        assert np.allclose(
-            model.geom_rgba[one_geom_of(model, THING_NAME)], THING_COLOR.to_rgba()
+        scene = built_as(world_with_a_region, appearance)
+        assert drawn_colors_of(scene, thing_of(world_with_a_region)) == (
+            THING_COLOR.to_rgba(),
         )
+
+
+# %% drawing one entity in another colour
+
+
+def test_recoloring_an_entity_changes_every_geom_of_it(
+    world_with_a_region: World,
+) -> None:
+    """
+    A recolored entity is drawn in the colour it was given, opacity and all.
+    """
+    scene = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
+    scene.recolor(thing_of(world_with_a_region), RECOLORED)
+    assert drawn_colors_of(scene, thing_of(world_with_a_region)) == (
+        RECOLORED.to_rgba(),
+    )
+
+
+def test_recoloring_an_entity_leaves_every_other_one_alone(
+    world_with_a_region: World,
+) -> None:
+    """
+    Recoloring singles one entity out: nothing else the scene draws changes.
+    """
+    scene = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
+    before = drawn_colors_of(scene, region_of(world_with_a_region))
+    scene.recolor(thing_of(world_with_a_region), RECOLORED)
+    assert drawn_colors_of(scene, region_of(world_with_a_region)) == before
+
+
+def test_recoloring_does_not_change_the_world_the_scene_mirrors(
+    world_with_a_region: World,
+) -> None:
+    """
+    Only the drawing changes: the twin keeps the colour it states, so the same world
+    renders unchanged into the next scene built from it.
+    """
+    scene = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
+    scene.recolor(thing_of(world_with_a_region), RECOLORED)
+    assert [shape.color for shape in thing_of(world_with_a_region).visual] == [
+        THING_COLOR
+    ]
+
+
+# %% drawing what the world states no appearance for
+
+
+@pytest.fixture
+def world_with_a_shape_only_collided_with() -> World:
+    """
+    A world holding one body that wears a shape it takes up space with and none it is
+    seen with.
+    """
+    world = World()
+    body = Body(name=PrefixedName(ONLY_COLLIDED_WITH_NAME))
+    body.collision = ShapeCollection(
+        [Box(scale=Scale(0.1, 0.1, 0.1), color=THING_COLOR)], reference_frame=body
+    )
+    with world.modify_world():
+        world.add_body(body)
+    return world
+
+
+def groups_of(
+    scene: MujocoSim, entity: KinematicStructureEntity
+) -> Tuple[GeomVisibilityAndCollisionType, ...]:
+    """
+    The group the scene puts each of an entity's geoms in.
+
+    :param scene: The scene to read.
+    :param entity: The body or region whose geoms are read.
+    """
+    return tuple(
+        GeomVisibilityAndCollisionType(scene.simulator._mj_model.geom_group[geom])
+        for geom in scene.geoms_of(entity)
+    )
+
+
+def test_a_shape_only_collided_with_is_not_drawn_by_default(
+    world_with_a_shape_only_collided_with: World,
+) -> None:
+    """
+    A body the world states no appearance for is built into a group a renderer hides, so
+    it takes up space without being seen.
+    """
+    scene = built_as(
+        world_with_a_shape_only_collided_with, RegionAppearance.TRANSPARENT
+    )
+    entity = (
+        world_with_a_shape_only_collided_with.get_kinematic_structure_entity_by_name(
+            ONLY_COLLIDED_WITH_NAME
+        )
+    )
+    assert not any(group.is_drawn for group in groups_of(scene, entity))
+
+
+def test_making_it_visible_puts_it_in_a_group_a_renderer_draws(
+    world_with_a_shape_only_collided_with: World,
+) -> None:
+    """
+    A picture that has to show such a body can ask for it, and every geom of it is then
+    drawn.
+    """
+    scene = built_as(
+        world_with_a_shape_only_collided_with, RegionAppearance.TRANSPARENT
+    )
+    entity = (
+        world_with_a_shape_only_collided_with.get_kinematic_structure_entity_by_name(
+            ONLY_COLLIDED_WITH_NAME
+        )
+    )
+    scene.make_visible(entity)
+    assert all(group.is_drawn for group in groups_of(scene, entity))
+
+
+def test_a_body_the_scene_already_draws_is_left_as_it_is(
+    world_with_a_region: World,
+) -> None:
+    """
+    A body with geometry of its own to be seen by is not moved, so its collision hull is
+    never drawn a second time over it.
+    """
+    scene = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
+    thing = thing_of(world_with_a_region)
+    before = groups_of(scene, thing)
+    scene.make_visible(thing)
+    assert groups_of(scene, thing) == before
+
+
+# %% asking the scene about something it does not hold
+
+
+def test_asking_for_the_geoms_of_something_the_scene_has_no_body_for_says_so(
+    world_with_a_region: World,
+) -> None:
+    """
+    A picture that singles out a body the scene never built would silently draw nothing,
+    so the scene says which entity it does not hold instead.
+    """
+    scene = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
+    missing = Body(name=PrefixedName("never_built"))
+    with pytest.raises(MujocoEntityNotFoundError) as raised:
+        scene.geoms_of(missing)
+    assert raised.value.entity_name == missing.name.name
+    assert raised.value.entity_type is mujoco.mjtObj.mjOBJ_BODY

@@ -69,6 +69,7 @@ from coraplex.execution_environment import simulated_robot
 from coraplex.view_manager import ViewManager
 from coraplex.plans.executables import ReceivesExecutedMotions
 from coraplex.plans.factories import sequential
+from coraplex.plans.plan import Plan
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
@@ -806,13 +807,14 @@ class SortingScene:
             raise HoleHasNoLandingRegionError(hole)
         return hole.landing_region
 
-    def pick_the_piece_up(self, category: MontessoriShapeCategory) -> None:
+    def pick_the_piece_up(self, category: MontessoriShapeCategory) -> Plan:
         """
         Have the robot take hold of the loose piece of the given shape.
 
         :param category: The shape to pick up.
+        :return: The plan that was performed.
         """
-        self._perform(
+        return self._perform(
             PickUpAction(
                 self.shape_of(category), THE_ARM_THAT_SORTS, self._grasp_description
             )
@@ -820,14 +822,15 @@ class SortingScene:
 
     def put_the_piece_down_at(
         self, category: MontessoriShapeCategory, destination: Point3
-    ) -> None:
+    ) -> Plan:
         """
         Have the robot carry the piece it is holding to a place and let go of it there.
 
         :param category: The shape of the piece being carried.
         :param destination: Where to let go of it, in the world root frame.
+        :return: The plan that was performed.
         """
-        self._perform(
+        return self._perform(
             PlaceAction(
                 self.body_of(category),
                 Pose.from_xyz_rpy(
@@ -841,18 +844,21 @@ class SortingScene:
             )
         )
 
-    def _perform(self, action: ActionDescription) -> None:
+    def _perform(self, action: ActionDescription) -> Plan:
         """
         Run one robot action against this scene's world.
 
         :param action: The action to run.
+        :return: The plan that was performed, its nodes carrying when each of them ran.
         """
         context = Context(self.world, self.robot, motion_listener=self.motion_listener)
         # The conditions a coraplex action states are about a robot that perceives and
         # navigates; a scripted scene states its own preconditions as its layout.
         context.evaluate_conditions = False
+        plan = sequential([action], context=context).plan
         with simulated_robot:
-            sequential([action], context=context).plan.perform()
+            plan.perform()
+        return plan
 
     @property
     def _grasp_description(self) -> GraspDescription:
@@ -1563,8 +1569,8 @@ class AskTheQuestion(ScenePhysicsStep):
 @dataclass
 class HaveTheRobotAct(ScenePhysicsStep, ABC):
     """
-    A step that has the robot perform an action, so a motion state chart is built and
-    run while it happens.
+    A step that has the robot perform an action as a plan of its own, so a motion state
+    chart is built and run while it happens.
     """
 
     motion_listener: Optional[ReceivesExecutedMotions] = field(
@@ -1573,6 +1579,11 @@ class HaveTheRobotAct(ScenePhysicsStep, ABC):
     """
     Told about each motion state chart this step runs, or None for a step nobody
     watches.
+    """
+
+    performed: Optional[Plan] = field(init=False, default=None)
+    """
+    The plan the step performed, or None until it has.
     """
 
     def scene_of(self, world: World) -> SortingScene:
@@ -1602,7 +1613,7 @@ class PickThePieceUp(HaveTheRobotAct):
     """
 
     def perform(self, world: World) -> None:
-        self.scene_of(world).pick_the_piece_up(self.category)
+        self.performed = self.scene_of(world).pick_the_piece_up(self.category)
 
 
 @dataclass
@@ -1628,7 +1639,7 @@ class PutThePieceInItsHole(HaveTheRobotAct):
     def perform(self, world: World) -> None:
         scene = self.scene_of(world)
         hole = scene.hole_for(self.category).root.global_transform.to_position()
-        scene.put_the_piece_down_at(
+        self.performed = scene.put_the_piece_down_at(
             self.category,
             Point3(
                 float(hole.x),

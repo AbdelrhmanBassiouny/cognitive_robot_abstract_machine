@@ -54,12 +54,14 @@ class PlanNode(PlanEntity):
 
     start_time: Optional[datetime] = field(default_factory=datetime.now)
     """
-    The starting time of the function, optional.
+    When this node started running.
+
+    Until it has run, this is when it was built.
     """
 
     end_time: Optional[datetime] = None
     """
-    The ending time of the function, optional.
+    When this node stopped running, or None while it has not.
     """
 
     reason: Optional[PlanFailure] = None
@@ -287,6 +289,7 @@ class PlanNode(PlanEntity):
                 self.status = LifeCycleValues.INTERRUPTED
                 return
 
+        self.start_time = datetime.now()
         self.status = LifeCycleValues.RUNNING
         try:
             self.notify()

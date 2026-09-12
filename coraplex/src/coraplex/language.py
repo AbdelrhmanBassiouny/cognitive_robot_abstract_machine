@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from datetime import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing_extensions import (
@@ -393,4 +394,21 @@ class CodeNode(LanguageNode):
     code: Callable = field(default_factory=lambda: lambda: None, kw_only=True)
 
     def notify(self) -> Any:
-        return self.code()
+        """
+        Run the code, keeping when it ran and how it ended.
+
+        A code node's whole execution is this call, so it is what stamps the node's own
+        start, end and status.
+        """
+        self.start_time = datetime.now()
+        self.status = LifeCycleValues.RUNNING
+        try:
+            result = self.code()
+        except PlanFailure as failure:
+            self.status = LifeCycleValues.FAILED
+            self.reason = failure
+            raise
+        finally:
+            self.end_time = datetime.now()
+        self.status = LifeCycleValues.SUCCEEDED
+        return result
