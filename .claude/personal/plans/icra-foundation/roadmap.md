@@ -2465,3 +2465,67 @@ for the model, so it is asked rather than taken. And `RobotSortsAPiece`/`PieceHe
 the real rig (Robotiq gripper, the two-armed `PickUpAction`) behind a `ShapeSorter` before
 they can run on the robot.
 
+
+## 2026-09-12 (afternoon): a perturbation is an event someone other than the robot brings about
+
+The open point of the entry above -- a perceived run answering from a model the
+perturbation had moved by hand -- was settled with the developer in three turns, and the
+shape they converged on is worth keeping because it says what a perturbation *is*.
+First: "done with another look, not by moving the model manually; the perturbation can
+be part of the action plan, in simulation moving the model itself, in real waiting for
+the human's confirmation". Then: a perturbation is something done by *another agent*,
+not the robot -- a human. Then, the shape: not a coraplex action of the robot's at all
+but an *executable event effect* -- segmind's events, such as a translation of an
+object over a distance, replicating in the world the process that caused them; in
+simulation done in the model, on the robot done by the human who confirms.
+
+**What an event can now say, three things.** The event itself is what was seen to
+happen; `effect()` is what holds afterwards; `reproduce(world)` is how the world gets
+there. `ReproducibleEvent` is a plain ABC mixed into `MotionEvent`, so nothing in the
+ORM changes, and a motion event reproduces itself by putting the object where the
+motion ended -- which is what lets an event that was *described* rather than seen be
+brought about in a simulation. The one layering point argued and kept: segmind depends
+on neither coraplex nor a prompt, so the person and the simulated/real dispatch live on
+the run, not on the event.
+
+**Where the person lives.** The operator prompt was a channel; the thing is the agent.
+`Person.carry_out(instruction)` (`PersonAtTheConsole`, `AbsentPerson`) replaces
+`OperatorPrompt.show`, the runner's field is `person`, and
+`ScenarioRunner.apply_perturbation` dispatches: in simulation `perturbation.apply
+(world)`; on the robot `perturbation.carried_out_by(person, scenario, world)`. The base
+perturbation asks the person and writes nothing, which is what a perturbation of what
+is *seen* needs (a look afterwards would undo it); `EventBroughtAbout` asks the person
+and then has the scenario look at its scene (`Scenario.perceive`, which the base refuses
+with `ScenarioCannotPerceive`). The shove and the slid board are `EventBroughtAbout`s
+over `TranslationEvent`s of the piece and of the board.
+
+**What that forced downstream, all of it measured.** A run on the robot needs a scene it
+can look at again, so `PerceivingWorldBuilder` is the builder a REAL Montessori scenario
+insists on (`RealRunNeedsAPerceivedScene`), and `record_episode` defaults `--scene` to
+`perceived` for `--execution real` and refuses `built` there -- the pretend real run is
+gone for good. A second look at the perceived scene must keep the piece the monitor and
+the question set hold: `PiecePublisher` remembers what it took down and stands a piece
+the new look finds again as the same annotation and body on a fresh fixed connection,
+which the watched-run test over the tape capture proves end to end (the person mimic
+flips a look mimic to report the shove; the trial fails its undisturbed goal with the
+cube 10 cm along x and the same body the run watched). And `hold_board` now looks for
+the board whether or not the world holds one, moving the held board -- holes with it --
+to where the camera finds it now, so the slid board works on the robot; the pickup test
+that stated the old "not asked to find one again" is restated to say so.
+
+**Two defects met on the way.** `SortingScene._stand` moved a welded piece by assigning
+`parent_T_connection_expression` bare inside `modify_world` -- a change no synchronizer
+records, so on the robot Giskard's copy of the world would never have seen it. The new
+`World.move_branch_to` restates a fixed connection as remove + add, which the history
+records, and drives a free one through its degrees of freedom; it is what both
+`_stand` and `MotionEvent.reproduce` now use. And segmind's motion detectors labelled
+every pose they read in the world frame with the tracked body as its reference frame,
+so a translation event said the object had moved relative to itself -- harmless until
+something read the poses against the frame they name, which reproducing does. Its own
+commit (`31c0f3a67e`), with a test that fails without it.
+
+**Standing.** Not run on the robot. The lighting change and the two perturbations of
+what is seen have no event to reproduce and keep `apply` plus the person. #319 (trial
+motions recorded) was merged in from the fork on the way, clean; its `RecordedTrial`
+change needed the ORM regenerated before the episode tests passed here.
+

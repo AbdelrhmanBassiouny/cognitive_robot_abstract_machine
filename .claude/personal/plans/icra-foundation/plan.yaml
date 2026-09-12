@@ -256,6 +256,22 @@ items:
     end to end on the tape capture in Tracy's own parsed world. Still the developer's:
     a perceived run answers its questions from the model the perturbation moved, not
     from a second look. Full detail in roadmap.md.
+
+    2026-09-12 (afternoon): that open point is closed, by a change of what a
+    perturbation is. A perturbation of the scene is an event someone other than the
+    robot brings about: segmind's events gain reproduce(world) (ReproducibleEvent, a
+    motion event reproduced by putting the object where the motion ended, through the
+    new World.move_branch_to), the shove and the slid board are events brought about
+    (EventBroughtAbout), the run reproduces the event in simulation, and on the robot
+    the person at the table (Person, replacing the operator prompt) brings it about and
+    the scenario looks at its scene again (Scenario.perceive) -- the model is never
+    written by hand. A run on the robot therefore needs a scene it can look at again
+    (PerceivingWorldBuilder; record_episode defaults --scene to perceived under
+    --execution real and refuses built), and a second look at the perceived scene keeps
+    the pieces it finds again as the bodies they were and moves the held board to where
+    the camera finds it now. Motion detectors were labelling world-frame poses with the
+    tracked body as frame; fixed. #319 merged in from the fork on the way. Still not run
+    on the robot. Full detail in roadmap.md.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback
