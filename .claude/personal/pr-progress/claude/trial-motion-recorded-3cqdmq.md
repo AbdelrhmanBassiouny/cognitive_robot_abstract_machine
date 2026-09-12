@@ -1,4 +1,4 @@
-# claude/trial-motion-recorded-3cqdmq - PR #319 (draft)
+# claude/trial-motion-recorded-3cqdmq - PR #319 (merged into #265, 2026-09-12)
 
 Base: `claude/icra-experiments-simulation-pipeline-w4ep7n` (#265).
 Session: https://claude.ai/code/session_013HepqhoucZF2H2cCjSizFP
@@ -27,7 +27,8 @@ commits after the merge base. Fixed both here anyway:
    look found 2 pieces instead of 4. Re-derived the constant from the captures against the
    frame the camera reports in (`tracy_mount`). File now 6 passed, 1 xfailed locally.
    Only `camera_on_tracy` reads the constant, so the real-robot demo is untouched.
-   Open question for the author: why the real camera sits 12 deg off `camera_link`.
+   Why: the lab runs the camera against the description in Tracy's own ROS workspace on
+   the lab machine, not the published one - answered by the developer, no longer open.
 
 ## Environment breakthrough (this container)
 
@@ -61,5 +62,45 @@ rather than only on the fixture. Local `test/experiments_test`: 1282 passed, 0 f
 
 A trial's chart does not survive the database (`MotionStatechartDAO` has no columns;
 `from_json` needs a world the engine's JSON deserializer cannot pass; nothing fills
-`Episode.world`). Reported on the PR; separate change.
+`Episode.world`). Not lost information though: a chart is reproducible from a saved plan
+plus a saved world, so what the recording owes is the plan and the world. Reported on the
+PR; separate change.
+
+## Merge round (2026-09-12, after "fetch and merge 265")
+
+Merged base `020cbc41a` (perceived-scene recording) into this branch: 3 conflicts, resolved
+keeping both sides - `record_episode.py`/`test_record_episode.py` keep the dropped lighting
+perturbation next to the base's `Layout`/`LayoutAsFound` and perceived-scene options;
+`scenarios.py` keeps the base's `physics: ScenePhysics` rename next to this branch's
+`motion_listener`. One test read `scenario.simulation.world`, renamed to `.physics.world`.
+Merged-area tests (test_record_episode, test_montessori_watched_run,
+test_montessori_scenarios, test_episode_observer, test_episodes): 171 passed, 0 failed.
+Then merged this branch into `claude/icra-experiments-simulation-pipeline-w4ep7n` and
+pushed that too, as asked.
+
+## Answered by the developer
+
+The camera calibration in use in the lab is the one in the description in Tracy's own ROS
+workspace on the lab machine, not the published `iai_tracy_description`. So the 12 deg /
+40 mm difference the captures show is that local calibration, and
+`CAMERA_LINK_T_OPTICAL` carrying it is the right fix, not a mystery. Docstring and PR
+description now say so; the open question is closed.
+
+Motion statechart: a chart is deterministically reproducible from a saved plan plus a saved
+world (load the plan from long-term memory, convert DAOs to domain objects and execute it,
+or build the chart in the program). So the database gap is a gap in the reading, not lost
+information, and what the recording still owes is the plan and the world. PR's "What is not
+done" reframed accordingly.
+
+## Local test environment notes
+
+`pytest` must be run with ROS sourced (`source /opt/ros/jazzy/setup.bash`), otherwise ORM
+generation now dies on `CouldNotResolveType: MetaData` - base's generate_orm.py reaches
+`semantic_digital_twin.exceptions`, whose `MetaData` hint only resolves when
+`geometry_msgs` imports. Wrappers: `scratchpad/pytest.sh` (ROS only) and
+`scratchpad/pytest_tracy.sh` (ROS + the fake ament prefix).
+
+Also: with ORM interfaces generated locally, `test/version_test` reports `coraplex` missing
+a `segmind` declaration - that import is in the generated, gitignored
+`coraplex/orm/ormatic_interface.py`, which CI's version job never has. Local artifact only.
 
