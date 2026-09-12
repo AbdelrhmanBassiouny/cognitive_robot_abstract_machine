@@ -6,11 +6,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import FrozenSet, Optional, TYPE_CHECKING
+from typing_extensions import FrozenSet, Optional, TYPE_CHECKING, Type
 
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
+    from semantic_digital_twin.robots.robot_parts import AbstractRobot
+    from semantic_digital_twin.world import World
+
     from experiments.montessori.semantics import (
         MontessoriShape,
         MontessoriShapeCategory,
@@ -123,4 +126,98 @@ class BoardDescriptionIncomplete(DataclassException):
         return (
             "State the lid's size and height, and every hole's shape, size and place "
             "on the lid, so the whole layout can be fitted at once."
+        )
+
+
+@dataclass
+class WorldHoldsNoSuchRobot(DataclassException):
+    """
+    Raised when a scene is to be built around the robot a world already holds, and the
+    world holds no robot of the kind the scenario runs on.
+    """
+
+    robot_type: Type[AbstractRobot]
+    """
+    The kind of robot the scenario runs on.
+    """
+
+    world: World
+    """
+    The world that was to hold it.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The world does not hold exactly one {self.robot_type.__name__}, so no "
+            f"scene can be built around one."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Run the scenario bound to the robot the world holds, or fetch the world "
+            "from that robot."
+        )
+
+
+@dataclass
+class SceneNotBuiltYet(DataclassException):
+    """
+    Raised when a scenario is asked about the scene of its most recent trial before it
+    has built one.
+    """
+
+    scenario_name: str
+    """
+    The name of the scenario that was asked.
+    """
+
+    def error_message(self) -> str:
+        return f"'{self.scenario_name}' has not built a scene yet."
+
+    def suggest_correction(self) -> str:
+        return "Build the scenario's world first; a runner does so at the start of a trial."
+
+
+@dataclass
+class ScenarioRunsOnlyInSimulation(DataclassException):
+    """
+    Raised when a scenario whose script needs the simulation is asked to run on the
+    robot.
+    """
+
+    scenario_name: str
+    """
+    The name of the scenario that was asked to run on the robot.
+    """
+
+    def error_message(self) -> str:
+        return f"'{self.scenario_name}' cannot run on the robot."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Its script drives the scene through the simulation; on the robot, run a "
+            "scenario whose steps the real scene can perform, and bring what the "
+            "script would have done about as a perturbation a person carries out."
+        )
+
+
+@dataclass
+class RealRunCannotBeFilmed(DataclassException):
+    """
+    Raised when a scenario running on the robot is asked to film its trials, which only
+    a simulation can do.
+    """
+
+    scenario_name: str
+    """
+    The name of the scenario that was asked to film.
+    """
+
+    def error_message(self) -> str:
+        return f"'{self.scenario_name}' runs on the robot, where no trial is filmed."
+
+    def suggest_correction(self) -> str:
+        return (
+            "A trial is filmed from the simulation carrying it; on the robot, record a "
+            "bag of the camera instead."
         )

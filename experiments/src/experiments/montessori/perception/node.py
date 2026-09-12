@@ -24,7 +24,6 @@ from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass, field
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from typing_extensions import Callable, List, Optional, TypeVar
@@ -40,15 +39,15 @@ from experiments.montessori.perception.overlay import (
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import lab_board
-from experiments.montessori.perception.scene_publishing import hold_board
+from experiments.montessori.perception.scene_publishing import (
+    LOOKS_FOR_THE_BOARD,
+    hold_board,
+)
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import RepeatedLook
 from experiments.montessori.perception.scene_windows import SceneWindows
 from experiments.montessori.perception.viewer import CameraFrameViewer
 from experiments.montessori.pieces import SMALLER_PIECES
-from experiments.network_limits import check_large_messages_can_arrive
-from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
-from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
@@ -65,11 +64,6 @@ Name this node registers under.
 REPORT_PERIOD_SECONDS = 1.0
 """
 How often the scene is logged while the node runs.
-"""
-
-LOOKS_FOR_THE_BOARD = 30
-"""
-How many looks the camera is given to show the board before the node gives up.
 """
 
 Held = TypeVar("Held")
@@ -182,14 +176,43 @@ class MontessoriPerceptionNode(RepeatedLook):
             return
         if self.camera_pose_error is None:
             self.check_camera_pose(frame)
-        scene = self.pipeline.detect(frame)
-        with self._lock:
-            self._scene = scene
-            self._frame = frame
+        scene = self.look_at(frame)
         if self.markers is not None:
             self.markers.publish(scene)
         if self.viewer is not None:
             self._show(frame, scene)
+
+    def look_at(self, frame: RgbdFrame) -> MontessoriScene:
+        """
+        Run the pipeline on one look and keep the result as the newest.
+
+        A result is kept only if the look was taken through the pipeline this node
+        still reads with: a look begun before :meth:`read_with` handed over another
+        pipeline was taken through the old one, and serving it would answer a request
+        with what that pipeline made of the scene.
+
+        :param frame: The look, in the pipeline's own reference frame.
+        :return: What the look found.
+        """
+        pipeline = self.pipeline
+        scene = pipeline.detect(frame)
+        with self._lock:
+            if pipeline is self.pipeline:
+                self._scene = scene
+                self._frame = frame
+        return scene
+
+    def read_with(self, pipeline: MontessoriPerceptionPipeline) -> None:
+        """
+        Take every later look through the given pipeline, and forget the newest result,
+        which was taken through the pipeline this replaces.
+
+        :param pipeline: What takes the looks from now on.
+        """
+        with self._lock:
+            super().read_with(pipeline)
+            self._scene = None
+            self._frame = None
 
     def check_camera_pose(self, frame: RgbdFrame) -> CameraPoseError:
         """
@@ -400,30 +423,29 @@ def main() -> None:
     A world the robot publishes without a shape-sorting board has the board looked for
     first, by the description of the board on this table, and the board found is
     published into that world so every process keeping it in step holds it too.
+
+    Imported here rather than at the top: the connection to the live robot is built on
+    this module's own node, and importing it above would import this module from
+    itself.
     """
+    from experiments.tracy_experiments.live_tracy import LiveTracy
+
     arguments = parse_arguments()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    check_large_messages_can_arrive()
     rclpy.init()
-    node = rclpy.create_node(NODE_NAME)
-    executor = MultiThreadedExecutor()
-    executor.add_node(node)
-    threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor").start()
-
-    world = fetch_world_from_service(node=node, timeout_seconds=300)
-    WorldSynchronizer(_world=world, node=node)
-    perception = build_node(node, world, show_images=arguments.show_images)
-    hold_board(world, perception, lab_board(), looks=LOOKS_FOR_THE_BOARD)
-    report(perception.wait_for_scene())
-    next_report = time.monotonic() + REPORT_PERIOD_SECONDS
-    while rclpy.ok():
-        if time.monotonic() >= next_report:
-            next_report = time.monotonic() + REPORT_PERIOD_SECONDS
-            report(perception.scene())
-        if perception.viewer is None:
-            time.sleep(REPORT_PERIOD_SECONDS)
-            continue
-        perception.viewer.refresh()
+    with LiveTracy.connected(NODE_NAME, show_images=arguments.show_images) as tracy:
+        perception = tracy.look
+        hold_board(tracy.world, perception, lab_board(), looks=LOOKS_FOR_THE_BOARD)
+        report(perception.wait_for_scene())
+        next_report = time.monotonic() + REPORT_PERIOD_SECONDS
+        while rclpy.ok():
+            if time.monotonic() >= next_report:
+                next_report = time.monotonic() + REPORT_PERIOD_SECONDS
+                report(perception.scene())
+            if perception.viewer is None:
+                time.sleep(REPORT_PERIOD_SECONDS)
+                continue
+            perception.viewer.refresh()
 
 
 if __name__ == "__main__":

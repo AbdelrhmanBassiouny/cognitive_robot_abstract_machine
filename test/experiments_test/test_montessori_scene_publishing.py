@@ -1,7 +1,8 @@
 """
 Tests for :mod:`experiments.montessori.perception.scene_publishing`: the board a look
-found is stood in the world the robot publishes, once, where the look found it, and the
-pieces a look found are stood there as the pieces they were seen as.
+found is stood in the world the robot publishes, once, where the look found it, the
+pieces a look found are stood there as the pieces they were seen as, and a scene
+perceived again stands them afresh.
 """
 
 from __future__ import annotations
@@ -18,9 +19,11 @@ from experiments.montessori.perception.recorded_setup import (
     perception_pipeline,
     recorded_world,
 )
+from experiments.montessori.perception.recorded_setup import lab_board
 from experiments.montessori.perception.scene_publishing import (
     PUBLISHED_PREFIX,
     BoardPublisher,
+    PerceivedScene,
     PiecePublisher,
     look_for_board,
 )
@@ -154,6 +157,83 @@ def test_two_looks_stand_pieces_under_different_names(look: RecordedFrame) -> No
     second = publisher.publish(scene, resting_on=look.pipeline.table.name)
 
     assert len({piece.name for piece in first + second}) == len(first) + len(second)
+    assert publisher.published == first + second
+
+
+def test_taking_the_pieces_down_leaves_none_of_them_in_the_world(
+    look: RecordedFrame,
+) -> None:
+    scene = look.scene()
+    live = look.pipeline.world
+    publisher = PiecePublisher(world=live)
+    stood = publisher.publish(scene, resting_on=look.pipeline.table.name)
+    assert stood
+
+    publisher.take_down()
+
+    assert publisher.published == []
+    assert live.get_semantic_annotations_by_type(MontessoriShape) == []
+    assert not {piece.root for piece in stood} & set(live.bodies)
+
+
+def test_pieces_stood_after_a_take_down_keep_their_own_names(
+    look: RecordedFrame,
+) -> None:
+    """
+    A name is never given twice, so nothing that kept a piece of the first look can
+    mistake one of the second for it.
+    """
+    scene = look.scene()
+    publisher = PiecePublisher(world=look.pipeline.world)
+    first = publisher.publish(scene, resting_on=look.pipeline.table.name)
+
+    publisher.take_down()
+    second = publisher.publish(scene, resting_on=look.pipeline.table.name)
+
+    assert not {piece.name for piece in first} & {piece.name for piece in second}
+
+
+# %% the scene a look stands
+
+
+def test_a_perceived_scene_holds_the_board_and_the_pieces_the_look_found(
+    look: RecordedFrame,
+) -> None:
+    live = look.pipeline.world
+    scene = PerceivedScene(world=live, look=look, described_board=lab_board())
+
+    scene.perceive()
+
+    assert ShapeSortingBoard.held_by(live) is scene.board
+    assert live.get_semantic_annotations_by_type(MontessoriShape) == scene.pieces
+    assert sorted(piece.shape_category for piece in scene.pieces) == sorted(
+        shape.category
+        for shape in look.scene().shapes
+        if shape.supporting_surface == look.pipeline.table.name
+    )
+    assert scene.piece_set is SMALLER_PIECES
+    assert scene.table_height == pytest.approx(TABLE_HEIGHT)
+
+
+def test_a_scene_perceived_again_stands_the_pieces_afresh_and_keeps_the_board(
+    look: RecordedFrame,
+) -> None:
+    """
+    The pieces of the first look are gone from the world, the second look's stand in
+    their place, and the board found once is the board the world holds.
+    """
+    live = look.pipeline.world
+    scene = PerceivedScene(world=live, look=look, described_board=lab_board())
+    scene.perceive()
+    board, first = scene.board, list(scene.pieces)
+
+    scene.perceive()
+
+    assert scene.board is board
+    assert ShapeSortingBoard.held_by(live) is board
+    assert live.get_semantic_annotations_by_type(MontessoriShape) == scene.pieces
+    assert len(scene.pieces) == len(first)
+    assert not {piece.root for piece in first} & set(live.bodies)
 
 
 # %% looking for the board

@@ -110,14 +110,14 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         scenario: MontessoriSortingScenario,
     ) -> MontessoriShapeCategory:
         """
-        The piece the monitor tracks: the one the script acts on, or the first piece of
-        the layout for a script that acts on none.
+        The piece the monitor tracks: the one the script acts on, or the first piece
+        standing in the scene for a script that acts on none.
 
-        :param scenario: The scenario whose piece is watched.
+        :param scenario: The scenario whose piece is watched, which has built its scene.
         """
         if scenario.acted_on_category is not None:
             return scenario.acted_on_category
-        return scenario.layout.placements[0].piece.category
+        return scenario.starting_layout.placements[0].piece.category
 
     @classmethod
     def question_set(
@@ -128,17 +128,17 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         questions that single one out.
 
         The piece the script acts on is what is asked about and what the robot is asked
-        whether it holds; the next piece of the layout is what it is placed against, and
-        the board stands in when the layout holds one piece only.
+        whether it holds; the next piece standing in the scene is what it is placed
+        against, and the board stands in when the scene holds one piece only.
 
-        :param scenario: The scenario whose scene is asked.
+        :param scenario: The scenario whose scene is asked, which has built its scene.
         :param world: The world the trial is running in.
         """
         scene = SortingScene(world)
         acted_on = cls.watched_category(scenario)
         others = [
             placement.piece.category
-            for placement in scenario.layout.placements
+            for placement in scenario.starting_layout.placements
             if placement.piece.category is not acted_on
         ]
         compared_against = scene.body_of(others[0]) if others else scene.board.root

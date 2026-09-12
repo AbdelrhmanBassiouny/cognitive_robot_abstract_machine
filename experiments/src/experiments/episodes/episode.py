@@ -19,7 +19,7 @@ from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from krrood.patterns.role import Role
 from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.world import World
-from typing_extensions import TYPE_CHECKING, List, Optional, Sequence
+from typing_extensions import TYPE_CHECKING, List, Optional, Sequence, Type
 
 from experiments.questions.question import BloomLevel, Bucket, Question
 from experiments.scenarios.trial import TrialOutcome
@@ -356,16 +356,39 @@ class Episode:
         """
         Describe the run a scenario is about to make.
 
-        The conditions and perturbations are recorded by name because they act on a live
-        world and so are not themselves records.
-
         :param scenario: The scenario every trial runs.
         :param conditions: The knowledge sources switched for every trial.
         :param perturbations: The changes applied to every trial's world.
         """
+        return cls.planned(
+            type(scenario), scenario.execution_type, conditions, perturbations
+        )
+
+    @classmethod
+    def planned(
+        cls,
+        scenario_type: Type[Scenario],
+        execution_type: ExecutionType,
+        conditions: Sequence[Condition] = (),
+        perturbations: Sequence[Perturbation] = (),
+    ) -> Episode:
+        """
+        Describe a run that is going to be made, before the scenario making it exists.
+
+        What a run is made of can be known before its scene can be built — a scene on
+        the robot needs the robot — so the episode, whose identifier is what everything
+        the run leaves behind is filed under, is described from the run's kind alone.
+        The conditions and perturbations are recorded by name because they act on a
+        live world and so are not themselves records.
+
+        :param scenario_type: The kind of scenario every trial runs.
+        :param execution_type: Whether the run happens in a simulator or on the robot.
+        :param conditions: The knowledge sources switched for every trial.
+        :param perturbations: The changes applied to every trial's world.
+        """
         return cls(
-            scenario_name=scenario.name,
-            execution_type=scenario.execution_type,
+            scenario_name=scenario_type.name,
+            execution_type=execution_type,
             condition_names=[type(condition).__name__ for condition in conditions],
             perturbation_names=[
                 type(perturbation).__name__ for perturbation in perturbations

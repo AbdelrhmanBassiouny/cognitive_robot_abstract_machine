@@ -182,7 +182,7 @@ def test_a_scenario_runs_headless_unless_told_otherwise(area):
 
     scenario.build_world()
 
-    assert scenario.simulation.headless is True
+    assert scenario.physics.headless is True
 
 
 def test_a_scenario_told_to_show_itself_carries_that_to_its_simulation(area):
@@ -194,7 +194,7 @@ def test_a_scenario_told_to_show_itself_carries_that_to_its_simulation(area):
 
     scenario.build_world()
 
-    assert scenario.simulation.headless is False
+    assert scenario.physics.headless is False
 
 
 def test_the_questions_asked_come_back_from_the_database_without_their_world(
@@ -342,7 +342,7 @@ def test_a_motion_read_back_from_its_json_still_answers_for_the_task_that_ran(ar
 
     motions = motions_of(run, scenario)
 
-    world = scenario.simulation.world
+    world = scenario.physics.world
     tracker = WorldEntityWithIDKwargsTracker.from_world(world)
     for motion in motions:
         chart = motion.motion_statechart

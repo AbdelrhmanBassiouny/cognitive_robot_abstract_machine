@@ -22,7 +22,10 @@ from experiments.montessori.perception.recorded_setup import (
     perception_pipeline,
     recorded_world,
 )
-from experiments.montessori.perception.scene_publishing import PUBLISHED_PREFIX
+from experiments.montessori.perception.scene_publishing import (
+    PUBLISHED_PREFIX,
+    PerceivedScene,
+)
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import RecordedFrame, RepeatedLook
 from experiments.montessori.perception.surfaces import WorkspaceSurface
@@ -133,9 +136,7 @@ def sorting(world: World, look: RecordedFrame) -> PerceivedSorting:
     A run over the measured capture that has already looked.
     """
     run = PerceivedSorting(
-        world=world,
-        look=look,
-        described_board=lab_board(),
+        scene=PerceivedScene(world=world, look=look, described_board=lab_board()),
         sorter=_SorterKeepingWhatItWasHanded(),
     )
     run.perceive()
@@ -188,8 +189,8 @@ def test_the_look_reads_the_lid_of_the_board_it_stood(
     Once the board is stood, the pipeline is handed that board's lid as the second
     surface it reads.
     """
-    assert sorting.look.pipeline.lid.entity is sorting.board.root
-    assert sorting.look.pipeline.lid.height == pytest.approx(
+    assert sorting.scene.look.pipeline.lid.entity is sorting.board.root
+    assert sorting.scene.look.pipeline.lid.height == pytest.approx(
         WorkspaceSurface.of(sorting.board, world.root).height
     )
 
@@ -203,9 +204,7 @@ def test_a_board_the_world_already_holds_is_sorted_into_without_looking(
     """
     held = _held_board(world)
     run = PerceivedSorting(
-        world=world,
-        look=look,
-        described_board=lab_board(),
+        scene=PerceivedScene(world=world, look=look, described_board=lab_board()),
         sorter=_SorterKeepingWhatItWasHanded(),
     )
 
@@ -225,12 +224,14 @@ def test_a_run_with_no_board_in_view_says_so(
     described = lab_board()
     empty_table = _LookAtAnEmptyTable(pipeline=look.pipeline)
     run = PerceivedSorting(
-        world=world,
-        look=empty_table,
-        described_board=described,
+        scene=PerceivedScene(
+            world=world,
+            look=empty_table,
+            described_board=described,
+            looks_for_board=2,
+            board_search_period=0.0,
+        ),
         sorter=_SorterKeepingWhatItWasHanded(),
-        looks_for_board=2,
-        board_search_period=0.0,
     )
 
     with pytest.raises(NoBoardInView) as raised:

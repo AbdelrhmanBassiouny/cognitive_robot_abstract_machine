@@ -1,8 +1,14 @@
 """
 Record one episode of a Montessori sorting scenario: the scenario, its layout, the
-perturbation applied to it and where it runs are chosen on the command line, the run is
-watched by the event monitor and asked the question set, and its trials, its video, its
-transcript and its bag are kept under the episode's identifier.
+perturbation applied to it, where it runs and where its scene comes from are chosen on
+the command line, the run is watched by the event monitor and asked the question set,
+and its trials, its video, its transcript and its bag are kept under the episode's
+identifier.
+
+The scene is either built from Tracy's description, for a run in simulation, or
+perceived: the world is fetched from the robot and the board and the pieces are stood in
+it by the robot's own camera, which is what a run on the robot is set among. A perceived
+scene is laid out by nobody here, so its layout is read off what the camera found.
 
 The identifier is printed before anything else, so a run that dies can still be found in
 the database and asked about.
@@ -20,12 +26,17 @@ from pathlib import Path
 from coraplex.datastructures.enums import ExecutionType
 from krrood.exceptions import DataclassException
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
-from typing_extensions import Iterator, List, Optional, Sequence
+from typing_extensions import Iterator, List, Optional, Sequence, Type
 
 from experiments.episodes.artifacts import ArtifactDirectory
 from experiments.episodes.episode import Episode
 from experiments.episodes.recording import open_recording
 from experiments.montessori import results_database
+from experiments.montessori.perception.recorded_setup import lab_board
+from experiments.montessori.perception.scene_publishing import (
+    LOOKS_FOR_THE_BOARD,
+    PerceivedScene,
+)
 from experiments.montessori.results_database import (
     DATABASE_URI_ENVIRONMENT_VARIABLE,
     ConfiguredDatabase,
@@ -39,7 +50,10 @@ from experiments.montessori.results_database import (
 from experiments.montessori.scenarios import (
     DetectionRelabelled,
     HOW_FAR_A_MOVED_HOLE_GOES,
+    Layout,
+    LayoutAsFound,
     MontessoriSortingScenario,
+    MontessoriWorldBuilder,
     PerceivedPoseOffset,
     Perturbation,
     PieceLayout,
@@ -55,6 +69,7 @@ from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.watched_run import WatchedSortingRun
 from experiments.scenarios.runner import ConsoleOperatorPrompt
 from experiments.tracy_experiments.montessori.scene_builder import (
+    TracyLookingAtItsOwnTable,
     TracyOnItsOwnTable,
     WHERE_TRACY_LOOKS_FROM,
     layout_area_on_tracys_table,
@@ -76,11 +91,31 @@ class ScenarioChoice(StrEnum):
 
 class LayoutChoice(StrEnum):
     """
-    How the pieces are stood on the table.
+    How the pieces come to stand on the table.
     """
 
     RANDOMIZED = "randomized"
     NEARLY_AMBIGUOUS = "nearly-ambiguous"
+    AS_FOUND = "as-found"
+
+
+class SceneChoice(StrEnum):
+    """
+    Where the board and the pieces the run is set among come from.
+    """
+
+    BUILT = "built"
+    PERCEIVED = "perceived"
+
+    @property
+    def default_layout(self) -> LayoutChoice:
+        """
+        How the pieces come to stand unless the command line says otherwise: a built
+        scene stands them by a seeded draw, a perceived scene finds them where they are.
+        """
+        if self is SceneChoice.PERCEIVED:
+            return LayoutChoice.AS_FOUND
+        return LayoutChoice.RANDOMIZED
 
 
 class PerturbationChoice(StrEnum):
@@ -118,6 +153,7 @@ class RecordingOption(StrEnum):
     """
 
     SCENARIO = "--scenario"
+    SCENE = "--scene"
     LAYOUT = "--layout"
     PERTURBATION = "--perturbation"
     PERTURBATION_STEP = "--perturbation-step"
@@ -159,6 +195,27 @@ BAG_NAME_PREFIX = "montessori_episode"
 Leading part of the name of the bag a run records.
 """
 
+NODE_NAME = "montessori_episode_recording"
+"""
+The name a run on the robot registers its node under.
+"""
+
+RECORDED_EXIT_CODE = 0
+"""
+What the process exits with once the episode is recorded.
+"""
+
+DATABASE_REFUSED_EXIT_CODE = 1
+"""
+What the process exits with when the episode's database cannot be recorded to.
+"""
+
+CHOICES_CLASH_EXIT_CODE = 2
+"""
+What the process exits with when the choices made on the command line contradict each
+other, as a parser exits on a usage error.
+"""
+
 # %% refusing a database that would be lost with the run
 
 
@@ -193,6 +250,62 @@ class InMemoryDatabaseRefused(DataclassException):
         ) % (RecordingOption.DATABASE_URI.value, DATABASE_URI_ENVIRONMENT_VARIABLE)
 
 
+# %% refusing choices that contradict each other
+
+
+@dataclass
+class PerceivedSceneNeedsTheRobot(DataclassException):
+    """
+    Raised when the scene is to be perceived but the run is not on the robot: the world
+    a perceived scene is stood in is the one the robot publishes, and no simulation can
+    carry that.
+    """
+
+    execution: ExecutionChoice
+    """
+    Where the run was asked to happen.
+    """
+
+    def error_message(self) -> str:
+        return (
+            "A perceived scene is the world the robot publishes with what its camera "
+            "finds stood in it, which cannot be run %s." % self.execution
+        )
+
+    def suggest_correction(self) -> str:
+        return "Pass %s %s, or record a %s scene." % (
+            RecordingOption.EXECUTION.value,
+            ExecutionChoice.REAL,
+            SceneChoice.BUILT,
+        )
+
+
+@dataclass
+class PerceivedSceneCannotBeLaidOut(DataclassException):
+    """
+    Raised when a perceived scene is asked to stand its pieces by a layout: nothing here
+    moves the real pieces, so where they stand is read off the look rather than chosen.
+    """
+
+    layout: LayoutChoice
+    """
+    The layout that was asked for.
+    """
+
+    def error_message(self) -> str:
+        return "A perceived scene cannot stand its pieces %s." % self.layout
+
+    def suggest_correction(self) -> str:
+        return (
+            "Leave %s out, or pass %s %s: the pieces stand where the camera finds them."
+            % (
+                RecordingOption.LAYOUT.value,
+                RecordingOption.LAYOUT.value,
+                LayoutChoice.AS_FOUND,
+            )
+        )
+
+
 # %% what one run is asked to do
 
 
@@ -207,9 +320,14 @@ class RecordingArguments:
     Which scenario runs.
     """
 
+    scene: SceneChoice
+    """
+    Where the board and the pieces come from.
+    """
+
     layout: LayoutChoice
     """
-    How its pieces are stood.
+    How its pieces come to stand.
     """
 
     perturbation: Optional[PerturbationChoice]
@@ -257,14 +375,49 @@ class RecordingArguments:
     The database asked for on the command line, or None to use the configured one.
     """
 
-    def scenario_instance(self) -> MontessoriSortingScenario:
+    def __post_init__(self) -> None:
+        if self.scene is not SceneChoice.PERCEIVED:
+            return
+        if self.execution is not ExecutionChoice.REAL:
+            raise PerceivedSceneNeedsTheRobot(execution=self.execution)
+        if self.layout is not LayoutChoice.AS_FOUND:
+            raise PerceivedSceneCannotBeLaidOut(layout=self.layout)
+
+    @property
+    def needs_ros(self) -> bool:
         """
-        The scenario this run records, built on Tracy's own table.
+        Whether the run talks to ROS at all: a perceived scene comes from the robot, and
+        a bag is recorded off its topics.
+        """
+        return self.scene is SceneChoice.PERCEIVED or self.record_bag
+
+    @property
+    def scenario_type(self) -> Type[MontessoriSortingScenario]:
+        """
+        The kind of scenario this run records.
+        """
+        if self.scenario is ScenarioChoice.ROBOT_SORTS_A_PIECE:
+            return TracySortsAPiece
+        if self.scenario is ScenarioChoice.PIECE_PUSHED_WHILE_IDLE:
+            return TracyIsIdleWhileAPieceIsPushed
+        if self.scenario is ScenarioChoice.PIECE_HELD_WHEN_ASKED:
+            return TracyHoldsAPiece
+        return TracyWatchesTheSceneStandStill
+
+    def scenario_instance(
+        self, world_builder: MontessoriWorldBuilder
+    ) -> MontessoriSortingScenario:
+        """
+        The scenario this run records, set in the given scene.
+
+        A simulated run is filmed; a run on the robot cannot be.
+
+        :param world_builder: What builds the scene each trial runs in.
         """
         scene = dict(
             layout=self.piece_layout(),
-            world_builder=TracyOnItsOwnTable(),
-            filmed=True,
+            world_builder=world_builder,
+            filmed=self.execution is ExecutionChoice.SIMULATED,
             headless=self.headless,
             execution_type=self.execution.execution_type,
         )
@@ -276,10 +429,12 @@ class RecordingArguments:
             return TracyHoldsAPiece(held_category=self.piece, **scene)
         return TracyWatchesTheSceneStandStill(**scene)
 
-    def piece_layout(self) -> PieceLayout:
+    def piece_layout(self) -> Layout:
         """
-        The layout this run stands its pieces in.
+        How this run's pieces come to stand.
         """
+        if self.layout is LayoutChoice.AS_FOUND:
+            return LayoutAsFound()
         area = layout_area_on_tracys_table()
         if self.layout is LayoutChoice.NEARLY_AMBIGUOUS:
             return PieceLayout.nearly_ambiguous(
@@ -349,10 +504,16 @@ def parse_arguments(
         default=ScenarioChoice.SCENE_STANDS_STILL,
     )
     parser.add_argument(
+        RecordingOption.SCENE,
+        type=SceneChoice,
+        choices=list(SceneChoice),
+        default=SceneChoice.BUILT,
+    )
+    parser.add_argument(
         RecordingOption.LAYOUT,
         type=LayoutChoice,
         choices=list(LayoutChoice),
-        default=LayoutChoice.RANDOMIZED,
+        default=None,
     )
     parser.add_argument(
         RecordingOption.PERTURBATION,
@@ -388,7 +549,10 @@ def parse_arguments(
     parsed = parser.parse_args(argument_list)
     return RecordingArguments(
         scenario=parsed.scenario,
-        layout=parsed.layout,
+        scene=parsed.scene,
+        layout=(
+            parsed.scene.default_layout if parsed.layout is None else parsed.layout
+        ),
         perturbation=parsed.perturbation,
         perturbation_step=parsed.perturbation_step,
         execution=parsed.execution,
@@ -427,20 +591,24 @@ def record_episode(arguments: RecordingArguments, episode: Episode) -> Path:
     """
     database = resolve_lasting_database(arguments.database_uri)
     verify_writable(database.uri)
-    scenario = arguments.scenario_instance()
     artifacts = ArtifactDirectory().open_for(episode)
     recording = open_recording(database)
-    run = WatchedSortingRun(
-        repetitions=arguments.repetitions,
-        operator_prompt=ConsoleOperatorPrompt(),
-        episode=episode,
-        records_trials=recording,
-        artifacts=artifacts,
-        film=scenario,
-    )
     bag = recorded_bag() if arguments.record_bag else contextlib.nullcontext()
     try:
-        with bag as bag_directory:
+        with (
+            ros_running(arguments.needs_ros),
+            scene_of(arguments) as world_builder,
+            bag as bag_directory,
+        ):
+            scenario = arguments.scenario_instance(world_builder)
+            run = WatchedSortingRun(
+                repetitions=arguments.repetitions,
+                operator_prompt=ConsoleOperatorPrompt(),
+                episode=episode,
+                records_trials=recording,
+                artifacts=artifacts,
+                film=scenario if scenario.filmed else None,
+            )
             run.run(scenario, perturbations=arguments.perturbations())
     finally:
         recording.close()
@@ -450,23 +618,66 @@ def record_episode(arguments: RecordingArguments, episode: Episode) -> Path:
 
 
 @contextlib.contextmanager
-def recorded_bag() -> Iterator[Path]:
+def ros_running(needed: bool) -> Iterator[None]:
     """
-    Record a bag of the run's topics for as long as the block runs, on a ROS context of
-    the run's own, and hand over the bag's directory once it is closed.
+    Keep ROS initialised for as long as the block runs, if the run needs it at all.
 
-    Imported here rather than at the top, so a run that records no bag needs no ROS.
+    Imported here rather than at the top, so a run that needs no ROS needs none
+    installed.
+
+    :param needed: Whether the run talks to ROS.
     """
+    if not needed:
+        yield
+        return
     import rclpy
-
-    from experiments.tracy_experiments.rosbag_recording import RosbagRecorder
 
     rclpy.init()
     try:
-        with RosbagRecorder.timestamped(BAG_NAME_PREFIX) as recorder:
-            yield Path(recorder.output_directory)
+        yield
     finally:
         rclpy.shutdown()
+
+
+@contextlib.contextmanager
+def scene_of(arguments: RecordingArguments) -> Iterator[MontessoriWorldBuilder]:
+    """
+    What builds the scene the run is set in, for as long as the block runs: Tracy's
+    table as its description builds it, or, connected to the robot for the block's
+    duration, Tracy's table as its own camera finds it.
+
+    Imported here rather than at the top, so a run whose scene is built needs no ROS.
+
+    :param arguments: What the run is asked to do.
+    """
+    if arguments.scene is SceneChoice.BUILT:
+        yield TracyOnItsOwnTable()
+        return
+    from experiments.tracy_experiments.live_tracy import LiveTracy
+
+    with LiveTracy.connected(NODE_NAME) as tracy:
+        yield TracyLookingAtItsOwnTable(
+            scene=PerceivedScene(
+                world=tracy.world,
+                look=tracy.look,
+                described_board=lab_board(),
+                looks_for_board=LOOKS_FOR_THE_BOARD,
+            )
+        )
+
+
+@contextlib.contextmanager
+def recorded_bag() -> Iterator[Path]:
+    """
+    Record a bag of the run's topics for as long as the block runs, and hand over the
+    bag's directory once it is closed.
+
+    Imported here rather than at the top, so a run that records no bag needs no ROS.
+    """
+    from experiments.tracy_experiments.rosbag_recording import RosbagRecorder
+
+    with RosbagRecorder.timestamped(BAG_NAME_PREFIX) as recorder:
+        yield Path(recorder.output_directory)
 
 
 def main(argument_list: Optional[Sequence[str]] = None) -> int:
@@ -474,11 +685,18 @@ def main(argument_list: Optional[Sequence[str]] = None) -> int:
     Record one episode as the command line asks.
 
     :param argument_list: Arguments to read; the process's own when omitted.
-    :return: 0 once the episode is recorded, 1 if its database cannot be recorded to.
+    :return: 0 once the episode is recorded, 1 if its database cannot be recorded to, 2
+        if the choices made on the command line contradict each other.
     """
-    arguments = parse_arguments(argument_list)
-    episode = Episode.from_run(
-        arguments.scenario_instance(), perturbations=arguments.perturbations()
+    try:
+        arguments = parse_arguments(argument_list)
+    except (PerceivedSceneNeedsTheRobot, PerceivedSceneCannotBeLaidOut) as clash:
+        print(clash, file=sys.stderr)
+        return CHOICES_CLASH_EXIT_CODE
+    episode = Episode.planned(
+        arguments.scenario_type,
+        arguments.execution.execution_type,
+        perturbations=arguments.perturbations(),
     )
     print(episode.identifier, flush=True)
     results_database.main(list(argument_list) if argument_list is not None else None)
@@ -486,9 +704,9 @@ def main(argument_list: Optional[Sequence[str]] = None) -> int:
         kept_in = record_episode(arguments, episode)
     except (UnreachableResultsDatabase, ReadOnlyResultsDatabase) as error:
         print(error, file=sys.stderr)
-        return 1
+        return DATABASE_REFUSED_EXIT_CODE
     print("Episode %s recorded; artifacts in %s" % (episode.identifier, kept_in))
-    return 0
+    return RECORDED_EXIT_CODE
 
 
 if __name__ == "__main__":
