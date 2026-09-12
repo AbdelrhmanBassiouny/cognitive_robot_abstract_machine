@@ -128,6 +128,42 @@ Measured, not guessed (scratchpad `probe_motion_eql.py`, `probe_constraints_eql.
   call: hand the question the chart as its domain, or make the controller's nodes and
   constraints symbols so the graph tracks them.
 
+## Recommended approach for constraints and detectors (2026-09-12, asked for)
+
+Asked: cleanest way to find all constraints of an action/task/motion and return their
+expressions, and likewise the detectors that answered a perception query.
+
+Measured first (scratchpad `probe_constraint_design.py`):
+
+- The recommended query shape works today. A node that inherits `Symbol` registers
+  itself, and `flat_variable(node.constraints)` selected the compiled constraint with
+  `node.name == "hold the joint"` as the condition, returning its `expression` and
+  `bound`. Reading the symbolic fields off the answers is fine; only conditioning on
+  them raises `HasFreeVariablesError`.
+- Registration is O(1) index bookkeeping (`SymbolGraph.add_node` does no field
+  traversal). A `ClassDiagram` over all 122 `MotionStatechartNode` subclasses builds in
+  0.61 s once.
+- Long-term memory is not an option for expressions. `to_dao` on a live constraint
+  builds a `GiskardEqualityConstraintDAO`, but the insert fails with
+  `Object of type Scalar is not JSON serializable` - the generated `expression` column
+  is a plain JSON column holding a `Scalar`. Even with a serializer,
+  `SerializableSymbolicMathType.to_json` refuses any non-constant value, and a
+  constraint's expression is never constant. So no constraint row has ever been
+  written.
+
+Recommendation given: keep the question in working memory; make
+`MotionStatechartNode` inherit `Symbol` (one edit covers constraints and detectors,
+since `Task`, `PerceptionTask` and `AbstractDetector` are all nodes); add a public
+`MotionStatechartNode.constraints`, which also removes the private reach
+`combine_constraint_collections_of_nodes` already performs from outside; give the node
+a `parent` object in place of `parent_node_index` for the action/goal granularity, and
+keep the plan-side link (`MotionNode` -> its `Task`) on the coraplex side rather than
+teaching giskardpy the plan's vocabulary - `GiskardExecutable.motion_mappings` is that
+link today and a dict is the wrong shape for it. On the perception side the provenance
+does not exist yet to be queried: `Detection` carries only the annotation and the pose,
+`PerceptionTask.perception_source` is `init=False`, the detections are applied to the
+world and dropped, and `DetectionEvent` does not name the detector that produced it.
+
 ## Local test environment notes
 
 `pytest` must be run with ROS sourced (`source /opt/ros/jazzy/setup.bash`), otherwise ORM
