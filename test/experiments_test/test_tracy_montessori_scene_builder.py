@@ -43,6 +43,7 @@ from experiments.montessori.semantics import (
 )
 from experiments.montessori.watched_run import WatchedSortingRun
 from experiments.questions.question import Memory
+from experiments.questions.question import SceneAsSetUp
 from experiments.questions.working_memory import SupportingSurfaces
 from experiments.scenarios.scenario import AbsentPerson
 from experiments.scenarios.trial import TrialOutcome
@@ -174,7 +175,7 @@ def test_a_perceived_piece_stands_on_tracys_own_table(
     ]
 
     assert SupportingSurfaces(subject=cube.root).ask(robot) == [robot.root]
-    assert SupportingSurfaces(subject=cube.root).ground_truth(robot) == [robot.root]
+    assert SceneAsSetUp.read_from(robot).holding_up(cube.root.name) == [robot.root.name]
 
 
 def test_the_perceived_scene_is_the_published_world_with_what_the_look_found(

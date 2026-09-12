@@ -10,20 +10,27 @@ and asks whether the score follows.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
+from typing_extensions import List
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.world import World
 
+from coraplex.datastructures.enums import ExecutionType
+
 from experiments.episodes.episode import Episode
+from experiments.montessori.exceptions import UnknownPieceNamed
 from experiments.montessori.scenarios import (
+    BoardOnItsOwnTable,
     DetectionRelabelled,
     LayoutArea,
+    LayoutAsFound,
     MontessoriSortingScenario,
     PerceivedPoseOffset,
+    PerceivingWorldBuilder,
     PieceLayout,
     SortingScene,
     SortingStep,
@@ -32,7 +39,10 @@ from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
 )
-from experiments.montessori.watched_run import WatchedSortingRun
+from experiments.montessori.watched_run import (
+    WHICH_PIECES_WERE_PLACED,
+    WatchedSortingRun,
+)
 from experiments.questions.question import Memory, SceneAsSetUp
 from experiments.questions.working_memory import ObjectPlaces, ObjectsSeen
 
@@ -42,6 +52,7 @@ from .test_montessori_scenarios import (
     SEED,
     SyntheticGrasperWatchesTheSceneStandStill,
     board_and_the_arm,
+    mounted_arm,
 )
 
 MISREAD_PIECE = MontessoriShapeCategory.CUBE
@@ -294,3 +305,169 @@ def test_an_unperturbed_run_answers_every_working_memory_question_it_is_scored_o
     assert all(query.answered_correctly for query in scored), [
         query.text for query in scored if not query.answered_correctly
     ]
+
+
+# %% the scene a person at the table set up
+
+
+@dataclass
+class TheBoardAndTheArmAsIfPerceived(BoardOnItsOwnTable, PerceivingWorldBuilder):
+    """
+    A scene builder standing in for one whose scene the robot's camera finds: the pieces
+    stand where this package builds them, and a look finds nothing it has not already
+    found.
+    """
+
+    def perceive(self) -> None:
+        """
+        Nothing to look with, and nothing a look would change.
+        """
+
+
+@dataclass
+class PersonWhoSaysWhatTheyPlaced:
+    """
+    Stands in for the person at the table: does nothing about what they are told, and
+    answers what they are asked with the line they would type.
+    """
+
+    says: str
+    """
+    What they type when they are asked.
+    """
+
+    asked: List[str] = field(default_factory=list)
+    """
+    The questions they have been put, in order.
+    """
+
+    @classmethod
+    def who_placed(cls, categories: List[MontessoriShapeCategory]):
+        """
+        Somebody who says they put those pieces on the table.
+
+        :param categories: The shapes they placed.
+        """
+        return cls(says=", ".join(str(category) for category in categories))
+
+    def carry_out(self, instruction: str) -> None:
+        """
+        Nothing, since these cases are about what they say rather than what they do.
+
+        :param instruction: What they were told to do.
+        """
+
+    def answer(self, question: str) -> str:
+        """
+        What they type.
+
+        :param question: What they were asked.
+        """
+        self.asked.append(question)
+        return self.says
+
+
+@dataclass
+class ATableTheCameraFound:
+    """
+    A scene on the robot, standing in the world the robot publishes, before anyone has
+    said what was put on the table.
+    """
+
+    scenario: MontessoriSortingScenario
+    """
+    The scenario the run runs on the robot.
+    """
+
+    world: World
+    """
+    The twin, which is what the camera made of the table.
+    """
+
+    @classmethod
+    def looked_at(cls) -> ATableTheCameraFound:
+        """
+        One such scene, its pieces standing where this package builds them.
+        """
+        scenario = SyntheticGrasperWatchesTheSceneStandStill(
+            layout=LayoutAsFound(),
+            world_builder=TheBoardAndTheArmAsIfPerceived(robot=mounted_arm()),
+            execution_type=ExecutionType.REAL,
+        )
+        return cls(scenario=scenario, world=scenario.build_world())
+
+    @property
+    def pieces_standing(self) -> List[MontessoriShapeCategory]:
+        """
+        The shapes of the pieces standing on the table, in the order the set spells
+        them.
+        """
+        standing = SortingScene(self.world).categories
+        return [
+            category for category in MontessoriShapeCategory if category in standing
+        ]
+
+    def as_the_person_says(
+        self, person: PersonWhoSaysWhatTheyPlaced
+    ) -> ASceneTheRunStood:
+        """
+        The run's account of this table, taken from what the person at it says.
+
+        :param person: The person at the table.
+        """
+        run = watched(self.scenario)
+        run.person = person
+        return ASceneTheRunStood(
+            scenario=self.scenario,
+            world=self.world,
+            as_set_up=run.scene_as_set_up(self.scenario, self.world),
+        )
+
+
+def test_the_person_at_the_table_is_asked_which_pieces_they_placed():
+    """
+    On the robot the twin is what the camera made of the table, so the only account of
+    the table that is not the camera's is the person's.
+    """
+    found = ATableTheCameraFound.looked_at()
+    person = PersonWhoSaysWhatTheyPlaced.who_placed(found.pieces_standing)
+
+    found.as_the_person_says(person)
+
+    assert person.asked == [WHICH_PIECES_WERE_PLACED]
+
+
+def test_the_objects_of_a_table_the_camera_read_right_are_the_ones_the_person_placed():
+    found = ATableTheCameraFound.looked_at()
+
+    stood = found.as_the_person_says(
+        PersonWhoSaysWhatTheyPlaced.who_placed(found.pieces_standing)
+    )
+
+    assert ObjectsSeen(scene=stood.as_set_up).matches_ground_truth(stood.robot) is True
+
+
+def test_a_piece_the_camera_misread_is_not_one_the_person_placed():
+    """
+    The camera called one piece by another shape and the person says what they really
+    put there, so the robot's account of its table and the table disagree.
+    """
+    found = ATableTheCameraFound.looked_at()
+    person = PersonWhoSaysWhatTheyPlaced.who_placed(found.pieces_standing)
+    call_the_piece_what_the_look_reported(
+        found.world,
+        DetectionRelabelled(
+            step=SortingStep.ANSWER, category=MISREAD_PIECE, reported_as=REPORTED_SHAPE
+        ),
+    )
+
+    stood = found.as_the_person_says(person)
+
+    assert ObjectsSeen(scene=stood.as_set_up).matches_ground_truth(stood.robot) is False
+
+
+def test_a_shape_no_piece_of_the_set_is_is_not_a_piece_anyone_placed():
+    found = ATableTheCameraFound.looked_at()
+
+    with pytest.raises(UnknownPieceNamed):
+        found.as_the_person_says(PersonWhoSaysWhatTheyPlaced(says="banana"))

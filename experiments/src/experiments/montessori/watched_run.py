@@ -44,7 +44,6 @@ from experiments.questions.question import (
     QuestionedThings,
     SceneAsSetUp,
     objects_of_the_scene,
-    placeless,
 )
 from experiments.questions.question_set import QuestionSet
 from experiments.questions.working_memory import BeliefAgreesWithPerception
@@ -284,12 +283,12 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         What this run knows it set up, said in the words its questions are scored in.
 
         Which pieces stand there and where comes from the layout the scenario stood them
-        by, or from the person who placed them where the run is on the robot. A piece the
-        script acts on is left without a place, since where the physics takes it is not
-        the script's to say, and the piece the script leaves in the hand is no object of
-        the scene at all. The rest of the scene -- the table, the board, whatever the
-        script acts with -- is named and placed off the world as it was just built, since
-        a run builds that rather than putting it there.
+        by, or from the person who placed them where the run is on the robot. A piece
+        the script acts on is left without a place, since where the physics takes it is
+        not the script's to say, and the piece the script leaves in the hand is no
+        object of the scene at all. The rest of the scene -- the table, the board,
+        whatever the script acts with -- is named and placed off the world as it was
+        just built, since a run builds that rather than putting it there.
 
         :param scenario: The scenario whose scene it is, which has built that scene.
         :param world: The world the trial is about to run in.
@@ -301,7 +300,7 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         return SceneAsSetUp(
             objects=pieces
             + [
-                PlacedObject(name=body.name, place=placeless(body.global_pose))
+                PlacedObject.read_from(body)
                 for body in objects_of_the_scene(scene.robot)
                 if body.name not in piece_names
             ],

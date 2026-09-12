@@ -61,6 +61,7 @@ from experiments.questions.question import (
     QueryBackend,
     QuestionedThings,
     RequiredFact,
+    SceneNotStated,
     ScoredAgainstTheSceneAsSetUp,
     moving_parts_of,
     objects_of_the_scene,
@@ -318,10 +319,9 @@ class ObjectColours(WorkingMemoryQuestion[List[Color]]):
         """
         The colours the twin holds, read off it directly.
 
-        The one thing about a piece that whoever set the scene up cannot state: a scene
-        is set up by putting known pieces somewhere, and what a piece is painted is the
-        description's rather than the setting-up's. Read from the twin until a scene
-        says what it stood each piece in.
+        What a piece is painted belongs to the description it is built from rather than
+        to the setting up of a scene, which only says which pieces stand where, so the
+        twin is the only account of it there is.
 
         :param source: The robot whose scene it is.
         """
@@ -399,7 +399,9 @@ class ObjectPlaces(WorkingMemoryQuestion[List[Pose]], ScoredAgainstTheSceneAsSet
 
 
 @dataclass
-class SupportingSurfaces(WorkingMemoryQuestion[List[Body]], ScoredAgainstTheSceneAsSetUp):
+class SupportingSurfaces(
+    WorkingMemoryQuestion[List[Body]], ScoredAgainstTheSceneAsSetUp
+):
     """
     What one object is standing on.
     """
@@ -432,7 +434,7 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]], ScoredAgainstTheScen
 
         :param things: What the scene fills in for the questions about one thing.
         """
-        if not things.scene.knows_what_holds_up(things.object_asked_about.name):
+        if things.scene.holding_up(things.object_asked_about.name) is None:
             return []
         return [cls(subject=things.object_asked_about, scene=things.scene)]
 
@@ -469,7 +471,10 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]], ScoredAgainstTheScen
 
         :param source: The robot whose scene it is.
         """
-        return BodiesNamed(names=self.stated_scene().holding_up(self.subject.name))
+        holding_it_up = self.stated_scene().holding_up(self.subject.name)
+        if holding_it_up is None:
+            raise SceneNotStated(question=self.english)
+        return BodiesNamed(names=holding_it_up)
 
 
 @dataclass
@@ -526,9 +531,10 @@ class SideOfAnotherObject(WorkingMemoryQuestion[bool], ScoredAgainstTheSceneAsSe
 
         :param things: What the scene fills in for the questions about one thing.
         """
-        if not things.scene.knows_where(
-            things.object_asked_about.name
-        ) or not things.scene.knows_where(things.object_compared_against.name):
+        if (
+            things.scene.place_of(things.object_asked_about.name) is None
+            or things.scene.place_of(things.object_compared_against.name) is None
+        ):
             return []
         return [
             cls(
@@ -582,12 +588,13 @@ class SideOfAnotherObject(WorkingMemoryQuestion[bool], ScoredAgainstTheSceneAsSe
         :param source: The robot whose scene it is.
         """
         scene = self.stated_scene()
-        relation = self.side.relation(
-            scene.object_called(self.subject.name).place,
-            scene.object_called(self.other.name).place,
-            self.point_of_view,
+        subject_place = scene.place_of(self.subject.name)
+        other_place = scene.place_of(self.other.name)
+        if subject_place is None or other_place is None:
+            raise SceneNotStated(question=self.english)
+        return bool(
+            self.side.relation(subject_place, other_place, self.point_of_view)()
         )
-        return bool(relation())
 
 
 @dataclass

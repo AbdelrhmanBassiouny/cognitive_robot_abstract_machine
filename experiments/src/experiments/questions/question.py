@@ -204,19 +204,6 @@ separates settling from something having happened.
 """
 
 
-def placeless(pose: Pose) -> Point3:
-    """
-    Where a pose puts something, as three numbers in the frame the pose was measured in.
-
-    Taken off the frame it was measured in, since a scene's account of itself outlives
-    the world that frame is a body of.
-
-    :param pose: The pose to read.
-    """
-    stands_at = pose.to_position().to_np()
-    return Point3(float(stands_at[0]), float(stands_at[1]), float(stands_at[2]))
-
-
 @dataclass
 class PlacedObject:
     """
@@ -244,6 +231,29 @@ class PlacedObject:
     """
     What it was put on, or None where the run cannot say what holds it up.
     """
+
+    @classmethod
+    def read_from(
+        cls, body: Body, standing_on: Optional[PrefixedName] = None
+    ) -> PlacedObject:
+        """
+        One object as the twin has it, named and placed where the twin puts it, without
+        the frame that place was measured in: a scene's account of itself outlives the
+        world a frame is a body of.
+
+        ..warning:: Read off the very twin the questions are answered from, so it is an
+            account of what was set up only where it is taken before anything acts on
+            the scene.
+
+        :param body: The object as the twin holds it.
+        :param standing_on: What it was put on, where that is known.
+        """
+        stands_at = body.global_pose.to_position().to_np()
+        return cls(
+            name=body.name,
+            place=Point3(float(stands_at[0]), float(stands_at[1]), float(stands_at[2])),
+            standing_on=standing_on,
+        )
 
 
 @dataclass
@@ -298,38 +308,30 @@ class SceneAsSetUp:
                 return placed
         return None
 
-    def knows_what_holds_up(self, name: PrefixedName) -> bool:
+    def holding_up(self, name: PrefixedName) -> Optional[List[PrefixedName]]:
         """
-        Whether the scene says what holds one of its objects up, which it does for the
-        object in the hand -- nothing does -- and for anything it put on a surface and
-        did not act on afterwards.
-
-        :param name: What the scene calls the object.
-        """
-        if name == self.object_in_the_hand:
-            return True
-        placed = self.object_called(name)
-        return placed is not None and placed.standing_on is not None
-
-    def holding_up(self, name: PrefixedName) -> List[PrefixedName]:
-        """
-        What the scene put under one of its objects, and nothing at all for the object
-        in the hand.
+        What the scene put under one of its objects: nothing at all for the object in
+        the hand, and None where the scene does not say -- which is what a piece the run
+        acted on leaves it able to say, since where the physics took it is not the
+        script's.
 
         :param name: What the scene calls the object.
         """
         if name == self.object_in_the_hand:
             return []
-        return [self.object_called(name).standing_on]
+        placed = self.object_called(name)
+        if placed is None or placed.standing_on is None:
+            return None
+        return [placed.standing_on]
 
-    def knows_where(self, name: PrefixedName) -> bool:
+    def place_of(self, name: PrefixedName) -> Optional[Point3]:
         """
-        Whether the scene says where one of its objects stands.
+        Where the scene put one of its objects, or None where it does not say.
 
         :param name: What the scene calls the object.
         """
         placed = self.object_called(name)
-        return placed is not None and placed.place is not None
+        return None if placed is None else placed.place
 
     def forget_where(self, name: PrefixedName) -> None:
         """
@@ -359,9 +361,8 @@ class SceneAsSetUp:
         surfaces = surfaces_of_the_scene(robot)
         return cls(
             objects=[
-                PlacedObject(
-                    name=body.name,
-                    place=placeless(body.global_pose),
+                PlacedObject.read_from(
+                    body,
                     standing_on=next(
                         (
                             surface.name
@@ -486,7 +487,8 @@ class PlacesPutAt(TrueAnswer):
 class SceneNotStated(DataclassException):
     """
     Raised when a question scored against the scene it was asked of is asked for its
-    true answer without anyone having said what that scene was set up to be.
+    true answer and nothing says what that scene was set up to be, or says the part of
+    it the question is about.
     """
 
     question: str
