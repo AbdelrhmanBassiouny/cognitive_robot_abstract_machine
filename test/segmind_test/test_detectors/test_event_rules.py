@@ -295,6 +295,16 @@ def test_the_insertion_rule_names_the_events_it_consumed(inserted_shape):
     ]
 
 
+def test_the_insertion_rule_states_the_entity_the_shape_ended_up_inside(inserted_shape):
+    """
+    Asserted by identity: an argument the rule left unresolved would be a symbolic
+    attribute, whose ``==`` answers with a comparison rather than with a truth value.
+    """
+    insertion = inserted_shape.the_event_of(InsertionEvent)
+    [inserted_into] = insertion.inserted_into_objects
+    assert inserted_into is inserted_shape.the_event_of(ContainmentEvent).with_object
+
+
 def test_an_event_no_rule_produced_names_no_events(picked_up_milk):
     """
     An atomic detector builds its events directly, so there is no rule behind them and
@@ -308,17 +318,57 @@ def test_an_event_no_rule_produced_names_no_events(picked_up_milk):
 
 def test_the_pick_up_rule_verbalizes_as_a_sentence(picked_up_milk):
     explanation = explain_inference(picked_up_milk.the_event_of(PickUpEvent))
-    assert verbalize_expression(explanation.query_root) == ""
+    assert verbalize_expression(explanation.query_root) == (
+        "If there's a LossOfSupportEvent whose tracked_object is the tracked_object "
+        "of a TranslationEvent, an event_time_difference, where the first_event of "
+        "the event_time_difference is the TranslationEvent, and the second_event of "
+        "the event_time_difference is the LossOfSupportEvent is at most "
+        "datetime.timedelta(seconds=15), not (there exists a PickUpEvent such that "
+        "its tracked_object is the tracked_object of the first_event of the "
+        "event_time_difference, and its with_object is the with_object of the "
+        "second_event of the event_time_difference), then there's a PickUpEvent "
+        "whose tracked_object is the tracked_object of the first_event of the "
+        "event_time_difference, and whose with_object is the with_object of the "
+        "second_event of the event_time_difference"
+    )
 
 
 def test_the_placing_rule_verbalizes_as_a_sentence(placed_milk):
     explanation = explain_inference(placed_milk.the_event_of(PlacingEvent))
-    assert verbalize_expression(explanation.query_root) == ""
+    assert verbalize_expression(explanation.query_root) == (
+        "If there's a SupportEvent whose tracked_object is the tracked_object of a "
+        "StopTranslationEvent, an event_time_difference, where the first_event of "
+        "the event_time_difference is the StopTranslationEvent, and the "
+        "second_event of the event_time_difference is the SupportEvent is at most "
+        "datetime.timedelta(seconds=15), not (there exists a PlacingEvent such that "
+        "its tracked_object is the tracked_object of the first_event of the "
+        "event_time_difference, and its with_object is the with_object of the "
+        "second_event of the event_time_difference), then there's a PlacingEvent "
+        "whose tracked_object is the tracked_object of the first_event of the "
+        "event_time_difference, and whose with_object is the with_object of the "
+        "second_event of the event_time_difference"
+    )
 
 
 def test_the_insertion_rule_verbalizes_as_a_sentence(inserted_shape):
     explanation = explain_inference(inserted_shape.the_event_of(InsertionEvent))
-    assert verbalize_expression(explanation.query_root) == ""
+    assert verbalize_expression(explanation.query_root) == (
+        "If there's an Aperture whose root is the with_object of a ContactEvent, "
+        "the tracked_object of a ContainmentEvent is the tracked_object of the "
+        "ContactEvent, an event_time_difference, where the first_event of the "
+        "event_time_difference is the ContactEvent, and the second_event of the "
+        "event_time_difference is the ContainmentEvent is at most "
+        "datetime.timedelta(seconds=15), not (there exists an InsertionEvent such "
+        "that its tracked_object is the tracked_object of the first_event of the "
+        "event_time_difference, and its with_object is the with_object of the "
+        "first_event of the event_time_difference), then there's an InsertionEvent "
+        "whose tracked_object is the tracked_object of the first_event of the "
+        "event_time_difference, whose with_object is the with_object of the "
+        "first_event of the event_time_difference, whose inserted_into_objects are "
+        "an objects_inserted_into, where the containing_object of the "
+        "objects_inserted_into is the with_object of the second_event of the "
+        "event_time_difference, and whose through_hole is the Aperture"
+    )
 
 
 # %% what the rule costs
