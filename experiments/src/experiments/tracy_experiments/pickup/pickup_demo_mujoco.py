@@ -52,6 +52,7 @@ from experiments.episodes.episode import Episode, RecordedTrial
 from experiments.episodes.observer import EpisodeObserver, ObserverListener
 from experiments.episodes.recording import RecordsNothing, RecordsTrials
 from experiments.episodes.trace import JointTrace, TimedFrames
+from experiments.questions.after_the_move import QuestionAfterTheMove
 from experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_shape_monitor_in_scene,
@@ -898,6 +899,12 @@ class SimulatedPickupDemo:
     The trial the run recorded, once :meth:`perform` has finished.
     """
 
+    asks: QuestionAfterTheMove = field(init=False)
+    """
+    What asks the question set once the piece asked about has come to rest, once
+    :meth:`perform` has started.
+    """
+
     tracing: TrialTracing = field(init=False)
     """
     The monitor's ticks and the joint trace, once :meth:`perform` has run.
@@ -925,8 +932,10 @@ class SimulatedPickupDemo:
 
     def perform(self) -> None:
         """
-        Start the simulation, look, sort every piece the look found, ask the question
-        set, and stop -- recording all of it as one trial of one episode.
+        Start the simulation, look, sort every piece the look found, and stop --
+        recording all of it as one trial of one episode. The question set is asked the
+        moment the piece asked about is reported to have stopped moving, or at the end
+        where it never is.
         """
         self.episode = Episode(
             scenario_name=SCENARIO_NAME,
@@ -938,11 +947,18 @@ class SimulatedPickupDemo:
         )
         self.observer.restart()
         watched = self.lab.real_piece_of(self.piece_asked_about)
+        self.asks = QuestionAfterTheMove(
+            observer=self.observer,
+            asked_about=watched.root,
+            question_set=self.question_set,
+            robot=self.lab.robot,
+            listener=ObserverListener(self.observer),
+        )
         self.tracing = TrialTracing(
             world=self.lab.reality,
             observer=self.observer,
             monitor=build_shape_monitor_in_scene(
-                self.lab.reality, watched, listener=ObserverListener(self.observer)
+                self.lab.reality, watched, listener=self.asks
             ),
         )
         overview_camera = camera_looking_at(
@@ -1003,9 +1019,7 @@ class SimulatedPickupDemo:
                 self._shove(simulation, self.shove)
             self.sorting.sort_every_piece()
             simulation.advance(1.0)
-            self.observer.ask(
-                self.question_set(), self.lab.robot, self.observer.elapsed_seconds
-            )
+            self.asks.ask_if_not_yet()
             self.overview.close()
             self.camera_film.close()
         overview_camera.body.simulator_additional_properties.remove(overview_camera)

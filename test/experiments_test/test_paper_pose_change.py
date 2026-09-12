@@ -516,6 +516,21 @@ def test_the_move_is_looked_at_from_square_across_it() -> None:
     assert viewpoint[2] == ACROSS_ELEVATION
 
 
+def test_the_move_is_looked_at_from_the_side_away_from_the_robot() -> None:
+    """
+    With the robot standing to one side of the move, the camera stands on the other, so
+    the robot's body is behind the move rather than between the camera and it.
+    """
+    before = Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
+    after = Pose.from_xyz_rpy(x=ENDED_AT).to_homogeneous_matrix()
+    robot_at = np.array([0.0, 1.0, 0.0])
+
+    viewpoint = viewpoint_across(before, after, away_from=robot_at)
+
+    assert viewpoint[1] < 0
+    assert viewpoint[2] == ACROSS_ELEVATION
+
+
 def test_a_lift_is_looked_at_from_the_overviews_side() -> None:
     before = Pose.from_xyz_rpy(z=0.0).to_homogeneous_matrix()
     after = Pose.from_xyz_rpy(z=0.3).to_homogeneous_matrix()

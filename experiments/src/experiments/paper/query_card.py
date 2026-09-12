@@ -16,7 +16,6 @@ from pathlib import Path
 
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
-    AgentInteractionEvent,
     DetectionEvent,
     MotionEvent,
     PickUpEvent,
@@ -29,7 +28,7 @@ from experiments.episodes.episode import RecordedQuery, RecordedTrial
 from experiments.experiment_definitions import TypstRenderer
 from experiments.episodes.trace import JointPositions, JointTrace
 from experiments.montessori.same_piece import SamePiece
-from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
+from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.paper.camera_frame import (
     BagFrameAt,
     BagFramesAround,
@@ -782,23 +781,18 @@ class QueryCard(ABC):
         subject: Body, world: World
     ) -> Tuple[KinematicStructureEntity, ...]:
         """
-        What the picture of an object's move is framed on besides the object: the
-        boards and every other piece of the scene, so the move is seen with the table
-        it happened on rather than alone.
+        What the picture of an object's move is framed on besides the object and its
+        way: the boards of the scene, so the move is seen with what it was made
+        towards rather than alone, and close enough that the two poses and the way
+        between them are read.
 
         :param subject: The object that moved.
         :param world: The twin it stands in.
         """
-        boards = [
+        return tuple(
             board.root
             for board in world.get_semantic_annotations_by_type(ShapeSortingBoard)
-        ]
-        pieces = [
-            shape.root
-            for shape in world.get_semantic_annotations_by_type(MontessoriShape)
-            if shape.root is not subject
-        ]
-        return tuple(boards + pieces)
+        )
 
     def _camera_frame(
         self,

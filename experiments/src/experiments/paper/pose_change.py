@@ -45,6 +45,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
@@ -112,25 +113,36 @@ side.
 
 
 def viewpoint_across(
-    before: HomogeneousTransformationMatrix, after: HomogeneousTransformationMatrix
+    before: HomogeneousTransformationMatrix,
+    after: HomogeneousTransformationMatrix,
+    away_from: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Which way from a move the camera stands to see the two poses side by side: square
-    across the table to the way the object went, raised, on whichever side the overview
-    camera also stands on so the picture is turned the same way as the other cards.
+    across the table to the way the object went, raised, and on the side away from
+    whatever would otherwise stand between the camera and the move.
 
     A move with no way across the table -- a lift -- is looked at from the overview's
-    own side.
+    own side; so is a move nothing is to be kept behind.
 
     :param before: Where the object was, in the world root frame.
     :param after: Where it ended up, in the world root frame.
+    :param away_from: A point of the world root frame to keep on the far side of the
+        move -- where the robot stands, so its body is behind the move rather than in
+        front of it -- or None to stand on the overview camera's side.
     """
-    across_the_table = (after.to_np()[:3, 3] - before.to_np()[:3, 3])[:2]
+    start, end = before.to_np()[:3, 3], after.to_np()[:3, 3]
+    across_the_table = (end - start)[:2]
     length = float(np.linalg.norm(across_the_table))
     if length < MINIMUM_MOVE_ACROSS_THE_TABLE:
         return np.array(OVERVIEW_VIEWPOINT, dtype=float)
     square_to_it = np.array([-across_the_table[1], across_the_table[0]]) / length
-    if square_to_it @ np.array(OVERVIEW_VIEWPOINT[:2]) < 0:
+    towards = (
+        np.array(OVERVIEW_VIEWPOINT[:2])
+        if away_from is None
+        else ((start + end) / 2 - away_from)[:2]
+    )
+    if square_to_it @ towards < 0:
         square_to_it = -square_to_it
     return np.array([square_to_it[0], square_to_it[1], ACROSS_ELEVATION])
 
@@ -642,7 +654,9 @@ class PoseChangeRender:
             dots = self.stand_dots_along(
                 change.subject, change.way or change.straight_way()
             )
-            framed_on = self.framed_on(change.subject, ghost) + tuple(among)
+            framed_on = (
+                self.framed_on(change.subject, ghost) + tuple(dots) + tuple(among)
+            )
             camera = self.camera
             if camera is None:
                 camera = self.hang_a_camera_across(change, framed_on)
@@ -664,6 +678,19 @@ class PoseChangeRender:
                 stand(self.world, change.subject, stood_at)
                 stood.restore_into(self.world)
 
+    def where_the_robot_stands(self) -> Optional[np.ndarray]:
+        """
+        Where the robot's base stands in the world root frame, or None where the world
+        holds no robot: what the camera keeps behind the move so the robot's body is
+        not in front of it.
+        """
+        robots = self.world.get_semantic_annotations_by_type(AbstractRobot)
+        if not robots:
+            return None
+        return self.world.compute_forward_kinematics_np(
+            self.world.root, robots[0].root
+        )[:3, 3]
+
     def hang_a_camera_across(
         self, change: PoseChange, framed_on: Sequence[KinematicStructureEntity]
     ) -> MujocoCamera:
@@ -678,7 +705,9 @@ class PoseChangeRender:
         """
         pose = MujocoCamera.pose_looking_from(
             SceneRender(world=self.world, framed_on=tuple(framed_on)).bounds(),
-            viewpoint_across(change.before, change.after),
+            viewpoint_across(
+                change.before, change.after, self.where_the_robot_stands()
+            ),
         )
         camera = MujocoCamera(
             name=MOVE_CAMERA_NAME,

@@ -100,6 +100,7 @@ from experiments.montessori.perception.scene_publishing import (
 from experiments.montessori.results_database import ConfiguredDatabase, ResultsDatabase
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.questions.question import QuestionedThings
+from experiments.questions.after_the_move import QuestionAfterTheMove
 from experiments.questions.question_set import QuestionSet
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.live_tracy import LiveTracy
@@ -338,6 +339,12 @@ class _SortingRig(ShapeSorter):
     event its monitors report.
     """
 
+    asks: Optional[QuestionAfterTheMove] = None
+    """
+    What asks the question set once the piece asked about has come to rest, or None for
+    a run that asks it some other way.
+    """
+
     def sort(self, piece: MontessoriShape, release_pose: Pose) -> None:
         """
         Pick ``piece`` off the table and release it at ``release_pose``.
@@ -450,6 +457,8 @@ class _SortingRig(ShapeSorter):
         """
         self.feed.publish(piece_name, event)
         self.observer.tick(self.observer.elapsed_seconds, [event])
+        if self.asks is not None:
+            self.asks.receive([event])
 
     def _carry_watching_for_slip(
         self, body: Body, close_setpoint: float, carry: Callable[[], None]
@@ -712,6 +721,12 @@ def main() -> None:
         )
         asked_about = piece_asked_about(sorting, arguments.ask_about)
         question_set = question_set_about(sorting, asked_about, tracy.robot)
+        rig.asks = QuestionAfterTheMove(
+            observer=rig.observer,
+            asked_about=asked_about.root,
+            question_set=lambda: question_set,
+            robot=tracy.robot,
+        )
         # Recording starts here rather than at start-up so the bag holds the sorting
         # itself, not the operator's wait at the prompt above, and closes as soon as
         # the last piece is placed. The trial's own clock starts with it, so the bag
@@ -737,7 +752,7 @@ def main() -> None:
         ):
             rig.perform_and_record(park)
             sorting.sort_every_piece()
-            rig.observer.ask(question_set, tracy.robot, rig.observer.elapsed_seconds)
+            rig.asks.ask_if_not_yet()
         joints.stop()
         logger.info("Sorting finished.")
         trial = rig.observer.into(

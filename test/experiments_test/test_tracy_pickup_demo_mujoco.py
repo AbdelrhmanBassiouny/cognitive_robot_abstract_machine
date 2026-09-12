@@ -14,7 +14,11 @@ import numpy as np
 import pytest
 from typing_extensions import Dict
 
-from segmind.datastructures.events import PickUpEvent, TranslationEvent
+from segmind.datastructures.events import (
+    PickUpEvent,
+    StopTranslationEvent,
+    TranslationEvent,
+)
 
 from experiments.episodes.artifacts import ArtifactDirectory
 from experiments.montessori.perception.captures import SceneCapture
@@ -33,6 +37,7 @@ from experiments.tracy_experiments.pickup.pickup_demo_mujoco import (
     LAB_BOARD_CENTRE,
     LAB_PIECE_PLACES,
     RunArtifact,
+    TRACE_PERIOD,
     Shove,
     SimulatedLab,
     SimulatedPickupDemo,
@@ -295,17 +300,32 @@ def test_the_plan_accounts_for_the_pick_up_the_monitor_saw(
     assert isinstance(accounting.action, PickUpActionMujoco)
 
 
-def test_the_question_set_was_asked_at_the_end_and_answered_correctly(
+def test_the_question_set_was_asked_as_the_piece_came_to_rest_and_answered_correctly(
     performed: SimulatedPickupDemo,
 ) -> None:
+    """
+    The set is asked the moment the monitor reports the piece asked about has stopped
+    moving, so the query stands right after the carry it is about rather than at the
+    end of the run.
+    """
     queries = performed.trial.queries
+    piece = performed.lab.real_piece_of(performed.piece_asked_about).root
+    came_to_rest = [
+        tick
+        for tick in performed.trial.ticks
+        if any(
+            isinstance(event, StopTranslationEvent) and event.tracked_object is piece
+            for event in tick.events
+        )
+    ][0]
 
     assert queries
     [picked_up_recently] = [
         query for query in queries if isinstance(query.question, PickedUpRecently)
     ]
     assert picked_up_recently.answered_correctly is True
-    assert all(query.moment <= performed.trial.duration for query in queries)
+    assert came_to_rest.moment <= picked_up_recently.moment
+    assert picked_up_recently.moment - came_to_rest.moment < TRACE_PERIOD * 2
 
 
 def test_the_joints_and_the_camera_are_traced_along_the_trial(
