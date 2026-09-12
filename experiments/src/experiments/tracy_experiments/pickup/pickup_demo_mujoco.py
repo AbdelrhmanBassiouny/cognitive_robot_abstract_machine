@@ -929,6 +929,9 @@ class SimulatedPickupDemo:
         self.episode = Episode(
             scenario_name=SCENARIO_NAME,
             execution_type=ExecutionType.SIMULATED,
+            perturbation_names=(
+                [] if self.shove is None else [type(self.shove).__name__]
+            ),
             world=self.lab.reality,
         )
         self.observer.restart()

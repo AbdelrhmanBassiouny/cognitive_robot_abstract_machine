@@ -41,9 +41,15 @@ RUNNING_TITLE = "what the robot was running"
 What is written over the chart of the plan.
 """
 
-CAMERA_FRAMES_LABEL = "camera frames"
+PICTURES_TAKEN_AT = "pictures below taken at %s"
 """
-What the stretch the camera frames were taken over is named on the chart.
+What is written under the charts to say which instants the levels below show, given
+those instants written out.
+"""
+
+INSTANT = "%.1f s"
+"""
+How one instant is written.
 """
 
 REPORTED_LEGEND = "reported"
@@ -101,7 +107,7 @@ class RunTimeline:
         asked_at: Optional[float] = None,
         emphasise: Sequence[DetectionEvent] = (),
         happened_at: Optional[float] = None,
-        either_side: float = 0.0,
+        pictured_at: Sequence[float] = (),
         identity: ObjectIdentity = SameName(),
     ) -> RenderedRunTimeline:
         """
@@ -114,9 +120,10 @@ class RunTimeline:
             are picked out.
         :param happened_at: Seconds into the trial the answered event was reported, or
             None to mark no event.
-        :param either_side: How far either side of that moment the camera frames of the
-            same card were taken, in seconds; the stretch is shaded so a reader can find
-            it on the chart. Zero shades nothing.
+        :param pictured_at: The instants the other levels of the same card show, in
+            seconds into the trial; the stretch between the first and the last is shaded
+            and the instants written under the charts, so a reader can find each picture
+            on the axis.
         :param identity: How a body an item of the plan acts on is told to be the body
             an event is about.
         """
@@ -138,21 +145,40 @@ class RunTimeline:
         self.chart.draw_rows(lower, ran, trial.duration)
         upper.set_title(REPORTED_TITLE, loc="left", fontsize=self.title_size)
         lower.set_title(RUNNING_TITLE, loc="left", fontsize=self.title_size)
-        lower.set_xlabel(self.chart.time_axis_label, fontsize=self.chart.label_size)
+        lower.set_xlabel(self._axis_label(pictured_at), fontsize=self.chart.label_size)
+        marks = self._marks(asked_at, happened_at)
         for axes in (upper, lower):
-            for marked in self._marks(asked_at, happened_at):
-                self.chart.draw_rule(axes, marked)
-            if happened_at is not None and either_side > 0.0:
+            for marked in marks:
+                self.chart.draw_rule(
+                    axes,
+                    (
+                        marked
+                        if axes is upper
+                        else MarkedMoment(marked.moment, "", marked.color)
+                    ),
+                )
+            if pictured_at:
                 self.chart.shade(
                     axes,
-                    TimelineSpan(happened_at - either_side, 2 * either_side),
-                    CAMERA_FRAMES_LABEL if axes is lower else "",
+                    TimelineSpan(min(pictured_at), max(pictured_at) - min(pictured_at)),
                 )
         self._key(figure, ran)
-        figure.subplots_adjust(left=0.30, right=0.98, top=0.90, bottom=0.30)
+        figure.subplots_adjust(left=0.30, right=0.98, top=0.90, bottom=0.22)
         return RenderedRunTimeline(
             mark=asked_at, figure=figure, reported=reported, ran=ran
         )
+
+    def _axis_label(self, pictured_at: Sequence[float]) -> str:
+        """
+        What is written under the lower chart: the seconds, and the instants the
+        pictures below were taken at where there are any.
+
+        :param pictured_at: The instants, in seconds into the trial.
+        """
+        if not pictured_at:
+            return self.chart.time_axis_label
+        instants = ", ".join(INSTANT % moment for moment in sorted(set(pictured_at)))
+        return "%s; %s" % (self.chart.time_axis_label, PICTURES_TAKEN_AT % instants)
 
     @staticmethod
     def _plan_rows_of(

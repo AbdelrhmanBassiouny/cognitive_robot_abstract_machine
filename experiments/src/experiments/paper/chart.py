@@ -277,10 +277,11 @@ class TrialChart:
 
     def draw_rule(self, axes: Axes, marked: MarkedMoment) -> None:
         """
-        Stand a rule at one moment of the trial, with its name written at the top.
+        Stand a rule at one moment of the trial, with its name written over the top of
+        the chart where it is given one.
 
         :param axes: Where to draw.
-        :param marked: The moment, and what to write beside it.
+        :param marked: The moment, and what to write above it, or nothing.
         """
         axes.axvline(
             marked.moment, color=marked.color.to_hex(), linewidth=self.rule_width
@@ -289,22 +290,21 @@ class TrialChart:
             return
         axes.annotate(
             marked.label,
-            xy=(marked.moment, 0.0),
+            xy=(marked.moment, 1.0),
             xycoords=("data", "axes fraction"),
-            xytext=(3, 2),
+            xytext=(3, 1),
             textcoords="offset points",
             fontsize=self.label_size,
             color=marked.color.to_hex(),
             verticalalignment="bottom",
         )
 
-    def shade(self, axes: Axes, stretch: TimelineSpan, label: str = "") -> None:
+    def shade(self, axes: Axes, stretch: TimelineSpan) -> None:
         """
-        Shade one stretch of the trial, naming it at its foot.
+        Shade one stretch of the trial.
 
         :param axes: Where to draw.
         :param stretch: The seconds to shade.
-        :param label: What the stretch is, or nothing.
         """
         axes.axvspan(
             stretch.start,
@@ -312,17 +312,4 @@ class TrialChart:
             facecolor=BAND_COLOR.to_hex(),
             alpha=BAND_COLOR.A,
             linewidth=0,
-        )
-        if not label:
-            return
-        axes.annotate(
-            label,
-            xy=((stretch.start + stretch.end) / 2, 1.0),
-            xycoords=("data", "axes fraction"),
-            xytext=(0, -2),
-            textcoords="offset points",
-            fontsize=self.label_size,
-            color="0.35",
-            horizontalalignment="center",
-            verticalalignment="top",
         )

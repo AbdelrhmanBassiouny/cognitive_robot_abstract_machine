@@ -21,13 +21,15 @@ from segmind.datastructures.events import (
     MotionEvent,
     PickUpEvent,
 )
+import numpy as np
 from typing_extensions import ClassVar, Dict, List, Optional, Sequence, Tuple, Type
 
 from experiments.episodes.artifacts import ArtifactDirectory, EpisodeArtifacts
 from experiments.episodes.episode import RecordedQuery, RecordedTrial
 from experiments.experiment_definitions import TypstRenderer
-from experiments.episodes.trace import JointPositions
+from experiments.episodes.trace import JointPositions, JointTrace
 from experiments.montessori.same_piece import SamePiece
+from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
 from experiments.paper.camera_frame import (
     EITHER_SIDE,
     BagFrameAt,
@@ -39,9 +41,11 @@ from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import CardPanel, PanelKind
 from experiments.paper.plan_timeline import PlanTimeline
 from experiments.paper.pose_change import (
+    WAYPOINTS,
     PoseChange,
     PoseChangeRender,
     can_be_stood_somewhere_else,
+    standing_pose,
 )
 from experiments.paper.run_timeline import RunTimeline
 from experiments.paper.scene import PointOfView, SceneRender
@@ -57,7 +61,11 @@ from experiments.questions.working_memory import (
 from semantic_digital_twin.adapters.multi_sim import MujocoCamera
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world_description.world_entity import (
+    Body,
     KinematicStructureEntity,
 )
 
@@ -90,6 +98,12 @@ class CardFile(StrEnum):
     The card's levels drawn one above another as a single picture.
     """
 
+
+EPISODE_IDENTIFIER_SHOWN = 8
+"""
+How many characters of an episode's identifier a figure names it by: enough to find it
+in the database, short enough for a line.
+"""
 
 TRIAL_DIRECTORY = "trial_%02d"
 """
@@ -266,6 +280,18 @@ class QueryCard(ABC):
     it was asked and what it answered.
     """
 
+    subtitle: ClassVar[str] = "%s, trial %d of episode %s"
+    """
+    What is written under the head naming the run, given the scenario, the trial's
+    number and the episode.
+    """
+
+    perturbed: ClassVar[str] = "%s, perturbed by %s"
+    """
+    What the run's line says instead where the run was perturbed, given the line and
+    the perturbations' names.
+    """
+
     @abstractmethod
     def answers(self, asked: Question, world: World) -> List[KinematicStructureEntity]:
         """
@@ -420,7 +446,9 @@ class QueryCard(ABC):
             panel: drawn.write(output_directory / self.panel_file_name(number, panel))
             for panel, drawn in self._panels(trial, query, artifacts).items()
         }
-        layered_path = self._layered(number, output_directory, panel_paths, query)
+        layered_path = self._layered(
+            number, output_directory, panel_paths, query, trial
+        )
         markup_path = output_directory / self.markup_file_name(number)
         markup_path.write_text(
             self._markup(query, self._figures(panel_paths, layered_path))
@@ -439,6 +467,7 @@ class QueryCard(ABC):
         output_directory: Path,
         panel_paths: Dict[PanelKind, Path],
         query: RecordedQuery,
+        trial: RecordedTrial,
     ) -> Optional[Path]:
         """
         This card's pictures stacked into one under the query and its answer, or None
@@ -452,6 +481,7 @@ class QueryCard(ABC):
         :param output_directory: Where the file goes.
         :param panel_paths: Where each of the card's pictures was left.
         :param query: The query the figure shows, written across its head.
+        :param trial: The trial it is drawn from, named under the head.
         """
         if not self.layered:
             return None
@@ -466,7 +496,24 @@ class QueryCard(ABC):
             ],
             output_directory / self.layered_file_name(number),
             title=self.title % (query.text, query.answer),
+            subtitle=self.run_line(trial),
         )
+
+    def run_line(self, trial: RecordedTrial) -> str:
+        """
+        The line naming the run a card is drawn from: its scenario, its trial and its
+        episode, and what perturbed it if anything did.
+
+        :param trial: The trial the card is drawn from.
+        """
+        line = self.subtitle % (
+            trial.episode.scenario_name,
+            trial.number,
+            trial.episode.identifier[:EPISODE_IDENTIFIER_SHOWN],
+        )
+        if not trial.episode.perturbation_names:
+            return line
+        return self.perturbed % (line, ", ".join(trial.episode.perturbation_names))
 
     def _figures(
         self, panel_paths: Dict[PanelKind, Path], layered_path: Optional[Path]
@@ -580,16 +627,27 @@ class QueryCard(ABC):
         if not trial.ticks and not plans_of(trial):
             return None
         answered = self.emphasise(query.question, trial)
+        happened_at = (
+            self.reported_at(answered[0], trial, query.moment) if answered else None
+        )
         return RunTimeline().of(
             trial,
             asked_at=query.moment,
             emphasise=answered,
-            happened_at=(
-                self.reported_at(answered[0], trial, query.moment) if answered else None
-            ),
-            either_side=EITHER_SIDE,
+            happened_at=happened_at,
+            pictured_at=() if happened_at is None else self.pictured_at(happened_at),
             identity=self.identity,
         )
+
+    @staticmethod
+    def pictured_at(happened_at: float) -> Tuple[float, float]:
+        """
+        The instants the levels under the charts show, either side of the event: the
+        camera frames, and the object's earlier and later pose.
+
+        :param happened_at: Seconds into the trial the event was reported.
+        """
+        return (happened_at - EITHER_SIDE, happened_at + EITHER_SIDE)
 
     def _pose_change(
         self,
@@ -616,22 +674,27 @@ class QueryCard(ABC):
         subject = world.get_body_by_name(change.subject.name.name)
         if not can_be_stood_somewhere_else(subject.parent_connection):
             return None
+        happened_at = self.reported_at(answered[0], trial, query.moment)
+        trace = self._trace_of(trial, artifacts)
+        change = PoseChange(subject=subject, before=change.before, after=change.after)
+        if trace is not None:
+            change = change.with_the_way(
+                self._way_of(subject, world, trace, self.pictured_at(happened_at))
+            )
         return PoseChangeRender(world=world).of(
-            PoseChange(subject=subject, before=change.before, after=change.after),
-            robot_at=self._joints_at(
-                self.reported_at(answered[0], trial, query.moment), trial, artifacts
-            ),
+            change,
+            robot_at=None if trace is None else trace.at(happened_at),
+            among=self.scene_around(subject, world),
         )
 
     @staticmethod
-    def _joints_at(
-        moment: float, trial: RecordedTrial, artifacts: Optional[EpisodeArtifacts]
-    ) -> Optional[JointPositions]:
+    def _trace_of(
+        trial: RecordedTrial, artifacts: Optional[EpisodeArtifacts]
+    ) -> Optional[JointTrace]:
         """
-        Where every joint stood at the given moment of the trial, or None where the run
-        traced no joints.
+        The trace of where every joint stood along the trial, or None where the run
+        kept none.
 
-        :param moment: Seconds into the trial.
         :param trial: The trial to read.
         :param artifacts: The episode's own files, or None.
         """
@@ -640,7 +703,70 @@ class QueryCard(ABC):
         kept = artifacts.trial(trial.number)
         if not kept.kept_a_joint_trace:
             return None
-        return kept.joint_trace.at(moment)
+        return kept.joint_trace
+
+    @staticmethod
+    def _way_of(
+        subject: Body,
+        world: World,
+        trace: JointTrace,
+        between: Tuple[float, float],
+        dots: int = WAYPOINTS,
+    ) -> List[HomogeneousTransformationMatrix]:
+        """
+        Where the object stood along its way, read off the trace between two instants.
+
+        The world is stood at each sample and read, then put back as it was. An object
+        the trace does not hold -- one the world holds fixed -- gives an empty way, and
+        the picture falls back on the straight line.
+
+        :param subject: The object.
+        :param world: The twin it stands in.
+        :param trace: Where every joint stood along the trial.
+        :param between: The instants the way runs between, in seconds into the trial.
+        :param dots: How many places along the way at most.
+        """
+        held_by = str(subject.parent_connection.name)
+        if not any(name.startswith(held_by) for name in trace.names):
+            return []
+        stood = JointPositions(
+            moment=0.0,
+            positions={
+                str(name): position
+                for name, position in world.state.to_position_dict().items()
+            },
+        )
+        way = []
+        try:
+            for moment in np.linspace(between[0], between[1], dots + 2)[1:-1]:
+                trace.at(float(moment)).restore_into(world)
+                way.append(standing_pose(world, subject))
+        finally:
+            stood.restore_into(world)
+        return way
+
+    @staticmethod
+    def scene_around(
+        subject: Body, world: World
+    ) -> Tuple[KinematicStructureEntity, ...]:
+        """
+        What the picture of an object's move is framed on besides the object: the
+        boards and every other piece of the scene, so the move is seen with the table
+        it happened on rather than alone.
+
+        :param subject: The object that moved.
+        :param world: The twin it stands in.
+        """
+        boards = [
+            board.root
+            for board in world.get_semantic_annotations_by_type(ShapeSortingBoard)
+        ]
+        pieces = [
+            shape.root
+            for shape in world.get_semantic_annotations_by_type(MontessoriShape)
+            if shape.root is not subject
+        ]
+        return tuple(boards + pieces)
 
     def _camera_frame(
         self,

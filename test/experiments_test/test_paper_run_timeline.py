@@ -15,6 +15,7 @@ from segmind.datastructures.events import PickUpEvent
 from experiments.episodes.episode import RecordedTrial, Tick
 from experiments.paper.run_timeline import (
     ANSWER_LEGEND,
+    INSTANT,
     REPORTED_LEGEND,
     RenderedRunTimeline,
     RunTimeline,
@@ -43,9 +44,9 @@ HAPPENED_AT = PICKING_STARTED_AT + 1.0
 Seconds into the trial the answered event was reported.
 """
 
-EITHER_SIDE = 1.0
+PICTURED_AT = (HAPPENED_AT - 1.0, HAPPENED_AT + 1.0)
 """
-How far either side of that the camera frames of the same card were taken.
+The instants the other levels of the same card show, either side of the event.
 """
 
 
@@ -63,7 +64,7 @@ def drawn(trial: RecordedTrial, cube: Body) -> RenderedRunTimeline:
         asked_at=ASKED_AT,
         emphasise=[picked_up],
         happened_at=HAPPENED_AT,
-        either_side=EITHER_SIDE,
+        pictured_at=PICTURED_AT,
     )
 
 
@@ -136,15 +137,34 @@ def test_the_key_names_what_the_colours_mean(trial: RecordedTrial, cube: Body) -
     assert labels[:2] == [REPORTED_LEGEND, ANSWER_LEGEND]
 
 
-def test_the_moments_are_named_beside_their_rules(
+def test_the_moments_are_named_once_over_the_upper_chart(
     trial: RecordedTrial, cube: Body
 ) -> None:
+    """
+    Both charts carry the rules, but a name written twice is clutter; it is written over
+    the upper chart only.
+    """
     figure = drawn(trial, cube).figure
-    upper = figure.axes[0]
+    upper, lower = figure.axes[:2]
 
     written = {text.get_text() for text in upper.texts}
     assert "reported at %.1f s" % HAPPENED_AT in written
     assert "asked at %.1f s" % ASKED_AT in written
+    assert not lower.texts
+
+
+def test_the_axis_says_when_the_pictures_below_were_taken(
+    trial: RecordedTrial, cube: Body
+) -> None:
+    """
+    The other levels of the card are pictures of instants; the axis names them so a
+    reader can find each picture on it.
+    """
+    figure = drawn(trial, cube).figure
+    lower = figure.axes[1]
+
+    label = lower.get_xlabel()
+    assert all(INSTANT % moment in label for moment in PICTURED_AT)
 
 
 def test_the_figure_keeps_the_moment_the_query_was_asked(

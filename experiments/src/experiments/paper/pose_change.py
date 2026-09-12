@@ -18,7 +18,8 @@ from segmind.datastructures.events import (
     EventWithTrackedObjects,
     MotionEvent,
 )
-from typing_extensions import List, Optional, Tuple
+import numpy as np
+from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.episodes.episode import RecordedTrial
 from experiments.episodes.trace import JointPositions
@@ -37,8 +38,12 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body, Connection
-from semantic_digital_twin.world_description.geometry import Color
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    Connection,
+    KinematicStructureEntity,
+)
+from semantic_digital_twin.world_description.geometry import Color, Sphere
 
 # %% how the earlier pose is told from the later one
 
@@ -56,6 +61,23 @@ something else.
 GHOST_NAME = "%s_where_it_was"
 """
 What the body standing at the object's earlier pose is called, after the object itself.
+"""
+
+WAYPOINT_NAME = "%s_on_its_way_%d"
+"""
+What each dot standing along the object's way is called, after the object and its place
+along the way.
+"""
+
+WAYPOINT_RADIUS = 0.006
+"""
+How big a dot along the object's way is, in metres: visible on a table-sized scene,
+small beside a piece.
+"""
+
+WAYPOINTS = 10
+"""
+How many dots the object's way is shown with.
 """
 
 # %% an event that says nothing about where its object went
@@ -194,6 +216,42 @@ class PoseChange:
     Where it ended up, in the world root frame.
     """
 
+    way: Tuple[HomogeneousTransformationMatrix, ...] = ()
+    """
+    Where it stood on its way from the one to the other, in order, in the world root
+    frame; empty where the run kept no record of the way.
+    """
+
+    def with_the_way(
+        self, way: Sequence[HomogeneousTransformationMatrix]
+    ) -> PoseChange:
+        """
+        The same change, with the way the object took between its two poses.
+
+        :param way: Where it stood on the way, in order.
+        """
+        return PoseChange(
+            subject=self.subject, before=self.before, after=self.after, way=tuple(way)
+        )
+
+    def straight_way(
+        self, dots: int = WAYPOINTS
+    ) -> Tuple[HomogeneousTransformationMatrix, ...]:
+        """
+        The straight line from where the object was to where it ended up, as the places
+        along it: what stands in for the way where the run kept no record of it.
+
+        :param dots: How many places along the line.
+        """
+        start = self.before.to_np()[:3, 3]
+        end = self.after.to_np()[:3, 3]
+        return tuple(
+            HomogeneousTransformationMatrix.from_xyz_rpy(
+                *(start + (end - start) * fraction).tolist()
+            )
+            for fraction in np.linspace(0.0, 1.0, dots + 2)[1:-1]
+        )
+
     @classmethod
     def of(cls, event: MotionEvent) -> PoseChange:
         """
@@ -306,24 +364,33 @@ class PoseChangeRender:
     """
 
     def of(
-        self, change: PoseChange, robot_at: Optional[JointPositions] = None
+        self,
+        change: PoseChange,
+        robot_at: Optional[JointPositions] = None,
+        among: Sequence[KinematicStructureEntity] = (),
     ) -> RenderedScene:
         """
         Draw the given change of pose as one picture.
 
-        Both poses stand in the one scene: the object itself where it ended up, and a
-        see-through copy of it where it was. Being a body of the scene rather than a
-        picture laid over one, the ghost is lit, shaded and occluded like everything
-        else -- a piece now held in the gripper shows its old place on the table through
-        whatever happens to stand in front of it.
+        Both poses stand in the one scene: the object itself where it ended up, a
+        see-through copy of it where it was, and a dot at each place it stood on its
+        way -- the way the run recorded, or the straight line where it recorded none.
+        Being bodies of the scene rather than pictures laid over one, they are lit,
+        shaded and occluded like everything else -- a piece now held in the gripper
+        shows its old place on the table through whatever happens to stand in front of
+        it.
 
         The twin is left exactly as it was: every joint goes back where it stood, the
-        object goes back where it came from and the ghost is taken out again.
+        object goes back where it came from and the ghost and the dots are taken out
+        again.
 
         :param change: Where the object was and where it ended up.
         :param robot_at: Where every joint of the world stood at the moment drawn, so
             the robot is shown as it was -- reaching for the piece, or holding it --
             rather than as the run left it. None leaves the joints where they are.
+        :param among: What else the picture is framed on, so the move is seen with
+            the scene it happened in -- the gripper that took the piece, the board it
+            went to -- rather than alone.
         :raises ObjectHeldFixedError: If the twin holds the object fixed where it is.
         :raises NothingToDrawError: If a camera or a light has to be placed and the world
             holds no geometry to place it around.
@@ -340,6 +407,9 @@ class PoseChangeRender:
         stood_at = standing_pose(self.world, change.subject)
         stand(self.world, change.subject, change.after)
         ghost = self.stand_a_ghost_at(change.subject, change.before)
+        dots = self.stand_dots_along(
+            change.subject, change.way or change.straight_way()
+        )
         try:
             return SceneRender(
                 world=self.world,
@@ -347,10 +417,13 @@ class PoseChangeRender:
                 highlight=self.highlight,
                 faded=self.faded,
                 label_answers=False,
-                framed_on=self.framed_on(change.subject, ghost),
-                picked_out=(PickedOut(entity=ghost, color=self.ghost),),
+                framed_on=self.framed_on(change.subject, ghost) + tuple(among),
+                picked_out=(PickedOut(entity=ghost, color=self.ghost),)
+                + tuple(PickedOut(entity=dot, color=self.ghost) for dot in dots),
             ).of([change.subject])
         finally:
+            for dot in dots:
+                self.take_the_ghost_away(dot)
             self.take_the_ghost_away(ghost)
             stand(self.world, change.subject, stood_at)
             stood.restore_into(self.world)
@@ -358,8 +431,8 @@ class PoseChangeRender:
     @staticmethod
     def framed_on(subject: Body, ghost: Body) -> Tuple[Body, ...]:
         """
-        What this panel's picture is framed on: the object and the ghost of where it
-        was.
+        What this panel's picture is always framed on: the object and the ghost of where
+        it was.
 
         A picture framed on the whole world leaves a piece on a table a few pixels
         across; framed on the two poses, it is a picture of the move itself with as much
@@ -369,6 +442,37 @@ class PoseChangeRender:
         :param ghost: The copy standing where it was.
         """
         return (subject, ghost)
+
+    def stand_dots_along(
+        self, subject: Body, way: Sequence[HomogeneousTransformationMatrix]
+    ) -> List[Body]:
+        """
+        Put a small dot into the scene at each place along the object's way.
+
+        :param subject: The object whose way it is.
+        :param way: The places, in order, in the world root frame.
+        :return: The bodies that were added, to be taken away again once the picture is
+            drawn.
+        """
+        dots = []
+        with self.world.modify_world():
+            for place, pose in enumerate(way):
+                dot = Body(
+                    name=PrefixedName(WAYPOINT_NAME % (subject.name.name, place)),
+                    visual=ShapeCollection([Sphere(radius=WAYPOINT_RADIUS)]),
+                    collision=ShapeCollection([Sphere(radius=WAYPOINT_RADIUS)]),
+                )
+                self.world.add_connection(
+                    FixedConnection(
+                        parent=self.world.root,
+                        child=dot,
+                        parent_T_connection_expression=pose.copy_with_new_reference_frames(
+                            new_reference_frame=self.world.root, new_child_frame=dot
+                        ),
+                    )
+                )
+                dots.append(dot)
+        return dots
 
     # %% the body standing where the object used to be
 

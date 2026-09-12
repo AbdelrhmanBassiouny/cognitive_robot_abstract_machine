@@ -42,24 +42,24 @@ to the figure's width it would push every other level off the page. A level that
 exceed this is fitted to it and centred instead.
 """
 
-TITLE_HEIGHT = 64
+TITLE_HEIGHT = 56
 """
 How tall the band the figure's title is written in, in pixels.
 """
 
-LABEL_HEIGHT = 44
+LABEL_HEIGHT = 30
 """
 How tall the band a level's name is written in, in pixels.
 """
 
-MISSING_HEIGHT = 90
+MISSING_HEIGHT = 60
 """
 How tall a level the run left nothing to draw is, in pixels.
 
 Enough to say what is missing and why, without taking the room a drawn level would.
 """
 
-LAYER_GAP = 14
+LAYER_GAP = 4
 """
 How many pixels of background are left between one level and the next.
 """
@@ -72,6 +72,11 @@ What the figure is drawn on, behind and between the levels.
 TITLE_BACKGROUND = Color(0.13, 0.15, 0.19, 1.0)
 """
 What the title band is, dark so the title reads as the head of the figure.
+"""
+
+SUBTITLE_HEIGHT = 34
+"""
+How tall the band under the title naming the run the figure is drawn from is, in pixels.
 """
 
 LABEL_BACKGROUND = Color(0.93, 0.94, 0.96, 1.0)
@@ -167,26 +172,40 @@ class LayeredFigure:
 
     title: Lettering = field(
         default_factory=lambda: Lettering(
-            size=26, face=Face.BOLD, color=Color(1.0, 1.0, 1.0, 1.0)
+            size=24, face=Face.BOLD, color=Color(1.0, 1.0, 1.0, 1.0)
         )
     )
     """
     How the title is set.
     """
 
-    label: Lettering = field(default_factory=lambda: Lettering(size=22, face=Face.BOLD))
+    subtitle_height: int = SUBTITLE_HEIGHT
+    """
+    How tall the band naming the run under the title is, in pixels.
+    """
+
+    subtitle: Lettering = field(
+        default_factory=lambda: Lettering(size=16, color=Color(0.85, 0.87, 0.9, 1.0))
+    )
+    """
+    How the line naming the run is set.
+    """
+
+    label: Lettering = field(default_factory=lambda: Lettering(size=16, face=Face.BOLD))
     """
     How a level's name is set.
     """
 
     missing: Lettering = field(
-        default_factory=lambda: Lettering(size=20, color=MISSING_TEXT_COLOR)
+        default_factory=lambda: Lettering(size=16, color=MISSING_TEXT_COLOR)
     )
     """
     How the line saying a level was not recorded is set.
     """
 
-    def of(self, layers: Sequence[Layer], title: str = "") -> np.ndarray:
+    def of(
+        self, layers: Sequence[Layer], title: str = "", subtitle: str = ""
+    ) -> np.ndarray:
         """
         Draw the given levels one above another.
 
@@ -195,6 +214,8 @@ class LayeredFigure:
             level was left out or never existed.
         :param title: What the whole figure is about, written across its head; nothing
             for a figure without a head.
+        :param subtitle: Which run the figure is drawn from, written under the title;
+            nothing for a figure without one.
         :return: The figure as red, green and blue in that order, shape ``(height,
             width, 3)`` of ``uint8``.
         """
@@ -202,6 +223,12 @@ class LayeredFigure:
         if title:
             stacked.append(
                 self.title.band(title, self.width, self.title_height, TITLE_BACKGROUND)
+            )
+        if subtitle:
+            stacked.append(
+                self.subtitle.band(
+                    subtitle, self.width, self.subtitle_height, TITLE_BACKGROUND
+                )
             )
         for layer in layers:
             if stacked:
@@ -214,7 +241,9 @@ class LayeredFigure:
             stacked.append(self._drawn(layer))
         return np.vstack(stacked)
 
-    def write(self, layers: Sequence[Layer], path: Path, title: str = "") -> Path:
+    def write(
+        self, layers: Sequence[Layer], path: Path, title: str = "", subtitle: str = ""
+    ) -> Path:
         """
         Leave the layered figure at the given path.
 
@@ -222,10 +251,11 @@ class LayeredFigure:
         :param path: The file it is written to, its directory created if it is not
             there.
         :param title: What the whole figure is about, or nothing.
+        :param subtitle: Which run the figure is drawn from, or nothing.
         :return:``path``.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
-        imageio.imwrite(str(path), self.of(layers, title))
+        imageio.imwrite(str(path), self.of(layers, title, subtitle))
         return path
 
     # %% the pieces one level is made of

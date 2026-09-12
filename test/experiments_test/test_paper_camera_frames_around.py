@@ -209,8 +209,8 @@ def test_each_frame_of_the_pair_says_when_it_was_taken() -> None:
     """
     before, after = captions_around(ASKED_AT, EITHER_SIDE)
 
-    assert before == "%.1f s before, at %.1f s" % (EITHER_SIDE, ASKED_AT - EITHER_SIDE)
-    assert after == "%.1f s after, at %.1f s" % (EITHER_SIDE, ASKED_AT + EITHER_SIDE)
+    assert before == "before, %.1f s" % (ASKED_AT - EITHER_SIDE)
+    assert after == "after, %.1f s" % (ASKED_AT + EITHER_SIDE)
 
 
 def test_the_kept_frames_are_written_side_by_side_with_their_captions(

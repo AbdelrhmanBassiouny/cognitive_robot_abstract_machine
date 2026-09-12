@@ -58,9 +58,14 @@ How many pixels of blank are left between the two frames, so the pair reads as t
 pictures rather than one wide one.
 """
 
-CAPTION_HEIGHT = 36
+CAPTION_HEIGHT = 22
 """
 How tall the strip under each frame saying when it was taken is, in pixels.
+"""
+
+CAPTION_SIZE = 15
+"""
+How tall the letters of that caption are, in pixels.
 """
 
 CAPTION_BACKGROUND = Color(0.96, 0.96, 0.97, 1.0)
@@ -68,13 +73,12 @@ CAPTION_BACKGROUND = Color(0.96, 0.96, 0.97, 1.0)
 What the strip under each frame is.
 """
 
-BEFORE_CAPTION = "%.1f s before, at %.1f s"
+BEFORE_CAPTION = "before, %.1f s"
 """
-What is written under the earlier frame, given how far before the event it was taken
-and the second of the trial.
+What is written under the earlier frame, given the second of the trial it was taken at.
 """
 
-AFTER_CAPTION = "%.1f s after, at %.1f s"
+AFTER_CAPTION = "after, %.1f s"
 """
 What is written under the later frame.
 """
@@ -85,7 +89,7 @@ def side_by_side(
     later: np.ndarray,
     captions: Tuple[str, str],
     gap: int = FRAME_GAP,
-    lettering: Lettering = Lettering(size=20, face=Face.REGULAR),
+    lettering: Lettering = Lettering(size=CAPTION_SIZE, face=Face.REGULAR, inset=6),
 ) -> np.ndarray:
     """
     Two frames as one picture, the earlier on the left, each with a line under it saying
@@ -118,8 +122,8 @@ def captions_around(moment: float, either_side: float) -> Tuple[str, str]:
     :param either_side: How far either side of it the frames were taken, in seconds.
     """
     return (
-        BEFORE_CAPTION % (either_side, moment - either_side),
-        AFTER_CAPTION % (either_side, moment + either_side),
+        BEFORE_CAPTION % (moment - either_side),
+        AFTER_CAPTION % (moment + either_side),
     )
 
 

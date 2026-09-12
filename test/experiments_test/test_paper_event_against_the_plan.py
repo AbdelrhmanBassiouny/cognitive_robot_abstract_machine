@@ -553,9 +553,32 @@ def test_the_stacked_figure_is_headed_by_the_query_and_its_answer(
         ]
     )
     figure = LayeredFigure()
-    assert (
-        stacked.shape[0] == without_a_head.shape[0] + figure.title_height + figure.gap
+    assert stacked.shape[0] == (
+        without_a_head.shape[0]
+        + figure.title_height
+        + figure.subtitle_height
+        + figure.gap
     )
+
+
+def test_the_run_is_named_under_the_head(a_person_shoved_it: RecordedTrial) -> None:
+    """
+    Two cards can answer the same question the same way in different runs, so the
+    figure names the scenario, the trial and the episode it is drawn from.
+    """
+    line = EventAgainstThePlanCard().run_line(a_person_shoved_it)
+
+    assert a_person_shoved_it.episode.scenario_name in line
+    assert "trial %d" % a_person_shoved_it.number in line
+    assert a_person_shoved_it.episode.identifier[:8] in line
+
+
+def test_a_perturbed_run_is_named_with_its_perturbation(
+    a_person_shoved_it: RecordedTrial,
+) -> None:
+    a_person_shoved_it.episode.perturbation_names = ["Shove"]
+
+    assert "Shove" in EventAgainstThePlanCard().run_line(a_person_shoved_it)
 
 
 @needs_a_renderer
