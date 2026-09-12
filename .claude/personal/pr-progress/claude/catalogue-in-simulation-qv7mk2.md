@@ -1,31 +1,28 @@
-Branch `claude/catalogue-in-simulation-qv7mk2`, cut off
-`origin/claude/icra-experiments-simulation-pipeline-w4ep7n` (#265). Draft PR targets
-that branch.
+Branch `claude/catalogue-in-simulation-qv7mk2`, draft PR
+[#335](https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/335)
+targeting `claude/icra-experiments-simulation-pipeline-w4ep7n` (#265).
 
-Goal: the paper's accuracy, latency and determinism tables from a simulated corpus,
-plus four cross-episode questions.
-
-Done
-1. `LayoutChoice.PARTIAL` wired to `PieceLayout.partial` (commit e0851f64e6).
+Done (6 commits, pushed)
+1. `LayoutChoice.PARTIAL` wired to `PieceLayout.partial`.
 2. Four cross-episode `LongTermMemoryQuestion`s: `EpisodesWhereInsertionFailed`,
    `HowOftenWasThePieceMoved`, `EpisodesWhereThePieceWasPickedUp`,
-   `HasThisHappenedBefore` (e0851f64e6).
-3. `experiments/src/experiments/montessori/run_corpus.py` + `experiments/scripts/run_corpus.py`
-   (51cd115ead), plus recording which backend answered each predicate, without which
-   `QueryLatencyByBackend` had no rows at all - nothing in the pipeline wrote
-   `RecordedQuery.answered_predicates`.
-- Branch pushed.
+   `HasThisHappenedBefore`.
+3. `experiments/src/experiments/montessori/run_corpus.py` + `experiments/scripts/run_corpus.py`.
+4. Backend/predicate routing recorded on each scored query - without it
+   `QueryLatencyByBackend` had no rows at all.
+5. Fixed `ObjectsTheRobotMovedInTheEpisode` (and the other two "which objects"
+   long-term questions) naming an object once per motion-x-pick-up pair rather than
+   once - 85 of 300 askings wrong over the corpus.
+- A 60-episode corpus was recorded and asked on the synthetic grasping robot; the
+  accuracy-by-bucket table in the PR body comes from it, one row stale (the 0.970,
+  which is the defect fixed in 5).
 
-Next
-- finish the demonstration corpus (60 episodes recorded, asking phase running), run
-  `generate_paper_figures.py` over it, paste the accuracy-by-bucket table into the PR
-  and open the draft PR against #265's branch.
+Left for a session at the lab (developer's own call, 2026-09-12)
+- Re-run `run_corpus.py --repetitions 1` and `generate_paper_figures.py` on a checkout
+  with ROS, Tracy, the camera and MuJoCo, and replace the table in the PR body.
+  Re-running it here on the synthetic robot costs 4 hours and is not worth it.
 
 Environment note
-This container has no ROS install and no `iai_tracy_description`, so the Tracy scene a
-simulated episode is built in cannot be built here: `run_corpus.py --repetitions 1`
-gets as far as `parse_tracy` and stops there. The demonstration corpus is the same
-60-episode plan run on the test suite's synthetic grasping robot instead.
-The workspace is installed in `.venv` (uv, python 3.12); tests run with `MUJOCO_GL=egl`
-and a local ROS stand-in on `PYTHONPATH` (scratchpad `rosstub/sitecustomize.py`, never
-committed).
+No ROS and no `iai_tracy_description` here, so `run_corpus.py` stops at `parse_tracy`.
+Workspace installed in `.venv` (uv, python 3.12); tests run with `MUJOCO_GL=egl` and a
+ROS stand-in on `PYTHONPATH` (scratchpad `rosstub/sitecustomize.py`, never committed).
