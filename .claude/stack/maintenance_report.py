@@ -18,6 +18,7 @@ from pathlib import Path
 from maintenance_board import BoardExport
 from maintenance_fast_forward import FastForwardOutcome, FastForwardReport
 from maintenance_promotion import Promotion
+from maintenance_reparent_notice import RetargetOutcome
 from maintenance_restack_steps import BranchOutcome, RestackOutcome
 from stack import Reparent, Stack, landed_branches, promotion_order, reparents
 
@@ -27,10 +28,13 @@ from stack import Reparent, Stack, landed_branches, promotion_order, reparents
 @dataclass(frozen=True)
 class MaintenanceReport:
     """
-    Everything one pass did, and the one thing it leaves for its caller.
+    Everything one pass did, and what it could not.
 
-    ``reparents`` is that one thing: retargeting a base is the single write GitHub
-    refuses to the credential this runs on, so it is reported rather than performed.
+    ``reparents`` is every child whose base has landed, as :func:`stack.reparents`
+    found it; ``reparents_retargeted`` is which of them this pass's own credential
+    retargeted itself. A retarget GitHub refuses is labelled and commented at instead -
+    see :func:`maintenance_reparent_notice.resolve_reparents` - and is the one write
+    left for a session to perform through the GitHub MCP server.
 
     Every field defaults to nothing done, so a single command reports the part of the
     pass it performed through the same object - and therefore through the same exit
@@ -58,8 +62,18 @@ class MaintenanceReport:
     """
 
     reparents: tuple[Reparent, ...] = ()
-    """The children whose base has landed, for the caller to retarget - the one step
-    this cannot perform itself."""
+    """
+    Every child whose base has landed, as :func:`stack.reparents` found it - whether or
+    not this pass's own credential went on to retarget it.
+    """
+
+    reparents_retargeted: tuple[str, ...] = ()
+    """
+    The branches in ``reparents`` this pass's own credential retargeted itself.
+
+    Every other one in ``reparents`` was refused and left labelled and commented at for
+    a session to retarget instead.
+    """
 
     landed: tuple[str, ...] = ()
     """
@@ -107,6 +121,7 @@ def build_report(
     restacked: Sequence[BranchOutcome],
     promoted: Sequence[Promotion] = (),
     promotion_labels_cleared: Sequence[str] = (),
+    reparent_outcomes: Sequence[RetargetOutcome] = (),
 ) -> MaintenanceReport:
     """
     Assemble one pass's outcomes and its leftovers into a single report.
@@ -116,6 +131,9 @@ def build_report(
     :param restacked: What became of each branch in the restack plan.
     :param promoted: The branches whose upstream link was built this pass.
     :param promotion_labels_cleared: The branches whose spent link label was removed.
+    :param reparent_outcomes: What became of every pending reparent, from
+        :func:`maintenance_reparent_notice.resolve_reparents` - empty when reparents
+        were not attempted this command.
     :return: The report.
     """
     return MaintenanceReport(
@@ -124,6 +142,11 @@ def build_report(
         promoted=tuple(promoted),
         promotion_labels_cleared=tuple(promotion_labels_cleared),
         reparents=tuple(reparents(stack)),
+        reparents_retargeted=tuple(
+            outcome.reparent.branch
+            for outcome in reparent_outcomes
+            if outcome.retargeted
+        ),
         landed=tuple(branch.name for branch in landed_branches(stack)),
         promotable=tuple(branch.name for branch in promotion_order(stack)),
     )
@@ -178,6 +201,13 @@ def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> N
             )
     for branch in cleared:
         print(f"{branch}\tlink-label-cleared\t")
+
+
+def print_reparents(outcomes: Sequence[RetargetOutcome]) -> None:
+    """:param outcomes: What became of each pending reparent."""
+    for outcome in outcomes:
+        state = "retargeted" if outcome.retargeted else "refused-notified"
+        print(f"{outcome.reparent.branch}\t{state}\t{outcome.reparent.target_base}")
 
 
 # %% the exit status

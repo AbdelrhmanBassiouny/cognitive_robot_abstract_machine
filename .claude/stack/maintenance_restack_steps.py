@@ -15,8 +15,8 @@ from enum import StrEnum
 from typing import Any
 
 from maintenance_constants import (
-    CONFLICT_COMMENT_PREFIX,
     MERGEABLE_STATE_WITH_CONFLICTS,
+    NEEDS_RESOLUTION_COMMENT_PREFIX,
 )
 from maintenance_board import PullRequestField
 from maintenance_git_commands import GitCommandRunner, ProposedPush
@@ -153,7 +153,7 @@ def conflict_report(
         else "\n\nThis pull request's description names no session to address."
     )
     return (
-        f"{CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
+        f"{NEEDS_RESOLUTION_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
         f"conflicts, so this branch was left untouched and skipped.\n\n"
         f"Conflicting files:\n{files}\n\n"
         f"Please resolve and push. This branch is labelled "
