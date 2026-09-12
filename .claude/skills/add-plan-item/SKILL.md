@@ -121,7 +121,7 @@ changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}
 and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
 so no published dashboard is older than the manifest behind it.
 
-**If the outcome is a new item**, `${PLAN_ITEM_BOOTSTRAP_SCRIPT}`'s `record`
+**If the outcome is a new item**, `${PLAN_ITEM_BOOTSTRAP_MODULE}`'s `record`
 operation writes its `plan.yaml` entry and `roadmap.md` section and runs the save
 for you — `record` only, never `open`, which creates the branch and pull request
 this skill does not.
@@ -136,3 +136,10 @@ Flag explicitly, never silently paper over:
 
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
+
+## 7. Once the outcome is carried out, the manifest leads
+
+Adding an item, folding one into another and changing a plan's shape are each a
+transition, so `${MANIFEST_STALENESS_DOCUMENT}` governs when they get written:
+the manifest first and the dashboard republished in the same turn, not once the
+work the outcome describes is finished.

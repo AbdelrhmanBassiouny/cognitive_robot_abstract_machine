@@ -20,9 +20,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from bastler.exceptions import GitHubRequestFailed
 from bastler.maintenance_board import PullRequestRecord
 from bastler.maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
-from bastler.maintenance_errors import ExternalCallFailed
 from bastler.stack import Repository
 
 
@@ -101,28 +101,6 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
     together wherever both are needed; the board export takes the reading half alone,
     which is what keeps an export from being able to write.
     """
-
-
-@dataclass
-class GitHubRequestFailed(ExternalCallFailed):
-    """
-    Raised when the API refuses a call this module depends on.
-    """
-
-    method: str = ""
-    """
-    The HTTP method used.
-    """
-
-    path: str = ""
-    """
-    The API path called, without the host.
-    """
-
-    @property
-    def call(self) -> str:
-        """:return: The request line, as issued."""
-        return f"{self.method} {self.path}"
 
 
 # %% the client that makes the calls
