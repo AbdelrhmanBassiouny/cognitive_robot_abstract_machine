@@ -1,3 +1,66 @@
+## #265: a perturbation is an event someone other than the robot brings about (2026-09-12, afternoon)
+
+**Session.** https://claude.ai/code/session_01GCgvcENQygfenibC73KQ1n -- the same session
+as the two entries below; resume here.
+
+**The task, in the developer's words.** On the open item below ("a perceived run answers
+its questions from the model the perturbation moved"): "I want it to be done with
+another look not by just moving the model manually. The perturbation can actually be
+part of the action plan, where in simulation mode it moves it itself in the model while
+in real it waits for human confirmation that the object now moved." Then: "a
+perturbation is something done by another agent not the robot, in this case a Human."
+Then, settling the shape: "Maybe a perturbation should be an executable event effect?
+So segmind events like translation of an object over a distance can have a replicate
+or execute method where it replicates the process in the world that caused the event.
+Instead of it being coraplex action, and if simulated it will do it in the model,
+otherwise a human should do it and the human confirms." Agreed with one layering point:
+`reproduce(world)` sits on the segmind event, the person and the sim/real dispatch on
+the run, since segmind depends on neither coraplex nor a prompt.
+
+**Done** (`31c0f3a67e` detector frame fix, `a03dcc55b5` the feature, `bb1bd50958`
+merge of the fork's `3a3dfe0d2b` = PR #319; pushed to `bass` on both #265's branch and
+`claude/episode-observer-8mq3xv`; PR #265 description has a section; still a draft).
+- segmind: `ReproducibleEvent.reproduce(world)` (plain ABC mixin, not mapped);
+  `MotionEvent` reproduces itself by putting the object at `current_pose` through
+  `World.move_branch_to`. Motion detectors now state their poses in the world frame
+  (were labelled with the tracked body).
+- sdt: `World.move_branch_to(branch_root, transform)`: free connection through its
+  dofs, fixed connection restated as remove + add (recorded, so synchronizers carry
+  it). `SortingScene._stand` uses it; the bare `parent_T_connection_expression`
+  assignment is gone.
+- experiments/scenarios: `Person` protocol (`carry_out`), `PersonAtTheConsole`,
+  `AbsentPerson(asked)` replace `OperatorPrompt`/`ConsoleOperatorPrompt`/
+  `RecordedOperatorPrompt`; runner field `person`; `ScenarioRunner.apply_perturbation`
+  dispatches: REAL -> `perturbation.carried_out_by(person, scenario, world)`, else
+  `apply(world)`. `EventBroughtAbout(Perturbation)`: `event_in(world)`; `apply` =
+  reproduce; `carried_out_by` = ask the person, then `scenario.perceive(world)`. Base
+  `Scenario.perceive` raises `ScenarioCannotPerceive`.
+- montessori: `PieceShoved`/`TargetHoleMoved` are `EventBroughtAbout` over
+  `TranslationEvent`s; `PerceivingWorldBuilder(MontessoriWorldBuilder)` with abstract
+  `perceive()`; REAL scenario refuses any other builder
+  (`RealRunNeedsAPerceivedScene`); `MontessoriSortingScenario.perceive` ->
+  `world_builder.perceive()`. `TracyLookingAtItsOwnTable` is a `PerceivingWorldBuilder`.
+- scene_publishing: `PiecePublisher.taken_down`; a piece found again is re-stood as
+  the same annotation/body (new FixedConnection); `hold_board` always looks for the
+  board and `BoardPublisher.publish` moves a held board (`DescribedBoard.move_in`) to
+  where it is found now; kept if no look shows it.
+- record_episode: `ExecutionChoice.default_scene` (REAL -> perceived);
+  `BuiltSceneCannotRunOnTheRobot` (exit 2); `PersonAtTheConsole`. Command now:
+  `python experiments/scripts/record_episode.py --execution real --scenario
+  scene-stands-still --perturbation piece-shoved --piece cube [--record-bag]`.
+
+**Tests.** test_scenarios 38, test_montessori_scenarios 85 (mimic
+`WorldBuilderWhoseLookFindsTheCubeShoved`), test_montessori_scene_publishing 11 (mimic
+`RecordedFrameWhoseSceneCanBeMoved`, reused by the scene-builder tests),
+test_tracy_montessori_scene_builder 12 (`PersonWhoMovesTheScene`), test_record_episode
+54, test_tracy_pickup_perceived_sorting (held-board test restated: looked for and
+moved), sdt test_world +3, segmind test_event_reproduction (new) + detector frame test.
+ORM regenerates. CLI smoke in simulation with the shove: transcript + video.
+
+**Open.** Not run on the robot. Sort/hold scenarios still need the real rig. The
+lighting change and the perturbations of what is seen have no event and keep
+`apply`/person-only behaviour. #319's merge removed the lighting-changed CLI choice.
+
 ## #265: record_episode runs on the fetched world and the look (2026-09-12, day)
 
 **Session.** https://claude.ai/code/session_01GCgvcENQygfenibC73KQ1n -- the same session
