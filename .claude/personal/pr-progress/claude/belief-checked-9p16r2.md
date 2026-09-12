@@ -67,11 +67,30 @@ rather than with a router or a cross-check class of its own.
 
 ## Next
 
-- Nothing outstanding on the branch itself. Both commits pushed, PR #325 description
-  brought up to date, left as a draft. Awaiting review.
+- **Asked to merge into #265; did not merge.** The gate was "merge if the experiments
+  job is green" and it is red: `test_each_lib (experiments)` failed with a crashed xdist
+  worker on
+  `test_tracy_pickup_demo_mujoco.py::test_the_run_leaves_its_films_and_the_picture_of_the_look`
+  (1 failed, 1387 passed). Re-run of the failed jobs queued on run 34703418437 to tell a
+  resource flake from a deterministic crash - check it when next prompted.
+- Also settled by the user: merge via draft->ready + the GitHub API (not a direct git
+  merge), so the ready flip is mine to make when the gate passes.
 
 ## Outstanding
 
+- **The experiments CI failure is not attributable yet.** Nothing in
+  `test_tracy_pickup_demo_mujoco.py` or `pickup_demo_mujoco.py` reaches any symbol this
+  branch changed (grepped). The base branch's own last CI run was red on the *same
+  module*, but with 4 assertion failures about camera pose and believed places, and that
+  run is 15 commits stale - including "Stand the simulated camera where the captures say
+  the real one stood" and "Say which description the camera constant is calibrated
+  against", which plainly address those very assertions. So the 4 assertions were most
+  likely fixed on the base and what remains on this PR is a *different* symptom, which I
+  cannot call pre-existing. The plausible mechanism by which it could be this branch's
+  doing is resource pressure: the new tests add ~5 MuJoCo camera renders to the
+  experiments suite, running under xdist beside a heavy MuJoCo demo, and the crash hit
+  `gw0` while `gw1` was mid-test. Cannot be reproduced locally - that module needs
+  Tracy's description, a ROS package this container lacks.
 - Tracy's own description cannot be built here, so
   `record_episode.py --scenario robot-looks-at-the-scene` is exercised only as far as the
   choice resolving to `TracyLooksAtTheScene`; the run itself was verified on the
