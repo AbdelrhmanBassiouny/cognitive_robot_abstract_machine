@@ -69,10 +69,19 @@ data" critique + the tighter-layout feedback list), commits d6647fcb, 9a79a38b:
        the stop, frames at carry start/end, ghost+trail+piece from across the
        move. Its one defect (rule names overlapping now the rules are close)
        fixed in 6373bde: MarkedMoment.side (chart.Side), earlier name left.
-13. [ ] IN PROGRESS: shoved run of run6 drawing (old label code). Then:
-       send it, rerun BOTH demos for final PNGs (label fix), run
-       test_tracy_pickup_demo_mujoco.py fully (alone, after), redraft, update
-       the PR description (pr_body.md drafted; fill "Verified").
+13. [x] run6 shoved card drawn (old label code): timeline right (the shoved
+       piece is never moved again, the robot's later pick-up of it reaches
+       for where it no longer is). Two defects, fixed and pushed:
+       83a7ab6 - MuJoCo mirror wrote the shared dof's raw value into every
+       following joint (multi_sim.py keyframe/push/read-back ignore
+       multiplier+offset) -> gripper mangled in FK-only pictures; tests in
+       test_multi_sim.py. 518bb69 - camera across the move framed on the
+       move only (boards no longer in the frame; `among`/scene_around gone).
+14. [ ] IN PROGRESS: run7 = final reruns of both demos with the current
+       code (picked_up then shoved, monitor b0mse3ufh). Then: send both
+       cards, run test_tracy_pickup_demo_mujoco.py fully (alone, after),
+       update the PR description from scratchpad pr_body.md (fill
+       "Verified"), redraft.
 
 ## Outstanding / judgement calls (also in the PR description)
 
