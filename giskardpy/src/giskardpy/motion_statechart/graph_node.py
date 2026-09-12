@@ -49,6 +49,7 @@ from giskardpy.motion_statechart.plotters.plot_specs import (
     NodePlotSpec,
     plot_specification_field,
 )
+from giskardpy.qp.constraint import GiskardConstraint
 from giskardpy.qp.constraint_collection import ConstraintCollection
 from giskardpy.utils.utils import string_shortener
 from krrood.adapters.deserialized_object_tracker import DeserializedObjectTracker
@@ -58,6 +59,7 @@ from krrood.adapters.json_serializer import (
 )
 from krrood.exceptions import DataclassException
 from krrood.patterns.field_metadata import JSONMetadata
+from krrood.symbol_graph.symbol_graph import Symbol
 from krrood.symbolic_math.symbolic_math import FloatVariable, Scalar, trinary_logic_not
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import (
@@ -664,7 +666,15 @@ class LifeCycleTransitions:
 
 
 @dataclass(repr=False, eq=False)
-class MotionStatechartNode(SubclassJSONSerializer):
+class MotionStatechartNode(Symbol, SubclassJSONSerializer):
+    """
+    One node of a motion statechart.
+
+    A symbol, so that what the controller was told to do is part of what can be asked
+    about while it runs: a node the symbol graph has no entry for is one no question can
+    reach without being handed the chart.
+    """
+
     name: str = field(default=None, kw_only=True)
     """
     A name for the node within a motion statechart.
@@ -709,8 +719,12 @@ class MotionStatechartNode(SubclassJSONSerializer):
     A variable referring to whether this node reached its goal.
     """
 
-    _constraint_collection: ConstraintCollection = field(init=False, repr=False)
-    """The parameter is set after build() using its NodeArtifacts."""
+    _constraint_collection: ConstraintCollection = field(
+        init=False, repr=False, default_factory=ConstraintCollection
+    )
+    """
+    The parameter is set after build() using its NodeArtifacts, and is empty until then.
+    """
     _observation_expression: Scalar = field(init=False, repr=False)
     """The parameter is set after build() using its NodeArtifacts."""
     _error_signal: Optional[ErrorSignal] = field(init=False, repr=False, default=None)
@@ -794,6 +808,14 @@ class MotionStatechartNode(SubclassJSONSerializer):
         if self.parent_node_index is None:
             return None
         return self._motion_statechart.get_node_by_index(self.parent_node_index)
+
+    @property
+    def constraints(self) -> List[GiskardConstraint]:
+        """
+        :return: The constraints this node gave the controller during build, empty
+            before it was built.
+        """
+        return list(self._constraint_collection)
 
     @property
     def debug_expressions(self) -> List[DebugExpression]:

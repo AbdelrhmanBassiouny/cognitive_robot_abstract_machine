@@ -1089,7 +1089,7 @@ class MotionStatechart(SubclassJSONSerializer):
         combined_constraint_collection = ConstraintCollection()
         for node in self.nodes:
             combined_constraint_collection.merge(
-                name_prefix=node.unique_name, other=node._constraint_collection
+                name_prefix=node.unique_name, constraints=node.constraints
             )
         return combined_constraint_collection
 
