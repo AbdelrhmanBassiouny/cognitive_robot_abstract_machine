@@ -209,6 +209,33 @@ def test_a_piece_found_again_after_a_take_down_is_stood_as_the_same_piece(
     assert live.get_semantic_annotations_by_type(MontessoriShape) == second
 
 
+def test_the_pieces_an_earlier_run_stood_are_taken_down_before_a_look_stands_its_own(
+    look: RecordedFrame,
+) -> None:
+    """
+    The world fetched from the robot still holds the pieces every earlier run stood in
+    it; a publisher that knew only what it had stood itself left them standing beside
+    its own, one more set per run.
+    """
+    scene = look.scene()
+    live = look.pipeline.world
+    an_earlier_run = PiecePublisher(world=live)
+    an_earlier_run.publish(scene, resting_on=look.pipeline.table.name)
+    this_run = PiecePublisher(world=live)
+
+    this_run.take_down()
+    stood = this_run.publish(scene, resting_on=look.pipeline.table.name)
+
+    assert live.get_semantic_annotations_by_type(MontessoriShape) == stood
+    assert len(stood) == len(
+        [
+            shape
+            for shape in scene.shapes
+            if shape.supporting_surface == look.pipeline.table.name
+        ]
+    )
+
+
 def test_a_piece_the_next_look_no_longer_finds_stays_taken_down(
     look: RecordedFrame,
 ) -> None:
