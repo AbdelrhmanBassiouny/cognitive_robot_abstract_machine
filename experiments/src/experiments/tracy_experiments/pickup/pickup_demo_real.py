@@ -45,7 +45,9 @@ must be running)::
 Pass ``--record`` to capture a rosbag of the camera, depth camera and joint states for
 the duration of the sorting. Bags are written to
 :data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_BAG_DIRECTORY` and keep
-one camera frame in :data:`KEEP_EVERY_NTH_FRAME`; both are overridable, see
+one camera frame in
+:data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`;
+both are overridable, see
 ``--bag-directory`` and ``--keep-every-nth-frame``.
 """
 
@@ -133,6 +135,7 @@ from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperControll
 from experiments.tracy_experiments.rosbag_recording import (
     DECIMATED_TOPICS,
     DEFAULT_BAG_DIRECTORY,
+    DEFAULT_KEEP_EVERY_NTH_FRAME,
     RosbagRecorder,
 )
 from segmind.datastructures.events import (
@@ -223,17 +226,6 @@ class DemoOption(StrEnum):
     BAG_DIRECTORY = "--bag-directory"
     KEEP_EVERY_NTH_FRAME = "--keep-every-nth-frame"
     DATABASE_URI = "--database-uri"
-
-
-KEEP_EVERY_NTH_FRAME = 10
-"""
-How much of the camera streams a recorded run keeps, by default.
-
-Recording every frame costs around 230 MB of disk per second of wall clock: a sorting
-run fills tens of gigabytes, almost all of it registered depth and point cloud. One
-frame in ten still shows what the arm did, at roughly a ninth of the size. Pass
-``--keep-every-nth-frame 1`` for a run that genuinely needs every frame.
-"""
 
 
 def _grasp_target_pose(body: Body, grasp_height_offset: float) -> Pose:
@@ -662,13 +654,13 @@ def _parse_arguments(argument_list: Optional[Sequence[str]]) -> argparse.Namespa
     parser.add_argument(
         DemoOption.KEEP_EVERY_NTH_FRAME,
         type=int,
-        default=KEEP_EVERY_NTH_FRAME,
+        default=DEFAULT_KEEP_EVERY_NTH_FRAME,
         metavar="N",
         help=(
             f"Record only one in every N frames of the heavy camera streams "
             f"({', '.join(DECIMATED_TOPICS)}). Joint states and transforms are always "
             f"recorded whole. Pass 1 to record every frame. Default: "
-            f"{KEEP_EVERY_NTH_FRAME}."
+            f"{DEFAULT_KEEP_EVERY_NTH_FRAME}."
         ),
     )
     parser.add_argument(

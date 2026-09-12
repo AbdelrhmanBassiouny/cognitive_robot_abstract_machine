@@ -26,7 +26,7 @@ from pathlib import Path
 from coraplex.datastructures.enums import ExecutionType
 from krrood.exceptions import DataclassException
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
-from typing_extensions import Iterator, List, Optional, Sequence, Type
+from typing_extensions import TYPE_CHECKING, Iterator, List, Optional, Sequence, Type
 
 from experiments.episodes.artifacts import ArtifactDirectory
 from experiments.episodes.episode import Episode
@@ -70,6 +70,9 @@ from experiments.tracy_experiments.montessori.scene_builder import (
     WHERE_TRACY_LOOKS_FROM,
     layout_area_on_tracys_table,
 )
+
+if TYPE_CHECKING:
+    from experiments.tracy_experiments.rosbag_recording import RosbagRecorder
 
 # %% what the command line offers
 
@@ -651,17 +654,36 @@ def scene_of(arguments: RecordingArguments) -> Iterator[MontessoriWorldBuilder]:
         )
 
 
+def episode_bag_recorder(parent_directory: Optional[str] = None) -> RosbagRecorder:
+    """
+    The recorder of an episode's bag: the run's topics, keeping one camera frame in :dat
+    a:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`.
+
+    Imported here rather than at the top, so a run that records no bag needs no ROS.
+
+    :param parent_directory: Where the bag is placed; the recorder's own default when
+        None.
+    """
+    from experiments.tracy_experiments.rosbag_recording import (
+        DEFAULT_BAG_DIRECTORY,
+        DEFAULT_KEEP_EVERY_NTH_FRAME,
+        RosbagRecorder,
+    )
+
+    return RosbagRecorder.timestamped(
+        BAG_NAME_PREFIX,
+        DEFAULT_BAG_DIRECTORY if parent_directory is None else parent_directory,
+        keep_every_nth_frame=DEFAULT_KEEP_EVERY_NTH_FRAME,
+    )
+
+
 @contextlib.contextmanager
 def recorded_bag() -> Iterator[Path]:
     """
     Record a bag of the run's topics for as long as the block runs, and hand over the
     bag's directory once it is closed.
-
-    Imported here rather than at the top, so a run that records no bag needs no ROS.
     """
-    from experiments.tracy_experiments.rosbag_recording import RosbagRecorder
-
-    with RosbagRecorder.timestamped(BAG_NAME_PREFIX) as recorder:
+    with episode_bag_recorder() as recorder:
         yield Path(recorder.output_directory)
 
 
