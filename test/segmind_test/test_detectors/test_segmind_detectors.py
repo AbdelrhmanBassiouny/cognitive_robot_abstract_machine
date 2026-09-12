@@ -58,7 +58,6 @@ from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -260,6 +259,35 @@ def test_pickup(_simple_apartment_setup):
     )
 
 
+def test_a_translation_event_states_its_poses_in_the_world_frame(
+    _simple_apartment_setup,
+):
+    """
+    The poses a motion event carries are read in the world frame, so that is the frame
+    they are stated in -- what reproducing the event elsewhere reads them against.
+    """
+    segmind_executor, segmind_context, milk, _, box2 = _build_executor(
+        _simple_apartment_setup
+    )
+    world = segmind_executor.context.world
+    segmind_executor.compile(
+        SegmindStatechart().build_statechart([TranslationDetector()])
+    )
+    segmind_executor.tick()
+    for i in range(5):
+        milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+            x=box2.global_pose.x,
+            y=box2.global_pose.y,
+            z=box2.global_pose.z + 0.56 + i * 0.1,
+            reference_frame=world.root,
+        )
+        segmind_executor.tick()
+
+    [event] = events_of(segmind_context, TranslationEvent)
+    assert event.start_pose.reference_frame is world.root
+    assert event.current_pose.reference_frame is world.root
+
+
 def test_placing(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(
         _simple_apartment_setup
@@ -439,7 +467,9 @@ def test_detect_holes_uses_apertures_not_body_names(_simple_apartment_setup):
     annotation is not a hole, and an ``Aperture`` annotated on a body whose name does
     not mention "hole" at all is still one.
     """
-    segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
+    segmind_executor, segmind_context, milk, box1, box2 = _build_executor(
+        _simple_apartment_setup
+    )
 
     with segmind_executor.context.world.modify_world():
         decoy_body = Body(name=PrefixedName("decoy_hole"))
