@@ -244,6 +244,18 @@ items:
     any shared fingertip contact; loose pieces get torsional friction
     (MujocoGeom.contact_dimensionality). #316 was merged into this branch by its own session
     the same night and its branch fast-forwarded to this tip. Full detail in roadmap.md.
+
+    2026-09-12 (day): record_episode --scene perceived. A run on the robot is set in the
+    world fetched from it with the board and the pieces stood by its own camera
+    (TracyLookingAtItsOwnTable over PerceivedScene), its layout read off what was found
+    (LayoutAsFound), and carried by no simulation (RealScene); the three scripts whose
+    steps need the simulation refuse to run on the robot. --execution real used to build
+    the scene from the URDF and simulate it. One connection to the robot (LiveTracy) is
+    shared by the real demo, the perception node and the recorder; the live node no
+    longer serves a look taken before the board's lid was handed to it. Tested offline
+    end to end on the tape capture in Tracy's own parsed world. Still the developer's:
+    a perceived run answers its questions from the model the perturbation moved, not
+    from a second look. Full detail in roadmap.md.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback

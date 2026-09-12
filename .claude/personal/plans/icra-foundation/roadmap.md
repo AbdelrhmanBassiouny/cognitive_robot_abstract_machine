@@ -2412,3 +2412,56 @@ and rectangular prism go through on every run.
 may need more than 0.6. #316's `record_episode --execution real` still builds its world
 from the URDF (`TracyOnItsOwnTable`) rather than from the fetched world and a look;
 `PerceivedSorting` is what a perceiving `MontessoriWorldBuilder` would wrap.
+## 2026-09-12 (day): an episode recorded on the robot is set in the world the robot publishes
+
+The developer's ask, the morning of the recording: *"Improve the record_episode to have an
+option to use the real fetched world and look. Test it very well and make sure it is clean
+and reliable."* Recorded on `integrated-simulation-pipeline` (#265), the branch that carries
+`record_episode`.
+
+**What `--execution real` had been.** The scene was built from Tracy's description
+(`TracyOnItsOwnTable`), the pieces stood by a seeded layout, MuJoCo settled the scene and the
+question set was answered from that pretend model; only the perturbation prompt to the person
+was real, and every robot action ran under `simulated_robot` regardless. A recording made
+that way would have shown the camera's role as nil.
+
+**What it is now.** `--scene perceived` fetches the world from the robot and has its own
+camera stand the board and the pieces in it (`TracyLookingAtItsOwnTable`, over the
+`PerceivedScene` the pickup demo now also runs on); the layout is read off what was found
+(`LayoutAsFound`); and a run on the robot is carried by nothing (`RealScene` -- settle and
+stop do nothing, since the person at the table says when the scene is at rest). Three rules
+make the option hard to misuse: a perceived scene needs `--execution real`
+(`PerceivedSceneNeedsTheRobot`), cannot be given a drawn layout
+(`PerceivedSceneCannotBeLaidOut`), and a script whose steps drive the scene through the
+simulation -- the pusher on its rail, the simulated grasp -- refuses to run on the robot
+(`ScenarioRunsOnlyInSimulation`), as does filming a real run (`RealRunCannotBeFilmed`).
+Every trial looks afresh, taking the previous look's pieces down first, so the second trial
+of a run is the table as the person left it, not the model as the first trial's
+perturbation moved it.
+
+**Three things found on the way, all fixed.** A perceived piece is welded to the world, and
+`SortingScene.stand_the_piece_at` -- which `PieceShoved` moves the model with -- raised on a
+weld; it now restates the weld, and keeps the piece's turn, which it used to reset for every
+piece. `hold_board` replaced the look's pipeline with one reading the lid while the live
+node's cached newest scene was one taken *without* the lid, so the very next `scene()` could
+serve the board's drawer front as yellow pieces: the look is now *handed* a pipeline
+(`read_with`), the node forgets a stale result, and a look begun through a pipeline since
+replaced is not kept. And three scripts each opened their own connection to the robot;
+`LiveTracy.connected` is the one they share.
+
+**Measured**, offline, in the world Tracy's own description gives with the tape-measured
+capture as the look: the perceived scene stands the board at (1.044, 0.154) and the four
+pieces within the tape's tolerance; a watched real run over it builds no synchronizer, asks
+the 14 working-memory questions, fails its undisturbed goal when a shove is asked of the
+person, and two trials take 2.2 s. Suites: scene builder 11 (new), record_episode 51,
+scenarios 81, scene publishing 9, live camera 15.
+
+**Left for the developer.** A perceived run still answers its questions from the model as
+the perturbation moved it -- the runner's design, in which a perturbation writes to the world
+and tells the person to do the same -- rather than from a second look after the person acted.
+Looking again at the answer step is what would make the recording show perception under
+perturbation; it is one step's change and a decision about what the perturbation then means
+for the model, so it is asked rather than taken. And `RobotSortsAPiece`/`PieceHeld...` need
+the real rig (Robotiq gripper, the two-armed `PickUpAction`) behind a `ShapeSorter` before
+they can run on the robot.
+
