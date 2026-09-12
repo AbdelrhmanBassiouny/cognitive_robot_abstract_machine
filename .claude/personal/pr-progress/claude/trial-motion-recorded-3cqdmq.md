@@ -164,6 +164,57 @@ does not exist yet to be queried: `Detection` carries only the annotation and th
 `PerceptionTask.perception_source` is `init=False`, the detections are applied to the
 world and dropped, and `DetectionEvent` does not name the detector that produced it.
 
+## Done (giskardpy constraint questions round, 2026-09-12)
+
+Asked for the giskardpy half of the recommendation, with one change: query by constraint
+*type*, never by name. Committed `5c058219d` on the same branch, pushed onto #323.
+
+- `MotionStatechartNode(Symbol, SubclassJSONSerializer)`. Precedent already in the repo:
+  `DetectionEvent(Symbol, ABC)` and `ManipulatesBodies(Symbol, ABC)` with the same
+  rationale in their docstrings.
+- `MotionStatechartNode.constraints` (public), `_constraint_collection` gets a
+  `default_factory` so an unbuilt node answers `[]`, `ConstraintCollection.__iter__`, and
+  `merge` now takes the constraints instead of another collection's `_constraints`.
+  `combine_constraint_collections_of_nodes` uses the public accessor.
+- `_CollisionAvoidanceTask` -> `CollisionAvoidanceTask` (public), so "all non-collision
+  constraints" is `not_(HasType(task, CollisionAvoidanceTask))`.
+- Four tests in `test/giskardpy_test/test_motion_statechart/test_constraint_questions.py`.
+  Proven meaningful by TDD: with the `Symbol` base removed, 3 of the 4 fail with empty
+  answers.
+
+Corrections to what I told the developer last round: `MotionStatechartNode.parent_node`
+and `.motion_statechart` already exist as object-returning properties, so no new parent
+accessor was needed - `parent_node_index` is not a traversal dead-end.
+
+Query-by-type vocabulary that already existed and needed nothing new: `enforcement_strategy`
+(a `type[EnforcementStrategy]` field) tells `VelocityStrategy` apart from `IntegralStrategy`,
+and equality vs inequality is already a class distinction.
+
+Test evidence (ROS sourced): giskardpy test_motion_statechart/test_qp/test_orm/test_executor
+483 passed, 14 failed, 91 errors - failure list byte-identical to the unmodified tree
+(479 passed), every one of them this container missing robot descriptions or graphviz `dot`.
+krrood_test 3080 passed / 2 failed (`dot`). segmind_test + experiments questions 131 passed.
+Pre-existing and unrelated: running `test/krrood_test` together with
+`test/experiments_test/test_long_term_memory.py` in one process fails collection with
+`Table '_7893...' is already defined for this MetaData instance` - reproduced identically on
+the unmodified tree.
+
+## #323 is no longer a draft
+
+It came back `draft: false` this round, so the developer marked it ready themselves. Per
+"When your PR's job ends" I did not re-draft it after pushing. The giskardpy commit went
+onto its branch because the session is pinned to `claude/trial-motion-recorded-3cqdmq` and
+the developer asked for the work in this session; flagged in chat, with an offer to move it
+to its own branch.
+
+## Still open on the perception side
+
+The developer clarified: not robokudo. What they want is, when writing an EQL query with
+the perception backend, to know how each answer was detected - which detector, and a
+mapping from a detector to the features/predicates/attributes it tried to answer. Their
+read is that perception spawns new instances, so it fits EQL's inference explanation
+mechanism (`Symbol._inference_explanation_`, `InferenceExplanation`). Not started.
+
 ## Local test environment notes
 
 `pytest` must be run with ROS sourced (`source /opt/ros/jazzy/setup.bash`), otherwise ORM
