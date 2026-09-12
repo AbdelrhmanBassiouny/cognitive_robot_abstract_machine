@@ -11,6 +11,7 @@ from typing_extensions import (
     Type,
 )
 
+from coraplex.plans.executables import ReceivesExecutedMotions
 from coraplex.plans.plan_entity import PlanEntity
 from krrood.entity_query_language.backends import (
     QueryBackend,
@@ -102,6 +103,12 @@ class Context(PlanEntity):
     evaluate_conditions: bool = field(default=True)
     """
     Should pre -and postconditions of actions be evaluated in this plan.
+    """
+
+    motion_listener: Optional[ReceivesExecutedMotions] = field(default=None)
+    """
+    Told about each motion state chart the plan runs, or None for a plan nobody
+    watches.
     """
 
     query_backend: QueryBackend = field(

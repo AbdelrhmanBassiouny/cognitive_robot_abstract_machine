@@ -337,6 +337,26 @@ class DescribedBoard:
                 board.add(hole)
         return board
 
+    def move_in(self, world: World, board: ShapeSortingBoard, lid_pose: Pose) -> None:
+        """
+        Move a board this description stood to where a lid pose now says it is.
+
+        :param world: The world holding the board.
+        :param board: The board, as :meth:`stand_in` stood it.
+        :param lid_pose: Where the lid's centre now stands, in the world root frame;
+            only its position and its turn about the vertical place the board.
+        """
+        world.move_branch_to(
+            board.root,
+            HomogeneousTransformationMatrix.from_xyz_rpy(
+                x=float(lid_pose.x),
+                y=float(lid_pose.y),
+                z=float(lid_pose.z) - self.height / 2,
+                yaw=float(lid_pose.yaw),
+                reference_frame=world.root,
+            ),
+        )
+
     @staticmethod
     def _fix_to_root(
         world: World,

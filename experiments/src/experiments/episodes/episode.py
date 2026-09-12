@@ -19,7 +19,7 @@ from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from krrood.patterns.role import Role
 from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.world import World
-from typing_extensions import TYPE_CHECKING, List, Optional, Sequence
+from typing_extensions import TYPE_CHECKING, List, Optional, Sequence, Type
 
 from experiments.questions.question import BloomLevel, Bucket, Question
 from experiments.scenarios.trial import TrialOutcome
@@ -166,6 +166,31 @@ class RecordedQuery(Role[Question]):
 
 
 @dataclass
+class RecordedMotion:
+    """
+    One motion a trial ran, and when it ran.
+
+    A trial runs several, one per motion state chart its steps build, so what was asked
+    of the controller at a moment is read off whichever of these was running then.
+    """
+
+    motion_statechart: MotionStatechart
+    """
+    The chart that ran, holding the history the controller wrote into it.
+    """
+
+    start_moment: float
+    """
+    Seconds between the start of the trial and the moment this motion began.
+    """
+
+    end_moment: float
+    """
+    Seconds between the start of the trial and the moment this motion ended.
+    """
+
+
+@dataclass
 class InsertionAttempt:
     """
     One attempt to insert a shape, how it ended, and what was made of that.
@@ -276,14 +301,14 @@ class RecordedTrial:
     Every insertion attempted while the trial ran, in the order they were made.
     """
 
-    motion_statechart: Optional[MotionStatechart] = None
+    motions: List[RecordedMotion] = field(default_factory=list)
     """
-    The motion the trial ran, or None if it ran none.
+    Every motion the trial ran, in the order they ran.
 
-    What a question about the control program reaches: the statechart holds the tasks
+    What a question about the control program reaches: each statechart holds the tasks
     that were active and the constraints they put on the optimization, so asking what the
-    robot was constrained by at the time is a query over this rather than over prose
-    about it.
+    robot was constrained by at a moment is a query over whichever of these was running
+    then rather than over prose about it.
     """
 
     @classmethod
@@ -366,16 +391,39 @@ class Episode:
         """
         Describe the run a scenario is about to make.
 
-        The conditions and perturbations are recorded by name because they act on a live
-        world and so are not themselves records.
-
         :param scenario: The scenario every trial runs.
         :param conditions: The knowledge sources switched for every trial.
         :param perturbations: The changes applied to every trial's world.
         """
+        return cls.planned(
+            type(scenario), scenario.execution_type, conditions, perturbations
+        )
+
+    @classmethod
+    def planned(
+        cls,
+        scenario_type: Type[Scenario],
+        execution_type: ExecutionType,
+        conditions: Sequence[Condition] = (),
+        perturbations: Sequence[Perturbation] = (),
+    ) -> Episode:
+        """
+        Describe a run that is going to be made, before the scenario making it exists.
+
+        What a run is made of can be known before its scene can be built — a scene on
+        the robot needs the robot — so the episode, whose identifier is what everything
+        the run leaves behind is filed under, is described from the run's kind alone.
+        The conditions and perturbations are recorded by name because they act on a
+        live world and so are not themselves records.
+
+        :param scenario_type: The kind of scenario every trial runs.
+        :param execution_type: Whether the run happens in a simulator or on the robot.
+        :param conditions: The knowledge sources switched for every trial.
+        :param perturbations: The changes applied to every trial's world.
+        """
         return cls(
-            scenario_name=scenario.name,
-            execution_type=scenario.execution_type,
+            scenario_name=scenario_type.name,
+            execution_type=execution_type,
             condition_names=[type(condition).__name__ for condition in conditions],
             perturbation_names=[
                 type(perturbation).__name__ for perturbation in perturbations

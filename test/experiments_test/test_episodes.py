@@ -34,6 +34,7 @@ from experiments.episodes.episode import (
     FailureType,
     InsertionAttempt,
     InsertionOutcome,
+    RecordedMotion,
     RecordedQuery,
     RecordedTrial,
     Tick,
@@ -43,6 +44,17 @@ from experiments.questions.question import Bucket
 from experiments.questions.working_memory import ObjectColours, ObjectsSeen
 from experiments.scenarios.trial import TrialOutcome
 from krrood.ormatic.data_access_objects.helper import to_dao
+
+MOMENT_THE_MOTION_BEGAN = 2.0
+"""
+When the motion of the trial below is taken to have begun, in seconds after the start of
+the trial.
+"""
+
+MOMENT_THE_MOTION_ENDED = 7.5
+"""
+When that motion is taken to have ended.
+"""
 
 
 class SortingFailureType(FailureType):
@@ -407,17 +419,22 @@ def test_the_recorded_world_names_the_robot_among_its_annotations(
     ]
 
 
-def test_a_trial_keeps_the_motion_it_ran(experiments_database_session):
+def test_a_trial_keeps_the_motions_it_ran(experiments_database_session):
     """
-    The control questions are answered from the statechart a trial ran, so a trial that
-    ran one has to still name it after a round trip.
+    The control questions are answered from the statecharts a trial ran and from when
+    each of them ran, so a trial that ran one has to still name both after a round trip.
     """
     session = experiments_database_session
+    motion = RecordedMotion(
+        motion_statechart=MotionStatechart(),
+        start_moment=MOMENT_THE_MOTION_BEGAN,
+        end_moment=MOMENT_THE_MOTION_ENDED,
+    )
     trial = RecordedTrial(
         episode=sorting_episode(),
         outcome=TrialOutcome.SUCCEEDED,
         duration=12.5,
-        motion_statechart=MotionStatechart(),
+        motions=[motion],
     )
 
     session.add(to_dao(trial))
@@ -425,7 +442,10 @@ def test_a_trial_keeps_the_motion_it_ran(experiments_database_session):
 
     [recorded_trial] = session.scalars(select(RecordedTrialDAO)).all()
     restored: RecordedTrial = recorded_trial.from_dao()
-    assert isinstance(restored.motion_statechart, MotionStatechart)
+    [restored_motion] = restored.motions
+    assert isinstance(restored_motion.motion_statechart, MotionStatechart)
+    assert restored_motion.start_moment == motion.start_moment
+    assert restored_motion.end_moment == motion.end_moment
 
 
 def test_an_episode_that_kept_no_world_round_trips_without_one(

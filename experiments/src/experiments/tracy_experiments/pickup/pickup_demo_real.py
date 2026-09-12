@@ -1,10 +1,9 @@
 """
 The physical Tracy's left arm sorts the loose Montessori pieces into the shape-sorting
 board by looking -- wired the way :mod:`coraplex_real_tracy.demo` wires the physical
-robot: a Giskard standalone node is launched, the live world is fetched from a running
-``WorldFetcher`` service and kept in sync via
-:class:`~semantic_digital_twin.adapters.ros. world_synchronizer.WorldSynchronizer`, and
-the plan runs under :attr:`~coraplex.datastructures.enums.ExecutionType.REAL`.
+robot: a Giskard standalone node is launched, the live world is fetched and kept in step
+through :class:`~experiments.tracy_experiments.live_tracy.LiveTracy`, and the plan runs
+under :attr:`~coraplex.datastructures.enums.ExecutionType.REAL`.
 
 Nothing on the table is placed by hand. The camera looks for the board by its
 description (:func:`~experiments.montessori.perception.recorded_setup.lab_board`) and
@@ -67,7 +66,6 @@ from typing_extensions import Optional
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import (
@@ -94,14 +92,17 @@ from experiments.episodes.episode import Episode, RecordedTrial
 from experiments.episodes.observer import EpisodeObserver
 from experiments.episodes.recording import open_recording
 from experiments.episodes.trace import JointTraceRecorder
-from experiments.montessori.perception.node import build_node
 from experiments.montessori.perception.recorded_setup import lab_board
+from experiments.montessori.perception.scene_publishing import (
+    LOOKS_FOR_THE_BOARD,
+    PerceivedScene,
+)
 from experiments.montessori.results_database import ConfiguredDatabase, ResultsDatabase
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
-from experiments.network_limits import check_large_messages_can_arrive
 from experiments.questions.question import QuestionedThings
 from experiments.questions.question_set import QuestionSet
 from experiments.scenarios.trial import TrialOutcome
+from experiments.tracy_experiments.live_tracy import LiveTracy
 from experiments.tracy_experiments.montessori.event_dashboard import (
     EventFeed,
     run_dashboard,
@@ -144,16 +145,16 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Pose,
 )
-from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
-from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
-from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
-    VizMarkerPublisher,
-)
 
 logger = logging.getLogger(__name__)
+
+NODE_NAME = "tracy_pickup_demo_real"
+"""
+The name this demo's node registers under.
+"""
 
 PICK_ARM = Arms.LEFT
 """
@@ -170,11 +171,6 @@ see it on the table. This offset then lifts the grasp target back up by the same
 distance the pieces used to be spawned hovering, so the arm still reaches where it did
 before the spawn was lowered. A starting point to tune on hardware, not a measured
 value.
-"""
-
-LOOKS_FOR_THE_BOARD = 30
-"""
-How many looks the camera is given to show the board before the demo gives up.
 """
 
 SLIP_WATCH_INTERVAL_SECONDS = 1.0
@@ -657,113 +653,106 @@ def main() -> None:
     feed = EventFeed()
     run_dashboard(feed)
 
-    check_large_messages_can_arrive()
     rclpy.init()
-    node = rclpy.create_node("tracy_pickup_demo_real")
-    executor = MultiThreadedExecutor()
-    executor.add_node(node)
-    thread = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor")
-    thread.start()
-
-    world = fetch_world_from_service(node=node, timeout_seconds=300)
-    [robot] = world.get_semantic_annotations_by_type(Tracy)
-
-    # Build the rviz marker + tf publisher before the WorldSynchronizer exists.
-    # TFPublisher registers a state-change callback partway through its own
-    # construction; a sync update landing in that window reaches it before its
-    # tf_model_callback is set and takes down the executor thread.
-    viz_marker_publisher = VizMarkerPublisher(_world=world, node=node)
-
-    WorldSynchronizer(_world=world, node=node)
-
-    context = Context(
-        world=world, robot=robot, ros_node=node, evaluate_conditions=False
-    )
-    grasp_description = GraspDescription(
-        ApproachDirection.FRONT,
-        VerticalAlignment.TOP,
-        ViewManager.get_end_effector_view(PICK_ARM, robot),
-        rotate_gripper=True,
-    )
-
-    # Giskard's Tracy interface has no command channel for the gripper fingers, so a
-    # plan's own MoveGripperMotion blocks forever on the real robot. The arm motion
-    # still runs through the plan; the gripper is driven straight through its Robotiq
-    # action server instead.
-    gripper = RobotiqGripperController(node)
-    gripper_listener = GripperJointStateListener(node=node, arm=PICK_ARM)
-    tool_frame = ViewManager.get_end_effector_view(PICK_ARM, robot).tool_frame
-    rig = _SortingRig(
-        context,
-        world,
-        robot,
-        feed,
-        gripper,
-        gripper_listener,
-        grasp_description,
-        tool_frame,
-    )
-    sorting = PerceivedSorting(
-        world=world,
-        look=build_node(node, world),
-        described_board=lab_board(),
-        sorter=rig,
-        looks_for_board=LOOKS_FOR_THE_BOARD,
-    )
-    sorting.perceive()
-
-    park = sequential([ParkArmsAction(PICK_ARM)], context=context).plan
-
-    logger.info(
-        "Board and %d perceived piece(s) in rviz. Check they line up with the real "
-        "objects, then press Enter to run the sorting.",
-        len(sorting.pieces),
-    )
-    input()
-    logger.info("Sorting %d piece(s) on the real robot.", len(sorting.pieces))
-    episode = Episode(
-        scenario_name=SCENARIO_NAME, execution_type=ExecutionType.REAL, world=world
-    )
-    asked_about = piece_asked_about(sorting, arguments.ask_about)
-    question_set = question_set_about(sorting, asked_about, robot)
-    # Recording starts here rather than at start-up so the bag holds the sorting itself,
-    # not the operator's wait at the prompt above, and closes as soon as the last piece
-    # is placed. The trial's own clock starts with it, so the bag and the trial agree.
-    recorder = (
-        RosbagRecorder.timestamped(
-            BAG_NAME_PREFIX,
-            arguments.bag_directory,
-            keep_every_nth_frame=arguments.keep_every_nth_frame,
+    with LiveTracy.connected(NODE_NAME) as tracy:
+        context = Context(
+            world=tracy.world,
+            robot=tracy.robot,
+            ros_node=tracy.node,
+            evaluate_conditions=False,
         )
-        if arguments.record
-        else contextlib.nullcontext()
-    )
-    rig.observer.restart()
-    joints = JointTraceRecorder(
-        _world=world, clock=lambda: rig.observer.elapsed_seconds
-    )
-    with (
-        recorder as bag,
-        ExecutionEnvironment(
-            execution_type=ExecutionType.REAL, collision_avoidance=True
-        ),
-    ):
-        rig.perform_and_record(park)
-        sorting.sort_every_piece()
-        rig.observer.ask(question_set, robot, rig.observer.elapsed_seconds)
-    joints.stop()
-    logger.info("Sorting finished.")
-    trial = rig.observer.into(
-        RecordedTrial(
-            episode=episode,
-            outcome=outcome_of(
-                [event for tick in rig.observer.ticks for event in tick.events],
-                asked_about.root,
+        grasp_description = GraspDescription(
+            ApproachDirection.FRONT,
+            VerticalAlignment.TOP,
+            ViewManager.get_end_effector_view(PICK_ARM, tracy.robot),
+            rotate_gripper=True,
+        )
+
+        # Giskard's Tracy interface has no command channel for the gripper fingers, so
+        # a plan's own MoveGripperMotion blocks forever on the real robot. The arm
+        # motion still runs through the plan; the gripper is driven straight through
+        # its Robotiq action server instead.
+        gripper = RobotiqGripperController(tracy.node)
+        gripper_listener = GripperJointStateListener(node=tracy.node, arm=PICK_ARM)
+        tool_frame = ViewManager.get_end_effector_view(PICK_ARM, tracy.robot).tool_frame
+        rig = _SortingRig(
+            context,
+            tracy.world,
+            tracy.robot,
+            feed,
+            gripper,
+            gripper_listener,
+            grasp_description,
+            tool_frame,
+        )
+        sorting = PerceivedSorting(
+            scene=PerceivedScene(
+                world=tracy.world,
+                look=tracy.look,
+                described_board=lab_board(),
+                looks_for_board=LOOKS_FOR_THE_BOARD,
             ),
-            duration=rig.observer.elapsed_seconds,
+            sorter=rig,
         )
-    )
-    keep_the_episode(trial, joints, None if bag is None else Path(bag.output_directory))
+        sorting.perceive()
+
+        park = sequential([ParkArmsAction(PICK_ARM)], context=context).plan
+
+        logger.info(
+            "Board and %d perceived piece(s) in rviz. Check they line up with the real "
+            "objects, then press Enter to run the sorting.",
+            len(sorting.pieces),
+        )
+        input()
+        logger.info("Sorting %d piece(s) on the real robot.", len(sorting.pieces))
+        episode = Episode(
+            scenario_name=SCENARIO_NAME,
+            execution_type=ExecutionType.REAL,
+            world=tracy.world,
+        )
+        asked_about = piece_asked_about(sorting, arguments.ask_about)
+        question_set = question_set_about(sorting, asked_about, tracy.robot)
+        # Recording starts here rather than at start-up so the bag holds the sorting
+        # itself, not the operator's wait at the prompt above, and closes as soon as
+        # the last piece is placed. The trial's own clock starts with it, so the bag
+        # and the trial agree.
+        recorder = (
+            RosbagRecorder.timestamped(
+                BAG_NAME_PREFIX,
+                arguments.bag_directory,
+                keep_every_nth_frame=arguments.keep_every_nth_frame,
+            )
+            if arguments.record
+            else contextlib.nullcontext()
+        )
+        rig.observer.restart()
+        joints = JointTraceRecorder(
+            _world=tracy.world, clock=lambda: rig.observer.elapsed_seconds
+        )
+        with (
+            recorder as bag,
+            ExecutionEnvironment(
+                execution_type=ExecutionType.REAL, collision_avoidance=True
+            ),
+        ):
+            rig.perform_and_record(park)
+            sorting.sort_every_piece()
+            rig.observer.ask(question_set, tracy.robot, rig.observer.elapsed_seconds)
+        joints.stop()
+        logger.info("Sorting finished.")
+        trial = rig.observer.into(
+            RecordedTrial(
+                episode=episode,
+                outcome=outcome_of(
+                    [event for tick in rig.observer.ticks for event in tick.events],
+                    asked_about.root,
+                ),
+                duration=rig.observer.elapsed_seconds,
+            )
+        )
+        keep_the_episode(
+            trial, joints, None if bag is None else Path(bag.output_directory)
+        )
 
 
 def keep_the_episode(

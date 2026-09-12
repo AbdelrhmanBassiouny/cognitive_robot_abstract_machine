@@ -17,7 +17,9 @@ import numpy
 import pytest
 from typing_extensions import Dict, List, Type
 
-from experiments.montessori.pieces import KNOWN_PIECES
+from coraplex.datastructures.enums import ExecutionType
+
+from experiments.montessori.pieces import FULL_SIZE_PIECES, KNOWN_PIECES
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 
@@ -29,6 +31,7 @@ from experiments.montessori.scenarios import (
     DetectionRelabelled,
     HOW_FAR_A_MOVED_HOLE_GOES,
     LayoutArea,
+    LayoutAsFound,
     LightingChanged,
     LookAtTheScene,
     MontessoriEnvironmentVariable,
@@ -37,12 +40,14 @@ from experiments.montessori.scenarios import (
     PUSHER_RAIL_NAME,
     PUSHER_SCALE,
     PerceivedPoseOffset,
+    PerceivingWorldBuilder,
     PerturbationOfTheNextLook,
     PieceHeldWhileTheQuestionIsAsked,
     PieceLayout,
     PiecePlacement,
     PiecePushedWhileTheRobotIsIdle,
     PieceShoved,
+    RealScene,
     RobotSortsAPiece,
     SceneRecording,
     SimulatedScene,
@@ -66,21 +71,28 @@ from experiments.montessori.perception.simulated_setup import (
 from experiments.montessori.exceptions import (
     HoleHasNoLandingRegionError,
     NoSuchPieceError,
+    RealRunCannotBeFilmed,
+    RealRunNeedsAPerceivedScene,
+    ScenarioRunsOnlyInSimulation,
+    SceneNotBuiltYet,
 )
+from experiments.montessori.world import MontessoriWorld
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
-from experiments.montessori.world import (
-    BOARD_POSITION,
-    BOARD_SCALE,
-    MontessoriWorld,
-)
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.world import BOARD_POSITION, BOARD_SCALE
+from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.scenarios.runner import ScenarioRunner
+from experiments.scenarios.scenario import AbsentPerson
+from segmind.datastructures.events import TranslationEvent
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.adapters.multi_sim import MujocoLight
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from semantic_digital_twin.world_description.connections import PrismaticConnection
+from semantic_digital_twin.adapters.multi_sim import MultiSimSynchronizer
+from semantic_digital_twin.world_description.connections import (
+    FixedConnection,
+    PrismaticConnection,
+)
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types import Point3
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
@@ -163,15 +175,61 @@ class WorldBuilderThatKeepsWhatItBuilt(BoardOnItsOwnTable):
     scenario ran in one of them or in a scene of its own.
     """
 
-    built: List[MontessoriWorld] = field(default_factory=list)
+    built: List[World] = field(default_factory=list)
     """
     Every scene this has been asked for, in the order it was asked for them.
     """
 
-    def build(self, robot_type: Type[AbstractRobot]) -> MontessoriWorld:
+    def build(self, robot_type: Type[AbstractRobot]) -> World:
         built = super().build(robot_type)
         self.built.append(built)
         return built
+
+
+@dataclass
+class WorldBuilderWhoseLookFindsTheCubeShoved(
+    BoardOnItsOwnTable, PerceivingWorldBuilder
+):
+    """
+    A scene builder standing in for one whose scene is perceived: every look it takes
+    after the first finds the cube shoved by a stated displacement, as a camera would
+    once the person at the table had shoved it, and the world holds the cube there.
+
+    A displacement of nothing stands in for a person who did nothing.
+    """
+
+    shoved_by: Vector3 = field(kw_only=True)
+    """
+    How far each look finds the cube from where the look before found it.
+    """
+
+    built: List[World] = field(default_factory=list)
+    """
+    Every scene this has been asked for, in the order it was asked for them.
+    """
+
+    looks_taken: int = 0
+    """
+    How often the scene has been looked at again since it was built.
+    """
+
+    def build(self, robot_type: Type[AbstractRobot]) -> World:
+        built = super().build(robot_type)
+        self.built.append(built)
+        return built
+
+    def perceive(self) -> None:
+        self.looks_taken += 1
+        scene = SortingScene(self.built[-1])
+        found_at = scene.position_of(MontessoriShapeCategory.CUBE)
+        scene.stand_the_piece_at(
+            MontessoriShapeCategory.CUBE,
+            Point3(
+                float(found_at.x) + float(self.shoved_by.x),
+                float(found_at.y) + float(self.shoved_by.y),
+                float(found_at.z) + float(self.shoved_by.z),
+            ),
+        )
 
 
 @dataclass
@@ -378,6 +436,283 @@ def test_a_built_scene_mounts_the_robot_its_type_names(area):
     assert isinstance(SortingScene(world).robot, SyntheticGraspingRobot)
 
 
+# %% the layout a scene is found in
+
+
+def test_a_stated_layout_is_the_layout_the_trial_starts_in(area):
+    layout = PieceLayout.randomized(seed=SEED, area=area)
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=layout, world_builder=board_and_the_arm()
+    )
+
+    scenario.build_world()
+
+    assert scenario.starting_layout is layout
+
+
+def test_a_scenario_asked_where_its_pieces_stood_before_it_built_a_scene_says_so(
+    area,
+):
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+
+    with pytest.raises(SceneNotBuiltYet) as asked:
+        scenario.starting_layout
+
+    assert asked.value.scenario_name == scenario.name
+
+
+def test_a_layout_as_found_leaves_every_piece_where_the_scene_built_it():
+    """
+    The pieces stand where the scene's own builder put them, which is where a scene
+    built without any layout stands them.
+    """
+    builder = board_and_the_arm()
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=LayoutAsFound(), world_builder=builder
+    )
+    as_built = SortingScene(builder.build(SyntheticGraspingRobot))
+
+    scene = SortingScene(scenario.build_world())
+
+    assert scene.categories == as_built.categories
+    for category in as_built.categories:
+        assert scene.position_of(category).to_np() == pytest.approx(
+            as_built.position_of(category).to_np()
+        )
+
+
+def test_a_layout_as_found_reads_where_every_piece_of_the_set_stands_off_the_scene():
+    """
+    The scene this package builds also stands a disk and a sphere, which belong to no
+    set of pieces and so to no layout.
+    """
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=LayoutAsFound(), world_builder=board_and_the_arm()
+    )
+
+    world = scenario.build_world()
+
+    found = scenario.starting_layout
+    assert type(found) is PieceLayout
+    of_the_set = [
+        shape
+        for shape in world.get_semantic_annotations_by_type(MontessoriShape)
+        if shape.shape_category in FULL_SIZE_PIECES.by_category
+    ]
+    assert len(found.placements) == len(of_the_set)
+    for placement, shape in zip(found.placements, of_the_set):
+        assert placement.piece is FULL_SIZE_PIECES.by_category[shape.shape_category]
+        stands_at = shape.root.global_transform.to_position()
+        assert placement.x == pytest.approx(float(stands_at.x))
+        assert placement.y == pytest.approx(float(stands_at.y))
+
+
+def test_a_layout_read_off_a_scene_keeps_how_far_each_piece_is_turned(area):
+    layout = PieceLayout.randomized(seed=SEED, area=area)
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=layout, world_builder=board_and_the_arm()
+    )
+    world = scenario.build_world()
+
+    read = PieceLayout.read_from(world, FULL_SIZE_PIECES)
+
+    assert read.categories == layout.categories
+    for placement in layout.placements:
+        read_back = read.placement_of(placement.piece.category)
+        assert read_back.piece is placement.piece
+        assert read_back.x == pytest.approx(placement.x)
+        assert read_back.y == pytest.approx(placement.y)
+        assert read_back.yaw == pytest.approx(placement.yaw)
+
+
+# %% standing a piece somewhere
+
+
+def test_a_shoved_piece_keeps_how_far_it_was_turned(area):
+    layout = PieceLayout.randomized(seed=SEED, area=area)
+    world = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=layout, world_builder=board_and_the_arm()
+    ).build_world()
+    scene = SortingScene(world)
+    turned_by = layout.placement_of(MontessoriShapeCategory.CUBE).yaw
+
+    PieceShoved(
+        step=SortingStep.SETTLE,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).apply(world)
+
+    _, _, yaw = (
+        scene.body_of(MontessoriShapeCategory.CUBE)
+        .global_transform.to_rotation_matrix()
+        .to_rpy()
+    )
+    assert float(yaw) == pytest.approx(turned_by)
+
+
+def test_a_piece_fixed_where_it_stands_is_moved_by_restating_where_it_is_fixed():
+    """
+    A piece a look stood is welded to the world, so it has no degree of freedom to move
+    it by; standing it elsewhere restates the weld.
+    """
+    world = MontessoriWorld(shapes_are_movable=False).world
+    scene = SortingScene(world)
+    cube = scene.body_of(MontessoriShapeCategory.CUBE)
+    assert type(cube.parent_connection) is FixedConnection
+    stood_at = scene.position_of(MontessoriShapeCategory.CUBE).to_np()
+    moved_to = Point3(
+        float(stood_at[0]) + float(HOW_FAR_A_PERTURBATION_MOVES_SOMETHING.x),
+        float(stood_at[1]),
+        float(stood_at[2]),
+    )
+
+    scene.stand_the_piece_at(MontessoriShapeCategory.CUBE, moved_to)
+
+    assert type(cube.parent_connection) is FixedConnection
+    assert scene.position_of(MontessoriShapeCategory.CUBE).to_np()[
+        :3
+    ].flatten() == pytest.approx(moved_to.to_np()[:3].flatten())
+
+
+# %% a run on the robot
+
+
+def a_run_on_the_robot(
+    area, shoved_by: Vector3 = Vector3(0.0, 0.0, 0.0)
+) -> tuple[TheSceneStandsStill, WorldBuilderWhoseLookFindsTheCubeShoved]:
+    """
+    The static run on the robot, in a scene whose every later look finds the cube shoved
+    by the given displacement.
+
+    :param area: The patch of table the pieces stand on.
+    :param shoved_by: How far the person at the table is found to have shoved the cube.
+    """
+    builder = WorldBuilderWhoseLookFindsTheCubeShoved(
+        robot=mounted_arm(), shoved_by=shoved_by
+    )
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=builder,
+        execution_type=ExecutionType.REAL,
+    )
+    return scenario, builder
+
+
+def test_a_run_on_the_robot_is_carried_by_the_real_world(area):
+    """
+    Nothing simulates a scene on the robot: the trial runs with no simulation built and
+    no synchronizer left on the world.
+    """
+    scenario, _ = a_run_on_the_robot(area)
+    runner = ScenarioRunner(person=AbsentPerson())
+
+    trial = runner.run_trial(scenario)
+
+    assert type(scenario.physics) is RealScene
+    assert trial.outcome is TrialOutcome.SUCCEEDED
+    assert trial.execution_type is ExecutionType.REAL
+    assert (
+        MultiSimSynchronizer.all_callbacks_of_this_type_from_world(
+            scenario.physics.world
+        )
+        == []
+    )
+
+
+def test_a_run_on_the_robot_needs_a_scene_it_can_look_at(area):
+    """
+    What the person at the table changes reaches the world only through a look, so a
+    scene that is built rather than perceived cannot be run on the robot.
+    """
+    with pytest.raises(RealRunNeedsAPerceivedScene) as refused:
+        SyntheticGrasperWatchesTheSceneStandStill(
+            layout=PieceLayout.randomized(seed=SEED, area=area),
+            world_builder=board_and_the_arm(),
+            execution_type=ExecutionType.REAL,
+        )
+
+    assert refused.value.scenario_name == TheSceneStandsStill.name
+
+
+def test_a_shove_on_the_robot_is_the_persons_and_is_learned_of_by_looking(area):
+    scenario, builder = a_run_on_the_robot(
+        area, shoved_by=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING
+    )
+    person = AbsentPerson()
+    shove = PieceShoved(
+        step=SortingStep.SETTLE,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    )
+
+    trial = ScenarioRunner(person=person).run_trial(scenario, perturbations=[shove])
+
+    assert person.asked == [shove.instruction_for_a_person()]
+    assert builder.looks_taken == 1
+    assert trial.outcome is TrialOutcome.FAILED
+
+
+def test_a_shove_the_look_does_not_find_leaves_the_world_as_it_was(area):
+    """
+    The run never writes the shove into the world itself: where the look finds the cube
+    where it stood, the scene counts as undisturbed however the person was asked.
+    """
+    scenario, builder = a_run_on_the_robot(area)
+    shove = PieceShoved(
+        step=SortingStep.SETTLE,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    )
+
+    trial = ScenarioRunner(person=AbsentPerson()).run_trial(
+        scenario, perturbations=[shove]
+    )
+
+    assert builder.looks_taken == 1
+    assert trial.outcome is TrialOutcome.SUCCEEDED
+    stood_at = scenario.starting_layout.placement_of(MontessoriShapeCategory.CUBE)
+    assert SortingScene(builder.built[-1]).stands_at(
+        MontessoriShapeCategory.CUBE, stood_at
+    )
+
+
+def test_a_run_on_the_robot_cannot_be_filmed(area):
+    with pytest.raises(RealRunCannotBeFilmed) as refused:
+        SyntheticGrasperWatchesTheSceneStandStill(
+            layout=PieceLayout.randomized(seed=SEED, area=area),
+            world_builder=board_and_the_arm(),
+            execution_type=ExecutionType.REAL,
+            filmed=True,
+        )
+
+    assert refused.value.scenario_name == TheSceneStandsStill.name
+
+
+@pytest.mark.parametrize(
+    "scenario_class, acted_on",
+    [
+        (SyntheticGrasperSortsAPiece, "sorted_category"),
+        (SyntheticGrasperIsIdleWhileAPieceIsPushed, "pushed_category"),
+        (SyntheticGrasperHoldsAPiece, "held_category"),
+    ],
+)
+def test_a_script_the_simulation_drives_cannot_run_on_the_robot(
+    scenario_class, acted_on, area
+):
+    with pytest.raises(ScenarioRunsOnlyInSimulation) as refused:
+        scenario_class(
+            layout=PieceLayout.randomized(seed=SEED, area=area),
+            world_builder=board_and_the_arm(),
+            execution_type=ExecutionType.REAL,
+            **{acted_on: MontessoriShapeCategory.CUBE},
+        )
+
+    assert refused.value.scenario_name == scenario_class.name
+
+
 # %% the scene a scenario is given
 
 
@@ -389,7 +724,7 @@ def test_a_scenario_runs_in_the_scene_the_builder_it_was_given_built(area):
 
     world = scenario.build_world()
 
-    assert [built.world for built in builder.built] == [world]
+    assert builder.built == [world]
 
 
 def test_a_scenario_stands_its_pieces_on_the_table_the_scene_it_was_given_says(area):
@@ -523,7 +858,7 @@ def test_a_piece_left_above_the_table_falls_onto_it_when_the_scene_settles(area)
         Point3(stood_at.x, stood_at.y, float(stood_at.z) + 0.1),
     )
 
-    scenario.simulation.settle()
+    scenario.physics.settle()
 
     rested_at = scene.position_of(MontessoriShapeCategory.CUBE)
     assert float(rested_at.z) == pytest.approx(float(stood_at.z), abs=1e-3)
@@ -857,8 +1192,10 @@ def test_a_moved_target_hole_stands_the_displacement_away_from_where_it_was(area
 def test_a_moved_target_hole_carries_the_boards_other_holes_with_it(area):
     """
     A hole is cut into the board rather than standing beside it, so the board is what
-    moves and every hole in it travels the same distance. Naming one hole says which
-    displacement is being stated, not that the board bends around it.
+    moves and every hole in it travels the same distance.
+
+    Naming one hole says which displacement is being stated, not that the board bends
+    around it.
     """
     world = a_scene_to_perturb(area)
     scene = SortingScene(world)
@@ -875,6 +1212,47 @@ def test_a_moved_target_hole_carries_the_boards_other_holes_with_it(area):
         scene.hole_for(alongside).root.global_transform.to_position().to_np() - stood_at
     )
     assert numpy.linalg.norm(moved_by[:3]) == pytest.approx(HOW_FAR_A_MOVED_HOLE_GOES)
+
+
+def test_a_shove_is_the_translation_of_the_piece_by_its_displacement(area):
+    world = a_scene_to_perturb(area)
+    scene = SortingScene(world)
+    cube = scene.body_of(MontessoriShapeCategory.CUBE)
+    stood_at = cube.global_transform.to_np()
+
+    event = PieceShoved(
+        step=SortingStep.SETTLE,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).event_in(world)
+
+    assert type(event) is TranslationEvent
+    assert event.tracked_object is cube
+    assert numpy.allclose(event.start_pose.to_homogeneous_matrix().to_np(), stood_at)
+    ended_at = event.current_pose.to_homogeneous_matrix().to_np()
+    assert numpy.allclose(ended_at[:3, :3], stood_at[:3, :3])
+    assert (ended_at[:3, 3] - stood_at[:3, 3]) == pytest.approx(
+        HOW_FAR_A_PERTURBATION_MOVES_SOMETHING.to_np()[:3].flatten()
+    )
+
+
+def test_a_moved_target_hole_is_the_translation_of_the_board(area):
+    world = a_scene_to_perturb(area)
+    board = SortingScene(world).board.root
+
+    event = TargetHoleMoved(
+        step=SortingStep.PUT_DOWN,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    ).event_in(world)
+
+    assert type(event) is TranslationEvent
+    assert event.tracked_object is board
+    moved_by = (
+        event.current_pose.to_homogeneous_matrix().to_np()[:3, 3]
+        - board.global_transform.to_np()[:3, 3]
+    )
+    assert numpy.linalg.norm(moved_by) == pytest.approx(HOW_FAR_A_MOVED_HOLE_GOES)
 
 
 def test_a_shoved_piece_stands_the_displacement_away_from_where_it_was(area):
@@ -1213,9 +1591,9 @@ def a_filmed_sorting_run() -> AFilmedRun:
     frames_by_the_end_of = {}
     for step in scenario.steps(world):
         step.perform(world)
-        frames_by_the_end_of[step.name] = scenario.simulation.recording.frame_count
+        frames_by_the_end_of[step.name] = scenario.physics.recording.frame_count
     return AFilmedRun(
-        recording=scenario.simulation.recording,
+        recording=scenario.physics.recording,
         frames_by_the_end_of=frames_by_the_end_of,
         left_the_piece_at=_where_the_sorted_piece_stands(world),
     )

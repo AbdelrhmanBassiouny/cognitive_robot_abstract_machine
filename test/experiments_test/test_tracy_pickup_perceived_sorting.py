@@ -22,7 +22,10 @@ from experiments.montessori.perception.recorded_setup import (
     perception_pipeline,
     recorded_world,
 )
-from experiments.montessori.perception.scene_publishing import PUBLISHED_PREFIX
+from experiments.montessori.perception.scene_publishing import (
+    PUBLISHED_PREFIX,
+    PerceivedScene,
+)
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import RecordedFrame, RepeatedLook
 from experiments.montessori.perception.surfaces import WorkspaceSurface
@@ -133,9 +136,7 @@ def sorting(world: World, look: RecordedFrame) -> PerceivedSorting:
     A run over the measured capture that has already looked.
     """
     run = PerceivedSorting(
-        world=world,
-        look=look,
-        described_board=lab_board(),
+        scene=PerceivedScene(world=world, look=look, described_board=lab_board()),
         sorter=_SorterKeepingWhatItWasHanded(),
     )
     run.perceive()
@@ -188,31 +189,51 @@ def test_the_look_reads_the_lid_of_the_board_it_stood(
     Once the board is stood, the pipeline is handed that board's lid as the second
     surface it reads.
     """
-    assert sorting.look.pipeline.lid.entity is sorting.board.root
-    assert sorting.look.pipeline.lid.height == pytest.approx(
+    assert sorting.scene.look.pipeline.lid.entity is sorting.board.root
+    assert sorting.scene.look.pipeline.lid.height == pytest.approx(
         WorkspaceSurface.of(sorting.board, world.root).height
     )
 
 
-def test_a_board_the_world_already_holds_is_sorted_into_without_looking(
-    look: _LookKeepingItsRequests, world: World
+def test_a_board_the_world_already_holds_is_moved_to_where_the_look_finds_it(
+    look: _LookKeepingItsRequests, world: World, truth: CaptureTruth
 ) -> None:
     """
-    A world holding a board is not asked to find one again: the only look taken is the
-    one for the pieces.
+    A world holding a board keeps that board, and the look for the board moves it to
+    where the camera finds it now: a fetch may hold a board from a table since changed.
     """
     held = _held_board(world)
+    stood_by_hand = held.root.global_transform.to_position().to_np()[:2]
     run = PerceivedSorting(
-        world=world,
-        look=look,
-        described_board=lab_board(),
+        scene=PerceivedScene(world=world, look=look, described_board=lab_board()),
         sorter=_SorterKeepingWhatItWasHanded(),
     )
 
     run.perceive()
 
     assert run.board is held
-    assert [request.described_board for request in look.requests] == [None]
+    assert [request.described_board for request in look.requests] == [
+        lab_board(),
+        None,
+    ]
+    centre_T_front_left_corner = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=-held.lid_size.x / 2, y=held.lid_size.y / 2
+    )
+    corner_xy = (
+        (held.root.global_transform @ centre_T_front_left_corner)
+        .to_position()
+        .to_np()[:2]
+    )
+    assert (
+        float(
+            np.hypot(
+                corner_xy[0] - truth.board_front_left_corner.x,
+                corner_xy[1] - truth.board_front_left_corner.y,
+            )
+        )
+        <= TAPE_TOLERANCE
+    ), corner_xy
+    assert not np.allclose(held.root.global_transform.to_position().to_np()[:2], stood_by_hand)
 
 
 def test_a_run_with_no_board_in_view_says_so(
@@ -225,12 +246,14 @@ def test_a_run_with_no_board_in_view_says_so(
     described = lab_board()
     empty_table = _LookAtAnEmptyTable(pipeline=look.pipeline)
     run = PerceivedSorting(
-        world=world,
-        look=empty_table,
-        described_board=described,
+        scene=PerceivedScene(
+            world=world,
+            look=empty_table,
+            described_board=described,
+            looks_for_board=2,
+            board_search_period=0.0,
+        ),
         sorter=_SorterKeepingWhatItWasHanded(),
-        looks_for_board=2,
-        board_search_period=0.0,
     )
 
     with pytest.raises(NoBoardInView) as raised:

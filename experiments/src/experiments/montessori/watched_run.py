@@ -1,10 +1,10 @@
 """
 A sorting run watched while it happens: an event monitor ticks against the piece the
-script acts on, and the frozen working-memory question set is asked at the step the
-scene is asked about.
+script acts on, the frozen working-memory question set is asked at the step the scene is
+asked about, and every motion state chart a step runs is kept as it finishes.
 
-Both go through the run's observer, so the trial the run records carries its ticks and
-its scored queries rather than only its outcome.
+All three go through the run's observer, so the trial the run records carries its ticks,
+its scored queries and the motions it ran rather than only its outcome.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world import World
 from typing_extensions import Optional
 
-from experiments.episodes.observer import ObserverListener
+from experiments.episodes.observer import ObserverListener, ObserverMotionListener
 from experiments.episodes.recording import EpisodeRecording
 from experiments.episodes.trace import JointTraceRecorder
 from experiments.montessori.event_monitoring import (
@@ -26,7 +26,7 @@ from experiments.montessori.event_monitoring import (
 )
 from experiments.montessori.scenarios import (
     MontessoriSortingScenario,
-    PlanStep,
+    HaveTheRobotAct,
     SortingScene,
     SortingStep,
 )
@@ -58,12 +58,14 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
     def trial_started(self, scenario: MontessoriSortingScenario, world: World) -> None:
         """
         Start watching the piece the script acts on, ticking the observer with every
-        detection, and tracing where every joint of the world stands.
+        detection, tracing where every joint of the world stands, and have the steps
+        hand their motions to the observer as they finish.
 
         :param scenario: The scenario the trial runs.
         :param world: The world the trial is about to run in.
         """
         super().trial_started(scenario, world)
+        scenario.motion_listener = ObserverMotionListener(observer=self.observer)
         self._stop_watching()
         scene = SortingScene(world)
         self.monitor = build_shape_monitor_in_scene(
@@ -96,7 +98,7 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         """
         super().perform_step(scenario, step, world)
         self.monitor.tick()
-        if isinstance(step, PlanStep) and step.performed is not None:
+        if isinstance(step, HaveTheRobotAct) and step.performed is not None:
             self.observer.performed(step.performed)
         if step.name is not SortingStep.ANSWER:
             return
@@ -125,14 +127,14 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         scenario: MontessoriSortingScenario,
     ) -> MontessoriShapeCategory:
         """
-        The piece the monitor tracks: the one the script acts on, or the first piece of
-        the layout for a script that acts on none.
+        The piece the monitor tracks: the one the script acts on, or the first piece
+        standing in the scene for a script that acts on none.
 
-        :param scenario: The scenario whose piece is watched.
+        :param scenario: The scenario whose piece is watched, which has built its scene.
         """
         if scenario.acted_on_category is not None:
             return scenario.acted_on_category
-        return scenario.layout.placements[0].piece.category
+        return scenario.starting_layout.placements[0].piece.category
 
     @classmethod
     def question_set(
@@ -143,17 +145,17 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         questions that single one out.
 
         The piece the script acts on is what is asked about and what the robot is asked
-        whether it holds; the next piece of the layout is what it is placed against, and
-        the board stands in when the layout holds one piece only.
+        whether it holds; the next piece standing in the scene is what it is placed
+        against, and the board stands in when the scene holds one piece only.
 
-        :param scenario: The scenario whose scene is asked.
+        :param scenario: The scenario whose scene is asked, which has built its scene.
         :param world: The world the trial is running in.
         """
         scene = SortingScene(world)
         acted_on = cls.watched_category(scenario)
         others = [
             placement.piece.category
-            for placement in scenario.layout.placements
+            for placement in scenario.starting_layout.placements
             if placement.piece.category is not acted_on
         ]
         compared_against = scene.body_of(others[0]) if others else scene.board.root

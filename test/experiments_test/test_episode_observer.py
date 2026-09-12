@@ -1,7 +1,7 @@
 """
 Collecting what a trial's runner cannot see - when it began, the monitor's ticks, the
-questions asked, the plans performed and the insertions attempted - and writing it onto
-the trial that was recorded.
+questions asked, the plans performed, the insertions attempted and the motions run - and
+writing it onto the trial that was recorded.
 
 The trial is built on the recording scenario of :mod:`test_scenarios`, so nothing here
 needs a simulator; the questions are asked of the two-arm scene of
@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
+from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import PickUpEvent, TranslationEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.testing import two_arm_robot_world
@@ -26,7 +27,11 @@ from experiments.episodes.episode import (
     RecordedTrial,
     Tick,
 )
-from experiments.episodes.observer import EpisodeObserver, ObserverListener
+from experiments.episodes.observer import (
+    EpisodeObserver,
+    ObserverListener,
+    ObserverMotionListener,
+)
 from experiments.orm.ormatic_interface import RecordedTrialDAO
 from experiments.scenarios.runner import ScenarioRunner
 from krrood.ormatic.data_access_objects.helper import to_dao
@@ -50,6 +55,11 @@ When the second tick is taken to have happened.
 MOMENT_OF_THE_QUESTION = 2.0
 """
 When the questions are taken to have been asked.
+"""
+
+HOW_LONG_THE_MOTION_RAN = 0.25
+"""
+How long the motion an executable hands over is taken to have run, in seconds.
 """
 
 
@@ -156,6 +166,41 @@ def test_a_performed_plan_is_kept(observer: EpisodeObserver):
 
     assert observer.plans == [performed]
     assert performed.plan is plan
+# %% motions
+
+
+def test_a_motion_is_kept_with_the_chart_that_ran_and_the_span_it_ran_over(
+    observer: EpisodeObserver,
+):
+    motion_statechart = MotionStatechart()
+
+    observer.ran_the_motion(
+        motion_statechart, MOMENT_OF_THE_FIRST_TICK, MOMENT_OF_THE_QUESTION
+    )
+
+    [motion] = observer.motions
+    assert motion.motion_statechart is motion_statechart
+    assert motion.start_moment == MOMENT_OF_THE_FIRST_TICK
+    assert motion.end_moment == MOMENT_OF_THE_QUESTION
+
+
+def test_the_executable_hook_places_the_chart_it_ran_on_the_trials_clock(
+    observer: EpisodeObserver,
+):
+    """
+    An executable knows how long its chart ran and nothing about the trial's clock, so
+    the hook is what turns that into the span the motion covers.
+    """
+    motion_statechart = MotionStatechart()
+
+    ObserverMotionListener(observer=observer).receive(
+        motion_statechart, HOW_LONG_THE_MOTION_RAN
+    )
+
+    [motion] = observer.motions
+    assert motion.motion_statechart is motion_statechart
+    assert motion.end_moment - motion.start_moment == HOW_LONG_THE_MOTION_RAN
+    assert motion.end_moment <= observer.elapsed_seconds
 
 
 # %% insertion attempts
@@ -181,6 +226,9 @@ def test_what_was_observed_is_written_onto_the_trial(
     rows = observer.ask(scene.question_set, scene.robot, MOMENT_OF_THE_QUESTION)
     attempt = one_attempt()
     observer.attempted(attempt)
+    motion = observer.ran_the_motion(
+        MotionStatechart(), MOMENT_OF_THE_FIRST_TICK, MOMENT_OF_THE_QUESTION
+    )
     trial = recorded_trial()
 
     performed = observer.performed(minimal_plan())
@@ -192,6 +240,7 @@ def test_what_was_observed_is_written_onto_the_trial(
     assert trial.queries == rows
     assert trial.plans == [performed]
     assert trial.insertion_attempts == [attempt]
+    assert trial.motions == [motion]
 
 
 def test_the_trial_is_handed_the_instant_it_began(observer: EpisodeObserver):
@@ -215,6 +264,9 @@ def test_the_next_trial_starts_with_nothing_observed(observer: EpisodeObserver):
     observer.tick(MOMENT_OF_THE_FIRST_TICK, [])
     observer.attempted(one_attempt())
     observer.performed(minimal_plan())
+    observer.ran_the_motion(
+        MotionStatechart(), MOMENT_OF_THE_FIRST_TICK, MOMENT_OF_THE_QUESTION
+    )
     observer.into(recorded_trial())
 
     next_trial = observer.into(recorded_trial())
@@ -223,6 +275,7 @@ def test_the_next_trial_starts_with_nothing_observed(observer: EpisodeObserver):
     assert next_trial.queries == []
     assert next_trial.plans == []
     assert next_trial.insertion_attempts == []
+    assert next_trial.motions == []
 
 
 def test_restarting_measures_moments_from_the_restart(observer: EpisodeObserver):

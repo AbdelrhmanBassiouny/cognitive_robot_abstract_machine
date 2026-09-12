@@ -35,10 +35,12 @@ import experiments.paper.pose_change
 import experiments.paper.queries
 import experiments.paper.query_card
 import experiments.paper.questions
+import experiments.montessori.perception.scene_publishing
 import experiments.paper.run_plan
 import experiments.paper.run_timeline
 import experiments.paper.scene
 import experiments.paper.timeline
+import experiments.tracy_experiments.live_tracy
 import experiments.tracy_experiments.pickup.perceived_sorting
 import experiments.tracy_experiments.pickup.pickup_demo_mujoco
 import coraplex.orm.ormatic_interface
@@ -147,6 +149,14 @@ for pickup_demo_module in (
     experiments.tracy_experiments.pickup.pickup_demo_mujoco,
 ):
     ignored_classes |= set(classes_of_module(pickup_demo_module))
+
+# what stands a look's findings in the world the robot publishes, and the connection to
+# the robot it is stood through, are running things rather than records of anything
+for live_robot_module in (
+    experiments.montessori.perception.scene_publishing,
+    experiments.tracy_experiments.live_tracy,
+):
+    ignored_classes |= set(classes_of_module(live_robot_module))
 
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(
