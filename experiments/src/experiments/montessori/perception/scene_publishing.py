@@ -241,15 +241,30 @@ class PiecePublisher:
 
     def take_down(self) -> None:
         """
-        Take every piece this publisher stood out of the world again, so a fresh look
-        can stand the pieces as it finds them.
+        Take every piece a look stood out of the world again, so a fresh look can stand
+        the pieces as it finds them.
+
+        Every piece stood by a look, not only this publisher's own: the world fetched
+        from the robot still holds what earlier runs stood in it, and each of them is
+        waiting to be stood again as the piece it was.
         """
+        stood_by_a_look = self.stood_by_a_look()
         with self.world.modify_world():
-            for piece in self.published:
+            for piece in stood_by_a_look:
                 self.world.remove_semantic_annotation(piece)
                 self.world.remove_kinematic_structure_entity(piece.root)
-        self.taken_down = self.published
+        self.taken_down = stood_by_a_look
         self.published = []
+
+    def stood_by_a_look(self) -> List[MontessoriShape]:
+        """
+        Every piece the world holds that a look stood, this run's or an earlier one's.
+        """
+        return [
+            piece
+            for piece in self.world.get_semantic_annotations_by_type(MontessoriShape)
+            if piece.name.prefix == PUBLISHED_PREFIX
+        ]
 
     def publish_piece(self, shape: DetectedMontessoriShape) -> MontessoriShape:
         """
