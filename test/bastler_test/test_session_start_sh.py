@@ -27,7 +27,12 @@ from .constants import (
     PersonalNotesPath,
 )
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executable
-from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
+from .scratch_repository import (
+    SCRATCH_IDENTITY,
+    ScratchRepository,
+    StackConfigurationPath,
+    stack_configuration,
+)
 from .session_start_summary import SummaryMessage, summary_message, summary_value
 
 PLAN_MANIFEST = (DATASET_DIRECTORY / "plan.yaml").read_text()
@@ -502,3 +507,73 @@ def test_every_summary_message_renders_something():
     """
     for message in SummaryMessage:
         assert summary_message(message, "first", "second", "third").strip() != ""
+
+
+# %% which branch counts as the default when the repository has been re-pointed
+
+CONFIGURED_BASE_BRANCH = "main"
+"""
+The branch the scratch repository's stack configuration names as its base.
+"""
+
+STAGING_DEFAULT_BRANCH = "integration"
+"""
+A default branch that is not the configured base - deliberately, since it is what puts
+reviewed-but-unlanded work into every fresh checkout. Nothing may be based on it, but
+that is the setup check's business; here it only has to stop standing in for the base.
+"""
+
+
+def configure_a_staged_repository(repository: ScratchRepository) -> None:
+    """
+    Set a scratch repository up as one whose declared default branch is not the base its
+    stack configuration names, with a remote-tracking ref for each - the state a clone of
+    such a repository is really in.
+
+    :param repository: The fixture-built scratch repository.
+    """
+    repository.write(
+        StackConfigurationPath.COMMITTED, stack_configuration(CONFIGURED_BASE_BRANCH)
+    )
+    repository.commit_everything("declare the configured base")
+    repository.add_work_remote()
+    repository.track_remote_branch(CONFIGURED_BASE_BRANCH)
+    repository.declare_default_branch(STAGING_DEFAULT_BRANCH)
+
+
+def test_treats_the_configured_base_as_the_branch_no_plan_item_can_track(
+    session_start_repository: ScratchRepository,
+):
+    configure_a_staged_repository(session_start_repository)
+    session_start_repository.publish_notes_branch(
+        {PersonalNotesPath.NOTES_FILE: "personal notes\n"}
+    )
+    session_start_repository.run_git(
+        "checkout", "--quiet", "-b", CONFIGURED_BASE_BRANCH
+    )
+
+    result = run_session_start(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "plan") == summary_message(
+        SummaryMessage.PLAN_NOT_APPLICABLE
+    )
+
+
+def test_treats_the_staging_default_branch_as_ordinary_work(
+    session_start_repository: ScratchRepository,
+):
+    configure_a_staged_repository(session_start_repository)
+    session_start_repository.publish_notes_branch(
+        {PersonalNotesPath.NOTES_FILE: "personal notes\n"}
+    )
+    session_start_repository.run_git(
+        "checkout", "--quiet", "-b", STAGING_DEFAULT_BRANCH
+    )
+
+    result = run_session_start(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "plan") == summary_message(
+        SummaryMessage.NO_PLANS_TRACKED, NOTES_BRANCH
+    )

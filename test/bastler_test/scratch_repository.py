@@ -66,6 +66,32 @@ def install_package_into(project_root: Path) -> None:
     )
 
 
+class StackConfigurationPath(StrEnum):
+    """
+    Where the stacked-PR configuration naming the base branch is read from, relative to
+    the project root.
+
+    Two layers, in the order they win: the committed defaults every clone carries, and
+    the personal override the notes branch may add on top.
+    """
+
+    COMMITTED = f"{PACKAGE_DIRECTORY.name}/{bastler.stack.CONFIGURATION_PATH.name}"
+    PERSONAL = ".claude/personal/stack.toml"
+
+
+def stack_configuration(base_branch: str) -> str:
+    """
+    Render a stacked-PR configuration file naming *base_branch* as the base.
+
+    Written once here rather than at each call site, so a test asserting which layer
+    won is comparing two files that differ only in the value under test.
+
+    :param base_branch: The branch to record as ``upstream_base``.
+    :return: The file's contents.
+    """
+    return f'upstream_base = "{base_branch}"\n'
+
+
 class SetupPrerequisiteFile(StrEnum):
     """
     The files check-setup.sh's ``tooling_files`` check requires, relative to the project
@@ -453,6 +479,95 @@ class ScratchRepository:
         )
         self.run_git("remote", "add", "origin", str(self.work_remote_path))
         return self.work_remote_path
+
+    def track_remote_branch(self, branch: str, commit: str = "HEAD") -> None:
+        """
+        Give this clone a remote-tracking ref for *branch*, the way cloning a repository
+        that has it does.
+
+        :param branch: The branch the work remote is to be known to have.
+        :param commit: What that branch points at, defaulting to the current checkout.
+        """
+        resolved = self.run_git("rev-parse", commit).stdout.strip()
+        self.run_git("update-ref", f"refs/remotes/origin/{branch}", resolved)
+
+    def publish_staging_branch(self, branch: str) -> str:
+        """
+        Give the remote a *branch* carrying a commit the checked-out branch does not,
+        and leave the checkout where it started.
+
+        Models the branch fresh clones start on when that is not the configured base:
+        what makes it unusable as a pull request's base is precisely that it holds
+        commits of its own, so a fixture pinning it to the same commit as everything
+        else could not exercise the rule at all.
+
+        :param branch: The branch to publish.
+        :return: The commit it points at.
+        """
+        starting_point = self.run_git("rev-parse", "HEAD").stdout.strip()
+        self.write(f"{branch}-only.txt", f"a change only {branch} carries\n")
+        self.commit_everything(f"stage {branch}")
+        staged = self.run_git("rev-parse", "HEAD").stdout.strip()
+        self.track_remote_branch(branch, staged)
+        self.run_git("reset", "--hard", "--quiet", starting_point)
+        return staged
+
+    def start_branch_from(self, branch: str, start_point: str) -> None:
+        """
+        Check out a new *branch* cut from *start_point*, the way a session opens work.
+
+        :param branch: The branch to create.
+        :param start_point: The commit or ref it is cut from.
+        """
+        self.run_git("checkout", "--quiet", "-b", branch, start_point)
+
+    def declare_default_branch(self, branch: str, commit: str = "HEAD") -> None:
+        """
+        Record *branch* as the work remote's default in this clone, the way a real
+        ``git clone`` does.
+
+        Writes both refs a clone gets - the remote-tracking branch and the
+        ``origin/HEAD`` symbolic ref naming it - since a test that wrote only the
+        symbolic ref would assert against a state git never produces.
+
+        :param branch: The branch the repository declares as its default.
+        :param commit: What that branch points at, defaulting to the current checkout.
+            Pass it explicitly for a branch that has already been published somewhere
+            other than the checkout, so declaring it does not silently move it back.
+        """
+        self.track_remote_branch(branch, commit)
+        self.run_git(
+            "symbolic-ref", "refs/remotes/origin/HEAD", f"refs/remotes/origin/{branch}"
+        )
+
+    def forget_declared_default_branch(self) -> None:
+        """
+        Drop the ``origin/HEAD`` ref, leaving the clone in the state a session
+        environment's fresh checkout is really in - it has a remote, but nothing local
+        recording which branch that remote calls its default.
+        """
+        self.run_git("symbolic-ref", "--delete", "refs/remotes/origin/HEAD")
+
+    def declare_default_branch_on_work_remote(self, branch: str) -> None:
+        """
+        Point the work remote's own ``HEAD`` at *branch*, which is what
+        ``git ls-remote --symref`` reports and the only source left once
+        :meth:`forget_declared_default_branch` has run.
+
+        Pushes *branch* to the remote first: ``ls-remote --symref`` reports no
+        symbolic ref at all for a ``HEAD`` naming a branch that does not exist, so a
+        remote set up without it would be a state no real repository is ever in.
+
+        :param branch: The branch the remote declares as its default.
+        """
+        assert self.work_remote_path is not None, "call add_work_remote() first"
+        self.run_git("push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
+        self.run_git(
+            "symbolic-ref",
+            "HEAD",
+            f"refs/heads/{branch}",
+            cwd=self.work_remote_path,
+        )
 
     def resolve_notes_remote_to(self, remote: Path | None = None) -> None:
         """
