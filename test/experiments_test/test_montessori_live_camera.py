@@ -23,7 +23,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, CompressedImage
 from tf2_ros import StaticTransformBroadcaster
-from typing_extensions import Callable, Iterator, List
+from typing_extensions import Callable, Iterator, List, Optional
 
 from experiments.montessori.perception.camera import (
     CameraIntrinsics,
@@ -407,6 +407,51 @@ class _PipelineHandingOverAnotherMidLook(MontessoriPerceptionPipeline):
     def detect(self, frame: RgbdFrame, request: SceneRequest = SceneRequest()):
         self.node.read_with(self.handed_over)
         return super().detect(frame, request)
+
+
+@dataclass
+class _PipelineAskingForTheFrameMidLook(MontessoriPerceptionPipeline):
+    """
+    A pipeline that, while it takes a look, asks the node for its newest frame -- what
+    a run waiting for a frame does while the camera's thread is still detecting.
+    """
+
+    node: MontessoriPerceptionNode = field(kw_only=True)
+    """
+    The node asked for the frame.
+    """
+
+    served_mid_look: Optional[RgbdFrame] = None
+    """
+    The frame the node served while the look was under way.
+    """
+
+    def detect(self, frame: RgbdFrame, request: SceneRequest = SceneRequest()):
+        self.served_mid_look = self.node.wait_for_frame(A_SHORT_WAIT)
+        return super().detect(frame, request)
+
+
+def test_the_frame_a_look_is_taken_on_is_served_before_the_look_ends(node: Node):
+    """
+    A first look under load can outlast a run's wait for a frame; the frame is there
+    as soon as it is built, whether or not the pipeline has finished with it.
+    """
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+    read_with_now = perception.pipeline
+    asking = _PipelineAskingForTheFrameMidLook(
+        table=read_with_now.table,
+        lid=read_with_now.lid,
+        reference_frame=read_with_now.reference_frame,
+        world=read_with_now.world,
+        pieces=read_with_now.pieces,
+        node=perception,
+    )
+    perception.read_with(asking)
+    frame = SceneCapture.load(A_LOOK).to_frame()
+
+    perception.look_at(frame)
+
+    assert asking.served_mid_look is frame
 
 
 def test_a_look_taken_is_the_newest_result_the_node_serves(node: Node):
