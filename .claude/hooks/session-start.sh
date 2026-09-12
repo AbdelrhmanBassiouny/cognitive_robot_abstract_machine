@@ -119,6 +119,14 @@ set -euo pipefail
 # keeps it, and global config is never touched. See ./save-git-identity.sh to
 # record one, and ./README.md for the two cases a hook cannot reach.
 #
+# Default branch: sessions are cut from the fork's default branch, so a fork
+# that has drifted behind the upstream it tracks makes every session in that
+# clone plan and implement against a stale base - invisibly, because the clone
+# is perfectly consistent with itself. Every run therefore brings that branch
+# level first, via ./fast-forward-default-branch.sh: fast-forward only, that one
+# branch only, and never fatal. See that script and ./README.md's "Starting from
+# a fresh base".
+#
 # Dependencies: the package's own are installed on every start, for anyone
 # whose notes branch resolved - the same audience everything else here serves.
 # Only what is missing gets installed, so the usual run costs an import check
@@ -179,6 +187,10 @@ fetch_personal_notes_branch || exit 0
 # session on a branch that isn't itself a tracked item) as for one on a
 # tracked item's own branch. See ./plan-updates-since.sh, the recheck tool
 # this stamp exists for.
+# Reported at the bottom of this script from the stamp itself rather than from
+# FETCH_HEAD a second time: later steps fetch too (the default branch catch-up
+# below fetches the upstream), so whatever fetched last owns FETCH_HEAD, and the
+# baseline a session is told to recheck from has to be the one actually recorded.
 record_plan_state_sync_stamp
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -469,6 +481,24 @@ if [ -f "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" ]; then
   fi
 fi
 
+# Default branch, from ./fast-forward-default-branch.sh - so a session starts
+# from a base level with the upstream this fork tracks rather than from whatever
+# the fork's default branch had drifted to. Runs here, at session start, because
+# the drift is invisible from inside the clone: nothing about a stale base looks
+# wrong until the work written against it is rebased.
+#
+# Run as a subprocess and captured with `|| true`, for the same two reasons as
+# check-setup.sh below: it sources resolve-personal-notes-config.sh, which
+# reassigns every variable in use here, and a base that cannot be synced must
+# still leave the session able to start.
+SUMMARY_DEFAULT_BRANCH="$(default_branch_line_not_synced "${FAST_FORWARD_DEFAULT_BRANCH_SCRIPT}")"
+if [ -f "${PROJECT_ROOT}/${FAST_FORWARD_DEFAULT_BRANCH_SCRIPT}" ]; then
+  # Prints its outcome first and its follow-up rows, already indented, after -
+  # the same heading-plus-rows shape as the setup line below.
+  SUMMARY_DEFAULT_BRANCH="$(bash "${PROJECT_ROOT}/${FAST_FORWARD_DEFAULT_BRANCH_SCRIPT}" \
+    2>/dev/null || true)"
+fi
+
 # Deterministic session-start report: what this run found and wrote, printed
 # once by the script itself rather than left for a session to notice and
 # describe secondhand from CLAUDE.local.md's content. SessionStart hook
@@ -481,8 +511,9 @@ session-start.sh summary:
   local settings:  ${SUMMARY_SETTINGS}
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
+  default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
   setup:           ${SUMMARY_SETUP}
-  plan state SHA:  $(git rev-parse FETCH_HEAD) (run plan-updates-since.sh <plan-id> to recheck from here later)
+  plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

@@ -174,6 +174,12 @@ pr_progress_path() {
   printf '.claude/personal/pr-progress/%s.md\n' "${branch}"
 }
 
+# FAST_FORWARD_DEFAULT_BRANCH_SCRIPT: the session-start step that keeps the base
+# every session starts from level with the upstream this fork tracks. Named here
+# rather than in session-start.sh so the one script that runs it and the setup
+# check that looks for it read the same path.
+FAST_FORWARD_DEFAULT_BRANCH_SCRIPT=".claude/hooks/fast-forward-default-branch.sh"
+
 # PERSONAL_GIT_IDENTITY_PATH: where the human contributor's git identity is
 # recorded on the notes branch, so a fresh clone can be given one instead of
 # inheriting whatever the environment's global git config happens to be. Fixed
