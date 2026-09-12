@@ -77,11 +77,18 @@ data" critique + the tighter-layout feedback list), commits d6647fcb, 9a79a38b:
        multiplier+offset) -> gripper mangled in FK-only pictures; tests in
        test_multi_sim.py. 518bb69 - camera across the move framed on the
        move only (boards no longer in the frame; `among`/scene_around gone).
-14. [ ] IN PROGRESS: run7 = final reruns of both demos with the current
-       code (picked_up then shoved, monitor b0mse3ufh). Then: send both
-       cards, run test_tracy_pickup_demo_mujoco.py fully (alone, after),
-       update the PR description from scratchpad pr_body.md (fill
-       "Verified"), redraft.
+14. [x] run7 picked_up card verified (gripper right, labels apart). The
+       shoved rerun was killed for the user's lab merge (see 15).
+15. [x] 2ce7410 - merged the moved base (#325 belief-vs-perception; conflicts
+       in watched_run.py + its test, keep both sides). PR description updated,
+       draft. User asked at the lab whether #318 can merge into #265: told
+       them yes once this merge landed; the real demo is untested on the robot.
+16. [ ] NEXT (cosmetic, cards only): RecordedFramesAround.after = frame
+       nearest the stretch's end (FramesByMoment.nearest_to -> TimedFrame, at
+       delegates); drop first_at_or_after (+ its test lines); update
+       test_paper_camera_frames_around. Answering the question set blocks the
+       film ~3 s so first_at_or_after landed after the ask. Then rerun both
+       demos for final PNGs, run test_tracy_pickup_demo_mujoco.py alone.
 
 ## Outstanding / judgement calls (also in the PR description)
 
