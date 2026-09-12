@@ -42,13 +42,14 @@ from __future__ import annotations
 import math
 
 import numpy
-from typing_extensions import Dict
+from typing_extensions import Dict, List
 
 from coraplex.datastructures.enums import Arms
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.plans.factories import code
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.base import ActionDescription
+from coraplex.robot_plans.mixins import ManipulatesBodies
 from dataclasses import dataclass
 from experiments.tracy_experiments.real_time_simulation import RealTimeSimulation
 from experiments.tracy_experiments.trajectory_planning import (
@@ -91,6 +92,7 @@ closed) -- confirmed directly, a pad that clears the table by that same ~1.35cm 
 open ends up flush with the table once closed. ``0.015`` covers that swing with a small
 margin.
 """
+
 
 def _bounding_box_center_world(world: World, body: Body) -> numpy.ndarray:
     """
@@ -202,7 +204,7 @@ def _reach(
 
 
 @dataclass
-class PickUpActionMujoco(ActionDescription):
+class PickUpActionMujoco(ActionDescription, ManipulatesBodies):
     """
     :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`'s own field
     interface, but driven by direct MuJoCo actuator control; see this module's own
@@ -241,6 +243,13 @@ class PickUpActionMujoco(ActionDescription):
     """
 
     @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator]
+
+    @property
     def _action_plan(self) -> PlanNode:
         return code(self._run)
 
@@ -268,7 +277,7 @@ class PickUpActionMujoco(ActionDescription):
 
 
 @dataclass
-class PlaceActionMujoco(ActionDescription):
+class PlaceActionMujoco(ActionDescription, ManipulatesBodies):
     """
     :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`'s own field
     interface, but driven by direct MuJoCo actuator control; see this module's own
@@ -310,6 +319,13 @@ class PlaceActionMujoco(ActionDescription):
     """
     See :data:`PLACE_HOVER_CLEARANCE`.
     """
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator]
 
     @property
     def _action_plan(self) -> PlanNode:

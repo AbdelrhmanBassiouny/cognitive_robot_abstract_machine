@@ -263,12 +263,43 @@ class JointTraceRecorder(StateChangeCallback):
 # %% what a camera saw
 
 
+@dataclass(frozen=True)
+class TimedFrame:
+    """
+    One frame a camera took, with the moment it took it at.
+    """
+
+    image: np.ndarray
+    """
+    What the camera saw, as red, green and blue.
+    """
+
+    moment: float
+    """
+    Seconds into the trial it saw it at.
+    """
+
+
 class FramesByMoment(ABC):
     """
     What a camera saw along one trial, asked for by the moment a frame was taken at.
     """
 
     @abstractmethod
+    def moments_taken(self) -> np.ndarray:
+        """
+        Seconds into the trial each frame was taken at, in the order they were taken.
+        """
+
+    @abstractmethod
+    def frame(self, index: int) -> np.ndarray:
+        """
+        The frame at the given place in the order they were taken, as red, green and
+        blue.
+
+        :param index: Its place, counted from the first frame.
+        """
+
     def at(self, moment: float) -> np.ndarray:
         """
         The frame taken nearest the given moment, as red, green and blue.
@@ -276,6 +307,39 @@ class FramesByMoment(ABC):
         :param moment: Seconds into the trial.
         :raises TraceIsEmptyError: If no frame was kept.
         """
+        return self.frame(nearest(self.moments_taken(), moment))
+
+    def last_at_or_before(self, moment: float) -> TimedFrame:
+        """
+        The last frame taken at or before the given moment, or the first frame taken
+        where none was taken that early: what the camera saw just before something
+        happened.
+
+        :param moment: Seconds into the trial.
+        :raises TraceIsEmptyError: If no frame was kept.
+        """
+        moments = self.moments_taken()
+        if moments.size == 0:
+            raise TraceIsEmptyError(moment=moment)
+        index = max(int(np.searchsorted(moments, moment, side="right")) - 1, 0)
+        return TimedFrame(image=self.frame(index), moment=float(moments[index]))
+
+    def first_at_or_after(self, moment: float) -> TimedFrame:
+        """
+        The first frame taken at or after the given moment, or the last frame taken
+        where none was taken that late: what the camera saw just after something
+        happened.
+
+        :param moment: Seconds into the trial.
+        :raises TraceIsEmptyError: If no frame was kept.
+        """
+        moments = self.moments_taken()
+        if moments.size == 0:
+            raise TraceIsEmptyError(moment=moment)
+        index = min(
+            int(np.searchsorted(moments, moment, side="left")), moments.size - 1
+        )
+        return TimedFrame(image=self.frame(index), moment=float(moments[index]))
 
 
 @dataclass(frozen=True)
@@ -312,8 +376,10 @@ class TimedFramesFile(FramesByMoment):
         """
         return np.load(self.moments_path).tolist()
 
-    def at(self, moment: float) -> np.ndarray:
-        index = nearest(np.array(self.moments, dtype=float), moment)
+    def moments_taken(self) -> np.ndarray:
+        return np.load(self.moments_path).astype(float)
+
+    def frame(self, index: int) -> np.ndarray:
         with imageio.get_reader(str(self.path)) as reader:
             return np.asarray(reader.get_data(index))
 
@@ -371,8 +437,11 @@ class TimedFrames(FramesByMoment):
         """
         return not self.frames
 
-    def at(self, moment: float) -> np.ndarray:
-        return self.frames[nearest(np.array(self.moments, dtype=float), moment)]
+    def moments_taken(self) -> np.ndarray:
+        return np.array(self.moments, dtype=float)
+
+    def frame(self, index: int) -> np.ndarray:
+        return self.frames[index]
 
     def video(self) -> RecordedVideo:
         """

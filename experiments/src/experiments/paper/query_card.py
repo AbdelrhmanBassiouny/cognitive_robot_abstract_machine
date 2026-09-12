@@ -31,11 +31,12 @@ from experiments.episodes.trace import JointPositions, JointTrace
 from experiments.montessori.same_piece import SamePiece
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
 from experiments.paper.camera_frame import (
-    EITHER_SIDE,
     BagFrameAt,
     BagFramesAround,
+    FramesAround,
     RecordedFramesAround,
 )
+from experiments.paper.chart import TimelineSpan
 from experiments.paper.figure import FigureFile
 from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import CardPanel, PanelKind
@@ -574,7 +575,7 @@ class QueryCard(ABC):
         if panel is PanelKind.PLAN_TIMELINE:
             return self._plan_chart(trial, query)
         if panel is PanelKind.RUN_TIMELINE:
-            return self._run_timeline(trial, query)
+            return self._run_timeline(trial, query, artifacts)
         if panel is PanelKind.POSE_CHANGE:
             return self._pose_change(trial, query, artifacts)
         if panel is PanelKind.CAMERA_FRAME:
@@ -614,15 +615,19 @@ class QueryCard(ABC):
         )
 
     def _run_timeline(
-        self, trial: RecordedTrial, query: RecordedQuery
+        self,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        artifacts: Optional[EpisodeArtifacts],
     ) -> Optional[CardPanel]:
         """
         What the monitor reported over what the robot was running, on one axis, with
-        the answered event and the query's own moment marked. None where the run
-        reported nothing and recorded no plan.
+        the answered event and the query's own moment marked and the instants the
+        levels below show. None where the run reported nothing and recorded no plan.
 
         :param trial: The trial the query was asked during.
         :param query: The query this card shows.
+        :param artifacts: The episode's own files, or None.
         """
         if not trial.ticks and not plans_of(trial):
             return None
@@ -635,19 +640,46 @@ class QueryCard(ABC):
             asked_at=query.moment,
             emphasise=answered,
             happened_at=happened_at,
-            pictured_at=() if happened_at is None else self.pictured_at(happened_at),
+            pictured_at=(
+                () if happened_at is None else self.pictured_at(trial, query, artifacts)
+            ),
             identity=self.identity,
         )
 
-    @staticmethod
-    def pictured_at(happened_at: float) -> Tuple[float, float]:
+    def pictured_at(
+        self,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        artifacts: Optional[EpisodeArtifacts],
+    ) -> Tuple[float, float]:
         """
-        The instants the levels under the charts show, either side of the event: the
-        camera frames, and the object's earlier and later pose.
+        The instants the levels under the charts show: the ones the camera frames were
+        taken at where the run kept a camera, and otherwise the ends of the stretch the
+        object moved over.
 
-        :param happened_at: Seconds into the trial the event was reported.
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        :param artifacts: The episode's own files, or None.
         """
-        return (happened_at - EITHER_SIDE, happened_at + EITHER_SIDE)
+        frames = self._camera_frames_around(trial, query, artifacts)
+        if frames is not None:
+            return frames.instants
+        over = self.moved_over(trial, query)
+        return (over.start, over.end)
+
+    def moved_over(self, trial: RecordedTrial, query: RecordedQuery) -> TimelineSpan:
+        """
+        The stretch of the trial the answered event's object moved over, or the one
+        instant the event was reported at where the run saw it move at no point.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        """
+        [answered] = self.emphasise(query.question, trial)[:1]
+        change = PoseChange.around(answered, trial)
+        if change is not None and change.over is not None:
+            return change.over
+        return TimelineSpan(self.reported_at(answered, trial, query.moment), 0.0)
 
     def _pose_change(
         self,
@@ -656,9 +688,10 @@ class QueryCard(ABC):
         artifacts: Optional[EpisodeArtifacts],
     ) -> Optional[CardPanel]:
         """
-        The object drawn where it was and where it ended up, with the robot as it stood
-        when the event was reported wherever the run traced its joints. None where the
-        run saw the object move at no point, or where the twin holds it fixed.
+        The object drawn where it was and where it ended up, with the way it took
+        between the two and the robot as it stood as the move ended, wherever the run
+        traced its joints. None where the run saw the object move at no point, or where
+        the twin holds it fixed.
 
         :param trial: The trial the query was asked during.
         :param query: The query this card shows.
@@ -671,20 +704,18 @@ class QueryCard(ABC):
         if change is None:
             return None
         world = self.world_of(trial)
-        subject = world.get_body_by_name(change.subject.name.name)
-        if not can_be_stood_somewhere_else(subject.parent_connection):
+        change = change.standing_in(world)
+        if not can_be_stood_somewhere_else(change.subject.parent_connection):
             return None
-        happened_at = self.reported_at(answered[0], trial, query.moment)
         trace = self._trace_of(trial, artifacts)
-        change = PoseChange(subject=subject, before=change.before, after=change.after)
         if trace is not None:
             change = change.with_the_way(
-                self._way_of(subject, world, trace, self.pictured_at(happened_at))
+                self._way_of(change.subject, world, trace, change.over)
             )
         return PoseChangeRender(world=world).of(
             change,
-            robot_at=None if trace is None else trace.at(happened_at),
-            among=self.scene_around(subject, world),
+            robot_at=None if trace is None else trace.at(change.over.end),
+            among=self.scene_around(change.subject, world),
         )
 
     @staticmethod
@@ -710,11 +741,12 @@ class QueryCard(ABC):
         subject: Body,
         world: World,
         trace: JointTrace,
-        between: Tuple[float, float],
+        over: TimelineSpan,
         dots: int = WAYPOINTS,
     ) -> List[HomogeneousTransformationMatrix]:
         """
-        Where the object stood along its way, read off the trace between two instants.
+        Where the object stood along its way, read off the trace over a stretch of the
+        trial.
 
         The world is stood at each sample and read, then put back as it was. An object
         the trace does not hold -- one the world holds fixed -- gives an empty way, and
@@ -723,7 +755,7 @@ class QueryCard(ABC):
         :param subject: The object.
         :param world: The twin it stands in.
         :param trace: Where every joint stood along the trial.
-        :param between: The instants the way runs between, in seconds into the trial.
+        :param over: The stretch of the trial the way runs over.
         :param dots: How many places along the way at most.
         """
         held_by = str(subject.parent_connection.name)
@@ -738,7 +770,7 @@ class QueryCard(ABC):
         )
         way = []
         try:
-            for moment in np.linspace(between[0], between[1], dots + 2)[1:-1]:
+            for moment in np.linspace(over.start, over.end, dots + 2)[1:-1]:
                 trace.at(float(moment)).restore_into(world)
                 way.append(standing_pose(world, subject))
         finally:
@@ -794,9 +826,10 @@ class QueryCard(ABC):
         trial: RecordedTrial,
         query: RecordedQuery,
         artifacts: Optional[EpisodeArtifacts],
-    ) -> Optional[CardPanel]:
+    ) -> Optional[FramesAround]:
         """
-        What the robot's camera saw either side of the answered event.
+        What the robot's camera saw either side of the stretch the answered event's
+        object moved over.
 
         A run on the robot kept a bag, so the two frames are read back out of it; a run
         that kept what its camera saw along the trial, with the moments, is read the
@@ -810,16 +843,16 @@ class QueryCard(ABC):
         answered = self.emphasise(query.question, trial)
         if not answered or artifacts is None:
             return None
-        moment = self.reported_at(answered[0], trial, query.moment)
+        over = self.moved_over(trial, query)
         bagged = BagFramesAround(
-            artifacts=artifacts, moment=moment, trial_duration=trial.duration
+            over=over, artifacts=artifacts, trial_duration=trial.duration
         )
         if bagged.was_recorded:
             return bagged
         kept = artifacts.trial(trial.number)
         if not kept.kept_a_camera:
             return None
-        return RecordedFramesAround(frames=kept.camera, moment=moment)
+        return RecordedFramesAround(over=over, frames=kept.camera)
 
     @staticmethod
     def reported_at(

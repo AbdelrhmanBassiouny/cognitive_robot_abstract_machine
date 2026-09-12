@@ -9,6 +9,7 @@ query is about.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -20,7 +21,8 @@ from krrood.exceptions import DataclassException
 from typing_extensions import Tuple
 
 from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
-from experiments.episodes.trace import FramesByMoment
+from experiments.episodes.trace import FramesByMoment, TimedFrame
+from experiments.paper.chart import TimelineSpan
 from experiments.montessori.perception.camera import decode_compressed_color_image
 from experiments.montessori.perception.recordings import REFERENCE_FRAME, RecordedCamera
 from experiments.paper.lettering import Face, Lettering
@@ -42,15 +44,7 @@ class RunFile(StrEnum):
     """
 
 
-# %% how far either side of an event its two frames are taken
-
-EITHER_SIDE = 1.0
-"""
-How far either side of an event the two frames showing it are taken, in seconds.
-
-Far enough that the earlier frame is genuinely before the change and the later one
-genuinely shows it, close enough that nothing else about the scene has moved on.
-"""
+# %% how the two frames are laid side by side
 
 FRAME_GAP = 8
 """
@@ -114,17 +108,38 @@ def side_by_side(
     return np.hstack((columns[0], blank, columns[1]))
 
 
-def captions_around(moment: float, either_side: float) -> Tuple[str, str]:
+def captions_at(instants: Tuple[float, float]) -> Tuple[str, str]:
     """
-    What is written under the two frames taken either side of a moment.
+    What is written under the earlier and the later frame.
 
-    :param moment: Seconds into the trial the event happened at.
-    :param either_side: How far either side of it the frames were taken, in seconds.
+    :param instants: Seconds into the trial each of the two was taken at.
     """
-    return (
-        BEFORE_CAPTION % (moment - either_side),
-        AFTER_CAPTION % (moment + either_side),
-    )
+    return (BEFORE_CAPTION % instants[0], AFTER_CAPTION % instants[1])
+
+
+# %% the two frames either side of a stretch of the trial
+
+
+@dataclass
+class FramesAround(CardPanel, ABC):
+    """
+    Two frames of the robot's camera, one from just before a stretch of the trial and
+    one from just after it, laid side by side.
+    """
+
+    over: TimelineSpan
+    """
+    The stretch of the trial the frames are taken either side of: the seconds
+    something happened over.
+    """
+
+    @property
+    @abstractmethod
+    def instants(self) -> Tuple[float, float]:
+        """
+        Seconds into the trial the earlier and the later frame were taken at, which is
+        what a chart of the same trial marks so a reader can find each frame on it.
+        """
 
 
 # %% asking a run that recorded no camera
@@ -266,14 +281,14 @@ class BagFrameAt(CardPanel):
         return path
 
 
-# %% the two frames either side of an event
+# %% the two frames of a run that kept a bag
 
 
 @dataclass
-class BagFramesAround(CardPanel):
+class BagFramesAround(FramesAround):
     """
-    The colour frames an episode's camera recorded either side of one moment, written as
-    one picture with the earlier one on the left.
+    The colour frames an episode's camera recorded either side of a stretch of the
+    trial, written as one picture with the earlier one on the left.
 
     What makes an event visible rather than only reported: the scene before it and the
     scene after it, from the camera that was actually looking at it.
@@ -284,19 +299,9 @@ class BagFramesAround(CardPanel):
     The episode's own files, among which its camera's recording is kept.
     """
 
-    moment: float
-    """
-    Seconds between the start of the trial and the event the frames are taken around.
-    """
-
     trial_duration: float
     """
     How long the trial ran, in seconds.
-    """
-
-    either_side: float = EITHER_SIDE
-    """
-    How far either side of the moment the two frames are taken, in seconds.
     """
 
     gap: int = FRAME_GAP
@@ -312,16 +317,20 @@ class BagFramesAround(CardPanel):
     @property
     def before(self) -> BagFrameAt:
         """
-        The frame recorded before the event.
+        The frame recorded as the stretch began.
         """
-        return self._frame_at(self.moment - self.either_side)
+        return self._frame_at(self.over.start)
 
     @property
     def after(self) -> BagFrameAt:
         """
-        The frame recorded after the event.
+        The frame recorded as the stretch ended.
         """
-        return self._frame_at(self.moment + self.either_side)
+        return self._frame_at(self.over.end)
+
+    @property
+    def instants(self) -> Tuple[float, float]:
+        return (self.over.start, self.over.end)
 
     @property
     def expected_at(self) -> Path:
@@ -348,7 +357,7 @@ class BagFramesAround(CardPanel):
         return side_by_side(
             cv2.cvtColor(self.before.image, cv2.COLOR_BGR2RGB),
             cv2.cvtColor(self.after.image, cv2.COLOR_BGR2RGB),
-            captions_around(self.moment, self.either_side),
+            captions_at(self.instants),
             self.gap,
         )[:, :, ::-1]
 
@@ -384,29 +393,21 @@ class BagFramesAround(CardPanel):
 
 
 @dataclass
-class RecordedFramesAround(CardPanel):
+class RecordedFramesAround(FramesAround):
     """
-    The frames a run's own camera took either side of one moment, written as one
-    picture with the earlier one on the left.
+    The frames a run's own camera took either side of a stretch of the trial, written
+    as one picture with the earlier one on the left.
 
     What a run that kept its camera along the trial -- a simulated one filming the
     camera the twin states, or any run that traced its frames with their moments --
-    shows in place of a bag.
+    shows in place of a bag. The earlier frame is the last one taken before the stretch
+    began and the later one the first taken after it ended, so a change that took less
+    than the time between two frames still shows as one.
     """
 
     frames: FramesByMoment
     """
     What the camera saw along the trial, asked for by the moment a frame was taken at.
-    """
-
-    moment: float
-    """
-    Seconds between the start of the trial and the event the frames are taken around.
-    """
-
-    either_side: float = EITHER_SIDE
-    """
-    How far either side of the moment the two frames are taken, in seconds.
     """
 
     gap: int = FRAME_GAP
@@ -415,18 +416,22 @@ class RecordedFramesAround(CardPanel):
     """
 
     @property
-    def before(self) -> np.ndarray:
+    def before(self) -> TimedFrame:
         """
-        The frame taken nearest the moment before the event.
+        The last frame taken before the stretch began.
         """
-        return self.frames.at(self.moment - self.either_side)
+        return self.frames.last_at_or_before(self.over.start)
 
     @property
-    def after(self) -> np.ndarray:
+    def after(self) -> TimedFrame:
         """
-        The frame taken nearest the moment after the event.
+        The first frame taken after the stretch ended.
         """
-        return self.frames.at(self.moment + self.either_side)
+        return self.frames.first_at_or_after(self.over.end)
+
+    @property
+    def instants(self) -> Tuple[float, float]:
+        return (self.before.moment, self.after.moment)
 
     @property
     def image(self) -> np.ndarray:
@@ -434,10 +439,11 @@ class RecordedFramesAround(CardPanel):
         The two frames side by side, as red, green and blue, each saying when it was
         taken.
         """
+        before, after = self.before, self.after
         return side_by_side(
-            self.before,
-            self.after,
-            captions_around(self.moment, self.either_side),
+            before.image,
+            after.image,
+            captions_at((before.moment, after.moment)),
             self.gap,
         )
 

@@ -22,14 +22,14 @@ from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
 from experiments.episodes.trace import TimedFrames
 from experiments.paper.camera_frame import (
     CAPTION_HEIGHT,
-    EITHER_SIDE,
     BagFrameAt,
     BagFramesAround,
     NoCameraRecordingError,
     RecordedFramesAround,
     RunFile,
-    captions_around,
+    captions_at,
 )
+from experiments.paper.chart import TimelineSpan
 
 from .test_montessori_bag_replay import demo_recording
 from .test_paper_camera_frame import (
@@ -39,18 +39,30 @@ from .test_paper_camera_frame import (
     keep_a_recording,
 )
 
-# %% the two moments the pair is taken at
+# %% the stretch the pair is taken either side of
+
+MOVED_FOR = 2.0
+"""
+How long the object was moving, in seconds.
+"""
+
+MOVED_OVER = TimelineSpan(ASKED_AT, MOVED_FOR)
+"""
+The stretch of the trial the object moved over.
+"""
 
 
-def pair(artifacts: EpisodeArtifacts, moment: float = ASKED_AT) -> BagFramesAround:
+def pair(
+    artifacts: EpisodeArtifacts, over: TimelineSpan = MOVED_OVER
+) -> BagFramesAround:
     """
-    The pair of frames this test reads either side of a moment.
+    The pair of frames this test reads either side of a stretch of the trial.
 
     :param artifacts: The episode's own directory.
-    :param moment: Seconds into the trial the event happened at.
+    :param over: The stretch the object moved over.
     """
     return BagFramesAround(
-        artifacts=artifacts, moment=moment, trial_duration=TRIAL_DURATION
+        over=over, artifacts=artifacts, trial_duration=TRIAL_DURATION
     )
 
 
@@ -58,14 +70,15 @@ def test_the_two_frames_are_taken_either_side_of_the_event(
     episode_artifacts: EpisodeArtifacts,
 ) -> None:
     """
-    The point of the pair is the change across the event, so one frame is taken before
-    it happened and the other after.
+    The point of the pair is the change across the stretch, so one frame is taken as it
+    began and the other as it ended.
     """
     either_side = pair(episode_artifacts)
     assert (either_side.before.moment, either_side.after.moment) == (
-        ASKED_AT - EITHER_SIDE,
-        ASKED_AT + EITHER_SIDE,
+        MOVED_OVER.start,
+        MOVED_OVER.end,
     )
+    assert either_side.instants == (MOVED_OVER.start, MOVED_OVER.end)
 
 
 def test_each_frame_reads_the_same_recording_as_the_pair(
@@ -89,7 +102,7 @@ def test_an_event_at_the_very_start_is_still_shown_from_the_beginning(
     it is the first one the camera recorded rather than a place the recording does not
     reach.
     """
-    assert pair(episode_artifacts, moment=0.0).before.fraction == 0.0
+    assert pair(episode_artifacts, TimelineSpan(0.0, MOVED_FOR)).before.fraction == 0.0
 
 
 def test_an_event_at_the_very_end_is_still_shown_to_the_end(
@@ -98,7 +111,10 @@ def test_an_event_at_the_very_end_is_still_shown_to_the_end(
     """
     An event in the last moments of a run has no second after it either.
     """
-    assert pair(episode_artifacts, moment=TRIAL_DURATION).after.fraction == 1.0
+    assert (
+        pair(episode_artifacts, TimelineSpan(TRIAL_DURATION, MOVED_FOR)).after.fraction
+        == 1.0
+    )
 
 
 # %% a run that recorded no camera
@@ -185,11 +201,25 @@ def kept_frames() -> TimedFrames:
     return frames
 
 
-def test_the_two_frames_of_a_kept_camera_are_taken_either_side_of_the_event() -> None:
-    either_side = RecordedFramesAround(frames=kept_frames(), moment=ASKED_AT)
+def test_the_two_frames_of_a_kept_camera_are_taken_either_side_of_the_stretch() -> None:
+    either_side = RecordedFramesAround(over=MOVED_OVER, frames=kept_frames())
 
-    assert either_side.before[0, 0, 0] == round(ASKED_AT - EITHER_SIDE) * 10
-    assert either_side.after[0, 0, 0] == round(ASKED_AT + EITHER_SIDE) * 10
+    assert either_side.before.image[0, 0, 0] == round(MOVED_OVER.start) * 10
+    assert either_side.after.image[0, 0, 0] == round(MOVED_OVER.end) * 10
+
+
+def test_the_frames_are_the_last_before_the_stretch_and_the_first_after_it() -> None:
+    """
+    A change that took less than the time between two frames still shows as one: the
+    earlier frame is the last taken before it began, the later the first taken after it
+    ended, and the pair says the instants those frames were actually taken at.
+    """
+    within_a_second = TimelineSpan(ASKED_AT + 0.25, 0.5)
+    either_side = RecordedFramesAround(over=within_a_second, frames=kept_frames())
+
+    assert either_side.instants == (ASKED_AT, ASKED_AT + 1.0)
+    assert either_side.before.image[0, 0, 0] == round(ASKED_AT) * 10
+    assert either_side.after.image[0, 0, 0] == round(ASKED_AT + 1.0) * 10
 
 
 def test_the_two_frames_of_a_kept_camera_differ_when_the_camera_saw_a_change() -> None:
@@ -197,26 +227,26 @@ def test_the_two_frames_of_a_kept_camera_differ_when_the_camera_saw_a_change() -
     The pair exists to show a change, so with a camera that saw one the two frames it
     hands back are not the same picture.
     """
-    either_side = RecordedFramesAround(frames=kept_frames(), moment=ASKED_AT)
+    either_side = RecordedFramesAround(over=MOVED_OVER, frames=kept_frames())
 
-    assert not np.array_equal(either_side.before, either_side.after)
+    assert not np.array_equal(either_side.before.image, either_side.after.image)
 
 
 def test_each_frame_of_the_pair_says_when_it_was_taken() -> None:
     """
-    A reader is told how far either side of the event each frame is, and at what second
-    of the trial, rather than left to guess which is which.
+    A reader is told which frame is which and at what second of the trial each was
+    taken, rather than left to guess.
     """
-    before, after = captions_around(ASKED_AT, EITHER_SIDE)
+    before, after = captions_at((MOVED_OVER.start, MOVED_OVER.end))
 
-    assert before == "before, %.1f s" % (ASKED_AT - EITHER_SIDE)
-    assert after == "after, %.1f s" % (ASKED_AT + EITHER_SIDE)
+    assert before == "before, %.1f s" % MOVED_OVER.start
+    assert after == "after, %.1f s" % MOVED_OVER.end
 
 
 def test_the_kept_frames_are_written_side_by_side_with_their_captions(
     tmp_path: Path,
 ) -> None:
-    either_side = RecordedFramesAround(frames=kept_frames(), moment=ASKED_AT)
+    either_side = RecordedFramesAround(over=MOVED_OVER, frames=kept_frames())
 
     written = imageio.imread(either_side.write(tmp_path / "either_side.png"))
 

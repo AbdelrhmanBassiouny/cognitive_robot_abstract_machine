@@ -17,13 +17,17 @@ from segmind.datastructures.events import (
     DetectionEvent,
     EventWithTrackedObjects,
     MotionEvent,
+    StopTranslationEvent,
+    TranslationEvent,
 )
 import numpy as np
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.episodes.episode import RecordedTrial
 from experiments.episodes.trace import JointPositions
+from experiments.paper.chart import TimelineSpan
 from experiments.paper.panel import ANSWER_COLOR
+from experiments.paper.run_plan import TrialClock
 from experiments.paper.scene import (
     BACKGROUND_COLOR,
     PickedOut,
@@ -243,6 +247,130 @@ class ModelChangesUnannounced:
         self.held = []
 
 
+# %% one stretch of the trial an object was moving over
+
+
+@dataclass(frozen=True)
+class MotionStretch:
+    """
+    One stretch of a trial an object was moving over, as the monitor reported it: from
+    the translation that started it to the one that stopped it.
+    """
+
+    started: TranslationEvent
+    """
+    The report that the object had started moving, which says where it was.
+    """
+
+    stopped: Optional[StopTranslationEvent]
+    """
+    The report that it had stopped, which says where it got to; None where the trial
+    ended with it still moving.
+    """
+
+    over: TimelineSpan
+    """
+    The seconds of the trial the stretch runs over.
+    """
+
+    @property
+    def before(self) -> HomogeneousTransformationMatrix:
+        """
+        Where the object was as the stretch began.
+        """
+        return self.started.start_pose.to_homogeneous_matrix()
+
+    @property
+    def after(self) -> HomogeneousTransformationMatrix:
+        """
+        Where it was as the stretch ended: where it stopped, or where it had got to when
+        the trial ended with it still moving.
+        """
+        ended_by = self.started if self.stopped is None else self.stopped
+        return ended_by.current_pose.to_homogeneous_matrix()
+
+    def distance_to(self, moment: float) -> float:
+        """
+        How far the given moment lies outside this stretch, in seconds: nothing where it
+        falls within it.
+
+        :param moment: Seconds into the trial.
+        """
+        return max(self.over.start - moment, moment - self.over.end, 0.0)
+
+    @classmethod
+    def all_of(cls, subject: Body, trial: RecordedTrial) -> List[MotionStretch]:
+        """
+        Every stretch of the trial the given object was moving over, in order.
+
+        Matched by the name the twin gives the object rather than by identity, because a
+        recalled episode reads its events back as separate objects. A stop the monitor
+        reported with no start before it is a stretch of no length at the stop.
+
+        :param subject: The object to look for.
+        :param trial: The trial to read.
+        """
+        clock = TrialClock.of(trial)
+        stretches: List[MotionStretch] = []
+        started: Optional[TranslationEvent] = None
+        for event in cls._translations_of(subject, trial):
+            moment = clock.seconds_of(event.timestamp)
+            if isinstance(event, TranslationEvent):
+                if started is not None:
+                    stretches.append(cls._open_until(started, clock, moment))
+                started = event
+                continue
+            began_at = (
+                moment if started is None else clock.seconds_of(started.timestamp)
+            )
+            stretches.append(
+                cls(
+                    started=started if started is not None else event,
+                    stopped=event,
+                    over=TimelineSpan(began_at, moment - began_at),
+                )
+            )
+            started = None
+        if started is not None:
+            stretches.append(cls._open_until(started, clock, trial.duration))
+        return stretches
+
+    @classmethod
+    def _open_until(
+        cls, started: TranslationEvent, clock: TrialClock, end: float
+    ) -> MotionStretch:
+        """
+        A stretch the monitor never reported the end of, running to the given moment.
+
+        :param started: The report that the object had started moving.
+        :param clock: Where the trial's own seconds start.
+        :param end: Seconds into the trial the stretch is taken to run to.
+        """
+        began_at = clock.seconds_of(started.timestamp)
+        return cls(
+            started=started, stopped=None, over=TimelineSpan(began_at, end - began_at)
+        )
+
+    @staticmethod
+    def _translations_of(subject: Body, trial: RecordedTrial) -> List[MotionEvent]:
+        """
+        Every report that the given object started or stopped moving, oldest first.
+
+        :param subject: The object to look for.
+        :param trial: The trial to read.
+        """
+        return sorted(
+            (
+                event
+                for tick in trial.ticks
+                for event in tick.events
+                if isinstance(event, (TranslationEvent, StopTranslationEvent))
+                and event.tracked_object.name == subject.name
+            ),
+            key=lambda event: event.timestamp,
+        )
+
+
 # %% where an object went
 
 
@@ -267,6 +395,12 @@ class PoseChange:
     Where it ended up, in the world root frame.
     """
 
+    over: Optional[TimelineSpan] = None
+    """
+    The seconds of the trial the change happened over, or None for a change read off one
+    event alone.
+    """
+
     way: Tuple[HomogeneousTransformationMatrix, ...] = ()
     """
     Where it stood on its way from the one to the other, in order, in the world root
@@ -282,7 +416,25 @@ class PoseChange:
         :param way: Where it stood on the way, in order.
         """
         return PoseChange(
-            subject=self.subject, before=self.before, after=self.after, way=tuple(way)
+            subject=self.subject,
+            before=self.before,
+            after=self.after,
+            over=self.over,
+            way=tuple(way),
+        )
+
+    def standing_in(self, world: World) -> PoseChange:
+        """
+        The same change, of the body of the given name in the given world.
+
+        :param world: The twin the change is to be drawn in.
+        """
+        return PoseChange(
+            subject=world.get_body_by_name(self.subject.name.name),
+            before=self.before,
+            after=self.after,
+            over=self.over,
+            way=self.way,
         )
 
     def straight_way(
@@ -324,50 +476,31 @@ class PoseChange:
         cls, event: DetectionEvent, trial: RecordedTrial
     ) -> Optional[PoseChange]:
         """
-        The change of pose the trial recorded for the object an event is about.
+        The change of pose the trial recorded for the object an event is about, over the
+        stretch it was moving that the event falls in.
 
-        An event that is itself a motion states the change; one that is not -- a pick-up
-        says the object is held, not where it went -- is read against every motion of
-        the same object the run reported, from where the first of them started to where
-        the last of them got to.
+        A pick-up says the object is held, not where it went; a translation says it
+        started moving, not where it stopped. Either is read against the stretch of the
+        trial the monitor saw that object moving over -- the one the event falls in, or
+        the nearest one where it falls in none -- from where the object was as the
+        stretch began to where it was as it ended.
 
         :param event: The event whose object is asked after.
         :param trial: The trial it was reported in.
         :return: The change, or None where the run saw that object move at no point.
         """
-        if isinstance(event, MotionEvent):
-            return cls.of(event)
         if not isinstance(event, EventWithTrackedObjects):
             return None
-        moved = cls._motions_of(event.tracked_object, trial)
-        if not moved:
+        stretches = MotionStretch.all_of(event.tracked_object, trial)
+        if not stretches:
             return None
+        moment = TrialClock.of(trial).seconds_of(event.timestamp)
+        nearest = min(stretches, key=lambda stretch: stretch.distance_to(moment))
         return cls(
             subject=event.tracked_object,
-            before=moved[0].start_pose.to_homogeneous_matrix(),
-            after=moved[-1].current_pose.to_homogeneous_matrix(),
-        )
-
-    @staticmethod
-    def _motions_of(subject: Body, trial: RecordedTrial) -> List[MotionEvent]:
-        """
-        Every motion of the given object the trial reported, oldest first.
-
-        Matched by the name the twin gives the object rather than by identity, because a
-        recalled episode reads its events back as separate objects.
-
-        :param subject: The object to look for.
-        :param trial: The trial to read.
-        """
-        return sorted(
-            (
-                event
-                for tick in trial.ticks
-                for event in tick.events
-                if isinstance(event, MotionEvent)
-                and event.tracked_object.name == subject.name
-            ),
-            key=lambda event: event.timestamp,
+            before=nearest.before,
+            after=nearest.after,
+            over=nearest.over,
         )
 
 

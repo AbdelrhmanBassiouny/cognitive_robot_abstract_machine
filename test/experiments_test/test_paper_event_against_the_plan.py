@@ -40,7 +40,6 @@ from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import PanelKind
 from experiments.paper.scene import PointOfView
 from experiments.paper.plan_timeline import PlanTimeline
-from experiments.paper.camera_frame import EITHER_SIDE
 from experiments.paper.query_card import (
     EventAgainstThePlanCard,
     QueryCardName,
@@ -442,8 +441,9 @@ def test_a_run_that_kept_its_camera_shows_the_frames_either_side_of_the_event(
 ) -> None:
     """
     The camera level is what the run's own camera saw, read back from what it kept
-    along the trial, so the two frames are the ones taken either side of the event
-    rather than anything drawn afterwards.
+    along the trial, so the two frames are the ones taken either side of the stretch
+    the piece moved over rather than anything drawn afterwards. The monitor never
+    reported the piece stopping, so that stretch runs to the end of the trial.
     """
     artifacts = kept_by(the_robot_picked_it_up, tmp_path, scene)
 
@@ -452,10 +452,39 @@ def test_a_run_that_kept_its_camera_shows_the_frames_either_side_of_the_event(
     )
 
     pair = imageio.imread(written.panel_paths[PanelKind.CAMERA_BEFORE_AND_AFTER])
-    before_shade = round(SOMETHING_HAPPENED_AT - EITHER_SIDE) * 20
-    after_shade = round(SOMETHING_HAPPENED_AT + EITHER_SIDE) * 20
+    before_shade = round(SOMETHING_HAPPENED_AT) * 20
+    after_shade = round(TRIAL_DURATION) * 20
     assert abs(int(pair[0, 0, 0]) - before_shade) <= ENCODING_TOLERANCE
     assert abs(int(pair[0, -1, 0]) - after_shade) <= ENCODING_TOLERANCE
+
+
+def test_the_levels_below_the_charts_are_placed_on_the_axis_where_they_were_taken(
+    the_robot_picked_it_up: RecordedTrial, scene: World, tmp_path: Path
+) -> None:
+    """
+    The charts say which instants the pictures under them show, and those are the
+    instants the camera frames were actually taken at.
+    """
+    artifacts = kept_by(the_robot_picked_it_up, tmp_path, scene)
+    card = EventAgainstThePlanCard()
+    [query] = card.queries_in(the_robot_picked_it_up)
+
+    pictured_at = card.pictured_at(the_robot_picked_it_up, query, artifacts)
+
+    frames = card._camera_frames_around(the_robot_picked_it_up, query, artifacts)
+    assert pictured_at == frames.instants == (SOMETHING_HAPPENED_AT, TRIAL_DURATION)
+
+
+def test_without_a_camera_the_charts_mark_the_stretch_the_piece_moved_over(
+    the_robot_picked_it_up: RecordedTrial,
+) -> None:
+    card = EventAgainstThePlanCard()
+    [query] = card.queries_in(the_robot_picked_it_up)
+
+    assert card.pictured_at(the_robot_picked_it_up, query, None) == (
+        SOMETHING_HAPPENED_AT,
+        TRIAL_DURATION,
+    )
 
 
 @needs_a_renderer

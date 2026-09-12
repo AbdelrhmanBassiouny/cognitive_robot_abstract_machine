@@ -201,9 +201,43 @@ def test_the_frame_nearest_a_moment_is_the_one_handed_back() -> None:
     assert np.array_equal(frames.at(LATER - 0.1), later)
 
 
+def test_the_frames_either_side_of_a_moment_are_the_last_before_and_first_after() -> (
+    None
+):
+    """
+    What the camera saw just before and just after something happened, each with the
+    moment it was actually taken at.
+    """
+    earlier, later = coloured_frames(2)
+    frames = TimedFrames()
+    frames.keep(earlier, EARLIER)
+    frames.keep(later, LATER)
+    between = (EARLIER + LATER) / 2
+
+    before, after = frames.last_at_or_before(between), frames.first_at_or_after(between)
+
+    assert (before.moment, after.moment) == (EARLIER, LATER)
+    assert np.array_equal(before.image, earlier)
+    assert np.array_equal(after.image, later)
+
+
+def test_a_moment_outside_the_film_is_shown_from_its_nearest_end() -> None:
+    earlier, later = coloured_frames(2)
+    frames = TimedFrames()
+    frames.keep(earlier, EARLIER)
+    frames.keep(later, LATER)
+
+    assert frames.last_at_or_before(EARLIER - 1.0).moment == EARLIER
+    assert frames.first_at_or_after(LATER + 1.0).moment == LATER
+
+
 def test_no_frame_is_handed_back_before_one_was_kept() -> None:
     with pytest.raises(TraceIsEmptyError):
         TimedFrames().at(EARLIER)
+    with pytest.raises(TraceIsEmptyError):
+        TimedFrames().last_at_or_before(EARLIER)
+    with pytest.raises(TraceIsEmptyError):
+        TimedFrames().first_at_or_after(EARLIER)
 
 
 def test_frames_written_out_are_read_back_with_their_moments(tmp_path: Path) -> None:

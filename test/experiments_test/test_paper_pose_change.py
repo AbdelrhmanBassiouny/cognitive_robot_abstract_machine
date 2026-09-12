@@ -9,12 +9,14 @@ see that the answer is about a real change and not a label on a chart.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 import numpy as np
 import pytest
 from coraplex.datastructures.enums import ExecutionType
 from segmind.datastructures.events import (
     PickUpEvent,
+    StopTranslationEvent,
     SupportEvent,
     TranslationEvent,
 )
@@ -27,6 +29,7 @@ from experiments.paper.pose_change import (
     GHOST_COLOR,
     EventStatesNoPoseChangeError,
     ModelChangesUnannounced,
+    MotionStretch,
     PoseChange,
     PoseChangeRender,
     stand,
@@ -101,18 +104,75 @@ MOVED_AT = 3.0
 Seconds into the trial the object moved.
 """
 
+TRIAL_BEGAN_AT = datetime(2026, 1, 1, 12, 0, 0)
+"""
+When the trial the tests read began, on the wall clock.
+"""
 
-def moved(subject: Body) -> TranslationEvent:
+TRIAL_DURATION = 12.0
+"""
+How long that trial ran, in seconds.
+"""
+
+
+def at(moment: float) -> datetime:
     """
-    The translation the monitor reported of the given object.
+    The wall-clock instant of a moment of the trial.
+
+    :param moment: Seconds into the trial.
+    """
+    return TRIAL_BEGAN_AT + timedelta(seconds=moment)
+
+
+def moved(
+    subject: Body,
+    moment: float = MOVED_AT,
+    from_x: float = STOOD_AT,
+    to_x: float = ENDED_AT,
+) -> TranslationEvent:
+    """
+    The report that the given object started moving.
 
     :param subject: The object that moved.
+    :param moment: Seconds into the trial it was reported at.
+    :param from_x: Where along the world's x-axis it was.
+    :param to_x: Where along it the object had got to when it was reported.
     """
     return TranslationEvent(
         tracked_object=subject,
-        start_pose=Pose.from_xyz_rpy(x=STOOD_AT),
-        current_pose=Pose.from_xyz_rpy(x=ENDED_AT),
+        start_pose=Pose.from_xyz_rpy(x=from_x),
+        current_pose=Pose.from_xyz_rpy(x=to_x),
+        timestamp=at(moment),
     )
+
+
+def stopped(
+    subject: Body, moment: float, from_x: float, to_x: float
+) -> StopTranslationEvent:
+    """
+    The report that the given object stopped moving.
+
+    :param subject: The object that stopped.
+    :param moment: Seconds into the trial it was reported at.
+    :param from_x: Where along the world's x-axis it had started from.
+    :param to_x: Where along it the object stopped.
+    """
+    return StopTranslationEvent(
+        tracked_object=subject,
+        start_pose=Pose.from_xyz_rpy(x=from_x),
+        current_pose=Pose.from_xyz_rpy(x=to_x),
+        timestamp=at(moment),
+    )
+
+
+def picked_up(subject: Body, moment: float = MOVED_AT) -> PickUpEvent:
+    """
+    The report that the given object was picked up.
+
+    :param subject: The object.
+    :param moment: Seconds into the trial it was reported at.
+    """
+    return PickUpEvent(tracked_object=subject, timestamp=at(moment))
 
 
 # %% reading a change of pose off what was reported
@@ -158,7 +218,8 @@ def trial_that_reported(*events) -> RecordedTrial:
             scenario_name="shape_sorting", execution_type=ExecutionType.SIMULATED
         ),
         outcome=TrialOutcome.SUCCEEDED,
-        duration=12.0,
+        duration=TRIAL_DURATION,
+        began_at=TRIAL_BEGAN_AT,
         ticks=[Tick(moment=MOVED_AT, events=list(events))],
     )
 
@@ -171,13 +232,130 @@ def test_an_event_that_is_not_a_motion_is_drawn_from_the_motions_around_it(
     motions of the same object reported while it was being picked up say.
     """
     subject = loose_piece(scene_with_a_loose_piece)
-    picked_up = PickUpEvent(tracked_object=subject)
-    trial = trial_that_reported(picked_up, moved(subject))
+    held = picked_up(subject)
+    trial = trial_that_reported(held, moved(subject))
 
-    change = PoseChange.around(picked_up, trial)
+    change = PoseChange.around(held, trial)
 
     assert change.before.to_np()[0, 3] == STOOD_AT
     assert change.after.to_np()[0, 3] == ENDED_AT
+
+
+def test_a_motion_never_reported_stopped_runs_to_the_end_of_the_trial(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    As far as the monitor said, the object was still moving when the trial ended.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    held = picked_up(subject)
+    trial = trial_that_reported(held, moved(subject))
+
+    change = PoseChange.around(held, trial)
+
+    assert change.over.start == MOVED_AT
+    assert change.over.end == TRIAL_DURATION
+
+
+# %% which stretch of the trial the change is read over
+
+CARRIED_OVER = (5.0, 8.0)
+"""
+Seconds into the trial the object was carried from where it was picked up to above the
+board, as the start and the end of the stretch.
+"""
+
+DROPPED_OVER = (9.0, 10.0)
+"""
+Seconds into the trial it was dropped from there into the hole.
+"""
+
+ABOVE_THE_BOARD = 1.5
+"""
+Where along the world's x-axis the object was carried to, in metres.
+"""
+
+IN_THE_HOLE = 1.4
+"""
+Where along the world's x-axis it was dropped to.
+"""
+
+
+def carried_then_dropped(subject: Body) -> RecordedTrial:
+    """
+    A trial in which the object was carried, stopped, then dropped and stopped again.
+
+    :param subject: The object.
+    """
+    return trial_that_reported(
+        moved(subject, CARRIED_OVER[0], STOOD_AT, STOOD_AT),
+        stopped(subject, CARRIED_OVER[1], STOOD_AT, ABOVE_THE_BOARD),
+        moved(subject, DROPPED_OVER[0], ABOVE_THE_BOARD, ABOVE_THE_BOARD),
+        stopped(subject, DROPPED_OVER[1], ABOVE_THE_BOARD, IN_THE_HOLE),
+    )
+
+
+def test_a_translation_and_its_stop_are_one_stretch(
+    scene_with_a_loose_piece: World,
+) -> None:
+    subject = loose_piece(scene_with_a_loose_piece)
+
+    carried, dropped = MotionStretch.all_of(subject, carried_then_dropped(subject))
+
+    assert (carried.over.start, carried.over.end) == CARRIED_OVER
+    assert carried.before.to_np()[0, 3] == STOOD_AT
+    assert carried.after.to_np()[0, 3] == ABOVE_THE_BOARD
+    assert (dropped.over.start, dropped.over.end) == DROPPED_OVER
+    assert dropped.after.to_np()[0, 3] == IN_THE_HOLE
+
+
+def test_the_change_is_read_over_the_stretch_the_event_falls_in(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    A pick-up reported while the object was being carried is about the carry, not about
+    the object's whole life in the trial: it ended up above the board, not in the hole
+    it was dropped into later.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    trial = carried_then_dropped(subject)
+    held = picked_up(subject, moment=6.0)
+
+    change = PoseChange.around(held, trial)
+
+    assert (change.over.start, change.over.end) == CARRIED_OVER
+    assert change.before.to_np()[0, 3] == STOOD_AT
+    assert change.after.to_np()[0, 3] == ABOVE_THE_BOARD
+
+
+def test_an_event_between_stretches_is_read_over_the_nearest(
+    scene_with_a_loose_piece: World,
+) -> None:
+    subject = loose_piece(scene_with_a_loose_piece)
+    trial = carried_then_dropped(subject)
+    held = picked_up(subject, moment=8.9)
+
+    change = PoseChange.around(held, trial)
+
+    assert (change.over.start, change.over.end) == DROPPED_OVER
+
+
+def test_a_translation_read_as_the_event_itself_is_read_over_its_own_stretch(
+    scene_with_a_loose_piece: World,
+) -> None:
+    subject = loose_piece(scene_with_a_loose_piece)
+    trial = carried_then_dropped(subject)
+    [carry] = [
+        event
+        for event in trial.ticks[0].events
+        if isinstance(event, TranslationEvent)
+        and event.timestamp == at(CARRIED_OVER[0])
+    ]
+
+    change = PoseChange.around(carry, trial)
+
+    assert (change.over.start, change.over.end) == CARRIED_OVER
+    assert change.after.to_np()[0, 3] == ABOVE_THE_BOARD
 
 
 def test_an_object_the_run_never_saw_move_has_no_change_to_draw(
@@ -188,8 +366,8 @@ def test_an_object_the_run_never_saw_move_has_no_change_to_draw(
     rather than drawing the object twice in the same place.
     """
     subject = loose_piece(scene_with_a_loose_piece)
-    picked_up = PickUpEvent(tracked_object=subject)
-    assert PoseChange.around(picked_up, trial_that_reported(picked_up)) is None
+    held = picked_up(subject)
+    assert PoseChange.around(held, trial_that_reported(held)) is None
 
 
 def test_the_motions_read_off_the_run_are_the_ones_about_that_object(
@@ -200,10 +378,10 @@ def test_the_motions_read_off_the_run_are_the_ones_about_that_object(
     """
     subject = loose_piece(scene_with_a_loose_piece)
     another = scene_with_a_loose_piece.get_body_by_name(ANSWERED_NAME)
-    picked_up = PickUpEvent(tracked_object=subject)
-    trial = trial_that_reported(picked_up, moved(another))
+    held = picked_up(subject)
+    trial = trial_that_reported(held, moved(another))
 
-    assert PoseChange.around(picked_up, trial) is None
+    assert PoseChange.around(held, trial) is None
 
 
 # %% drawing both poses in one view
@@ -373,8 +551,10 @@ def test_holding_the_callbacks_off_lets_only_those_it_held_go_again(
 ) -> None:
     """
     A callback something else had paused before stays paused after, and one that was
-    live is live again and told of the next change. The world's own forward kinematics
-    are never held off, since they are what places the body stood in for the picture.
+    live is live again and told of the next change.
+
+    The world's own forward kinematics are never held off, since they are what places
+    the body stood in for the picture.
     """
     live = CountsModelChanges(_world=scene_with_a_loose_piece)
     paused_before = CountsModelChanges(_world=scene_with_a_loose_piece)
