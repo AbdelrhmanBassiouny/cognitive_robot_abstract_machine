@@ -18,6 +18,7 @@ from segmind.datastructures.events import (
     SupportEvent,
     TranslationEvent,
 )
+from segmind.exceptions import NothingSaysWhereItStands
 from segmind.expectations import Expectation, Expectations
 from semantic_digital_twin.reasoning.predicates import (
     Colored,
@@ -32,6 +33,9 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 from ..dataset.plate_with_a_hole import (
     CUBE_COLOR,
+    CUBE_SIDE,
+    HOLE_AT,
+    PLATE_TOP,
     HoleScene,
     cube_in_the_hole,
     cube_lifted_clear_of_the_hole,
@@ -43,6 +47,14 @@ from ..dataset.stated_relations import says
 RELEASE_SPREAD = 0.03
 """
 How far from a hole a released thing may come to rest, in metres, for these tests.
+"""
+
+SHOVED_BY = 0.1
+"""
+How far something other than the robot moves the cube, in metres, for these tests.
+
+Further than :data:`RELEASE_SPREAD`, so a thing shoved this far is somewhere the belief
+about it does not allow.
 """
 
 
@@ -336,3 +348,96 @@ def test_finding_nothing_where_the_action_promised_is_its_own_outcome(
     assert not report.holds
     assert report.nothing_was_found
     assert report.violated == ()
+
+
+# %% what is believed of a thing nothing has acted on
+
+
+def test_a_thing_the_world_holds_on_a_surface_is_believed_to_rest_there(
+    expectations: Expectations, declared: SomethingThatDeclaredAnEffect
+):
+    """
+    What can be believed of a thing without anything having acted on it: the world holds
+    it somewhere, resting on something, and that is the belief a look can disagree with.
+    """
+    scene = cube_on_the_plate_over_the_hole()
+
+    believed = expectations.standing_on(scene.cube, scene.plate, declared)
+
+    assert [stated._type_ for stated in believed.holds] == [SupportedBy, Near]
+    assert believed.expects(an(SupportedBy)(supporting=scene.plate))
+    assert believed.subject is scene.cube
+    assert believed.source is declared
+
+
+def test_a_thing_is_believed_no_further_from_where_it_stands_than_the_spread(
+    expectations: Expectations, declared: SomethingThatDeclaredAnEffect
+):
+    """
+    How far a thing may have drifted from where the world last had it and still be the
+    same belief, which is the spread the store was given.
+    """
+    scene = cube_on_the_plate_over_the_hole()
+
+    believed = expectations.standing_on(scene.cube, scene.plate, declared)
+
+    [near] = [
+        stated.construct_instance()
+        for stated in believed.holds
+        if stated._type_ is Near
+    ]
+    assert near.radius == RELEASE_SPREAD
+    assert near.place.to_np() == pytest.approx(
+        scene.cube.global_transform.to_position().to_np()
+    )
+
+
+def test_where_a_thing_is_believed_to_stand_stays_where_it_was_believed(
+    expectations: Expectations, declared: SomethingThatDeclaredAnEffect
+):
+    """
+    The belief is a snapshot rather than a reading of the world: moving the thing
+    afterwards leaves where it was believed to stand exactly where it was.
+    """
+    scene = cube_on_the_plate_over_the_hole()
+    believed = expectations.standing_on(scene.cube, scene.plate, declared)
+    stood_at = believed.believed_place.to_np()
+
+    scene.stand_the_cube_at(
+        HOLE_AT[0] + SHOVED_BY, HOLE_AT[1], PLATE_TOP + CUBE_SIDE / 2
+    )
+
+    assert believed.believed_place.to_np() == pytest.approx(stood_at)
+    assert not believed.holds_now()
+
+
+def test_a_thing_believed_nowhere_in_particular_has_no_believed_place(
+    expectations: Expectations, declared: SomethingThatDeclaredAnEffect
+):
+    """
+    Where a thing is believed to stand is read off the placement believed of it, so an
+    expectation stating none says so rather than answering a place nothing put there.
+    """
+    believed = expectations.expect(
+        cube_in_the_hole().cube, (an(SupportedBy)(supporting=named("plate")),), declared
+    )
+
+    with pytest.raises(NothingSaysWhereItStands):
+        believed.believed_place
+
+
+def test_a_look_that_finds_the_thing_on_another_surface_contradicts_the_support(
+    expectations: Expectations, declared: SomethingThatDeclaredAnEffect
+):
+    """
+    The belief and the sighting disagree about what the thing rests on, which is what a
+    thing shoved off the surface it stood on looks like.
+    """
+    scene = cube_on_the_plate_over_the_hole()
+    believed = expectations.standing_on(scene.cube, scene.plate, declared)
+
+    scene.stand_the_cube_at(HOLE_AT[0] + SHOVED_BY, HOLE_AT[1], CUBE_SIDE / 2)
+
+    report = believed.check(scene.cube)
+
+    assert [type(violated) for violated in report.violated] == [SupportedBy, Near]

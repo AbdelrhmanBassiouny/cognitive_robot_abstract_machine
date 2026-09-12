@@ -12,7 +12,10 @@ import pytest
 
 from typing_extensions import List, Optional, Type
 
-from experiments.montessori.perception.detections import DetectedMontessoriShape
+from experiments.montessori.perception.detections import (
+    DetectedMontessoriShape,
+    MontessoriScene,
+)
 from experiments.montessori.perception.exceptions import LookHasNoReferenceFrame
 from experiments.montessori.perception.expectations import (
     MontessoriExpectation,
@@ -118,6 +121,14 @@ Stated here rather than defaulted, because :class:`MontessoriExpectations` refus
 invent it - see :attr:`~segmind.expectations.Expectations.release_spread`.
 """
 
+SHOVED_BY = 0.1
+"""
+How far something other than the robot moves a piece, in metres, for these tests.
+
+Further than :data:`RELEASE_SPREAD`, so a piece shoved this far stands somewhere the
+belief about it does not allow.
+"""
+
 
 def body_named(name: str) -> Body:
     """
@@ -195,6 +206,36 @@ def world_with_a_hole_at(x: float, y: float, height: float = LID_HEIGHT) -> Worl
     return world
 
 
+def piece_standing_over_the_hole(
+    world: World,
+    name: str,
+    category: MontessoriShapeCategory,
+    height_above_the_lid: float,
+) -> Body:
+    """
+    Stand a piece's body in the world over the hole, a height above the lid's plane.
+
+    :param world: The world holding the hole.
+    :param name: What the world calls the piece.
+    :param category: Which piece of the set it is.
+    :param height_above_the_lid: How far the piece's own centre stands above the lid's
+        plane, in metres.
+    """
+    [hole] = world.regions
+    body = piece_body(name, category)
+    with world.modify_world():
+        world.add_connection(
+            FixedConnection(
+                parent=hole,
+                child=body,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    z=height_above_the_lid, reference_frame=hole
+                ),
+            )
+        )
+    return body
+
+
 def piece_held_above_the_hole(
     world: World, name: str, category: MontessoriShapeCategory
 ) -> Body:
@@ -206,19 +247,21 @@ def piece_held_above_the_hole(
     :param name: What the world calls the piece.
     :param category: Which piece of the set it is.
     """
-    [hole] = world.regions
-    body = piece_body(name, category)
-    with world.modify_world():
-        world.add_connection(
-            FixedConnection(
-                parent=hole,
-                child=body,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                    z=HELD_ABOVE_THE_LID, reference_frame=hole
-                ),
-            )
-        )
-    return body
+    return piece_standing_over_the_hole(world, name, category, HELD_ABOVE_THE_LID)
+
+
+def piece_resting_on_the_lid(
+    world: World, name: str, category: MontessoriShapeCategory
+) -> Body:
+    """
+    Stand a piece's body in the world resting on the lid over the hole, which is where a
+    piece nothing has acted on stands.
+
+    :param world: The world holding the hole.
+    :param name: What the world calls the piece.
+    :param category: Which piece of the set it is.
+    """
+    return piece_standing_over_the_hole(world, name, category, PIECE_HEIGHT / 2)
 
 
 WORLD = world_with_a_hole_at(0.8, 0.1)
@@ -233,6 +276,11 @@ CUBE = CubeShape(
 )
 CYLINDER = CylinderShape(
     root=piece_held_above_the_hole(WORLD, "cylinder", MontessoriShapeCategory.CYLINDER)
+)
+CUBE_ON_THE_LID = CubeShape(
+    root=piece_resting_on_the_lid(
+        WORLD, "cube_on_the_lid", MontessoriShapeCategory.CUBE
+    )
 )
 
 
@@ -881,3 +929,110 @@ def found_at(scene, piece: PlacedPiece) -> Optional[DetectedMontessoriShape]:
         <= 0.01
     ]
     return at_the_piece[0] if at_the_piece else None
+
+
+# %% which piece a look reported where one was believed
+
+
+def test_the_sighting_of_a_shape_is_the_one_nearest_where_the_piece_was_believed():
+    """
+    A look reports the odd piece that is not there, so which sighting a belief is
+    checked against is the one of its own shape standing nearest where it was believed.
+    """
+    at_the_piece = piece_seen_at(0.8, 0.1)
+    elsewhere = piece_seen_at(0.8 + SHOVED_BY, 0.1)
+    seen = MontessoriScene(shapes=[elsewhere, at_the_piece])
+
+    nearest = seen.shape_nearest_to(
+        MontessoriShapeCategory.CUBE,
+        CUBE_ON_THE_LID.root.global_transform.to_position(),
+    )
+
+    assert nearest is at_the_piece
+
+
+def test_a_look_that_reports_no_piece_of_a_shape_reports_none_of_it():
+    """
+    A relabelled detection is reported as a piece of another shape, so the shape it
+    really is has gone missing from the look rather than moved within it.
+    """
+    relabelled = piece_seen_at(0.8, 0.1)
+    relabelled.category = MontessoriShapeCategory.CYLINDER
+    seen = MontessoriScene(shapes=[relabelled])
+
+    nearest = seen.shape_nearest_to(
+        MontessoriShapeCategory.CUBE,
+        CUBE_ON_THE_LID.root.global_transform.to_position(),
+    )
+
+    assert nearest is None
+
+
+# %% what a look says about a piece nothing has acted on
+
+
+def believed_on_the_lid(
+    expectations: MontessoriExpectations, asker: SomethingThatAskedForALook
+) -> MontessoriExpectation:
+    """
+    What the twin believes of a piece standing on the lid: that it rests there, where
+    the twin has it.
+
+    :param expectations: What perception expects.
+    :param asker: Whoever the belief is held on behalf of.
+    """
+    return expectations.standing_on(CUBE_ON_THE_LID.root, LID, asker)
+
+
+def test_a_piece_the_twin_holds_on_the_lid_is_believed_to_rest_where_it_stands(
+    expectations: MontessoriExpectations, asker: SomethingThatAskedForALook
+):
+    believed = believed_on_the_lid(expectations, asker)
+
+    assert kinds_of(believed) == [SupportedBy, Near]
+    assert believed.expects(an(SupportedBy)(supporting=LID))
+    assert believed.believed_place.to_np() == pytest.approx(
+        CUBE_ON_THE_LID.root.global_transform.to_position().to_np()
+    )
+
+
+def test_a_piece_found_where_the_twin_holds_it_agrees_with_the_belief(
+    expectations: MontessoriExpectations, asker: SomethingThatAskedForALook
+):
+    report = believed_on_the_lid(expectations, asker).check(piece_seen_at(0.8, 0.1))
+
+    assert report.holds
+    assert report.violated == ()
+
+
+def test_a_piece_found_beyond_the_spread_contradicts_standing_where_it_was_believed(
+    expectations: MontessoriExpectations, asker: SomethingThatAskedForALook
+):
+    """
+    What a shove across the lid, and a pose reported a shove's worth off, both look
+    like: still on the lid, no longer where the twin has it.
+    """
+    report = believed_on_the_lid(expectations, asker).check(
+        piece_seen_at(0.8 + SHOVED_BY, 0.1)
+    )
+
+    assert [type(violated) for violated in report.violated] == [Near]
+
+
+def test_a_piece_found_on_the_table_contradicts_the_lid_holding_it_up_as_well(
+    expectations: MontessoriExpectations, asker: SomethingThatAskedForALook
+):
+    """
+    A piece shoved off the lid is on another surface and somewhere else, and the report
+    names both.
+    """
+    report = believed_on_the_lid(expectations, asker).check(
+        piece_seen_at(
+            0.8 + SHOVED_BY,
+            0.1,
+            supporting_surface=TABLE.name,
+            surface_height=TABLE_HEIGHT,
+        )
+    )
+
+    assert [type(violated) for violated in report.violated] == [SupportedBy, Near]
