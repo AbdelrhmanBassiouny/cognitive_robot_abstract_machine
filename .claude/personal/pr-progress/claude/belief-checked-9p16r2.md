@@ -67,18 +67,19 @@ rather than with a router or a cross-check class of its own.
 
 ## Next
 
-- **Asked to merge into #265; did not merge.** The gate was "merge if the experiments
-  job is green" and it is red: `test_each_lib (experiments)` failed with a crashed xdist
-  worker on
-  `test_tracy_pickup_demo_mujoco.py::test_the_run_leaves_its_films_and_the_picture_of_the_look`
-  (1 failed, 1387 passed). Re-run of the failed jobs queued on run 34703418437 to tell a
-  resource flake from a deterministic crash - check it when next prompted.
-- Also settled by the user: merge via draft->ready + the GitHub API (not a direct git
-  merge), so the ready flip is mine to make when the gate passes.
+- **Merged.** PR #325 is merged into `claude/icra-experiments-simulation-pipeline-w4ep7n`
+  (#265) as `3e41b69e29`, after CI came back green: the re-run of
+  `test_each_lib (experiments)` passed (16:48-17:14), so the earlier crashed xdist worker
+  was non-deterministic resource pressure rather than a deterministic failure. Marked
+  ready and merged through the API, as chosen. Nothing left for this session.
 
 ## Outstanding
 
-- **The experiments CI failure is not attributable yet.** Nothing in
+- **The experiments CI crash was a flake, now resolved.** It cleared on a re-run of the
+  same commit with nothing changed, which rules out the deterministic-failure reading.
+  The resource-pressure hypothesis below stands unproven but is now moot for this branch;
+  worth remembering if that module starts crashing more often, since this branch does add
+  ~5 MuJoCo camera renders to the experiments suite. Original analysis kept: nothing in
   `test_tracy_pickup_demo_mujoco.py` or `pickup_demo_mujoco.py` reaches any symbol this
   branch changed (grepped). The base branch's own last CI run was red on the *same
   module*, but with 4 assertion failures about camera pose and believed places, and that
