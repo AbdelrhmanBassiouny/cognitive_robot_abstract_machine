@@ -151,11 +151,12 @@ bar for stopping to ask anyway. Two things are this skill's own, because the
 item is already underway rather than being started:
 
 - **The record is an update, not a first draft.** Append what the resolution
-  turned out to be to `roadmap.md` — especially a blocker whose recorded
-  cause turned out to be wrong — and refresh the PR-progress note and the
-  pull request description rather than writing them from scratch. Update the
-  item's `blockers`, `notes` and `status` where the resolution changed what
-  the item means, then republish the dashboard with `/plan-dashboard`.
+  turned out to be to `roadmap.md`, scoped per `${ROADMAP_WRITING_DOCUMENT}`
+  — especially a blocker whose recorded cause turned out to be wrong — and
+  refresh the PR-progress note and the pull request description rather than
+  writing them from scratch. Update the item's `blockers`, `notes` and
+  `status` where the resolution changed what the item means, then republish
+  the dashboard with `/plan-dashboard`.
 - **The pull request goes back to draft after the push**, per the user's own
   convention, unless they marked it ready themselves — in which case the
   item was finished and this skill should not have been resolving it.

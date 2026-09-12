@@ -124,7 +124,8 @@ so no published dashboard is older than the manifest behind it.
 **If the outcome is a new item**, `${PLAN_ITEM_BOOTSTRAP_SCRIPT}`'s `record`
 operation writes its `plan.yaml` entry and `roadmap.md` section and runs the save
 for you — `record` only, never `open`, which creates the branch and pull request
-this skill does not.
+this skill does not. Write that section per `${ROADMAP_WRITING_DOCUMENT}`: what
+binds future work, not a transcript of how this session reached it.
 
 Flag explicitly, never silently paper over:
 
