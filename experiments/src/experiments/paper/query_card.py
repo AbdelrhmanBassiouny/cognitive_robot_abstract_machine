@@ -26,7 +26,14 @@ from typing_extensions import ClassVar, Dict, List, Optional, Sequence, Tuple, T
 from experiments.episodes.artifacts import ArtifactDirectory, EpisodeArtifacts
 from experiments.episodes.episode import RecordedQuery, RecordedTrial
 from experiments.experiment_definitions import TypstRenderer
-from experiments.paper.camera_frame import BagFrameAt, BagFramesAround
+from experiments.episodes.trace import JointPositions
+from experiments.montessori.same_piece import SamePiece
+from experiments.paper.camera_frame import (
+    EITHER_SIDE,
+    BagFrameAt,
+    BagFramesAround,
+    RecordedFramesAround,
+)
 from experiments.paper.figure import FigureFile
 from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import CardPanel, PanelKind
@@ -34,11 +41,11 @@ from experiments.paper.plan_timeline import PlanTimeline
 from experiments.paper.pose_change import (
     PoseChange,
     PoseChangeRender,
-    SimulatedFramesAround,
     can_be_stood_somewhere_else,
 )
+from experiments.paper.run_timeline import RunTimeline
 from experiments.paper.scene import PointOfView, SceneRender
-from experiments.paper.run_plan import plans_of
+from experiments.paper.run_plan import ObjectIdentity, SameName, plans_of
 from experiments.paper.timeline import EventTimeline
 from experiments.questions.question import Question
 from experiments.questions.working_memory import (
@@ -248,6 +255,17 @@ class QueryCard(ABC):
     other say less than the shape they are drawn on.
     """
 
+    identity: ClassVar[ObjectIdentity] = SameName()
+    """
+    How a body an item of the plan acts on is told to be the body an event is about.
+    """
+
+    title: ClassVar[str] = "%s  %s"
+    """
+    What is written across the head of this card's stacked figure, given the query as
+    it was asked and what it answered.
+    """
+
     @abstractmethod
     def answers(self, asked: Question, world: World) -> List[KinematicStructureEntity]:
         """
@@ -402,7 +420,7 @@ class QueryCard(ABC):
             panel: drawn.write(output_directory / self.panel_file_name(number, panel))
             for panel, drawn in self._panels(trial, query, artifacts).items()
         }
-        layered_path = self._layered(number, output_directory, panel_paths)
+        layered_path = self._layered(number, output_directory, panel_paths, query)
         markup_path = output_directory / self.markup_file_name(number)
         markup_path.write_text(
             self._markup(query, self._figures(panel_paths, layered_path))
@@ -420,18 +438,20 @@ class QueryCard(ABC):
         number: int,
         output_directory: Path,
         panel_paths: Dict[PanelKind, Path],
+        query: RecordedQuery,
     ) -> Optional[Path]:
         """
-        This card's pictures stacked into one, or None for a card that shows each of them
-        as a figure of its own.
+        This card's pictures stacked into one under the query and its answer, or None
+        for a card that shows each of them as a figure of its own.
 
         Every picture the card declares keeps its place, drawn or not: a reader shown
-        three of four levels cannot tell whether the fourth was left out or never
+        two of three levels cannot tell whether the third was left out or never
         existed.
 
         :param number: Which asking of this card's question it shows.
         :param output_directory: Where the file goes.
         :param panel_paths: Where each of the card's pictures was left.
+        :param query: The query the figure shows, written across its head.
         """
         if not self.layered:
             return None
@@ -445,6 +465,7 @@ class QueryCard(ABC):
                 for panel in self.panels
             ],
             output_directory / self.layered_file_name(number),
+            title=self.title % (query.text, query.answer),
         )
 
     def _figures(
@@ -505,8 +526,10 @@ class QueryCard(ABC):
             return self._event_chart(trial, query)
         if panel is PanelKind.PLAN_TIMELINE:
             return self._plan_chart(trial, query)
+        if panel is PanelKind.RUN_TIMELINE:
+            return self._run_timeline(trial, query)
         if panel is PanelKind.POSE_CHANGE:
-            return self._pose_change(trial, query)
+            return self._pose_change(trial, query, artifacts)
         if panel is PanelKind.CAMERA_FRAME:
             return self._camera_frame(trial, query, artifacts)
         return self._camera_frames_around(trial, query, artifacts)
@@ -540,17 +563,48 @@ class QueryCard(ABC):
             trial,
             mark=query.moment,
             emphasise=self.emphasise(query.question, trial),
+            identity=self.identity,
         )
 
-    def _pose_change(
+    def _run_timeline(
         self, trial: RecordedTrial, query: RecordedQuery
     ) -> Optional[CardPanel]:
         """
-        The object drawn where it was and where it ended up. None where the run saw it
-        move at no point, or where the twin holds it fixed.
+        What the monitor reported over what the robot was running, on one axis, with
+        the answered event and the query's own moment marked. None where the run
+        reported nothing and recorded no plan.
 
         :param trial: The trial the query was asked during.
         :param query: The query this card shows.
+        """
+        if not trial.ticks and not plans_of(trial):
+            return None
+        answered = self.emphasise(query.question, trial)
+        return RunTimeline().of(
+            trial,
+            asked_at=query.moment,
+            emphasise=answered,
+            happened_at=(
+                self.reported_at(answered[0], trial, query.moment) if answered else None
+            ),
+            either_side=EITHER_SIDE,
+            identity=self.identity,
+        )
+
+    def _pose_change(
+        self,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        artifacts: Optional[EpisodeArtifacts],
+    ) -> Optional[CardPanel]:
+        """
+        The object drawn where it was and where it ended up, with the robot as it stood
+        when the event was reported wherever the run traced its joints. None where the
+        run saw the object move at no point, or where the twin holds it fixed.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        :param artifacts: The episode's own files, or None.
         """
         answered = self.emphasise(query.question, trial)
         if not answered:
@@ -563,8 +617,30 @@ class QueryCard(ABC):
         if not can_be_stood_somewhere_else(subject.parent_connection):
             return None
         return PoseChangeRender(world=world).of(
-            PoseChange(subject=subject, before=change.before, after=change.after)
+            PoseChange(subject=subject, before=change.before, after=change.after),
+            robot_at=self._joints_at(
+                self.reported_at(answered[0], trial, query.moment), trial, artifacts
+            ),
         )
+
+    @staticmethod
+    def _joints_at(
+        moment: float, trial: RecordedTrial, artifacts: Optional[EpisodeArtifacts]
+    ) -> Optional[JointPositions]:
+        """
+        Where every joint stood at the given moment of the trial, or None where the run
+        traced no joints.
+
+        :param moment: Seconds into the trial.
+        :param trial: The trial to read.
+        :param artifacts: The episode's own files, or None.
+        """
+        if artifacts is None:
+            return None
+        kept = artifacts.trial(trial.number)
+        if not kept.kept_a_joint_trace:
+            return None
+        return kept.joint_trace.at(moment)
 
     def _camera_frame(
         self,
@@ -596,87 +672,28 @@ class QueryCard(ABC):
         """
         What the robot's camera saw either side of the answered event.
 
-        A run on the robot kept a recording, so the two frames are read back out of it. A
-        simulated run kept none, and its camera is the one the twin states, so what it saw
-        is rendered from the twin instead. None where the run answered no event to take
-        the frames around, or where neither camera is there to look through.
+        A run on the robot kept a bag, so the two frames are read back out of it; a run
+        that kept what its camera saw along the trial, with the moments, is read the
+        same way. None where the run answered no event to take the frames around, or
+        kept no camera at all.
 
         :param trial: The trial the query was asked during.
         :param query: The query this card shows.
         :param artifacts: The episode's own files, or None.
         """
         answered = self.emphasise(query.question, trial)
-        if not answered:
+        if not answered or artifacts is None:
             return None
-        recorded = self._recorded_frames_around(answered[0], trial, artifacts, query)
-        if recorded is not None:
-            return recorded
-        return self._rendered_frames_around(answered[0], trial)
-
-    def _recorded_frames_around(
-        self,
-        answered: DetectionEvent,
-        trial: RecordedTrial,
-        artifacts: Optional[EpisodeArtifacts],
-        query: RecordedQuery,
-    ) -> Optional[CardPanel]:
-        """
-        The two frames read out of the recording a run on the robot kept, or None where
-        it kept none.
-
-        :param answered: The event the frames are taken either side of.
-        :param trial: The trial it was reported in.
-        :param artifacts: The episode's own files, or None.
-        :param query: The query this card shows.
-        """
-        if artifacts is None:
-            return None
-        either_side = BagFramesAround(
-            artifacts=artifacts,
-            moment=self.reported_at(answered, trial, query.moment),
-            trial_duration=trial.duration,
+        moment = self.reported_at(answered[0], trial, query.moment)
+        bagged = BagFramesAround(
+            artifacts=artifacts, moment=moment, trial_duration=trial.duration
         )
-        return either_side if either_side.was_recorded else None
-
-    def _rendered_frames_around(
-        self, answered: DetectionEvent, trial: RecordedTrial
-    ) -> Optional[CardPanel]:
-        """
-        The two looks the twin's own camera takes either side of the event, for a run
-        that kept no recording.
-
-        :param answered: The event the looks are taken either side of.
-        :param trial: The trial it was reported in.
-        """
-        world = self.world_of(trial)
-        camera = self.camera_of(world)
-        change = PoseChange.around(answered, trial)
-        if camera is None or change is None:
+        if bagged.was_recorded:
+            return bagged
+        kept = artifacts.trial(trial.number)
+        if not kept.kept_a_camera:
             return None
-        subject = world.get_body_by_name(change.subject.name.name)
-        if not can_be_stood_somewhere_else(subject.parent_connection):
-            return None
-        return SimulatedFramesAround(
-            world=world,
-            change=PoseChange(
-                subject=subject, before=change.before, after=change.after
-            ),
-            camera=camera,
-        )
-
-    @staticmethod
-    def camera_of(world: World) -> Optional[MujocoCamera]:
-        """
-        The camera the twin states, which is what a simulated run's robot looked through.
-
-        :param world: The twin the run happened in.
-        :return: The first camera the world states, or None where it states none.
-        """
-        for entity in world.kinematic_structure_entities:
-            for stated in entity.simulator_additional_properties:
-                if isinstance(stated, MujocoCamera):
-                    return stated
-        return None
+        return RecordedFramesAround(frames=kept.camera, moment=moment)
 
     @staticmethod
     def reported_at(
@@ -872,24 +889,25 @@ class EventAgainstThePlanCard(QueryCard):
     """
     What the robot saw happen to an object, set against what it was running at the time.
 
-    The card that says why the answer is what it is rather than only what it is. Four
-    levels read one under the other: the event the monitor reported, the item of the plan
-    that accounts for it, what the camera saw either side of it, and where the object
-    went. A pick-up the robot performed has an item of the plan standing under it and the
-    piece ends up in the gripper; a piece a person shoved has a translation under an empty
-    stretch of plan, which is the picture of an answer of no.
+    The card that says why the answer is what it is rather than only what it is. The
+    levels read one under the other: the event the monitor reported over the item of
+    the plan that accounts for it, on one time axis; what the camera saw either side of
+    it; and where the object went, with the robot as it stood at the time. A pick-up the
+    robot performed has an item of the plan standing under it and the piece ends up in
+    the gripper; a piece a person shoved has a translation under an empty stretch of
+    plan, which is the picture of an answer of no.
     """
 
     name: ClassVar[QueryCardName] = QueryCardName.EVENT_AGAINST_THE_PLAN
     question: ClassVar[Type[Question]] = PickedUpRecently
     panels: ClassVar[Tuple[PanelKind, ...]] = (
-        PanelKind.TIMELINE,
-        PanelKind.PLAN_TIMELINE,
+        PanelKind.RUN_TIMELINE,
         PanelKind.CAMERA_BEFORE_AND_AFTER,
         PanelKind.POSE_CHANGE,
     )
     caption: ClassVar[str] = "What the run saw happen to the object:"
     layered: ClassVar[bool] = True
+    identity: ClassVar[ObjectIdentity] = SamePiece()
 
     def answers(
         self, asked: PickedUpRecently, world: World
@@ -1035,11 +1053,11 @@ class QueryCardSet:
         for recorded in self._by_episode(trials):
             episode = recorded[0].episode
             episode_directory = output_directory / episode.identifier
-            for number, trial in enumerate(recorded, start=1):
+            for trial in recorded:
                 written.extend(
                     self.write(
                         trial,
-                        episode_directory / (TRIAL_DIRECTORY % number),
+                        episode_directory / (TRIAL_DIRECTORY % trial.number),
                         None if artifacts is None else artifacts.open_for(episode),
                     )
                 )

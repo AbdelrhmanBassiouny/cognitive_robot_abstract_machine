@@ -9,6 +9,7 @@ import experiments.scenarios.runner
 import experiments.scenarios.scenario
 import experiments.scenarios.trial
 import experiments.episodes.artifacts
+import experiments.episodes.trace
 import experiments.episodes.observer
 import experiments.episodes.recording
 import experiments.episodes.long_term_memory
@@ -24,6 +25,7 @@ import experiments.paper.camera_frame
 import experiments.paper.chart
 import experiments.paper.figure
 import experiments.paper.layered
+import experiments.paper.lettering
 import experiments.paper.figure_set
 import experiments.paper.measurement
 import experiments.paper.outcomes
@@ -34,6 +36,7 @@ import experiments.paper.queries
 import experiments.paper.query_card
 import experiments.paper.questions
 import experiments.paper.run_plan
+import experiments.paper.run_timeline
 import experiments.paper.scene
 import experiments.paper.timeline
 import experiments.tracy_experiments.pickup.perceived_sorting
@@ -94,6 +97,7 @@ for episode_machinery_module in (
 # and how they are rendered - a path names a file rather than describing one, and the
 # transcript is a reading of queries the trials' rows already carry
 ignored_classes |= set(classes_of_module(experiments.episodes.artifacts))
+ignored_classes |= set(classes_of_module(experiments.episodes.trace))
 
 # the Montessori scenes and scripts are the same kind of description one level down:
 # they say how a sorting run is set up and what is done to it, and what a run then

@@ -18,6 +18,7 @@ from segmind.datastructures.events import (
 )
 
 from experiments.episodes.episode import Episode, RecordedTrial, Tick
+from experiments.episodes.trace import JointPositions
 from experiments.paper.panel import ANSWER_COLOR
 from experiments.paper.scene import SceneRender
 from experiments.paper.pose_change import (
@@ -25,9 +26,13 @@ from experiments.paper.pose_change import (
     EventStatesNoPoseChangeError,
     PoseChange,
     PoseChangeRender,
+    stand,
 )
 from experiments.scenarios.trial import TrialOutcome
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.geometry import Color
@@ -328,3 +333,93 @@ def test_the_panel_is_framed_on_the_move_rather_than_the_whole_world(
             scene_with_a_loose_piece.root, stands
         )[:3, 3]
         assert np.all(framed[0] <= at) and np.all(at <= framed[1])
+
+
+# %% the robot as it stood at the time
+
+
+def a_second_loose_body(world: World) -> Body:
+    """
+    Another body hanging loose in the scene, standing for the robot's own joints: a
+    trace can put it somewhere for the length of a picture.
+
+    :param world: The world to add it to.
+    """
+    arm = standing_box("the_arm")
+    with world.modify_world():
+        world.add_connection(
+            Connection6DoF.create_with_dofs(
+                world=world, parent=world.get_body_by_name(ANSWERED_NAME), child=arm
+            )
+        )
+    return arm
+
+
+def arm_stood_at(world: World, x: float) -> JointPositions:
+    """
+    Where every joint of the world stands once the arm is at the given place.
+
+    :param world: The world to read.
+    :param x: Where along x the arm stands, in metres.
+    """
+    arm = world.get_body_by_name("the_arm")
+    stand(world, arm, HomogeneousTransformationMatrix.from_xyz_rpy(x=x))
+    positions = JointPositions(
+        moment=MOVED_AT,
+        positions={
+            str(name): position
+            for name, position in world.state.to_position_dict().items()
+        },
+    )
+    stand(world, arm, HomogeneousTransformationMatrix.from_xyz_rpy(x=0.0))
+    return positions
+
+
+@needs_a_renderer
+def test_the_robot_is_drawn_where_the_trace_says_it_stood(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    The picture is of the moment the event was reported, so the robot stands as it did
+    then rather than as the run left it -- which shows as a different picture.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    a_second_loose_body(scene_with_a_loose_piece)
+    change = PoseChange.of(moved(subject))
+    render = PoseChangeRender(world=scene_with_a_loose_piece)
+
+    as_left = render.of(change)
+    as_traced = render.of(change, robot_at=arm_stood_at(scene_with_a_loose_piece, 0.3))
+
+    assert not np.array_equal(as_left.image, as_traced.image)
+
+
+def test_the_joints_go_back_where_they_stood_after_the_picture(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    The next question is answered from the world the run recorded, so a picture of an
+    earlier moment leaves every joint where the run left it.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    arm = a_second_loose_body(scene_with_a_loose_piece)
+    stood = scene_with_a_loose_piece.state.to_position_dict()
+
+    PoseChangeRender(world=scene_with_a_loose_piece).stand_a_ghost_at(
+        subject, Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
+    )
+    traced = arm_stood_at(scene_with_a_loose_piece, 0.3)
+    traced.restore_into(scene_with_a_loose_piece)
+    assert (
+        scene_with_a_loose_piece.compute_forward_kinematics_np(
+            scene_with_a_loose_piece.root, arm
+        )[0, 3]
+        != 0.0
+    )
+
+    JointPositions(
+        moment=MOVED_AT,
+        positions={str(name): position for name, position in stood.items()},
+    ).restore_into(scene_with_a_loose_piece)
+
+    assert scene_with_a_loose_piece.state.to_position_dict() == stood

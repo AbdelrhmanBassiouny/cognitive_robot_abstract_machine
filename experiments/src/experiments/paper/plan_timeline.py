@@ -15,7 +15,7 @@ from typing_extensions import Optional, Sequence, Tuple
 from experiments.episodes.episode import RecordedTrial
 from experiments.paper.chart import ChartRow, RenderedChart, TimelineSpan, TrialChart
 from experiments.paper.panel import ANSWER_COLOR
-from experiments.paper.run_plan import PlanItem, RunPlan
+from experiments.paper.run_plan import ObjectIdentity, PlanItem, RunPlan, SameName
 from semantic_digital_twin.world_description.geometry import Color
 
 # %% one row of the chart
@@ -97,6 +97,7 @@ class PlanTimeline:
         trial: RecordedTrial,
         mark: Optional[float] = None,
         emphasise: Sequence[DetectionEvent] = (),
+        identity: ObjectIdentity = SameName(),
     ) -> RenderedPlanTimeline:
         """
         Draw the plan one trial ran, with the moment a query was asked marked on it.
@@ -106,9 +107,11 @@ class PlanTimeline:
             nothing.
         :param emphasise: The events the query answered, whose accounting items are
             picked out. An event no item of the plan accounts for picks out nothing.
+        :param identity: How a body an item acts on is told to be the body an event is
+            about.
         :raises TrialRanNoPlanError: If the trial recorded no plan.
         """
-        rows = self._rows_of(RunPlan.of(trial), emphasise)
+        rows = self.rows_of(RunPlan.of(trial, identity=identity), emphasise)
         return RenderedPlanTimeline(
             rows=rows,
             mark=mark,
@@ -118,7 +121,7 @@ class PlanTimeline:
     # %% reading the rows off the plan
 
     @staticmethod
-    def _rows_of(
+    def rows_of(
         plan: RunPlan, emphasise: Sequence[DetectionEvent]
     ) -> Tuple[PlanRow, ...]:
         """

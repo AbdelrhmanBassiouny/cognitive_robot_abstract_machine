@@ -36,13 +36,27 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 import cv2
 import mujoco
 import numpy as np
-from typing_extensions import Dict, List, Optional
+from typing_extensions import Callable, Dict, List, Optional
 
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import ApproachDirection, Arms, VerticalAlignment
+from coraplex.datastructures.enums import (
+    ApproachDirection,
+    Arms,
+    ExecutionType,
+    VerticalAlignment,
+)
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.plans.factories import sequential
 from coraplex.view_manager import ViewManager
+from experiments.episodes.artifacts import EpisodeArtifacts, Transcript
+from experiments.episodes.episode import Episode, RecordedTrial
+from experiments.episodes.observer import EpisodeObserver, ObserverListener
+from experiments.episodes.recording import RecordsNothing, RecordsTrials
+from experiments.episodes.trace import JointTrace, TimedFrames
+from experiments.montessori.event_monitoring import (
+    MontessoriEventMonitor,
+    build_shape_monitor_in_scene,
+)
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.overlay import CameraView, DetectionOverlay
@@ -63,6 +77,9 @@ from experiments.montessori.pieces import SMALLER_PIECES, KnownPieceSet
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.montessori.world import BOARD_SCALE
+from experiments.questions.question import QuestionedThings
+from experiments.questions.question_set import QuestionSet
+from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.equipment import (
     TRACY_MOUNT_ROOT_NAME,
     apply_gravity_compensation,
@@ -102,6 +119,7 @@ from semantic_digital_twin.datastructures.definitions import (
     StaticJointState,
 )
 from semantic_digital_twin.reasoning.predicates import InsideOf
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -199,6 +217,34 @@ its width, since a film is watched rather than measured.
 FRAMES_PER_SECOND = 15
 """
 How many frames a second the films keep.
+"""
+
+SCENARIO_NAME = "the robot sorts the pieces it saw"
+"""
+What the episode a run records calls its scenario.
+"""
+
+TRACE_PERIOD = 0.2
+"""
+Seconds of simulated time between two samples of what the run keeps of itself: a tick
+of the event monitor and a reading of every joint.
+"""
+
+DEFAULT_PIECE_ASKED_ABOUT = MontessoriShapeCategory.CUBE
+"""
+The piece the event monitor watches and the question set is asked about unless told
+otherwise.
+"""
+
+SORTED_INTO_ITS_HOLE = 0.9
+"""
+How much of a piece must stand in the space under its hole for the run to count as
+having sorted it.
+"""
+
+SHOVE_STEP = 0.02
+"""
+Seconds of simulated time between two steps of a shove.
 """
 
 
@@ -576,6 +622,11 @@ class MujocoSortingRig(ShapeSorter):
     Grasp used for every piece.
     """
 
+    observer: EpisodeObserver
+    """
+    What keeps every plan this rig performs, for the episode the run records.
+    """
+
     def sort(self, piece: MontessoriShape, release_pose: Pose) -> None:
         plan = sequential(
             [
@@ -601,6 +652,7 @@ class MujocoSortingRig(ShapeSorter):
             self.context,
         ).plan
         plan.perform()
+        self.observer.performed(plan)
         logger.info("%s sorted.", piece.name)
 
 
@@ -634,9 +686,19 @@ class SimulationFilm(SimulationObserver):
     How many frames a second of simulated time the film keeps.
     """
 
+    clock: Callable[[], float] = field(default=lambda: 0.0)
+    """
+    Reads how far into the trial the run is, which is what each frame is stamped with.
+    """
+
     frames: List[np.ndarray] = field(init=False, default_factory=list)
     """
     The frames kept so far.
+    """
+
+    moments: List[float] = field(init=False, default_factory=list)
+    """
+    How far into the trial each frame was taken, as the clock read it.
     """
 
     _next_frame_at: float = field(init=False, default=0.0)
@@ -662,6 +724,7 @@ class SimulationFilm(SimulationObserver):
                 )
             self._renderer.update_scene(simulator._mj_data, self.camera_name)
             self.frames.append(self._renderer.render().copy())
+        self.moments.append(self.clock())
 
     def video(self) -> RecordedVideo:
         """
@@ -671,6 +734,16 @@ class SimulationFilm(SimulationObserver):
             frames=self.frames, frames_per_second=self.frames_per_second
         )
 
+    def timed_frames(self) -> TimedFrames:
+        """
+        :return: The film with each frame at the second of the trial it was taken.
+        """
+        return TimedFrames(
+            frames=list(self.frames),
+            moments=list(self.moments),
+            frames_per_second=self.frames_per_second,
+        )
+
     def close(self) -> None:
         """
         Let go of the renderer, once the simulation it drew from has stopped.
@@ -678,6 +751,83 @@ class SimulationFilm(SimulationObserver):
         if self._renderer is not None:
             self._renderer.close()
             self._renderer = None
+
+
+# %% what the run keeps of itself as it goes
+
+
+@dataclass
+class TrialTracing(SimulationObserver):
+    """
+    Keeps, every so much simulated time, what the run records of the trial besides its
+    films: a tick of the event monitor, and where every joint stands.
+
+    Ticked from the thread stepping the physics, which is the only thread that may
+    read the world the monitor watches.
+    """
+
+    world: World
+    """
+    The world the joints are read from.
+    """
+
+    observer: EpisodeObserver
+    """
+    The trial's own clock, which every sample is stamped against.
+    """
+
+    monitor: MontessoriEventMonitor
+    """
+    The monitor ticked against the world.
+    """
+
+    joints: JointTrace = field(default_factory=JointTrace)
+    """
+    Where every joint stood, sampled so far.
+    """
+
+    period: float = TRACE_PERIOD
+    """
+    Seconds of simulated time between two samples.
+    """
+
+    _next_at: float = field(init=False, default=0.0)
+    """
+    The simulated time the next sample is due at.
+    """
+
+    def simulation_advanced(self, simulated_time: float) -> None:
+        if simulated_time < self._next_at:
+            return
+        self._next_at = simulated_time + self.period
+        self.monitor.tick()
+        self.joints.sample(self.world, self.observer.elapsed_seconds)
+
+
+@dataclass(frozen=True)
+class Shove:
+    """
+    Someone pushing one piece across the table while the robot is idle.
+
+    What tells a run in which the robot moved the piece from one in which something
+    else did: the piece ends up somewhere else in both, but here no item of the plan
+    was running when it moved.
+    """
+
+    category: MontessoriShapeCategory
+    """
+    The kind of piece that is pushed.
+    """
+
+    along_y: float
+    """
+    How far the piece is pushed along the table's y axis, in metres.
+    """
+
+    over: float = 1.0
+    """
+    How many simulated seconds the push takes.
+    """
 
 
 # %% the run
@@ -714,6 +864,43 @@ class SimulatedPickupDemo:
     Whether the run is filmed; drawing the frames is most of what an unpaced run costs.
     """
 
+    piece_asked_about: MontessoriShapeCategory = DEFAULT_PIECE_ASKED_ABOUT
+    """
+    The piece the event monitor watches and the question set is asked about.
+    """
+
+    shove: Optional[Shove] = None
+    """
+    A push someone gives a piece after the look and before the sorting, while the
+    robot is idle, or None for a run nothing but the robot acts in.
+    """
+
+    records_trials: RecordsTrials = field(default_factory=RecordsNothing)
+    """
+    Where the trial the run makes goes once it has finished.
+    """
+
+    observer: EpisodeObserver = field(default_factory=EpisodeObserver)
+    """
+    What collects, while the run goes, what its trial records: the monitor's ticks,
+    the plans performed and the questions asked.
+    """
+
+    episode: Episode = field(init=False)
+    """
+    The episode the run records, once :meth:`perform` has started it.
+    """
+
+    trial: RecordedTrial = field(init=False)
+    """
+    The trial the run recorded, once :meth:`perform` has finished.
+    """
+
+    tracing: TrialTracing = field(init=False)
+    """
+    The monitor's ticks and the joint trace, once :meth:`perform` has run.
+    """
+
     sorting: PerceivedSorting = field(init=False)
     """
     The run, once :meth:`perform` has built it.
@@ -736,8 +923,23 @@ class SimulatedPickupDemo:
 
     def perform(self) -> None:
         """
-        Start the simulation, look, sort every piece the look found, and stop.
+        Start the simulation, look, sort every piece the look found, ask the question
+        set, and stop -- recording all of it as one trial of one episode.
         """
+        self.episode = Episode(
+            scenario_name=SCENARIO_NAME,
+            execution_type=ExecutionType.SIMULATED,
+            world=self.lab.reality,
+        )
+        self.observer.restart()
+        watched = self.lab.real_piece_of(self.piece_asked_about)
+        self.tracing = TrialTracing(
+            world=self.lab.reality,
+            observer=self.observer,
+            monitor=build_shape_monitor_in_scene(
+                self.lab.reality, watched, listener=ObserverListener(self.observer)
+            ),
+        )
         overview_camera = camera_looking_at(
             self.lab.reality,
             OVERVIEW_CAMERA_NAME,
@@ -753,11 +955,15 @@ class SimulatedPickupDemo:
             followers=[self.lab.belief],
         )
         self.overview = SimulationFilm(
-            simulation, OVERVIEW_CAMERA_NAME, OVERVIEW_VIDEO_RESOLUTION
+            simulation,
+            OVERVIEW_CAMERA_NAME,
+            OVERVIEW_VIDEO_RESOLUTION,
+            clock=self._elapsed,
         )
         self.camera_film = SimulationFilm(
-            simulation, CAMERA_NAME, CAMERA_VIDEO_RESOLUTION
+            simulation, CAMERA_NAME, CAMERA_VIDEO_RESOLUTION, clock=self._elapsed
         )
+        simulation.observers.append(self.tracing)
         if self.filmed:
             simulation.observers.extend([self.overview, self.camera_film])
         self.lab.camera.drawn_by = simulation.multi_sim
@@ -782,16 +988,111 @@ class SimulatedPickupDemo:
                         PICK_ARM, self.lab.believed_robot
                     ),
                 ),
+                observer=self.observer,
             ),
         )
         with simulation, self.lab.camera:
             self.lab.hold_the_parked_pose(simulation)
             self.sorting.perceive()
+            if self.shove is not None:
+                self._shove(simulation, self.shove)
             self.sorting.sort_every_piece()
             simulation.advance(1.0)
+            self.observer.ask(
+                self.question_set(), self.lab.robot, self.observer.elapsed_seconds
+            )
             self.overview.close()
             self.camera_film.close()
         overview_camera.body.simulator_additional_properties.remove(overview_camera)
+        self.trial = self.observer.into(
+            RecordedTrial(
+                episode=self.episode,
+                outcome=self._outcome(),
+                duration=self.observer.elapsed_seconds,
+            )
+        )
+        self.records_trials.record(self.trial)
+
+    def _elapsed(self) -> float:
+        """
+        How far into the trial the run is, in seconds.
+        """
+        return self.observer.elapsed_seconds
+
+    def _shove(self, simulation: RealTimeSimulation, shove: Shove) -> None:
+        """
+        Push a piece across the table in the simulation, a little further every step,
+        while the robot holds its parked pose.
+
+        Pushed in the simulation rather than in the world the robot plans in: the robot
+        did not see it happen, which is what the plan it made before the push does not
+        know.
+
+        :param simulation: The running simulation.
+        :param shove: The push to give.
+        """
+        piece = self.lab.real_piece_of(shove.category)
+        started_at = self.lab.real_position_of(shove.category)
+        steps = max(1, round(shove.over / SHOVE_STEP))
+        for step in range(1, steps + 1):
+            pushed_to = started_at.copy()
+            pushed_to[1] += shove.along_y * step / steps
+            simulation.multi_sim.simulator.set_body_position(
+                piece.root.name.name, pushed_to
+            )
+            simulation.advance(SHOVE_STEP)
+        simulation.advance(0.5)
+
+    def question_set(self) -> QuestionSet:
+        """
+        The working-memory question set, asked about the piece the monitor watched,
+        placed against the next piece the look found, from where the robot stands.
+        """
+        asked_about = self.lab.real_piece_of(self.piece_asked_about)
+        others = [
+            self.lab.real_piece_of(piece.shape_category)
+            for piece in self.sorting.pieces
+            if piece.shape_category is not self.piece_asked_about
+        ]
+        compared_against = others[0] if others else self.lab.scene.board
+        return QuestionSet.over_working_memory(
+            QuestionedThings(
+                object_asked_about=asked_about.root,
+                object_compared_against=compared_against.root,
+                object_in_the_hand=asked_about.root,
+                own_body_asked_about=ViewManager.get_end_effector_view(
+                    PICK_ARM, self.lab.robot
+                ).tool_frame.name,
+                point_of_view=HomogeneousTransformationMatrix(
+                    self.lab.robot.root.global_transform.to_np()
+                ),
+            )
+        )
+
+    def _outcome(self) -> TrialOutcome:
+        """
+        Whether the run sorted the piece it was asked about into its hole.
+        """
+        sorted_it = (
+            self.lab.containment_in_its_hole(self.piece_asked_about)
+            >= SORTED_INTO_ITS_HOLE
+        )
+        return TrialOutcome.SUCCEEDED if sorted_it else TrialOutcome.FAILED
+
+    def keep(self, artifacts: EpisodeArtifacts) -> EpisodeArtifacts:
+        """
+        Keep everything the run left behind as the artifacts of its episode: the film of
+        the table, the transcript, and the trial's own camera film and joint trace.
+
+        :param artifacts: Where the episode's artifacts go.
+        :return: ``artifacts``.
+        """
+        artifacts.keep_video(self.overview.video())
+        artifacts.keep_transcript(Transcript(episode=self.episode, trials=[self.trial]))
+        kept = artifacts.trial(self.trial.number)
+        kept.keep_camera(self.camera_film.timed_frames())
+        kept.keep_joint_trace(self.tracing.joints)
+        return artifacts
 
     def write_artifacts(self, directory: Path) -> List[Path]:
         """

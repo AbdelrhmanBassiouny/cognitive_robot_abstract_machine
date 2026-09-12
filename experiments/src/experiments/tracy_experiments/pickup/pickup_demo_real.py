@@ -31,6 +31,13 @@ fingers then travel past where the grasp first settled, the piece has left the p
 :mod:`~experiments.tracy_experiments.montessori.gripper_feedback`). Each poll's verdict
 is logged, and a slip also shows on the dashboard as a ``GripperSlipEvent``.
 
+The run is recorded as one trial of one episode, the way a simulated run is: every
+plan the rig performs, every event its monitors report and the working-memory question
+set asked about one piece at the end go onto the trial, and where every joint stood
+along the run is kept beside the episode's other artifacts -- with the bag, when one is
+recorded -- so the paper's cards can be drawn from the run on the robot exactly as from
+a run in MuJoCo.
+
 Run with (the camera, ``iai_tracy_description`` and the Giskard/world-fetcher ROS stack
 must be running)::
 
@@ -52,6 +59,10 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
+
+from krrood.exceptions import DataclassException
+from typing_extensions import Optional
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -74,10 +85,23 @@ from coraplex.robot_plans.actions.core.pick_up import ReachAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.motions.gripper import MoveToolCenterPointMotion
 from coraplex.view_manager import ViewManager
+from experiments.episodes.artifacts import (
+    ArtifactDirectory,
+    EpisodeArtifacts,
+    Transcript,
+)
+from experiments.episodes.episode import Episode, RecordedTrial
+from experiments.episodes.observer import EpisodeObserver
+from experiments.episodes.recording import open_recording
+from experiments.episodes.trace import JointTraceRecorder
 from experiments.montessori.perception.node import build_node
 from experiments.montessori.perception.recorded_setup import lab_board
-from experiments.montessori.semantics import MontessoriShape
+from experiments.montessori.results_database import ConfiguredDatabase, ResultsDatabase
+from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.network_limits import check_large_messages_can_arrive
+from experiments.questions.question import QuestionedThings
+from experiments.questions.question_set import QuestionSet
+from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.montessori.event_dashboard import (
     EventFeed,
     run_dashboard,
@@ -116,7 +140,10 @@ from segmind.datastructures.events import (
 )
 from segmind.detectors.base import SegmindContext
 from semantic_digital_twin.datastructures.definitions import GripperState
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
 from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
 from semantic_digital_twin.robots.tracy import Tracy
@@ -166,6 +193,16 @@ transient, which both seeds
 :class:`~experiments.tracy_experiments.montessori.gripper_feedback.SlipDetector` from a
 position the grasp has not actually reached and risks a first poll that reads the
 still-settling travel as a slip.
+"""
+
+SCENARIO_NAME = "the robot sorts the pieces it saw"
+"""
+What the episode a run records calls its scenario, the same as its simulated twin.
+"""
+
+DEFAULT_PIECE_ASKED_ABOUT = MontessoriShapeCategory.CUBE
+"""
+The piece the question set is asked about at the end of the run unless told otherwise.
 """
 
 BAG_NAME_PREFIX = "tracy_pickup_demo"
@@ -299,6 +336,12 @@ class _SortingRig(ShapeSorter):
     Seconds to let the grasp settle after the lift before it is read.
     """
 
+    observer: EpisodeObserver = field(default_factory=EpisodeObserver)
+    """
+    What keeps, for the episode the run records, every plan this rig performs and every
+    event its monitors report.
+    """
+
     def sort(self, piece: MontessoriShape, release_pose: Pose) -> None:
         """
         Pick ``piece`` off the table and release it at ``release_pose``.
@@ -374,21 +417,43 @@ class _SortingRig(ShapeSorter):
         piece_name = body.name.name
         monitor.context.require_extension(SegmindContext).logger.add_callback(
             DetectionEvent,
-            lambda event, name=piece_name: self.feed.publish(name, event),
+            lambda event, name=piece_name: self.note_event(name, event),
         )
         close_setpoint = self.close_table.setpoint_for(piece.shape_category)
         monitor.start()
         try:
             self.gripper.move(PICK_ARM, GripperState.OPEN)
-            reach_plan.perform()
+            self.perform_and_record(reach_plan)
             self.gripper.close_to(PICK_ARM, close_setpoint)
-            lift.perform()
-            self._carry_watching_for_slip(body, close_setpoint, place.perform)
+            self.perform_and_record(lift)
+            self._carry_watching_for_slip(
+                body, close_setpoint, lambda: self.perform_and_record(place)
+            )
             self.gripper.move(PICK_ARM, GripperState.OPEN)
-            retract_and_park.perform()
+            self.perform_and_record(retract_and_park)
         finally:
             monitor.stop()
         _log_pick_events(body, monitor)
+
+    def perform_and_record(self, plan) -> None:
+        """
+        Perform one plan and keep it for the episode, its nodes carrying when they ran.
+
+        :param plan: The plan to perform.
+        """
+        plan.perform()
+        self.observer.performed(plan)
+
+    def note_event(self, piece_name: str, event: DetectionEvent) -> None:
+        """
+        Pass one event a monitor reported on to the dashboard, and keep it as a tick of
+        the episode's trial stamped with the moment it arrived.
+
+        :param piece_name: The piece the event is about, as the dashboard names it.
+        :param event: The event.
+        """
+        self.feed.publish(piece_name, event)
+        self.observer.tick(self.observer.elapsed_seconds, [event])
 
     def _carry_watching_for_slip(
         self, body: Body, close_setpoint: float, carry: Callable[[], None]
@@ -462,12 +527,98 @@ class _SortingRig(ShapeSorter):
             self.feed.publish(body.name.name, GripperSlipEvent(tracked_object=body))
 
 
+def piece_asked_about(
+    sorting: PerceivedSorting, category: MontessoriShapeCategory
+) -> MontessoriShape:
+    """
+    The piece the look found of the given kind, which the run is asked about.
+
+    :param sorting: The run, once it has looked.
+    :param category: The kind of piece.
+    :raises PieceNotSeenError: If the look found no piece of that kind.
+    """
+    for piece in sorting.pieces:
+        if piece.shape_category is category:
+            return piece
+    raise PieceNotSeenError(category=category)
+
+
+def question_set_about(
+    sorting: PerceivedSorting, piece: MontessoriShape, robot: Tracy
+) -> QuestionSet:
+    """
+    The working-memory question set, asked about one of the pieces the look found,
+    placed against the next one, from where the robot stands.
+
+    :param sorting: The run, once it has looked.
+    :param piece: The piece the questions single out.
+    :param robot: The robot the questions are put to.
+    """
+    others = [other for other in sorting.pieces if other is not piece]
+    compared_against = others[0] if others else sorting.board
+    return QuestionSet.over_working_memory(
+        QuestionedThings(
+            object_asked_about=piece.root,
+            object_compared_against=compared_against.root,
+            object_in_the_hand=piece.root,
+            own_body_asked_about=ViewManager.get_end_effector_view(
+                PICK_ARM, robot
+            ).tool_frame.name,
+            point_of_view=HomogeneousTransformationMatrix(
+                robot.root.global_transform.to_np()
+            ),
+        )
+    )
+
+
+@dataclass
+class PieceNotSeenError(DataclassException):
+    """
+    Raised when the run is asked about a kind of piece the look did not find.
+    """
+
+    category: MontessoriShapeCategory
+    """
+    The kind of piece asked about.
+    """
+
+    def error_message(self) -> str:
+        return "The look found no %s to ask about." % self.category.value
+
+    def suggest_correction(self) -> str:
+        return (
+            "Ask about a piece standing on the table, or put one of that kind there "
+            "before the look."
+        )
+
+
+def outcome_of(trial_events, asked_about: Body) -> TrialOutcome:
+    """
+    Whether the run picked the piece it was asked about up, as its monitors saw it.
+
+    :param trial_events: Every event the run's monitors reported.
+    :param asked_about: The piece the run is asked about.
+    """
+    picked_up = any(
+        isinstance(event, PickUpEvent) and event.tracked_object is asked_about
+        for event in trial_events
+    )
+    return TrialOutcome.SUCCEEDED if picked_up else TrialOutcome.FAILED
+
+
 def _parse_arguments() -> argparse.Namespace:
     """
     :return: The demo's own command line arguments.
     """
     parser = argparse.ArgumentParser(
         description="Sort the Montessori pieces with the physical Tracy by looking."
+    )
+    parser.add_argument(
+        "--ask-about",
+        type=MontessoriShapeCategory,
+        choices=list(MontessoriShapeCategory),
+        default=DEFAULT_PIECE_ASKED_ABOUT,
+        help="the piece the question set is asked about once the sorting is done",
     )
     parser.add_argument(
         "--record",
@@ -570,9 +721,14 @@ def main() -> None:
     )
     input()
     logger.info("Sorting %d piece(s) on the real robot.", len(sorting.pieces))
+    episode = Episode(
+        scenario_name=SCENARIO_NAME, execution_type=ExecutionType.REAL, world=world
+    )
+    asked_about = piece_asked_about(sorting, arguments.ask_about)
+    question_set = question_set_about(sorting, asked_about, robot)
     # Recording starts here rather than at start-up so the bag holds the sorting itself,
     # not the operator's wait at the prompt above, and closes as soon as the last piece
-    # is placed.
+    # is placed. The trial's own clock starts with it, so the bag and the trial agree.
     recorder = (
         RosbagRecorder.timestamped(
             BAG_NAME_PREFIX,
@@ -582,15 +738,65 @@ def main() -> None:
         if arguments.record
         else contextlib.nullcontext()
     )
+    rig.observer.restart()
+    joints = JointTraceRecorder(
+        _world=world, clock=lambda: rig.observer.elapsed_seconds
+    )
     with (
-        recorder,
+        recorder as bag,
         ExecutionEnvironment(
             execution_type=ExecutionType.REAL, collision_avoidance=True
         ),
     ):
-        park.perform()
+        rig.perform_and_record(park)
         sorting.sort_every_piece()
+        rig.observer.ask(question_set, robot, rig.observer.elapsed_seconds)
+    joints.stop()
     logger.info("Sorting finished.")
+    trial = rig.observer.into(
+        RecordedTrial(
+            episode=episode,
+            outcome=outcome_of(
+                [event for tick in rig.observer.ticks for event in tick.events],
+                asked_about.root,
+            ),
+            duration=rig.observer.elapsed_seconds,
+        )
+    )
+    keep_the_episode(trial, joints, None if bag is None else Path(bag.output_directory))
+
+
+def keep_the_episode(
+    trial: RecordedTrial, joints: JointTraceRecorder, bag_directory: Optional[Path]
+) -> EpisodeArtifacts:
+    """
+    Record the trial to the configured database and keep the run's artifacts beside
+    it: the transcript, the trace of the joints, and the bag if one was recorded.
+
+    :param trial: The trial the run recorded.
+    :param joints: The trace of where every joint stood along it.
+    :param bag_directory: The bag the run recorded, or None for a run that recorded
+        none.
+    :return: The artifacts that were kept.
+    """
+    recording = open_recording(
+        ResultsDatabase(uri=ConfiguredDatabase.resolve_reachable(None).uri)
+    )
+    try:
+        recording.record(trial)
+    finally:
+        recording.close()
+    artifacts = ArtifactDirectory().open_for(trial.episode)
+    artifacts.keep_transcript(Transcript(episode=trial.episode, trials=[trial]))
+    artifacts.trial(trial.number).keep_joint_trace(joints.trace)
+    if bag_directory is not None:
+        artifacts.keep_directory(bag_directory)
+    logger.info(
+        "Episode %s recorded; artifacts in %s",
+        trial.episode.identifier,
+        artifacts.directory,
+    )
+    return artifacts
 
 
 if __name__ == "__main__":

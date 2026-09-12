@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
 from dataclasses import dataclass, field
 
 from typing_extensions import List, Dict, ClassVar, Optional, TYPE_CHECKING
@@ -37,6 +38,21 @@ if TYPE_CHECKING:
     from coraplex.datastructures.dataclasses import Context
 
 logger = logging.getLogger(__name__)
+
+HELD_BY_THE_PLAN = (LifeCycleValues.PAUSED, LifeCycleValues.INTERRUPTED)
+"""
+The states a plan sets on its own nodes to steer the chart, which the chart's own life
+cycles are not allowed to overwrite.
+"""
+
+ENDED = (
+    LifeCycleValues.SUCCEEDED,
+    LifeCycleValues.FAILED,
+    LifeCycleValues.INTERRUPTED,
+)
+"""
+The states a node does not run on from.
+"""
 
 
 @dataclass
@@ -348,6 +364,8 @@ class GiskardExecutable(Executable):
 
             tick_start_time = time.time()
             executor.tick()
+            ticked_at = datetime.now()
+            self.keep_the_motions_in_step(started_at=ticked_at, ended_at=ticked_at)
             executor.pacer.sleep()
             counter += 1
             if tick_period is not None:
@@ -376,8 +394,37 @@ class GiskardExecutable(Executable):
         """
         Executes the motion state chart on the real robot via giskard while monitoring
         for interrupts.
+
+        The chart runs inside Giskard, which reports back once it is done, so every
+        motion of it is stamped with the stretch the whole chart ran over.
         """
+        began = datetime.now()
         self.context.giskard_wrapper.execute(self.motion_state_chart)
+        self.keep_the_motions_in_step(started_at=began, ended_at=datetime.now())
+
+    def keep_the_motions_in_step(
+        self, started_at: datetime, ended_at: datetime
+    ) -> None:
+        """
+        Bring each motion's own record up to date with the life cycle its task is in.
+
+        A plan's nodes are not performed one by one: the whole plan runs as one motion
+        statechart, so what a motion node knows of its own run is read off its task
+        after every tick. A node the plan itself holds paused or interrupted is left as
+        the plan set it.
+
+        :param started_at: When a task first seen running now is taken to have started.
+        :param ended_at: When a task first seen ended now is taken to have ended.
+        """
+        for motion, task in self.motion_mappings.items():
+            state = task.life_cycle_state
+            if state is motion.status or motion.status in HELD_BY_THE_PLAN:
+                continue
+            if motion.status is LifeCycleValues.NOT_STARTED:
+                motion.start_time = started_at
+            if state in ENDED:
+                motion.end_time = ended_at
+            motion.status = state
 
 
 @dataclass

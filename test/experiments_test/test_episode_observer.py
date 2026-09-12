@@ -1,6 +1,7 @@
 """
-Collecting what a trial's runner cannot see - the monitor's ticks, the questions asked
-and the insertions attempted - and writing it onto the trial that was recorded.
+Collecting what a trial's runner cannot see - when it began, the monitor's ticks, the
+questions asked, the plans performed and the insertions attempted - and writing it onto
+the trial that was recorded.
 
 The trial is built on the recording scenario of :mod:`test_scenarios`, so nothing here
 needs a simulator; the questions are asked of the two-arm scene of
@@ -8,6 +9,8 @@ needs a simulator; the questions are asked of the two-arm scene of
 """
 
 from __future__ import annotations
+
+from datetime import datetime
 
 import pytest
 from segmind.datastructures.events import PickUpEvent, TranslationEvent
@@ -143,6 +146,18 @@ def test_questions_asked_twice_are_kept_in_the_order_they_were_asked(
     assert observer.queries == first + second
 
 
+# %% the plans the robot performed
+
+
+def test_a_performed_plan_is_kept(observer: EpisodeObserver):
+    plan = minimal_plan()
+
+    performed = observer.performed(plan)
+
+    assert observer.plans == [performed]
+    assert performed.plan is plan
+
+
 # %% insertion attempts
 
 
@@ -168,12 +183,28 @@ def test_what_was_observed_is_written_onto_the_trial(
     observer.attempted(attempt)
     trial = recorded_trial()
 
+    performed = observer.performed(minimal_plan())
+
     written = observer.into(trial)
 
     assert written is trial
     assert [tick.moment for tick in trial.ticks] == [MOMENT_OF_THE_FIRST_TICK]
     assert trial.queries == rows
+    assert trial.plans == [performed]
     assert trial.insertion_attempts == [attempt]
+
+
+def test_the_trial_is_handed_the_instant_it_began(observer: EpisodeObserver):
+    """
+    A plan's nodes and a monitor's events carry instants rather than seconds into the
+    trial, so the trial keeps the instant it began, which is what places them.
+    """
+    observer.restart()
+    began_at = observer.began_at
+
+    trial = observer.into(recorded_trial())
+
+    assert trial.began_at == began_at
 
 
 def test_the_next_trial_starts_with_nothing_observed(observer: EpisodeObserver):
@@ -183,12 +214,14 @@ def test_the_next_trial_starts_with_nothing_observed(observer: EpisodeObserver):
     """
     observer.tick(MOMENT_OF_THE_FIRST_TICK, [])
     observer.attempted(one_attempt())
+    observer.performed(minimal_plan())
     observer.into(recorded_trial())
 
     next_trial = observer.into(recorded_trial())
 
     assert next_trial.ticks == []
     assert next_trial.queries == []
+    assert next_trial.plans == []
     assert next_trial.insertion_attempts == []
 
 
@@ -196,6 +229,14 @@ def test_restarting_measures_moments_from_the_restart(observer: EpisodeObserver)
     observer.restart()
 
     assert observer.elapsed_seconds < MOMENT_OF_THE_FIRST_TICK
+
+
+def test_restarting_notes_the_instant_the_trial_begins(observer: EpisodeObserver):
+    before = datetime.now()
+
+    observer.restart()
+
+    assert before <= observer.began_at <= datetime.now()
 
 
 # %% what was observed survives the database

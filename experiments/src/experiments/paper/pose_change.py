@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from pathlib import Path
 
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
@@ -22,22 +21,15 @@ from segmind.datastructures.events import (
 from typing_extensions import List, Optional, Tuple
 
 from experiments.episodes.episode import RecordedTrial
-import imageio.v2 as imageio
-import numpy as np
-
-from experiments.montessori.perception.simulated_camera import SimulatedCamera
-from experiments.paper.camera_frame import FRAME_GAP
-from experiments.paper.panel import ANSWER_COLOR, CardPanel
+from experiments.episodes.trace import JointPositions
+from experiments.paper.panel import ANSWER_COLOR
 from experiments.paper.scene import (
     BACKGROUND_COLOR,
     PickedOut,
     RenderedScene,
     SceneRender,
 )
-from semantic_digital_twin.adapters.multi_sim import (
-    MujocoCamera,
-    select_offscreen_rendering_backend,
-)
+from semantic_digital_twin.adapters.multi_sim import MujocoCamera
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -313,7 +305,9 @@ class PoseChangeRender:
     What everything else is drawn in.
     """
 
-    def of(self, change: PoseChange) -> RenderedScene:
+    def of(
+        self, change: PoseChange, robot_at: Optional[JointPositions] = None
+    ) -> RenderedScene:
         """
         Draw the given change of pose as one picture.
 
@@ -323,14 +317,26 @@ class PoseChangeRender:
         else -- a piece now held in the gripper shows its old place on the table through
         whatever happens to stand in front of it.
 
-        The twin is left exactly as it was: the object goes back where it came from and
-        the ghost is taken out again.
+        The twin is left exactly as it was: every joint goes back where it stood, the
+        object goes back where it came from and the ghost is taken out again.
 
         :param change: Where the object was and where it ended up.
+        :param robot_at: Where every joint of the world stood at the moment drawn, so
+            the robot is shown as it was -- reaching for the piece, or holding it --
+            rather than as the run left it. None leaves the joints where they are.
         :raises ObjectHeldFixedError: If the twin holds the object fixed where it is.
         :raises NothingToDrawError: If a camera or a light has to be placed and the world
             holds no geometry to place it around.
         """
+        stood = JointPositions(
+            moment=0.0,
+            positions={
+                str(name): position
+                for name, position in self.world.state.to_position_dict().items()
+            },
+        )
+        if robot_at is not None:
+            robot_at.restore_into(self.world)
         stood_at = standing_pose(self.world, change.subject)
         stand(self.world, change.subject, change.after)
         ghost = self.stand_a_ghost_at(change.subject, change.before)
@@ -347,6 +353,7 @@ class PoseChangeRender:
         finally:
             self.take_the_ghost_away(ghost)
             stand(self.world, change.subject, stood_at)
+            stood.restore_into(self.world)
 
     @staticmethod
     def framed_on(subject: Body, ghost: Body) -> Tuple[Body, ...]:
@@ -417,84 +424,3 @@ class PoseChangeRender:
         return ShapeCollection(
             [copy.copy(shape) for shape in shapes.shapes], reference_frame=worn_by
         )
-
-
-# %% what the robot's own camera saw of it
-
-
-@dataclass
-class SimulatedFramesAround(CardPanel):
-    """
-    What the robot's camera saw either side of the change, rendered from the twin.
-
-    The counterpart of
-    :class:`~experiments.paper.camera_frame.BagFramesAround` for a run that kept no
-    recording: a simulated episode's camera is the one the twin states, so what it saw is
-    rendered rather than read back. Written as one picture with the earlier look on the
-    left.
-    """
-
-    world: World
-    """
-    The twin the camera stands in.
-    """
-
-    change: PoseChange
-    """
-    Where the object was and where it ended up, which is what the two looks are taken
-    either side of.
-    """
-
-    camera: MujocoCamera
-    """
-    The camera to look through, already attached to :attr:`world`.
-    """
-
-    gap: int = FRAME_GAP
-    """
-    How many pixels of blank are left between the two looks.
-    """
-
-    @property
-    def image(self) -> np.ndarray:
-        """
-        The two looks side by side, as red, green and blue in that order.
-
-        The twin is left exactly as it was: the object is stood at each pose for the
-        length of one look and put back afterwards.
-        """
-        stood_at = standing_pose(self.world, self.change.subject)
-        try:
-            earlier = self._look_with_the_object_at(self.change.before)
-            later = self._look_with_the_object_at(self.change.after)
-        finally:
-            stand(self.world, self.change.subject, stood_at)
-        blank = np.zeros(
-            (earlier.shape[0], self.gap, earlier.shape[2]), dtype=earlier.dtype
-        )
-        return np.hstack((earlier, blank, later))
-
-    def write(self, path: Path) -> Path:
-        """
-        Leave the pair at the given path.
-
-        :param path: The file it is written to, its directory created if it is not
-            there.
-        :return:``path``.
-        """
-        path.parent.mkdir(parents=True, exist_ok=True)
-        imageio.imwrite(str(path), self.image)
-        return path
-
-    def _look_with_the_object_at(
-        self, pose: HomogeneousTransformationMatrix
-    ) -> np.ndarray:
-        """
-        One look through the camera, with the object standing at the given pose.
-
-        :param pose: Where to stand it, in the world root frame.
-        """
-        stand(self.world, self.change.subject, pose)
-        select_offscreen_rendering_backend()
-        with SimulatedCamera(world=self.world, camera=self.camera) as looking:
-            return np.ascontiguousarray(looking.frame().color)

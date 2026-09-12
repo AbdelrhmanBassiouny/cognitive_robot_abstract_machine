@@ -20,6 +20,7 @@ from krrood.exceptions import DataclassException
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
+from experiments.paper.lettering import drawn
 from experiments.paper.panel import ANSWER_COLOR, CardPanel
 from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from semantic_digital_twin.adapters.multi_sim import (
@@ -98,20 +99,6 @@ DIFFUSE_LIGHT = [0.75, 0.75, 0.75]
 """
 How much light a surface facing the lamp takes, as red, green and blue.
 """
-
-
-def drawn(color: Color) -> Tuple[int, int, int]:
-    """
-    A colour of the twin as the channel values a captured picture is drawn on with.
-
-    A capture holds red, green and blue in that order, one byte each, which is the order
-    it is written out in; opacity is not drawn, since a line laid over a picture
-    replaces what it covers.
-
-    :param color: The colour the twin states.
-    """
-    return tuple(round(channel * 255) for channel in color.to_rgb())
-
 
 # %% something the picture singles out
 

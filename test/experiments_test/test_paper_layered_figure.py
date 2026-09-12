@@ -221,3 +221,32 @@ def test_the_figure_is_written_where_it_is_asked_for(
     written = LayeredFigure().write(two_levels, tmp_path / "deep" / "layered.png")
     assert written.is_file()
     assert imageio.imread(written).shape[1] == LayeredFigure().width
+
+
+# %% the title over the whole figure
+
+
+def test_a_titled_figure_is_taller_by_its_title_band(
+    two_levels: Tuple[Layer, Layer],
+) -> None:
+    """
+    The title says what the whole figure is about, so it takes a band of its own at the
+    head of the figure rather than a line on the first level.
+    """
+    figure = LayeredFigure()
+
+    assert (
+        figure.of(two_levels, title="Was the cube picked up? yes").shape[0]
+        == figure.of(two_levels).shape[0] + figure.title_height + figure.gap
+    )
+
+
+def test_the_levels_keep_their_places_under_the_title(
+    two_levels: Tuple[Layer, Layer],
+) -> None:
+    figure = LayeredFigure().of(two_levels, title="Was the cube picked up? yes")
+
+    assert (
+        rows_holding(figure, FIRST_COLOR).max()
+        < rows_holding(figure, SECOND_COLOR).min()
+    )

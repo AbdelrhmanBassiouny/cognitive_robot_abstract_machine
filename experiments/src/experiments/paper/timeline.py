@@ -112,7 +112,7 @@ class EventTimeline:
         :param emphasise: The events the query answered, whose rows are picked out. An
             event of a kind the trial never reported has no row and picks out nothing.
         """
-        rows = self._rows_of(trial, emphasise)
+        rows = self.rows_of(trial, emphasise)
         return RenderedTimeline(
             rows=rows,
             mark=mark,
@@ -121,7 +121,7 @@ class EventTimeline:
 
     # %% reading the rows off the trial
 
-    def _rows_of(
+    def rows_of(
         self, trial: RecordedTrial, emphasise: Sequence[DetectionEvent]
     ) -> Tuple[TimelineRow, ...]:
         """

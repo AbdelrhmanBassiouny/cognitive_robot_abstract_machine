@@ -443,7 +443,7 @@ def test_two_trials_of_one_episode_do_not_write_over_each_other(
     Every trial of an episode asks the same questions, so each is given a directory of
     its own inside the episode's.
     """
-    second = replace(trial)
+    second = replace(trial, number=2)
     written = QueryCardSet.for_the_paper().write_every_episode(
         [trial, second], tmp_path
     )

@@ -17,11 +17,15 @@ import cv2
 import imageio.v2 as imageio
 import numpy as np
 from krrood.exceptions import DataclassException
+from typing_extensions import Tuple
 
 from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
+from experiments.episodes.trace import TimedFrames
 from experiments.montessori.perception.camera import decode_compressed_color_image
 from experiments.montessori.perception.recordings import REFERENCE_FRAME, RecordedCamera
+from experiments.paper.lettering import Face, Lettering
 from experiments.paper.panel import CardPanel
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% what a run leaves its camera in
 
@@ -53,6 +57,70 @@ FRAME_GAP = 8
 How many pixels of blank are left between the two frames, so the pair reads as two
 pictures rather than one wide one.
 """
+
+CAPTION_HEIGHT = 36
+"""
+How tall the strip under each frame saying when it was taken is, in pixels.
+"""
+
+CAPTION_BACKGROUND = Color(0.96, 0.96, 0.97, 1.0)
+"""
+What the strip under each frame is.
+"""
+
+BEFORE_CAPTION = "%.1f s before, at %.1f s"
+"""
+What is written under the earlier frame, given how far before the event it was taken
+and the second of the trial.
+"""
+
+AFTER_CAPTION = "%.1f s after, at %.1f s"
+"""
+What is written under the later frame.
+"""
+
+
+def side_by_side(
+    earlier: np.ndarray,
+    later: np.ndarray,
+    captions: Tuple[str, str],
+    gap: int = FRAME_GAP,
+    lettering: Lettering = Lettering(size=20, face=Face.REGULAR),
+) -> np.ndarray:
+    """
+    Two frames as one picture, the earlier on the left, each with a line under it saying
+    when it was taken.
+
+    :param earlier: The earlier frame.
+    :param later: The later frame, of the same size.
+    :param captions: What is written under the earlier and the later frame.
+    :param gap: How many pixels of blank are left between the two.
+    :param lettering: How the captions are set.
+    :return: The pair, in the channel order the frames came in.
+    """
+    columns = []
+    for frame, caption in zip((earlier, later), captions):
+        strip = lettering.band(
+            caption, frame.shape[1], CAPTION_HEIGHT, CAPTION_BACKGROUND
+        )
+        columns.append(np.vstack((frame, strip.astype(frame.dtype))))
+    blank = np.full(
+        (columns[0].shape[0], gap, columns[0].shape[2]), 255, dtype=earlier.dtype
+    )
+    return np.hstack((columns[0], blank, columns[1]))
+
+
+def captions_around(moment: float, either_side: float) -> Tuple[str, str]:
+    """
+    What is written under the two frames taken either side of a moment.
+
+    :param moment: Seconds into the trial the event happened at.
+    :param either_side: How far either side of it the frames were taken, in seconds.
+    """
+    return (
+        BEFORE_CAPTION % (either_side, moment - either_side),
+        AFTER_CAPTION % (either_side, moment + either_side),
+    )
 
 
 # %% asking a run that recorded no camera
@@ -268,16 +336,17 @@ class BagFramesAround(CardPanel):
     @property
     def image(self) -> np.ndarray:
         """
-        The two frames side by side, in OpenCV's blue, green, red order.
+        The two frames side by side, in OpenCV's blue, green, red order, each saying
+        when it was taken.
 
         :raises NoCameraRecordingError: When the episode kept no camera recording.
         """
-        earlier = self.before.image
-        later = self.after.image
-        blank = np.zeros(
-            (earlier.shape[0], self.gap, earlier.shape[2]), dtype=earlier.dtype
-        )
-        return np.hstack((earlier, blank, later))
+        return side_by_side(
+            cv2.cvtColor(self.before.image, cv2.COLOR_BGR2RGB),
+            cv2.cvtColor(self.after.image, cv2.COLOR_BGR2RGB),
+            captions_around(self.moment, self.either_side),
+            self.gap,
+        )[:, :, ::-1]
 
     def write(self, path: Path) -> Path:
         """
@@ -305,3 +374,76 @@ class BagFramesAround(CardPanel):
             trial_duration=self.trial_duration,
             reference_frame=self.reference_frame,
         )
+
+
+# %% the two frames of a run that kept what its camera saw
+
+
+@dataclass
+class RecordedFramesAround(CardPanel):
+    """
+    The frames a run's own camera took either side of one moment, written as one
+    picture with the earlier one on the left.
+
+    What a run that kept its camera along the trial -- a simulated one filming the
+    camera the twin states, or any run that traced its frames with their moments --
+    shows in place of a bag.
+    """
+
+    frames: TimedFrames
+    """
+    What the camera saw along the trial, with the moment each frame was taken at.
+    """
+
+    moment: float
+    """
+    Seconds between the start of the trial and the event the frames are taken around.
+    """
+
+    either_side: float = EITHER_SIDE
+    """
+    How far either side of the moment the two frames are taken, in seconds.
+    """
+
+    gap: int = FRAME_GAP
+    """
+    How many pixels of blank are left between the two frames.
+    """
+
+    @property
+    def before(self) -> np.ndarray:
+        """
+        The frame taken nearest the moment before the event.
+        """
+        return self.frames.at(self.moment - self.either_side)
+
+    @property
+    def after(self) -> np.ndarray:
+        """
+        The frame taken nearest the moment after the event.
+        """
+        return self.frames.at(self.moment + self.either_side)
+
+    @property
+    def image(self) -> np.ndarray:
+        """
+        The two frames side by side, as red, green and blue, each saying when it was
+        taken.
+        """
+        return side_by_side(
+            self.before,
+            self.after,
+            captions_around(self.moment, self.either_side),
+            self.gap,
+        )
+
+    def write(self, path: Path) -> Path:
+        """
+        Leave the pair at the given path.
+
+        :param path: The file it is written to, its directory created if it is not there.
+        :return: ``path``.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        imageio.imwrite(str(path), self.image)
+        return path

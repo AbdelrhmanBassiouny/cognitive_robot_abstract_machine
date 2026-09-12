@@ -53,6 +53,11 @@ class PanelKind(StrEnum):
     What the robot was running while those events were reported.
     """
 
+    RUN_TIMELINE = "run_timeline"
+    """
+    What was reported over what the robot was running, on one time axis.
+    """
+
     POSE_CHANGE = "pose_change"
     """
     The twin with the object drawn where it was and where it ended up, in one view.
@@ -132,6 +137,12 @@ _PANEL_WORDING = {
         caption="against the plan the robot was running, with the item that accounts "
         "for the event picked out.",
         when_missing="this run recorded no plan.",
+    ),
+    PanelKind.RUN_TIMELINE: PanelWording(
+        level="what the monitor reported, over what the robot was running",
+        caption="against the events of the run over the plan the robot was running, "
+        "on one time axis, with the event and the query's own moment marked.",
+        when_missing="this run reported no events and recorded no plan.",
     ),
     PanelKind.POSE_CHANGE: PanelWording(
         level="where the object went",

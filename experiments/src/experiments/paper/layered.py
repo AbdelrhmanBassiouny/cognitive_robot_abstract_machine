@@ -1,10 +1,10 @@
 """
 A card's levels drawn one above another as a single picture.
 
-Four figures floating separately on a page are read in whatever order the layout puts
-them; the point of this card is that its levels are read *straight down* -- an event,
-over the item of the plan that was running when it happened, over what the camera saw,
-over where the object went. That only holds if they are one picture.
+Figures floating separately on a page are read in whatever order the layout puts them;
+the point of this card is that its levels are read *straight down* -- the event over the
+item of the plan that was running when it happened, over what the camera saw, over where
+the object went. That only holds if they are one picture.
 
 The levels are already pictures by the time they get here, so this composes what the
 panels wrote rather than drawing anything itself.
@@ -12,7 +12,7 @@ panels wrote rather than drawing anything itself.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
@@ -20,12 +20,12 @@ import imageio.v2 as imageio
 import numpy as np
 from typing_extensions import List, Optional, Sequence
 
-from experiments.paper.scene import drawn
+from experiments.paper.lettering import Face, Lettering, drawn
 from semantic_digital_twin.world_description.geometry import Color
 
 # %% how a stacked figure is laid out
 
-FIGURE_WIDTH = 1200
+FIGURE_WIDTH = 1600
 """
 How wide the whole figure is drawn, in pixels.
 
@@ -33,7 +33,7 @@ Every level is scaled to this, since levels drawn at whatever width they happene
 rendered at would not line up under one another.
 """
 
-MAXIMUM_LEVEL_HEIGHT = 520
+MAXIMUM_LEVEL_HEIGHT = 720
 """
 How tall one level may be drawn, in pixels.
 
@@ -42,7 +42,12 @@ to the figure's width it would push every other level off the page. A level that
 exceed this is fitted to it and centred instead.
 """
 
-LABEL_HEIGHT = 40
+TITLE_HEIGHT = 64
+"""
+How tall the band the figure's title is written in, in pixels.
+"""
+
+LABEL_HEIGHT = 44
 """
 How tall the band a level's name is written in, in pixels.
 """
@@ -54,7 +59,7 @@ How tall a level the run left nothing to draw is, in pixels.
 Enough to say what is missing and why, without taking the room a drawn level would.
 """
 
-LAYER_GAP = 12
+LAYER_GAP = 14
 """
 How many pixels of background are left between one level and the next.
 """
@@ -64,9 +69,15 @@ FIGURE_BACKGROUND = Color(1.0, 1.0, 1.0, 1.0)
 What the figure is drawn on, behind and between the levels.
 """
 
-LABEL_TEXT_COLOR = Color(0.1, 0.1, 0.12, 1.0)
+TITLE_BACKGROUND = Color(0.13, 0.15, 0.19, 1.0)
 """
-What a level's name is written in.
+What the title band is, dark so the title reads as the head of the figure.
+"""
+
+LABEL_BACKGROUND = Color(0.93, 0.94, 0.96, 1.0)
+"""
+What a level's name band is, a shade off the background so each level reads as a section
+of the figure.
 """
 
 MISSING_TEXT_COLOR = Color(0.45, 0.45, 0.48, 1.0)
@@ -116,7 +127,7 @@ class Layer:
 class LayeredFigure:
     """
     Draws a card's levels one above another as a single picture, each written over with
-    what it shows.
+    what it shows, under a title saying what the whole figure is about.
     """
 
     width: int = FIGURE_WIDTH
@@ -127,6 +138,11 @@ class LayeredFigure:
     maximum_level_height: int = MAXIMUM_LEVEL_HEIGHT
     """
     How tall one level may be drawn, in pixels.
+    """
+
+    title_height: int = TITLE_HEIGHT
+    """
+    How tall the band the title is written in, in pixels.
     """
 
     label_height: int = LABEL_HEIGHT
@@ -149,55 +165,67 @@ class LayeredFigure:
     What the figure is drawn on.
     """
 
-    label_color: Color = LABEL_TEXT_COLOR
+    title: Lettering = field(
+        default_factory=lambda: Lettering(
+            size=26, face=Face.BOLD, color=Color(1.0, 1.0, 1.0, 1.0)
+        )
+    )
     """
-    What a level's name is written in.
-    """
-
-    missing_color: Color = MISSING_TEXT_COLOR
-    """
-    What the line saying a level was not recorded is written in.
-    """
-
-    label_scale: float = 0.7
-    """
-    Size a level's name is written at, as OpenCV's own multiple of its base font.
+    How the title is set.
     """
 
-    line_width: int = 2
+    label: Lettering = field(default_factory=lambda: Lettering(size=22, face=Face.BOLD))
     """
-    Thickness of the written text, in pixels.
+    How a level's name is set.
     """
 
-    def of(self, layers: Sequence[Layer]) -> np.ndarray:
+    missing: Lettering = field(
+        default_factory=lambda: Lettering(size=20, color=MISSING_TEXT_COLOR)
+    )
+    """
+    How the line saying a level was not recorded is set.
+    """
+
+    def of(self, layers: Sequence[Layer], title: str = "") -> np.ndarray:
         """
         Draw the given levels one above another.
 
         :param layers: The levels, top first. A level with no picture keeps its place
             and says what is missing, so a reader is never left wondering whether a
             level was left out or never existed.
+        :param title: What the whole figure is about, written across its head; nothing
+            for a figure without a head.
         :return: The figure as red, green and blue in that order, shape ``(height,
             width, 3)`` of ``uint8``.
         """
         stacked: List[np.ndarray] = []
+        if title:
+            stacked.append(
+                self.title.band(title, self.width, self.title_height, TITLE_BACKGROUND)
+            )
         for layer in layers:
             if stacked:
                 stacked.append(self._blank(self.gap))
-            stacked.append(self._band(layer.name, self.label_color))
+            stacked.append(
+                self.label.band(
+                    layer.name, self.width, self.label_height, LABEL_BACKGROUND
+                )
+            )
             stacked.append(self._drawn(layer))
         return np.vstack(stacked)
 
-    def write(self, layers: Sequence[Layer], path: Path) -> Path:
+    def write(self, layers: Sequence[Layer], path: Path, title: str = "") -> Path:
         """
         Leave the layered figure at the given path.
 
         :param layers: The levels, top first.
         :param path: The file it is written to, its directory created if it is not
             there.
+        :param title: What the whole figure is about, or nothing.
         :return:``path``.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
-        imageio.imwrite(str(path), self.of(layers))
+        imageio.imwrite(str(path), self.of(layers, title))
         return path
 
     # %% the pieces one level is made of
@@ -209,7 +237,9 @@ class LayeredFigure:
         :param layer: The level to draw.
         """
         if not layer.was_drawn:
-            return self._band(layer.note, self.missing_color, self.missing_height)
+            return self.missing.band(
+                layer.note, self.width, self.missing_height, self.background
+            )
         return self._scaled(imageio.imread(layer.picture))
 
     def _scaled(self, picture: np.ndarray) -> np.ndarray:
@@ -241,8 +271,7 @@ class LayeredFigure:
         """
         if picture.shape[1] == self.width:
             return picture
-        strip = np.zeros((picture.shape[0], self.width, 3), dtype=np.uint8)
-        strip[:, :] = drawn(self.background)
+        strip = self._blank(picture.shape[0])
         left = (self.width - picture.shape[1]) // 2
         strip[:, left : left + picture.shape[1]] = picture
         return strip
@@ -257,29 +286,6 @@ class LayeredFigure:
         if picture.ndim == 2:
             return np.dstack([picture] * 3)
         return picture[:, :, :3]
-
-    def _band(
-        self, text: str, color: Color, height: Optional[int] = None
-    ) -> np.ndarray:
-        """
-        A strip of background with one line written across it.
-
-        :param text: What to write.
-        :param color: What to write it in.
-        :param height: How tall the strip is, or the name band's own height.
-        """
-        band = self._blank(self.label_height if height is None else height)
-        cv2.putText(
-            band,
-            text,
-            (self.gap, band.shape[0] // 2 + round(self.label_scale * 10)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            self.label_scale,
-            drawn(color),
-            self.line_width,
-            cv2.LINE_AA,
-        )
-        return band
 
     def _blank(self, height: int) -> np.ndarray:
         """

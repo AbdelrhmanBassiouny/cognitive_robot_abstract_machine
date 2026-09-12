@@ -25,13 +25,16 @@ from experiments.episodes.episode import (
     Episode,
     InsertionAttempt,
     InsertionOutcome,
+    PerformedPlan,
     RecordedTrial,
 )
 from experiments.paper.run_plan import (
     JUST_FINISHED,
+    ObjectIdentity,
     RunPlan,
     TrialClock,
     TrialRanNoPlanError,
+    plans_of,
 )
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -41,8 +44,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 TRIAL_BEGAN_AT = datetime(2026, 1, 1, 12, 0, 0)
 """
-The instant the recorded trial's first plan item started, which is where its own clock
-starts from.
+The instant the recorded trial began, which is where its own clock starts from.
 """
 
 TRIAL_DURATION = 12.0
@@ -175,20 +177,15 @@ def trial(cube: Body) -> RecordedTrial:
         ),
         outcome=TrialOutcome.SUCCEEDED,
         duration=TRIAL_DURATION,
-        insertion_attempts=[
-            InsertionAttempt(
-                shape_name="cube", plan=plan, outcome=InsertionOutcome.FELL_THROUGH
-            )
-        ],
+        began_at=TRIAL_BEGAN_AT,
+        plans=[PerformedPlan(plan=plan)],
     )
 
 
 # %% the clock the plan and the events share
 
 
-def test_the_clock_starts_where_the_first_thing_the_trial_recorded_happened(
-    trial: RecordedTrial,
-) -> None:
+def test_the_clock_starts_when_the_trial_began(trial: RecordedTrial) -> None:
     """
     A plan is recorded against the wall clock and a tick against the seconds of its
     trial, so the two are only read against each other once the trial says where its own
@@ -213,12 +210,141 @@ def test_the_clock_turns_an_instant_into_seconds_into_the_trial(
 
 def test_a_trial_that_recorded_no_plan_says_so(trial: RecordedTrial) -> None:
     """
-    Without a plan there is no clock to place anything on, which is a state to report
-    rather than a zero to carry on from.
+    Without a plan there is nothing the robot ran, which is a state to report rather
+    than an empty chart to carry on from.
     """
-    trial.insertion_attempts = []
+    trial.plans = []
     with pytest.raises(TrialRanNoPlanError):
-        TrialClock.of(trial)
+        RunPlan.of(trial)
+
+
+def test_the_plans_a_trial_performed_come_before_the_ones_it_attempted_with(
+    trial: RecordedTrial,
+) -> None:
+    """
+    An insertion attempt is the older way a plan reached a trial, and a trial may carry
+    both; the plans it performed are what it ran, so they are read first.
+    """
+    attempted = Plan()
+    attempted.add_node(PlanNode())
+    trial.insertion_attempts = [
+        InsertionAttempt(
+            shape_name="cube", plan=attempted, outcome=InsertionOutcome.FELL_THROUGH
+        )
+    ]
+    assert plans_of(trial) == [trial.plans[0].plan, attempted]
+
+
+# %% an action that ran as the parts it expands into
+
+
+def part_ran(start: float, end: float) -> PlanNode:
+    """
+    One node an action expands into, having run over the given stretch of its trial.
+
+    :param start: Seconds into the trial it started.
+    :param end: Seconds into the trial it finished.
+    """
+    node = PlanNode()
+    node.start_time = TRIAL_BEGAN_AT + timedelta(seconds=start)
+    node.end_time = TRIAL_BEGAN_AT + timedelta(seconds=end)
+    node.status = LifeCycleValues.SUCCEEDED
+    return node
+
+
+def trial_whose_action_ran_as_two_parts(cube: Body) -> RecordedTrial:
+    """
+    A trial that performed one action which itself was never started, but which expanded
+    into two parts that ran one after the other.
+
+    :param cube: The piece the action acts on.
+    """
+    plan = Plan()
+    action = ActionNode(designator=ActsOnOneBody(subject=cube))
+    action.start_time = TRIAL_BEGAN_AT - timedelta(hours=1)
+    plan.add_node(action)
+    for part in (
+        part_ran(PICKING_STARTED_AT, PICKING_ENDED_AT),
+        part_ran(CARRYING_STARTED_AT, CARRYING_STARTED_AT + 1.0),
+    ):
+        plan.add_node(part)
+        action.add_child(part)
+    return RecordedTrial(
+        episode=Episode(
+            scenario_name="shape_sorting", execution_type=ExecutionType.SIMULATED
+        ),
+        outcome=TrialOutcome.SUCCEEDED,
+        duration=TRIAL_DURATION,
+        began_at=TRIAL_BEGAN_AT,
+        plans=[PerformedPlan(plan=plan)],
+    )
+
+
+def test_an_action_runs_from_its_first_part_to_its_last(cube: Body) -> None:
+    """
+    A plan is performed as one motion, so the action itself is never started and what
+    carries the times is what it expands into; the action ran for as long as they did.
+    """
+    [item] = RunPlan.of(trial_whose_action_ran_as_two_parts(cube)).items
+
+    assert item.start == PICKING_STARTED_AT
+    assert item.start + item.duration == CARRYING_STARTED_AT + 1.0
+
+
+def test_an_action_that_ran_as_parts_is_left_in_the_state_of_its_last_part(
+    cube: Body,
+) -> None:
+    [item] = RunPlan.of(trial_whose_action_ran_as_two_parts(cube)).items
+
+    assert item.status is LifeCycleValues.SUCCEEDED
+
+
+def test_an_action_none_of_whose_parts_ran_is_not_something_the_robot_did(
+    cube: Body,
+) -> None:
+    """
+    A plan may hold an action the run never reached; it was built but it was not run, so
+    it is not an item of what the robot did.
+    """
+    trial = trial_whose_action_ran_as_two_parts(cube)
+    plan = trial.plans[0].plan
+    root = plan.root
+    never_reached = ActionNode(designator=MovesOnlyTheRobot())
+    plan.add_node(never_reached)
+    root.add_child(never_reached)
+
+    assert len(RunPlan.of(trial).items) == 1
+
+
+# %% how a body the plan acts on is matched to the one an event is about
+
+
+@dataclass(frozen=True)
+class EveryBodyIsTheSame(ObjectIdentity):
+    """
+    Tells no two bodies apart, which is what shows that the matching is the identity's
+    to make rather than the plan's.
+    """
+
+    def same(self, one: Body, other: Body) -> bool:
+        return True
+
+
+def test_the_object_is_matched_by_whatever_identity_the_plan_is_read_with(
+    trial: RecordedTrial, cylinder: Body
+) -> None:
+    """
+    A plan made in what the robot believes names its bodies differently from the world
+    the monitor watched, so what counts as the same object is settled by whoever reads
+    the plan rather than by the plan.
+    """
+    shoved = event_at(TranslationEvent, cylinder, PICKING_STARTED_AT + 1.0)
+
+    assert RunPlan.of(trial).accounts_for(shoved) is None
+    assert (
+        RunPlan.of(trial, identity=EveryBodyIsTheSame()).accounts_for(shoved)
+        is not None
+    )
 
 
 # %% the items the plan ran

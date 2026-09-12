@@ -19,6 +19,7 @@ from pathlib import Path
 from typing_extensions import Tuple
 
 import imageio.v2 as imageio
+import numpy as np
 import pytest
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.plans.plan import Plan
@@ -26,18 +27,20 @@ from coraplex.plans.plan_node import PlanNode
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from segmind.datastructures.events import PickUpEvent, TranslationEvent
 
+from experiments.episodes.artifacts import ArtifactDirectory, EpisodeArtifacts
 from experiments.episodes.episode import (
     Episode,
-    InsertionAttempt,
-    InsertionOutcome,
+    PerformedPlan,
     RecordedQuery,
     RecordedTrial,
     Tick,
 )
+from experiments.episodes.trace import JointTrace, TimedFrames
 from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import PanelKind
 from experiments.paper.scene import PointOfView
 from experiments.paper.plan_timeline import PlanTimeline
+from experiments.paper.camera_frame import EITHER_SIDE
 from experiments.paper.query_card import (
     EventAgainstThePlanCard,
     QueryCardName,
@@ -62,7 +65,7 @@ from .test_paper_scene_render import ANSWERED_NAME, OTHER_NAME, standing_box
 
 TRIAL_BEGAN_AT = datetime(2026, 1, 1, 12, 0, 0)
 """
-The instant the recorded trial's first plan item started.
+The instant the recorded trial began.
 """
 
 TRIAL_DURATION = 12.0
@@ -149,9 +152,10 @@ def moved(subject: Body, moment: float) -> TranslationEvent:
     )
 
 
-def ran_a_plan_picking_up(piece: Body, over: Tuple[float, float]) -> InsertionAttempt:
+def ran_a_plan_picking_up(piece: Body, over: Tuple[float, float]) -> PerformedPlan:
     """
-    One attempt whose plan picks the given piece up over the given stretch of the trial.
+    One performed plan that picks the given piece up over the given stretch of the
+    trial.
 
     :param piece: The piece the plan's item acts on.
     :param over: The seconds of the trial it ran between.
@@ -165,9 +169,7 @@ def ran_a_plan_picking_up(piece: Body, over: Tuple[float, float]) -> InsertionAt
     )
     plan.add_node(item)
     root.add_child(item)
-    return InsertionAttempt(
-        shape_name=piece.name.name, plan=plan, outcome=InsertionOutcome.FELL_THROUGH
-    )
+    return PerformedPlan(plan=plan)
 
 
 def run_that(
@@ -194,8 +196,9 @@ def run_that(
         ),
         outcome=TrialOutcome.SUCCEEDED,
         duration=TRIAL_DURATION,
+        began_at=TRIAL_BEGAN_AT,
         ticks=[Tick(moment=SOMETHING_HAPPENED_AT, events=list(saw))],
-        insertion_attempts=[ran_a_plan_picking_up(piece, picking_up_over)],
+        plans=[ran_a_plan_picking_up(piece, picking_up_over)],
         queries=[
             RecordedQuery(
                 role_taker=PickedUpRecently(subject=piece),
@@ -245,17 +248,54 @@ def a_person_shoved_it(scene: World, piece: Body) -> RecordedTrial:
 # %% what the card reads off each run
 
 
-def test_the_card_shows_the_four_levels_in_order() -> None:
+def test_the_card_shows_its_levels_in_order() -> None:
     """
-    The levels are read one under the other -- what was seen, what was being run, what
-    the camera saw, where the object went -- so they are drawn in that order.
+    The levels are read one under the other -- what was seen over what was being run,
+    on one axis; what the camera saw; where the object went -- so they are drawn in
+    that order.
     """
     assert EventAgainstThePlanCard().panels == (
-        PanelKind.TIMELINE,
-        PanelKind.PLAN_TIMELINE,
+        PanelKind.RUN_TIMELINE,
         PanelKind.CAMERA_BEFORE_AND_AFTER,
         PanelKind.POSE_CHANGE,
     )
+
+
+# %% what the run kept of its world
+
+FRAME_SIDE = 32
+"""
+Pixel width and height of the camera frames the kept run traced.
+"""
+
+ENCODING_TOLERANCE = 3
+"""
+How far a shade may drift through being written as a video and read back, in channel
+values; the frames are kept as a video, and a video is not written losslessly.
+"""
+
+
+def kept_by(trial: RecordedTrial, tmp_path: Path, scene: World) -> EpisodeArtifacts:
+    """
+    The artifacts of a run that traced its joints and filmed its camera every second.
+
+    :param trial: The trial whose artifacts they are.
+    :param tmp_path: Where they are kept.
+    :param scene: The world the joints are traced in.
+    """
+    artifacts = ArtifactDirectory(path=tmp_path / "artifacts").open_for(trial.episode)
+    joints = JointTrace()
+    frames = TimedFrames()
+    for second in range(int(TRIAL_DURATION) + 1):
+        joints.sample(scene, float(second))
+        frames.keep(
+            np.full((FRAME_SIDE, FRAME_SIDE, 3), second * 20, dtype=np.uint8),
+            float(second),
+        )
+    kept = artifacts.trial(trial.number)
+    kept.keep_joint_trace(joints)
+    kept.keep_camera(frames)
+    return artifacts
 
 
 def test_a_run_the_robot_acted_in_is_read_by_what_the_robot_did(
@@ -380,6 +420,7 @@ def test_the_camera_is_asked_for_the_moment_the_event_was_reported(
 def test_both_runs_are_drawn_as_cards(
     the_robot_picked_it_up: RecordedTrial,
     a_person_shoved_it: RecordedTrial,
+    scene: World,
     tmp_path: Path,
 ) -> None:
     """
@@ -387,39 +428,49 @@ def test_both_runs_are_drawn_as_cards(
     either being special-cased.
     """
     for number, trial in enumerate((the_robot_picked_it_up, a_person_shoved_it)):
-        [written] = EventAgainstThePlanCard().write(trial, tmp_path / str(number))
+        [written] = EventAgainstThePlanCard().write(
+            trial, tmp_path / str(number), kept_by(trial, tmp_path / str(number), scene)
+        )
         assert written.card is QueryCardName.EVENT_AGAINST_THE_PLAN
+        assert set(written.panel_paths) == set(EventAgainstThePlanCard.panels)
         assert all(path.is_file() for path in written.panel_paths.values())
 
 
 @needs_a_renderer
-def test_a_simulated_run_shows_what_the_twins_camera_saw(
-    the_robot_picked_it_up: RecordedTrial, tmp_path: Path
+def test_a_run_that_kept_its_camera_shows_the_frames_either_side_of_the_event(
+    the_robot_picked_it_up: RecordedTrial, scene: World, tmp_path: Path
 ) -> None:
     """
-    A simulated run keeps no recording, but its robot still looked through a camera --
-    the one the twin states -- so the camera level is rendered rather than left out.
+    The camera level is what the run's own camera saw, read back from what it kept
+    along the trial, so the two frames are the ones taken either side of the event
+    rather than anything drawn afterwards.
     """
-    [written] = EventAgainstThePlanCard().write(the_robot_picked_it_up, tmp_path)
-    assert set(written.panel_paths) == {
-        PanelKind.TIMELINE,
-        PanelKind.PLAN_TIMELINE,
-        PanelKind.CAMERA_BEFORE_AND_AFTER,
-        PanelKind.POSE_CHANGE,
-    }
+    artifacts = kept_by(the_robot_picked_it_up, tmp_path, scene)
+
+    [written] = EventAgainstThePlanCard().write(
+        the_robot_picked_it_up, tmp_path, artifacts
+    )
+
+    pair = imageio.imread(written.panel_paths[PanelKind.CAMERA_BEFORE_AND_AFTER])
+    before_shade = round(SOMETHING_HAPPENED_AT - EITHER_SIDE) * 20
+    after_shade = round(SOMETHING_HAPPENED_AT + EITHER_SIDE) * 20
+    assert abs(int(pair[0, 0, 0]) - before_shade) <= ENCODING_TOLERANCE
+    assert abs(int(pair[0, -1, 0]) - after_shade) <= ENCODING_TOLERANCE
 
 
 @needs_a_renderer
-def test_a_run_whose_twin_states_no_camera_shows_no_camera_level(
-    a_person_shoved_it: RecordedTrial, scene: World, tmp_path: Path
+def test_a_run_that_kept_no_camera_shows_no_camera_level(
+    a_person_shoved_it: RecordedTrial, tmp_path: Path
 ) -> None:
     """
-    A twin that states no camera says nothing about what was looked at, so that level is
-    left out rather than invented.
+    A run that kept nothing of what its camera saw has nothing to show for it, so that
+    level is left out rather than invented.
     """
-    scene.root.simulator_additional_properties.clear()
+    artifacts = ArtifactDirectory(path=tmp_path / "artifacts").open_for(
+        a_person_shoved_it.episode
+    )
 
-    [written] = EventAgainstThePlanCard().write(a_person_shoved_it, tmp_path)
+    [written] = EventAgainstThePlanCard().write(a_person_shoved_it, tmp_path, artifacts)
 
     assert PanelKind.CAMERA_BEFORE_AND_AFTER not in written.panel_paths
 
@@ -454,14 +505,13 @@ def test_every_level_is_written_beside_the_stacked_figure(
 
 @needs_a_renderer
 def test_a_level_the_run_recorded_nothing_for_keeps_its_place(
-    a_person_shoved_it: RecordedTrial, scene: World, tmp_path: Path
+    a_person_shoved_it: RecordedTrial, tmp_path: Path
 ) -> None:
     """
-    A run whose twin states no camera has nothing to draw that level from -- and it is
-    still stacked in its own place, because a reader shown three levels of four cannot
-    tell whether the fourth was left out or never existed.
+    A run that kept no camera has nothing to draw that level from -- and it is still
+    stacked in its own place, because a reader shown two levels of three cannot tell
+    whether the third was left out or never existed.
     """
-    scene.root.simulator_additional_properties.clear()
     card = EventAgainstThePlanCard()
 
     [written] = card.write(a_person_shoved_it, tmp_path)
@@ -477,6 +527,35 @@ def test_a_level_the_run_recorded_nothing_for_keeps_its_place(
         ]
     )
     assert stacked.shape[0] > drawn_alone.shape[0]
+
+
+@needs_a_renderer
+def test_the_stacked_figure_is_headed_by_the_query_and_its_answer(
+    a_person_shoved_it: RecordedTrial, tmp_path: Path
+) -> None:
+    """
+    The figure is about one asking of one question, so what was asked and what was
+    answered head it rather than being left to the caption.
+    """
+    card = EventAgainstThePlanCard()
+
+    [written] = card.write(a_person_shoved_it, tmp_path)
+
+    stacked = imageio.imread(written.layered_path)
+    without_a_head = LayeredFigure().of(
+        [
+            Layer(
+                name=panel.level,
+                picture=written.panel_paths.get(panel),
+                note=panel.when_missing,
+            )
+            for panel in card.panels
+        ]
+    )
+    figure = LayeredFigure()
+    assert (
+        stacked.shape[0] == without_a_head.shape[0] + figure.title_height + figure.gap
+    )
 
 
 @needs_a_renderer

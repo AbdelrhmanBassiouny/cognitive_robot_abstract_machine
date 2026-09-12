@@ -162,7 +162,7 @@ def test_a_trial_that_recorded_no_plan_cannot_be_charted(trial: RecordedTrial) -
     There is no plan chart to draw for a run that recorded no plan, which is a state to
     report rather than an empty chart to show.
     """
-    trial.insertion_attempts = []
+    trial.plans = []
     with pytest.raises(TrialRanNoPlanError):
         PlanTimeline().of(trial)
 

@@ -184,7 +184,7 @@ class SimulatedCamera:
             through a mirror of its own.
         """
         if self.drawn_by is not None:
-            self._make_room_for_the_picture(self.drawn_by.simulator._mj_model)
+            self.drawn_by.make_room_for_a_picture(self.width, self.height)
             return
         if self._mirror is not None:
             raise SimulatedCameraIsAlreadyLooking(self.camera.name)

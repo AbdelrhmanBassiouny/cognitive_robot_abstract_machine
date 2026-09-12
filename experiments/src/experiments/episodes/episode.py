@@ -203,6 +203,18 @@ class InsertionAttempt:
 
 
 @dataclass
+class PerformedPlan:
+    """
+    One plan the robot performed while a trial ran.
+    """
+
+    plan: Plan
+    """
+    The plan as it was performed, its nodes carrying when each of them ran.
+    """
+
+
+@dataclass
 class RecordedTrial:
     """
     One trial of an episode's scenario, as it was recorded.
@@ -227,9 +239,31 @@ class RecordedTrial:
     How long the trial took, in seconds.
     """
 
+    number: int = 1
+    """
+    Which trial of its episode this is, counted from one in the order they ran.
+
+    What addresses the files the trial kept of its own among the episode's artifacts.
+    """
+
+    began_at: datetime.datetime = field(default_factory=datetime.datetime.now)
+    """
+    When the trial started, on the clock the nodes of its plans and the events of its
+    ticks are stamped with.
+
+    What turns an instant one of them carries into seconds into the trial, which is
+    the clock a tick or a query already states its moment on.
+    """
+
     ticks: List[Tick] = field(default_factory=list)
     """
     The event monitor's ticks, in the order they happened.
+    """
+
+    plans: List[PerformedPlan] = field(default_factory=list)
+    """
+    Every plan the robot performed while the trial ran, in the order it performed
+    them.
     """
 
     queries: List[RecordedQuery] = field(default_factory=list)
@@ -257,8 +291,9 @@ class RecordedTrial:
         """
         Take what a finished trial recorded of itself.
 
-        What the trial's own runner cannot see - the monitor's ticks, the queries asked
-        and the insertions attempted - is added by whatever observed it.
+        What the trial's own runner cannot see - when it began on the wall clock, the
+        monitor's ticks, the queries asked, the plans performed and the insertions
+        attempted - is added by whatever observed it.
 
         :param trial: The trial that has finished.
         :param episode: The episode the trial belongs to.

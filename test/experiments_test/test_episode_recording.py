@@ -342,6 +342,20 @@ def test_what_the_observer_saw_is_recorded_on_the_trial():
     assert trial.insertion_attempts == [attempt]
 
 
+def test_every_trial_is_numbered_in_the_order_it_ran():
+    """
+    What a trial kept of its own among the episode's artifacts is addressed by its
+    number, so each trial knows which of the episode's it is.
+    """
+    scenario = SortOnePiece()
+    kept = TrialsKeptInMemory()
+    recording = observing_recording(Episode.from_run(scenario), kept, repetitions=2)
+
+    recording.run(scenario)
+
+    assert [trial.number for trial in kept.trials] == [1, 2]
+
+
 def test_the_observer_starts_afresh_with_every_trial():
     """
     A tick observed in one trial belongs to it alone, and the observer's clock is

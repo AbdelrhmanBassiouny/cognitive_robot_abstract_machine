@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import pytest
 from krrood.ormatic.data_access_objects.helper import to_dao
+from giskardpy.motion_statechart.data_types import LifeCycleValues
 from segmind.datastructures.events import DetectionEvent
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
 from sqlalchemy import select
 
+from experiments.episodes.artifacts import ArtifactDirectory
 from experiments.episodes.episode import Episode
 from experiments.montessori.scenarios import (
     LayoutArea,
@@ -130,6 +132,68 @@ def test_the_monitor_of_one_trial_is_stopped_before_the_next_starts(area):
 
     assert run.monitor is None
     assert len(run.records_trials.trials) == 2
+
+
+# %% the plans the robot performed, and where its joints stood
+
+
+def test_a_watched_run_records_the_plans_its_steps_performed(area):
+    """
+    A sorting run picks a piece up and puts it down as two plans, and each is kept on
+    the trial with its nodes carrying when they ran.
+    """
+    scenario = SyntheticGrasperSortsAPiece(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+        sorted_category=HELD_PIECE,
+    )
+    run = watched(scenario)
+
+    run.run(scenario)
+
+    [trial] = run.records_trials.trials
+    assert len(trial.plans) == 2
+    assert all(
+        any(node.status is LifeCycleValues.SUCCEEDED for node in performed.plan.nodes)
+        for performed in trial.plans
+    )
+
+
+def test_a_watched_run_keeps_a_trace_of_its_joints_with_the_episode(area, tmp_path):
+    """
+    Where every joint stood along the trial is what puts a moment of it back in front
+    of a reader, so it is kept beside the episode's other artifacts, under the trial's
+    own number.
+    """
+    scenario = SyntheticGrasperSortsAPiece(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+        sorted_category=HELD_PIECE,
+    )
+    run = watched(scenario)
+    run.artifacts = ArtifactDirectory(path=tmp_path).open_for(run.episode)
+
+    run.run(scenario)
+
+    [trial] = run.records_trials.trials
+    kept = run.artifacts.trial(trial.number)
+    assert kept.kept_a_joint_trace
+    trace = kept.joint_trace
+    assert not trace.is_empty
+    assert all(0.0 <= moment <= trial.duration for moment in trace.moments)
+
+
+def test_the_joint_trace_of_one_trial_is_stopped_before_the_next_starts(area):
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+    run = watched(scenario)
+    run.repetitions = 2
+
+    run.run(scenario)
+
+    assert run.joints is None
 
 
 # %% the video of a filmed trial

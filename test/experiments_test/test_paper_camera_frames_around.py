@@ -15,15 +15,20 @@ from __future__ import annotations
 from pathlib import Path
 
 import imageio.v2 as imageio
+import numpy as np
 import pytest
 
 from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
+from experiments.episodes.trace import TimedFrames
 from experiments.paper.camera_frame import (
+    CAPTION_HEIGHT,
     EITHER_SIDE,
     BagFrameAt,
     BagFramesAround,
     NoCameraRecordingError,
+    RecordedFramesAround,
     RunFile,
+    captions_around,
 )
 
 from .test_montessori_bag_replay import demo_recording
@@ -154,5 +159,66 @@ def test_the_two_frames_are_written_side_by_side(
 
     side_by_side = imageio.imread(written)
     one = either_side.before.image
-    assert side_by_side.shape[0] == one.shape[0]
+    assert side_by_side.shape[0] == one.shape[0] + CAPTION_HEIGHT
     assert side_by_side.shape[1] == 2 * one.shape[1] + either_side.gap
+
+
+# %% the two frames of a run that kept what its camera saw
+
+FRAME_SIDE = 24
+"""
+Pixel width and height of the frames kept here.
+"""
+
+
+def kept_frames() -> TimedFrames:
+    """
+    What a camera saw at every whole second of a trial, each frame one flat shade
+    numbered by its second.
+    """
+    frames = TimedFrames()
+    for second in range(int(TRIAL_DURATION) + 1):
+        frames.keep(
+            np.full((FRAME_SIDE, FRAME_SIDE, 3), second * 10, dtype=np.uint8),
+            float(second),
+        )
+    return frames
+
+
+def test_the_two_frames_of_a_kept_camera_are_taken_either_side_of_the_event() -> None:
+    either_side = RecordedFramesAround(frames=kept_frames(), moment=ASKED_AT)
+
+    assert either_side.before[0, 0, 0] == round(ASKED_AT - EITHER_SIDE) * 10
+    assert either_side.after[0, 0, 0] == round(ASKED_AT + EITHER_SIDE) * 10
+
+
+def test_the_two_frames_of_a_kept_camera_differ_when_the_camera_saw_a_change() -> None:
+    """
+    The pair exists to show a change, so with a camera that saw one the two frames it
+    hands back are not the same picture.
+    """
+    either_side = RecordedFramesAround(frames=kept_frames(), moment=ASKED_AT)
+
+    assert not np.array_equal(either_side.before, either_side.after)
+
+
+def test_each_frame_of_the_pair_says_when_it_was_taken() -> None:
+    """
+    A reader is told how far either side of the event each frame is, and at what second
+    of the trial, rather than left to guess which is which.
+    """
+    before, after = captions_around(ASKED_AT, EITHER_SIDE)
+
+    assert before == "%.1f s before, at %.1f s" % (EITHER_SIDE, ASKED_AT - EITHER_SIDE)
+    assert after == "%.1f s after, at %.1f s" % (EITHER_SIDE, ASKED_AT + EITHER_SIDE)
+
+
+def test_the_kept_frames_are_written_side_by_side_with_their_captions(
+    tmp_path: Path,
+) -> None:
+    either_side = RecordedFramesAround(frames=kept_frames(), moment=ASKED_AT)
+
+    written = imageio.imread(either_side.write(tmp_path / "either_side.png"))
+
+    assert written.shape[0] == FRAME_SIDE + CAPTION_HEIGHT
+    assert written.shape[1] == 2 * FRAME_SIDE + either_side.gap
