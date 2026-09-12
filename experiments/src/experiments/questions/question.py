@@ -20,6 +20,9 @@ from krrood.adapters.json_serializer import (
     DataclassJSONSerializer,
     SubclassJSONSerializer,
 )
+from krrood.entity_query_language.backends import QueryBackend
+from krrood.entity_query_language.core.variable import InstantiatedVariable
+from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.query.query import Query
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -29,7 +32,17 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world_description.world_entity import Body
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
-from typing_extensions import Any, ClassVar, Dict, Generic, List, Tuple, TypeVar
+from typing_extensions import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Generic,
+    List,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 # %% what a question is about, and what answering it exercises
 
@@ -173,6 +186,12 @@ class Question(
     The level of Bloom's taxonomy answering this question exercises.
     """
 
+    backend: ClassVar[Type[QueryBackend]]
+    """
+    The kind of query backend the memory this question is asked of answers it with,
+    which is what a reported latency is attributed to.
+    """
+
     @property
     @abstractmethod
     def english(self) -> str:
@@ -200,6 +219,36 @@ class Question(
 
         :param source: The memory the question is put to.
         """
+
+    def predicates_asked(self, source: SourceType) -> List[Callable[..., Any]]:
+        """
+        The predicates this question's query applies, in the order the query holds them.
+
+        What a reported latency is attributed to, together with the backend that
+        answered them.
+
+        :param source: The memory the question is put to.
+        """
+        query = self.query(source)
+        query.build()
+        return [
+            descendant._type_
+            for descendant in query._descendants_
+            if isinstance(descendant, InstantiatedVariable)
+            and self.is_a_predicate(descendant._type_)
+        ]
+
+    @staticmethod
+    def is_a_predicate(applied: Any) -> bool:
+        """
+        Whether what a query applies to the things it ranges over is a predicate: one of
+        the predicate classes, or a function the query language made symbolic.
+
+        :param applied: What the query applies.
+        """
+        if isinstance(applied, type):
+            return issubclass(applied, Predicate)
+        return callable(applied)
 
     @abstractmethod
     def solutions(self, source: SourceType) -> List[Any]:

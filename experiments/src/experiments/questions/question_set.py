@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from krrood.utils import recursive_subclasses
 from typing_extensions import Any, List, Set, Type, TypeVar
 
-from experiments.episodes.episode import RecordedQuery
+from experiments.episodes.episode import AnsweredPredicate, RecordedQuery
 from experiments.questions.long_term_memory import LongTermMemoryQuestion
 from experiments.questions.question import (
     BloomLevel,
@@ -157,6 +157,28 @@ class QuestionSet:
                 found.append(question.bucket)
         return found
 
+    @staticmethod
+    def routed_predicates(
+        question: Question[Any, Any], source: Any
+    ) -> List[AnsweredPredicate]:
+        """
+        Which backend answered each predicate one question's query put, named as the
+        query spells them.
+
+        Read after the question has been answered rather than while it is, so building
+        the query a second time is not counted against the latency the answer took.
+
+        :param question: The question that was asked.
+        :param source: The memory it was asked of.
+        """
+        return [
+            AnsweredPredicate(
+                predicate_name=predicate.__name__,
+                backend_name=question.backend.__name__,
+            )
+            for predicate in question.predicates_asked(source)
+        ]
+
     def answer_and_record(self, source: Any) -> List[RecordedQuery]:
         """
         Ask every question of this set, score each against ground truth, and return the
@@ -176,6 +198,7 @@ class QuestionSet:
                     answer=str(answer),
                     latency=latency,
                     moment=asked_at - batch_started_at,
+                    answered_predicates=self.routed_predicates(question, source),
                     answered_correctly=question.values_agree(
                         answer, question.ground_truth(source)
                     ),
