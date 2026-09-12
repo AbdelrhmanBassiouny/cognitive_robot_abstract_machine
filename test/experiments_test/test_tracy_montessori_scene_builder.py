@@ -26,6 +26,7 @@ from experiments.montessori.perception.node import pipeline_of
 from experiments.montessori.perception.recorded_setup import lab_board
 from experiments.montessori.perception.scene_publishing import PerceivedScene
 from experiments.montessori.perception.scene_source import RecordedFrame
+from experiments.montessori.perception.simulated_setup import table_surface
 from experiments.montessori.pieces import FULL_SIZE_PIECES, SMALLER_PIECES
 from experiments.montessori.scenarios import (
     HOW_FAR_A_MOVED_HOLE_GOES,
@@ -152,6 +153,16 @@ def test_the_built_scene_stands_the_set_it_is_told_on_tracys_own_table(piece_set
 
 def test_the_built_scene_is_the_full_size_set_unless_told_otherwise():
     assert TracyOnItsOwnTable().piece_set is FULL_SIZE_PIECES
+
+
+def test_the_built_scenes_table_is_tracys_own():
+    builder = TracyOnItsOwnTable()
+
+    world = builder.build(Tracy)
+
+    scene = SortingScene(world)
+    assert scene.table.root is scene.robot.root
+    assert table_surface(world).height == pytest.approx(builder.table_top_z)
 
 
 # %% the scene Tracy's camera finds
