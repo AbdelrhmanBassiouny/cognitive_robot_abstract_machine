@@ -45,7 +45,9 @@ must be running)::
 Pass ``--record`` to capture a rosbag of the camera, depth camera and joint states for
 the duration of the sorting. Bags are written to
 :data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_BAG_DIRECTORY` and keep
-one camera frame in :data:`KEEP_EVERY_NTH_FRAME`; both are overridable, see
+one camera frame in
+:data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`;
+both are overridable, see
 ``--bag-directory`` and ``--keep-every-nth-frame``.
 """
 
@@ -58,10 +60,11 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 
 from krrood.exceptions import DataclassException
-from typing_extensions import Optional
+from typing_extensions import Optional, Sequence
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -91,13 +94,16 @@ from experiments.episodes.artifacts import (
 from experiments.episodes.episode import Episode, RecordedTrial
 from experiments.episodes.observer import EpisodeObserver
 from experiments.episodes.recording import open_recording
-from experiments.episodes.trace import JointTraceRecorder
+from experiments.episodes.trace import JointTrace, JointTraceRecorder
 from experiments.montessori.perception.recorded_setup import lab_board
 from experiments.montessori.perception.scene_publishing import (
     LOOKS_FOR_THE_BOARD,
     PerceivedScene,
 )
-from experiments.montessori.results_database import ConfiguredDatabase, ResultsDatabase
+from experiments.montessori.results_database import (
+    ResultsDatabase,
+    resolve_lasting_database,
+)
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.questions.question import QuestionedThings
 from experiments.questions.after_the_move import QuestionAfterTheMove
@@ -129,7 +135,9 @@ from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperControll
 from experiments.tracy_experiments.rosbag_recording import (
     DECIMATED_TOPICS,
     DEFAULT_BAG_DIRECTORY,
+    DEFAULT_KEEP_EVERY_NTH_FRAME,
     RosbagRecorder,
+    RosbagRecordingProcess,
 )
 from segmind.datastructures.events import (
     DetectionEvent,
@@ -208,15 +216,17 @@ Leading part of the recorded bag's directory name, completed with a timestamp so
 consecutive runs do not collide.
 """
 
-KEEP_EVERY_NTH_FRAME = 10
-"""
-How much of the camera streams a recorded run keeps, by default.
 
-Recording every frame costs around 230 MB of disk per second of wall clock: a sorting
-run fills tens of gigabytes, almost all of it registered depth and point cloud. One
-frame in ten still shows what the arm did, at roughly a ninth of the size. Pass
-``--keep-every-nth-frame 1`` for a run that genuinely needs every frame.
-"""
+class DemoOption(StrEnum):
+    """
+    The command line options, as they are spelled.
+    """
+
+    ASK_ABOUT = "--ask-about"
+    RECORD = "--record"
+    BAG_DIRECTORY = "--bag-directory"
+    KEEP_EVERY_NTH_FRAME = "--keep-every-nth-frame"
+    DATABASE_URI = "--database-uri"
 
 
 def _grasp_target_pose(body: Body, grasp_height_offset: float) -> Pose:
@@ -611,22 +621,23 @@ def outcome_of(trial_events, asked_about: Body) -> TrialOutcome:
     return TrialOutcome.SUCCEEDED if picked_up else TrialOutcome.FAILED
 
 
-def _parse_arguments() -> argparse.Namespace:
+def _parse_arguments(argument_list: Optional[Sequence[str]]) -> argparse.Namespace:
     """
+    :param argument_list: Arguments to read; the process's own when None.
     :return: The demo's own command line arguments.
     """
     parser = argparse.ArgumentParser(
         description="Sort the Montessori pieces with the physical Tracy by looking."
     )
     parser.add_argument(
-        "--ask-about",
+        DemoOption.ASK_ABOUT,
         type=MontessoriShapeCategory,
         choices=list(MontessoriShapeCategory),
         default=DEFAULT_PIECE_ASKED_ABOUT,
         help="the piece the question set is asked about once the sorting is done",
     )
     parser.add_argument(
-        "--record",
+        DemoOption.RECORD,
         action="store_true",
         help=(
             "Record a rosbag of the camera, depth camera, joint states and transforms "
@@ -634,7 +645,7 @@ def _parse_arguments() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--bag-directory",
+        DemoOption.BAG_DIRECTORY,
         default=DEFAULT_BAG_DIRECTORY,
         help=(
             f"Directory the recorded bag is placed in. Default: "
@@ -642,22 +653,40 @@ def _parse_arguments() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--keep-every-nth-frame",
+        DemoOption.KEEP_EVERY_NTH_FRAME,
         type=int,
-        default=KEEP_EVERY_NTH_FRAME,
+        default=DEFAULT_KEEP_EVERY_NTH_FRAME,
         metavar="N",
         help=(
             f"Record only one in every N frames of the heavy camera streams "
             f"({', '.join(DECIMATED_TOPICS)}). Joint states and transforms are always "
             f"recorded whole. Pass 1 to record every frame. Default: "
-            f"{KEEP_EVERY_NTH_FRAME}."
+            f"{DEFAULT_KEEP_EVERY_NTH_FRAME}."
         ),
     )
-    return parser.parse_args()
+    parser.add_argument(
+        DemoOption.DATABASE_URI,
+        default=None,
+        help=(
+            "Database the episode is recorded to; the MONTESSORI_SORTING_DATABASE_URI "
+            "environment variable or the built-in default otherwise. A database that "
+            "cannot be reached or would live only in memory is refused before the "
+            "robot moves."
+        ),
+    )
+    return parser.parse_args(argument_list)
 
 
-def main() -> None:
-    arguments = _parse_arguments()
+def main(argument_list: Optional[Sequence[str]] = None) -> None:
+    """
+    Sort the pieces the camera finds with the physical Tracy, recording the episode.
+
+    :param argument_list: Arguments to read; the process's own when omitted.
+    :raises InMemoryDatabaseRefused: If the episode would be recorded to a database that
+        dies with the run, before anything on the robot is touched.
+    """
+    arguments = _parse_arguments(argument_list)
+    database = resolve_lasting_database(arguments.database_uri)
 
     feed = EventFeed()
     run_dashboard(feed)
@@ -732,10 +761,12 @@ def main() -> None:
         # the last piece is placed. The trial's own clock starts with it, so the bag
         # and the trial agree.
         recorder = (
-            RosbagRecorder.timestamped(
-                BAG_NAME_PREFIX,
-                arguments.bag_directory,
-                keep_every_nth_frame=arguments.keep_every_nth_frame,
+            RosbagRecordingProcess(
+                RosbagRecorder.timestamped(
+                    BAG_NAME_PREFIX,
+                    arguments.bag_directory,
+                    keep_every_nth_frame=arguments.keep_every_nth_frame,
+                )
             )
             if arguments.record
             else contextlib.nullcontext()
@@ -766,33 +797,39 @@ def main() -> None:
             )
         )
         keep_the_episode(
-            trial, joints, None if bag is None else Path(bag.output_directory)
+            trial,
+            joints.trace,
+            None if bag is None else Path(bag.output_directory),
+            database,
         )
 
 
 def keep_the_episode(
-    trial: RecordedTrial, joints: JointTraceRecorder, bag_directory: Optional[Path]
+    trial: RecordedTrial,
+    joints: JointTrace,
+    bag_directory: Optional[Path],
+    database: ResultsDatabase,
 ) -> EpisodeArtifacts:
     """
-    Record the trial to the configured database and keep the run's artifacts beside
-    it: the transcript, the trace of the joints, and the bag if one was recorded.
+    Record the trial to the database the run was checked against and keep the run's
+    artifacts beside it: the transcript, the trace of the joints, and the bag if one
+    was recorded.
 
     :param trial: The trial the run recorded.
     :param joints: The trace of where every joint stood along it.
     :param bag_directory: The bag the run recorded, or None for a run that recorded
         none.
+    :param database: The database the trial is recorded to.
     :return: The artifacts that were kept.
     """
-    recording = open_recording(
-        ResultsDatabase(uri=ConfiguredDatabase.resolve_reachable(None).uri)
-    )
+    recording = open_recording(database)
     try:
         recording.record(trial)
     finally:
         recording.close()
     artifacts = ArtifactDirectory().open_for(trial.episode)
     artifacts.keep_transcript(Transcript(episode=trial.episode, trials=[trial]))
-    artifacts.trial(trial.number).keep_joint_trace(joints.trace)
+    artifacts.trial(trial.number).keep_joint_trace(joints)
     if bag_directory is not None:
         artifacts.keep_directory(bag_directory)
     logger.info(

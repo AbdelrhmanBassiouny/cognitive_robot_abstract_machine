@@ -436,6 +436,27 @@ def test_every_episode_is_written_under_its_own_identifier(
 
 
 @needs_a_renderer
+def test_an_episode_that_kept_no_world_is_passed_over_when_a_corpus_is_written(
+    trial: RecordedTrial, tmp_path: Path
+) -> None:
+    """
+    The paper's figures are regenerated from the whole database, and an episode recorded
+    before runs kept their world must not stop every other episode's cards.
+    """
+    without_a_world = replace(
+        trial, episode=replace(trial.episode, identifier="kept-no-world", world=None)
+    )
+
+    written = QueryCardSet.for_the_paper().write_every_episode(
+        [without_a_world, trial], tmp_path
+    )
+
+    assert {card.markup_path.parent.parent.name for card in written} == {
+        trial.episode.identifier
+    }
+
+
+@needs_a_renderer
 def test_two_trials_of_one_episode_do_not_write_over_each_other(
     trial: RecordedTrial, tmp_path: Path
 ) -> None:

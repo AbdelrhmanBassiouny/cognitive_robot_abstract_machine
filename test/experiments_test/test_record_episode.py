@@ -18,7 +18,6 @@ from experiments.montessori.record_episode import (
     CHOICES_CLASH_EXIT_CODE,
     DEFAULT_REPETITIONS,
     ExecutionChoice,
-    InMemoryDatabaseRefused,
     LayoutChoice,
     PerceivedSceneCannotBeLaidOut,
     PerceivedSceneNeedsTheRobot,
@@ -27,6 +26,7 @@ from experiments.montessori.record_episode import (
     ScenarioChoice,
     SceneChoice,
     another_piece_than,
+    episode_bag_recorder,
     main,
     parse_arguments,
     scene_of,
@@ -35,6 +35,7 @@ from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.results_database import (
     DATABASE_URI_ENVIRONMENT_VARIABLE,
     IN_MEMORY_DATABASE_URI,
+    InMemoryDatabaseRefused,
 )
 from experiments.montessori.scenarios import (
     DetectionRelabelled,
@@ -52,6 +53,10 @@ from experiments.montessori.scenarios import (
     TracyWatchesTheSceneStandStill,
 )
 from experiments.tracy_experiments.montessori.scene_builder import TracyOnItsOwnTable
+from experiments.tracy_experiments.rosbag_recording import (
+    DECIMATED_TOPICS,
+    DEFAULT_KEEP_EVERY_NTH_FRAME,
+)
 
 from .test_episode_recording import UNREACHABLE_URI
 
@@ -387,6 +392,22 @@ def test_only_a_perceived_scene_or_a_bag_needs_ros():
     assert parse_arguments([]).needs_ros is False
     assert parse_arguments([RecordingOption.RECORD_BAG]).needs_ros is True
     assert parse_arguments(A_PERCEIVED_SCENE_ON_THE_ROBOT).needs_ros is True
+
+
+# %% the bag it records
+
+
+def test_the_bag_keeps_one_camera_frame_in_ten(tmp_path):
+    """
+    Every camera frame of a stand-still run is 26 GB a minute and a half, nearly all of
+    it point cloud; the recorded episodes keep the same one frame in ten the pickup demo
+    settled on.
+    """
+    recorder = episode_bag_recorder(str(tmp_path))
+
+    assert recorder.keep_every_nth_frame == DEFAULT_KEEP_EVERY_NTH_FRAME
+    for topic in DECIMATED_TOPICS:
+        assert recorder.keep_every_nth_frame_of(topic) == DEFAULT_KEEP_EVERY_NTH_FRAME
 
 
 # %% the database it records to

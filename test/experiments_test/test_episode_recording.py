@@ -240,6 +240,21 @@ def test_every_trial_of_a_run_is_recorded_under_one_episode():
     assert {trial.episode.identifier for trial in kept.trials} == {episode.identifier}
 
 
+def test_a_recorded_run_keeps_the_world_its_trial_ran_in():
+    """
+    A query card draws its scene from the episode's world, so an episode recorded by
+    the run itself must keep the world the trial ran in, as the pickup demo does.
+    """
+    scenario = SortOnePiece()
+    episode = Episode.from_run(scenario)
+    kept = TrialsKeptInMemory()
+
+    EpisodeRecording(episode=episode, records_trials=kept).run(scenario)
+
+    [world] = scenario.built_worlds
+    assert episode.world is world
+
+
 def test_a_recorded_trial_carries_what_its_trial_measured():
     scenario = SortOnePiece()
     episode = Episode.from_run(scenario)

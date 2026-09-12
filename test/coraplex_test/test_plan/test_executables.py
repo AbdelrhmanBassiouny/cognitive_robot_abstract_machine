@@ -8,6 +8,7 @@ nodes that terminate the chart, which depend on the execution type.
 """
 
 from copy import deepcopy
+from datetime import datetime
 
 import pytest
 from typing_extensions import List
@@ -15,6 +16,10 @@ from typing_extensions import List
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     ExternalCollisionAvoidance,
     SelfCollisionAvoidance,
+)
+from giskardpy.motion_statechart.data_types import (
+    LifeCycleValues,
+    ObservationStateValues,
 )
 from giskardpy.motion_statechart.goals.templates import Sequence
 from giskardpy.motion_statechart.graph_node import (
@@ -334,3 +339,36 @@ def test_is_interrupted_reflects_an_interrupted_motion_mapping(
 
     first_node.interrupt()
     assert reach_action_executable.is_interrupted
+
+
+# %% the motions of a chart Giskard compiled elsewhere
+
+
+def test_the_motions_of_a_chart_giskard_ran_elsewhere_end_with_it(
+    reach_action_executable,
+):
+    """
+    On the robot the chart is compiled inside Giskard, so the tasks below this
+    executable's own chart belong to no statechart; what Giskard hands back says the
+    chart as a whole reached its end, and every motion of it ended with it.
+    """
+    executable = reach_action_executable
+    executable.prepare_for_execution()
+    [end_motion] = [
+        node
+        for node in executable.motion_state_chart.nodes
+        if isinstance(node, EndMotion)
+    ]
+    executable.motion_state_chart.observation_state[end_motion] = (
+        ObservationStateValues.TRUE
+    )
+    began = datetime.now()
+    ended = datetime.now()
+
+    executable.keep_the_motions_in_step(started_at=began, ended_at=ended)
+
+    for motion, task in executable.motion_mappings.items():
+        assert not task.belongs_to_motion_statechart()
+        assert motion.status is LifeCycleValues.SUCCEEDED
+        assert motion.start_time == began
+        assert motion.end_time == ended

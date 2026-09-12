@@ -7,6 +7,7 @@ ROS but no camera and no robot.
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -23,7 +24,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, CompressedImage
 from tf2_ros import StaticTransformBroadcaster
-from typing_extensions import Callable, Iterator, List
+from typing_extensions import Callable, Iterator, List, Optional
 
 from experiments.montessori.perception.camera import (
     CameraIntrinsics,
@@ -407,6 +408,97 @@ class _PipelineHandingOverAnotherMidLook(MontessoriPerceptionPipeline):
     def detect(self, frame: RgbdFrame, request: SceneRequest = SceneRequest()):
         self.node.read_with(self.handed_over)
         return super().detect(frame, request)
+
+
+@dataclass
+class _PipelineAskingForTheFrameMidLook(MontessoriPerceptionPipeline):
+    """
+    A pipeline that, while it takes a look, asks the node for its newest frame -- what
+    a run waiting for a frame does while the camera's thread is still detecting.
+    """
+
+    node: MontessoriPerceptionNode = field(kw_only=True)
+    """
+    The node asked for the frame.
+    """
+
+    served_mid_look: Optional[RgbdFrame] = None
+    """
+    The frame the node served while the look was under way.
+    """
+
+    def detect(self, frame: RgbdFrame, request: SceneRequest = SceneRequest()):
+        self.served_mid_look = self.node.wait_for_frame(A_SHORT_WAIT)
+        return super().detect(frame, request)
+
+
+def test_the_frame_a_look_is_taken_on_is_served_before_the_look_ends(node: Node):
+    """
+    A first look under load can outlast a run's wait for a frame; the frame is there
+    as soon as it is built, whether or not the pipeline has finished with it.
+    """
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+    read_with_now = perception.pipeline
+    asking = _PipelineAskingForTheFrameMidLook(
+        table=read_with_now.table,
+        lid=read_with_now.lid,
+        reference_frame=read_with_now.reference_frame,
+        world=read_with_now.world,
+        pieces=read_with_now.pieces,
+        node=perception,
+    )
+    perception.read_with(asking)
+    frame = SceneCapture.load(A_LOOK).to_frame()
+
+    perception.look_at(frame)
+
+    assert asking.served_mid_look is frame
+
+
+A_SLOW_LOOK = 3 * A_SHORT_WAIT
+"""
+How long a slow look takes: longer than a wait that starts when the look does, so a wait
+that gives up on its own clock alone runs out while the look is still under way.
+"""
+
+
+@dataclass
+class _PipelineTakingItsTime(MontessoriPerceptionPipeline):
+    """
+    A pipeline whose look takes :data:`A_SLOW_LOOK`, as a first look through a pipeline
+    just handed over does.
+    """
+
+    def detect(self, frame: RgbdFrame, request: SceneRequest = SceneRequest()):
+        time.sleep(A_SLOW_LOOK)
+        return super().detect(frame, request)
+
+
+def test_a_wait_for_a_scene_outlasts_a_look_that_is_under_way(node: Node):
+    """
+    The first look through a pipeline just handed over is slow, and a run waiting for
+    the scene must not give up while the camera's thread is still looking at it.
+    """
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+    read_with_now = perception.pipeline
+    perception.read_with(
+        _PipelineTakingItsTime(
+            table=read_with_now.table,
+            lid=read_with_now.lid,
+            reference_frame=read_with_now.reference_frame,
+            world=read_with_now.world,
+            pieces=read_with_now.pieces,
+        )
+    )
+    frame = SceneCapture.load(A_LOOK).to_frame()
+    looking = threading.Thread(target=perception.look_at, args=(frame,))
+    looking.start()
+    time.sleep(A_SHORT_WAIT / 2)
+
+    seen = perception.wait_for_scene(A_SHORT_WAIT)
+
+    looking.join()
+    assert seen is perception.wait_for_scene(A_SHORT_WAIT)
 
 
 def test_a_look_taken_is_the_newest_result_the_node_serves(node: Node):

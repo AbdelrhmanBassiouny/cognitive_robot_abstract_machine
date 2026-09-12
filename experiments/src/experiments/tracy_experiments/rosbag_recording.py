@@ -17,6 +17,9 @@ still closes the bag: a bag that was never closed has no metadata and does not r
 from __future__ import annotations
 
 import logging
+import multiprocessing
+import multiprocessing.process
+import multiprocessing.synchronize
 import os
 import threading
 import time
@@ -86,11 +89,21 @@ DECIMATED_TOPICS = [
 Topics :attr:`RosbagRecorder.keep_every_nth_frame` thins.
 
 The image and cloud streams only -- they are effectively all of a bag's size. Joint
-states, transforms and camera infos are together well under a percent of it, and thinning
-them would cost motion fidelity and replayability to save nothing.
+states, transforms and camera infos are together well under a percent of it, and
+thinning them would cost motion fidelity and replayability to save nothing.
 
 ``camera_info`` is excluded deliberately: it is tiny and constant, and a consumer that
 cannot find one alongside a thinned image stream cannot use the images at all.
+"""
+
+DEFAULT_KEEP_EVERY_NTH_FRAME = 10
+"""
+How much of the camera streams a recorded run keeps unless told otherwise.
+
+Recording every frame costs around 230 MB of disk per second of wall clock: a sorting
+run fills tens of gigabytes, almost all of it registered depth and point cloud. One
+frame in ten still shows what the arm did, at roughly a ninth of the size. Ask for ``1``
+for a run that genuinely needs every frame.
 """
 
 SUBSCRIPTION_QUEUE_DEPTH = 100
@@ -109,7 +122,6 @@ Deliberately outside any source tree: a run of the demo produces tens of gigabyt
 writing that next to the code it was launched from puts it in reach of the next
 ``git add``.
 """
-
 
 # %% failures
 
@@ -136,7 +148,9 @@ class FrameCounter:
 
     keep_every_nth: int
     """
-    Keep one message in this many. ``1`` keeps everything.
+    Keep one message in this many.
+
+    ``1`` keeps everything.
     """
 
     seen: int = 0
@@ -175,24 +189,31 @@ class RosbagRecorder:
 
     output_directory: str
     """
-    Directory the bag is written to. Must not already exist.
+    Directory the bag is written to.
+
+    Must not already exist.
     """
 
     topics: List[str] = field(default_factory=lambda: list(DEFAULT_TOPICS))
     """
-    Topics to record. See :data:`DEFAULT_TOPICS`.
+    Topics to record.
+
+    See :data:`DEFAULT_TOPICS`.
     """
 
     keep_every_nth_frame: int = 1
     """
-    Keep only one in this many messages of each of :data:`DECIMATED_TOPICS`. ``1``, the
-    default, records every frame.
+    Keep only one in this many messages of each of :data:`DECIMATED_TOPICS`.
+
+    ``1``, the default, records every frame.
     """
 
     startup_timeout: float = 20.0
     """
-    Seconds to wait for the recorded topics to be discovered. A topic nobody publishes
-    within this is reported and left out rather than failing the run.
+    Seconds to wait for the recorded topics to be discovered.
+
+    A topic nobody publishes within this is reported and left out rather than failing
+    the run.
     """
 
     _node: Optional[Node] = field(init=False, default=None, repr=False)
@@ -211,8 +232,9 @@ class RosbagRecorder:
         init=False, default=None, repr=False
     )
     """
-    Spins :attr:`_node`. Single-threaded, so writes to the bag are serialised without a
-    lock.
+    Spins :attr:`_node`.
+
+    Single-threaded, so writes to the bag are serialised without a lock.
     """
 
     _thread: Optional[threading.Thread] = field(init=False, default=None, repr=False)
@@ -449,3 +471,174 @@ class RosbagRecorder:
             logger.info(
                 "  %s: kept %d of %d frames.", topic, counter.kept, counter.seen
             )
+
+
+# %% recording in a process of its own
+
+RECORDING_PROCESS_START_TIMEOUT_SECONDS = 30.0
+"""
+How long a run allows the recording process to start its interpreter and import what it
+records with, on top of the recorder's own wait for the topics to appear.
+"""
+
+RECORDING_PROCESS_STOP_TIMEOUT_SECONDS = 30.0
+"""
+How long a run waits for the recording process to close its bag before giving up on it.
+
+Closing writes the bag's metadata, without which it does not replay, so the wait is
+generous: a process still flushing tens of megabytes of point clouds must be let finish.
+"""
+
+RECORDING_PROCESS_POLL_SECONDS = 0.05
+"""
+How often a run looks whether the recording process has started or failed.
+"""
+
+
+def _record_until_told_to_stop(
+    output_directory: str,
+    topics: List[str],
+    keep_every_nth_frame: int,
+    startup_timeout: float,
+    started: multiprocessing.synchronize.Event,
+    stop: multiprocessing.synchronize.Event,
+    failures: multiprocessing.Queue,
+) -> None:
+    """
+    What the recording process runs: record the given topics until told to stop.
+
+    Reports a recorder that cannot start through ``failures`` rather than raising, since
+    an exception in a child process reaches nobody.
+
+    :param output_directory: Where the bag is written.
+    :param topics: The topics recorded.
+    :param keep_every_nth_frame: How much of the camera streams is kept.
+    :param startup_timeout: How long the recorder waits for the topics to appear.
+    :param started: Set once the bag is open and every topic subscribed.
+    :param stop: Set by the run once the bag is to be closed.
+    :param failures: Where the reason the recorder could not start is put.
+    """
+    rclpy.init()
+    try:
+        with RosbagRecorder(
+            output_directory=output_directory,
+            topics=topics,
+            keep_every_nth_frame=keep_every_nth_frame,
+            startup_timeout=startup_timeout,
+        ):
+            started.set()
+            stop.wait()
+    except RosbagRecordingFailed as failed:
+        failures.put(str(failed))
+    finally:
+        rclpy.shutdown()
+
+
+@dataclass
+class RosbagRecordingProcess:
+    """
+    A bag recorded by a process of its own for as long as the ``with`` block runs.
+
+    Recording in the run's own interpreter starves whatever else it does: the camera's
+    streams arrive at tens of megabytes a frame and every one of them takes the
+    interpreter's lock on the way to the bag, which made a look at the scene take eight
+    times as long as it does alone. Recorded by another process, the bag costs the run's
+    threads nothing.
+    """
+
+    recorder: RosbagRecorder
+    """
+    The recorder as the run would have built it; the process builds its own alike.
+    """
+
+    _process: Optional[multiprocessing.process.BaseProcess] = field(
+        init=False, default=None, repr=False
+    )
+    """
+    The recording process, while it runs.
+    """
+
+    _stop: Optional[multiprocessing.synchronize.Event] = field(
+        init=False, default=None, repr=False
+    )
+    """
+    Tells the process to close its bag.
+    """
+
+    @property
+    def output_directory(self) -> str:
+        """
+        The directory the bag is written to.
+        """
+        return self.recorder.output_directory
+
+    @property
+    def process_id(self) -> int:
+        """
+        The identifier of the process writing the bag.
+
+        :raises RosbagRecordingFailed: Before the process has been started.
+        """
+        if self._process is None or self._process.pid is None:
+            raise RosbagRecordingFailed("The recording process has not been started.")
+        return self._process.pid
+
+    def __enter__(self) -> RosbagRecordingProcess:
+        """
+        Start the process and return once its bag is open and every topic subscribed.
+
+        :raises RosbagRecordingFailed: If the recorder cannot start, with its own
+            reason, or does not report back within its startup timeout.
+        """
+        context = multiprocessing.get_context("spawn")
+        started = context.Event()
+        self._stop = context.Event()
+        failures = context.Queue()
+        self._process = context.Process(
+            target=_record_until_told_to_stop,
+            args=(
+                self.recorder.output_directory,
+                list(self.recorder.topics),
+                self.recorder.keep_every_nth_frame,
+                self.recorder.startup_timeout,
+                started,
+                self._stop,
+                failures,
+            ),
+            name="rosbag-recording",
+            daemon=True,
+        )
+        self._process.start()
+        deadline = time.monotonic() + (
+            self.recorder.startup_timeout + RECORDING_PROCESS_START_TIMEOUT_SECONDS
+        )
+        while time.monotonic() < deadline:
+            if started.is_set():
+                return self
+            if not failures.empty():
+                self._process.join(RECORDING_PROCESS_STOP_TIMEOUT_SECONDS)
+                raise RosbagRecordingFailed(failures.get())
+            if not self._process.is_alive():
+                raise RosbagRecordingFailed(
+                    "The recording process ended before its bag was open."
+                )
+            time.sleep(RECORDING_PROCESS_POLL_SECONDS)
+        self._process.kill()
+        raise RosbagRecordingFailed(
+            "The recording process did not open its bag in time."
+        )
+
+    def __exit__(self, exception_type, exception_value, traceback) -> None:
+        """
+        Close the bag and wait for the process to finish writing it.
+
+        Never suppresses an exception from the block, as the recorder itself does not.
+        """
+        self._stop.set()
+        self._process.join(RECORDING_PROCESS_STOP_TIMEOUT_SECONDS)
+        if self._process.is_alive():
+            logger.warning(
+                "The recording process did not close %s in time; killing it.",
+                self.output_directory,
+            )
+            self._process.kill()

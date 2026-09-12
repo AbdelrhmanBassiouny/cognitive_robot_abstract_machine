@@ -26,7 +26,7 @@ from pathlib import Path
 from coraplex.datastructures.enums import ExecutionType
 from krrood.exceptions import DataclassException
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
-from typing_extensions import Iterator, List, Optional, Sequence, Type
+from typing_extensions import TYPE_CHECKING, Iterator, List, Optional, Sequence, Type
 
 from experiments.episodes.artifacts import ArtifactDirectory
 from experiments.episodes.episode import Episode
@@ -38,14 +38,9 @@ from experiments.montessori.perception.scene_publishing import (
     PerceivedScene,
 )
 from experiments.montessori.results_database import (
-    DATABASE_URI_ENVIRONMENT_VARIABLE,
-    ConfiguredDatabase,
     ReadOnlyResultsDatabase,
-    ResultsDatabase,
     UnreachableResultsDatabase,
-    database_label,
-    is_in_memory,
-    verify_writable,
+    resolve_lasting_database,
 )
 from experiments.montessori.scenarios import (
     DetectionRelabelled,
@@ -75,6 +70,9 @@ from experiments.tracy_experiments.montessori.scene_builder import (
     WHERE_TRACY_LOOKS_FROM,
     layout_area_on_tracys_table,
 )
+
+if TYPE_CHECKING:
+    from experiments.tracy_experiments.rosbag_recording import RosbagRecorder
 
 # %% what the command line offers
 
@@ -245,40 +243,6 @@ CHOICES_CLASH_EXIT_CODE = 2
 What the process exits with when the choices made on the command line contradict each
 other, as a parser exits on a usage error.
 """
-
-# %% refusing a database that would be lost with the run
-
-
-@dataclass
-class InMemoryDatabaseRefused(DataclassException):
-    """
-    Raised when the database a run would record to lives only in memory, so the episode
-    would be lost with the process that recorded it.
-    """
-
-    database: ConfiguredDatabase
-    """
-    The database that was resolved.
-    """
-
-    def error_message(self) -> str:
-        if self.database.fell_back_from is None:
-            return "Refusing to record an episode to %s, which lives in memory." % (
-                database_label(self.database.uri)
-            )
-        return (
-            "Refusing to record an episode to a database in memory, stood in for one "
-            "that cannot be reached: %s"
-        ) % self.database.fell_back_from.error_message()
-
-    def suggest_correction(self) -> str:
-        return (
-            "An episode is recorded so that it can be asked about later, which a "
-            "database that dies with the run cannot serve. Start the database, or "
-            "point the run at one that lasts with %s or %s (for a throwaway one, "
-            "sqlite:///montessori.db)."
-        ) % (RecordingOption.DATABASE_URI.value, DATABASE_URI_ENVIRONMENT_VARIABLE)
-
 
 # %% refusing choices that contradict each other
 
@@ -630,19 +594,6 @@ def parse_arguments(
 # %% the run itself
 
 
-def resolve_lasting_database(database_uri: Optional[str]) -> ResultsDatabase:
-    """
-    The database the run records to, insisting it outlives the run.
-
-    :param database_uri: The database asked for on the command line, or None.
-    :raises InMemoryDatabaseRefused: If the run would record to memory.
-    """
-    configured = ConfiguredDatabase.resolve_reachable(database_uri)
-    if configured.fell_back_from is not None or is_in_memory(configured.uri):
-        raise InMemoryDatabaseRefused(database=configured)
-    return ResultsDatabase(uri=configured.uri)
-
-
 def record_episode(arguments: RecordingArguments, episode: Episode) -> Path:
     """
     Run the scenario as asked and keep everything it leaves behind.
@@ -652,7 +603,6 @@ def record_episode(arguments: RecordingArguments, episode: Episode) -> Path:
     :return: The directory the episode's artifacts were kept in.
     """
     database = resolve_lasting_database(arguments.database_uri)
-    verify_writable(database.uri)
     artifacts = ArtifactDirectory().open_for(episode)
     recording = open_recording(database)
     bag = recorded_bag() if arguments.record_bag else contextlib.nullcontext()
@@ -728,18 +678,43 @@ def scene_of(arguments: RecordingArguments) -> Iterator[MontessoriWorldBuilder]:
         )
 
 
+def episode_bag_recorder(parent_directory: Optional[str] = None) -> RosbagRecorder:
+    """
+    The recorder of an episode's bag: the run's topics, keeping one camera frame in
+    :data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`.
+
+    Imported here rather than at the top, so a run that records no bag needs no ROS.
+
+    :param parent_directory: Where the bag is placed; the recorder's own default when
+        None.
+    """
+    from experiments.tracy_experiments.rosbag_recording import (
+        DEFAULT_BAG_DIRECTORY,
+        DEFAULT_KEEP_EVERY_NTH_FRAME,
+        RosbagRecorder,
+    )
+
+    return RosbagRecorder.timestamped(
+        BAG_NAME_PREFIX,
+        DEFAULT_BAG_DIRECTORY if parent_directory is None else parent_directory,
+        keep_every_nth_frame=DEFAULT_KEEP_EVERY_NTH_FRAME,
+    )
+
+
 @contextlib.contextmanager
 def recorded_bag() -> Iterator[Path]:
     """
     Record a bag of the run's topics for as long as the block runs, and hand over the
     bag's directory once it is closed.
 
+    Written by a process of its own, so recording it costs the run's looks nothing.
+
     Imported here rather than at the top, so a run that records no bag needs no ROS.
     """
-    from experiments.tracy_experiments.rosbag_recording import RosbagRecorder
+    from experiments.tracy_experiments.rosbag_recording import RosbagRecordingProcess
 
-    with RosbagRecorder.timestamped(BAG_NAME_PREFIX) as recorder:
-        yield Path(recorder.output_directory)
+    with RosbagRecordingProcess(episode_bag_recorder()) as recording:
+        yield Path(recording.output_directory)
 
 
 def main(argument_list: Optional[Sequence[str]] = None) -> int:

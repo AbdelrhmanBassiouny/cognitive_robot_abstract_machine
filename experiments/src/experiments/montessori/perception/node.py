@@ -144,6 +144,12 @@ class MontessoriPerceptionNode(RepeatedLook):
     When the pipeline last ran, as a monotonic timestamp.
     """
 
+    _look_under_way_since: Optional[float] = field(init=False, default=None)
+    """
+    When the look the camera's thread is taking now began, as a monotonic timestamp, or
+    None between looks; what tells a wait for a result that one is on its way.
+    """
+
     _lock: threading.Lock = field(init=False, default_factory=threading.Lock)
     """
     Guards the newest result against being read while it is being replaced.
@@ -186,20 +192,26 @@ class MontessoriPerceptionNode(RepeatedLook):
         """
         Run the pipeline on one look and keep the result as the newest.
 
-        A result is kept only if the look was taken through the pipeline this node
-        still reads with: a look begun before :meth:`read_with` handed over another
-        pipeline was taken through the old one, and serving it would answer a request
-        with what that pipeline made of the scene.
+        The frame is kept before the pipeline runs on it, so whoever waits for a frame
+        is served as soon as one is built rather than once the look is over -- a first
+        look under load can outlast that wait. A result is kept only if the look was
+        taken through the pipeline this node still reads with: a look begun before
+        :meth:`read_with` handed over another pipeline was taken through the old one,
+        and serving it would answer a request with what that pipeline made of the scene.
 
         :param frame: The look, in the pipeline's own reference frame.
         :return: What the look found.
         """
         pipeline = self.pipeline
+        with self._lock:
+            self._look_under_way_since = time.monotonic()
+            if pipeline is self.pipeline:
+                self._frame = frame
         scene = pipeline.detect(frame)
         with self._lock:
+            self._look_under_way_since = None
             if pipeline is self.pipeline:
                 self._scene = scene
-                self._frame = frame
         return scene
 
     def read_with(self, pipeline: MontessoriPerceptionPipeline) -> None:
@@ -317,19 +329,30 @@ class MontessoriPerceptionNode(RepeatedLook):
         """
         Block until something this node holds has arrived.
 
+        A look under way is waited for however long it takes: a first look through a
+        pipeline just handed over is slow, and a wait that gave up while the camera's
+        thread was still looking would report a camera that is silent when it is not.
+        The timeout is the time the node is allowed to spend between looks, so only a
+        node the camera has stopped feeding gives up.
+
         :param newest: Reads what the node holds now, None until it has arrived.
-        :param timeout_seconds: How long to wait before giving up.
+        :param timeout_seconds: How long to wait with no look under way before giving
+            up.
         :return: What arrived.
         :raises NoSceneAvailable: If nothing arrived within the timeout.
         """
         deadline = time.monotonic() + timeout_seconds
-        while time.monotonic() < deadline:
+        while True:
             with self._lock:
                 held = newest()
+                look_under_way = self._look_under_way_since is not None
             if held is not None:
                 return held
+            if look_under_way:
+                deadline = time.monotonic() + timeout_seconds
+            elif time.monotonic() >= deadline:
+                raise NoSceneAvailable(timeout_seconds, self._missing_inputs())
             time.sleep(self.scene_check_period)
-        raise NoSceneAvailable(timeout_seconds, self._missing_inputs())
 
 
 # %% running it

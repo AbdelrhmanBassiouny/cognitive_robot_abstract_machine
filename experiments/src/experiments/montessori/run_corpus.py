@@ -43,14 +43,13 @@ from experiments.montessori.record_episode import (
     ScenarioChoice,
     SceneChoice,
     record_episode,
-    resolve_lasting_database,
 )
 from experiments.montessori.results_database import (
     ReadOnlyResultsDatabase,
     ResultsDatabase,
     UnreachableResultsDatabase,
     database_label,
-    verify_writable,
+    resolve_lasting_database,
 )
 from experiments.montessori.scenarios import SortingStep
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -465,7 +464,6 @@ def main(argument_list: Optional[Sequence[str]] = None) -> int:
     arguments = parse_arguments(argument_list)
     try:
         database = resolve_lasting_database(arguments.database_uri)
-        verify_writable(database.uri)
     except (UnreachableResultsDatabase, ReadOnlyResultsDatabase) as error:
         print(error, file=sys.stderr)
         return DATABASE_REFUSED_EXIT_CODE
