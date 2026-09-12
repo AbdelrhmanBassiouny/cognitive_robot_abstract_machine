@@ -177,13 +177,14 @@ CAMERA_LINK_T_OPTICAL = HomogeneousTransformationMatrix.from_xyz_rpy(
     yaw=-1.546731,
 ).to_np()
 """
-Where the colour camera's optical frame stands on ``camera_link``.
+Where the colour camera's optical frame stands on the ``camera_link`` this scene is
+built on.
 
-Read off the shipped captures, which agree on it to a ten-millionth of a metre: every
-one of them places the optical frame here against the ``camera_link`` the description
-states. The turn is not the plain quarter turns a description usually states between a
-camera link and its optical frame, because the camera looks some twelve degrees flatter
-than ``camera_link`` points.
+Read off the shipped captures, which agree on it to a ten-millionth of a metre. It is
+not the plain quarter turns a description states between a camera link and its optical
+frame: the lab calibrates the camera in the description in Tracy's own ROS workspace,
+not in the published one this scene is built from, and this pose carries the difference
+between the two so that the simulated camera looks where the real one looked.
 """
 
 OVERVIEW_VIDEO_RESOLUTION = VideoResolution(width=960, height=540)
