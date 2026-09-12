@@ -28,12 +28,15 @@ from experiments.paper.scene import SceneRender
 from experiments.paper.pose_change import (
     GHOST_COLOR,
     EventStatesNoPoseChangeError,
+    ACROSS_ELEVATION,
     ModelChangesUnannounced,
     MotionStretch,
     PoseChange,
     PoseChangeRender,
     stand,
+    viewpoint_across,
 )
+from semantic_digital_twin.adapters.multi_sim import OVERVIEW_VIEWPOINT
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -452,6 +455,72 @@ def test_the_ghost_is_a_body_of_the_scene_wearing_the_objects_own_shapes(
         theirs is not ours
         for theirs, ours in zip(ghost.visual.shapes, subject.visual.shapes)
     )
+
+
+def test_the_ghost_wears_its_shapes_on_its_own_frame(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    A shape places itself against the frame its origin names, so the copies stand on the
+    ghost exactly as the originals stand on the object -- and not on the object, where a
+    copy that kept the original's origin would be drawn.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    render = PoseChangeRender(world=scene_with_a_loose_piece)
+
+    ghost = render.stand_a_ghost_at(
+        subject, Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
+    )
+
+    for theirs, ours in zip(ghost.visual.shapes, subject.visual.shapes):
+        assert theirs.origin.reference_frame is ghost
+        assert np.array_equal(theirs.origin.to_np(), ours.origin.to_np())
+
+
+@needs_a_renderer
+def test_the_ghost_is_drawn_where_the_object_was_rather_than_on_it(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    The two poses are apart, so the ghost's colour and the object's colour are found in
+    different places of the picture.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    drawn = PoseChangeRender(world=scene_with_a_loose_piece, ghost=SOLID_GHOST).of(
+        PoseChange.of(moved(subject))
+    )
+
+    ghost_at = np.argwhere(drawn.pixels_of(SOLID_GHOST)).mean(axis=0)
+    object_at = np.argwhere(drawn.pixels_of(ANSWER_COLOR)).mean(axis=0)
+    assert abs(ghost_at[1] - object_at[1]) > drawn.image.shape[1] / 10
+
+
+# %% where the move is looked at from
+
+
+def test_the_move_is_looked_at_from_square_across_it() -> None:
+    """
+    Seen from along the way the object went, the two poses hide one another; seen from
+    square across it they stand side by side.
+
+    The camera stands on the side the overview camera stands on, so the picture is
+    turned the same way as the others.
+    """
+    before = Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
+    after = Pose.from_xyz_rpy(x=ENDED_AT).to_homogeneous_matrix()
+
+    viewpoint = viewpoint_across(before, after)
+
+    assert viewpoint[0] == 0.0
+    assert viewpoint[1] * OVERVIEW_VIEWPOINT[1] > 0
+    assert viewpoint[2] == ACROSS_ELEVATION
+
+
+def test_a_lift_is_looked_at_from_the_overviews_side() -> None:
+    before = Pose.from_xyz_rpy(z=0.0).to_homogeneous_matrix()
+    after = Pose.from_xyz_rpy(z=0.3).to_homogeneous_matrix()
+
+    assert np.array_equal(viewpoint_across(before, after), OVERVIEW_VIEWPOINT)
 
 
 def test_the_ghost_is_taken_back_out_of_the_scene(

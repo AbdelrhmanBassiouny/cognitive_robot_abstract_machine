@@ -22,6 +22,7 @@ from typing_extensions import (
     Set,
     Type,
     Optional,
+    Sequence,
     Set,
     Union,
 )
@@ -201,6 +202,13 @@ class RegionAppearance(Enum):
 FULLY_OPAQUE = 1.0
 """
 The opacity a shape is drawn at when nothing asked for it to be faded.
+"""
+
+
+OVERVIEW_VIEWPOINT = (1.0, -1.0, 1.0)
+"""
+Which way from a scene's centre the overview camera stands: diagonally off it and
+above, so the whole scene is seen at once.
 """
 
 
@@ -1068,13 +1076,38 @@ class MujocoCamera(MultiSimCamera):
         :param distance_factor: Multiplier applied to the box's bounding diagonal to place the camera.
         :return: The framing camera's world-frame pose.
         """
+        return cls.pose_looking_from(
+            bounds, OVERVIEW_VIEWPOINT, minimum_distance, distance_factor
+        )
+
+    @classmethod
+    def pose_looking_from(
+        cls,
+        bounds: numpy.ndarray,
+        viewpoint: Sequence[float],
+        minimum_distance: float = 1.0,
+        distance_factor: float = 1.5,
+    ) -> HomogeneousTransformationMatrix:
+        """
+        Computes a viewpoint from the given side that frames an axis-aligned bounding
+        box: the camera stands off the box's centre along the given direction and
+        looks back at it.
+
+        :param bounds: A ``(2, 3)`` array of the scene's ``[minimum, maximum]`` corners.
+        :param viewpoint: Which way from the box's centre the camera stands, as a
+            direction in the world frame; its length does not matter.
+        :param minimum_distance: Floor (in meters) for the camera's distance to the box center,
+            so a box that collapses to a point still gets a sensibly framed camera.
+        :param distance_factor: Multiplier applied to the box's bounding diagonal to place the camera.
+        :return: The framing camera's world-frame pose.
+        """
         minimum = Point3.from_iterable(bounds[0])
         maximum = Point3.from_iterable(bounds[1])
         diagonal_vector = maximum - minimum
         center = minimum + diagonal_vector * 0.5
         diagonal = float(diagonal_vector.norm().to_np().item())
         distance = max(diagonal, minimum_distance) * distance_factor
-        direction = Vector3.from_iterable([1.0, -1.0, 1.0])
+        direction = Vector3.from_iterable(list(viewpoint))
         direction.scale(1)
         position = center + direction * distance
         rotation = cls._look_at_rotation(position, center)

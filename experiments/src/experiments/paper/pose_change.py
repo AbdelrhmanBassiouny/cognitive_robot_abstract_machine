@@ -30,11 +30,13 @@ from experiments.paper.panel import ANSWER_COLOR
 from experiments.paper.run_plan import TrialClock
 from experiments.paper.scene import (
     BACKGROUND_COLOR,
+    PICTURE_HEIGHT,
+    PICTURE_WIDTH,
     PickedOut,
     RenderedScene,
     SceneRender,
 )
-from semantic_digital_twin.adapters.multi_sim import MujocoCamera
+from semantic_digital_twin.adapters.multi_sim import OVERVIEW_VIEWPOINT, MujocoCamera
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
     ForwardKinematicsManager,
@@ -87,6 +89,51 @@ WAYPOINTS = 10
 """
 How many dots the object's way is shown with.
 """
+
+# %% where the move is looked at from
+
+MOVE_CAMERA_NAME = "paper_move_camera"
+"""
+What the render calls the camera it hangs to look across an object's move.
+"""
+
+ACROSS_ELEVATION = 1.0
+"""
+How far up the camera looking across a move stands for every metre it stands to the
+side, so the move is seen from diagonally above rather than along the table.
+"""
+
+MINIMUM_MOVE_ACROSS_THE_TABLE = 0.01
+"""
+How far an object has to have moved across the table, in metres, for there to be a side
+to look at the move from; a move straight up or down is looked at from the overview's
+side.
+"""
+
+
+def viewpoint_across(
+    before: HomogeneousTransformationMatrix, after: HomogeneousTransformationMatrix
+) -> np.ndarray:
+    """
+    Which way from a move the camera stands to see the two poses side by side: square
+    across the table to the way the object went, raised, on whichever side the overview
+    camera also stands on so the picture is turned the same way as the other cards.
+
+    A move with no way across the table -- a lift -- is looked at from the overview's
+    own side.
+
+    :param before: Where the object was, in the world root frame.
+    :param after: Where it ended up, in the world root frame.
+    """
+    across_the_table = (after.to_np()[:3, 3] - before.to_np()[:3, 3])[:2]
+    length = float(np.linalg.norm(across_the_table))
+    if length < MINIMUM_MOVE_ACROSS_THE_TABLE:
+        return np.array(OVERVIEW_VIEWPOINT, dtype=float)
+    square_to_it = np.array([-across_the_table[1], across_the_table[0]]) / length
+    if square_to_it @ np.array(OVERVIEW_VIEWPOINT[:2]) < 0:
+        square_to_it = -square_to_it
+    return np.array([square_to_it[0], square_to_it[1], ACROSS_ELEVATION])
+
 
 # %% an event that says nothing about where its object went
 
@@ -527,8 +574,9 @@ class PoseChangeRender:
     """
     The camera to draw through, already attached to :attr:`world`.
 
-    When none is given, an overview camera framing the whole scene is hung on the
-    world's root for the one panel and taken off again afterwards.
+    When none is given, a camera looking across the move from the side is hung on the
+    world's root for the one panel and taken off again afterwards, so the two poses are
+    seen side by side rather than one behind the other.
     """
 
     highlight: Color = ANSWER_COLOR
@@ -594,21 +642,53 @@ class PoseChangeRender:
             dots = self.stand_dots_along(
                 change.subject, change.way or change.straight_way()
             )
+            framed_on = self.framed_on(change.subject, ghost) + tuple(among)
+            camera = self.camera
+            if camera is None:
+                camera = self.hang_a_camera_across(change, framed_on)
             try:
                 return SceneRender(
                     world=self.world,
-                    camera=self.camera,
+                    camera=camera,
                     highlight=self.highlight,
                     faded=self.faded,
                     label_answers=False,
-                    framed_on=self.framed_on(change.subject, ghost) + tuple(among),
+                    framed_on=framed_on,
                     picked_out=(PickedOut(entity=ghost, color=self.ghost),)
                     + tuple(PickedOut(entity=dot, color=self.ghost) for dot in dots),
                 ).of([change.subject])
             finally:
+                if self.camera is None:
+                    camera.body.simulator_additional_properties.remove(camera)
                 self.take_away([ghost] + dots)
                 stand(self.world, change.subject, stood_at)
                 stood.restore_into(self.world)
+
+    def hang_a_camera_across(
+        self, change: PoseChange, framed_on: Sequence[KinematicStructureEntity]
+    ) -> MujocoCamera:
+        """
+        Hang a camera on the world's root that looks across the move from the side,
+        framing everything the picture is about.
+
+        :param change: The move to look across.
+        :param framed_on: What the picture is framed on.
+        :return: The camera, already attached, to be taken off again once the picture is
+            drawn.
+        """
+        pose = MujocoCamera.pose_looking_from(
+            SceneRender(world=self.world, framed_on=tuple(framed_on)).bounds(),
+            viewpoint_across(change.before, change.after),
+        )
+        camera = MujocoCamera(
+            name=MOVE_CAMERA_NAME,
+            body=self.world.root,
+            position=pose.to_position().to_np()[:3].tolist(),
+            quaternion=MujocoCamera.quaternion_of(pose),
+            resolution=[float(PICTURE_WIDTH), float(PICTURE_HEIGHT)],
+        )
+        self.world.root.simulator_additional_properties.append(camera)
+        return camera
 
     @staticmethod
     def framed_on(subject: Body, ghost: Body) -> Tuple[Body, ...]:
@@ -706,11 +786,20 @@ class PoseChangeRender:
     @staticmethod
     def _copied(shapes: ShapeCollection, worn_by: Body) -> ShapeCollection:
         """
-        One body's shapes, copied so that a scene built from both draws both.
+        One body's shapes, copied so that a scene built from both draws both, each
+        standing on the copy's own frame exactly as the original stands on its body's.
+
+        A shape places itself against the frame its origin names, so a copy that kept
+        the original's origin would be drawn on the original wherever the copy stood.
 
         :param shapes: The shapes to copy.
         :param worn_by: The body the copies belong to.
         """
-        return ShapeCollection(
-            [copy.copy(shape) for shape in shapes.shapes], reference_frame=worn_by
-        )
+        copies = []
+        for shape in shapes.shapes:
+            copied = copy.copy(shape)
+            copied.origin = HomogeneousTransformationMatrix(
+                shape.origin.to_np(), reference_frame=worn_by
+            )
+            copies.append(copied)
+        return ShapeCollection(copies, reference_frame=worn_by)

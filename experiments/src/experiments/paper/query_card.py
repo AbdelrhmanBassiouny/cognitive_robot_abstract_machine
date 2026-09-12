@@ -1083,13 +1083,15 @@ class EventAgainstThePlanCard(QueryCard):
         self, asked: PickedUpRecently, trial: RecordedTrial
     ) -> List[DetectionEvent]:
         """
-        What the run saw happen to that object, which is what the four levels are read
+        What the run saw happen to that object, which is what the levels are read
         against.
 
-        An agency question is about what was done to the object, so what the robot did to
-        it is what the card shows where the run saw any of it. Where it saw none, what is
-        left is the object moving on its own -- which is exactly the case the answer is no
-        in, and the case the card has to show for that answer to mean anything.
+        The question is whether the object was picked up, so the pick-ups the run saw
+        are what the card shows where it saw any -- not everything the robot did to
+        the object, which would have the plan chart pick out the placing as well and
+        tell two stories. Where it saw none, what is left is the object moving on its
+        own -- which is exactly the case the answer is no in, and the case the card has
+        to show for that answer to mean anything.
 
         Matched by the name the twin gives the object rather than by identity, because a
         recalled episode's question and its events are read back as separate objects.
@@ -1097,10 +1099,10 @@ class EventAgainstThePlanCard(QueryCard):
         :param asked: The question as it was asked.
         :param trial: The trial it was asked during.
         """
-        acted_on = self._reported_about(asked.subject, trial, AgentInteractionEvent)
+        picked_up = self._reported_about(asked.subject, trial, PickUpEvent)
         return (
-            acted_on
-            if acted_on
+            picked_up
+            if picked_up
             else self._reported_about(asked.subject, trial, MotionEvent)
         )
 

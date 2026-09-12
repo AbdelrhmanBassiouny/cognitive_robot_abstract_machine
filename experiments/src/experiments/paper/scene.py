@@ -242,13 +242,21 @@ class RenderedScene(CardPanel):
     ``bool``.
     """
 
+    def pixels_of(self, color: Color) -> np.ndarray:
+        """
+        Where exactly the given colour was drawn, as a mask over the picture.
+
+        :param color: The colour the twin states.
+        """
+        return np.all(self.image[:, :, :3] == drawn(color), axis=-1)
+
     def holds(self, color: Color) -> bool:
         """
-        Whether any pixel of the picture was drawn in the given colour.
+        Whether the given colour was drawn anywhere in the picture.
 
-        :param color: The colour to look for.
+        :param color: The colour the twin states.
         """
-        return bool(np.any(np.all(self.image[:, :, :3] == drawn(color), axis=-1)))
+        return bool(np.any(self.pixels_of(color)))
 
     def write(self, path: Path) -> Path:
         """
