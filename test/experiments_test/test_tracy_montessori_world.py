@@ -8,8 +8,17 @@ from __future__ import annotations
 
 import pytest
 
-from experiments.montessori.pieces import FULL_SIZE_PIECES, SMALLER_PIECES
-from experiments.montessori.semantics import MontessoriShape
+from experiments.montessori.pieces import (
+    FULL_SIZE_PIECES,
+    SMALLER_PIECES,
+    KnownPieceSet,
+)
+from experiments.montessori.semantics import (
+    MontessoriShape,
+    MontessoriShapeCategory,
+    ShapeSortingBoard,
+    ShapeSortingHole,
+)
 from experiments.tracy_experiments.montessori.world import (
     BOARD_POSITION_TRACY,
     TracyMontessoriWorld,
@@ -46,6 +55,33 @@ def test_every_loose_shape_is_built_as_the_set_the_scene_is_told_stands_there(pi
         bounds = shape.root.collision.combined_mesh.bounds
         assert bounds[1][2] - bounds[0][2] == pytest.approx(piece.height)
         assert shape.root.collision[0].color == piece.color
+
+
+def _hole_names(scene: TracyMontessoriWorld) -> list:
+    return sorted(
+        hole.name
+        for hole in ShapeSortingBoard.held_by(scene.world).apertures
+        if isinstance(hole, ShapeSortingHole)
+    )
+
+
+def test_a_scene_told_a_part_of_the_set_builds_only_those_pieces():
+    """
+    A run with one piece on the table hands the scene a set of one; the board still has
+    a hole for every category, and a hole without a piece in the set stays empty.
+    """
+    a_cube_alone = KnownPieceSet(
+        pieces=(SMALLER_PIECES.by_category[MontessoriShapeCategory.CUBE],)
+    )
+
+    scene = TracyMontessoriWorld(table_top_z=TABLE_TOP_Z, pieces=a_cube_alone)
+
+    assert [shape.shape_category for shape in _shapes(scene)] == [
+        MontessoriShapeCategory.CUBE
+    ]
+    assert _hole_names(scene) == _hole_names(
+        TracyMontessoriWorld(table_top_z=TABLE_TOP_Z)
+    )
 
 
 def test_the_board_stands_where_the_scene_is_told_with_its_holes_and_drawers():
