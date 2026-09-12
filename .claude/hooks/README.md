@@ -205,6 +205,21 @@ the narrative that doesn't belong in structured data.
   `.claude/.plan-state-sync-sha`), so this can diff the plan's directory from that stamp and print
   only the tracking-issue comments newer than it. Needs no Claude Code session: it prefers the `gh`
   CLI when installed, otherwise `GH_TOKEN`/`GITHUB_TOKEN` with `curl`.
+- See which plans are outgrowing the size budget → [`plan-size-report.sh`](./plan-size-report.sh).
+  Each plan is budgeted for so many items and so many lines of `plan.yaml` and `roadmap.md`
+  together — the budget itself is
+  [`bastler/plan_size_budget.py`](../../bastler/plan_size_budget.py)'s
+  `SizeBudget`, and the report prints it above a row per plan, naming which half a plan is
+  over and by how much. Reports only: nothing refuses a save yet, so a plan already over the budget
+  stays saveable while it waits to be split.
+- Know which Python dependencies are absent →
+  [`bastler/dependencies.py`](../../bastler/dependencies.py), which prints the requirement
+  specifiers [`bastler/pyproject.toml`](../../bastler/pyproject.toml) declares and the interpreter
+  does not have. That declaration is the one place a tooling dependency is written down, so no
+  script names a distribution of its own: `check-setup.sh` reports what is missing,
+  `session-start.sh` installs it and `plan-size-report.sh` refuses to run without it, all through
+  the `missing_dependencies` helper in
+  [`resolve-personal-notes-config.sh`](./resolve-personal-notes-config.sh).
 
 **Auto-discovery.** If your branch is an item in some plan, that plan's `plan.yaml` and `roadmap.md`
 are pulled into `CLAUDE.local.md` too, via a generated branch-to-plan index that `save-plan.sh`
