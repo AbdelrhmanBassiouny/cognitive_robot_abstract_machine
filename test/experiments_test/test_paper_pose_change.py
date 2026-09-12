@@ -8,6 +8,8 @@ see that the answer is about a real change and not a label on a chart.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import pytest
 from coraplex.datastructures.enums import ExecutionType
@@ -24,6 +26,7 @@ from experiments.paper.scene import SceneRender
 from experiments.paper.pose_change import (
     GHOST_COLOR,
     EventStatesNoPoseChangeError,
+    ModelChangesUnannounced,
     PoseChange,
     PoseChangeRender,
     stand,
@@ -33,8 +36,12 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Pose,
 )
+from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -282,7 +289,7 @@ def test_the_ghost_is_taken_back_out_of_the_scene(
         subject, Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
     )
 
-    render.take_the_ghost_away(ghost)
+    render.take_away([ghost])
 
     assert ghost not in scene_with_a_loose_piece.kinematic_structure_entities
 
@@ -308,6 +315,88 @@ def test_the_render_leaves_nothing_hanging_on_the_world(
         entity.name: len(entity.simulator_additional_properties)
         for entity in stood_in_it
     } == hanging
+
+
+# %% what the world's own callbacks are told
+
+
+@dataclass(eq=False)
+class CountsModelChanges(ModelChangeCallback):
+    """
+    Stands in for a simulator or a collision checker attached to the world: counts how
+    often it is told the model changed.
+    """
+
+    changes: int = 0
+    """
+    How many changes it was told of.
+    """
+
+    def on_model_change(self, **kwargs) -> None:
+        self.changes += 1
+
+
+def hung_from_the_root(world: World, name: str) -> Body:
+    """
+    Hang a box of the given name from the world's root, as one change to the model.
+
+    :param world: The world to change.
+    :param name: What the box is called.
+    """
+    box = standing_box(name)
+    with world.modify_world():
+        world.add_connection(FixedConnection(parent=world.root, child=box))
+    return box
+
+
+@needs_a_renderer
+def test_the_picture_announces_no_model_change_to_the_worlds_callbacks(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    The ghost and the dots stand in the scene for one picture only, so nothing attached
+    to the world -- a simulator, a collision checker -- is made to work the scene out
+    again for them: that is what turned a picture of a real run into half an hour of
+    loading meshes.
+    """
+    subject = loose_piece(scene_with_a_loose_piece)
+    counts = CountsModelChanges(_world=scene_with_a_loose_piece)
+
+    PoseChangeRender(world=scene_with_a_loose_piece).of(PoseChange.of(moved(subject)))
+
+    assert counts.changes == 0
+    assert not counts.paused
+
+
+def test_holding_the_callbacks_off_lets_only_those_it_held_go_again(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    A callback something else had paused before stays paused after, and one that was
+    live is live again and told of the next change. The world's own forward kinematics
+    are never held off, since they are what places the body stood in for the picture.
+    """
+    live = CountsModelChanges(_world=scene_with_a_loose_piece)
+    paused_before = CountsModelChanges(_world=scene_with_a_loose_piece)
+    paused_before.pause()
+
+    with ModelChangesUnannounced(scene_with_a_loose_piece):
+        stood_for_the_picture = hung_from_the_root(
+            scene_with_a_loose_piece, "stood_for_the_picture"
+        )
+        assert np.allclose(
+            scene_with_a_loose_piece.compute_forward_kinematics_np(
+                scene_with_a_loose_piece.root, stood_for_the_picture
+            ),
+            np.eye(4),
+        )
+    assert live.changes == 0
+    assert not live.paused
+    assert paused_before.paused
+
+    hung_from_the_root(scene_with_a_loose_piece, "stood_for_good")
+    assert live.changes == 1
+    assert paused_before.changes == 0
 
 
 def test_the_panel_is_framed_on_the_move_rather_than_the_whole_world(

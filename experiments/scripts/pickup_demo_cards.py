@@ -11,13 +11,12 @@ plan accounts for it.
 Usage:
     python3 pickup_demo_cards.py <output-directory> [--shoved] [--piece <shape>]
         [--headless]
-    python3 pickup_demo_cards.py <output-directory> --from-recording
 
 The episode's artifacts -- the film of the table, the transcript, and the trial's own
 camera film and joint trace -- are kept under the output directory beside a database
-holding the trial, and the cards are written beside them. Run again with
-``--from-recording`` to draw the cards from that database and those artifacts without
-running the demo again.
+holding the trial, and the cards are written beside them. The cards are drawn from the
+run itself rather than read back from that database, since the twin the run keeps
+there points at mesh files the run wrote for its own lifetime and takes away again.
 """
 
 from __future__ import annotations
@@ -29,7 +28,6 @@ from enum import StrEnum
 from pathlib import Path
 
 from experiments.episodes.artifacts import ArtifactDirectory
-from experiments.episodes.long_term_memory import LongTermMemory
 from experiments.episodes.recording import open_recording
 from experiments.montessori.results_database import ResultsDatabase
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -69,7 +67,6 @@ class Option(StrEnum):
     SHOVED = "--shoved"
     PIECE = "--piece"
     HEADLESS = "--headless"
-    FROM_RECORDING = "--from-recording"
 
 
 def parse_arguments(argument_list=None) -> argparse.Namespace:
@@ -96,11 +93,6 @@ def parse_arguments(argument_list=None) -> argparse.Namespace:
         action="store_true",
         help="run without MuJoCo's viewer window, as fast as the machine allows",
     )
-    parser.add_argument(
-        Option.FROM_RECORDING,
-        action="store_true",
-        help="draw the cards from the recording an earlier run left, without running",
-    )
     return parser.parse_args(argument_list)
 
 
@@ -115,23 +107,6 @@ def recording_of(output_directory: Path) -> ResultsDatabase:
     )
 
 
-def draw_from_the_recording(output_directory: Path) -> int:
-    """
-    Draw the cards from the trial and the artifacts an earlier run left.
-
-    :param output_directory: The directory that run wrote into.
-    :return: 0 once the cards are written.
-    """
-    trials = LongTermMemory(recording_of(output_directory)).recall_every_trial()
-    artifacts = ArtifactDirectory(path=output_directory / Directory.ARTIFACTS)
-    written = QueryCardSet.for_the_paper().write_every_episode(
-        trials, output_directory / Directory.CARDS, artifacts
-    )
-    for card in written:
-        logger.info("Written %s.", card.layered_path or card.markup_path)
-    return 0
-
-
 def main(argument_list=None) -> int:
     """
     Run the demo once and draw its cards.
@@ -140,8 +115,6 @@ def main(argument_list=None) -> int:
     :return: 0 once the cards are written.
     """
     arguments = parse_arguments(argument_list)
-    if arguments.from_recording:
-        return draw_from_the_recording(arguments.output_directory)
     arguments.output_directory.mkdir(parents=True, exist_ok=True)
     recording = open_recording(recording_of(arguments.output_directory))
     demo = SimulatedPickupDemo(

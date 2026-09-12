@@ -10,7 +10,7 @@ change in the world rather than a label on a chart.
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
@@ -31,6 +31,10 @@ from experiments.paper.scene import (
     SceneRender,
 )
 from semantic_digital_twin.adapters.multi_sim import MujocoCamera
+from semantic_digital_twin.callbacks.callback import ModelChangeCallback
+from semantic_digital_twin.spatial_computations.forward_kinematics import (
+    ForwardKinematicsManager,
+)
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -192,6 +196,53 @@ def stand(world: World, subject: Body, pose: HomogeneousTransformationMatrix) ->
     world.notify_state_change()
 
 
+# %% keeping a change made for one picture to the picture
+
+
+@dataclass
+class ModelChangesUnannounced:
+    """
+    Holds off, for as long as it is entered, everything the world tells when its model
+    changes, except its own forward kinematics.
+
+    A body stood in the scene for one picture and taken out again is no change to what a
+    simulator or a collision checker attached to the world has to know about, and each
+    of them working the whole scene out again for it is what turns a picture of a real
+    run into half an hour of loading meshes. The forward kinematics are what the world
+    knows of where its bodies stand, so they are told: they are what places the body in
+    the picture, which is drawn by a mirror of its own.
+    """
+
+    world: World
+    """
+    The world whose callbacks are held off.
+    """
+
+    held: List[ModelChangeCallback] = field(default_factory=list, init=False)
+    """
+    The callbacks this held off, so that only those are let go again; one that was
+    paused before stays paused after.
+    """
+
+    def __enter__(self) -> ModelChangesUnannounced:
+        self.held = [
+            callback
+            for callback in ModelChangeCallback.all_callbacks_of_this_type_from_world(
+                self.world
+            )
+            if not callback.paused
+            and not isinstance(callback, ForwardKinematicsManager)
+        ]
+        for callback in self.held:
+            callback.pause()
+        return self
+
+    def __exit__(self, *exception) -> None:
+        for callback in self.held:
+            callback.resume()
+        self.held = []
+
+
 # %% where an object went
 
 
@@ -329,10 +380,9 @@ class PoseChangeRender:
     Draws one object where it was and where it ended up, from one place.
 
     Both poses are drawn from the same camera under the same light, so the ghost reads
-    as the same object moved rather than as a second scene. The ghost is laid over the
-    picture rather than drawn into it, so it shows through whatever ended up standing in
-    front of it -- which is what makes a piece now held in the gripper still show where
-    it came from.
+    as the same object moved rather than as a second scene. The ghost is a see-through
+    body of the scene, so a piece now held in the gripper still shows where it came from
+    through whatever ended up standing in front of it.
     """
 
     world: World
@@ -406,27 +456,26 @@ class PoseChangeRender:
             robot_at.restore_into(self.world)
         stood_at = standing_pose(self.world, change.subject)
         stand(self.world, change.subject, change.after)
-        ghost = self.stand_a_ghost_at(change.subject, change.before)
-        dots = self.stand_dots_along(
-            change.subject, change.way or change.straight_way()
-        )
-        try:
-            return SceneRender(
-                world=self.world,
-                camera=self.camera,
-                highlight=self.highlight,
-                faded=self.faded,
-                label_answers=False,
-                framed_on=self.framed_on(change.subject, ghost) + tuple(among),
-                picked_out=(PickedOut(entity=ghost, color=self.ghost),)
-                + tuple(PickedOut(entity=dot, color=self.ghost) for dot in dots),
-            ).of([change.subject])
-        finally:
-            for dot in dots:
-                self.take_the_ghost_away(dot)
-            self.take_the_ghost_away(ghost)
-            stand(self.world, change.subject, stood_at)
-            stood.restore_into(self.world)
+        with ModelChangesUnannounced(self.world):
+            ghost = self.stand_a_ghost_at(change.subject, change.before)
+            dots = self.stand_dots_along(
+                change.subject, change.way or change.straight_way()
+            )
+            try:
+                return SceneRender(
+                    world=self.world,
+                    camera=self.camera,
+                    highlight=self.highlight,
+                    faded=self.faded,
+                    label_answers=False,
+                    framed_on=self.framed_on(change.subject, ghost) + tuple(among),
+                    picked_out=(PickedOut(entity=ghost, color=self.ghost),)
+                    + tuple(PickedOut(entity=dot, color=self.ghost) for dot in dots),
+                ).of([change.subject])
+            finally:
+                self.take_away([ghost] + dots)
+                stand(self.world, change.subject, stood_at)
+                stood.restore_into(self.world)
 
     @staticmethod
     def framed_on(subject: Body, ghost: Body) -> Tuple[Body, ...]:
@@ -507,15 +556,19 @@ class PoseChangeRender:
             )
         return ghost
 
-    def take_the_ghost_away(self, ghost: Body) -> None:
+    def take_away(self, added: Sequence[Body]) -> None:
         """
-        Take the copy back out of the scene, so the next question is answered from the
-        world the run recorded rather than from one with a spare piece in it.
+        Take every body added for a picture back out of the scene, so the next question
+        is answered from the world the run recorded rather than from one with a spare
+        piece in it. One change to the world for all of them, since each change has the
+        twin work the whole scene out again.
 
-        :param ghost: The body :meth:`stand_a_ghost_at` added.
+        :param added: The bodies :meth:`stand_a_ghost_at` and :meth:`stand_dots_along`
+            added.
         """
         with self.world.modify_world():
-            self.world.remove_kinematic_structure_entity(ghost)
+            for body in added:
+                self.world.remove_kinematic_structure_entity(body)
 
     @staticmethod
     def _copied(shapes: ShapeCollection, worn_by: Body) -> ShapeCollection:
