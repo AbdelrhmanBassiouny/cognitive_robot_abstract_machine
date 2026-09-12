@@ -12,11 +12,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from coraplex.datastructures.enums import ExecutionType
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
+    Point3,
 )
 from semantic_digital_twin.world import World
-from typing_extensions import List, Optional, Set
+from typing_extensions import Dict, List, Optional, Set
 
 from experiments.episodes.observer import ObserverListener, ObserverMotionListener
 from experiments.episodes.recording import EpisodeRecording
@@ -25,19 +28,41 @@ from experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_shape_monitor_in_scene,
 )
+from experiments.montessori.exceptions import UnknownPieceNamed
 from experiments.montessori.scenarios import (
     LookAtTheScene,
     MontessoriSortingScenario,
     HaveTheRobotAct,
+    PiecePlacement,
     SortingPerturbation,
     SortingScene,
     SortingStep,
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
-from experiments.questions.question import QuestionedThings
+from experiments.questions.question import (
+    PlacedObject,
+    QuestionedThings,
+    SceneAsSetUp,
+    objects_of_the_scene,
+    placeless,
+)
 from experiments.questions.question_set import QuestionSet
 from experiments.questions.working_memory import BeliefAgreesWithPerception
 from experiments.scenarios.scenario import ScenarioStep
+
+WHICH_PIECES_WERE_PLACED = (
+    "Which pieces did you put on the table when you set it up? "
+    "Name their shapes, separated by commas:"
+)
+"""
+What the person at the table is asked, so a run on the robot is scored on the scene they
+set up rather than on the one the camera made of it.
+"""
+
+BETWEEN_THE_PIECES_THEY_NAME = ","
+"""
+What separates one shape from the next in what the person types.
+"""
 
 # %% the run
 
@@ -70,17 +95,27 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
     on: a piece nobody else touched is one the look and the belief ought to agree about.
     """
 
+    stated_scene: Optional[SceneAsSetUp] = field(init=False, default=None)
+    """
+    What the run knows it set up in the trial that is running, or None between trials.
+
+    Taken as the trial starts, before anything acts on the scene, so it is an account of
+    what was set up rather than a second reading of what the questions are answered
+    from.
+    """
+
     def trial_started(self, scenario: MontessoriSortingScenario, world: World) -> None:
         """
-        Start watching the piece the script acts on, ticking the observer with every
-        detection, tracing where every joint of the world stands, and have the steps
-        hand their motions to the observer as they finish.
+        Take down what the run knows it set up, start watching the piece the script acts
+        on, tick the observer with every detection, trace where every joint of the world
+        stands, and have the steps hand their motions to the observer as they finish.
 
         :param scenario: The scenario the trial runs.
         :param world: The world the trial is about to run in.
         """
         super().trial_started(scenario, world)
         self.pieces_acted_on = set()
+        self.stated_scene = self.scene_as_set_up(scenario, world)
         scenario.motion_listener = ObserverMotionListener(observer=self.observer)
         self._stop_watching()
         scene = SortingScene(world)
@@ -139,10 +174,14 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         world: World,
     ) -> None:
         """
-        Bring the perturbation about, and note which pieces it acted on.
+        Bring the perturbation about, note which pieces it acted on, keep the
+        instruction it states with the trial, and stop saying where anything it moved
+        stands.
 
         The run is the only thing that sees both a perturbation and a look, so it is
-        where what the robot ought to have been wrong about is known.
+        where what the robot ought to have been wrong about is known. What someone else
+        moved is no longer where the run put it, and where it ended up is theirs rather
+        than the run's to say.
 
         :param scenario: The scenario the trial runs.
         :param perturbation: The perturbation due at the step about to be performed.
@@ -150,6 +189,9 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         """
         super().apply_perturbation(scenario, perturbation, world)
         self.pieces_acted_on.update(perturbation.pieces_acted_on)
+        self.observer.carried_out(perturbation.instruction_for_a_person())
+        for moved in perturbation.things_moved(SortingScene(world)):
+            self.stated_scene.forget_where(moved)
 
     def belief_questions(self, step: LookAtTheScene, world: World) -> QuestionSet:
         """
@@ -199,13 +241,13 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             return scenario.acted_on_category
         return scenario.starting_layout.placements[0].piece.category
 
-    @classmethod
     def question_set(
-        cls, scenario: MontessoriSortingScenario, world: World
+        self, scenario: MontessoriSortingScenario, world: World
     ) -> QuestionSet:
         """
         The working-memory question set, with the pieces of this scene filled in for the
-        questions that single one out.
+        questions that single one out and the run's own account of the scene for the
+        ones scored against it.
 
         The piece the script acts on is what is asked about and what the robot is asked
         whether it holds; the next piece standing in the scene is what it is placed
@@ -215,7 +257,7 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         :param world: The world the trial is running in.
         """
         scene = SortingScene(world)
-        acted_on = cls.watched_category(scenario)
+        acted_on = self.watched_category(scenario)
         others = [
             placement.piece.category
             for placement in scenario.starting_layout.placements
@@ -231,8 +273,134 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
                 point_of_view=HomogeneousTransformationMatrix(
                     scene.robot.root.global_transform.to_np()
                 ),
+                scene=self.stated_scene,
             )
         )
+
+    def scene_as_set_up(
+        self, scenario: MontessoriSortingScenario, world: World
+    ) -> SceneAsSetUp:
+        """
+        What this run knows it set up, said in the words its questions are scored in.
+
+        Which pieces stand there and where comes from the layout the scenario stood them
+        by, or from the person who placed them where the run is on the robot. A piece the
+        script acts on is left without a place, since where the physics takes it is not
+        the script's to say, and the piece the script leaves in the hand is no object of
+        the scene at all. The rest of the scene -- the table, the board, whatever the
+        script acts with -- is named and placed off the world as it was just built, since
+        a run builds that rather than putting it there.
+
+        :param scenario: The scenario whose scene it is, which has built that scene.
+        :param world: The world the trial is about to run in.
+        """
+        scene = SortingScene(world)
+        pieces = self.pieces_set_up(scenario, scene)
+        piece_names = {scene.body_of(category).name for category in scene.categories}
+        in_the_hand = scenario.category_in_the_hand
+        return SceneAsSetUp(
+            objects=pieces
+            + [
+                PlacedObject(name=body.name, place=placeless(body.global_pose))
+                for body in objects_of_the_scene(scene.robot)
+                if body.name not in piece_names
+            ],
+            object_in_the_hand=(
+                None if in_the_hand is None else scene.body_of(in_the_hand).name
+            ),
+        )
+
+    def pieces_set_up(
+        self, scenario: MontessoriSortingScenario, scene: SortingScene
+    ) -> List[PlacedObject]:
+        """
+        The loose pieces standing in the scene as whoever set it up knows them, which is
+        every piece put there but the one the script leaves in the hand.
+
+        :param scenario: The scenario whose scene it is.
+        :param scene: The scene, as the world it was built in holds it.
+        """
+        resting_on = scene.table.root.name
+        return [
+            self.piece_set_up(scenario, scene, category, placement, resting_on)
+            for category, placement in self.pieces_placed(scenario).items()
+            if category is not scenario.category_in_the_hand
+        ]
+
+    def piece_set_up(
+        self,
+        scenario: MontessoriSortingScenario,
+        scene: SortingScene,
+        category: MontessoriShapeCategory,
+        placement: Optional[PiecePlacement],
+        resting_on: PrefixedName,
+    ) -> PlacedObject:
+        """
+        One loose piece as whoever set the scene up knows it.
+
+        A piece the script acts on is named and nothing more: it is somewhere the physics
+        put it by the time the scene is asked about. A piece the twin holds none of --
+        one placed but never found -- is named by its own shape, since the twin has no
+        name for what it does not hold.
+
+        :param scenario: The scenario whose scene it is.
+        :param scene: The scene, as the world it was built in holds it.
+        :param category: The shape of the piece.
+        :param placement: Where it was put, or None where whoever set the scene up did
+            not say.
+        :param resting_on: What the pieces were put on.
+        """
+        name = (
+            scene.body_of(category).name
+            if category in scene.categories
+            else PrefixedName(str(category))
+        )
+        if category is scenario.acted_on_category or placement is None:
+            return PlacedObject(name=name)
+        return PlacedObject(
+            name=name,
+            place=Point3(
+                placement.x,
+                placement.y,
+                scenario.world_builder.resting_height_of(scene.body_of(category)),
+            ),
+            standing_on=resting_on,
+        )
+
+    def pieces_placed(
+        self, scenario: MontessoriSortingScenario
+    ) -> Dict[MontessoriShapeCategory, Optional[PiecePlacement]]:
+        """
+        Which pieces were put on the table and where, as whoever put them there knows
+        it: the layout in simulation, and the person at the table on the robot, who says
+        which pieces they placed but not where to the millimetre.
+
+        :param scenario: The scenario whose scene it is.
+        """
+        if scenario.execution_type is ExecutionType.REAL:
+            return {category: None for category in self.pieces_the_person_placed()}
+        return {
+            placement.piece.category: placement
+            for placement in scenario.starting_layout.placements
+        }
+
+    def pieces_the_person_placed(self) -> List[MontessoriShapeCategory]:
+        """
+        The shapes the person at the table says they put on it.
+
+        :raises UnknownPieceNamed: If they name a shape no piece of the set is.
+        """
+        said = self.person.answer(WHICH_PIECES_WERE_PLACED)
+        named = [
+            spelled.strip()
+            for spelled in said.split(BETWEEN_THE_PIECES_THEY_NAME)
+            if spelled.strip()
+        ]
+        spellings = {str(category) for category in MontessoriShapeCategory}
+        unknown = [spelled for spelled in named if spelled not in spellings]
+        if unknown:
+            raise UnknownPieceNamed(named=unknown[0], known=frozenset(spellings))
+        return [MontessoriShapeCategory(spelled) for spelled in named]
 
     def _stop_watching(self):
         """

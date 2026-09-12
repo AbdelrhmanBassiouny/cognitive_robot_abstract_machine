@@ -17,13 +17,8 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body
 
 from experiments.episodes.episode import Episode
-from experiments.montessori.perception.imagination import piece_mesh
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.scenarios import (
     DetectionRelabelled,
     LayoutArea,
@@ -54,9 +49,12 @@ MISREAD_PIECE = MontessoriShapeCategory.CUBE
 The piece a look in this module reports as something it is not.
 """
 
-REPORTED_SHAPE = MontessoriShapeCategory.SPHERE
+REPORTED_SHAPE = MontessoriShapeCategory.CYLINDER
 """
-The shape it is reported as, which is a shape of the set like any other.
+The shape it is reported as.
+
+Any shape with a hole of its own serves; this one shares the cube's colour, so nothing
+about the case rests on a colour telling the two apart.
 """
 
 REPORTED_BY_A_LOOK = "reported"
@@ -142,38 +140,29 @@ def stood(area: LayoutArea) -> ASceneTheRunStood:
 # %% what a look that misread the scene leaves in the twin
 
 
-def stand_the_piece_the_look_reported(
+def call_the_piece_what_the_look_reported(
     world: World, relabelled: DetectionRelabelled
 ) -> None:
     """
-    Leave the twin holding what a look that misread one piece leaves in it: where the
-    piece of one shape stood, a piece of the shape it was reported as stands instead,
-    under a name of its own, since a scene the robot holds by looking holds what the
-    look said was there.
+    Leave the twin calling one piece by the shape a look reported it as, which is what a
+    scene the robot holds by looking holds when a detection is misread: the piece stands
+    where it stands and the world knows it under another shape's name.
+
+    Renamed where it stands rather than taken down and stood again, so the twin lists
+    its bodies in the order it did before and nothing but the name has changed.
 
     :param world: The twin the scene stands in.
     :param relabelled: What the look made of which piece.
     """
     scene = SortingScene(world)
     misread = scene.shape_of(relabelled.category)
-    stands_at = misread.root.global_transform
-    name = PrefixedName(str(relabelled.reported_as), REPORTED_BY_A_LOOK)
-    reported = Body.from_shape_collection(
-        name,
-        ShapeCollection([piece_mesh(KNOWN_PIECE_BY_CATEGORY[relabelled.reported_as])]),
-    )
+    body = misread.root
+    reported = PrefixedName(str(relabelled.reported_as), REPORTED_BY_A_LOOK)
     with world.modify_world():
         world.remove_semantic_annotation(misread)
-        world.remove_kinematic_structure_entity(misread.root)
-        world.add_connection(
-            FixedConnection(
-                parent=world.root,
-                child=reported,
-                parent_T_connection_expression=stands_at,
-            )
-        )
+        body.update_name(reported)
         world.add_semantic_annotation(
-            MONTESSORI_SHAPE_CLASSES[relabelled.reported_as](name=name, root=reported)
+            MONTESSORI_SHAPE_CLASSES[relabelled.reported_as](name=reported, root=body)
         )
 
 
@@ -219,7 +208,7 @@ def test_a_piece_the_twin_calls_by_another_shape_is_not_one_the_run_stood(
     The tautology this module exists to break: the twin holds a piece the run never
     stood, and a true answer read off that same twin would call the answer right.
     """
-    stand_the_piece_the_look_reported(
+    call_the_piece_what_the_look_reported(
         stood.world,
         DetectionRelabelled(
             step=SortingStep.ANSWER, category=MISREAD_PIECE, reported_as=REPORTED_SHAPE

@@ -41,7 +41,9 @@ from experiments.questions.question import (
     Bucket,
     GroundTruthSource,
     Memory,
+    PlacedObject,
     RequiredFact,
+    SceneAsSetUp,
 )
 from experiments.questions.question import QuestionedThings
 from experiments.questions.question_set import QuestionSet
@@ -102,6 +104,11 @@ DISTANCE_ACROSS_THE_TABLE = 0.2
 """
 How far to either side of the table's middle the cube and the cylinder stand, which is
 what makes one of them left of the other.
+"""
+
+WHERE_THE_TABLE_STANDS = 1.0
+"""
+How far in front of the world's root the table is fixed, in metres.
 """
 
 # %% the scene every question is asked of
@@ -187,6 +194,12 @@ class QuestionedScene:
     alive, so an event nothing holds is one the robot no longer remembers.
     """
 
+    as_set_up: SceneAsSetUp
+    """
+    What this scene was stood to be, said from the numbers it was built from rather than
+    read back off the twin, which is what its questions are scored against.
+    """
+
     question_set: QuestionSet
     """
     The frozen set, asked of this scene.
@@ -224,7 +237,7 @@ def scene(two_arm_robot_world: World) -> QuestionedScene:
                 parent=world.root,
                 child=table,
                 parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                    x=1.0, reference_frame=world.root
+                    x=WHERE_THE_TABLE_STANDS, reference_frame=world.root
                 ),
             )
         )
@@ -256,6 +269,29 @@ def scene(two_arm_robot_world: World) -> QuestionedScene:
         PickUpEvent(tracked_object=cube),
     ]
     point_of_view = HomogeneousTransformationMatrix.from_xyz_rpy(x=3.0)
+    as_set_up = SceneAsSetUp(
+        objects=[
+            PlacedObject(
+                name=table.name,
+                place=Point3(WHERE_THE_TABLE_STANDS, 0.0, 0.0),
+            ),
+            PlacedObject(
+                name=cube.name,
+                place=Point3(
+                    WHERE_THE_TABLE_STANDS, DISTANCE_ACROSS_THE_TABLE, standing_height
+                ),
+                standing_on=table.name,
+            ),
+            PlacedObject(
+                name=cylinder.name,
+                place=Point3(
+                    WHERE_THE_TABLE_STANDS, -DISTANCE_ACROSS_THE_TABLE, standing_height
+                ),
+                standing_on=table.name,
+            ),
+        ],
+        object_in_the_hand=held_cube.name,
+    )
     return QuestionedScene(
         world=world,
         robot=robot,
@@ -266,6 +302,7 @@ def scene(two_arm_robot_world: World) -> QuestionedScene:
         own_body_name=hand.name,
         point_of_view=point_of_view,
         events=events,
+        as_set_up=as_set_up,
         question_set=QuestionSet.over_working_memory(
             QuestionedThings(
                 object_asked_about=cube,
@@ -273,6 +310,7 @@ def scene(two_arm_robot_world: World) -> QuestionedScene:
                 object_in_the_hand=held_cube,
                 own_body_asked_about=hand.name,
                 point_of_view=point_of_view,
+                scene=as_set_up,
             )
         ),
     )
@@ -374,8 +412,10 @@ def test_the_colours_are_the_ones_the_shapes_carry(robot: AbstractRobot):
     assert ObjectColours().ask(robot) == [TABLE_COLOUR, CUBE_COLOUR, CYLINDER_COLOUR]
 
 
-def test_the_places_are_where_the_twin_puts_the_objects(robot: AbstractRobot):
-    question = ObjectPlaces()
+def test_the_places_are_where_the_scene_stood_the_objects(
+    scene: QuestionedScene, robot: AbstractRobot
+):
+    question = ObjectPlaces(scene=scene.as_set_up)
     assert question.matches_ground_truth(robot)
 
 
@@ -447,6 +487,7 @@ def test_a_scene_on_its_own_is_not_asked_whether_its_eyes_and_belief_agree(
                 object_in_the_hand=scene.held_cube,
                 own_body_asked_about=scene.own_body_name,
                 point_of_view=scene.point_of_view,
+                scene=scene.as_set_up,
             )
         )
         == []

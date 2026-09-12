@@ -105,7 +105,7 @@ from experiments.montessori.results_database import (
     resolve_lasting_database,
 )
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
-from experiments.questions.question import QuestionedThings
+from experiments.questions.question import QuestionedThings, SceneAsSetUp
 from experiments.questions.after_the_move import QuestionAfterTheMove
 from experiments.questions.question_set import QuestionSet
 from experiments.scenarios.trial import TrialOutcome
@@ -582,6 +582,7 @@ def question_set_about(
             point_of_view=HomogeneousTransformationMatrix(
                 robot.root.global_transform.to_np()
             ),
+            scene=SceneAsSetUp.read_from(robot),
         )
     )
 
