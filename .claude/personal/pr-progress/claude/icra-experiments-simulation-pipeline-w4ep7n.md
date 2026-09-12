@@ -1,3 +1,67 @@
+## #265: record_episode runs on the fetched world and the look (2026-09-12, day)
+
+**Session.** https://claude.ai/code/session_01GCgvcENQygfenibC73KQ1n -- the same session
+as the pickup demo work below; resume here.
+
+**The task, in the developer's words.** "Improve the record_episode to have an option to
+use the real fetched world and look. Test it very well and make sure it is clean and
+reliable."
+
+**What `--execution real` was.** The world was built from the URDF (`TracyOnItsOwnTable`),
+the pieces stood by a seeded layout, MuJoCo ran on it and the questions were answered
+from that pretend scene; only the perturbation prompt was real. `SortingScene._perform`
+also runs every robot action under `simulated_robot` whatever the execution type.
+
+**Done.**
+- `record_episode --scene {built,perceived}` (`SceneChoice`): `perceived` fetches the
+  world from the robot and stands the board and the pieces in it by looking
+  (`TracyLookingAtItsOwnTable` in `scene_builder.py`, over `PerceivedScene` in
+  `scene_publishing.py`); needs `--execution real` (`PerceivedSceneNeedsTheRobot`) and
+  its layout is `--layout as-found` by default (`PerceivedSceneCannotBeLaidOut` for any
+  other). Exit code 2 for clashing choices. Tomorrow's command:
+  `python experiments/scripts/record_episode.py --execution real --scene perceived
+  --scenario scene-stands-still --perturbation piece-shoved --piece cube [--record-bag]`.
+- `Layout` (ABC) in `scenarios.py`: `PieceLayout` (stated) and `LayoutAsFound` (read off
+  the built scene, `PieceLayout.read_from`). The scenario keeps `layout` (how the pieces
+  come to stand) and `starting_layout` (where they stood when the trial began,
+  `SceneNotBuiltYet` before a build); goals and the watched run read the latter.
+- `ScenePhysics` (ABC): `SimulatedScene` and `RealScene` (settle/stop do nothing). A
+  REAL scenario builds a `RealScene`; `filmed` + REAL raises `RealRunCannotBeFilmed`;
+  the three scripts whose steps need the simulation (`runs_on_the_robot = False`) raise
+  `ScenarioRunsOnlyInSimulation` under REAL. `MontessoriSortingScenario.simulation` is
+  now `physics`. `MontessoriWorldBuilder.build` returns the `World`; builders state
+  their `piece_set`.
+- `SortingScene.stand_the_piece_at` moves a piece on a fixed connection (a perceived
+  piece) by restating the weld, and keeps the piece's turn (it used to reset it).
+- `PiecePublisher.take_down()`; `PerceivedScene.perceive()` takes the previous look's
+  pieces down first, so a second trial looks afresh. `PerceivedSorting` now composes a
+  `PerceivedScene` (pickup_demo_real and pickup_demo_mujoco adapted).
+- `LiveTracy.connected(node_name)` (`tracy_experiments/live_tracy.py`): one connection
+  to the robot (executor thread, fetch, VizMarkerPublisher before WorldSynchronizer,
+  `build_node`) shared by `pickup_demo_real`, `perception/node.py` and `record_episode`.
+- Race fixed on the live node: `hold_board` used to replace `look.pipeline` while the
+  node's cached newest scene was one taken without the lid; `RepeatedLook.read_with` /
+  `MontessoriPerceptionNode.read_with` now forgets the stale result, and
+  `look_at` keeps a result only if the pipeline it was taken through is still current.
+- `Episode.planned(scenario_type, execution_type, ...)`; `from_run` delegates to it.
+- generate_orm ignores `scene_publishing` and `live_tracy`; ORM regenerated.
+
+**Tests.** `test_tracy_montessori_scene_builder.py` (new, 11): both builders, the
+as-found layout against the tape truth on `scaled_pieces_in_a_row` in `parse_tracy()`'s
+world, and a watched REAL run over the perceived scene (RealScene, no synchronizer,
+question set asked, a shove prompts the person and disturbs the scene, two trials look
+afresh). `test_record_episode.py` 51, `test_montessori_scenarios.py` 81,
+`test_montessori_scene_publishing.py` 9, `test_montessori_live_camera.py` 15 (three new
+on `read_with`/`look_at`).
+
+**Open for the developer.** (1) On a perceived run the perturbation still moves the
+*model* (the runner's design): the run does not look again after the person acted, so
+the question set is answered from the model as moved, not from a second look. A re-look
+at the answer step is the honest next step if the recording should show perception
+under perturbation. (2) `RobotSortsAPiece`/`PieceHeld...` are refused under REAL until
+the real rig (Robotiq gripper, `PickUpAction` on a two-armed robot) is wired into a
+`ShapeSorter` for the scenarios. (3) Not run on the robot (powered off).
+
 ## #265: the pickup demo runs on the perception pipeline, real and in MuJoCo (2026-09-12)
 
 **Session.** https://claude.ai/code/session_01GCgvcENQygfenibC73KQ1n -- resume here.
