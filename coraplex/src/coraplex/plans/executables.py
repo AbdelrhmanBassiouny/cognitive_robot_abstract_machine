@@ -54,7 +54,6 @@ ENDED = (
 The states a node does not run on from.
 """
 
-
 # %% who is told about a motion that has run
 
 
@@ -452,7 +451,7 @@ class GiskardExecutable(Executable):
         :param ended_at: When a task first seen ended now is taken to have ended.
         """
         for motion, task in self.motion_mappings.items():
-            state = task.life_cycle_state
+            state = self._life_cycle_of(task)
             if state is motion.status or motion.status in HELD_BY_THE_PLAN:
                 continue
             if motion.status is LifeCycleValues.NOT_STARTED:
@@ -460,6 +459,23 @@ class GiskardExecutable(Executable):
             if state in ENDED:
                 motion.end_time = ended_at
             motion.status = state
+
+    def _life_cycle_of(self, task: Task) -> LifeCycleValues:
+        """
+        The life cycle a motion's task is in.
+
+        A task below a chart compiled in this process knows its own; one below a chart
+        Giskard compiled elsewhere belongs to no statechart here, and is read off the
+        chart as a whole: Giskard ran it as one goal, so the task ended when the chart
+        did and is still running while the chart is.
+
+        :param task: The task of one motion.
+        """
+        if task.belongs_to_motion_statechart():
+            return task.life_cycle_state
+        if self.motion_state_chart.is_end_motion():
+            return LifeCycleValues.SUCCEEDED
+        return LifeCycleValues.RUNNING
 
 
 @dataclass
