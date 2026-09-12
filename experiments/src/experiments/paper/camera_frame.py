@@ -20,7 +20,7 @@ from krrood.exceptions import DataclassException
 from typing_extensions import Tuple
 
 from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
-from experiments.episodes.trace import TimedFrames
+from experiments.episodes.trace import FramesByMoment
 from experiments.montessori.perception.camera import decode_compressed_color_image
 from experiments.montessori.perception.recordings import REFERENCE_FRAME, RecordedCamera
 from experiments.paper.lettering import Face, Lettering
@@ -394,9 +394,9 @@ class RecordedFramesAround(CardPanel):
     shows in place of a bag.
     """
 
-    frames: TimedFrames
+    frames: FramesByMoment
     """
-    What the camera saw along the trial, with the moment each frame was taken at.
+    What the camera saw along the trial, asked for by the moment a frame was taken at.
     """
 
     moment: float

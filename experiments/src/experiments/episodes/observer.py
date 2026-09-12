@@ -130,6 +130,7 @@ class EpisodeObserver:
         performed = PerformedPlan(plan=plan)
         self.plans.append(performed)
         return performed
+
     def ran_the_motion(
         self,
         motion_statechart: MotionStatechart,

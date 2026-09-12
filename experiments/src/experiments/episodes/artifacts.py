@@ -20,7 +20,7 @@ from krrood.exceptions import DataclassException
 from typing_extensions import TYPE_CHECKING, List, Sequence
 
 from experiments.episodes.episode import Episode, RecordedTrial
-from experiments.episodes.trace import JointTrace, TimedFrames
+from experiments.episodes.trace import JointTrace, TimedFrames, TimedFramesFile
 
 if TYPE_CHECKING:
     from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
@@ -369,13 +369,13 @@ class TrialArtifacts:
         return JointTrace.read(self._kept(TrialArtifact.JOINT_TRACE))
 
     @property
-    def camera(self) -> TimedFrames:
+    def camera(self) -> TimedFramesFile:
         """
-        What the robot's camera saw along the trial.
+        What the robot's camera saw along the trial, read a frame at a time.
 
         :raises TrialArtifactNotKept: When the run kept no camera.
         """
-        return TimedFrames.read(self._kept(TrialArtifact.CAMERA))
+        return TimedFramesFile(self._kept(TrialArtifact.CAMERA))
 
     def _kept(self, artifact: TrialArtifact) -> Path:
         """

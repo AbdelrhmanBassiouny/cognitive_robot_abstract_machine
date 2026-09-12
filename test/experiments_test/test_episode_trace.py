@@ -22,6 +22,7 @@ from experiments.episodes.trace import (
     JointTrace,
     JointTraceRecorder,
     TimedFrames,
+    TimedFramesFile,
     TraceIsEmptyError,
 )
 
@@ -58,6 +59,12 @@ def sorting_episode() -> Episode:
         scenario_name="montessori_sorting", execution_type=ExecutionType.SIMULATED
     )
 
+
+ENCODING_TOLERANCE = 3
+"""
+How far, per channel, a frame read back out of a video may differ from the one written
+into it, since the video is encoded lossily.
+"""
 
 # %% the moments the samples are taken at
 
@@ -213,6 +220,37 @@ def test_frames_written_out_are_read_back_with_their_moments(tmp_path: Path) -> 
     assert read_back.moments == [EARLIER, LATER]
     assert len(read_back.frames) == 2
     assert read_back.frames_per_second == 15
+
+
+def test_one_frame_of_a_written_film_is_read_without_the_rest(tmp_path: Path) -> None:
+    """
+    A card wants the frame nearest one moment of a film thousands of frames long, and
+    the film on disk hands that one back without the whole film being decoded into
+    memory.
+    """
+    frames = TimedFrames(frames_per_second=15)
+    earlier, later = coloured_frames(2)
+    frames.keep(earlier, EARLIER)
+    frames.keep(later, LATER)
+    film = TimedFramesFile(frames.write(tmp_path / "camera.mp4"))
+
+    assert film.moments == [EARLIER, LATER]
+    assert (
+        np.abs(film.at(LATER).astype(int) - later.astype(int)).max()
+        <= ENCODING_TOLERANCE
+    )
+    assert (
+        np.abs(film.at(EARLIER).astype(int) - earlier.astype(int)).max()
+        <= ENCODING_TOLERANCE
+    )
+
+
+def test_a_film_with_no_frame_hands_none_back(tmp_path: Path) -> None:
+    film = TimedFramesFile(tmp_path / "camera.mp4")
+    np.save(film.moments_path, np.array([], dtype=float))
+
+    with pytest.raises(TraceIsEmptyError):
+        film.at(EARLIER)
 
 
 # %% kept with the trial

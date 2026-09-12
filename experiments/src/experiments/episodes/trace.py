@@ -10,6 +10,7 @@ in the pose it was in, the camera showing what it showed -- rather than describe
 from __future__ import annotations
 
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from krrood.exceptions import DataclassException
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
 from semantic_digital_twin.callbacks.callback import StateChangeCallback
 from semantic_digital_twin.world import World
-from typing_extensions import Callable, Dict, List, Optional, Self
+from typing_extensions import Callable, ClassVar, Dict, List, Optional, Self
 
 # %% asking a trace for a moment it holds nothing of
 
@@ -262,17 +263,74 @@ class JointTraceRecorder(StateChangeCallback):
 # %% what a camera saw
 
 
-class TimedFramesFile:
+class FramesByMoment(ABC):
     """
-    The two files a set of timed frames is written as: the frames as a video, and the
-    moments beside it.
+    What a camera saw along one trial, asked for by the moment a frame was taken at.
     """
 
-    MOMENTS_SUFFIX = ".moments.npy"
+    @abstractmethod
+    def at(self, moment: float) -> np.ndarray:
+        """
+        The frame taken nearest the given moment, as red, green and blue.
+
+        :param moment: Seconds into the trial.
+        :raises TraceIsEmptyError: If no frame was kept.
+        """
+
+
+@dataclass(frozen=True)
+class TimedFramesFile(FramesByMoment):
+    """
+    The frames a run left as a video, with the moments beside it, read one frame at a
+    time.
+
+    A trial's film runs to thousands of frames, which is more than a machine drawing a
+    card from it has memory to spare, and a card wants two of them.
+    """
+
+    MOMENTS_SUFFIX: ClassVar[str] = ".moments.npy"
+    """
+    What the file holding the moments is called, after the video.
+    """
+
+    path: Path
+    """
+    The video file; the moments stand beside it.
+    """
+
+    @property
+    def moments_path(self) -> Path:
+        """
+        Where the moments of the video are kept.
+        """
+        return self.path.with_suffix(self.MOMENTS_SUFFIX)
+
+    @property
+    def moments(self) -> List[float]:
+        """
+        Seconds into the trial each frame was taken at, in the order they were taken.
+        """
+        return np.load(self.moments_path).tolist()
+
+    def at(self, moment: float) -> np.ndarray:
+        index = nearest(np.array(self.moments, dtype=float), moment)
+        with imageio.get_reader(str(self.path)) as reader:
+            return np.asarray(reader.get_data(index))
+
+    def read(self) -> TimedFrames:
+        """
+        Every frame of the video, with its moments.
+        """
+        with imageio.get_reader(str(self.path)) as reader:
+            frames = [np.asarray(frame) for frame in reader]
+            frames_per_second = round(reader.get_meta_data()["fps"])
+        return TimedFrames(
+            frames=frames, moments=self.moments, frames_per_second=frames_per_second
+        )
 
 
 @dataclass
-class TimedFrames:
+class TimedFrames(FramesByMoment):
     """
     What a camera saw along one trial, each frame with the moment it was taken at.
 
@@ -314,12 +372,6 @@ class TimedFrames:
         return not self.frames
 
     def at(self, moment: float) -> np.ndarray:
-        """
-        The frame taken nearest the given moment.
-
-        :param moment: Seconds into the trial.
-        :raises TraceIsEmptyError: If no frame was kept.
-        """
         return self.frames[nearest(np.array(self.moments, dtype=float), moment)]
 
     def video(self) -> RecordedVideo:
@@ -338,30 +390,14 @@ class TimedFrames:
         :return:``path``.
         """
         self.video().write(path)
-        np.save(self.moments_path_of(path), np.array(self.moments, dtype=float))
+        np.save(TimedFramesFile(path).moments_path, np.array(self.moments, dtype=float))
         return path
 
     @classmethod
-    def read(cls, path: Path) -> Self:
+    def read(cls, path: Path) -> TimedFrames:
         """
-        The frames a run left as a video at the given path.
+        Every frame a run left as a video at the given path, with its moments.
 
         :param path: The video file, with its moments beside it.
         """
-        with imageio.get_reader(str(path)) as reader:
-            frames = [np.asarray(frame) for frame in reader]
-            frames_per_second = round(reader.get_meta_data()["fps"])
-        return cls(
-            frames=frames,
-            moments=np.load(cls.moments_path_of(path)).tolist(),
-            frames_per_second=frames_per_second,
-        )
-
-    @staticmethod
-    def moments_path_of(path: Path) -> Path:
-        """
-        Where the moments of a video written at the given path are kept.
-
-        :param path: The video file.
-        """
-        return path.with_suffix(TimedFramesFile.MOMENTS_SUFFIX)
+        return TimedFramesFile(path).read()
