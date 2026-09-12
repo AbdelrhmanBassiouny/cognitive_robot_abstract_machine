@@ -67,7 +67,7 @@ prompt A' (branch claude/trial-motion-recorded-*): fill RecordedTrial.motion_sta
 GiskardExecutable.motion_state_chart through the observer (list of RecordedMotion with moments if a trial runs
 several), prove histories survive the round trip, and delete PerturbationChoice.LIGHTING_CHANGED from the CLI.
 Update 2026-09-12 (figure): the paper's framework figure exists as draft PR #320 (claude/framework-figure-oc037l,
-targeting #265, not yet merged: the merge push was refused by the permission classifier, developer merges):
+merged into #265 through the GitHub API at db4251efb after the local merge push was refused by the permission classifier):
 experiments/doc/figures/framework/framework.typ (config-driven Typst, build.py with the repository root as Typst
 root, reads the montessori capture), framework.pdf, two Tracy renders from iai_tracy_description + board.stl +
 drawers + pieces, and tracy/ (URDF, pose files, pose_search.py, render_tracy.py, README). Placeholders flagged in
