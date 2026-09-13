@@ -95,12 +95,12 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
     :return: One entry per branch promoted, in dependency order.
     """
     promoted: list[Promotion] = []
-    withheld = stack.configuration.needs_resolution_label
+    withheld = set(stack.configuration.blocking_labels)
     for branch in promotion_order(stack):
         number = branch.pull_request_number
         pull_request = fork.pull_request(number)
         labels = PullRequestField.LABELS.read(pull_request, number)
-        if PROMOTION_LINK_LABEL in labels or withheld in labels:
+        if PROMOTION_LINK_LABEL in labels or withheld.intersection(labels):
             continue
         description = str(PullRequestField.BODY.read(pull_request, number) or "")
         link = PromotionLink.build(

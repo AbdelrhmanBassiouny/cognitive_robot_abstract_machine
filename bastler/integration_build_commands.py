@@ -1,0 +1,220 @@
+"""
+Building the branch, and saying which pair of tips a failing suite is about.
+"""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+from bastler.stack import (
+    Configuration,
+    ConfigurationKey,
+)
+
+from bastler.integration_assembly import build_integration
+from bastler.integration_exit_codes import IntegrationExitCode
+from bastler.integration_failure import FailureLocation, print_failure_location
+from bastler.integration_report import exit_code_for, print_build
+from bastler.integration_run import IntegrationCommand, IntegrationRun
+from bastler.integration_selection import build_branch_name, stack_to_build
+from bastler.integration_suite import TestCommandNotConfiguredError
+from bastler.integration_tips import ResolutionProvenance
+
+
+@dataclass(frozen=True)
+class BuildCommand(IntegrationCommand):
+    """
+    Assembles the upstream base plus every reviewed in-flight stack tip.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "build"
+
+    @property
+    def description(self) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "assemble the upstream base plus every reviewed in-flight tip"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--restack",
+            action="store_true",
+            help=(
+                "bring every stale tip forward first; this pushes to branches that "
+                "belong to other people, which is why it is not the default"
+            ),
+        )
+        parser.add_argument(
+            "--no-test",
+            dest="run_tests",
+            action="store_false",
+            help="skip the suite that would otherwise be run on the finished branch",
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """:param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        test_command = self._test_command(run.configuration, arguments.run_tests)
+        fork = run.fork()
+        run.refresh_remotes()
+        stack = stack_to_build(run, fork, restack_first=arguments.restack)
+        report = build_integration(
+            stack=stack,
+            git=run.git,
+            build_branch=build_branch_name(datetime.now(timezone.utc)),
+            provenance=ResolutionProvenance.read(run.provenance_path()),
+            test_command=test_command,
+        )
+        if arguments.json:
+            print(report.as_json())
+        else:
+            print_build(report)
+        return exit_code_for(report)
+
+    @staticmethod
+    def _test_command(configuration: Configuration, run_tests: bool) -> str | None:
+        """
+        Settle what the suite is before anything is built, so an unrunnable request
+        fails before it has cost a build rather than after.
+
+        :param configuration: The resolved configuration.
+        :param run_tests: Whether a suite was asked for.
+        :return: The command to run, or ``None`` when it was asked to be skipped.
+        :raises TestCommandNotConfiguredError: If one was asked for and none is named.
+        """
+        if not run_tests:
+            return None
+        if not configuration.integration_test_command:
+            raise TestCommandNotConfiguredError(
+                ConfigurationKey.INTEGRATION_TEST_COMMAND
+            )
+        return configuration.integration_test_command
+
+
+@dataclass(frozen=True)
+class LocateFailureCommand(IntegrationCommand):
+    """
+    Finds which tip's arrival breaks a build that merged cleanly.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "locate-failure"
+
+    @property
+    def description(self) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "find which tip's arrival breaks the suite"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--json`` on."""
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """:param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        test_command = BuildCommand._test_command(run.configuration, run_tests=True)
+        fork = run.fork()
+        run.refresh_remotes()
+        report = FailureLocation(
+            stack=run.stack(fork),
+            git=run.git,
+            build_branch=build_branch_name(datetime.now(timezone.utc)),
+            provenance=ResolutionProvenance.read(run.provenance_path()),
+            test_command=test_command,
+        ).find()
+        if arguments.json:
+            print(report.as_json())
+        else:
+            print_failure_location(report)
+        return report.exit_code
+
+
+@dataclass(frozen=True)
+class BlockBranchCommand(IntegrationCommand):
+    """
+    Blocks the branch that breaks another, and tells its owner what it breaks.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "block-branch"
+
+    @property
+    def description(self) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "block the branch that breaks another, and say what it breaks"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """
+        Localise the failure, then block and report the branch that causes it.
+
+        Localised here rather than taken as an argument, so the branch that gets blocked
+        is the one the suite actually turned on rather than the one a caller believed it
+        would be.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        test_command = BuildCommand._test_command(run.configuration, run_tests=True)
+        fork = run.fork()
+        run.refresh_remotes()
+        report = FailureLocation(
+            stack=run.stack(fork),
+            git=run.git,
+            build_branch=build_branch_name(datetime.now(timezone.utc)),
+            provenance=ResolutionProvenance.read(run.provenance_path()),
+            test_command=test_command,
+        ).find()
+        localised = report.integration_test_failure
+        if localised is None:
+            print_failure_location(report)
+            return IntegrationExitCode.SUCCESS
+        blocked = localised.block_the_branch_that_causes_it(run.configuration, fork)
+        print(blocked.as_json() if arguments.json else blocked.as_line())
+        return report.exit_code

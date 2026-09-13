@@ -12,8 +12,10 @@ directory holding them rather than named.
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +30,7 @@ from bastler.package_layout import (
     command_line_entry_points,
     package_modules,
 )
+from bastler.stack import CONFIGURATION_PATH, ConfigurationKey
 
 CLAUDE_DIRECTORY = REPOSITORY_ROOT / ".claude"
 """
@@ -223,3 +226,42 @@ def test_no_python_module_remains_under_the_claude_directory():
     )
 
     assert remaining_module_paths == []
+
+
+# %% the shipped defaults name what this repository holds
+
+
+def paths_named_by(command: str) -> tuple[Path, ...]:
+    """
+    The files and directories a configured command names, resolved against the
+    repository root.
+
+    An argument is one of them when it carries a path separator and is not an option, so
+    the program, its module and its flags are passed over without any of them being
+    listed here.
+
+    :param command: The command as configured.
+    :return: Each path it names.
+    """
+    return tuple(
+        REPOSITORY_ROOT / argument
+        for argument in shlex.split(command)
+        if "/" in argument and not argument.startswith("-")
+    )
+
+
+def test_the_default_integration_test_command_names_suites_this_repository_holds():
+    """
+    The suite an integration build runs is named in configuration, where moving the
+    directories it points at breaks nothing until a build runs and finds nothing to run.
+    """
+    command = tomllib.loads(CONFIGURATION_PATH.read_text())[
+        ConfigurationKey.INTEGRATION_TEST_COMMAND
+    ]
+
+    named = paths_named_by(command)
+
+    assert named != ()
+    assert [
+        str(path.relative_to(REPOSITORY_ROOT)) for path in named if not path.exists()
+    ] == []

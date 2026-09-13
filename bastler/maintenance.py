@@ -32,13 +32,12 @@ import argparse
 import sys
 from pathlib import Path
 
+
+from bastler.exceptions import GitCommandFailed
 from bastler.maintenance_board import MissingPullRequestFieldError
 from bastler.maintenance_commands import COMMANDS, MaintenancePass
-from bastler.maintenance_git_commands import GitCommandFailed, GitCommandRunner
-from bastler.maintenance_github import (
-    GitHubCredentialUnavailableError,
-    GitHubRequestFailed,
-)
+from bastler.maintenance_git_commands import MaintenanceGitCommandRunner
+from bastler.maintenance_github import GitHubCredentialUnavailableError, GitHubRequestFailed
 from bastler.maintenance_report import MaintenanceExitCode
 from bastler.stack import (
     AmbiguousForkRemoteError,
@@ -96,7 +95,7 @@ def _dispatch() -> MaintenanceExitCode:
     try:
         maintenance = MaintenancePass(
             configuration=load_configuration(),
-            git=GitCommandRunner(working_directory=Path.cwd()),
+            git=MaintenanceGitCommandRunner(working_directory=Path.cwd()),
         )
         return requested.run(maintenance, arguments)
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:

@@ -44,6 +44,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
 
+
 import yaml
 
 from bastler.plan_model import ItemStatus
