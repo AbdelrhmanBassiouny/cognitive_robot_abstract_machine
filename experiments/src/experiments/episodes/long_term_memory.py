@@ -81,6 +81,20 @@ class LongTermMemory:
             conversion_state = FromDataAccessObjectState()
             return [row.from_dao(conversion_state) for row in rows]
 
+    def answer_with_identifiers(self, question: Query) -> List[str]:
+        """
+        Answer an EQL query selecting episodes with their identifiers alone.
+
+        Read off the rows rather than built from the episodes: an answer that names
+        episodes has no use for their worlds, and rebuilding a corpus of worlds to list
+        identifiers takes minutes.
+
+        :param question: The query to answer, which selects episodes.
+        :return: The identifier of every episode the query selected.
+        """
+        with self.results_database.open_session() as session:
+            return [row.identifier for row in eql_to_sql(question, session).evaluate()]
+
     def recall_trials(self, episode_identifier: str) -> List[RecordedTrial]:
         """
         Every trial recorded under one episode.
