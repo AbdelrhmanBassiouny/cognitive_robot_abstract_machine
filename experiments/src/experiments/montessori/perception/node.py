@@ -448,6 +448,19 @@ def report(scene: MontessoriScene) -> None:
     )
 
 
+def configure_logging() -> None:
+    """
+    Make this process print every INFO log record as its bare message.
+
+    ``coraplex``'s own package ``__init__`` calls :func:`logging.basicConfig` at import
+    time with no level, which -- being the first call anywhere in the process -- wins
+    outright and leaves the root logger at its default :data:`logging.WARNING`, silently
+    dropping this module's own ``INFO`` reports. ``force`` is what makes this call win
+    instead, regardless of what already configured the root logger.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
+
+
 def main() -> None:
     """
     Run the perception node until interrupted, logging what it sees.
@@ -463,7 +476,7 @@ def main() -> None:
     from experiments.tracy_experiments.live_tracy import LiveTracy
 
     arguments = parse_arguments()
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    configure_logging()
     rclpy.init()
     with LiveTracy.connected(NODE_NAME, show_images=arguments.show_images) as tracy:
         perception = tracy.look

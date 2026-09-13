@@ -7,6 +7,7 @@ ROS but no camera and no robot.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -40,7 +41,10 @@ from experiments.montessori.perception.capture_from_camera import (
 from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.live_camera import LiveCamera
-from experiments.montessori.perception.node import MontessoriPerceptionNode
+from experiments.montessori.perception.node import (
+    MontessoriPerceptionNode,
+    configure_logging,
+)
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import perception_pipeline
 from experiments.montessori.perception.scene_request import SceneRequest
@@ -607,3 +611,34 @@ def test_a_look_that_fails_lets_a_later_wait_time_out_instead_of_hanging_forever
     assert not waiting.is_alive()
     assert len(outcome) == 1
     assert isinstance(outcome[0], NoSceneAvailable)
+
+
+# %% logging wins even if something already configured the root logger without a level
+
+
+def test_configuring_logging_wins_even_if_the_root_logger_is_already_configured():
+    """
+    coraplex's own package ``__init__`` calls ``logging.basicConfig`` at import time
+    with no level -- reproduced here directly rather than by importing coraplex, since
+    the process either has already imported it or never will again. Left as the first
+    call to configure the root logger, it silently defeats a later plain
+    ``logging.basicConfig(level=logging.INFO, ...)`` call, which is exactly why running
+    the node reported nothing: every module logger stayed at the root's default
+    :data:`logging.WARNING`.
+    """
+    root = logging.getLogger()
+    original_handlers = list(root.handlers)
+    original_level = root.level
+    try:
+        root.handlers = []
+        root.setLevel(logging.WARNING)
+        logging.basicConfig(format="%(levelname)s:%(filename)s::%(lineno)s %(message)s")
+
+        configure_logging()
+
+        node_logger = logging.getLogger("experiments.montessori.perception.node")
+        assert root.getEffectiveLevel() == logging.INFO
+        assert node_logger.getEffectiveLevel() == logging.INFO
+    finally:
+        root.handlers = original_handlers
+        root.setLevel(original_level)
