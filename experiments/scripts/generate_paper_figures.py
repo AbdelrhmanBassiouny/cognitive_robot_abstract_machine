@@ -59,7 +59,9 @@ def main(argument_list: Optional[List[str]] = None) -> int:
 
     database = ConfiguredDatabase.resolve(arguments.database_uri)
     print("Reading episodes from %s." % database_label(database.uri))
-    trials = LongTermMemory(ResultsDatabase(uri=database.uri)).recall_every_trial()
+    trials = LongTermMemory(
+        ResultsDatabase(uri=database.uri)
+    ).recall_every_readable_trial()
     print("Recalled %d trial(s)." % len(trials))
 
     for written in FigureSet.for_the_paper().write(trials, arguments.output_directory):
