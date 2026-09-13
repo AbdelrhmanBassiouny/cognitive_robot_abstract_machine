@@ -317,6 +317,13 @@ class Configuration:
     would clear this on evidence that says nothing here. Nothing removes it
     automatically."""
 
+    integrated_label: str
+    """Fork-PR label marking a branch the integration branch currently carries.
+
+    Written when a build is published rather than when one is assembled, and reconciled
+    across every open pull request rather than added to the ones a build merged - see
+    :mod:`integration_integrated_label`."""
+
     fork_repository: Repository
     """The fork that holds the full stack, as GitHub names it."""
 
@@ -382,6 +389,9 @@ class DefaultLabel(StrEnum):
 
     INTEGRATION_CONFLICT = "integration-conflict"
     """Marks a branch that breaks a sibling it merges cleanly with."""
+
+    INTEGRATED = "integrated"
+    """Marks a branch the integration branch a developer works from currently carries."""
 
 
 class ConfigurationKey(StrEnum):
