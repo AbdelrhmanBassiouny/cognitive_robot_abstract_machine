@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import atexit
 import contextlib
 import logging
 import time
@@ -9,6 +8,8 @@ from enum import Enum
 from functools import partial
 from threading import Thread
 from typing import Optional, List, Any, Callable, Union, ClassVar
+
+from physics_simulators.shutdown_at_exit import ShutdownAtExit
 
 
 class SimulatorState(Enum):
@@ -49,9 +50,14 @@ class SimulatorRenderer:
 
     _is_running: bool = False
 
+    _close_at_exit: Optional[ShutdownAtExit] = field(default=None, repr=False)
+    """
+    Closes the renderer when the interpreter exits, for a renderer that is still open.
+    """
+
     def __init__(self):
         self._is_running = True
-        atexit.register(self.close)
+        self._close_at_exit = ShutdownAtExit.register(self.close)
 
     def __enter__(self):
         return self
@@ -76,11 +82,10 @@ class SimulatorRenderer:
         Context manager synchronizing model/data access with the renderer's own
         rendering thread, if it has one.
 
-        A no-op here (headless has no rendering thread to race with);
-        subclasses backed by a real, actively-rendering viewer (e.g.
-        MujocoRenderer) must override this with their viewer's own lock, since
-        that thread reads the live model/data independently of anything
-        :class:`BaseSimulator` itself does.
+        A no-op here (headless has no rendering thread to race with); subclasses backed
+        by a real, actively-rendering viewer (e.g. MujocoRenderer) must override this
+        with their viewer's own lock, since that thread reads the live model/data
+        independently of anything :class:`BaseSimulator` itself does.
         """
         return contextlib.nullcontext()
 
@@ -88,7 +93,7 @@ class SimulatorRenderer:
         """
         Close the renderer.
         """
-        atexit.unregister(self.close)
+        self._close_at_exit.cancel()
         self._is_running = False
 
 
@@ -283,6 +288,14 @@ class BaseSimulator:
     and it can also be used to check if the renderer is still running or not.
     """
 
+    _stop_at_exit: Optional[ShutdownAtExit] = field(
+        init=False, default=None, repr=False
+    )
+    """
+    Stops the simulator when the interpreter exits, for a simulator that is still in
+    use.
+    """
+
     def __post_init__(self):
         self._start_real_time = self.current_real_time
         self._state = SimulatorState.STOPPED
@@ -292,7 +305,7 @@ class BaseSimulator:
         self.instance_level_callbacks = []
         for func in self._callbacks:
             self.add_instance_callback(func)
-        atexit.register(self.stop)
+        self._stop_at_exit = ShutdownAtExit.register(self.stop)
 
     @property
     def callbacks(self):
@@ -372,8 +385,9 @@ class BaseSimulator:
                         # step_size per simulated second; sleep off however far
                         # the simulation clock has pulled ahead of the real one.
                         if self.real_time_factor is not None:
-                            ahead_by = self.current_simulation_time / self.real_time_factor - (
-                                self.current_real_time - self.start_real_time
+                            ahead_by = (
+                                self.current_simulation_time / self.real_time_factor
+                                - (self.current_real_time - self.start_real_time)
                             )
                             if ahead_by > 0:
                                 time.sleep(ahead_by)
@@ -422,7 +436,7 @@ class BaseSimulator:
         Stop the simulator, close the renderer and join the simulation thread if it
         exists and is alive.
         """
-        atexit.unregister(self.stop)
+        self._stop_at_exit.cancel()
         if self.renderer.is_running():
             self.renderer.close()
         if self.render_thread is not None and self.render_thread.is_alive():
