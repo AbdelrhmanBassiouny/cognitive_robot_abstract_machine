@@ -48,3 +48,6 @@ Plan: make the query cards of the simulated corpus right.
       #265 has moved on past 1bcef7d49f (real pickup demo, film written as taken, camera
       optical-frame offset, grasp widths) -- not merged into the stack; would conflict in
       camera_frame.py/query_card.py and change the pickup physics #356's CI fix was tuned to.
+- [x] same for #349/#352 (user asked): #349 fast-forwarded to 1bcef7d49f (its commits were
+      already in #265); #352 merge 3287e8f054; cascaded #353 0010d7dc63 and #356 996e0a5af7
+      (both empty-diff merges, trees unchanged). Descriptions of 349/352/353 got CI notes.
