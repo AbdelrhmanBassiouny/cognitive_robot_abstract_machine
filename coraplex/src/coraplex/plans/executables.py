@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 HELD_BY_THE_PLAN = (LifeCycleValues.PAUSED, LifeCycleValues.INTERRUPTED)
 """
 The states a plan sets on its own nodes to steer the chart, which the chart's own life
-cycles are not allowed to overwrite.
+cycles neither overwrite nor put a node into.
 """
 
 ENDED = (
@@ -444,15 +444,19 @@ class GiskardExecutable(Executable):
 
         A plan's nodes are not performed one by one: the whole plan runs as one motion
         statechart, so what a motion node knows of its own run is read off its task
-        after every tick. A node the plan itself holds paused or interrupted is left as
-        the plan set it.
+        after every tick. The states the plan steers the chart with are left to the
+        plan, both on a node it already holds and on one whose task has just reached
+        one: the tick loop stops on them, and a pause the chart holds a task in is
+        lifted by the very tick that stopping would skip.
 
         :param started_at: When a task first seen running now is taken to have started.
         :param ended_at: When a task first seen ended now is taken to have ended.
         """
         for motion, task in self.motion_mappings.items():
             state = self._life_cycle_of(task)
-            if state is motion.status or motion.status in HELD_BY_THE_PLAN:
+            if state is motion.status:
+                continue
+            if state in HELD_BY_THE_PLAN or motion.status in HELD_BY_THE_PLAN:
                 continue
             if motion.status is LifeCycleValues.NOT_STARTED:
                 motion.start_time = started_at
