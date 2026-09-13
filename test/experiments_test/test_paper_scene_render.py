@@ -398,6 +398,52 @@ def test_a_drawn_picture_leaves_no_callback_on_the_world(
     assert scene_with_two_things.state.state_change_callbacks == before
 
 
+# %% drawing without shadows
+
+FLOOR_NAME = "floor"
+"""
+The name of the slab the two things stand over, which is where their shadows would fall.
+"""
+
+
+@pytest.fixture
+def scene_over_a_floor(scene_with_two_things: World) -> World:
+    """
+    The two things a little above a wide slab, so a light casting shadows darkens the
+    slab beneath them.
+    """
+    floor = Body(name=PrefixedName(FLOOR_NAME))
+    slab = Box(scale=Scale(3.0, 3.0, 0.02), color=STATED_COLOR)
+    floor.visual = ShapeCollection([slab], reference_frame=floor)
+    floor.collision = ShapeCollection([slab], reference_frame=floor)
+    with scene_with_two_things.modify_world():
+        scene_with_two_things.add_connection(
+            FixedConnection(
+                parent=body_named(scene_with_two_things, ANSWERED_NAME),
+                child=floor,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0.25, z=-0.3
+                ),
+            )
+        )
+    return scene_with_two_things
+
+
+@needs_a_renderer
+def test_a_picture_is_drawn_without_shadows_unless_they_are_asked_for(
+    scene_over_a_floor: World,
+) -> None:
+    """
+    A shadow across the table reads as something standing there, so a picture is drawn
+    without them: the same scene lit the same way is brighter than it is with the
+    shadows the lights would cast.
+    """
+    answers = [body_named(scene_over_a_floor, ANSWERED_NAME)]
+    shadowed = SceneRender(world=scene_over_a_floor, shadows=True).of(answers)
+    plain = SceneRender(world=scene_over_a_floor).of(answers)
+    assert plain.image.mean() > shadowed.image.mean()
+
+
 # %% asking for a picture of nothing
 
 

@@ -2504,8 +2504,26 @@ class MujocoBuilder(MultiSimBuilder):
             material.texuniform = texture_uniform
         return material_name
 
+    def hangs_below_a_body(self, connection: Connection) -> bool:
+        """
+        Whether the connection is a free one whose parent is a body rather than the
+        world's root, which is how a thing a robot holds is attached.
+
+        MuJoCo takes a free joint at the top level only, so such a connection is built
+        as no joint at all: the child stands fixed to its parent where the connection
+        has it, and the world's degrees of freedom for it are synced with nothing.
+
+        :param connection: The connection to ask about.
+        """
+        return (
+            isinstance(connection, Connection6DoF)
+            and connection.parent is not self.world.root
+        )
+
     def _build_connection(self, connection: Connection):
         if isinstance(connection, self._ignore_connection_types):
+            return
+        if self.hangs_below_a_body(connection):
             return
         joint_props = MujocoJointConverter.convert(connection)
         if "equality_joint" in joint_props:
@@ -2633,6 +2651,17 @@ class MujocoBuilder(MultiSimBuilder):
         if body.name.name == "world":
             return
         body_props = MujocoKinematicStructureEntityConverter.convert(body)
+        if self.hangs_below_a_body(body.parent_connection):
+            [px, py, pz, qx, qy, qz, qw] = (
+                body.parent_connection.origin_as_position_quaternion().evaluate()[0]
+            )
+            body_props[MujocoKinematicStructureEntityConverter.pos_str] = [px, py, pz]
+            body_props[MujocoKinematicStructureEntityConverter.quat_str] = [
+                qw,
+                qx,
+                qy,
+                qz,
+            ]
         for mujoco_body in body.simulator_additional_properties:
             if isinstance(mujoco_body, MujocoBody):
                 body_props["gravcomp"] = mujoco_body.gravitation_compensation_factor
@@ -4387,6 +4416,16 @@ class MujocoSim(MultiSim):
         model = self.simulator._mj_model
         model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
         model.vis.global_.offheight = max(model.vis.global_.offheight, height)
+
+    def cast_no_shadows(self) -> None:
+        """
+        Stop every light of the scene, the world's own included, from casting shadows
+        from the next render on.
+
+        Changes the drawing alone: the lights the world states keep casting shadows in
+        the next scene built from it.
+        """
+        self.simulator._mj_model.light_castshadow[:] = 0
 
     def make_visible(self, entity: KinematicStructureEntity) -> None:
         """

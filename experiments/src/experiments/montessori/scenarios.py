@@ -1612,10 +1612,10 @@ class PutThePieceInItsHole(HaveTheRobotAct):
     Nothing puts the piece through the hole: the gripper opens above it and gravity does
     the rest, so a piece that does not fit does not go in.
 
-    Carrying the piece is the one stretch of a run that cannot be simulated: a held
-    piece hangs off the gripper on the free connection it stood on the table with, and
-    a body on a free connection has to be a top-level one for MuJoCo to compile the
-    scene at all. The scene is taken up again once the piece has been let go of.
+    Carrying the piece is the one stretch of a run that is not simulated: a held piece
+    hangs off the gripper on the free connection it stood on the table with, which a
+    scene builds fixed to the gripper, so a scene built then could not let it slip. The
+    scene is taken up again once the piece has been let go of.
     """
 
     category: MontessoriShapeCategory

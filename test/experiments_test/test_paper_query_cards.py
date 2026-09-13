@@ -26,11 +26,11 @@ from experiments.episodes.trace import JointTrace
 from experiments.paper.figure import FigureFile
 from experiments.paper.pose_change import stand, standing_pose
 from experiments.paper.panel import PanelKind
+from experiments.paper.scene import SceneRender
 from experiments.paper.query_card import (
     TRIAL_DIRECTORY,
     EpisodeKeptNoWorldError,
     PickedUpRecentlyCard,
-    WorldCannotBeSimulatedError,
     QueryCardName,
     QueryCardSet,
     SideOfAnotherObjectCard,
@@ -487,26 +487,28 @@ def held_freely_below_a_body(world: World) -> World:
     return world
 
 
-def test_a_card_of_an_episode_holding_a_piece_freely_below_a_body_says_so(
+@needs_a_renderer
+def test_a_card_of_an_episode_holding_a_piece_below_a_body_draws_the_held_piece(
     trial: RecordedTrial, tmp_path: Path
 ) -> None:
     """
-    A simulation is built with free joints at its top level only, so a kept world in
-    which a piece hangs below the gripper cannot be drawn, which is said rather than
-    left to the simulator's compiler.
+    A run that ended holding a piece kept it hanging below the gripper by a free joint,
+    and its scene is drawn with the piece there, held where the joint has it.
     """
     held_freely_below_a_body(trial.episode.world)
+    held = trial.episode.world.get_body_by_name("held")
 
-    with pytest.raises(WorldCannotBeSimulatedError):
-        PickedUpRecentlyCard().write(trial, tmp_path)
+    drawn = SceneRender(world=trial.episode.world).of([held])
+
+    assert drawn.answer_mask.any()
 
 
 @needs_a_renderer
-def test_an_episode_holding_a_piece_freely_below_a_body_is_passed_over_when_a_corpus_is_written(
+def test_an_episode_holding_a_piece_below_a_body_gets_its_cards_when_a_corpus_is_written(
     trial: RecordedTrial, tmp_path: Path
 ) -> None:
     """
-    An episode that ended holding a piece must not stop every other episode's cards.
+    An episode that ended holding a piece is drawn like every other.
     """
     holding = replace(
         trial,
@@ -522,7 +524,8 @@ def test_an_episode_holding_a_piece_freely_below_a_body_is_passed_over_when_a_co
     )
 
     assert {card.markup_path.parent.parent.name for card in written} == {
-        trial.episode.identifier
+        holding.episode.identifier,
+        trial.episode.identifier,
     }
 
 

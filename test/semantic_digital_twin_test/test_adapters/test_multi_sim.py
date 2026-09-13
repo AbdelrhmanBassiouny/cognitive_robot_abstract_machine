@@ -565,6 +565,62 @@ def test_builder_does_not_confuse_different_textures_sharing_a_basename(tmp_path
     assert len(texture_files) == 2
 
 
+def world_holding_a_piece() -> World:
+    """
+    A world whose one body holds a piece by a free connection, the way a piece a robot
+    has picked up hangs off its gripper, the piece standing a little in front of it.
+    """
+    world = World()
+    root = Body(name=PrefixedName("world"))
+    hand = Body(name=PrefixedName("hand"))
+    held = Body(name=PrefixedName("held"))
+    with world.modify_world():
+        world.add_body(root)
+        world.add_connection(FixedConnection(parent=root, child=hand))
+        world.add_connection(
+            Connection6DoF.create_with_dofs(world=world, parent=hand, child=held)
+        )
+    held.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=0.1, y=0.0, z=0.05, reference_frame=hand
+    )
+    return world
+
+
+def test_a_piece_held_below_a_body_is_built_fixed_where_it_hangs(tmp_path):
+    """
+    MuJoCo takes a free joint at the top level only, so a piece hanging off a body by a
+    free connection is built without a joint, standing where its connection has it.
+    """
+    world = world_holding_a_piece()
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    [held] = [body for body in builder.spec.bodies if body.name == "held"]
+    assert list(held.joints) == []
+    assert list(held.pos) == pytest.approx([0.1, 0.0, 0.05])
+
+
+def test_a_scene_holding_a_piece_below_a_body_is_simulated(tmp_path):
+    """
+    The scene compiles and its state syncs both ways, the held piece being no joint of
+    the model.
+    """
+    world = world_holding_a_piece()
+    multi_sim = MujocoSim(world=world, headless=True)
+    try:
+        multi_sim.simulator.start(simulate_in_thread=False, render_in_thread=False)
+        world.notify_state_change()
+        assert (
+            mujoco.mj_name2id(
+                multi_sim.simulator._mj_model, mujoco.mjtObj.mjOBJ_BODY, "held"
+            )
+            >= 0
+        )
+    finally:
+        stop_multisim_if_running(multi_sim)
+
+
 def test_builder_writes_a_light_attached_to_a_body(tmp_path):
     """
     Regression test: MujocoBuilder had no handling for MujocoLight additional properties at
