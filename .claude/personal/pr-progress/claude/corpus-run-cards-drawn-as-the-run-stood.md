@@ -41,3 +41,10 @@ Plan: make the query cards of the simulated corpus right.
       corpus_episodes.txt plus the 02:08 smoke episode 29c9ca09 (76 episodes, 76 trials,
       4868 scored queries, association rows); lab DB now 75 re-recorded + 5 robot episodes.
       Their plans/worlds/ticks/motions stay as unreferenced rows (same as the smoke cleanup).
+- [x] #353 CI red (user asked 2026-09-13 ~22:00; same red as #349/#352: coraplex 6 h hang,
+      experiments killed 137 in the pickup demo): fast-forwarded its branch to 96e861a679, the
+      merge of #265@1bcef7d49f that #356 already sits on (green), so #356 needed no downward
+      merge; #353 description got a CI section; left ready-for-review as the user set it.
+      #265 has moved on past 1bcef7d49f (real pickup demo, film written as taken, camera
+      optical-frame offset, grasp widths) -- not merged into the stack; would conflict in
+      camera_frame.py/query_card.py and change the pickup physics #356's CI fix was tuned to.
