@@ -199,17 +199,26 @@ class MontessoriPerceptionNode(RepeatedLook):
         :meth:`read_with` handed over another pipeline was taken through the old one,
         and serving it would answer a request with what that pipeline made of the scene.
 
+        A look that raises still clears its own "under way" mark, so a wait for a scene
+        fails with :class:`~experiments.montessori.perception.exceptions.NoSceneAvailable`
+        once its timeout passes rather than believing a look is forever still under way
+        and never giving up.
+
         :param frame: The look, in the pipeline's own reference frame.
         :return: What the look found.
+        :raises Exception: Whatever the pipeline's own look raised.
         """
         pipeline = self.pipeline
         with self._lock:
             self._look_under_way_since = time.monotonic()
             if pipeline is self.pipeline:
                 self._frame = frame
-        scene = pipeline.detect(frame)
+        try:
+            scene = pipeline.detect(frame)
+        finally:
+            with self._lock:
+                self._look_under_way_since = None
         with self._lock:
-            self._look_under_way_since = None
             if pipeline is self.pipeline:
                 self._scene = scene
         return scene
@@ -439,6 +448,19 @@ def report(scene: MontessoriScene) -> None:
     )
 
 
+def configure_logging() -> None:
+    """
+    Make this process print every INFO log record as its bare message.
+
+    ``coraplex``'s own package ``__init__`` calls :func:`logging.basicConfig` at import
+    time with no level, which -- being the first call anywhere in the process -- wins
+    outright and leaves the root logger at its default :data:`logging.WARNING`, silently
+    dropping this module's own ``INFO`` reports. ``force`` is what makes this call win
+    instead, regardless of what already configured the root logger.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
+
+
 def main() -> None:
     """
     Run the perception node until interrupted, logging what it sees.
@@ -454,7 +476,7 @@ def main() -> None:
     from experiments.tracy_experiments.live_tracy import LiveTracy
 
     arguments = parse_arguments()
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    configure_logging()
     rclpy.init()
     with LiveTracy.connected(NODE_NAME, show_images=arguments.show_images) as tracy:
         perception = tracy.look

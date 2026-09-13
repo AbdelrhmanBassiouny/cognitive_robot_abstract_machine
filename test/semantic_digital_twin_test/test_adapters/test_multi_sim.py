@@ -5,6 +5,7 @@ import threading
 import time
 import weakref
 from dataclasses import dataclass
+from pathlib import Path
 
 import mujoco
 import pytest
@@ -118,6 +119,20 @@ def test_mjcf_1_world():
 @pytest.fixture
 def test_mjcf_2_world():
     return MJCFParser(TEST_MJCF_2).parse()
+
+
+# %% where a worker of a run builds its scene
+
+
+def test_every_worker_builds_its_scene_in_a_file_of_its_own(tmp_path_factory) -> None:
+    """
+    A scene is written and then read back to be compiled, so workers sharing one path
+    race: one worker's write lands between another's write and its read, and the second
+    compiles a scene that is not the one it built.
+    """
+    assert Path(MujocoSim.default_file_path).is_relative_to(
+        tmp_path_factory.getbasetemp()
+    )
 
 
 def test_empty_multi_sim_in_5s():

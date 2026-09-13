@@ -44,6 +44,7 @@ try:
 except ModuleNotFoundError:
     # ROS dependencies.
     rospy = None
+from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.adapters.package_resolver import PathResolver
 from semantic_digital_twin.collision_checking.collision_matrix import (
     MaxAvoidedCollisionsOverride,
@@ -200,6 +201,21 @@ def pytest_configure(config):
     if worker:
         worker_num = int(worker.removeprefix("gw"))
         os.environ["ROS_DOMAIN_ID"] = str(100 + worker_num)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def scene_file_of_this_worker(tmp_path_factory) -> None:
+    """
+    Give every worker of a run its own file to build its MuJoCo scene in.
+
+    :class:`MujocoSim` writes the scene and then reads it back, so workers sharing one
+    path race: one worker's write lands between another's write and its read, and the
+    second compiles a scene that is not the one it built.
+    """
+    worker = os.environ.get(PytestEnvironmentVariable.XDIST_WORKER, "controller")
+    MujocoSim.default_file_path = str(
+        tmp_path_factory.mktemp("mujoco_scene_%s" % worker) / "scene.xml"
+    )
 
 
 @pytest.fixture(scope="session")

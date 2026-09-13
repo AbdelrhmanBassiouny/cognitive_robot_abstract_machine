@@ -7,6 +7,7 @@ ROS but no camera and no robot.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -40,7 +41,10 @@ from experiments.montessori.perception.capture_from_camera import (
 from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.live_camera import LiveCamera
-from experiments.montessori.perception.node import MontessoriPerceptionNode
+from experiments.montessori.perception.node import (
+    MontessoriPerceptionNode,
+    configure_logging,
+)
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import perception_pipeline
 from experiments.montessori.perception.scene_request import SceneRequest
@@ -546,3 +550,95 @@ def test_a_look_begun_through_a_pipeline_since_replaced_is_not_kept(node: Node):
     assert perception.pipeline is handed_over
     with pytest.raises(NoSceneAvailable):
         perception.wait_for_scene(A_SHORT_WAIT)
+
+
+# %% a look that fails still lets a later wait time out
+
+
+@dataclass
+class _PipelineThatFailsToDetect(MontessoriPerceptionPipeline):
+    """
+    A pipeline whose look always fails, as a real one can on a picture it cannot make
+    sense of.
+    """
+
+    def detect(self, frame: RgbdFrame, request: SceneRequest = SceneRequest()):
+        raise RuntimeError("the look failed")
+
+
+def _wait_for_scene_capturing_the_outcome(
+    perception: MontessoriPerceptionNode, outcome: List[BaseException]
+) -> None:
+    try:
+        outcome.append(perception.wait_for_scene(A_SHORT_WAIT))
+    except NoSceneAvailable as error:
+        outcome.append(error)
+
+
+def test_a_look_that_fails_lets_a_later_wait_time_out_instead_of_hanging_forever(
+    node: Node,
+):
+    """
+    A look that raises must not leave the node believing a look is still under way
+    forever -- that would make every later wait for a scene keep pushing its deadline
+    out and never give up.
+    """
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+    read_with_now = perception.pipeline
+    perception.read_with(
+        _PipelineThatFailsToDetect(
+            table=read_with_now.table,
+            lid=read_with_now.lid,
+            reference_frame=read_with_now.reference_frame,
+            world=read_with_now.world,
+            pieces=read_with_now.pieces,
+        )
+    )
+    frame = SceneCapture.load(A_LOOK).to_frame()
+
+    with pytest.raises(RuntimeError):
+        perception.look_at(frame)
+
+    outcome: List[BaseException] = []
+    waiting = threading.Thread(
+        target=_wait_for_scene_capturing_the_outcome,
+        args=(perception, outcome),
+        daemon=True,
+    )
+    waiting.start()
+    waiting.join(timeout=A_SHORT_WAIT * 10)
+
+    assert not waiting.is_alive()
+    assert len(outcome) == 1
+    assert isinstance(outcome[0], NoSceneAvailable)
+
+
+# %% logging wins even if something already configured the root logger without a level
+
+
+def test_configuring_logging_wins_even_if_the_root_logger_is_already_configured():
+    """
+    coraplex's own package ``__init__`` calls ``logging.basicConfig`` at import time
+    with no level -- reproduced here directly rather than by importing coraplex, since
+    the process either has already imported it or never will again. Left as the first
+    call to configure the root logger, it silently defeats a later plain
+    ``logging.basicConfig(level=logging.INFO, ...)`` call, which is exactly why running
+    the node reported nothing: every module logger stayed at the root's default
+    :data:`logging.WARNING`.
+    """
+    root = logging.getLogger()
+    original_handlers = list(root.handlers)
+    original_level = root.level
+    try:
+        root.handlers = []
+        root.setLevel(logging.WARNING)
+        logging.basicConfig(format="%(levelname)s:%(filename)s::%(lineno)s %(message)s")
+
+        configure_logging()
+
+        node_logger = logging.getLogger("experiments.montessori.perception.node")
+        assert root.getEffectiveLevel() == logging.INFO
+        assert node_logger.getEffectiveLevel() == logging.INFO
+    finally:
+        root.handlers = original_handlers
+        root.setLevel(original_level)

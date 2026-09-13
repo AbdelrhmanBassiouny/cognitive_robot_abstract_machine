@@ -19,10 +19,10 @@ from pathlib import Path
 import trimesh
 from krrood.exceptions import DataclassException
 from semantic_digital_twin.world_description.geometry import Mesh
-from typing_extensions import TYPE_CHECKING, List, Sequence
+from typing_extensions import TYPE_CHECKING, List, Sequence, Union
 
 from experiments.episodes.episode import Episode, RecordedTrial
-from experiments.episodes.trace import JointTrace, TimedFrames, TimedFramesFile
+from experiments.episodes.trace import FramesByMoment, JointTrace, TimedFramesFile
 
 if TYPE_CHECKING:
     from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
@@ -192,11 +192,12 @@ class EpisodeArtifacts:
     Where they are kept, named after the episode's identifier.
     """
 
-    def keep_video(self, video: RecordedVideo) -> Path:
+    def keep_video(self, video: Union[RecordedVideo, FramesByMoment]) -> Path:
         """
-        Encode a recorded run into this episode's video.
+        Leave the film a run took as this episode's video.
 
-        :param video: The frames captured while the run happened.
+        :param video: The film, whether it was kept in memory while the run happened or
+            written as it was taken.
         :return: The video that was written.
         """
         return video.write(self.directory / EpisodeArtifact.VIDEO)
@@ -371,7 +372,7 @@ class TrialArtifacts:
         """
         return trace.write(self.directory / TrialArtifact.JOINT_TRACE)
 
-    def keep_camera(self, frames: TimedFrames) -> Path:
+    def keep_camera(self, frames: FramesByMoment) -> Path:
         """
         Keep what the robot's camera saw along the trial.
 

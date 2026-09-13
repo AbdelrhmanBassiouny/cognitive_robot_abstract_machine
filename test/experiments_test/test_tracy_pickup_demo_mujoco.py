@@ -35,6 +35,7 @@ from experiments.tracy_experiments.pick_and_place_action import (
     PickUpActionMujoco,
 )
 from experiments.tracy_experiments.pickup.pickup_demo_mujoco import (
+    CAMERA_VIDEO_RESOLUTION,
     CUBE_STARTS_ON_THE_LID,
     LAB_BOARD_CENTRE,
     LAB_PIECE_PLACES,
@@ -263,8 +264,8 @@ def test_the_run_leaves_its_films_and_the_picture_of_the_look(
         RunArtifact.DETECTIONS,
     ]
     assert all(path.stat().st_size > 0 for path in written)
-    assert performed.overview.frames
-    assert len(performed.camera_film.frames) == len(performed.overview.frames)
+    assert performed.overview.moments
+    assert len(performed.camera_film.moments) == len(performed.overview.moments)
 
 
 # %% what the run records of itself
@@ -373,18 +374,31 @@ def test_the_question_set_was_asked_as_the_piece_came_to_rest_and_answered_corre
     assert picked_up_recently.moment - came_to_rest.moment < TRACE_PERIOD * 2
 
 
+COLOUR_CHANNELS = 3
+"""
+How many channels a frame the camera film hands back has: red, green and blue.
+"""
+
+
 def test_the_joints_and_the_camera_are_traced_along_the_trial(
     performed: SimulatedPickupDemo,
 ) -> None:
+    """
+    The film the run wrote as it went holds a frame for every moment it took one at,
+    and hands back the one nearest a moment as wide as the camera filmed -- how tall it
+    is is the encoder's to say, since it rounds a film up to what the codec needs.
+    """
     joints = performed.tracing.joints
-    camera = performed.camera_film.timed_frames()
+    camera = performed.camera_film.taken
 
     assert not joints.is_empty
     assert joints.moments == sorted(joints.moments)
-    assert (
-        len(camera.frames) == len(camera.moments) == len(performed.camera_film.frames)
-    )
+    assert camera.moments == performed.camera_film.moments
     assert camera.moments == sorted(camera.moments)
+    assert camera.at(camera.moments[-1]).shape[1:] == (
+        CAMERA_VIDEO_RESOLUTION.width,
+        COLOUR_CHANNELS,
+    )
 
 
 def test_the_run_keeps_everything_as_the_artifacts_of_its_episode(
