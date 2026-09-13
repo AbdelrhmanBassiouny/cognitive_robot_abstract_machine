@@ -86,10 +86,10 @@ def look_for_the_cube_on_the_lid(
     sought = a(DetectedMontessoriShape)()
     return sought.where(
         lid.name == LID_NAME,
-        SupportedBy(sought._variable_, lid),
-        Above(sought._variable_, square_hole._symbolic_expression_, look.seen_from),
-        Above(sought._variable_, triangle_hole._symbolic_expression_, look.seen_from),
-        Colored(sought._variable_, cube.color),
+        SupportedBy(sought, lid),
+        Above(sought, square_hole._symbolic_expression_, look.seen_from),
+        Above(sought, triangle_hole._symbolic_expression_, look.seen_from),
+        Colored(sought, cube.color),
     )
 
 

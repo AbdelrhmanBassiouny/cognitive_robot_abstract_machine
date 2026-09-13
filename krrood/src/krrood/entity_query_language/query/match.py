@@ -392,6 +392,16 @@ class Match(
         self._expression = entity_
         return entity_
 
+    @property
+    def _operand_(self) -> Variable[T]:
+        """
+        :return: The variable this match describes, which is what a condition written
+            with the match in the place of the thing it looks for is written about.
+        """
+        if self._variable_ is None:
+            self.resolve()
+        return self._variable_
+
     def _get_expression_(self) -> SymbolicExpression:
         return self._symbolic_expression_
 
@@ -551,6 +561,21 @@ class Match(
         if isinstance(value, (list, tuple, set)):
             return any(isinstance(element, type(Ellipsis)) for element in value)
         return isinstance(value, type(Ellipsis))
+
+    @property
+    def _nested_matches_(self) -> Iterator[Match]:
+        """
+        :return: Every match this one's pattern assigns to a field, directly or as an
+            element of a collection it assigns, innermost first -- so a match is always
+            reached after the matches it nests, which are what say what it describes.
+        """
+        for value in self._kwargs_.values():
+            elements = value if isinstance(value, (list, tuple, set)) else (value,)
+            for element in elements:
+                if not isinstance(element, Match):
+                    continue
+                yield from element._nested_matches_
+                yield element
 
     @property
     def _has_cause_attributes_(self) -> bool:

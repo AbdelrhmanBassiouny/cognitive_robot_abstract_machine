@@ -692,3 +692,38 @@ def test_writing_through_a_flattened_attribute_of_a_match_is_rejected():
 
     with pytest.raises(ReadOnlyMapping):
         attribute_match._update_kwargs_from(match)
+
+
+# %% the matches a pattern hands a match
+
+
+# A match compares symbolically, so two of them are told apart by identity rather than
+# by ``==``, which would build a comparator and read as true whatever it was given.
+
+
+def test_a_pattern_without_a_match_in_it_hands_none():
+    match = a(KRROODPosition)(x=1, y=2, z=3)
+    assert list(match._nested_matches_) == []
+
+
+def test_a_pattern_hands_the_match_assigned_to_one_of_its_fields():
+    container = a(Container)(name="Container1")
+    match = a(Cabinet)(container=container)
+    (nested,) = match._nested_matches_
+    assert nested is container
+
+
+def test_a_pattern_hands_a_match_standing_in_a_collection_it_assigns():
+    position = a(KRROODPosition)(x=..., y=2, z=3)
+    match = a(KRROODPositions)(positions=[position], some_strings=["a"])
+    (nested,) = match._nested_matches_
+    assert nested is position
+
+
+def test_a_pattern_hands_the_matches_it_nests_innermost_first():
+    handle = a(Handle)(name="Handle1")
+    drawer = a(Drawer)(handle=handle)
+    match = a(Cabinet)(drawers=[drawer])
+    innermost, outermost = match._nested_matches_
+    assert innermost is handle
+    assert outermost is drawer

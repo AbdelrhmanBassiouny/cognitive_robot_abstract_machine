@@ -43,6 +43,7 @@ from krrood.entity_query_language.core.base_expressions import (
 )
 from krrood.entity_query_language.core.base_expressions import Selectable
 from krrood.entity_query_language.core.bound_value import HasBoundValue
+from krrood.entity_query_language.core.mapped_variable import HasSymbolicOperations
 from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.patterns.code_parsing_utils import (
     get_accessed_attribute_name_in_return_statement_of_property,
@@ -67,11 +68,11 @@ def symbolic_function(
 
     @wraps(function)
     def wrapper(*args, **kwargs) -> Optional[Any]:
-        all_kwargs = merge_args_and_kwargs(function, args, kwargs)
-        if _any_of_the_kwargs_is_a_variable(all_kwargs):
+        operands = _operands_of(merge_args_and_kwargs(function, args, kwargs))
+        if _any_of_the_kwargs_is_a_variable(operands):
             return InstantiatedVariable(
                 _type_=function,
-                _kwargs_=all_kwargs,
+                _kwargs_=operands,
             )
         return function(*args, **kwargs)
 
@@ -222,13 +223,13 @@ class SymbolicCallable(Symbol, Verbalizable, HasBoundValue, ABC):
     """
 
     def __new__(cls, *args, **kwargs):
-        all_kwargs = merge_args_and_kwargs(
-            cls.__init__, args, kwargs, ignore_first=True
+        operands = _operands_of(
+            merge_args_and_kwargs(cls.__init__, args, kwargs, ignore_first=True)
         )
-        if _any_of_the_kwargs_is_a_variable(all_kwargs):
+        if _any_of_the_kwargs_is_a_variable(operands):
             return InstantiatedVariable(
                 _type_=cls,
-                _kwargs_=all_kwargs,
+                _kwargs_=operands,
             )
         return super().__new__(cls)
 
@@ -541,6 +542,24 @@ length = symbolic_callable_to_function(Length)
 Backward-compatible functional form of :class:`Length` (keeps the ``length(iterable)``
 call).
 """
+
+
+def _operands_of(bindings: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    The arguments of a symbolic call as the operands they stand for.
+
+    Something that stands for a value contributes the expression it names -- a match
+    contributes the variable it describes -- so a statement about the thing sought can
+    be written with the statement itself in that thing's place. Anything else is its own
+    operand.
+
+    :param bindings: A kwarg like dict mapping argument names to what was passed.
+    :return: The same mapping, with each argument replaced by its operand.
+    """
+    return {
+        name: value._operand_ if isinstance(value, HasSymbolicOperations) else value
+        for name, value in bindings.items()
+    }
 
 
 def _any_of_the_kwargs_is_a_variable(bindings: Dict[str, Any]) -> bool:

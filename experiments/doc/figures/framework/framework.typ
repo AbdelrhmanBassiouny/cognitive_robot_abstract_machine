@@ -58,7 +58,7 @@
   (text: "    object_designator="),
   (
     slot: "perception", indent: 6,
-    lines: ("a(DetectedMontessoriShape)(", "  category=CUBE)", ".where(", "  Colored(shape, LIGHT_BLUE),"),
+    lines: ("a(DetectedMontessoriShape)(", "  category=CUBE)", ".where(", "  Colored(shape, CYAN),"),
     nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(shape, board)),",)),
   ),
   (text: "    grasp_description="),
@@ -72,7 +72,7 @@
   (text: "    target="),
   (
     slot: "rules", indent: 6,
-    lines: ("a(ShapeSortingHole)(", "  shape=..., on=board)"),
+    lines: ("a(ShapeSortingHole)(", "  shape_category=...)", ".from_(board.apertures)"),
   ),
   (text: "  )"),
   (text: "]))"),
@@ -87,7 +87,7 @@
     slot: "perception", indent: 6,
     // where tracy/render_tracy.py stands the cube, in Tracy's own frame: on the board's
     // lid, on the stretch of it furthest from the square hole, as the sorting demo starts it
-    lines: ("cube_1  # LIGHT_BLUE, CUBE", "  at (0.72, 0.13, 0.10) m,"),
+    lines: ("cube_1  # CYAN, CUBE", "  at (0.72, 0.13, 0.10) m,"),
     nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(cube_1, board) ✓",)),
   ),
   (text: "    grasp_description="),
@@ -101,7 +101,7 @@
   (text: "    target="),
   (
     slot: "rules", indent: 6,
-    lines: ("ShapeSortingHole(", "  shape=SQUARE, on=board)"),
+    lines: ("ShapeSortingHole(", "  shape_category=CUBE)"),
   ),
   (text: "  )"),
   (text: "])"),
@@ -142,7 +142,7 @@
 // %% CONFIG: panel 4, the rules -------------------------------------------------------
 // A ripple-down tree: a rule, its exception and its alternative below it.
 
-#let rule-root = (condition: "shape.category == CUBE", conclusion: "hole.shape = SQUARE", fired: true)
+#let rule-root = (condition: "shape.category == CUBE", conclusion: "hole.shape_category = CUBE", fired: true)
 #let rule-except = (condition: "occupied(hole)", conclusion: "next free one", fired: false)
 #let rule-else = (condition: "no rule fires", conclusion: "NoHoleFits", fired: false)
 
