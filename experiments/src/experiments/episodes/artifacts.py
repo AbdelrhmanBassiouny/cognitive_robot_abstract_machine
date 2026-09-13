@@ -565,7 +565,7 @@ class Transcript:
             "# Episode %s" % self.episode.identifier,
             "",
             "- Scenario: %s" % self.episode.scenario_name,
-            "- Ran: %s" % self.episode.execution_type.value,
+            "- Ran: %s" % self.episode.execution_type.name,
             "- Recorded at: %s" % self.episode.recorded_at.isoformat(),
         ]
         for number, trial in enumerate(self.trials, start=1):
