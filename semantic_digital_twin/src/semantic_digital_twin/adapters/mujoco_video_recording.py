@@ -242,7 +242,7 @@ class MujocoVideoRecorder:
 
         self._frame_capture_callback.stop()
         self._frame_capture_callback = None
-        self._multi_sim.simulator.stop()
+        self._multi_sim.stop_simulation()
         self._multi_sim = None
 
         if self._auto_attached_camera is not None:

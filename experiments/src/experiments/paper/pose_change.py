@@ -24,12 +24,11 @@ import numpy as np
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.episodes.episode import RecordedTrial
-from experiments.episodes.trace import JointPositions
+from experiments.episodes.trace import JointPositions, put_back_afterwards
 from experiments.paper.chart import TimelineSpan
 from experiments.paper.panel import ANSWER_COLOR
 from experiments.paper.run_plan import TrialClock
 from experiments.paper.scene import (
-    BACKGROUND_COLOR,
     PICTURE_HEIGHT,
     PICTURE_WIDTH,
     PickedOut,
@@ -597,9 +596,9 @@ class PoseChangeRender:
     What the object is drawn in where it used to be.
     """
 
-    faded: Color = BACKGROUND_COLOR
+    faded: Optional[Color] = None
     """
-    What everything else is drawn in.
+    What everything else is drawn in, or None to draw it in the colours the twin states.
     """
 
     def of(
@@ -628,43 +627,38 @@ class PoseChangeRender:
         :raises NothingToDrawError: If a camera or a light has to be placed and the world
             holds no geometry to place it around.
         """
-        stood = JointPositions(
-            moment=0.0,
-            positions={
-                str(name): position
-                for name, position in self.world.state.to_position_dict().items()
-            },
-        )
-        if robot_at is not None:
-            robot_at.restore_into(self.world)
-        stood_at = standing_pose(self.world, change.subject)
-        stand(self.world, change.subject, change.after)
-        with ModelChangesUnannounced(self.world):
-            ghost = self.stand_a_ghost_at(change.subject, change.before)
-            dots = self.stand_dots_along(
-                change.subject, change.way or change.straight_way()
-            )
-            framed_on = self.framed_on(change.subject, ghost) + tuple(dots)
-            camera = self.camera
-            if camera is None:
-                camera = self.hang_a_camera_across(change, ghost, dots)
-            try:
-                return SceneRender(
-                    world=self.world,
-                    camera=camera,
-                    highlight=self.highlight,
-                    faded=self.faded,
-                    label_answers=False,
-                    framed_on=framed_on,
-                    picked_out=(PickedOut(entity=ghost, color=self.ghost),)
-                    + tuple(PickedOut(entity=dot, color=self.ghost) for dot in dots),
-                ).of([change.subject])
-            finally:
-                if self.camera is None:
-                    camera.body.simulator_additional_properties.remove(camera)
-                self.take_away([ghost] + dots)
-                stand(self.world, change.subject, stood_at)
-                stood.restore_into(self.world)
+        with put_back_afterwards(self.world):
+            if robot_at is not None:
+                robot_at.restore_into(self.world)
+            stood_at = standing_pose(self.world, change.subject)
+            stand(self.world, change.subject, change.after)
+            with ModelChangesUnannounced(self.world):
+                ghost = self.stand_a_ghost_at(change.subject, change.before)
+                dots = self.stand_dots_along(
+                    change.subject, change.way or change.straight_way()
+                )
+                framed_on = self.framed_on(change.subject, ghost) + tuple(dots)
+                camera = self.camera
+                if camera is None:
+                    camera = self.hang_a_camera_across(change, ghost, dots)
+                try:
+                    return SceneRender(
+                        world=self.world,
+                        camera=camera,
+                        highlight=self.highlight,
+                        faded=self.faded,
+                        label_answers=False,
+                        framed_on=framed_on,
+                        picked_out=(PickedOut(entity=ghost, color=self.ghost),)
+                        + tuple(
+                            PickedOut(entity=dot, color=self.ghost) for dot in dots
+                        ),
+                    ).of([change.subject])
+                finally:
+                    if self.camera is None:
+                        camera.body.simulator_additional_properties.remove(camera)
+                    self.take_away([ghost] + dots)
+                    stand(self.world, change.subject, stood_at)
 
     def where_the_robot_stands(self) -> Optional[np.ndarray]:
         """

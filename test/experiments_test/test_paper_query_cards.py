@@ -13,13 +13,18 @@ from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 from coraplex.datastructures.enums import ExecutionType
+from scipy.spatial.transform import Rotation
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
 from typing_extensions import List
 
+from experiments.episodes.artifacts import EpisodeArtifacts
 from experiments.episodes.episode import Episode, RecordedQuery, RecordedTrial, Tick
+from experiments.episodes.trace import JointTrace
 from experiments.paper.figure import FigureFile
+from experiments.paper.pose_change import stand, standing_pose
 from experiments.paper.panel import PanelKind
 from experiments.paper.query_card import (
     TRIAL_DIRECTORY,
@@ -145,9 +150,44 @@ def asked(question, answer: str) -> RecordedQuery:
 
 
 @pytest.fixture
+def loose_scene() -> World:
+    """
+    A world holding the two pieces, the one the questions are about hanging from the
+    other by a free joint, which is how a piece a run can move stands in a kept world.
+    """
+    world = World()
+    subject = piece(SUBJECT_NAME)
+    other = piece(OTHER_NAME)
+    with world.modify_world():
+        world.add_body(other)
+        world.add_connection(
+            Connection6DoF.create_with_dofs(world=world, parent=other, child=subject)
+        )
+    return world
+
+
+@pytest.fixture
 def trial(scene: World) -> RecordedTrial:
     """
     One recorded trial that asked a spatial question and a question about a pick-up.
+    """
+    return trial_in(scene)
+
+
+@pytest.fixture
+def traced_trial(loose_scene: World) -> RecordedTrial:
+    """
+    The same trial run in the scene whose piece a trace can move.
+    """
+    return trial_in(loose_scene)
+
+
+def trial_in(scene: World) -> RecordedTrial:
+    """
+    One recorded trial in the given scene that asked a spatial question and a question
+    about a pick-up.
+
+    :param scene: The world the trial ran in.
     """
     subject = scene.get_body_by_name(SUBJECT_NAME)
     other = scene.get_body_by_name(OTHER_NAME)
@@ -178,6 +218,59 @@ def trial(scene: World) -> RecordedTrial:
         ]
         + [asked(PickedUpRecently(subject=subject), answer="yes")],
     )
+
+
+MOVED_TO_X = 0.5
+"""
+Where along x the object the questions are about stands once the trial has moved it, in
+metres in the world root frame.
+"""
+
+
+def traced(trial: RecordedTrial, artifacts: EpisodeArtifacts) -> JointTrace:
+    """
+    A joint trace of the trial's world kept beside the episode's other files: the object
+    standing where the scene has it as the trial starts, and moved along x by the time
+    the pick-up is reported, where it stays.
+
+    :param trial: The trial to trace.
+    :param artifacts: The episode's own directory, which the trace is kept in.
+    """
+    world = trial.episode.world
+    subject = world.get_body_by_name(SUBJECT_NAME)
+    trace = JointTrace()
+    trace.sample(world, 0.0)
+    stood_at = standing_pose(world, subject)
+    stand(world, subject, HomogeneousTransformationMatrix.from_xyz_rpy(x=MOVED_TO_X))
+    trace.sample(world, PICKED_UP_AT)
+    trace.sample(world, TRIAL_DURATION)
+    stand(world, subject, stood_at)
+    artifacts.trial(trial.number).keep_joint_trace(trace)
+    return trace
+
+
+@pytest.fixture
+def artifacts_of(traced_trial: RecordedTrial, tmp_path: Path) -> EpisodeArtifacts:
+    """
+    The traced trial's episode's own directory, holding nothing yet.
+    """
+    return EpisodeArtifacts(
+        episode=traced_trial.episode,
+        directory=tmp_path / "artifacts" / traced_trial.episode.identifier,
+    )
+
+
+def facing_of(camera) -> np.ndarray:
+    """
+    The way a camera looks along the ground, as a unit vector in the frame of the body
+    it hangs on.
+
+    :param camera: The camera to read, whose quaternion is stated real part first.
+    """
+    real, x, y, z = camera.quaternion
+    looks_along = Rotation.from_quat([x, y, z, real]).apply([0.0, 0.0, -1.0])
+    along_the_ground = looks_along * np.array([1.0, 1.0, 0.0])
+    return along_the_ground / np.linalg.norm(along_the_ground)
 
 
 def written_images(card_markup: Path) -> List[str]:
@@ -242,18 +335,34 @@ def test_a_spatial_card_picks_out_both_objects_it_relates(
     ]
 
 
-def test_a_spatial_card_is_drawn_from_where_the_question_was_asked(
+def test_a_spatial_card_faces_the_way_the_question_was_asked_from(
     trial: RecordedTrial, scene: World
 ) -> None:
     """
-    Left and right are only left and right from somewhere, so the camera stands where
+    Left and right are only left and right from somewhere, so the camera faces the way
     the question says it was looked at from.
     """
     question = trial.queries[0].question
     camera = SideOfAnotherObjectCard().point_of_view(question, scene)
-    assert camera.position == pytest.approx(
-        question.point_of_view.to_position().to_np()[:3].tolist()
-    )
+    asked_from = question.point_of_view.to_np()[:3, 0]
+    assert facing_of(camera) == pytest.approx(asked_from / np.linalg.norm(asked_from))
+
+
+def test_a_spatial_card_is_drawn_from_behind_the_two_objects_it_relates(
+    trial: RecordedTrial, scene: World
+) -> None:
+    """
+    The place a question was asked from is wherever the robot stands, as often as not
+    inside its own table, so the camera is stood back from the two objects along the way
+    the question faces, above them, with both in front of it.
+    """
+    question = trial.queries[0].question
+    camera = SideOfAnotherObjectCard().point_of_view(question, scene)
+    stands_at = np.array(camera.position)
+    for related in (question.subject, question.other):
+        towards = scene.compute_forward_kinematics_np(scene.root, related)[:3, 3]
+        assert np.dot(towards - stands_at, facing_of(camera)) > 0
+        assert stands_at[2] > towards[2]
 
 
 def test_a_card_about_what_happened_picks_out_the_object_it_asks_about(
@@ -533,3 +642,64 @@ def test_two_trials_of_one_episode_do_not_write_over_each_other(
         TRIAL_DIRECTORY % 1,
         TRIAL_DIRECTORY % 2,
     }
+
+
+# %% a run that traced its joints
+
+
+def test_the_scene_is_drawn_as_the_run_stood_when_the_query_was_asked(
+    traced_trial: RecordedTrial, artifacts_of: EpisodeArtifacts
+) -> None:
+    """
+    A kept world stands as the run left it, which for a run that sorted a piece is with
+    the arm parked and the piece wherever it ended up; the scene a query is shown
+    against is the one the run stood in when it was asked, read off the trace of its
+    joints, and the world is left as it was found.
+    """
+    world = traced_trial.episode.world
+    trace = traced(traced_trial, artifacts_of)
+    subject = world.get_body_by_name(SUBJECT_NAME)
+    card = PickedUpRecentlyCard()
+    [query] = card.queries_in(traced_trial)
+
+    with card._stood_when_asked(traced_trial, query, artifacts_of) as stood:
+        assert stood is world
+        assert standing_pose(world, subject).to_np()[:3, 3] == pytest.approx(
+            trace.at(query.moment).positions[str(subject.parent_connection.x.name)]
+            * np.array([1.0, 0.0, 0.0])
+        )
+    assert standing_pose(world, subject).to_np()[0, 3] == 0.0
+
+
+def test_a_run_that_traced_no_joints_is_drawn_as_the_episode_kept_its_world(
+    traced_trial: RecordedTrial, artifacts_of: EpisodeArtifacts
+) -> None:
+    world = traced_trial.episode.world
+    card = PickedUpRecentlyCard()
+    [query] = card.queries_in(traced_trial)
+
+    with card._stood_when_asked(traced_trial, query, artifacts_of) as stood:
+        assert stood is world
+        assert (
+            standing_pose(world, world.get_body_by_name(SUBJECT_NAME)).to_np()[0, 3]
+            == 0.0
+        )
+
+
+@needs_a_renderer
+def test_a_run_that_traced_its_joints_shows_what_its_camera_would_have_seen(
+    traced_trial: RecordedTrial, artifacts_of: EpisodeArtifacts, tmp_path: Path
+) -> None:
+    """
+    A run in simulation records no camera, but the twin stood along its trace shows the
+    scene as the run showed it, so its card carries the camera panels the way a run on
+    the robot does.
+    """
+    traced(traced_trial, artifacts_of)
+    card = PickedUpRecentlyCard()
+
+    [written] = card.write(traced_trial, tmp_path, artifacts_of)
+
+    assert PanelKind.CAMERA_FRAME in card.panels
+    assert set(written.panel_paths) == set(card.panels)
+    assert all(path.is_file() for path in written.panel_paths.values())

@@ -65,7 +65,8 @@ class PanelKind(StrEnum):
 
     CAMERA_FRAME = "camera_frame"
     """
-    What the robot's own camera saw at that moment, which only a run on the robot has.
+    What the run's camera saw at that moment: the robot's own camera, or the twin as a
+    run in simulation stood at it.
     """
 
     CAMERA_BEFORE_AND_AFTER = "camera_before_and_after"
@@ -152,13 +153,13 @@ _PANEL_WORDING = {
     ),
     PanelKind.CAMERA_FRAME: PanelWording(
         level="what the camera saw",
-        caption="as the robot's camera saw it at that moment.",
-        when_missing="only a run on the robot records a camera.",
+        caption="as the run's camera saw it at that moment.",
+        when_missing="this run kept neither a camera nor a trace of its joints.",
     ),
     PanelKind.CAMERA_BEFORE_AND_AFTER: PanelWording(
         level="what the camera saw, before and after",
-        caption="as the robot's camera saw it just before and just after.",
-        when_missing="only a run on the robot records a camera.",
+        caption="as the run's camera saw it just before and just after.",
+        when_missing="this run kept neither a camera nor a trace of its joints.",
     ),
 }
 """

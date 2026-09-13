@@ -1,6 +1,6 @@
 """
-Picking an answer out of the twin: the things a query answered drawn in one colour and
-everything else faded behind them, which is what a reader of the paper is shown beside
+Picking an answer out of the twin: the things a query answered drawn in one colour out
+of the scene as the twin states it, which is what a reader of the paper is shown beside
 the query.
 
 The colouring is asserted off the scene the render builds, which needs no graphics at
@@ -182,7 +182,29 @@ def test_the_answer_is_drawn_in_the_highlight_colour(
     assert drawn_colors_of(scene, answered) == (HIGHLIGHT.to_rgba(),)
 
 
-def test_everything_the_answer_does_not_name_is_faded(
+def test_a_body_the_answer_leaves_out_keeps_the_colour_the_twin_states(
+    scene_with_two_things: World,
+) -> None:
+    """
+    Told nothing about a fade, a render draws the scene as the twin states it, so a
+    reader sees the robot and the table in their own colours with only the answer
+    recoloured.
+    """
+    scene = MujocoSim(
+        world=scene_with_two_things,
+        headless=True,
+        region_appearance=RegionAppearance.TRANSPARENT,
+    )
+    answered = body_named(scene_with_two_things, ANSWERED_NAME)
+    SceneRender(world=scene_with_two_things, highlight=HIGHLIGHT).pick_out(
+        scene, [answered]
+    )
+    assert drawn_colors_of(scene, body_named(scene_with_two_things, OTHER_NAME)) == (
+        STATED_COLOR.to_rgba(),
+    )
+
+
+def test_everything_the_answer_does_not_name_is_faded_when_a_fade_is_asked_for(
     scene_with_two_things: World,
 ) -> None:
     """
@@ -356,6 +378,24 @@ def test_a_lit_picture_is_brighter_than_an_unlit_one(
     assert lit.image.mean() > unlit.image.mean()
 
 
+def test_a_drawn_picture_leaves_no_callback_on_the_world(
+    scene_with_two_things: World,
+) -> None:
+    """
+    The scene a picture is drawn from is told about every change of the world through a
+    callback, and the render tears the scene down once the picture is taken; a callback
+    left behind would keep the scene, and its compiled model, alive for as long as the
+    world is, once per picture.
+    """
+    before = list(scene_with_two_things.state.state_change_callbacks)
+
+    render_of(scene_with_two_things).of(
+        [body_named(scene_with_two_things, ANSWERED_NAME)]
+    )
+
+    assert scene_with_two_things.state.state_change_callbacks == before
+
+
 # %% asking for a picture of nothing
 
 
@@ -421,6 +461,58 @@ def test_a_picture_taken_from_a_body_sees_what_stands_in_front_of_it(
         faded=FADED,
     ).of([seen])
     assert drawn.holds(HIGHLIGHT)
+
+
+def heading_of(point_of_view: PointOfView) -> np.ndarray:
+    """
+    The way a point of view faces along the ground, as a unit vector.
+
+    :param point_of_view: The point of view to read.
+    """
+    facing = point_of_view.pose.to_np()[:3, 0] * np.array([1.0, 1.0, 0.0])
+    return facing / np.linalg.norm(facing)
+
+
+def test_a_point_of_view_stood_behind_a_box_still_faces_the_way_it_faced(
+    scene_with_two_things: World,
+) -> None:
+    """
+    Left and right are only left and right from somewhere, so moving the looker to where
+    the box is in view must not turn it.
+    """
+    looker = PointOfView(
+        body=scene_with_two_things.root,
+        pose=HomogeneousTransformationMatrix.from_xyz_rpy(x=0.1, y=0.2, yaw=0.7),
+    )
+    box = SceneRender(world=scene_with_two_things).bounds()
+
+    stood = looker.stood_behind(box)
+
+    assert heading_of(stood) == pytest.approx(heading_of(looker))
+
+
+def test_a_point_of_view_stood_behind_a_box_looks_down_on_it_from_behind(
+    scene_with_two_things: World,
+) -> None:
+    """
+    The looker stands back from the box along the way it faces, above it, and looks at
+    its centre, so the whole box is in front of it and below it.
+    """
+    looker = PointOfView(
+        body=scene_with_two_things.root,
+        pose=HomogeneousTransformationMatrix.from_xyz_rpy(yaw=0.7),
+    )
+    box = SceneRender(world=scene_with_two_things).bounds()
+
+    stood = looker.stood_behind(box)
+
+    pose = stood.pose.to_np()
+    towards_the_centre = box.mean(axis=0) - pose[:3, 3]
+    assert pose[:3, 0] == pytest.approx(
+        towards_the_centre / np.linalg.norm(towards_the_centre)
+    )
+    assert pose[2, 3] > box[1, 2]
+    assert np.dot(heading_of(looker), towards_the_centre) > 0
 
 
 def test_a_point_of_view_stands_where_its_pose_puts_it(

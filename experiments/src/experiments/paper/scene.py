@@ -1,6 +1,6 @@
 """
-What an answer looks like in the twin: the things it names picked out of the scene, with
-everything else faded behind them.
+What an answer looks like in the twin: the things it names picked out of the scene,
+which is otherwise drawn as the twin states it.
 
 The picture half of a query card. A reader shown a query and a table of numbers has to
 take on trust that the answer means anything in the world; shown the same answer drawn
@@ -9,7 +9,7 @@ into the scene it was asked of, they can see that it does.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import cv2
@@ -45,17 +45,6 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 # %% the colours a picture tells an answer apart in
-
-BACKGROUND_COLOR = Color(0.55, 0.56, 0.60, 1.0)
-"""
-What everything else is drawn in: one grey, dark enough that the answer's own colour
-carries and light enough that the shapes around it still read.
-
-Opaque rather than see-through. A scene of a few bodies reads either way, but a real one
--- a robot standing over a board on a table -- drawn see-through shows its far side
-through its near side, and what a reader then makes out is neither the scene nor the
-answer.
-"""
 
 LABEL_COLOR = Color(1.0, 1.0, 1.0, 1.0)
 """
@@ -184,6 +173,25 @@ camera down its own negative z with y up the picture and x across it. Getting th
 leaves every picture facing somewhere the question was not asked from.
 """
 
+UP = np.array([0.0, 0.0, 1.0])
+"""
+Which way is up in the frame a point of view is given in.
+"""
+
+LOOKING_DOWN_BY = np.radians(55.0)
+"""
+How steeply a point of view stood behind what it is asked about looks down on it, in
+radians: enough to see over whatever stands in front, shallow enough that left and right
+still read as sides rather than as up and down the picture.
+"""
+
+STANDING_BACK_AT_LEAST = 0.6
+"""
+How far back from what it is asked about a point of view stands at the least, in metres:
+the pieces a question relates are a few centimetres across, and a looker any farther off
+leaves them a few pixels each.
+"""
+
 
 @dataclass(frozen=True)
 class PointOfView:
@@ -239,6 +247,54 @@ class PointOfView:
         )
         self.body.simulator_additional_properties.append(camera)
         return camera
+
+    def stood_behind(
+        self,
+        bounds: np.ndarray,
+        looking_down_by: float = LOOKING_DOWN_BY,
+        minimum_distance: float = STANDING_BACK_AT_LEAST,
+        distance_factor: float = 1.5,
+    ) -> PointOfView:
+        """
+        This point of view moved to where the given box fills the picture, still facing
+        the way it faces: stood back from the box's centre along its own heading and
+        raised to look down on the box, so what the box holds is seen with its left and
+        right where the question had them.
+
+        A question is asked from wherever the robot happens to stand, which is as often
+        as not inside its own table; the picture is taken from where the two things it
+        relates can be seen.
+
+        :param bounds: The lowest and highest corner of the box, in the frame of
+            :attr:`body`, as a ``(2, 3)`` array.
+        :param looking_down_by: The angle the picture looks down on the box by, in
+            radians.
+        :param minimum_distance: How far back the looker stands at the least, in metres.
+        :param distance_factor: How many times the box's diagonal the looker stands back.
+        """
+        stood = self.pose.to_np()
+        heading = stood[:3, 0] * np.array([1.0, 1.0, 0.0])
+        heading /= np.linalg.norm(heading)
+        centre = bounds.mean(axis=0)
+        distance = (
+            max(float(np.linalg.norm(bounds[1] - bounds[0])), minimum_distance)
+            * distance_factor
+        )
+        position = (
+            centre
+            - heading * distance * np.cos(looking_down_by)
+            + UP * distance * np.sin(looking_down_by)
+        )
+        facing = centre - position
+        facing /= np.linalg.norm(facing)
+        left = np.cross(UP, facing)
+        left /= np.linalg.norm(left)
+        pose = np.eye(4)
+        pose[:3, 0] = facing
+        pose[:3, 1] = left
+        pose[:3, 2] = np.cross(facing, left)
+        pose[:3, 3] = position
+        return replace(self, pose=HomogeneousTransformationMatrix(pose))
 
 
 # %% the picture that comes out
@@ -321,9 +377,9 @@ class SceneRender:
     What the things the answer names are drawn in.
     """
 
-    faded: Color = BACKGROUND_COLOR
+    faded: Optional[Color] = None
     """
-    What everything else is drawn in.
+    What everything else is drawn in, or None to draw it in the colours the twin states.
     """
 
     region_appearance: RegionAppearance = RegionAppearance.TRANSPARENT
@@ -393,7 +449,7 @@ class SceneRender:
             self.pick_out(scene, answers)
             return self._drawn(scene, camera, answers)
         finally:
-            scene.simulator.stop()
+            scene.stop_simulation()
             for own in placed:
                 own.body.simulator_additional_properties.remove(own)
 
@@ -411,7 +467,8 @@ class SceneRender:
         """
         for entity in self.world.kinematic_structure_entities:
             scene.make_visible(entity)
-            scene.recolor(entity, self.faded)
+            if self.faded is not None:
+                scene.recolor(entity, self.faded)
         for answer in answers:
             scene.recolor(answer, self.highlight)
         for singled_out in self.picked_out:

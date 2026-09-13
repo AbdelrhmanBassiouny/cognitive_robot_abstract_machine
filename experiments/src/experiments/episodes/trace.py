@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,7 +21,15 @@ from krrood.exceptions import DataclassException
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
 from semantic_digital_twin.callbacks.callback import StateChangeCallback
 from semantic_digital_twin.world import World
-from typing_extensions import Callable, ClassVar, Dict, List, Optional, Self
+from typing_extensions import (
+    Callable,
+    ClassVar,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Self,
+)
 
 # %% asking a trace for a moment it holds nothing of
 
@@ -90,6 +99,22 @@ class JointPositions:
     Each joint's position, by the joint's full name.
     """
 
+    @classmethod
+    def of(cls, world: World, moment: float = 0.0) -> Self:
+        """
+        Where every joint of the given world stands now.
+
+        :param world: The world to read.
+        :param moment: Seconds into the trial the reading is stamped with.
+        """
+        return cls(
+            moment=moment,
+            positions={
+                str(name): position
+                for name, position in world.state.to_position_dict().items()
+            },
+        )
+
     def restore_into(self, world: World) -> None:
         """
         Put every joint of the given world that this sample holds back where it stood.
@@ -106,6 +131,37 @@ class JointPositions:
                 continue
             world.state[degree_of_freedom.id].position = self.positions[name]
         world.notify_state_change()
+
+
+@contextmanager
+def put_back_afterwards(world: World) -> Iterator[World]:
+    """
+    Put every joint of the world back where it stood before the block once the block
+    ends, whatever the block moved, so a world read at some moment of a trial is left as
+    it was found.
+
+    :param world: The world to put back.
+    """
+    stood = JointPositions.of(world)
+    try:
+        yield world
+    finally:
+        stood.restore_into(world)
+
+
+@contextmanager
+def standing_at(world: World, positions: JointPositions) -> Iterator[World]:
+    """
+    Put every joint of the world where the given sample has it for the length of the
+    block, and back where it stood before afterwards, so the block reads the world as it
+    was at that moment of the trial.
+
+    :param world: The world to stand.
+    :param positions: Where every joint stood at the moment to read the world at.
+    """
+    with put_back_afterwards(world):
+        positions.restore_into(world)
+        yield world
 
 
 @dataclass

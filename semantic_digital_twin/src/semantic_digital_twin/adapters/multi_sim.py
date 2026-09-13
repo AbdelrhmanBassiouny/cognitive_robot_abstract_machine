@@ -1965,6 +1965,24 @@ class MultiSimBuilder(ABC):
         return self._world
 
 
+@dataclass(frozen=True)
+class MeshPart:
+    """
+    One of the meshes a mesh shape is built as, and the colour its file states for it.
+    """
+
+    file_path: str
+    """
+    The file the part's mesh is read from, in a format MuJoCo reads.
+    """
+
+    color: Optional[Color] = None
+    """
+    The colour the mesh file states for the part, or None where it states none and the
+    part is drawn in the colour the shape states.
+    """
+
+
 @dataclass
 class MujocoBuilder(MultiSimBuilder):
     """
@@ -2186,12 +2204,26 @@ class MujocoBuilder(MultiSimBuilder):
             raise MujocoEntityNotFoundError(
                 entity_name=parent_body_name, entity_type=mujoco.mjtObj.mjOBJ_BODY
             )
+        for mujoco_geom in shape.simulator_additional_properties:
+            if isinstance(mujoco_geom, MujocoGeom):
+                geom_props["solimp"] = mujoco_geom.solver_impedance
+                geom_props["solref"] = mujoco_geom.solver_reference
+                geom_props["friction"] = mujoco_geom.friction
+                geom_props["contype"] = mujoco_geom.contype
+                geom_props["conaffinity"] = mujoco_geom.conaffinity
+                geom_props["condim"] = mujoco_geom.contact_dimensionality
+                break
         if geom_props["type"] == mujoco.mjtGeom.mjGEOM_MESH:
-            if not self._parse_geom(geom_props=geom_props):
+            parts = self._mesh_parts(geom_props)
+            if not parts:
                 logger.warning(
                     f"Mesh {shape.mesh} could not be parsed. Skipping geom {geom_props['name']}."
                 )
                 return
+            every_geom_props = [
+                self._geom_props_of_part(geom_props, part, index, len(parts), shape)
+                for index, part in enumerate(parts)
+            ]
         else:
             texture_file_path = geom_props.pop("texture_file_path", None)
             texture_repeat = geom_props.pop("texture_repeat", (1.0, 1.0))
@@ -2202,41 +2234,107 @@ class MujocoBuilder(MultiSimBuilder):
                     texture_repeat=texture_repeat,
                     texture_uniform=texture_uniform,
                 )
-        for mujoco_geom in shape.simulator_additional_properties:
-            if isinstance(mujoco_geom, MujocoGeom):
-                geom_props["solimp"] = mujoco_geom.solver_impedance
-                geom_props["solref"] = mujoco_geom.solver_reference
-                geom_props["friction"] = mujoco_geom.friction
-                geom_props["contype"] = mujoco_geom.contype
-                geom_props["conaffinity"] = mujoco_geom.conaffinity
-                geom_props["condim"] = mujoco_geom.contact_dimensionality
-                break
-        geom_spec = parent_body_spec.add_geom(**geom_props)
-        if geom_spec.type == mujoco.mjtGeom.mjGEOM_BOX and geom_spec.size[2] == 0:
-            geom_spec.type = mujoco.mjtGeom.mjGEOM_PLANE
-            geom_spec.size = [0, 0, 0.05]
-        if geom_spec is None:
-            raise MujocoEntityNotFoundError(
-                entity_name=geom_props["name"],
-                entity_type=mujoco.mjtObj.mjOBJ_GEOM,
-                action="add",
-            )
+            every_geom_props = [geom_props]
+        for part_props in every_geom_props:
+            geom_spec = parent_body_spec.add_geom(**part_props)
+            if geom_spec.type == mujoco.mjtGeom.mjGEOM_BOX and geom_spec.size[2] == 0:
+                geom_spec.type = mujoco.mjtGeom.mjGEOM_PLANE
+                geom_spec.size = [0, 0, 0.05]
+            if geom_spec is None:
+                raise MujocoEntityNotFoundError(
+                    entity_name=part_props["name"],
+                    entity_type=mujoco.mjtObj.mjOBJ_GEOM,
+                    action="add",
+                )
 
-    def _create_stl_from_dae_mesh(
-        self, original_mesh_file_path: str, stl_file_path: str
-    ):
+    def _geom_props_of_part(
+        self,
+        geom_props: Dict[str, Any],
+        part: MeshPart,
+        index: int,
+        count: int,
+        shape: Shape,
+    ) -> Dict[str, Any]:
         """
-        Creates an .stl mesh at the location specified by stl_file_path from the original .dae mesh.
+        The properties of the geom one part of a mesh shape is built as: the shape's
+        own, drawing the part's mesh asset, named after the shape alone where the shape
+        is one part and after the shape and the part's place otherwise, and drawn in
+        the colour the mesh file states for the part where the shape states no colour
+        of its own.
 
-        :param original_mesh_file_path: filepath to the original .dae mesh
-        :param stl_file_path: filepath to save the new .stl mesh to
+        :param geom_props: The properties of the shape's geom, which the part's are
+            copied from.
+        :param part: The part of the mesh the geom draws.
+        :param index: The part's place among the shape's parts, counted from zero.
+        :param count: How many parts the shape is built as.
+        :param shape: The shape being built.
         """
-        logger.info(
-            f"Converting Collada mesh to STL for MuJoCo: {original_mesh_file_path}"
+        part_props = dict(geom_props, meshname=self._register_mesh(part, shape))
+        if count > 1:
+            part_props["name"] = "%s_%d" % (geom_props["name"], index)
+        if part.color is not None and shape.color == Color():
+            opacity = geom_props["rgba"][3]
+            part_props["rgba"] = [part.color.R, part.color.G, part.color.B, opacity]
+        return part_props
+
+    def _register_mesh(self, part: MeshPart, shape: Mesh) -> str:
+        """
+        Add the mesh asset one part of a shape draws to the spec, unless a part of the
+        same file at the same scale already has, and name it.
+
+        :param part: The part whose file becomes the asset.
+        :param shape: The shape the part belongs to, whose scale the asset takes.
+        """
+        mesh_name = os.path.splitext(os.path.basename(part.file_path))[0]
+        mesh_scale = [shape.scale.x, shape.scale.y, shape.scale.z]
+        if not numpy.allclose(mesh_scale, [1.0, 1.0, 1.0]):
+            mesh_name += f"_{'_'.join(map(str, mesh_scale))}"
+        if mesh_name not in [mesh.name for mesh in self.spec.meshes]:
+            mesh = self.spec.add_mesh(name=mesh_name)
+            mesh.file = part.file_path
+            mesh.scale = mesh_scale
+        return mesh_name
+
+    def _parts_of_a_collada_mesh(self, mesh_file_path: str) -> List[MeshPart]:
+        """
+        The parts a Collada file is built as, each written out as STL beside the model's
+        other assets, since MuJoCo reads no Collada: one part per mesh the file holds,
+        with the colour the file states for it, so a robot link whose file colours its
+        parts differently keeps those colours rather than being drawn in one. A part
+        already written by an earlier build into the same asset folder is reused.
+
+        :param mesh_file_path: The Collada file.
+        """
+        logger.info(f"Converting Collada mesh to STL for MuJoCo: {mesh_file_path}")
+        loaded = trimesh.load(mesh_file_path)
+        meshes = loaded.dump() if isinstance(loaded, trimesh.Scene) else [loaded]
+        base_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
+        parts = []
+        for index, mesh in enumerate(meshes):
+            part_name = base_name if len(meshes) == 1 else "%s_%d" % (base_name, index)
+            stl_file_path = os.path.join(self.asset_folder_path, part_name + ".stl")
+            if not os.path.exists(stl_file_path):
+                mesh.export(stl_file_path)
+            parts.append(MeshPart(file_path=stl_file_path, color=self._color_of(mesh)))
+        return parts
+
+    @staticmethod
+    def _color_of(mesh: trimesh.Trimesh) -> Optional[Color]:
+        """
+        The colour a mesh file states for a mesh, or None where it states none.
+
+        :param mesh: The mesh as trimesh loaded it.
+        """
+        visual = mesh.visual
+        if not visual.defined:
+            return None
+        stated = (
+            visual.material.main_color
+            if isinstance(visual, TextureVisuals)
+            else visual.main_color
         )
-        trimesh_mesh = trimesh.load(original_mesh_file_path, force="mesh")
-
-        trimesh_mesh.export(stl_file_path)
+        red, green, blue, alpha = numpy.asarray(stated, dtype=float) / 255.0
+        return Color(float(red), float(green), float(blue), float(alpha))
 
     def _thicken_if_near_planar(self, mesh_file_path: str) -> str:
         """
@@ -2304,50 +2402,38 @@ class MujocoBuilder(MultiSimBuilder):
         self._thickened_mesh_paths[mesh_file_path] = thickened_file_path
         return thickened_file_path
 
-    def _parse_geom(self, geom_props: Dict[str, Any]) -> bool:
+    def _mesh_parts(self, geom_props: Dict[str, Any]) -> List[MeshPart]:
         """
-        Parses the geometry properties for a mesh geom. Adds the mesh to the spec if it doesn't exist.
+        The parts a mesh geom is built as, each a file MuJoCo can read: the mesh's own
+        file, or the parts a Collada file is written out as; a part too flat to hull is
+        thickened. The geom's texture, where it states one, is registered as a material
+        of the spec.
 
-        :param geom_props: The geometry properties to parse.
-        :return: True if the mesh was parsed successfully, False otherwise.
+        :param geom_props: The geometry properties of the mesh geom, whose mesh is taken
+            out of them.
         """
         mesh_entity = geom_props.pop("mesh")
-        if isinstance(mesh_entity, Mesh):
-            mesh_file_path = mesh_entity.filename
-        else:
+        if not isinstance(mesh_entity, Mesh):
             raise NotImplementedError(
                 f"Mesh type {type(mesh_entity)} not supported in Mujoco."
             )
-        mesh_ext = os.path.splitext(mesh_file_path)[1].lower()
-        if mesh_ext == ".dae":
-            # Build output .stl path
-            base_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
-            stl_file_path = os.path.join(self.asset_folder_path, base_name + ".stl")
-
-            # create a .stl mesh from the original .dae mesh, as a replacement. If it not already exists.
-            if not os.path.exists(stl_file_path):
-                self._create_stl_from_dae_mesh(
-                    original_mesh_file_path=mesh_file_path, stl_file_path=stl_file_path
-                )
-            mesh_file_path = stl_file_path
-
-        mesh_file_path = self._thicken_if_near_planar(mesh_file_path)
-
-        mesh_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
-        mesh_scale = [mesh_entity.scale.x, mesh_entity.scale.y, mesh_entity.scale.z]
-        if not numpy.allclose(mesh_scale, [1.0, 1.0, 1.0]):
-            mesh_name += f"_{'_'.join(map(str, mesh_scale))}"
-        if mesh_name not in [mesh.name for mesh in self.spec.meshes]:
-            mesh = self.spec.add_mesh(name=mesh_name)
-            mesh.file = mesh_file_path
-            mesh.scale = mesh_scale
-        geom_props["meshname"] = mesh_name
+        mesh_file_path = mesh_entity.filename
+        if os.path.splitext(mesh_file_path)[1].lower() == ".dae":
+            parts = self._parts_of_a_collada_mesh(mesh_file_path)
+        else:
+            parts = [MeshPart(file_path=mesh_file_path)]
         texture_file_path = geom_props.pop("texture_file_path", None)
         if isinstance(texture_file_path, str):
             geom_props["material"] = self._register_texture_material(
                 texture_file_path=texture_file_path
             )
-        return True
+        return [
+            MeshPart(
+                file_path=self._thicken_if_near_planar(part.file_path),
+                color=part.color,
+            )
+            for part in parts
+        ]
 
     def _register_texture_material(
         self,

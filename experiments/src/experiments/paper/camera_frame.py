@@ -1,10 +1,11 @@
 """
-What the robot's own camera saw while a query was being answered.
+What the run's camera saw while a query was being answered.
 
-The panels of a query card only a run on the robot has: a rendered twin shows what the
-robot took the scene to be, and these show what it was actually looking at while it took
-it to be that -- at the moment the query was asked, or on either side of the event the
-query is about.
+The panels of a query card that show the run rather than the answer: a rendered twin
+shows what the robot took the scene to be, and these show what it was actually looking
+at while it took it to be that -- at the moment the query was asked, or on either side
+of the event the query is about. A run on the robot recorded its camera; a run in
+simulation is shown as the twin stood at those moments.
 """
 
 from __future__ import annotations
@@ -21,12 +22,19 @@ from krrood.exceptions import DataclassException
 from typing_extensions import Tuple
 
 from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
-from experiments.episodes.trace import FramesByMoment, TimedFrame
+from experiments.episodes.trace import (
+    FramesByMoment,
+    JointTrace,
+    TimedFrame,
+    standing_at,
+)
 from experiments.paper.chart import TimelineSpan
 from experiments.montessori.perception.camera import decode_compressed_color_image
 from experiments.montessori.perception.recordings import REFERENCE_FRAME, RecordedCamera
 from experiments.paper.lettering import Face, Lettering
 from experiments.paper.panel import CardPanel
+from experiments.paper.scene import SceneRender
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color
 
 # %% what a run leaves its camera in
@@ -169,8 +177,9 @@ class NoCameraRecordingError(DataclassException):
 
     def suggest_correction(self) -> str:
         return (
-            "Only a run on the robot records its camera, so a simulated episode has no "
-            "camera frame to show and its cards are drawn without that panel."
+            "Only a run on the robot records its camera; a simulated episode is shown "
+            "as the twin stood along its joint trace instead, or without that panel "
+            "where it traced none."
         )
 
 
@@ -457,3 +466,73 @@ class RecordedFramesAround(FramesAround):
         path.parent.mkdir(parents=True, exist_ok=True)
         imageio.imwrite(str(path), self.image)
         return path
+
+
+# %% the frame of a run that kept what its camera saw
+
+
+@dataclass
+class RecordedFrameAt(CardPanel):
+    """
+    The frame a run's own camera took nearest one moment of the trial.
+    """
+
+    frames: FramesByMoment
+    """
+    What the camera saw along the trial, asked for by the moment a frame was taken at.
+    """
+
+    moment: float
+    """
+    Seconds into the trial the frame is wanted for.
+    """
+
+    @property
+    def image(self) -> np.ndarray:
+        """
+        The frame taken nearest the moment, as red, green and blue.
+        """
+        return self.frames.at(self.moment)
+
+    def write(self, path: Path) -> Path:
+        """
+        Leave this frame at the given path.
+
+        :param path: The file it is written to, its directory created if it is not there.
+        :return: ``path``.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        imageio.imwrite(str(path), self.image)
+        return path
+
+
+# %% the frames of a run in simulation, drawn from the twin
+
+
+@dataclass
+class TwinFrames(FramesByMoment):
+    """
+    What a run in simulation showed along the trial, drawn from the twin stood at each
+    sample of the run's joint trace.
+
+    A run in simulation has no camera to record, but it traced where every joint stood,
+    and the twin put back there is the scene as the run showed it at that moment. Each
+    frame is drawn when it is asked for, since drawing one builds a simulation.
+    """
+
+    world: World
+    """
+    The twin the run happened in, which is stood at each sample and put back afterwards.
+    """
+
+    trace: JointTrace
+    """
+    Where every joint stood along the trial.
+    """
+
+    def moments_taken(self) -> np.ndarray:
+        return np.array(self.trace.moments, dtype=float)
+
+    def frame(self, index: int) -> np.ndarray:
+        with standing_at(self.world, self.trace.at(self.trace.moments[index])) as world:
+            return SceneRender(world=world, label_answers=False).of([]).image
