@@ -962,9 +962,14 @@ class NumberOfOwnParts(WorkingMemoryQuestion[int], ABC):
         """
         How many the twin holds, counted off it directly.
 
+        How many links and joints a robot is made of is its own description's to say and
+        no part of setting a scene up, so there is nothing else to count them off.
+        Counted once each, as the answer is: a joint that drives several connections is
+        reached through each of them and is one joint.
+
         :param source: The robot whose body it is.
         """
-        return len(self.parts(source))
+        return len(self.distinct(self.parts(source)))
 
 
 @dataclass
