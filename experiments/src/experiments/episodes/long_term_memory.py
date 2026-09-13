@@ -8,14 +8,14 @@ what was recorded rather than from what is still in the process that recorded it
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.query.query import Query
 from krrood.exceptions import DataclassException
 from krrood.ormatic.data_access_objects.from_dao import FromDataAccessObjectState
 from krrood.ormatic.eql_interface import eql_to_sql
-from typing_extensions import Any, List, Sequence
+from typing_extensions import Any, List, Optional, Sequence
 
 from experiments.episodes.episode import RecordedTrial
 from experiments.experiment_definitions import DEFAULT_CONFIDENCE_LEVEL
@@ -134,3 +134,28 @@ class LongTermMemory:
             metrics=list(metrics),
             confidence_level=confidence_level,
         )
+
+
+# %% the memory of a corpus that is finished recording
+
+
+@dataclass
+class FinishedCorpusMemory(LongTermMemory):
+    """
+    The episodes of a corpus that is finished recording, every trial of it recalled
+    once.
+
+    A corpus is asked once it stands, and every question spanning it is answered from
+    the same trials, so reading the whole corpus again for each asking would read the
+    same rows every time.
+    """
+
+    _every_trial: Optional[List[RecordedTrial]] = field(init=False, default=None)
+    """
+    Every trial of the corpus, once it has been recalled.
+    """
+
+    def recall_every_trial(self) -> List[RecordedTrial]:
+        if self._every_trial is None:
+            self._every_trial = super().recall_every_trial()
+        return self._every_trial

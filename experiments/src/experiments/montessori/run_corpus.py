@@ -29,7 +29,7 @@ from typing_extensions import List, Optional, Protocol, Sequence, Tuple
 
 from experiments.episodes.artifacts import configured_artifact_directory
 from experiments.episodes.episode import Episode, RecordedTrial
-from experiments.episodes.long_term_memory import LongTermMemory
+from experiments.episodes.long_term_memory import FinishedCorpusMemory
 from experiments.montessori.ask_episode import ask_episode, keep_with_the_trial
 from experiments.montessori.record_episode import (
     DATABASE_REFUSED_EXIT_CODE,
@@ -372,17 +372,22 @@ class RecordedCorpus:
     What records each episode.
     """
 
-    @property
-    def memory(self) -> LongTermMemory:
-        """
-        The episodes recorded so far, as the questions reach them.
-        """
-        return LongTermMemory(self.database)
+    memory: FinishedCorpusMemory = field(init=False)
+    """
+    The recorded episodes as the questions reach them, reading the whole corpus once.
+    """
+
+    def __post_init__(self) -> None:
+        self.memory = FinishedCorpusMemory(self.database)
 
     def record(self) -> List[Episode]:
         """
         Record every episode of this corpus, naming each in the manifest as it is
         recorded.
+
+        The world an episode ran in is left to the database once the episode is
+        recorded: a corpus of worlds does not fit in memory beside the run recording the
+        next one, and asking needs only the episode's identifier.
 
         :return: The episodes, in the order they were recorded.
         """
@@ -397,6 +402,7 @@ class RecordedCorpus:
             )
             print(episode.identifier, flush=True)
             self.recorder.record(recording, episode)
+            episode.world = None
             manifest.append(episode)
             episodes.append(episode)
         return episodes
