@@ -26,7 +26,7 @@ changes how `BagFrameAt` finds its frame).
    recorded camera (new, writes an mcap), rosbag process (end-to-end stamps within the
    trial). Regression run over touched modules in progress at the time of writing.
 
-**Next.** Commit, push to `bass`, open the draft PR, label `bug`, session link in body.
-Not run on the robot. Possible follow-ups for the developer: `EpisodeArtifacts.keep_directory`
+**State.** Committed (`584ac5edfc`, `c0cba283ad`), pushed to `bass`, draft PR #361 against
+#265 with the `bug` label. Not run on the robot. Possible follow-ups for the developer: `EpisodeArtifacts.keep_directory`
 now has no caller outside tests; `pickup_demo_real` could join `pickup_demo_mujoco` in
 generate_orm's ignore list (it maps `_SortingRig`/`SortingTrial` as junk tables).
