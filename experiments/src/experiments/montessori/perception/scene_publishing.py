@@ -16,7 +16,7 @@ import logging
 import time
 from dataclasses import dataclass, field, replace
 
-from typing_extensions import List, Optional
+from typing_extensions import FrozenSet, List, Optional
 
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
@@ -220,21 +220,21 @@ class PiecePublisher:
     """
 
     def publish(
-        self, scene: MontessoriScene, resting_on: PrefixedName
+        self, scene: MontessoriScene, resting_on: FrozenSet[PrefixedName]
     ) -> List[MontessoriShape]:
         """
-        Stand every piece one look put on one surface; a piece taken down and not found
-        again is gone for good.
+        Stand every piece one look put on the given surfaces; a piece taken down and not
+        found again is gone for good.
 
         :param scene: What the look found.
-        :param resting_on: What the look calls the surface a piece must rest on to be
+        :param resting_on: What the look calls the surfaces a piece may rest on to be
             stood; a piece on any other surface is left out.
         :return: The pieces stood, in the order the look reported them.
         """
         stood = [
             self.publish_piece(shape)
             for shape in scene.shapes
-            if shape.supporting_surface == resting_on
+            if shape.supporting_surface in resting_on
         ]
         self.taken_down = []
         return stood
@@ -402,16 +402,24 @@ class PerceivedScene:
         """
         return self.look.pipeline.table.height
 
+    @property
+    def surfaces_a_piece_may_rest_on(self) -> FrozenSet[PrefixedName]:
+        """
+        What the look calls the surfaces a piece still to be sorted stands on: the bare
+        table, and the board's own lid, which the sorting demo starts a piece on.
+        """
+        return frozenset({self.look.pipeline.table.name, self.look.pipeline.lid.name})
+
     def perceive(self) -> None:
         """
-        Have the world hold the board and the pieces on the table as the camera finds
-        them now.
+        Have the world hold the board and the pieces to sort as the camera finds them
+        now.
 
         The pieces an earlier look stood are taken down first, so the look is not told
         to expect them where they stood; the board is then looked for by its description
         and stood, or moved to, where it is found; and once the pipeline is handed the
-        board's lid, one look stands every piece resting on the bare table -- each piece
-        found again as the body it already was.
+        board's lid, one look stands every piece resting on a surface pieces are sorted
+        from -- each piece found again as the body it already was.
 
         :raises NoBoardInView: If the world holds no board and none is in view.
         """
@@ -424,10 +432,10 @@ class PerceivedScene:
             period=self.board_search_period,
         )
         self.pieces = self._publisher.publish(
-            self.look.scene(), resting_on=self.look.pipeline.table.name
+            self.look.scene(), resting_on=self.surfaces_a_piece_may_rest_on
         )
         logger.info(
-            "Perceived %s and %d piece(s) on the table: %s.",
+            "Perceived %s and %d piece(s) to sort: %s.",
             self.board.name,
             len(self.pieces),
             ", ".join(self.describe(piece) for piece in self.pieces),

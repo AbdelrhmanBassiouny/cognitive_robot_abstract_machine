@@ -169,7 +169,7 @@ def test_the_belief_stands_every_piece_where_the_reality_has_it(
     )
     for piece in performed.sorting.pieces:
         believed = lab.believed_position_of(piece)
-        real = LAB_PIECE_PLACES[piece.shape_category]
+        real = LAB_PIECE_PLACES[piece.shape_category].middle
         assert float(np.hypot(believed[0] - real.x, believed[1] - real.y)) <= (
             PERCEPTION_TOLERANCE
         ), (piece.shape_category, believed)
