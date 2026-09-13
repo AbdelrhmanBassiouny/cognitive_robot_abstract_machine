@@ -18,7 +18,7 @@ import pytest
 from typing_extensions import Dict, List, Type
 
 from coraplex.datastructures.enums import ExecutionType
-from coraplex.robot_plans.actions.core.insertion import InsertAction
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
 
 from experiments.montessori.pieces import FULL_SIZE_PIECES, KNOWN_PIECES
 from krrood.entity_query_language.factories import an, variable
@@ -1006,7 +1006,7 @@ def test_the_put_down_step_inserts_the_piece_through_its_hole(area):
     [insertion] = [
         node.designator
         for node in put_down.performed.nodes
-        if isinstance(getattr(node, "designator", None), InsertAction)
+        if isinstance(getattr(node, "designator", None), InsertionAction)
     ]
     assert insertion.object_designator is scene.body_of(MontessoriShapeCategory.CUBE)
     assert insertion.target is scene.hole_for(MontessoriShapeCategory.CUBE)

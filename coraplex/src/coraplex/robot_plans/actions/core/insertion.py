@@ -65,7 +65,7 @@ did not work.
 
 
 @dataclass
-class InsertAction(
+class InsertionAction(
     ActionDescription,
     PlaceTuningParameters,
     HasGraspDetectionThreshold,

@@ -21,7 +21,7 @@ from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.misc import MoveToReach
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
-from coraplex.robot_plans.actions.core.insertion import InsertAction
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.motions.robot_body import MoveJointsMotion
 from coraplex.view_manager import ViewManager
@@ -107,28 +107,28 @@ class InsertMontessoriShapeAction(ActionDescription):
     placing_linear_velocity: float = 0.05
     """
     Linear velocity (m/s) of
-    :class:`~coraplex.robot_plans.actions.core.insertion.InsertAction`'s own final descent
+    :class:`~coraplex.robot_plans.actions.core.insertion.InsertionAction`'s own final descent
     onto the release pose, passed straight through to it.
     """
 
     transport_linear_velocity: float = 0.08
     """
     Linear velocity (m/s)
-    :class:`~coraplex.robot_plans.actions.core.insertion.InsertAction` carries the held shape
+    :class:`~coraplex.robot_plans.actions.core.insertion.InsertionAction` carries the held shape
     at, above the hole and before its final descent, passed straight through to it.
     """
 
     release_opening_velocity: float = 0.07
     """
     Finger joint velocity (m/s)
-    :class:`~coraplex.robot_plans.actions.core.insertion.InsertAction` opens the gripper at to
+    :class:`~coraplex.robot_plans.actions.core.insertion.InsertionAction` opens the gripper at to
     release the shape, passed straight through to it.
     """
 
     retract_linear_velocity: Optional[float] = None
     """
     Linear velocity (m/s)
-    :class:`~coraplex.robot_plans.actions.core.insertion.InsertAction` retracts the end
+    :class:`~coraplex.robot_plans.actions.core.insertion.InsertionAction` retracts the end
     effector away from the released shape at, passed straight through to it. ``None``
     leaves the speed unconstrained.
     """
@@ -471,7 +471,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 final_approach_linear_velocity=self.final_approach_linear_velocity,
                 object_friction=self.object_friction,
             )
-            insert_shape: PlanNode = a(InsertAction)(
+            insert_shape: PlanNode = a(InsertionAction)(
                 object_designator=self.montessori_shape.root,
                 target=hole,
                 arm=self.arm,
@@ -495,7 +495,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 final_approach_linear_velocity=self.final_approach_linear_velocity,
                 object_friction=self.object_friction,
             )
-            insert_shape = InsertAction(
+            insert_shape = InsertionAction(
                 self.montessori_shape.root,
                 hole,
                 self.arm,

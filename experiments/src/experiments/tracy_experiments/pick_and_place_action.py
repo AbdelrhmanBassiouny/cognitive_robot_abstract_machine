@@ -1,14 +1,14 @@
 """
-:class:`PickUpActionMujoco`/:class:`PlaceActionMujoco`/:class:`InsertActionMujoco`:
+:class:`PickUpActionMujoco`/:class:`PlaceActionMujoco`/:class:`InsertionActionMujoco`:
 Mujoco-driven siblings of
 :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`/
 :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`/
-:class:`~coraplex.robot_plans.actions.core.insertion.InsertAction`, matching their own
-field interface (``object_designator``, ``arm``, ``grasp_description``/
+:class:`~coraplex.robot_plans.actions.core.insertion.InsertionAction`, matching their
+own field interface (``object_designator``, ``arm``, ``grasp_description``/
 ``target_location``/``target``) so a caller can compose them into a
 :func:`~coraplex.plans.factories.sequential` plan the same way, but with each own leaf
 motion running plain Python (see :meth:`PickUpActionMujoco._run`/
-:meth:`PlaceActionMujoco._run`/:meth:`InsertActionMujoco._run`, wrapped via
+:meth:`PlaceActionMujoco._run`/:meth:`InsertionActionMujoco._run`, wrapped via
 :func:`~coraplex.plans.factories.code`) rather than a Giskard motion mapping.
 
 The real ``PickUpAction``/``PlaceAction`` build their own plan entirely from
@@ -359,9 +359,9 @@ class PlaceActionMujoco(ActionDescription, ManipulatesBodies):
 
 
 @dataclass
-class InsertActionMujoco(ActionDescription, ManipulatesBodies):
+class InsertionActionMujoco(ActionDescription, ManipulatesBodies):
     """
-    :class:`~coraplex.robot_plans.actions.core.insertion.InsertAction`'s own field
+    :class:`~coraplex.robot_plans.actions.core.insertion.InsertionAction`'s own field
     interface, but driven by direct MuJoCo actuator control; see this module's own
     docstring.
 
