@@ -13,7 +13,7 @@ from coraplex.plans.executables import (
 )
 from coraplex.plans.failures import PlanFailure
 from coraplex.plans.plan import Plan
-from coraplex.plans.plan_node import ActionNode, ExecutionBoundaryNode, PlanNode
+from coraplex.plans.plan_node import ActionNode, ExecutionBoundaryNode
 from krrood.entity_query_language.query.match import Match
 
 if TYPE_CHECKING:
@@ -133,63 +133,6 @@ class ActionTrial:
         self._source_versions = None
 
 
-# %% a whole plan whose actions are still described rather than grounded
-
-
-@dataclass
-class UnderspecifiedPlan:
-    """
-    A plan whose actions are stated rather than grounded.
-
-    Each action is a match, and the things those matches are stated in terms of -- the
-    body to pick up, how to hold it, the opening to post it through -- are themselves
-    matches nothing has answered yet. Which of them is still open is what the plan says
-    about itself here; answering them is somebody else's job.
-    """
-
-    root: PlanNode
-    """
-    The root of the plan, whose descendants hold the actions.
-    """
-
-    @property
-    def actions(self) -> List[Match]:
-        """
-        :return: The action this plan's every underspecified node states, in the order
-            the plan reaches them.
-        """
-        return [
-            node.underspecified_action
-            for node in self.root.descendants
-            if isinstance(node, UnderspecifiedNode)
-        ]
-
-    @property
-    def open_descriptions(self) -> List[Match]:
-        """
-        :return: Every description this plan's actions hand over, each once and
-            innermost first, so a description is always reached after the ones it is
-            stated in terms of.
-        """
-        descriptions: List[Match] = []
-        for action in self.actions:
-            for description in action._nested_matches_:
-                if not any(kept is description for kept in descriptions):
-                    descriptions.append(description)
-        return descriptions
-
-
-def underspecified(root: PlanNode) -> UnderspecifiedPlan:
-    """
-    Read a plan as one underspecified whole.
-
-    :param root: The root of the plan, as a plan factory built it.
-    :return: The plan, with the descriptions its actions leave for something else to
-        answer reachable on it.
-    """
-    return UnderspecifiedPlan(root=root)
-
-
 # %% resolving an underspecified action to a candidate that works
 
 
@@ -235,6 +178,14 @@ class UnderspecifiedNode(ExecutionBoundaryNode):
     Held across candidates so they share one copy of the world, rather than each paying
     for its own.
     """
+
+    @property
+    def underspecified_actions(self) -> List[Match]:
+        """
+        :return: The statement this node stands for, which is the one action it states
+            rather than grounds.
+        """
+        return [self.underspecified_action]
 
     @property
     def designator_type(self) -> Type:

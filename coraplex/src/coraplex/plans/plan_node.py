@@ -133,6 +133,33 @@ class PlanNode(PlanEntity):
         return result
 
     @property
+    def underspecified_actions(self) -> List[Match]:
+        """
+        :return: The actions this node states rather than grounds, which is none unless
+            the node stands for a statement.
+        """
+        return []
+
+    @property
+    def open_descriptions(self) -> List[Match]:
+        """
+        :return: Every description the actions stated in this node and its descendants
+            hand over, each once and innermost first, so a description is always reached
+            after the ones it is stated in terms of.
+        """
+        stated = [
+            action
+            for node in [self, *self.descendants]
+            for action in node.underspecified_actions
+        ]
+        descriptions: List[Match] = []
+        for action in stated:
+            for description in action._nested_matches_:
+                if not any(kept is description for kept in descriptions):
+                    descriptions.append(description)
+        return descriptions
+
+    @property
     def path(self) -> List[PlanNode]:
         """
         :return: The ancestors of this node, ordered from the immediate parent

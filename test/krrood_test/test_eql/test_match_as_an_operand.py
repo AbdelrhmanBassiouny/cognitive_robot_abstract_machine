@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import pytest
 
 from krrood.entity_query_language.core.variable import InstantiatedVariable
-from krrood.entity_query_language.factories import a, an
+from krrood.entity_query_language.factories import a
 from krrood.entity_query_language.predicate import symbolic_function
 
 from ..dataset.backend_that_looks_at_the_world import Place, Sighting, StandingOn
@@ -43,7 +43,7 @@ def sightings() -> list[Sighting]:
 
 
 def test_a_relation_given_a_match_is_stated_about_the_variable_it_describes():
-    statement = an(Sighting)()
+    statement = a(Sighting)
 
     stated = StandingOn(statement, TABLE)
 
@@ -51,7 +51,7 @@ def test_a_relation_given_a_match_is_stated_about_the_variable_it_describes():
 
 
 def test_a_relation_given_a_match_is_built_symbolically():
-    statement = an(Sighting)()
+    statement = a(Sighting)
 
     stated = StandingOn(statement, TABLE)
 
@@ -61,7 +61,7 @@ def test_a_relation_given_a_match_is_built_symbolically():
 def test_a_statement_narrowed_by_a_relation_given_the_match_keeps_only_what_it_asserts(
     sightings: list[Sighting],
 ):
-    statement = an(Sighting)().from_(sightings)
+    statement = a(Sighting).from_(sightings)
 
     narrowed = statement.where(StandingOn(statement, LID))
 
@@ -76,7 +76,7 @@ def test_a_symbolic_function_given_a_match_is_stated_about_the_variable_it_descr
     def place_of(sighting: Sighting) -> str:
         return sighting.place
 
-    statement = an(Sighting)()
+    statement = a(Sighting)
 
     called = place_of(statement)
 
@@ -90,7 +90,7 @@ def test_a_statement_narrowed_by_a_function_given_the_match_keeps_only_what_it_c
     def place_of(sighting: Sighting) -> str:
         return sighting.place
 
-    statement = an(Sighting)().from_(sightings)
+    statement = a(Sighting).from_(sightings)
 
     narrowed = statement.where(place_of(statement) == LID.name)
 

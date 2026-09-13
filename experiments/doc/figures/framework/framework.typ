@@ -52,7 +52,7 @@
 // and optionally one `nested` slot at its end. `...` is how coraplex leaves a field open.
 
 #let open-plan = (
-  (text: "underspecified(sequential(["),
+  (text: "sequential(["),
   (text: "  a(PickUpAction)("),
   (text: "    arm=LEFT,"),
   (text: "    object_designator="),
@@ -67,7 +67,7 @@
     lines: ("a(GraspDescription)(", "  approach_direction=...,", "  vertical_alignment=...)"),
   ),
   (text: "  ),"),
-  (text: "  a(InsertAction)("),
+  (text: "  an(InsertAction)("),
   (text: "    object_designator=shape,"),
   (text: "    target="),
   (
@@ -75,7 +75,7 @@
     lines: ("a(ShapeSortingHole)(", "  shape_category=...)", ".from_(board.apertures)"),
   ),
   (text: "  )"),
-  (text: "]))"),
+  (text: "])"),
 )
 
 #let resolved-plan = (
