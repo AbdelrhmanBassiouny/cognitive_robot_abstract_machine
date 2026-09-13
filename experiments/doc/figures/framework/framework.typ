@@ -72,7 +72,7 @@
   (text: "    target="),
   (
     slot: "rules", indent: 6,
-    lines: ("a(ShapeSortingHole)(", "  shape_category=...)", ".from_(board.apertures)"),
+    lines: ("a(ShapeSortingHole)(", "  shape_category=...)", ".from_(board.apertures)", ".where(Admits(hole, shape))"),
   ),
   (text: "  )"),
   (text: "])"),

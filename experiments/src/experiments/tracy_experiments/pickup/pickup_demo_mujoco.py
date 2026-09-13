@@ -1002,6 +1002,20 @@ class SimulatedPickupDemo:
     that it can still be asked afterwards to leave them somewhere.
     """
 
+    def sorting_over(
+        self, scene: PerceivedScene, sorter: ShapeSorter
+    ) -> PerceivedSorting:
+        """
+        The run this demo performs: every piece the look put on the table sorted into
+        the hole of the perceived board it fits through.
+
+        :param scene: The board and the pieces, as the camera finds them.
+        :param sorter: What picks each piece up and lets it go.
+        :return: The run, which a demo stating its plan rather than looking it up
+            answers with one of its own.
+        """
+        return PerceivedSorting(scene=scene, sorter=sorter)
+
     def perform(self) -> None:
         """
         Start the simulation, look, sort every piece the look found, and stop --
@@ -1079,11 +1093,11 @@ class SimulatedPickupDemo:
         context = Context(
             self.lab.belief, self.lab.believed_robot, evaluate_conditions=False
         )
-        self.sorting = PerceivedSorting(
-            scene=PerceivedScene(
+        self.sorting = self.sorting_over(
+            PerceivedScene(
                 world=self.lab.belief, look=self.look, described_board=lab_board()
             ),
-            sorter=MujocoSortingRig(
+            MujocoSortingRig(
                 simulation=simulation,
                 actuators=self.lab.actuators,
                 context=context,
