@@ -122,21 +122,39 @@ def test_every_piece_resting_on_the_table_is_found(
     assert not (Counter(truth.pieces_on_table) - found)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A piece standing on the lid is reported a second time on the table, where "
-        "the table pass rectified it. Owned by the plan item one-detection-per-thing."
-    ),
-)
+TABLE_GHOSTS_STILL_REPORTED: List[str] = ["non_inserted_objects"]
+"""
+The captures where a piece on the lid is still read as one on the table.
+
+What a raised thing hides from the camera is measured off the board as it was detected,
+and the board's own orientation comes from the holes found in its lid. In this capture
+alone the board is reported turned twenty-two degrees from where the other five put it,
+about the same centre, so the stretch of table it is taken to stand in front of is
+turned with it.
+"""
+
+
 def test_only_the_pieces_resting_on_the_table_are_detected_there(
+    request: pytest.FixtureRequest,
     scene: MontessoriScene,
     truth: CaptureTruth,
+    capture: SceneCapture,
     capture_pipeline: MontessoriPerceptionPipeline,
 ) -> None:
     """
     Nothing is reported on the table that is not lying on it.
     """
+    if capture.name in TABLE_GHOSTS_STILL_REPORTED:
+        request.node.add_marker(
+            pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "The board is read as turned away from where it stands, so what it "
+                    "hides is turned with it; owned by the plan item "
+                    "holes-fitted-like-pieces."
+                ),
+            )
+        )
     assert detections_on(scene, capture_pipeline.table.name) == Counter(
         truth.pieces_on_table
     )
