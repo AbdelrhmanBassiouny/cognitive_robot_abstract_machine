@@ -11,6 +11,7 @@ from bastler.stack import PullRequest, Stack
 import bastler.integration_constants
 from bastler.integration_assembly import build_integration
 from bastler.integration_block_record import BlockStanding
+from bastler.integration_carried_pipeline import PIPELINE_PATHS, pipeline_carried_by
 from bastler.integration_report import IntegrationReport
 from bastler.integration_selection import build_branch_name
 from bastler.integration_tips import ReadmittedBranch, ResolutionProvenance, TipStatus
@@ -35,8 +36,73 @@ from .integration_fixtures import (
     build,
     outcome_for,
     publishing,
+    the_pipeline_this_checkout_carries,
     two_colliding_tips,
+    write_into,
 )
+
+RELOCATES_THE_PIPELINE = "relocates-the-pipeline"
+"""
+A tip that merges clean but, once in, carries none of the pipeline - the way a
+``.claude`` -> ``bastler`` relocation branch did.
+"""
+
+
+def carry_the_pipeline_on_the_base(fork_checkout: ForkCheckout) -> None:
+    """
+    Give the upstream base a real copy of the pipeline, so a tip can be judged by
+    whether it takes something out of the tree rather than by a tree that never had it.
+
+    :param fork_checkout: The checkout to commit the pipeline onto.
+    """
+    fork_checkout.git.switch_to(UPSTREAM_BASE)
+    write_into(fork_checkout.project_root, the_pipeline_this_checkout_carries())
+    fork_checkout.run_git("add", "--all")
+    fork_checkout.run_git("commit", "--quiet", "-m", "carry the pipeline")
+    fork_checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
+    fork_checkout.run_git("push", "--quiet", UPSTREAM_REMOTE, UPSTREAM_BASE)
+    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.run_git("fetch", "--quiet", UPSTREAM_REMOTE)
+
+
+def carry_the_pipeline_on_the_pointer(fork_checkout: ForkCheckout) -> None:
+    """
+    Give the pointer branch a real copy of the pipeline, matching a scheduled rebuild's
+    own checkout - which sits on the pointer branch, and never on the upstream base,
+    which does not carry the pipeline at all.
+
+    :param fork_checkout: The checkout to commit the pipeline onto.
+    """
+    fork_checkout.run_git(
+        "checkout",
+        "--quiet",
+        "-B",
+        bastler.integration_constants.POINTER_BRANCH,
+        UPSTREAM_BASE,
+    )
+    write_into(fork_checkout.project_root, the_pipeline_this_checkout_carries())
+    fork_checkout.run_git("add", "--all")
+    fork_checkout.run_git("commit", "--quiet", "-m", "carry the pipeline")
+
+
+def branch_that_relocates_the_pipeline_away(fork_checkout: ForkCheckout) -> None:
+    """
+    Publish :data:`RELOCATES_THE_PIPELINE` as a tip whose own commit removes every
+    pipeline path, without touching anything another tip would collide on.
+
+    :param fork_checkout: The checkout to publish the tip from.
+    """
+    fork_checkout.branch_from(RELOCATES_THE_PIPELINE, UPSTREAM_BASE)
+    fork_checkout.run_git("rm", "--quiet", *PIPELINE_PATHS)
+    fork_checkout.run_git("commit", "--quiet", "-m", "relocate the pipeline")
+    fork_checkout.run_git(
+        "push",
+        "--quiet",
+        "origin",
+        f"{RELOCATES_THE_PIPELINE}:{RELOCATES_THE_PIPELINE}",
+    )
+    fork_checkout.run_git("fetch", "--quiet", "origin")
+
 
 # %% the build branch's own name
 
@@ -68,6 +134,32 @@ def test_the_pointer_moves_to_the_build_that_finished(fork_checkout: ForkCheckou
     assert fork_checkout.git.commit_at(
         bastler.integration_constants.POINTER_BRANCH
     ) == fork_checkout.git.commit_at(A_BUILD_BRANCH)
+
+
+def test_a_build_keeps_the_checkout_s_own_files_when_it_sits_on_the_pointer(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A scheduled rebuild's own checkout sits on the pointer branch, since that is the
+    branch a build's pointer moves. The upstream base never carries the pipeline at
+    all, so a build that reaches no tip restoring it assembles a tree with none of it -
+    which the refusal above does not catch, since nothing here takes the pipeline out
+    of a tree that had it; the tree simply never had it. Moving the pointer's local ref
+    while sitting on it is what hands :class:`maintenance.DetachedCheckout`'s
+    reattachment that tree instead of the checkout's own.
+    """
+    carry_the_pipeline_on_the_pointer(fork_checkout)
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
+    fork_checkout.run_git(
+        "checkout", "--quiet", bastler.integration_constants.POINTER_BRANCH
+    )
+
+    build(
+        fork_checkout,
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
+    )
+
+    assert pipeline_carried_by(fork_checkout.git, "HEAD").can_rebuild
 
 
 # %% merging the tips
@@ -194,6 +286,62 @@ def test_a_tip_conflicting_with_the_base_itself_names_the_base(
     skipped = outcome_for(report, STALE_TIP)
     assert skipped.status is TipStatus.SKIPPED
     assert skipped.attributed_to == UPSTREAM_BASE
+
+
+def test_a_tip_that_would_take_the_pipeline_out_of_the_tree_is_skipped(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A relocation branch merges clean - nothing textual to conflict on - and the tree it
+    produces can no longer run the rebuild that would have produced the next one. That
+    has to be refused the same way a textual collision is, or a scheduled build both
+    destroys the automation and reports success doing it.
+    """
+    carry_the_pipeline_on_the_base(fork_checkout)
+    branch_that_relocates_the_pipeline_away(fork_checkout)
+
+    report = build(
+        fork_checkout,
+        [
+            PullRequest(
+                number=1, head=RELOCATES_THE_PIPELINE, base=UPSTREAM_BASE, draft=False
+            )
+        ],
+    )
+
+    skipped = outcome_for(report, RELOCATES_THE_PIPELINE)
+    assert skipped.status is TipStatus.SKIPPED
+    assert skipped.attributed_to == UPSTREAM_BASE
+    assert skipped.conflicting_paths == PIPELINE_PATHS
+    fork_checkout.git.switch_to(A_BUILD_BRANCH)
+    assert pipeline_carried_by(fork_checkout.git, A_BUILD_BRANCH).can_rebuild
+
+
+def test_a_build_continues_past_a_tip_that_would_remove_the_pipeline(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A build that stopped there would leave nothing to work from, which is the entire
+    thing the branch exists to provide - the same reason a textual collision does not
+    halt it either.
+    """
+    carry_the_pipeline_on_the_base(fork_checkout)
+    branch_that_relocates_the_pipeline_away(fork_checkout)
+    fork_checkout.branch_from(THIRD_TIP, UPSTREAM_BASE)
+
+    report = build(
+        fork_checkout,
+        [
+            PullRequest(
+                number=1, head=RELOCATES_THE_PIPELINE, base=UPSTREAM_BASE, draft=False
+            ),
+            PullRequest(number=2, head=THIRD_TIP, base=UPSTREAM_BASE, draft=False),
+        ],
+    )
+
+    assert outcome_for(report, THIRD_TIP).status is TipStatus.MERGED
+    fork_checkout.git.switch_to(A_BUILD_BRANCH)
+    assert fork_checkout.file_added_by(THIRD_TIP).exists()
 
 
 def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
