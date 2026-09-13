@@ -1,13 +1,15 @@
 """
-:class:`PickUpActionMujoco`/:class:`PlaceActionMujoco`: Mujoco-driven siblings of
+:class:`PickUpActionMujoco`/:class:`PlaceActionMujoco`/:class:`InsertActionMujoco`:
+Mujoco-driven siblings of
 :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`/
-:class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`, matching their own
+:class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`/
+:class:`~coraplex.robot_plans.actions.core.insertion.InsertAction`, matching their own
 field interface (``object_designator``, ``arm``, ``grasp_description``/
-``target_location``) so a caller can compose them into a
+``target_location``/``target``) so a caller can compose them into a
 :func:`~coraplex.plans.factories.sequential` plan the same way, but with each own leaf
 motion running plain Python (see :meth:`PickUpActionMujoco._run`/
-:meth:`PlaceActionMujoco._run`, wrapped via :func:`~coraplex.plans.factories.code`)
-rather than a Giskard motion mapping.
+:meth:`PlaceActionMujoco._run`/:meth:`InsertActionMujoco._run`, wrapped via
+:func:`~coraplex.plans.factories.code`) rather than a Giskard motion mapping.
 
 The real ``PickUpAction``/``PlaceAction`` build their own plan entirely from
 ``MoveToolCenterPointMotion``/``MoveGripperMotion`` designators, each of which ticks
@@ -17,21 +19,21 @@ Giskard's own closed loop live against the world model
 :class:`~coraplex.plans.executables.GiskardExecutable`). That races
 :class:`~semantic_digital_twin.adapters.multi_sim.MujocoSynchronizer`'s own
 physics-thread state sync for a physically simulated robot -- see
-:mod:`~experiments.tracy_experiments.equipment`'s own module docstring. These two
-actions instead reuse :mod:`~experiments.tracy_experiments.trajectory_planning`'s own
+:mod:`~experiments.tracy_experiments.equipment`'s own module docstring. The actions here
+instead reuse :mod:`~experiments.tracy_experiments.trajectory_planning`'s own
 plan-then-execute functions directly: each reach is planned by Giskard against an
 isolated scratch copy of the world, then the resulting trajectory is played back by
 commanding the real MuJoCo actuators.
 
-Unlike ``PickUpAction``/``PlaceAction``, neither action here kinematically attaches or
+Unlike ``PickUpAction``/``PlaceAction``, no action here kinematically attaches or
 detaches the object (no ``AttachNode``/``DetachNode``): the object is held only by real
 MuJoCo contact friction between the fingers throughout -- a kinematically snapped object
 is not left behind by a friction hold's own continuous motion the way an instantaneous
-kinematic detach would otherwise risk. Both actions are generic over any body and arm,
-used the same way for a Montessori shape being sorted into a hole and a cube being
-stacked onto another.
+kinematic detach would otherwise risk. They are generic over any body and arm, used the
+same way for a Montessori shape being sorted into a hole and a cube being stacked onto
+another.
 
-Both actions currently support only a fixed top-down grasp (``grasp_description`` is
+They currently support only a fixed top-down grasp (``grasp_description`` is
 accepted for interface parity with ``PickUpAction``, but its own approach direction and
 vertical alignment are not yet read); see :func:`_finger_midpoint_offset`'s own
 docstring for the geometry this fixed orientation assumes.
@@ -49,6 +51,7 @@ from coraplex.datastructures.grasp import GraspDescription
 from coraplex.plans.factories import code
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.base import ActionDescription
+from coraplex.robot_plans.actions.core.insertion import DEFAULT_HOVER_HEIGHT
 from coraplex.robot_plans.mixins import ManipulatesBodies
 from dataclasses import dataclass
 from experiments.tracy_experiments.real_time_simulation import RealTimeSimulation
@@ -60,6 +63,7 @@ from experiments.tracy_experiments.trajectory_planning import (
 )
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.robots.tracy import Tracy
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Actuator, Body
@@ -352,3 +356,104 @@ class PlaceActionMujoco(ActionDescription, ManipulatesBodies):
         _reach(world, self.sim, self.actuators, self.arm, place_pose)
         set_gripper(self.sim, self.actuators, robot, self.arm, GripperState.OPEN)
         _reach(world, self.sim, self.actuators, self.arm, place_hover)
+
+
+@dataclass
+class InsertActionMujoco(ActionDescription, ManipulatesBodies):
+    """
+    :class:`~coraplex.robot_plans.actions.core.insertion.InsertAction`'s own field
+    interface, but driven by direct MuJoCo actuator control; see this module's own
+    docstring.
+
+    What a place and an insertion do with the actuators is the same reach, descend, open
+    and retreat; what differs is where the release pose comes from. A place is handed
+    one, and this works it out from the opening the body goes through, so the body is
+    released over that opening however the opening stands.
+    """
+
+    object_designator: Body
+    """
+    The body to put through :attr:`target`.
+    """
+
+    target: Aperture
+    """
+    The opening the body goes through, which the release pose is stated in the frame of.
+    """
+
+    arm: Arms
+    """
+    Which arm carries it.
+    """
+
+    sim: RealTimeSimulation
+    """
+    The running real-time simulation to drive.
+    """
+
+    actuators: Dict[str, Actuator]
+    """
+    Every joint's own actuator, keyed by joint name.
+    """
+
+    hover_height: float = DEFAULT_HOVER_HEIGHT
+    """
+    How far above :attr:`target`'s own origin, along its own axis, the body's own centre
+    is let go of.
+    """
+
+    hover_clearance: float = HOVER_CLEARANCE
+    """
+    See :data:`HOVER_CLEARANCE`.
+    """
+
+    finger_hold_clearance: float = GRASP_CLOSE_SWING_CLEARANCE
+    """
+    How far below the fingers' own midpoint a held body's centre sits, so opening with
+    the midpoint that far above the release pose lets the body go with its centre there;
+    see :data:`GRASP_CLOSE_SWING_CLEARANCE`.
+    """
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator]
+
+    @property
+    def release_pose(self) -> Pose:
+        """
+        Where the body's own centre is let go, in the world root frame.
+        """
+        return self.world.transform(
+            Pose.from_xyz_rpy(
+                0.0, 0.0, self.hover_height, reference_frame=self.target.root
+            ),
+            self.world.root,
+        )
+
+    @property
+    def _action_plan(self) -> PlanNode:
+        return code(self._run)
+
+    def _run(self) -> None:
+        world = self.world
+        pose = _top_down_pose_builder(world, self.robot, self.arm)
+
+        released_at = self.release_pose.to_position()
+        insertion_hover = pose(
+            float(released_at.x),
+            float(released_at.y),
+            float(released_at.z) + self.hover_clearance,
+        )
+        release = pose(
+            float(released_at.x),
+            float(released_at.y),
+            float(released_at.z) + self.finger_hold_clearance,
+        )
+
+        _reach(world, self.sim, self.actuators, self.arm, insertion_hover)
+        _reach(world, self.sim, self.actuators, self.arm, release)
+        set_gripper(self.sim, self.actuators, self.robot, self.arm, GripperState.OPEN)
+        _reach(world, self.sim, self.actuators, self.arm, insertion_hover)

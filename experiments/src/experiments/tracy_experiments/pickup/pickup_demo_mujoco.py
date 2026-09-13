@@ -77,7 +77,7 @@ from experiments.montessori.perception.simulated_setup import (
 from experiments.montessori.pieces import SMALLER_PIECES, KnownPieceSet
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
-from experiments.montessori.world import BOARD_SCALE
+from experiments.montessori.world import BOARD_SCALE, solid_lid_away_from
 from experiments.questions.question import QuestionedThings
 from experiments.questions.question_set import QuestionSet
 from experiments.scenarios.trial import TrialOutcome
@@ -98,11 +98,11 @@ from experiments.tracy_experiments.grasp_contact import (
 )
 from experiments.tracy_experiments.montessori.world import TracyMontessoriWorld
 from experiments.tracy_experiments.pick_and_place_action import (
-    GRASP_CLOSE_SWING_CLEARANCE,
+    InsertActionMujoco,
     PickUpActionMujoco,
-    PlaceActionMujoco,
 )
 from experiments.tracy_experiments.pickup.perceived_sorting import (
+    Insertion,
     PerceivedSorting,
     ShapeSorter,
 )
@@ -165,14 +165,63 @@ LAB_PIECE_ROW_X = 0.79
 How far from the robot the tape put the row of pieces, in metres.
 """
 
-LAB_PIECE_PLACES: Dict[MontessoriShapeCategory, PlanarPoint] = {
-    MontessoriShapeCategory.CYLINDER: PlanarPoint(LAB_PIECE_ROW_X, 0.0),
-    MontessoriShapeCategory.TRIANGULAR_PRISM: PlanarPoint(LAB_PIECE_ROW_X, 0.10),
-    MontessoriShapeCategory.RECTANGULAR_PRISM: PlanarPoint(LAB_PIECE_ROW_X, 0.20),
-    MontessoriShapeCategory.CUBE: PlanarPoint(LAB_PIECE_ROW_X, 0.30),
+
+class RestingSurface(StrEnum):
+    """
+    What holds a piece up where it starts.
+    """
+
+    THE_TABLE = "the table"
+    THE_BOARDS_LID = "the board's lid"
+
+
+@dataclass(frozen=True)
+class PiecePlace:
+    """
+    Where a piece starts.
+    """
+
+    middle: PlanarPoint
+    """
+    Where the middle of it stands, in the robot's frame.
+    """
+
+    rests_on: RestingSurface = RestingSurface.THE_TABLE
+    """
+    What holds it up there, which is what settles how high its own origin sits.
+    """
+
+
+CUBE_STARTS_ON_THE_LID = PiecePlace(
+    middle=PlanarPoint(
+        LAB_BOARD_CENTRE.x + solid_lid_away_from(MontessoriShapeCategory.CUBE).x,
+        LAB_BOARD_CENTRE.y + solid_lid_away_from(MontessoriShapeCategory.CUBE).y,
+    ),
+    rests_on=RestingSurface.THE_BOARDS_LID,
+)
+"""
+Where the cube starts: on the board's lid, on the stretch of solid lid furthest from the
+square hole it belongs in (see
+:func:`~experiments.montessori.world.solid_lid_away_from`).
+
+A cube started here is picked up most of a lid's length from where it is posted in, so
+the place it comes from and the place it goes read as two places in every picture of the
+run.
+"""
+
+LAB_PIECE_PLACES: Dict[MontessoriShapeCategory, PiecePlace] = {
+    MontessoriShapeCategory.CYLINDER: PiecePlace(PlanarPoint(LAB_PIECE_ROW_X, 0.0)),
+    MontessoriShapeCategory.TRIANGULAR_PRISM: PiecePlace(
+        PlanarPoint(LAB_PIECE_ROW_X, 0.10)
+    ),
+    MontessoriShapeCategory.RECTANGULAR_PRISM: PiecePlace(
+        PlanarPoint(LAB_PIECE_ROW_X, 0.20)
+    ),
+    MontessoriShapeCategory.CUBE: CUBE_STARTS_ON_THE_LID,
 }
 """
-Where the tape put the middle of each piece, in the robot's frame.
+Where each piece starts: the tape's own row for every piece but the cube, which starts
+on the lid (see :data:`CUBE_STARTS_ON_THE_LID`).
 """
 
 # %% the camera on Tracy's camera link
@@ -431,15 +480,14 @@ class SimulatedLab:
         cls,
         pieces: KnownPieceSet = SMALLER_PIECES,
         board_centre: PlanarPoint = LAB_BOARD_CENTRE,
-        piece_places: Dict[MontessoriShapeCategory, PlanarPoint] = LAB_PIECE_PLACES,
+        piece_places: Dict[MontessoriShapeCategory, PiecePlace] = LAB_PIECE_PLACES,
     ) -> SimulatedLab:
         """
         Build both worlds, with the reality laid out as the lab table was.
 
         :param pieces: The set of pieces standing on the table.
         :param board_centre: Where the board's centre stands, in the robot's frame.
-        :param piece_places: Where the middle of each piece stands, in the robot's
-            frame.
+        :param piece_places: Where each piece starts, in the robot's frame.
         """
         tracy = parse_tracy()
         mount_position, table_top_z = tracy_table_mount_position(
@@ -453,8 +501,17 @@ class SimulatedLab:
         )
         robot = scene.mount_stationary_robot(Tracy, tracy, mount_position, 0.0)
         reality = scene.world
+        surface_tops = {
+            RestingSurface.THE_TABLE: table_top_z,
+            RestingSurface.THE_BOARDS_LID: scene.board.root.collision.as_bounding_box_collection_in_frame(
+                reality.root
+            )
+            .bounding_box()
+            .max_z,
+        }
         for shape in reality.get_semantic_annotations_by_type(MontessoriShape):
-            cls._stand_piece_at(reality, shape, piece_places[shape.shape_category])
+            place = piece_places[shape.shape_category]
+            cls._stand_piece_at(reality, shape, place, surface_tops[place.rests_on])
         cls._park(reality, robot)
 
         apply_montessori_grasp_contact_parameters(
@@ -490,19 +547,25 @@ class SimulatedLab:
 
     @staticmethod
     def _stand_piece_at(
-        world: World, shape: MontessoriShape, place: PlanarPoint
+        world: World, shape: MontessoriShape, place: PiecePlace, surface_top_z: float
     ) -> None:
         """
-        Move a free piece to a place on the table, at the height it already rests at.
+        Move a free piece to where a place puts it, resting on the surface that place
+        names.
 
         :param world: The world holding the piece.
         :param shape: The piece to move.
-        :param place: Where its middle stands, in the world root frame.
+        :param place: Where it starts, in the world root frame.
+        :param surface_top_z: The height of the top of the surface holding it up.
         """
-        connection = shape.root.parent_connection
-        resting_height = float(connection.origin.to_np()[2, 3])
-        connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=place.x, y=place.y, z=resting_height, reference_frame=world.root
+        lowest_local_z = shape.root.collision.combined_mesh.bounds[0][2]
+        shape.root.parent_connection.origin = (
+            HomogeneousTransformationMatrix.from_xyz_rpy(
+                x=place.middle.x,
+                y=place.middle.y,
+                z=surface_top_z - lowest_local_z,
+                reference_frame=world.root,
+            )
         )
         world.notify_state_change()
 
@@ -630,7 +693,7 @@ class MujocoSortingRig(ShapeSorter):
     What keeps every plan this rig performs, for the episode the run records.
     """
 
-    def sort(self, piece: MontessoriShape, release_pose: Pose) -> None:
+    def sort(self, piece: MontessoriShape, insertion: Insertion) -> None:
         plan = sequential(
             [
                 PickUpActionMujoco(
@@ -640,16 +703,13 @@ class MujocoSortingRig(ShapeSorter):
                     sim=self.simulation,
                     actuators=self.actuators,
                 ),
-                # The fingers hold the piece the grasp's swing clearance below their
-                # midpoint, so opening with the midpoint that far above the release pose
-                # lets the piece go with its centre there.
-                PlaceActionMujoco(
+                InsertActionMujoco(
                     object_designator=piece.root,
-                    target_location=release_pose,
+                    target=insertion.hole,
                     arm=PICK_ARM,
                     sim=self.simulation,
                     actuators=self.actuators,
-                    place_hover_clearance=GRASP_CLOSE_SWING_CLEARANCE,
+                    hover_height=insertion.hover_height,
                 ),
             ],
             self.context,
