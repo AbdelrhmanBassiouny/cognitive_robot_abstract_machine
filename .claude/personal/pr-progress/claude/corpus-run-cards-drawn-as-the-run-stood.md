@@ -75,6 +75,14 @@ Plan: make the query cards of the simulated corpus right.
       cast_no_shadows, SceneRender.shadows=False; MujocoBuilder.hangs_below_a_body builds a
       6DoF below a body as no joint at the connection's pose; WorldCannotBeSimulatedError and
       free_joints_below_a_body removed, tests replaced. Pushed, #356 description updated.
-- [ ] figures run 3 launched 23:40 (figures_rerecorded_2026-09-13_run3.log): expect 75 episodes
-      with cards; check a held-piece card and the shadows, then tell the user to redo the
-      figures backup (essential.tgz).
+- [x] figures run 3 died 23:57: my pytest runs write /tmp/scene.xml which the figures process
+      reads back (the race #265 fixed in 362b2b6c7d for CI workers, not in this stack);
+      scratchpad/figures_from_lab.py now sets MujocoSim.default_file_path to its own file.
+- [x] user (from phone, 2026-09-13 ~23:45): camera panel = Tracy's description camera; move
+      panel perpendicular to the dotted line, top-down for on-table moves; sharper pictures.
+      Commit 0cbb28d8ac (tracy_experiments/camera.py, TwinFrames.camera, looking_at_the_move,
+      1600x1200). No pyrender anywhere in the cards -- told the user; framework figure is the
+      only pyrender (render_tracy.py one-off). Pushed, #356 description updated.
+- [ ] figures run 4 launched 2026-09-13 23:58 (figures_rerecorded_2026-09-13_run4.log): check a
+      held-piece card, a pushed-piece pose-change panel (top-down) and a camera panel (Tracy's
+      camera), then tell the user to redo the figures backup (essential.tgz).
