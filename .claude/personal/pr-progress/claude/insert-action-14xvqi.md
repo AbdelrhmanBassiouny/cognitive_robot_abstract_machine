@@ -53,6 +53,33 @@ Replied (r3999715839), **left open** — it forks into three and needs a decisio
 Awaiting the choice between (a) rules as a follow-up, (b) rules in this PR, (c) collapse
 into a polymorphic-target `PlaceAction`.
 
+### CI round 1 (13 failures on f227cebb)
+Two causes, both diagnosed from the `experiments` job log:
+
+1. **5 in `test_montessori_insert_shape_action.py`** — `ValueError: Value cube not in
+   domain of variable Symbolic(InsertShapeAction.target.shape_category, ∅)`. Not this
+   PR's bug: `PolymorphicEnumType` maps back to the abstract `enum.Enum`, which has no
+   members, so `FeatureExtractor._process_attributes` built an empty-domain variable for
+   any entity with an enum field handed to a query the `ProbabilisticBackend` resolves.
+   `InsertAction.target` (a `ShapeSortingHole`) is just the first such entity.
+   Fixed in its own bug PR off main: **#357**, branch
+   `claude/polymorphic-enum-feature-domain-14xvqi`. Verified: the feature type for
+   `shape_category` goes from `enum.Enum` to `MontessoriShapeCategory`; krrood suite
+   2383 passed (2 pre-existing graphviz failures).
+   **#355 stays red until #357 reaches this stack** — #355 is stacked on #265, so
+   landing #357 on main does not reach it on its own.
+
+2. **8 in `test_tracy_pickup_demo_mujoco.py`** — this PR's. `PerceivedScene.perceive`
+   stood only the pieces resting on the bare table, so the cube on the lid was never
+   perceived and never sorted; everything downstream (monitor, trial outcome,
+   containment, recorded plan) cascaded from that. Fixed at `3e9e5b069`:
+   `PiecePublisher.publish` takes the surfaces a piece may rest on, and `PerceivedScene`
+   asks for the table and the lid both. Also fixed a stale `LAB_PIECE_PLACES[...].x`
+   left behind by the `PiecePlace` rename.
+   New test `test_a_piece_on_the_lid_is_stood_along_with_the_ones_on_the_table` runs
+   locally (13 passed). Whether the simulated MuJoCo camera actually detects the cube on
+   the lid can only be answered by CI.
+
 ### Local environment (not committed)
 - `pip install -U uv` then `uv sync --python /usr/bin/python3.12 --extra dev`.
 - No ROS here: a `.pth` in `.venv` loads `rosstub.py` from the scratchpad, which
