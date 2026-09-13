@@ -790,6 +790,33 @@ def test_only_a_candidate_that_failed_is_localised(tmp_path: Path):
     assert str(IntegrationSubcommand.LOCATE_CANDIDATE_FAILURE) not in runner.subcommands
 
 
+# %% telling an owner why a build left their branch out
+
+
+def test_an_unfiltered_rebuild_asks_the_build_to_report_what_it_left_out(
+    tmp_path: Path,
+):
+    """
+    A whole-stack rebuild is the transparency layer: nothing else will ever tell a
+    branch's owner why this pass left it out.
+    """
+    _, runner = rebuild(
+        no_candidate_open(),
+        succeeded(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
+        tmp_path=tmp_path,
+    )
+
+    building = next(
+        invocation
+        for invocation in runner.invoked
+        if str(IntegrationSubcommand.BUILD) in invocation
+    )
+    assert str(CommandLineFlag.REPORT_LEFT_OUT) in building
+
+
 # %% a rebuild asked for one plan
 
 
@@ -836,6 +863,27 @@ def test_a_rebuild_asked_for_one_plan_settles_nothing_and_publishes_nothing(
         str(IntegrationSubcommand.BUILD),
         str(IntegrationSubcommand.OPEN_CANDIDATE),
     ]
+
+
+def test_a_plan_filtered_rebuild_never_asks_the_build_to_report_what_it_left_out(
+    tmp_path: Path,
+):
+    """
+    A plan-filtered build judges a deliberately partial slice of what is in flight, so
+    a branch it leaves out is not the same fact a whole-stack rebuild's comment is - and
+    commenting on it would tell an owner their branch was left out of a build nobody
+    meant to be complete.
+    """
+    _, runner = filtered_rebuild(
+        succeeded(), a_build(), a_reported_candidate(), tmp_path=tmp_path
+    )
+
+    building = next(
+        invocation
+        for invocation in runner.invoked
+        if str(IntegrationSubcommand.BUILD) in invocation
+    )
+    assert str(CommandLineFlag.REPORT_LEFT_OUT) not in building
 
 
 def test_both_the_build_and_its_candidate_are_told_which_plan_was_asked_for(

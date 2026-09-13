@@ -668,7 +668,14 @@ def build_over(
     :return: The status and the document the build printed.
     """
     status = BuildCommand().run(
-        run, argparse.Namespace(restack=False, run_tests=True, plan=[], json=True)
+        run,
+        argparse.Namespace(
+            restack=False,
+            run_tests=True,
+            plan=[],
+            json=True,
+            report_left_out=False,
+        ),
     )
     return status, IntegrationReport.from_json(capsys.readouterr().out)
 
