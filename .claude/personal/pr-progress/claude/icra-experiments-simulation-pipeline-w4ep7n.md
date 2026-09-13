@@ -64,3 +64,52 @@ server started before the fix holds the earlier board's categories as strings in
 and serves them as strings regardless. `PolymorphicEnumType.process_bind_param` could
 raise a named exception when handed a non-member instead of the bare `AttributeError`
 that sent the trace into SQL -- left out to keep #365 to one root cause.
+## episode-audit: the three real stand-still runs checked, and what the check found (2026-09-14, small hours)
+
+**Session.** https://claude.ai/code/session_01DW221gKgpaa45K7i2yx9kf
+
+**Asked.** Health, logic and score check of the three real `scene-stands-still` runs
+of 2026-09-13 22:00-22:54 (`2f37062677`, `d37b712da5` piece-shoved, `6ffe9ec2ef`
+target-hole-moved; 3 trials each, bags kept), a command to check any recording, and
+the commands for the real sorting recordings.
+
+**Built, on #265.** `experiments/scripts/check_episode.py` (module
+`experiments/episodes/audit.py`, main in `experiments/montessori/check_episode.py`):
+`--episode ID...`, `--latest N`, `--real`, `--database-uri`; one finding per check
+(rows, world meshes present, transcript, joint traces, camera recording spanning every
+trial with a frame decoded at each question moment / video, questions, events,
+perturbation carried out and noticed, outcomes alike, scores by bucket naming every
+wrong answer, read back whole through LongTermMemory); exit 1 on any FAILED. Tests
+`test_episode_audit.py` (25) and `test_episode_audit_camera.py` (4, rosbag).
+
+**Fixed, on #265** (each its own commit, each with a failing-then-passing test):
+1. `7fcc2753e6` a recorded world's meshes are kept beside the artifacts before the world
+   goes into the database (`keep_meshes_of` in artifacts.py, called by
+   `RecordsTrialsToADatabase.record`; `MeshFileStorage.is_in_a_root`). Cause: a world
+   fetched from the robot rebuilds every mesh into the /tmp root removed at exit, so all
+   three real episodes' worlds name 65-79 files that are gone -- `recall_trials` and the
+   paper-figures job die in trimesh on them. The three episodes' geometry is
+   unrecoverable; re-record them (the check now passes on a fresh recording).
+2. `240243a5de` (cherry-pick of #367, off main, `bug`): `Mesh._from_json` dropped the
+   colour, so run 3's pieces (reused from the fetched world) answered all-white.
+3. `26e73cea5f` joints ground truth counted a shared DoF once per connection (Tracy 24
+   vs 14) -- `NumberOfOwnDegreesOfFreedom` scored wrong in every trial of the corpus.
+4. `b8c2bd3a93` colours truth compared position by position; same answer scored t/f/t.
+5. `13e2104bcc` transcript "Ran: 1" -> the member's name.
+
+**Found, not fixed (design, for the developer).** A perturbation leaves no motion
+event, on the robot or in simulation (`AnythingMoved` False after "Push the cube 10 cm"
+in every perturbed stands-still trial, sim and real): the person acts between two
+looks and the second look re-stands the body, the monitor ticks once per step. The
+run knows the perturbation and where the piece was before and after the look, so it
+could hand the observer a `TranslationEvent` of what the two looks saw. Also: the
+monitor watches the first piece, not the one the perturbation acts on
+(`watched_category`); `TheSceneIsUndisturbed` ignores the board, so target-hole-moved
+trials read SUCCEEDED; a joint trace samples only on state change, so a still robot
+leaves an empty one (2f37: 0 samples). record_episode's sorting scenarios refuse
+`--execution real` (`runs_on_the_robot` False) -- the real sorting recordings go
+through `pickup_demo_real` (one trial per run).
+
+**The other session** (in ~/bass) reported the same two health findings (meshes, joint
+traces) and offered a row repair of the robot links by body name; not done here.
+
