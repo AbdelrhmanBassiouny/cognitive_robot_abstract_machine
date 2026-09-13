@@ -142,7 +142,31 @@ Not done, deliberately:
 - The figure's resolved plan is still written into the CONFIG by hand; feeding the
   run's own numbers back as JSON needs a run first.
 
+## Review round on #369 (thread r4001095327, handled and resolved)
+
+The ask: the underspecified statement given to the RDR must have full context - access
+to the parent matches it is inside of - and generally, not hard-wired for this case.
+
+Done across the three PRs it belongs to:
+- **#366 `252a5d5bb7`**: every `Match` carries `_stated_by_` (the statement handing it
+  over + the attribute it is stated to, a `StatedBy`) and `_enclosing_statements_`
+  (innermost first). Written in `__call__`, so it is there before anything asks, and
+  `_restated` carries it on. 7 tests in `test_a_description_knows_what_it_is_for.py`.
+- **#368 `72894f888f`**: `HoleRulesBackend.piece_the_hole_is_wanted_for` walks the
+  enclosing statements; `Admits` deleted (it existed only to carry the piece). The
+  backend takes the world so a statement naming a body says which piece too. Dropping
+  `Admits` also untangled shape from size: `fits_through` demands a matching category,
+  which made a *corrected* rule unanswerable; now the rules say the shape and the
+  measurements say which holes of that shape the piece passes through, closest fit
+  first, and the corrigibility test asserts the correction takes effect.
+- **#369 `7c904e11e6`**: the run states
+  `an(InsertionAction)(object_designator=piece.root, target=<hole description>)` and
+  asks for the one slot it leaves open. Figure CONFIG reverted to what it already said;
+  PDF rebuilt. `sorting.py` now imports coraplex robot plans, so that test file needs
+  ROS (CI has it; here the scratchpad stubs).
+
 ## The stack as it stands
 
 #355 -> #359 (stage 1) -> #366 (stage 2) -> #368 (stage 3) -> #369 (stage 4), all
-drafts. Each PR's base is the branch below it.
+drafts. Each PR's base is the branch below it. All three descriptions rewritten after
+the review round.
