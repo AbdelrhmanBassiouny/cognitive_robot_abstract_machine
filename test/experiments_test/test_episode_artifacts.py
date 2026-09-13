@@ -228,6 +228,18 @@ def test_the_transcript_names_the_episode_it_transcribes():
     assert episode.scenario_name in rendered
 
 
+def test_the_transcript_says_where_the_episode_ran_by_name():
+    """
+    An execution type is an enum whose values are numbers, so a transcript saying where
+    the run happened has to name the member rather than print its value.
+    """
+    episode = sorting_episode()
+
+    rendered = Transcript(episode=episode, trials=[]).render()
+
+    assert episode.execution_type.name in rendered
+
+
 def test_the_transcript_is_read_back_from_the_episode_that_kept_it(tmp_path):
     episode = sorting_episode()
     artifacts = ArtifactDirectory(path=tmp_path).open_for(episode)
