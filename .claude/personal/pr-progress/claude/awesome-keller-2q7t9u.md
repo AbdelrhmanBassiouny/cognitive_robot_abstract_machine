@@ -34,11 +34,13 @@ Review round 2 (2 threads): the `._symbolic_expression_` one handled and resolve
 `InsertionAction` one renamed in #355 (`634f0aa708`) and merged here, but left open
 because #355's CI is not green.
 
-#355's base had moved; the merge conflict is resolved and pushed (`48b125cece`).
+#355's base had moved; the merge conflict is resolved and pushed (`48b125cece`), and the
+base was merged again after its camera fix (`e57ed84b08`, up here as `74c4e28c0c`; the
+conflict was `_SortingRig.sort` - this branch's `insertion: Insertion` signature plus the
+base's new `__post_init__`).
 
-#355 CI: 16 failures, all in experiments. Four are red on the base branch too; six more
-follow from the same camera error (#286 is its fix, against the same base); five are the
-insertion ones, now addressed by two bug PRs off main, both merged into #355:
+#355 CI: 16 failures, all in experiments, none of them the stack's own. Five are the
+insertion ones, addressed by two bug PRs off main, both merged into #355:
 - #362 `NoValueAlongAccessPath` - the bare `next` in
   `MappedVariable.apply_mapping_on_external_root` turned into
   `RuntimeError: generator raised StopIteration`.
@@ -47,7 +49,26 @@ insertion ones, now addressed by two bug PRs off main, both merged into #355:
   locally on a board built from measurements (no robot needed):
   `a(InsertionAction)(target=<hole>, arm=...)` now evaluates under ProbabilisticBackend.
 
-The remaining ten are the camera; #286 owns that, against the same base.
+The rest are one defect of the base branch, fixed there on 2026-09-13 (`7aa4013ae8`):
+`CAMERA_LINK_T_OPTICAL` *stated* the offset from Tracy's `camera_link` to the colour
+camera's optical frame, and that offset is the difference between where a description
+puts `camera_link` and where the camera stands, so it moves with every recalibration.
+The committed value holds against the lab's own ROS workspace; CI builds against the
+published `iai_tracy_description`, which puts `camera_link` a twelfth of a turn and most
+of a metre away, so the simulated camera looked 12 degrees flatter: board 52 mm out, two
+of four pieces unfound, nothing through its hole, trial failed. `camera_link_T_optical`
+now derives the offset from the captures (all eight agree to 1e-7 on where the camera
+stood in Tracy's own frame) against the description in hand. Pinned by
+`test_the_camera_stands_where_the_capture_says_wherever_its_mount_is_stated`, which
+states the mount at two places a metre apart; it needs no description, so it runs here.
+
+**Correction to an earlier note: #286 is NOT the fix for those camera failures.** It fits
+the real camera's ~1.7 degree lean out of a measured surface and its own description
+reports the same four failures as ones the base already carries. Nothing of it was merged
+into #265.
+
+Base CI is the only place the other four `test_tracy_pickup_demo_mujoco.py` tests can run
+(they need `iai_tracy_description`), so whether the camera fix clears them is unverified.
 
 ## Stages 2-4 - not started
 
