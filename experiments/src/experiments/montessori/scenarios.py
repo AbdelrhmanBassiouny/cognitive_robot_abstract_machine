@@ -72,7 +72,7 @@ from coraplex.plans.factories import sequential
 from coraplex.plans.plan import Plan
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
-from coraplex.robot_plans.actions.core.insertion import InsertAction
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
 
 from krrood.exceptions import DataclassException
 
@@ -829,7 +829,7 @@ class SortingScene:
         :return: The plan that was performed.
         """
         return self._perform(
-            InsertAction(
+            InsertionAction(
                 self.body_of(category),
                 self.hole_for(category),
                 THE_ARM_THAT_SORTS,

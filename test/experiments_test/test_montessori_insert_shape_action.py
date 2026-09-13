@@ -8,7 +8,7 @@ from coraplex.datastructures.enums import Arms
 from coraplex.execution_environment import simulated_robot
 from coraplex.plans.executables import Executable
 from coraplex.plans.factories import execute_single
-from coraplex.robot_plans.actions.core.insertion import InsertAction
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
 from krrood.entity_query_language.backends import ProbabilisticBackend
 from krrood.patterns.caching import clear_memoization_cache
 
@@ -241,7 +241,9 @@ def _montessori_without_a_robot() -> MontessoriWorld:
     return montessori
 
 
-def _insertion_of(shape: MontessoriShape, montessori: MontessoriWorld) -> InsertAction:
+def _insertion_of(
+    shape: MontessoriShape, montessori: MontessoriWorld
+) -> InsertionAction:
     """
     The insertion :class:`InsertMontessoriShapeAction` builds for ``shape``: through the
     hole of the board that matches it, turned the way the shape states for that hole.
@@ -254,7 +256,7 @@ def _insertion_of(shape: MontessoriShape, montessori: MontessoriWorld) -> Insert
     stated_pose = shape.insertion_pose_relative_to_hole(
         hole, NO_HORIZONTAL_OFFSET, hover_height
     )
-    return InsertAction(
+    return InsertionAction(
         shape.root,
         hole,
         Arms.RIGHT,

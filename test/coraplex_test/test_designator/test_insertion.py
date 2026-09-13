@@ -1,5 +1,5 @@
 """
-Tests for :class:`~coraplex.robot_plans.actions.core.insertion.InsertAction`: what it
+Tests for :class:`~coraplex.robot_plans.actions.core.insertion.InsertionAction`: what it
 states about the world before and after it runs, where it releases the body it carries,
 and that a plan can leave its target open for a query to settle.
 """
@@ -17,7 +17,7 @@ from coraplex.exceptions import ApertureHasNoLandingRegion
 from coraplex.plans.factories import sequential
 from coraplex.robot_plans.actions.core.insertion import (
     DEFAULT_MINIMUM_CONTAINMENT_RATIO,
-    InsertAction,
+    InsertionAction,
 )
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.view_manager import ViewManager
@@ -131,9 +131,9 @@ def test_the_pre_condition_states_that_the_arm_holds_the_body(world_with_two_slo
     arm that inserts it -- stated as a query the world answers, not checked in Python.
     """
     world, robot, body, slots = world_with_two_slots
-    action = InsertAction(body, slots[PostedShape.SQUARE], Arms.LEFT)
+    action = InsertionAction(body, slots[PostedShape.SQUARE], Arms.LEFT)
 
-    pre_condition = InsertAction.pre_condition(
+    pre_condition = InsertionAction.pre_condition(
         action.bound_variables, Context(world, robot), action.designator_parameter
     )
 
@@ -159,9 +159,9 @@ def test_the_post_condition_states_that_the_body_is_behind_the_opening(
     """
     world, robot, body, slots = world_with_two_slots
     slot = slots[PostedShape.SQUARE]
-    action = InsertAction(body, slot, Arms.LEFT)
+    action = InsertionAction(body, slot, Arms.LEFT)
 
-    post_condition = InsertAction.post_condition(
+    post_condition = InsertionAction.post_condition(
         action.bound_variables, Context(world, robot), action.designator_parameter
     )
 
@@ -183,8 +183,8 @@ def test_the_post_condition_holds_only_once_the_body_is_behind_the_opening(
     """
     world, robot, body, slots = world_with_two_slots
     slot = slots[PostedShape.SQUARE]
-    action = InsertAction(body, slot, Arms.LEFT)
-    post_condition = InsertAction.post_condition(
+    action = InsertionAction(body, slot, Arms.LEFT)
+    post_condition = InsertionAction.post_condition(
         action.bound_variables, Context(world, robot), action.designator_parameter
     )
 
@@ -201,10 +201,10 @@ def test_a_slot_with_no_space_behind_it_cannot_say_whether_a_body_went_through(
     world, robot, body, slots = world_with_two_slots
     slot = slots[PostedShape.SQUARE]
     slot.landing_region = None
-    action = InsertAction(body, slot, Arms.LEFT)
+    action = InsertionAction(body, slot, Arms.LEFT)
 
     with pytest.raises(ApertureHasNoLandingRegion):
-        InsertAction.post_condition(
+        InsertionAction.post_condition(
             action.bound_variables, Context(world, robot), action.designator_parameter
         )
 
@@ -222,7 +222,7 @@ def test_the_body_is_released_above_the_opening_along_the_slots_own_axis(
     """
     world, robot, body, slots = world_with_two_slots
     slot = slots[PostedShape.ROUND]
-    action = InsertAction(body, slot, Arms.LEFT, hover_height=0.05)
+    action = InsertionAction(body, slot, Arms.LEFT, hover_height=0.05)
 
     insertion_pose = action.insertion_pose
 
@@ -243,7 +243,7 @@ def test_a_body_that_only_fits_turned_is_released_turned_that_way(
     onto_its_edge = RotationMatrix.from_rpy(
         pitch=math.pi / 2, reference_frame=slot.root
     )
-    action = InsertAction(
+    action = InsertionAction(
         body, slot, Arms.LEFT, hover_height=0.05, target_R_body=onto_its_edge
     )
 
@@ -265,7 +265,7 @@ def test_the_plan_carries_the_body_to_that_release_pose_and_lets_it_go(
     world, robot, body, slots = world_with_two_slots
     slot = slots[PostedShape.ROUND]
     context = Context(world, robot, evaluate_conditions=False)
-    action = InsertAction(
+    action = InsertionAction(
         body, slot, Arms.LEFT, hover_height=0.05, release_opening_velocity=0.07
     )
 
@@ -281,7 +281,7 @@ def test_the_plan_carries_the_body_to_that_release_pose_and_lets_it_go(
     )
 
 
-def _places_of(action: InsertAction, context: Context) -> List[PlaceAction]:
+def _places_of(action: InsertionAction, context: Context) -> List[PlaceAction]:
     """
     Every place the action's own plan is built from.
 
@@ -304,12 +304,12 @@ def test_an_insertion_whose_slot_is_left_open_is_a_match_that_enumerates(
     world_with_two_slots,
 ):
     """
-    ``a(InsertAction)(...)`` with its target left to a query reads as a match, and the
+    ``a(InsertionAction)(...)`` with its target left to a query reads as a match, and the
     generative backend answers it with one insertion per slot and arm it could mean.
     """
     world, robot, body, slots = world_with_two_slots
 
-    query = a(InsertAction)(
+    query = a(InsertionAction)(
         object_designator=body,
         target=variable_from(list(slots.values())),
         arm=...,

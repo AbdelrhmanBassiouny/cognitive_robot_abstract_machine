@@ -99,7 +99,7 @@ from experiments.tracy_experiments.grasp_contact import (
 )
 from experiments.tracy_experiments.montessori.world import TracyMontessoriWorld
 from experiments.tracy_experiments.pick_and_place_action import (
-    InsertActionMujoco,
+    InsertionActionMujoco,
     PickUpActionMujoco,
 )
 from experiments.tracy_experiments.pickup.perceived_sorting import (
@@ -699,7 +699,7 @@ class MujocoSortingRig(ShapeSorter):
                     sim=self.simulation,
                     actuators=self.actuators,
                 ),
-                InsertActionMujoco(
+                InsertionActionMujoco(
                     object_designator=piece.root,
                     target=insertion.hole,
                     arm=PICK_ARM,

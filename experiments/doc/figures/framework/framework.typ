@@ -67,7 +67,7 @@
     lines: ("a(GraspDescription)(", "  approach_direction=...,", "  vertical_alignment=...)"),
   ),
   (text: "  ),"),
-  (text: "  an(InsertAction)("),
+  (text: "  an(InsertionAction)("),
   (text: "    object_designator=shape,"),
   (text: "    target="),
   (
@@ -96,7 +96,7 @@
     lines: ("GraspDescription(", "  FRONT, TOP)"),
   ),
   (text: "  ),"),
-  (text: "  InsertAction("),
+  (text: "  InsertionAction("),
   (text: "    object_designator=cube_1,"),
   (text: "    target="),
   (

@@ -31,7 +31,7 @@ from experiments.paper.run_plan import RunPlan
 from experiments.questions.working_memory import PickedUpRecently
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.pick_and_place_action import (
-    InsertActionMujoco,
+    InsertionActionMujoco,
     PickUpActionMujoco,
 )
 from experiments.tracy_experiments.pickup.pickup_demo_mujoco import (
@@ -317,7 +317,7 @@ def test_every_plan_the_rig_performed_is_recorded_with_when_its_actions_ran(
     items = RunPlan.of(trial).items
     assert {type(item.action) for item in items} == {
         PickUpActionMujoco,
-        InsertActionMujoco,
+        InsertionActionMujoco,
     }
     assert all(0.0 <= item.start and item.duration > 0.0 for item in items)
     assert all(item.start + item.duration <= trial.duration for item in items)
