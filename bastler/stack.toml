@@ -43,9 +43,9 @@ tooling_label = "tooling"      # fork-PR label raising a branch's merge priority
 # Prefixes, matched against a path from the repository root; a trailing "/" is what keeps a
 # directory from also matching a file whose name merely starts with it. They name where the
 # tooling lives on any branch this fork has in flight rather than only where it lives here, since
-# what is classified is another branch's changed files: `.claude/` is where the branches cut
-# before the tooling moved into `bastler/` still keep it, and a pull request carrying that move
-# is a tooling change like any other.
+# what is classified is another branch's changed files: `bastler/` is where an in-flight branch
+# has moved the tooling to, and a pull request carrying that move is a tooling change like any
+# other.
 tooling_paths = [".claude/", ".github/", "bastler/", "test/bastler_test/"]
 shared_paths = [".gitignore", "pytest.ini", "scripts/"]
 # fork_repository: deliberately unset - the fork is derived from `fork_remote`'s URL, so this file
