@@ -50,7 +50,9 @@ class SimulatorRenderer:
 
     _is_running: bool = False
 
-    _close_at_exit: Optional[ShutdownAtExit] = field(default=None, repr=False)
+    _close_at_exit: Optional[ShutdownAtExit] = field(
+        default=None, repr=False, compare=False
+    )
     """
     Closes the renderer when the interpreter exits, for a renderer that is still open.
     """
@@ -289,7 +291,7 @@ class BaseSimulator:
     """
 
     _stop_at_exit: Optional[ShutdownAtExit] = field(
-        init=False, default=None, repr=False
+        init=False, default=None, repr=False, compare=False
     )
     """
     Stops the simulator when the interpreter exits, for a simulator that is still in
