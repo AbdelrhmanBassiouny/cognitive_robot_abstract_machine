@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from scratch_repository import NOTES_BRANCH, ScratchRepository
+from tooling_files import HookScript
 
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
 
@@ -29,9 +30,9 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     :return: The same repository, ready to run save-plan.sh against.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "save-plan.sh",
-        "plan_manifest_tools.py",
+        HookScript.CONFIGURATION,
+        HookScript.SAVE_PLAN,
+        HookScript.PLAN_MANIFEST_TOOLS,
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -55,7 +56,7 @@ def run_save_plan(
     return subprocess.run(
         [
             "bash",
-            str(repository.project_root / ".claude" / "hooks" / "save-plan.sh"),
+            str(repository.hook_script_path(HookScript.SAVE_PLAN)),
             *arguments,
         ],
         cwd=repository.project_root,

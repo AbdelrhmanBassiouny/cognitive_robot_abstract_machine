@@ -30,26 +30,12 @@ from plan_item_mode import (
     Subcommand,
     UnknownModeError,
 )
-from scratch_repository import ScratchRepository
+from scratch_repository import NOTES_PATH, ScratchRepository
+from tooling_files import HookScript
 
-MODE_SCRIPT_FILENAME = Path(plan_item_mode.__file__).name
+PLACEHOLDER_NOTES_CONTENT = "notes\n"
 """
-The script under test, named from the module itself rather than retyped.
-"""
-
-CONFIGURATION_SCRIPT_FILENAME = "resolve-personal-notes-config.sh"
-"""
-The shell configuration the script sources to find the notes branch.
-"""
-
-NOTES_WRITER_SCRIPT_FILENAME = "write-personal-notes-file.sh"
-"""
-The helper ``set`` pushes the personal settings file through.
-"""
-
-PLACEHOLDER_NOTES_PATH = ".claude/personal/cram-notes.md"
-"""
-A file to give the scratch notes branch, which cannot be published empty.
+Something to give the scratch notes branch, which cannot be published empty.
 """
 
 # %% fixtures
@@ -65,14 +51,16 @@ def mode_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
     :return: The same repository, ready to resolve a mode in.
     """
     scratch_repository.install_hook_scripts(
-        CONFIGURATION_SCRIPT_FILENAME,
-        NOTES_WRITER_SCRIPT_FILENAME,
-        MODE_SCRIPT_FILENAME,
-        Location.COMMITTED_DEFAULTS.path.name,
+        HookScript.CONFIGURATION,
+        HookScript.WRITE_NOTES_FILE,
+        HookScript.PLAN_ITEM_MODE,
+    )
+    scratch_repository.install_hooks_directory_file(
+        Location.COMMITTED_DEFAULTS.path.name
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
-    scratch_repository.publish_notes_branch({PLACEHOLDER_NOTES_PATH: "notes\n"})
+    scratch_repository.publish_notes_branch({NOTES_PATH: PLACEHOLDER_NOTES_CONTENT})
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
 
@@ -90,7 +78,7 @@ def run_mode(
     return subprocess.run(
         [
             "python3",
-            str(repository.project_root / ".claude" / "hooks" / MODE_SCRIPT_FILENAME),
+            str(repository.hook_script_path(HookScript.PLAN_ITEM_MODE)),
             *arguments,
         ],
         cwd=repository.project_root,
@@ -166,10 +154,12 @@ def test_an_unreachable_notes_branch_still_resolves_to_the_default(
     setting is unset, not an error.
     """
     scratch_repository.install_hook_scripts(
-        CONFIGURATION_SCRIPT_FILENAME,
-        NOTES_WRITER_SCRIPT_FILENAME,
-        MODE_SCRIPT_FILENAME,
-        Location.COMMITTED_DEFAULTS.path.name,
+        HookScript.CONFIGURATION,
+        HookScript.WRITE_NOTES_FILE,
+        HookScript.PLAN_ITEM_MODE,
+    )
+    scratch_repository.install_hooks_directory_file(
+        Location.COMMITTED_DEFAULTS.path.name
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")

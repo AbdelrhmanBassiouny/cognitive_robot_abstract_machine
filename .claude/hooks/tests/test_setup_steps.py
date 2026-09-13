@@ -32,7 +32,8 @@ from setup_steps import (
     resolve_repository,
 )
 
-from scratch_repository import SCRUBBED_ENVIRONMENT_PREFIXES, ScratchRepository
+from scratch_repository import SCRUBBED_VARIABLE_PREFIXES, ScratchRepository
+from tooling_files import HookScript
 
 PLAN_DASHBOARD_DIRECTORY = (
     Path(setup_steps.__file__).parent.parent / "skills" / "plan-dashboard"
@@ -49,8 +50,6 @@ FORK_REMOTE_URL = f"https://github.com/{FORK.full_name}.git"
 RESOLVE_CONFIG_SCRIPT = (
     Path(setup_steps.__file__).parent / "resolve-personal-notes-config.sh"
 )
-
-SETUP_STEPS_SCRIPT_NAME = "setup_steps.py"
 
 
 @pytest.fixture
@@ -405,13 +404,8 @@ def test_running_the_script_prints_the_steps_for_its_own_clone(
     """
     The script resolves the clone it lives in, not the caller's working directory.
     """
-    clone_with_fork_remote.install_hook_scripts(SETUP_STEPS_SCRIPT_NAME)
-    script = (
-        clone_with_fork_remote.project_root
-        / ".claude"
-        / "hooks"
-        / SETUP_STEPS_SCRIPT_NAME
-    )
+    clone_with_fork_remote.install_hook_scripts(HookScript.SETUP_STEPS)
+    script = clone_with_fork_remote.hook_script_path(HookScript.SETUP_STEPS)
     result = subprocess.run(
         [sys.executable, str(script)],
         cwd=clone_with_fork_remote.project_root.parent,
@@ -420,7 +414,7 @@ def test_running_the_script_prints_the_steps_for_its_own_clone(
         env={
             name: value
             for name, value in os.environ.items()
-            if not name.startswith(SCRUBBED_ENVIRONMENT_PREFIXES)
+            if not name.startswith(SCRUBBED_VARIABLE_PREFIXES)
         },
     )
     assert result.returncode == 0, result.stderr

@@ -69,22 +69,11 @@ from typing import Any, ClassVar, Protocol
 
 import yaml
 
+from tooling_files import HOOKS_DIRECTORY, HookScript, PLANS_DIRECTORY
+
 GITHUB_API_ROOT = "https://api.github.com"
 """
 Where pull requests are created, overridable for a GitHub Enterprise host.
-"""
-
-HOOKS_DIRECTORY = ".claude/hooks"
-"""
-Where this repository keeps the scripts that read and write personal-notes data.
-"""
-
-PLANS_DIRECTORY = ".claude/personal/plans"
-"""
-Where plans live on the personal-notes branch.
-
-Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shell half of
-the same tooling; a test holds the two equal so the mirror cannot drift.
 """
 
 ITEM_FIELD_INDENT = "    "
@@ -99,35 +88,6 @@ What opens an item block, the list marker its first field sits behind.
 
 
 # %% the vocabulary a plan manifest is written in
-
-
-class HookScript(StrEnum):
-    """
-    The hook scripts this module drives, named once so a caller - a test installing them
-    into a scratch layout, or this module invoking one - never spells a filename itself.
-    """
-
-    CONFIGURATION = "resolve-personal-notes-config.sh"
-    """
-    Resolves the personal-notes remote and branch, and fetches it.
-    """
-
-    SAVE_PLAN = "save-plan.sh"
-    """
-    Pushes an edited manifest and roadmap to the personal-notes branch.
-    """
-
-    PLAN_ITEM_BOOTSTRAP = "plan_item_bootstrap.py"
-    """
-    This module, which a caller invokes by path.
-    """
-
-    @property
-    def path(self) -> str:
-        """
-        The script's path from the project root.
-        """
-        return f"{HOOKS_DIRECTORY}/{self.value}"
 
 
 class PlanDocument(StrEnum):
