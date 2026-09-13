@@ -16,9 +16,18 @@ Plan: make the query cards of the simulated corpus right.
       link below the robot root (the 1 kg massless frames were uncompensated) and
       exclude_self_collision applied too -- without both, the unused arm sagged out of park
 - [x] commit round 2 (7c4caf7d0b), pushed, #356 description updated (draft)
+- [x] film camera frames the world's own table top (WorkspaceSurface.corners; TABLE_BOUNDS
+      removed), commit 481c4f190e, pushed, #356 description updated
+- [x] lab DB: backup montessori_sorting_results_before_instructions_column_2026-09-13.dump,
+      then ALTER TABLE "RecordedTrialDAO" ADD COLUMN instructions_carried_out JSON NOT NULL
+      DEFAULT '[]'::json (user asked for it 2026-09-13)
+- [ ] re-recording the corpus on the lab DB, launched 2026-09-13 17:12 detached:
+      scratchpad/rerecord_then_figures.sh -> ~/episode-artifacts/corpus_rerecord_2026-09-13.log,
+      manifest corpus_episodes_rerecorded_2026-09-13.txt, status rerecord_status_2026-09-13.txt,
+      then figures_from_lab.py -> figures_rerecorded_2026-09-13.log (writes experiments/doc/figures)
+- [ ] once done: check a scene card of a re-recorded episode shows the idle arm parked, report
+- rehearsal cluster on port 55432 stopped 2026-09-13
 
-Open points for the user: film camera (SceneRecording._camera_watching_the_scene) frames the
-constant TABLE_BOUNDS, wrong for Tracy's table -> corpus videos mis-framed (not fixed);
-lab DB lacks RecordedTrialDAO.instructions_carried_out (#265) - ALTER TABLE before recording
-again; existing corpus recordings still hold the stretched unused arm in their traces, only a
-re-recording removes it from the cards.
+Open point for the user: the 75 earlier simulated episodes (manifest corpus_episodes.txt,
+stretched idle arm in their traces) stay in the lab DB beside the re-recorded ones, so the
+figures count both until they are removed (delete_smoke_episodes.py is the pattern).
