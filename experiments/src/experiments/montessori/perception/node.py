@@ -199,17 +199,26 @@ class MontessoriPerceptionNode(RepeatedLook):
         :meth:`read_with` handed over another pipeline was taken through the old one,
         and serving it would answer a request with what that pipeline made of the scene.
 
+        A look that raises still clears its own "under way" mark, so a wait for a scene
+        fails with :class:`~experiments.montessori.perception.exceptions.NoSceneAvailable`
+        once its timeout passes rather than believing a look is forever still under way
+        and never giving up.
+
         :param frame: The look, in the pipeline's own reference frame.
         :return: What the look found.
+        :raises Exception: Whatever the pipeline's own look raised.
         """
         pipeline = self.pipeline
         with self._lock:
             self._look_under_way_since = time.monotonic()
             if pipeline is self.pipeline:
                 self._frame = frame
-        scene = pipeline.detect(frame)
+        try:
+            scene = pipeline.detect(frame)
+        finally:
+            with self._lock:
+                self._look_under_way_since = None
         with self._lock:
-            self._look_under_way_since = None
             if pipeline is self.pipeline:
                 self._scene = scene
         return scene

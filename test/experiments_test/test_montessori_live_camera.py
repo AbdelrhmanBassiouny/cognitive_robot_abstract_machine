@@ -546,3 +546,64 @@ def test_a_look_begun_through_a_pipeline_since_replaced_is_not_kept(node: Node):
     assert perception.pipeline is handed_over
     with pytest.raises(NoSceneAvailable):
         perception.wait_for_scene(A_SHORT_WAIT)
+
+
+# %% a look that fails still lets a later wait time out
+
+
+@dataclass
+class _PipelineThatFailsToDetect(MontessoriPerceptionPipeline):
+    """
+    A pipeline whose look always fails, as a real one can on a picture it cannot make
+    sense of.
+    """
+
+    def detect(self, frame: RgbdFrame, request: SceneRequest = SceneRequest()):
+        raise RuntimeError("the look failed")
+
+
+def _wait_for_scene_capturing_the_outcome(
+    perception: MontessoriPerceptionNode, outcome: List[BaseException]
+) -> None:
+    try:
+        outcome.append(perception.wait_for_scene(A_SHORT_WAIT))
+    except NoSceneAvailable as error:
+        outcome.append(error)
+
+
+def test_a_look_that_fails_lets_a_later_wait_time_out_instead_of_hanging_forever(
+    node: Node,
+):
+    """
+    A look that raises must not leave the node believing a look is still under way
+    forever -- that would make every later wait for a scene keep pushing its deadline
+    out and never give up.
+    """
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+    read_with_now = perception.pipeline
+    perception.read_with(
+        _PipelineThatFailsToDetect(
+            table=read_with_now.table,
+            lid=read_with_now.lid,
+            reference_frame=read_with_now.reference_frame,
+            world=read_with_now.world,
+            pieces=read_with_now.pieces,
+        )
+    )
+    frame = SceneCapture.load(A_LOOK).to_frame()
+
+    with pytest.raises(RuntimeError):
+        perception.look_at(frame)
+
+    outcome: List[BaseException] = []
+    waiting = threading.Thread(
+        target=_wait_for_scene_capturing_the_outcome,
+        args=(perception, outcome),
+        daemon=True,
+    )
+    waiting.start()
+    waiting.join(timeout=A_SHORT_WAIT * 10)
+
+    assert not waiting.is_alive()
+    assert len(outcome) == 1
+    assert isinstance(outcome[0], NoSceneAvailable)
