@@ -245,6 +245,11 @@ def to_json(obj: Union[SubclassJSONSerializer, Any], **kwargs) -> JSON_RETURN_TY
         if json_type is not None:
             return obj
 
+    # A member of an enum built on a leaf type, a StrEnum for one, is a leaf as well;
+    # written as the leaf it would be read back as a bare value rather than the member.
+    if isinstance(obj, enum.Enum):
+        return EnumJSONSerializer.to_json(obj, **kwargs)
+
     if isinstance(obj, (leaf_types)):
         return obj
 
