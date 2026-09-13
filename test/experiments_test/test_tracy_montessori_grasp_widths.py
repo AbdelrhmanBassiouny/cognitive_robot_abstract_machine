@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.tracy_experiments.montessori.grasp_widths import (
+    CYLINDER_CLOSE_SETPOINT,
     DEFAULT_CLOSE_SETPOINT,
     RECTANGULAR_PRISM_CLOSE_SETPOINT,
     GraspCloseTable,
@@ -24,9 +25,6 @@ def test_a_shape_without_an_override_gets_the_default_setpoint():
 
     assert table.setpoint_for(MontessoriShapeCategory.CUBE) == DEFAULT_CLOSE_SETPOINT
     assert (
-        table.setpoint_for(MontessoriShapeCategory.CYLINDER) == DEFAULT_CLOSE_SETPOINT
-    )
-    assert (
         table.setpoint_for(MontessoriShapeCategory.TRIANGULAR_PRISM)
         == DEFAULT_CLOSE_SETPOINT
     )
@@ -38,6 +36,15 @@ def test_the_rectangular_prism_is_closed_further_than_the_default():
     setpoint = table.setpoint_for(MontessoriShapeCategory.RECTANGULAR_PRISM)
 
     assert setpoint == RECTANGULAR_PRISM_CLOSE_SETPOINT
+    assert setpoint > DEFAULT_CLOSE_SETPOINT
+
+
+def test_the_cylinder_is_closed_further_than_the_default():
+    table = GraspCloseTable()
+
+    setpoint = table.setpoint_for(MontessoriShapeCategory.CYLINDER)
+
+    assert setpoint == CYLINDER_CLOSE_SETPOINT
     assert setpoint > DEFAULT_CLOSE_SETPOINT
 
 

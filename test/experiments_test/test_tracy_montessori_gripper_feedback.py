@@ -6,14 +6,26 @@ knuckle joint position alone.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
+import pytest
+
+rclpy = pytest.importorskip("rclpy")
+
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import JointState
+from typing_extensions import Callable, Iterator
+
+import experiments.tracy_experiments.montessori.gripper_feedback as gripper_feedback
 from coraplex.datastructures.enums import Arms
 from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
     RECLOSE_SETPOINT,
     GraspVerdict,
     GripperClosure,
+    GripperJointStateListener,
     GripperSlipEvent,
     LiveGraspGuard,
     SlipDetector,
@@ -194,3 +206,87 @@ def test_gripper_slip_event_is_a_detection_event_for_the_carried_body():
     assert event.tracked_object is body
     assert event.with_object is None
     assert event.timestamp.isoformat()
+
+
+# %% the listener actually receives from a hardware-published joint-state topic
+
+ARRIVAL_TIMEOUT = 5.0
+"""
+How long a test waits for a message to cross the middleware, in seconds.
+"""
+
+PUBLISH_PERIOD = 0.05
+"""
+How often a test re-publishes while it waits, in seconds.
+"""
+
+TEST_ROS_DOMAIN_ID = 89
+"""
+DDS domain this test's node talks on, isolated from the robot's own domain (2, discovery
+range SUBNET) -- the exact topic name under test, ``/left_gripper/joint_states``, is
+shared with the physical gripper's own live driver, and publishing on it in the robot's
+own domain would be indistinguishable, to any node on the network, from a real command.
+"""
+
+
+@pytest.fixture(scope="module")
+def ros() -> Iterator[None]:
+    rclpy.init(domain_id=TEST_ROS_DOMAIN_ID)
+    yield
+    rclpy.shutdown()
+
+
+@pytest.fixture
+def node(ros: None) -> Iterator[Node]:
+    node = rclpy.create_node("gripper_feedback_test")
+    yield node
+    node.destroy_node()
+
+
+def spin_until(node: Node, publish: Callable[[], None], arrived: Callable[[], bool]):
+    """
+    Re-publish and spin until what a test waits for has arrived.
+
+    :raises TimeoutError: If it never does.
+    """
+    deadline = time.monotonic() + ARRIVAL_TIMEOUT
+    while time.monotonic() < deadline:
+        publish()
+        rclpy.spin_once(node, timeout_sec=PUBLISH_PERIOD)
+        if arrived():
+            return
+    raise TimeoutError(f"nothing arrived within {ARRIVAL_TIMEOUT} s")
+
+
+def test_the_listener_reads_a_knuckle_position_published_at_hardware_qos(node: Node):
+    """
+    A gripper's own joint-state driver publishes at sensor-data quality of service (best
+    effort), the same as the camera streams read by
+    :class:`~experiments.montessori.perception.live_camera.LiveCamera`.
+
+    A listener
+    subscribing at the default reliable profile never receives from a best-effort
+    publisher at all -- the two endpoints are reported as an incompatible QoS pairing at
+    discovery and are never matched -- which is what left a real run's
+    :attr:`~experiments.tracy_experiments.montessori.gripper_feedback.
+    GripperJointStateListener.latest_closure` raising
+    :class:`~experiments.tracy_experiments.montessori.gripper_feedback.
+    NoGripperJointStateError` five seconds after the gripper had already stalled onto
+    the piece.
+    """
+    side = gripper_feedback._ARM_SIDES[Arms.LEFT]
+    topic = gripper_feedback._GRIPPER_JOINT_STATE_TOPIC_TEMPLATE.format(side=side)
+    knuckle_joint = gripper_feedback._KNUCKLE_JOINT_TEMPLATE.format(side=side)
+    publisher = node.create_publisher(JointState, topic, qos_profile_sensor_data)
+
+    def publish() -> None:
+        message = JointState()
+        message.name = [knuckle_joint]
+        message.position = [0.42]
+        publisher.publish(message)
+
+    listener = GripperJointStateListener(node=node, arm=Arms.LEFT)
+
+    spin_until(node, publish, lambda: listener.has_reading)
+
+    assert listener.latest_closure == GripperClosure(knuckle_position=0.42)

@@ -3,10 +3,10 @@ Per-shape close targets for Tracy's Robotiq grippers.
 
 :mod:`~experiments.tracy_experiments.robotiq_gripper` drives the physical gripper to a
 single fixed :class:`~experiments.tracy_experiments.robotiq_gripper.FingerSetpoint`
-(``0`` fully open, ``0.5`` "closed") for every grasp. ``0.5`` holds the cube, cylinder
-and triangular prism but not the thin rectangular prism, which needs the fingers driven
-further in before they touch it. This module keeps that one number where it can be
-looked up and overridden per
+(``0`` fully open, ``0.5`` "closed") for every grasp. ``0.5`` holds the cube and
+triangular prism but not the thin rectangular prism or the cylinder, which each need
+the fingers driven further in before they touch. This module keeps that one number
+where it can be looked up and overridden per
 :class:`~experiments.montessori.semantics.MontessoriShapeCategory`, so the real
 Montessori demo can size each close to the piece it is about to grasp.
 
@@ -34,7 +34,7 @@ Equal to :attr:`~experiments.tracy_experiments.robotiq_gripper.FingerSetpoint.CL
 the value the demo drove every grasp to before this module existed.
 """
 
-RECTANGULAR_PRISM_CLOSE_SETPOINT = 0.6
+RECTANGULAR_PRISM_CLOSE_SETPOINT = 0.65
 """
 Close setpoint for the rectangular prism, driven further in than
 :data:`DEFAULT_CLOSE_SETPOINT` because the piece is too thin for the fingers to reach at
@@ -45,8 +45,15 @@ the fingers still close on air, lower it if they shove the piece aside before bo
 touch.
 """
 
+CYLINDER_CLOSE_SETPOINT = 0.58
+"""
+Close setpoint for the cylinder, driven further in than :data:`DEFAULT_CLOSE_SETPOINT`
+so both pads reach it before the close stalls.
+"""
+
 SHAPE_CLOSE_SETPOINTS: Mapping[MontessoriShapeCategory, float] = {
     MontessoriShapeCategory.RECTANGULAR_PRISM: RECTANGULAR_PRISM_CLOSE_SETPOINT,
+    MontessoriShapeCategory.CYLINDER: CYLINDER_CLOSE_SETPOINT,
 }
 """
 Close setpoint per shape category that needs one other than

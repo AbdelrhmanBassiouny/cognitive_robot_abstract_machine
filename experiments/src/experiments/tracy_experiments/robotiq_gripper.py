@@ -126,7 +126,7 @@ class FingerSetpoint(float, Enum):
     Fully open.
     """
 
-    CLOSED = 0.5
+    CLOSED = 0.55
     """
     Fully closed.
     """

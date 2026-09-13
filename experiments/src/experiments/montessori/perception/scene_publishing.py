@@ -27,6 +27,7 @@ from experiments.montessori.perception.detections import (
 from experiments.montessori.perception.exceptions import NoBoardInView
 from experiments.montessori.perception.imagination import piece_mesh
 from experiments.montessori.perception.scene_source import (
+    FixedScene,
     MontessoriSceneSource,
     RepeatedLook,
 )
@@ -38,6 +39,7 @@ from experiments.montessori.semantics import (
     MontessoriShapeCategory,
     ShapeSortingBoard,
 )
+from krrood.entity_query_language.factories import a, entity, in_, the, variable
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -179,6 +181,49 @@ class BoardPublisher:
 # %% the pieces
 
 
+def best_shape_of_each_category(
+    scene: MontessoriScene, resting_on: FrozenSet[PrefixedName], world: World
+) -> List[DetectedMontessoriShape]:
+    """
+    The one piece of each shape a look found resting on the given surfaces.
+
+    The set a look is told stands there holds exactly one piece of every shape it
+    contains, so where a look reports two sightings of the same shape it has mistaken
+    some other place for it. Which sighting is kept is asked of the look itself, as
+    :func:`~krrood.entity_query_language.factories.the` piece of that shape -- ordered by
+    how well each sighting's own account explains the picture, so the one the look is
+    most sure of is kept and the rest are let go rather than every one of them standing.
+
+    :param scene: What one look found.
+    :param resting_on: What the look calls the surfaces a piece may rest on to be kept.
+    :param world: The world the look's detections are placed against.
+    :return: One piece per shape the look found resting on those surfaces, in the order
+        each shape was first seen there.
+    """
+    source = FixedScene(captured=scene, reported_in=world.root)
+    sought = a(DetectedMontessoriShape)()
+    seen = sought.where(in_(sought._variable_.supporting_surface, resting_on)).tolist(
+        backend=MontessoriPerceptionBackend(source=source)
+    )
+
+    categories: List[MontessoriShapeCategory] = []
+    for shape in seen:
+        if shape.category not in categories:
+            categories.append(shape.category)
+
+    kept = []
+    for category in categories:
+        candidate = variable(DetectedMontessoriShape, domain=seen)
+        [shape] = (
+            the(entity(candidate).where(candidate.category == category))
+            .ordered_by(candidate.explanation.strength, descending=True)
+            .limit(1)
+            .tolist()
+        )
+        kept.append(shape)
+    return kept
+
+
 @dataclass
 class PiecePublisher:
     """
@@ -229,12 +274,12 @@ class PiecePublisher:
         :param scene: What the look found.
         :param resting_on: What the look calls the surfaces a piece may rest on to be
             stood; a piece on any other surface is left out.
-        :return: The pieces stood, in the order the look reported them.
+        :return: The pieces stood, one per shape the look found resting on those
+            surfaces.
         """
         stood = [
             self.publish_piece(shape)
-            for shape in scene.shapes
-            if shape.supporting_surface in resting_on
+            for shape in best_shape_of_each_category(scene, resting_on, self.world)
         ]
         self.taken_down = []
         return stood
