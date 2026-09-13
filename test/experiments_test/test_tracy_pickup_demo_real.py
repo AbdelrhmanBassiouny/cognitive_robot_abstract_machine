@@ -11,6 +11,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
+import numpy as np
 import pytest
 from coraplex.datastructures.enums import Arms
 from segmind.datastructures.events import PickUpEvent
@@ -31,7 +32,6 @@ from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
     RECLOSE_MARGIN,
-    RECLOSE_SETPOINT,
     GripperClosure,
     GripperSlipEvent,
 )
@@ -41,7 +41,6 @@ from experiments.tracy_experiments.montessori.grasp_widths import (
 from experiments.tracy_experiments.pickup.pickup_demo_real import (
     GRASP_HEIGHT_OFFSET,
     PICK_ARM,
-    POST_LIFT_SETTLE_SECONDS,
     DemoOption,
     PieceNotSeenError,
     _grasp_target_pose,
@@ -54,7 +53,12 @@ from experiments.tracy_experiments.pickup.pickup_demo_real import (
 )
 from experiments.tracy_experiments.robotiq_gripper import GripperCommandRejected
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
 
 from .test_episode_recording import (
@@ -67,18 +71,67 @@ from .test_episode_recording import (
 # %% the grasp offset
 
 
-def test_grasp_target_pose_sits_the_offset_above_the_body_origin():
-    body = Body(name=PrefixedName("shape"))
+def _world_with_root() -> World:
+    """
+    :return: A world holding only its root body.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("root")))
+    return world
 
-    pose = _grasp_target_pose(body, GRASP_HEIGHT_OFFSET)
 
-    translation = pose.to_homogeneous_matrix()[:3, 3]
-    assert [float(component) for component in translation] == [
-        0.0,
-        0.0,
-        GRASP_HEIGHT_OFFSET,
+def _body_at(world: World, name: str, x: float, y: float, z: float, yaw: float) -> Body:
+    """
+    A body stood in ``world`` at a position and turned about the world's z-axis, so a
+    grasp target computed from it can be checked against a body that is not resting flat
+    with no yaw.
+    """
+    body = Body(name=PrefixedName(name))
+    with world.modify_world():
+        world.add_connection(
+            FixedConnection(
+                parent=world.root,
+                child=body,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=x, y=y, z=z, yaw=yaw, reference_frame=world.root
+                ),
+            )
+        )
+    return body
+
+
+def test_grasp_target_pose_sits_the_offset_above_the_bodys_position():
+    world = _world_with_root()
+    body = _body_at(world, "shape", x=0.3, y=-0.1, z=0.05, yaw=1.0)
+
+    pose = _grasp_target_pose(body, GRASP_HEIGHT_OFFSET, world)
+
+    translation = [
+        float(component) for component in pose.to_homogeneous_matrix()[:3, 3]
     ]
-    assert pose.reference_frame is body
+    assert translation == pytest.approx([0.3, -0.1, 0.05 + GRASP_HEIGHT_OFFSET])
+    assert pose.reference_frame is world.root
+
+
+def test_grasp_target_pose_uses_the_same_orientation_for_every_body():
+    """
+    A perceived piece can land turned any way it happens to rest; the reach is aimed at
+    it the same way round whatever that turn was, so the target's own orientation does
+    not depend on the body's.
+    """
+    world = _world_with_root()
+    turned_one_way = _body_at(world, "first", x=0.3, y=-0.1, z=0.05, yaw=1.0)
+    turned_another_way = _body_at(world, "second", x=0.1, y=0.2, z=0.05, yaw=-2.0)
+
+    first_pose = _grasp_target_pose(turned_one_way, GRASP_HEIGHT_OFFSET, world)
+    second_pose = _grasp_target_pose(turned_another_way, GRASP_HEIGHT_OFFSET, world)
+
+    identity = np.eye(3)
+    assert first_pose.to_homogeneous_matrix().to_np()[:3, :3] == pytest.approx(identity)
+    assert second_pose.to_homogeneous_matrix().to_np()[:3, :3] == pytest.approx(
+        identity
+    )
 
 
 # %% the reach that is built to grasp a piece
@@ -216,7 +269,6 @@ def _slip_watch_rig(
         grasp_description=None,
         tool_frame=None,
         slip_watch_interval=0.01,
-        post_lift_settle=0.0,
     )
 
 
@@ -255,7 +307,7 @@ def test_a_missed_grasp_skips_the_slip_watch_but_still_carries():
     )
 
     assert carried == [True]
-    assert gripper.close_to_setpoints == [0.5]
+    assert gripper.close_to_setpoints == []
     assert _no_slip_watch_thread_left_running()
 
 
@@ -266,11 +318,13 @@ def test_a_held_grasp_re_closes_past_fully_closed_while_the_shape_is_carried():
     rig._carry_watching_for_slip(
         Body(name=PrefixedName("cube")),
         0.5,
-        lambda: _wait_until(lambda: len(gripper.close_to_setpoints) > 1),
+        lambda: _wait_until(lambda: len(gripper.close_to_setpoints) > 0),
     )
 
-    assert gripper.close_to_setpoints[0] == 0.5
-    assert RECLOSE_SETPOINT in gripper.close_to_setpoints[1:]
+    assert gripper.close_to_setpoints
+    assert all(
+        setpoint == 0.5 + RECLOSE_MARGIN for setpoint in gripper.close_to_setpoints
+    )
     assert _no_slip_watch_thread_left_running()
 
 
@@ -288,11 +342,10 @@ def test_the_slip_watch_re_closes_past_a_shapes_own_firmer_close_setpoint():
     rig._carry_watching_for_slip(
         Body(name=PrefixedName("rectangular_prism")),
         RECTANGULAR_PRISM_CLOSE_SETPOINT,
-        lambda: _wait_until(lambda: len(gripper.close_to_setpoints) > 1),
+        lambda: _wait_until(lambda: len(gripper.close_to_setpoints) > 0),
     )
 
-    assert gripper.close_to_setpoints[0] == RECTANGULAR_PRISM_CLOSE_SETPOINT
-    re_closes = gripper.close_to_setpoints[1:]
+    re_closes = gripper.close_to_setpoints
     assert re_closes
     assert all(
         setpoint == RECTANGULAR_PRISM_CLOSE_SETPOINT + RECLOSE_MARGIN
@@ -325,27 +378,6 @@ def test_a_rejected_reclose_does_not_end_the_slip_watch():
 
     assert len(gripper.close_to_setpoints) > 3
     assert _no_slip_watch_thread_left_running()
-
-
-def test_the_grasp_is_left_to_settle_after_the_lift_before_it_is_read():
-    """
-    The knuckle is still moving as the fingers take up the lifted shape's weight, so the
-    reading that seeds the slip detector must wait :attr:`_SortingRig.post_lift_settle`.
-    """
-    gripper = RecordingGripper()
-    rig = _slip_watch_rig(gripper, _held())
-    rig.post_lift_settle = 0.2
-
-    started = time.monotonic()
-    rig._carry_watching_for_slip(Body(name=PrefixedName("cube")), 0.5, lambda: None)
-
-    assert time.monotonic() - started >= 0.2
-    assert gripper.close_to_setpoints[0] == 0.5
-    assert _no_slip_watch_thread_left_running()
-
-
-def test_the_post_lift_settle_defaults_to_five_seconds():
-    assert POST_LIFT_SETTLE_SECONDS == 5.0
 
 
 def test_a_slip_streams_a_gripper_slip_event_to_the_feed():

@@ -57,7 +57,6 @@ import argparse
 import contextlib
 import logging
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -188,18 +187,6 @@ Seconds between the slip watch's re-closes while a piece is carried to its hole 
 :class:`~experiments.tracy_experiments.montessori.gripper_feedback.LiveGraspGuard`).
 """
 
-POST_LIFT_SETTLE_SECONDS = 5.0
-"""
-Seconds to hold still after the lift before the grasp is read and the slip watch starts.
-
-The knuckle keeps moving for a moment after the piece leaves the table: the fingers take
-up the piece's weight and it settles between the pads. Reading immediately catches that
-transient, which both seeds
-:class:`~experiments.tracy_experiments.montessori.gripper_feedback.SlipDetector` from a
-position the grasp has not actually reached and risks a first poll that reads the
-still-settling travel as a slip.
-"""
-
 SCENARIO_NAME = "the robot sorts the pieces it saw"
 """
 What the episode a run records calls its scenario, the same as its simulated twin.
@@ -229,15 +216,25 @@ class DemoOption(StrEnum):
     DATABASE_URI = "--database-uri"
 
 
-def _grasp_target_pose(body: Body, grasp_height_offset: float) -> Pose:
+def _grasp_target_pose(body: Body, grasp_height_offset: float, world: World) -> Pose:
     """
-    :return: The pose the reach, grasp and lift are aimed at: ``body``'s own origin
-        raised by ``grasp_height_offset`` (see :data:`GRASP_HEIGHT_OFFSET`).
+    :return: The pose the reach, grasp and lift are aimed at: ``body``'s own position in
+        the world, raised by ``grasp_height_offset`` (see :data:`GRASP_HEIGHT_OFFSET`),
+        held at the identity orientation.
 
-    A perceived piece stands resting on the table, with no roll or pitch, so the offset
-    along the body frame's own vertical is the offset along the world's.
+    A perceived piece can land turned any way it happens to rest, and the reach is not
+    aimed at that turn: every piece is reached the same way round, whatever the look
+    found its own orientation to be, and
+    :class:`~coraplex.datastructures.grasp.GraspDescription` alone decides how the
+    gripper is turned to it.
     """
-    return Pose.from_xyz_rpy(0.0, 0.0, grasp_height_offset, reference_frame=body)
+    position = body.global_transform.to_position()
+    return Pose.from_xyz_rpy(
+        float(position.x),
+        float(position.y),
+        float(position.z) + grasp_height_offset,
+        reference_frame=world.root,
+    )
 
 
 def _reach_action_for(
@@ -352,11 +349,6 @@ class _SortingRig(ShapeSorter):
     Seconds between the slip watch's re-closes while carrying a piece.
     """
 
-    post_lift_settle: float = POST_LIFT_SETTLE_SECONDS
-    """
-    Seconds to let the grasp settle after the lift before it is read.
-    """
-
     observer: EpisodeObserver = field(default_factory=EpisodeObserver)
     """
     What keeps, for the episode the run records, every plan this rig performs and every
@@ -383,7 +375,7 @@ class _SortingRig(ShapeSorter):
         :param release_pose: Where the piece's centre is let go, over its hole.
         """
         body = piece.root
-        grasp_target = _grasp_target_pose(body, self.grasp_height_offset)
+        grasp_target = _grasp_target_pose(body, self.grasp_height_offset, self.world)
         reach = _reach_action_for(piece, grasp_target, self.grasp_description)
         _, _, lift_to_pose = self.grasp_description.pose_sequence(grasp_target, body)
         transport_pose, placing_pose, retract_pose = (
@@ -486,26 +478,19 @@ class _SortingRig(ShapeSorter):
         Run ``carry`` -- the transport and release -- while watching the left gripper's
         knuckle joint for ``body`` slipping out.
 
-        The grasp is first given :attr:`post_lift_settle` seconds to settle: the lift has
-        just transferred the piece's weight onto the fingers and the knuckle is still
-        moving, so a reading taken now would seed the slip detector from a position the
-        grasp never reaches. Then the close is firmed to ``close_setpoint`` and the
-        knuckle read once: an empty
-        gripper (the grasp missed) skips the watch. Otherwise a re-close just past
-        ``close_setpoint`` is commanded every :attr:`slip_watch_interval` seconds for as
-        long as ``carry`` runs; each
-        poll's verdict is logged, and a slip also streams a
+        The knuckle is read as soon as the lift finishes: an empty gripper (the grasp
+        missed) skips the watch. Otherwise a re-close just past ``close_setpoint`` is
+        commanded every :attr:`slip_watch_interval` seconds for as long as ``carry``
+        runs; each poll's verdict is logged, and a slip also streams a
         :class:`~experiments.tracy_experiments.montessori.gripper_feedback.
         GripperSlipEvent` to the dashboard.
 
         :param body: The piece being carried.
-        :param close_setpoint: The piece's own close setpoint, re-commanded to firm the
-            grasp before the knuckle is read.
+        :param close_setpoint: The piece's own close setpoint, used to size the slip
+            watch's periodic re-close.
         :param carry: Runs the transport-and-place motion.
         """
         piece_name = body.name.name
-        time.sleep(self.post_lift_settle)
-        self.gripper.close_to(PICK_ARM, close_setpoint)
         confirmation = confirm_grasp(self.gripper_listener.latest_closure)
         logger.info("%s: grasp check -> %s.", piece_name, confirmation.verdict)
         if confirmation.slip_detector is None:

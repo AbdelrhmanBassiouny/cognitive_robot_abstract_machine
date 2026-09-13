@@ -49,6 +49,8 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
+from .test_montessori_occupancy import piece_at
+
 LID_HEIGHT = 0.96
 """
 An arbitrary height the found board's lid stands at.
@@ -149,6 +151,32 @@ def test_the_pieces_a_look_put_on_the_table_are_stood_where_they_were_seen(
         bounds = piece.root.collision.combined_mesh.bounds
         assert float(bounds[1][2] - bounds[0][2]) == pytest.approx(known.height)
         assert piece.root.collision[0].color == known.color
+
+
+def test_the_better_explained_of_two_sightings_of_one_shape_is_the_one_stood(
+    look: RecordedFrame,
+) -> None:
+    """
+    The set holds exactly one piece of every shape it contains, so a look that reports
+    two sightings of the same shape has mistaken one place for the other; the one kept
+    is the one whose own account better explains the picture.
+    """
+    resting_on = look.pipeline.table.name
+    live = look.pipeline.world
+    weaker = piece_at(0.70, 0.05, TABLE_HEIGHT, explains=0.4, reference_frame=live.root)
+    stronger = piece_at(
+        0.79, 0.10, TABLE_HEIGHT, explains=0.9, reference_frame=live.root
+    )
+    weaker.supporting_surface = resting_on
+    stronger.supporting_surface = resting_on
+    scene = MontessoriScene(shapes=[weaker, stronger])
+
+    stood = PiecePublisher(world=live).publish(scene, resting_on=resting_on)
+
+    assert len(stood) == 1
+    assert live.get_semantic_annotations_by_type(MontessoriShape) == stood
+    stands_at = stood[0].root.global_transform.to_position().to_np()[:2]
+    assert stands_at == pytest.approx([0.79, 0.10])
 
 
 def test_a_piece_on_another_surface_is_not_stood(look: RecordedFrame) -> None:

@@ -23,6 +23,9 @@ from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
 
 from .dataset.montessori_belief_sources import SomethingThatAskedForALook
 
@@ -98,6 +101,7 @@ def piece_at(
     explains: float,
     category: MontessoriShapeCategory = MontessoriShapeCategory.CUBE,
     outline: Optional[np.ndarray] = None,
+    reference_frame: Optional[KinematicStructureEntity] = None,
 ) -> DetectedMontessoriShape:
     """
     A detection standing at a position, explaining its place as well as the caller says.
@@ -110,10 +114,14 @@ def piece_at(
         exactly that strong.
     :param category: What the reading says stands there.
     :param outline: The ground it covers, defaulting to a square around its centre.
+    :param reference_frame: The frame the pose is stated in, or None for a pose meant to
+        be read numerically rather than placed in a world.
     """
     height = 0.03
     resting_on = PrefixedName("table", "occupancy_test")
-    pose = Pose.from_xyz_rpy(x, y, surface_height + height / 2)
+    pose = Pose.from_xyz_rpy(
+        x, y, surface_height + height / 2, reference_frame=reference_frame
+    )
     return DetectedMontessoriShape(
         role_taker=ImaginedWorld.copied_from(None).spawn(
             KNOWN_PIECE_BY_CATEGORY[category], pose
