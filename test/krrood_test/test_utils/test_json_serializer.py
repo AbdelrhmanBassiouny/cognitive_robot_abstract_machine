@@ -1,3 +1,4 @@
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -257,6 +258,26 @@ def test_list_of_enums():
     data = to_json(obj)
     result = from_json(data)
     assert result == obj
+
+
+def test_a_member_of_a_string_enum_is_written_as_the_member():
+    """
+    A member of an enum that is also a string is written as the member rather than as
+    the string it equals, so what is read back is the member.
+    """
+    data = to_json(CustomEnum.A)
+
+    assert data == {JSON_TYPE_NAME: get_full_class_name(CustomEnum), "name": "A"}
+
+
+def test_a_member_of_a_string_enum_is_read_back_as_the_member():
+    """
+    Equality to the member is not enough to tell the member from its string, so the
+    member itself is what a round trip through the text of the JSON must hand back.
+    """
+    result = from_json(json.loads(json.dumps(to_json(CustomEnum.A))))
+
+    assert result is CustomEnum.A
 
 
 def test_exception():
