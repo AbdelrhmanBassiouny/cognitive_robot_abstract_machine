@@ -806,9 +806,12 @@ class EpisodesWhereThePieceWasPickedUp(QuestionAboutPickingOneObjectUp[List[str]
         """
         The episodes that came back, each named once and in one order.
 
+        Named by identifier straight off the rows: the answer is a list of episodes, not
+        the episodes themselves.
+
         :param source: The long-term memory the question is put to.
         """
-        return sorted({episode.identifier for episode in self.solutions(source)})
+        return sorted(set(source.answer_with_identifiers(self.query(source))))
 
     def ground_truth(self, source: LongTermMemory) -> List[str]:
         """
@@ -862,11 +865,12 @@ class HasThisHappenedBefore(QuestionAboutPickingOneObjectUp[bool]):
 
     def ask(self, source: LongTermMemory) -> bool:
         """
-        Whether any other episode picked the object up.
+        Whether any other episode picked the object up, read off the rows the query
+        selects rather than from the episodes built from them.
 
         :param source: The long-term memory the question is put to.
         """
-        return bool(self.solutions(source))
+        return bool(source.answer_with_identifiers(self.query(source)))
 
     def ground_truth(self, source: LongTermMemory) -> bool:
         """

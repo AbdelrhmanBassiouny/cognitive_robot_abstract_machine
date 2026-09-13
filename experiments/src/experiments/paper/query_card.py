@@ -51,7 +51,7 @@ from experiments.paper.run_timeline import RunTimeline
 from experiments.paper.scene import PointOfView, SceneRender
 from experiments.paper.run_plan import ObjectIdentity, SameName, plans_of
 from experiments.paper.timeline import EventTimeline
-from experiments.questions.question import Question
+from experiments.questions.question import Question, objects_of_the_scene
 from experiments.questions.working_memory import (
     NumberOfOwnDegreesOfFreedom,
     ObjectsSeen,
@@ -900,13 +900,17 @@ class ObjectsSeenCard(QueryCard):
 
     def answers(self, asked: Question, world: World) -> List[KinematicStructureEntity]:
         """
-        Every object of the scene, read off the twin the same way the question's own
-        ground truth is.
+        Every object standing in the scene, read off the twin this card draws.
+
+        Read off the twin rather than taken from the question's own true answer: a card
+        draws the world the run happened in, while the question is scored against what
+        whoever set that scene up says they put there, which names things rather than
+        holding the bodies a picture is drawn of.
 
         :param asked: The question as it was asked.
         :param world: The twin the run happened in.
         """
-        return list(asked.ground_truth(self.robot_of(world)))
+        return objects_of_the_scene(self.robot_of(world))
 
 
 @dataclass

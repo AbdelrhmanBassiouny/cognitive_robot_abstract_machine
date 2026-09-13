@@ -11,9 +11,15 @@ checked against itself proves nothing here either.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 import pytest
 from segmind.datastructures.events import PickUpEvent, TranslationEvent
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.orm.ormatic_interface import WorldMappingDAO
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import List, Tuple
 
@@ -230,6 +236,72 @@ def test_the_episodes_reported_are_the_ones_that_recorded_a_pick_up(
         corpus[position].identifier for position in EPISODES_THAT_PICK_THE_CUBE_UP
     )
     assert question.matches_ground_truth(memory)
+
+
+@dataclass
+class StatementLog:
+    """
+    Every SQL statement any engine executes while this log listens.
+    """
+
+    statements: List[str] = field(default_factory=list)
+    """
+    The statements, in the order they were executed.
+    """
+
+    def __enter__(self) -> StatementLog:
+        event.listen(Engine, "before_cursor_execute", self.note)
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        event.remove(Engine, "before_cursor_execute", self.note)
+
+    def note(self, _conn, _cursor, statement: str, *_: object) -> None:
+        self.statements.append(statement)
+
+    def touched(self, table: str) -> bool:
+        """
+        Whether any statement read or wrote the given table.
+
+        :param table: The table's name.
+        """
+        return any(table in statement for statement in self.statements)
+
+
+def test_the_episodes_reported_are_read_without_their_worlds(
+    results_database: ResultsDatabase,
+):
+    """
+    The answer names episodes, so it is read off their rows: a corpus of worlds is not
+    rebuilt to list identifiers.
+    """
+    episodes = [sorting_episode() for _ in CUBE_MOTIONS_PER_EPISODE]
+    for position, episode in enumerate(episodes):
+        episode.world = World()
+        record(
+            results_database,
+            RecordedTrial(
+                episode=episode,
+                outcome=TrialOutcome.SUCCEEDED,
+                duration=TRIAL_DURATION,
+                ticks=[Tick(moment=FIRST_TICK, events=events_of(position))],
+            ),
+        )
+    memory = LongTermMemory(results_database)
+
+    with StatementLog() as log:
+        picked_up = EpisodesWhereThePieceWasPickedUp(
+            episode_identifier=episodes[0].identifier, object_name=SORTED_PIECE
+        ).ask(memory)
+        happened_before = HasThisHappenedBefore(
+            episode_identifier=episodes[0].identifier, object_name=SORTED_PIECE
+        ).ask(memory)
+
+    assert picked_up == sorted(
+        episodes[position].identifier for position in EPISODES_THAT_PICK_THE_CUBE_UP
+    )
+    assert happened_before is True
+    assert not log.touched(WorldMappingDAO.__tablename__)
 
 
 # %% whether it has happened in another episode
