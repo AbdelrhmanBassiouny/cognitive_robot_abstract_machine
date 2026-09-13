@@ -1,0 +1,14 @@
+"""Auto-generated EQL-RDR rule tree.
+
+Edit only to keep the existing rules working: a changed API or domain model is a
+reason to edit a rule. Do not change the tree's structure, and do not add rules.
+"""
+{{ factory_import }}
+
+{{ variable_name }} = variable({{ case_type_name }}, domain=[])
+
+# Stable handles for loading.
+{{ rdr_case_type_name }} = {{ case_type_name }}
+{{ rdr_conclusion_attribute_name }} = {{ conclusion_attribute_name|tojson }}
+{{ rdr_case_variable_name }} = {{ variable_name }}
+{{ rdr_query_name }} = None

@@ -32,6 +32,7 @@ from krrood.code_generation.imports import get_imports_from_types
 from krrood.utils import (
     is_builtin_type,
     get_import_path_from_path,
+    make_path_importable,
     get_method_name,
     get_method_class_name_if_exists,
     get_method_file_name,
@@ -157,6 +158,7 @@ def get_and_import_python_modules_in_a_package(
     :return: The imported modules.
     """
     package_path = dirname(file_paths[0])
+    make_path_importable(package_path)
     package_import_path = get_import_path_from_path(package_path)
     file_names = [Path(file_path).name.replace(".py", "") for file_path in file_paths]
     module_import_paths = [
@@ -190,6 +192,7 @@ def get_and_import_python_module(
     """
     if package_import_path is None:
         package_path = dirname(python_file_path)
+        make_path_importable(package_path)
         package_import_path = get_import_path_from_path(package_path)
     file_name = Path(python_file_path).name.replace(".py", "")
     module_import_path = (
@@ -1789,7 +1792,7 @@ def encapsulate_code_lines_into_a_function(
 from krrood.code_generation.naming import (  # noqa: E402, F401
     to_snake_case as str_to_snake_case,
 )
-from krrood.code_generation.type_hints import (  # noqa: E402, F401
+from krrood.code_generation.object_to_source import (  # noqa: E402, F401
     value_to_source,
     get_types_to_import_from_type_hints,
 )

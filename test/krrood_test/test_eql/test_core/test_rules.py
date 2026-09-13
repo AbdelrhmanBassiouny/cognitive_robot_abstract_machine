@@ -4,6 +4,7 @@ from krrood.entity_query_language.factories import (
     entity,
     variable,
     and_,
+    not_,
     inference,
     an,
     refinement,
@@ -13,10 +14,19 @@ from krrood.entity_query_language.factories import (
     add,
 )
 from krrood.entity_query_language.core.variable import Literal
-from krrood.entity_query_language.core.base_expressions import OperationResult
+from krrood.entity_query_language.core.base_expressions import (
+    OperationResult,
+    _evaluation_context_var,
+    get_evaluation_context,
+    set_evaluation_context,
+)
+from krrood.entity_query_language.evaluation import create_default_evaluation_context
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.rules.conclusion import Add
-from krrood.entity_query_language.rules.conclusion_selector import Refinement
+from krrood.entity_query_language.rules.conclusion_selector import (
+    Alternative,
+    Refinement,
+)
 from ...dataset.eql_rule_tree_doc_example import (
     ExampleConnection,
     ExampleView,
@@ -182,6 +192,85 @@ def test_conditions_root_resolves_after_insert_at_clones_an_already_parented_con
         "so its primary parent chain must resolve to query's own (now-grown) "
         "conditions root"
     )
+
+
+def parent_chain_of(expression):
+    """
+    Walk an expression's primary parents until nothing is left, or until one repeats.
+
+    :param expression: The node to walk up from.
+    :return: The nodes walked through, ending either at the graph's root or at the first
+        node reached twice, which is what a cycle looks like from here.
+    """
+    walked = []
+    while expression is not None and not any(seen is expression for seen in walked):
+        walked.append(expression)
+        expression = expression._parent_
+    return walked
+
+
+def test_splicing_beside_a_condition_the_new_branch_wraps_leaves_the_branch_alone():
+    """
+    A rule's condition can be the very node another rule's condition wraps, since
+    reading an attribute answers with the same node every time.
+
+    The anchor then has a parent inside the branch being spliced in, and re-pointing
+    that parent at the splice is what would make the branch hold what holds it.
+    """
+    drawer = variable(Drawer, domain=[])
+    correct = drawer.correct
+    incorrect = not_(drawer.correct)
+    drawers = deduced_variable(Drawer)
+    query = an(entity(drawers).where(correct))
+    query.build()
+
+    Alternative.insert_at(query._conditions_root_, incorrect)
+
+    assert any(child is correct for child in incorrect._children_), (
+        "the branch being spliced in still reads the attribute it was written over, "
+        "rather than the node it was spliced beside"
+    )
+
+
+def test_a_rule_whose_condition_the_next_rule_wraps_is_still_answered():
+    """
+    Both rules are reachable and answer, which is the whole point of splicing the second
+    one in beside the first.
+    """
+    handle = Handle(name="Handle1")
+    container = Container(name="Container1")
+    drawer = variable(
+        Drawer,
+        domain=[
+            Drawer(handle=handle, container=container, correct=True),
+            Drawer(handle=handle, container=container, correct=False),
+        ],
+    )
+    cupboard = variable(Container, domain=[container])
+    correct = drawer.correct
+    # Written before the query, so the attribute's first parent is this branch rather
+    # than the rule tree -- which is what the splice must not mistake for its own edge.
+    incorrect = not_(drawer.correct)
+    views = deduced_variable(View)
+    query = an(entity(views).where(correct))
+    with query:
+        add(views, inference(Door)(handle=drawer.handle, body=drawer.container))
+    query.build()
+
+    spliced = Alternative.insert_at(query._conditions_root_, incorrect)
+    with spliced:
+        add(
+            views,
+            inference(Wardrobe)(
+                handle=drawer.handle, body=drawer.container, container=cupboard
+            ),
+        )
+
+    assert parent_chain_of(correct)[-1]._parent_ is None, (
+        "the splice must leave a graph whose parents run out at a root, rather than "
+        "one where walking up from a rule's condition comes back to it"
+    )
+    assert {type(view) for view in query.tolist()} == {Door, Wardrobe}
 
 
 def test_generate_drawers_from_query(handles_and_containers_world):
@@ -842,3 +931,70 @@ def test_conclusions_fire_without_an_active_evaluation_context(
 
     assert drawers._id_ in processed_result.bindings
     assert isinstance(processed_result.bindings[drawers._id_], Drawer)
+
+
+def test_conclusions_fire_with_a_pre_installed_evaluation_context(
+    handles_and_containers_world,
+):
+    """
+    A conclusion must still fire when an ``EvaluationContext`` is already active.
+
+    Callers like RDR's ``classify_case``/``trace_case`` install an ``EvaluationContext``
+    before calling ``.evaluate()``, so ``_evaluate_``'s ``owns_an_evaluation_context``
+    is ``False`` for every node in that pass.
+    ``active_conditions_root.set_active_root_if_not_set()`` must still run in that case --
+    previously it was skipped entirely (nested inside the ``owns_an_evaluation_context``
+    branch), so the active conditions root was never set and conclusions never fired
+    under RDR classification.
+    """
+    world = handles_and_containers_world
+    container = variable(Container, domain=world.bodies)
+    handle = variable(Handle, domain=world.bodies)
+    fixed_connection = variable(FixedConnection, domain=world.connections)
+    drawers = variable(Drawer, domain=[])
+    condition = and_(
+        container == fixed_connection.parent,
+        handle == fixed_connection.child,
+    )
+
+    with condition:
+        Add(drawers, inference(Drawer)(handle=handle, container=container))
+
+    pre_installed_context = create_default_evaluation_context()
+    token = set_evaluation_context(pre_installed_context)
+    try:
+        assert get_evaluation_context() is pre_installed_context
+        results = list(condition._evaluate_(OperationResult({})))
+    finally:
+        _evaluation_context_var.reset(token)
+
+    fired = [result for result in results if drawers._id_ in result.bindings]
+    assert len(fired) >= 1
+    assert all(isinstance(result.bindings[drawers._id_], Drawer) for result in fired)
+
+
+def test_conclusions_respect_a_bare_attribute_conditions_root_truthiness():
+    """
+    A conclusion gated on a bare-attribute conditions root must respect that root's own
+    truth value.
+
+    When the conditions root is itself a bare attribute Comparator acting as a Filter
+    condition (rather than a logical combinator like ``AND``/``OR``/``NOT``), the gate
+    in ``_evaluate_conclusions_and_update_bindings_`` must reflect the comparator's own
+    truth value for the case being evaluated, rather than staying constant regardless of
+    the attribute's actual value.
+    """
+    milk_true = Body(name="milk_true")
+    milk_false = Body(name="milk_false")
+    body = variable(Body, domain=[milk_true, milk_false])
+    condition = body.name == "milk_true"
+
+    conclusion = variable(Body, domain=[])
+    with condition:
+        Add(conclusion, inference(Body)(name="conclusion_fired"))
+
+    results = list(condition._evaluate_(OperationResult({})))
+
+    fired = [result for result in results if conclusion._id_ in result.bindings]
+    assert len(fired) == 1
+    assert fired[0].bindings[conclusion._id_] == Body(name="conclusion_fired")

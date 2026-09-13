@@ -465,9 +465,9 @@ class SymbolicExpression(AbstractContextManager, HasExpression):
 
             evaluation_context = create_default_evaluation_context()
             context_token = set_evaluation_context(evaluation_context)
-            evaluation_context.active_conditions_root.set_active_root_if_not_set(
-                self._conditions_root_, has_condition=self._has_condition_
-            )
+        evaluation_context.active_conditions_root.set_active_root_if_not_set(
+            self._conditions_root_, has_condition=self._has_condition_
+        )
         try:
             evaluation_context.on_evaluate_enter(expression=self, sources=sources)
             # Normalize sources: always work with an OperationResult
@@ -560,6 +560,38 @@ class SymbolicExpression(AbstractContextManager, HasExpression):
             resulting from the evaluation of this expression.
         """
         pass
+
+    def _contains_(self, expression: SymbolicExpression) -> bool:
+        """
+        :param expression: The expression to look for.
+        :return: Whether this expression is that one or reaches it as a descendant.
+        """
+        return expression is self or any(
+            descendant is expression for descendant in self._descendants_
+        )
+
+    def _parent_outside_(
+        self, branch: SymbolicExpression
+    ) -> Optional[SymbolicExpression]:
+        """
+        The parent by which the surrounding graph reaches this expression, ignoring any
+        that lies inside *branch*.
+
+        Reading an attribute answers with the same node every time, so a node can be one
+        rule's whole condition and, at once, part of what another rule's condition is
+        written over. A parent inside *branch* is then the second of those rather than
+        the edge the surrounding graph holds this node by, and re-pointing it would make
+        *branch* hold what holds it.
+
+        :param branch: The branch about to be spliced in beside this expression.
+        :return: That parent, or ``None`` when nothing outside *branch* holds this
+            expression.
+        """
+        if self._parent_ is not None and not branch._contains_(self._parent_):
+            return self._parent_
+        return next(
+            (parent for parent in self._parents_ if not branch._contains_(parent)), None
+        )
 
     def _has_parent_(self, expression: SymbolicExpression) -> bool:
         """

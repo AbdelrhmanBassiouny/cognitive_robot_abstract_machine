@@ -300,7 +300,7 @@ class RippleDownRules(ABC):
                 f"Could not load the python file for the model {model_name} from {model_dir}. "
                 f"Make sure the file exists and is valid."
             )
-            raise RDRLoadError(model_name, model_dir)
+            raise RDRLoadError(model_name, model_dir) from e
         rdr.save_dir = load_dir
         rdr.model_name = model_name
         return rdr
@@ -1175,7 +1175,7 @@ class RDRWithCodeWriter(RippleDownRules, ABC):
             imports.append(f"from .{self.generated_python_defs_file_name} import *")
             f.write("\n".join(imports) + "\n\n\n")
             f.write(f"attribute_name = '{self.attribute_name}'\n")
-            from krrood.code_generation.type_hints import stringify_type_hint
+            from krrood.code_generation.object_to_source import stringify_type_hint
 
             f.write(
                 f"conclusion_type = ({', '.join([stringify_type_hint(ct) for ct in self.conclusion_type])},)\n"
@@ -1411,7 +1411,7 @@ class SingleClassRDR(RDRWithCodeWriter):
 
     @property
     def conclusion_type_hint(self) -> str:
-        from krrood.code_generation.type_hints import stringify_type_hint
+        from krrood.code_generation.object_to_source import stringify_type_hint
 
         all_types = set(list(self.conclusion_type) + [type(self.default_conclusion)])
         if NoneType in all_types:
@@ -1614,7 +1614,7 @@ class MultiClassRDR(RDRWithCodeWriter):
 
     @property
     def conclusion_type_hint(self) -> str:
-        from krrood.code_generation.type_hints import stringify_type_hint
+        from krrood.code_generation.object_to_source import stringify_type_hint
 
         conclusion_types = [
             stringify_type_hint(ct)
