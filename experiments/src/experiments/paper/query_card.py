@@ -65,6 +65,7 @@ from experiments.paper.pose_change import (
     standing_pose,
 )
 from experiments.paper.run_timeline import RunTimeline
+from experiments.tracy_experiments.camera import camera_of_the_robot
 from experiments.paper.scene import (
     PointOfView,
     SceneRender,
@@ -873,7 +874,11 @@ class QueryCard(ABC):
         trace = self._trace_of(trial, artifacts)
         if trace is None or not self.can_draw(trial):
             return None
-        return TwinFrames(world=trial.episode.world, trace=trace)
+        return TwinFrames(
+            world=trial.episode.world,
+            trace=trace,
+            camera=camera_of_the_robot(trial.episode.world),
+        )
 
     @staticmethod
     def reported_at(

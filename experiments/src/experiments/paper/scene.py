@@ -46,12 +46,13 @@ from semantic_digital_twin.world_description.world_entity import (
 
 # %% the picture a render takes
 
-PICTURE_WIDTH = 960
+PICTURE_WIDTH = 1600
 """
-Width of the picture a render takes when it places the camera itself, in pixels.
+Width of the picture a render takes when it places the camera itself, in pixels: wide
+enough for a piece a few centimetres across to be drawn sharp.
 """
 
-PICTURE_HEIGHT = 720
+PICTURE_HEIGHT = 1200
 """
 Height of the picture a render takes when it places the camera itself, in pixels.
 """

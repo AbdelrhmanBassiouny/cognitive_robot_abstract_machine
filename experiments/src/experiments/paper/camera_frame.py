@@ -11,6 +11,7 @@ simulation is shown as the twin stood at those moments.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -19,7 +20,7 @@ import cv2
 import imageio.v2 as imageio
 import numpy as np
 from krrood.exceptions import DataclassException
-from typing_extensions import Tuple
+from typing_extensions import Iterator, Optional, Tuple
 
 from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
 from experiments.episodes.trace import (
@@ -34,6 +35,7 @@ from experiments.montessori.perception.recordings import REFERENCE_FRAME, Record
 from experiments.paper.lettering import Face, Lettering
 from experiments.paper.panel import CardPanel
 from experiments.paper.scene import SceneRender
+from semantic_digital_twin.adapters.multi_sim import MujocoCamera
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color
 
@@ -530,9 +532,38 @@ class TwinFrames(FramesByMoment):
     Where every joint stood along the trial.
     """
 
+    camera: Optional[MujocoCamera] = None
+    """
+    The camera the run's robot looks through, standing on the robot but not hung on
+    the world, or None to draw the frames from an overview of the whole scene.
+
+    Hung on the world for the length of each frame and taken off again, so the world
+    is left as it was found.
+    """
+
     def moments_taken(self) -> np.ndarray:
         return np.array(self.trace.moments, dtype=float)
 
     def frame(self, index: int) -> np.ndarray:
         with standing_at(self.world, self.trace.at(self.trace.moments[index])) as world:
-            return SceneRender(world=world, label_answers=False).of([]).image
+            with self.looking_through_the_camera():
+                return (
+                    SceneRender(world=world, camera=self.camera, label_answers=False)
+                    .of([])
+                    .image
+                )
+
+    @contextmanager
+    def looking_through_the_camera(self) -> Iterator[None]:
+        """
+        Hang :attr:`camera` on the body it stands on for the length of the block, or
+        nothing when the frames are drawn from an overview.
+        """
+        if self.camera is None:
+            yield
+            return
+        self.camera.body.simulator_additional_properties.append(self.camera)
+        try:
+            yield
+        finally:
+            self.camera.body.simulator_additional_properties.remove(self.camera)

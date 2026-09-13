@@ -35,6 +35,7 @@ from experiments.paper.camera_frame import (
 from experiments.paper.chart import TimelineSpan
 from experiments.paper.pose_change import stand, standing_pose
 from experiments.paper.scene import PICTURE_HEIGHT, PICTURE_WIDTH
+from semantic_digital_twin.adapters.multi_sim import MujocoCamera
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -323,6 +324,34 @@ def traced_move(world: World) -> JointTrace:
     trace.sample(world, MOVED_OVER.end)
     stand(world, loose, stood_at)
     return trace
+
+
+@needs_a_renderer
+def test_a_twin_frame_is_drawn_through_the_robots_camera_and_the_camera_is_taken_off(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    A run in simulation showed what its robot's camera saw, so a frame given that camera
+    is drawn through it rather than from the overview, and the camera is hung on the
+    twin for the frame alone.
+    """
+    trace = traced_move(scene_with_a_loose_piece)
+    stands = scene_with_a_loose_piece.get_body_by_name(ANSWERED_NAME)
+    camera = MujocoCamera(
+        name="robots_camera",
+        body=stands,
+        position=[0.0, 0.0, 1.0],
+        quaternion=[1.0, 0.0, 0.0, 0.0],
+        resolution=[float(PICTURE_WIDTH), float(PICTURE_HEIGHT)],
+    )
+    overview = TwinFrames(world=scene_with_a_loose_piece, trace=trace).frame(0)
+
+    through_the_camera = TwinFrames(
+        world=scene_with_a_loose_piece, trace=trace, camera=camera
+    ).frame(0)
+
+    assert not np.array_equal(through_the_camera, overview)
+    assert camera not in stands.simulator_additional_properties
 
 
 def test_the_twins_frames_are_taken_at_the_moments_the_trace_was_sampled_at(
