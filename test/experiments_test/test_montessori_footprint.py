@@ -11,7 +11,7 @@ import pytest
 
 from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
-    Footprint,
+    RectifiedFootprint,
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
 
@@ -29,7 +29,7 @@ def test_square_footprint_measures_its_own_side_length():
     side = 0.032
     corners = np.array([[0, 0], [side, 0], [side, side], [0, side]])
 
-    footprint = Footprint.from_contour(_contour_of(corners, 0.001), 0.001)
+    footprint = RectifiedFootprint.from_contour(_contour_of(corners, 0.001), 0.001)
 
     assert footprint.width == pytest.approx(side, abs=0.002)
     assert footprint.length == pytest.approx(side, abs=0.002)
@@ -48,7 +48,9 @@ def test_footprint_fill_ratio_separates_the_shape_families():
     )
 
     measured = {
-        name: Footprint.from_contour(_contour_of(boundary, 0.0005), 0.0005).fill_ratio
+        name: RectifiedFootprint.from_contour(
+            _contour_of(boundary, 0.0005), 0.0005
+        ).fill_ratio
         for name, boundary in (
             ("square", square),
             ("triangle", triangle),
@@ -75,7 +77,7 @@ def test_classifier_names_each_shape_from_its_proportions(
     fill_ratio: float, aspect_ratio: float, expected: MontessoriShapeCategory
 ):
     width = 0.02
-    footprint = Footprint(
+    footprint = RectifiedFootprint(
         area=fill_ratio * width * width * aspect_ratio,
         width=width,
         length=width * aspect_ratio,
@@ -95,6 +97,6 @@ def test_footprint_yaw_follows_a_rotated_rectangle():
     rectangle = np.array([[-0.03, -0.01], [0.03, -0.01], [0.03, 0.01], [-0.03, 0.01]])
     rotated = rectangle @ rotation.T + np.array([0.06, 0.06])
 
-    footprint = Footprint.from_contour(_contour_of(rotated, 0.0005), 0.0005)
+    footprint = RectifiedFootprint.from_contour(_contour_of(rotated, 0.0005), 0.0005)
 
     assert footprint.yaw == pytest.approx(angle, abs=math.radians(3.0))
