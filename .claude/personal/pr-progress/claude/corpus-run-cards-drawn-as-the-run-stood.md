@@ -83,6 +83,8 @@ Plan: make the query cards of the simulated corpus right.
       Commit 0cbb28d8ac (tracy_experiments/camera.py, TwinFrames.camera, looking_at_the_move,
       1600x1200). No pyrender anywhere in the cards -- told the user; framework figure is the
       only pyrender (render_tracy.py one-off). Pushed, #356 description updated.
-- [ ] figures run 4 launched 2026-09-13 23:58 (figures_rerecorded_2026-09-13_run4.log): check a
-      held-piece card, a pushed-piece pose-change panel (top-down) and a camera panel (Tracy's
-      camera), then tell the user to redo the figures backup (essential.tgz).
+- [x] figures run 4 exit 0 at 2026-09-14 00:27: 348 cards / 75 episodes (held-piece episodes
+      included), 100 MB; checked a held-piece scene, a top-down push panel and a camera panel
+      through Tracy's camera -- all as intended. User told to redo the figures backup.
+- [ ] open for the user: tables count Real=5 (the 3 unreadable real episodes' trials are dropped
+      by the pass-over); mesh-file repair or a world-free recall would bring them back.
