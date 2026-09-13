@@ -6,6 +6,8 @@ and that a plan can leave its target open for a query to settle.
 
 from __future__ import annotations
 
+import math
+
 import pytest
 from typing_extensions import Dict, List, Tuple
 
@@ -27,7 +29,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from semantic_digital_twin.spatial_types.spatial_types import Point3
+from semantic_digital_twin.spatial_types.spatial_types import Point3, RotationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Scale
@@ -226,6 +228,31 @@ def test_the_body_is_released_above_the_opening_along_the_slots_own_axis(
 
     assert insertion_pose.reference_frame is slot.root
     assert insertion_pose.to_position().to_np()[:3].tolist() == [0.0, 0.0, 0.05]
+
+
+def test_a_body_that_only_fits_turned_is_released_turned_that_way(
+    world_with_two_slots,
+):
+    """
+    A body that only goes through an opening turned some way -- a coin onto its edge for
+    a slot -- is released turned that way by stating that turn, rather than by an
+    insertion of its own.
+    """
+    world, robot, body, slots = world_with_two_slots
+    slot = slots[PostedShape.ROUND]
+    onto_its_edge = RotationMatrix.from_rpy(
+        pitch=math.pi / 2, reference_frame=slot.root
+    )
+    action = InsertAction(
+        body, slot, Arms.LEFT, hover_height=0.05, target_R_body=onto_its_edge
+    )
+
+    insertion_pose = action.insertion_pose
+
+    assert insertion_pose.to_position().to_np()[:3].tolist() == [0.0, 0.0, 0.05]
+    assert insertion_pose.to_rotation_matrix().to_np().flatten().tolist() == (
+        pytest.approx(onto_its_edge.to_np().flatten().tolist())
+    )
 
 
 def test_the_plan_carries_the_body_to_that_release_pose_and_lets_it_go(

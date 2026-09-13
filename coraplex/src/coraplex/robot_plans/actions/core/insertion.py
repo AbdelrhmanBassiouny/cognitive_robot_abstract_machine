@@ -36,7 +36,12 @@ from krrood.entity_query_language.factories import ConditionType, variable_from
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    Point3,
+    Pose,
+    Quaternion,
+    RotationMatrix,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 DEFAULT_HOVER_HEIGHT = 0.02
@@ -109,19 +114,27 @@ class InsertAction(
     to have worked; see :data:`DEFAULT_MINIMUM_CONTAINMENT_RATIO`.
     """
 
+    target_R_body: RotationMatrix = field(default_factory=RotationMatrix, kw_only=True)
+    """
+    How the body is turned relative to :attr:`target`'s own axes when it is let go of.
+
+    The default presents it the way the opening is turned, which is what lines a body up
+    with an opening cut to its own cross-section; a body that only goes through turned
+    some other way -- a coin, which has to go into a slot on its edge -- is inserted by
+    stating that turn here.
+    """
+
     @property
     def insertion_pose(self) -> Pose:
         """
         The pose, in :attr:`target`'s own frame, the body is released at:
-        :attr:`hover_height` above the opening's origin along its own axis, turned the
-        way the opening is.
-
-        A body whose fit depends on some other orientation relative to the opening -- a
-        coin that has to be tipped onto its edge for a slot -- states that by overriding
-        this.
+        :attr:`hover_height` above the opening's origin along its own axis, turned as
+        :attr:`target_R_body` states.
         """
-        return Pose.from_xyz_rpy(
-            0.0, 0.0, self.hover_height, reference_frame=self.target.root
+        return Pose(
+            Point3(0.0, 0.0, self.hover_height),
+            Quaternion.from_rotation_matrix(self.target_R_body),
+            reference_frame=self.target.root,
         )
 
     @property
