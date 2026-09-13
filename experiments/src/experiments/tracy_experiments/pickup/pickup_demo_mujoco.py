@@ -29,6 +29,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -51,7 +52,7 @@ from experiments.episodes.artifacts import EpisodeArtifacts, Transcript
 from experiments.episodes.episode import Episode, RecordedTrial
 from experiments.episodes.observer import EpisodeObserver, ObserverListener
 from experiments.episodes.recording import RecordsNothing, RecordsTrials
-from experiments.episodes.trace import JointTrace, TimedFrames
+from experiments.episodes.trace import FilmBeingTaken, JointTrace, TimedFramesFile
 from experiments.questions.after_the_move import QuestionAfterTheMove
 from experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
@@ -111,10 +112,7 @@ from experiments.tracy_experiments.real_time_simulation import (
     SimulationObserver,
 )
 from semantic_digital_twin.adapters.multi_sim import MujocoCamera, RegionAppearance
-from semantic_digital_twin.adapters.mujoco_video_recording import (
-    RecordedVideo,
-    VideoResolution,
-)
+from semantic_digital_twin.adapters.mujoco_video_recording import VideoResolution
 from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
@@ -665,7 +663,7 @@ class MujocoSortingRig(ShapeSorter):
 class SimulationFilm(SimulationObserver):
     """
     Films a running simulation through one of its cameras, a frame every so much
-    simulated time.
+    simulated time, each frame written into the film's video as it is drawn.
     """
 
     simulation: RealTimeSimulation
@@ -683,24 +681,14 @@ class SimulationFilm(SimulationObserver):
     The size of the frames.
     """
 
-    frames_per_second: int = FRAMES_PER_SECOND
+    film: FilmBeingTaken
     """
-    How many frames a second of simulated time the film keeps.
+    Where each frame goes as it is drawn, and what the run leaves copies of.
     """
 
     clock: Callable[[], float] = field(default=lambda: 0.0)
     """
     Reads how far into the trial the run is, which is what each frame is stamped with.
-    """
-
-    frames: List[np.ndarray] = field(init=False, default_factory=list)
-    """
-    The frames kept so far.
-    """
-
-    moments: List[float] = field(init=False, default_factory=list)
-    """
-    How far into the trial each frame was taken, as the clock read it.
     """
 
     _next_frame_at: float = field(init=False, default=0.0)
@@ -714,6 +702,27 @@ class SimulationFilm(SimulationObserver):
     build, and a film asks for hundreds of frames.
     """
 
+    @property
+    def frames_per_second(self) -> int:
+        """
+        How many frames a second of simulated time the film keeps.
+        """
+        return self.film.frames_per_second
+
+    @property
+    def moments(self) -> List[float]:
+        """
+        How far into the trial each frame was taken, as the clock read it.
+        """
+        return self.film.moments
+
+    @property
+    def taken(self) -> TimedFramesFile:
+        """
+        The film as it stands on disk, read back a frame at a time.
+        """
+        return TimedFramesFile(self.film.path)
+
     def simulation_advanced(self, simulated_time: float) -> None:
         if simulated_time < self._next_frame_at:
             return
@@ -725,31 +734,15 @@ class SimulationFilm(SimulationObserver):
                     simulator._mj_model, self.resolution.height, self.resolution.width
                 )
             self._renderer.update_scene(simulator._mj_data, self.camera_name)
-            self.frames.append(self._renderer.render().copy())
-        self.moments.append(self.clock())
-
-    def video(self) -> RecordedVideo:
-        """
-        :return: The film, ready to be written.
-        """
-        return RecordedVideo(
-            frames=self.frames, frames_per_second=self.frames_per_second
-        )
-
-    def timed_frames(self) -> TimedFrames:
-        """
-        :return: The film with each frame at the second of the trial it was taken.
-        """
-        return TimedFrames(
-            frames=list(self.frames),
-            moments=list(self.moments),
-            frames_per_second=self.frames_per_second,
-        )
+            drawn = self._renderer.render().copy()
+        self.film.keep(drawn, self.clock())
 
     def close(self) -> None:
         """
-        Let go of the renderer, once the simulation it drew from has stopped.
+        Finish the film and let go of the renderer, once the simulation it drew from has
+        stopped.
         """
+        self.film.finish()
         if self._renderer is not None:
             self._renderer.close()
             self._renderer = None
@@ -929,6 +922,14 @@ class SimulatedPickupDemo:
     The film of what the robot's camera saw, once :meth:`perform` has run.
     """
 
+    _films_directory: Optional[TemporaryDirectory] = field(
+        init=False, default=None, repr=False
+    )
+    """
+    Where the films are written while they are taken, kept for as long as the run is so
+    that it can still be asked afterwards to leave them somewhere.
+    """
+
     def perform(self) -> None:
         """
         Start the simulation, look, sort every piece the look found, and stop --
@@ -974,14 +975,27 @@ class SimulatedPickupDemo:
             region_appearance=RegionAppearance.HIDDEN,
             followers=[self.lab.belief],
         )
+        self._films_directory = TemporaryDirectory()
+        being_filmed = Path(self._films_directory.name)
         self.overview = SimulationFilm(
             simulation,
             OVERVIEW_CAMERA_NAME,
             OVERVIEW_VIDEO_RESOLUTION,
+            FilmBeingTaken(
+                path=being_filmed / RunArtifact.OVERVIEW_VIDEO,
+                frames_per_second=FRAMES_PER_SECOND,
+            ),
             clock=self._elapsed,
         )
         self.camera_film = SimulationFilm(
-            simulation, CAMERA_NAME, CAMERA_VIDEO_RESOLUTION, clock=self._elapsed
+            simulation,
+            CAMERA_NAME,
+            CAMERA_VIDEO_RESOLUTION,
+            FilmBeingTaken(
+                path=being_filmed / RunArtifact.CAMERA_VIDEO,
+                frames_per_second=FRAMES_PER_SECOND,
+            ),
+            clock=self._elapsed,
         )
         simulation.observers.append(self.tracing)
         if self.filmed:
@@ -1106,26 +1120,27 @@ class SimulatedPickupDemo:
         :param artifacts: Where the episode's artifacts go.
         :return: ``artifacts``.
         """
-        artifacts.keep_video(self.overview.video())
+        artifacts.keep_video(self.overview.taken)
         artifacts.keep_transcript(Transcript(episode=self.episode, trials=[self.trial]))
         kept = artifacts.trial(self.trial.number)
-        kept.keep_camera(self.camera_film.timed_frames())
+        kept.keep_camera(self.camera_film.taken)
         kept.keep_joint_trace(self.tracing.joints)
         return artifacts
 
     def write_artifacts(self, directory: Path) -> List[Path]:
         """
-        Write the two films and the picture of what the look found.
+        Write the two films, each with the moments of its frames beside it, and the
+        picture of what the look found.
 
         :param directory: Where to write them; created if it does not exist.
-        :return: The files written.
+        :return: The two films and the picture.
         """
         directory.mkdir(parents=True, exist_ok=True)
         detections = directory / RunArtifact.DETECTIONS
         cv2.imwrite(str(detections), self.look.picture_of_what_was_found())
         return [
-            self.overview.video().write(directory / RunArtifact.OVERVIEW_VIDEO),
-            self.camera_film.video().write(directory / RunArtifact.CAMERA_VIDEO),
+            self.overview.taken.write(directory / RunArtifact.OVERVIEW_VIDEO),
+            self.camera_film.taken.write(directory / RunArtifact.CAMERA_VIDEO),
             detections,
         ]
 
