@@ -84,9 +84,8 @@ class InsertShapeAction(InsertAction):
 
     target: ShapeSortingHole
     """
-    The board's hole the shape goes through, which is narrower than the opening
-    :attr:`InsertAction.target` takes: the pose a shape states is stated for a hole of
-    the board.
+    The board's hole the shape goes through; a hole of the board rather than any
+    opening, since that is what a shape states its pose for.
     """
 
     montessori_shape: Optional[MontessoriShape] = field(default=None, kw_only=True)
