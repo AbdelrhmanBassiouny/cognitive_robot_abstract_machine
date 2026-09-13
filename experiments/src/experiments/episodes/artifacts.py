@@ -18,8 +18,10 @@ from pathlib import Path
 
 import trimesh
 from krrood.exceptions import DataclassException
-from semantic_digital_twin.world_description.geometry import Mesh
-from typing_extensions import TYPE_CHECKING, List, Sequence, Union
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.geometry import Mesh, Shape
+from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
+from typing_extensions import TYPE_CHECKING, Iterator, List, Sequence, Union
 
 from experiments.episodes.episode import Episode, RecordedTrial
 from experiments.episodes.trace import FramesByMoment, JointTrace, TimedFramesFile
@@ -132,6 +134,50 @@ def keep_mesh(mesh: trimesh.Trimesh) -> Mesh:
     directory = configured_mesh_directory()
     directory.mkdir(parents=True, exist_ok=True)
     return Mesh.from_trimesh(mesh=mesh, directory=directory)
+
+
+def keep_meshes_of(world: World) -> List[Path]:
+    """
+    Keep every mesh a world's bodies and regions read from a directory that goes with a
+    process, where a process reading the world back later finds it, and have the shapes
+    read from the kept copies.
+
+    A world fetched from the robot is rebuilt from what the robot publishes, so every
+    mesh of it is exported into the directory that is removed when the process exits;
+    recorded as it stands, such a world names files that are gone by the time it is read
+    back. Each mesh's own directory is copied whole, so a material written beside it
+    goes with it.
+
+    :param world: The world about to be recorded.
+    :return: The mesh files that were kept, one per shape that had to be.
+    """
+    storage = MeshFileStorage()
+    kept = []
+    for shape in shapes_of(world):
+        if not isinstance(shape, Mesh):
+            continue
+        mesh_file = Path(shape.filename)
+        if not storage.is_in_a_root(mesh_file):
+            continue
+        kept_directory = configured_mesh_directory() / mesh_file.parent.name
+        shutil.copytree(mesh_file.parent, kept_directory, dirs_exist_ok=True)
+        shape.filename = str(kept_directory / mesh_file.name)
+        kept.append(Path(shape.filename))
+    return kept
+
+
+def shapes_of(world: World) -> Iterator[Shape]:
+    """
+    Every shape a world's bodies show or collide with and every shape its regions
+    cover.
+
+    :param world: The world whose shapes are walked.
+    """
+    for body in world.bodies:
+        yield from body.visual.shapes
+        yield from body.collision.shapes
+    for region in world.regions:
+        yield from region.area.shapes
 
 
 @dataclass
