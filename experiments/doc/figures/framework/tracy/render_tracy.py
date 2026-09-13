@@ -2,7 +2,8 @@
 transparent background.
 
 Two shots are defined in :data:`SHOTS`: ``idle`` (both arms raised over the table, every
-piece loose) and ``inserting`` (the left gripper holding the cube over the square hole).
+piece loose -- the cube on the board's own lid, where the demo's layout starts it) and
+``inserting`` (the left gripper holding the cube over the square hole).
 Run ``python render_tracy.py idle`` or ``python render_tracy.py inserting``; the joint
 angles come from the pose files :mod:`pose_search` writes.
 
@@ -118,6 +119,15 @@ class PieceKind(StrEnum):
     BOX = "box"
     CYLINDER = "cylinder"
     TRIANGULAR_PRISM = "triangular_prism"
+
+
+class RestingSurface(StrEnum):
+    """
+    What holds a piece up where it starts.
+    """
+
+    THE_TABLE = "the table"
+    THE_BOARDS_LID = "the board's lid"
 
 
 @dataclass(frozen=True)
@@ -241,7 +251,12 @@ class Piece:
 
     position: tuple[float, float]
     """
-    Where it rests on the table, in Tracy's frame.
+    Where it rests, in Tracy's frame.
+    """
+
+    rests_on: RestingSurface = RestingSurface.THE_TABLE
+    """
+    What holds it up there, which is what settles how high its own centre sits.
     """
 
     @property
@@ -274,9 +289,19 @@ class Piece:
         mesh.visual.face_colors = pastel(self.hue)
         return mesh
 
-    def resting_transform(self) -> np.ndarray:
+    def resting_transform(self, board: Board) -> np.ndarray:
+        """
+        Where the piece stands, resting on whatever holds it up.
+
+        :param board: The board, whose lid holds up a piece that rests on it.
+        """
+        surface_top = (
+            board.lid_z()
+            if self.rests_on is RestingSurface.THE_BOARDS_LID
+            else TABLE_TOP_Z
+        )
         transform = np.eye(4)
-        transform[:3, 3] = [*self.position, TABLE_TOP_Z + self.height / 2]
+        transform[:3, 3] = [*self.position, surface_top + self.height / 2]
         return transform
 
 
@@ -291,8 +316,25 @@ DRAWERS = (
     Drawer(offset=(-0.003, 0.0, 0.0), hue=45),
     Drawer(offset=(-0.003, -0.087, 0.0), hue=38),
 )
+CUBE_ON_THE_LID = (0.0, 0.126)
+"""
+Where the cube rests on the lid, in the board's own frame: the stretch of solid lid
+furthest from the square hole, as the sorting demo's own layout puts it (see
+``experiments.montessori.world.solid_lid_away_from``), so the figure shows the run the
+demo performs.
+"""
+
 PIECES = {
-    "cube": Piece(PieceKind.BOX, (0.03, 0.03, 0.03), hue=172, position=(0.52, 0.17)),
+    "cube": Piece(
+        PieceKind.BOX,
+        (0.03, 0.03, 0.03),
+        hue=172,
+        position=(
+            BOARD.position[0] + CUBE_ON_THE_LID[0],
+            BOARD.position[1] + CUBE_ON_THE_LID[1],
+        ),
+        rests_on=RestingSurface.THE_BOARDS_LID,
+    ),
     "cylinder": Piece(
         PieceKind.CYLINDER, (0.028, 0.03), hue=172, position=(0.55, -0.14)
     ),
@@ -470,7 +512,7 @@ def scene_meshes(held: HeldPiece | None, robot: yourdfpy.URDF) -> list[trimesh.T
             carried[:3, 3] = robot.get_transform(held.frame, "world")[:3, 3]
             mesh.apply_transform(carried)
         else:
-            mesh.apply_transform(piece.resting_transform())
+            mesh.apply_transform(piece.resting_transform(BOARD))
         meshes.append(mesh)
     return meshes
 
