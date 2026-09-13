@@ -32,6 +32,27 @@ to adjacent lines (`solid_lid_away_from` here, `SceneAsSetUp` there); kept both.
   hardcoded a zero offset, and the change preserves that. Its test passes only because
   its tolerance (0.05) swallows the offset (0.01).
 
+### Review round 1 (2026-09-13, comment r3999689257 on `insert_shape_action.py`)
+Proposal, not a defect: rather than a new action, EQL-based RDR rules (`EQLSingleClassRDR`)
+that choose the target from context; and the figure's target hole filled by an RDR backend
+from an underspecified statement.
+
+Replied (r3999715839), **left open** — it forks into three and needs a decision:
+- The figure already colours the `target=a(ShapeSortingHole)(...)` slot as the *rules*
+  backend, but the code behind it is `ShapeSortingBoard.hole_for`, a hand-written
+  three-tier lookup (fits_through filter, name pairing, smallest-fitting fallback).
+  Making that an `EQLSingleClassRDR` is agreed and plugs in upstream of `InsertAction`
+  (whose `target` is already a statement) — recommended as a follow-up PR, since
+  `hole_for` is on the base branch with five callers including `event_monitoring`.
+- Target-selection rules do not replace `InsertAction`: they choose *where*, not the
+  post-condition (`InsideOf` the landing region) or the descent through the aperture.
+- The design that would collapse the two actions is a polymorphic *target* (surface or
+  aperture states its release pose and its satisfied condition), not an action subclass —
+  which does sidestep the LSP objection raised earlier. Rewrite of this PR + `PlaceAction`.
+
+Awaiting the choice between (a) rules as a follow-up, (b) rules in this PR, (c) collapse
+into a polymorphic-target `PlaceAction`.
+
 ### Local environment (not committed)
 - `pip install -U uv` then `uv sync --python /usr/bin/python3.12 --extra dev`.
 - No ROS here: a `.pth` in `.venv` loads `rosstub.py` from the scratchpad, which
