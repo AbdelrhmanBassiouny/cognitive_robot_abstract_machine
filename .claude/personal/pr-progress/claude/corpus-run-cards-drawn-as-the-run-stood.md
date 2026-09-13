@@ -21,6 +21,13 @@ Plan: make the query cards of the simulated corpus right.
 - [x] lab DB: backup montessori_sorting_results_before_instructions_column_2026-09-13.dump,
       then ALTER TABLE "RecordedTrialDAO" ADD COLUMN instructions_carried_out JSON NOT NULL
       DEFAULT '[]'::json (user asked for it 2026-09-13)
+- [x] CI red on #356 (test_tracy_pickup_demo_mujoco): commit 130e6e5a3b -- apply_gravity_compensation
+      back to arm+gripper scope (the widening made the cube/cylinder slip on the carry, 5/5),
+      corpus scene uses compensate_gravity_on_every_link; MujocoBuilder._register_mesh names
+      one asset per file+scale (collision meshes named like visual ones were never registered,
+      every link collided with its visual hull); prism strict xfail dropped (8/8 through).
+      test_the_camera_stands_where_the_captures_camera_stood fails locally at the base too
+      (local tracy description), passes on CI. Pushed, #356 description updated, draft.
 - [ ] re-recording the corpus on the lab DB, launched 2026-09-13 17:12 detached:
       scratchpad/rerecord_then_figures.sh -> ~/episode-artifacts/corpus_rerecord_2026-09-13.log,
       manifest corpus_episodes_rerecorded_2026-09-13.txt, status rerecord_status_2026-09-13.txt,
