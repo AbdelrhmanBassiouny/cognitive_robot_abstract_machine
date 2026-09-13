@@ -15,6 +15,12 @@ targets that branch.
    (`CUBE_STARTS_ON_THE_LID`, `experiments.montessori.world.solid_lid_away_from`).
 7. Framework figure: cube on the lid, plan prints `InsertAction` — done, re-rendered.
 
+### Merged with base
+`origin/claude/icra-experiments-simulation-pipeline-w4ep7n` moved to `1bcef7d49`; merged
+in at `f227cebbc`. One conflict, in `pickup_demo_mujoco.py`'s imports — both sides added
+to adjacent lines (`solid_lid_away_from` here, `SceneAsSetUp` there); kept both.
+`scenarios.py` and `world.py` auto-merged with both sides' additions intact.
+
 ### Outstanding
 - Nothing runnable here exercises the MuJoCo Tracy path: this container has no
   `iai_tracy_description` matching the lab's (the public clone uses `robotiq_arg2f_*`
