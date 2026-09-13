@@ -37,6 +37,16 @@ BLOCKING_LABEL = make_configuration().needs_resolution_label
 One of the labels that withholds a branch, read from the configuration that names them.
 """
 
+BUG_LABEL = make_configuration().bug_label
+"""
+The label raising a branch to :class:`~stack.BranchPriority.BUG`.
+"""
+
+TOOLING_LABEL = make_configuration().tooling_label
+"""
+The label raising a branch to :class:`~stack.BranchPriority.TOOLING`.
+"""
+
 
 @dataclass
 class ForkReportingChecks:
@@ -107,6 +117,53 @@ def test_tips_are_merged_in_ascending_pull_request_order():
     tips = tips_of(create_stack_object([later, earlier, middle]))
 
     assert [tip.name for tip in tips] == [earlier.name, middle.name, later.name]
+
+
+def test_a_bug_labelled_tip_merges_ahead_of_an_earlier_numbered_ordinary_tip():
+    """
+    Priority is read before pull request number, so a bug fix is never the one a
+    collision skips merely for carrying a higher number than an ordinary branch.
+    """
+    earlier_ordinary = create_branch_object("earlier-ordinary", 2)
+    later_bug_fix = create_branch_object("later-bug-fix", 9, labels=[BUG_LABEL])
+
+    tips = tips_of(create_stack_object([earlier_ordinary, later_bug_fix]))
+
+    assert [tip.name for tip in tips] == [later_bug_fix.name, earlier_ordinary.name]
+
+
+def test_a_tooling_labelled_tip_merges_ahead_of_an_earlier_numbered_ordinary_tip():
+    """
+    The same rule for the fork's own tooling, one tier below a bug fix.
+    """
+    earlier_ordinary = create_branch_object("earlier-ordinary", 2)
+    later_tooling = create_branch_object("later-tooling", 9, labels=[TOOLING_LABEL])
+
+    tips = tips_of(create_stack_object([earlier_ordinary, later_tooling]))
+
+    assert [tip.name for tip in tips] == [later_tooling.name, earlier_ordinary.name]
+
+
+def test_a_bug_labelled_tip_merges_ahead_of_a_tooling_labelled_one():
+    tooling = create_branch_object("tooling", 1, labels=[TOOLING_LABEL])
+    bug_fix = create_branch_object("bug-fix", 9, labels=[BUG_LABEL])
+
+    tips = tips_of(create_stack_object([tooling, bug_fix]))
+
+    assert [tip.name for tip in tips] == [bug_fix.name, tooling.name]
+
+
+def test_pull_request_number_still_breaks_ties_within_a_priority_tier():
+    """
+    A tier changes a branch's standing against branches outside it; two branches
+    sharing a tier still merge in the same ascending order as before.
+    """
+    later = create_branch_object("later-fix", 9, labels=[BUG_LABEL])
+    earlier = create_branch_object("earlier-fix", 2, labels=[BUG_LABEL])
+
+    tips = tips_of(create_stack_object([later, earlier]))
+
+    assert [tip.name for tip in tips] == [earlier.name, later.name]
 
 
 def test_a_draft_branch_is_left_out():
