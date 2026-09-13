@@ -2282,18 +2282,30 @@ class MujocoBuilder(MultiSimBuilder):
         Add the mesh asset one part of a shape draws to the spec, unless a part of the
         same file at the same scale already has, and name it.
 
+        The asset is named after its file, and a second file of that name -- a link's
+        collision mesh beside its visual mesh, say -- is told apart by a count, so no
+        geom is built with another file's mesh.
+
         :param part: The part whose file becomes the asset.
         :param shape: The shape the part belongs to, whose scale the asset takes.
         """
-        mesh_name = os.path.splitext(os.path.basename(part.file_path))[0]
         mesh_scale = [shape.scale.x, shape.scale.y, shape.scale.z]
+        for mesh in self.spec.meshes:
+            if mesh.file == part.file_path and numpy.allclose(mesh.scale, mesh_scale):
+                return mesh.name
+        mesh_name = os.path.splitext(os.path.basename(part.file_path))[0]
         if not numpy.allclose(mesh_scale, [1.0, 1.0, 1.0]):
             mesh_name += f"_{'_'.join(map(str, mesh_scale))}"
-        if mesh_name not in [mesh.name for mesh in self.spec.meshes]:
-            mesh = self.spec.add_mesh(name=mesh_name)
-            mesh.file = part.file_path
-            mesh.scale = mesh_scale
-        return mesh_name
+        taken = {mesh.name for mesh in self.spec.meshes}
+        name = mesh_name
+        count = 2
+        while name in taken:
+            name = "%s_%d" % (mesh_name, count)
+            count += 1
+        mesh = self.spec.add_mesh(name=name)
+        mesh.file = part.file_path
+        mesh.scale = mesh_scale
+        return name
 
     def _parts_of_a_collada_mesh(self, mesh_file_path: str) -> List[MeshPart]:
         """

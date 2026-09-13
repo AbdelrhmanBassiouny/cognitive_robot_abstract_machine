@@ -470,6 +470,41 @@ def test_the_parts_of_a_collada_mesh_stand_where_the_file_puts_them(tmp_path):
     assert together.bounds == pytest.approx(whole.bounds)
 
 
+def test_a_collision_mesh_named_like_the_visual_mesh_is_its_own_asset(tmp_path):
+    """
+    A link's collision mesh often shares its file name with the visual mesh in another
+    folder; the two are two assets, so the link collides with the mesh its description
+    states rather than with the one it is seen with.
+    """
+    visual_file = tmp_path / "visual" / "link.obj"
+    collision_file = tmp_path / "collision" / "link.stl"
+    visual_file.parent.mkdir()
+    collision_file.parent.mkdir()
+    trimesh.creation.icosphere(radius=0.1).export(str(visual_file))
+    trimesh.creation.box(extents=(0.1, 0.1, 0.1)).export(str(collision_file))
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        body = Body(
+            name=PrefixedName(TWO_COLOURED_CUBES_BODY),
+            visual=ShapeCollection([Mesh(filename=str(visual_file))]),
+            collision=ShapeCollection([Mesh(filename=str(collision_file))]),
+        )
+        world.add_kinematic_structure_entity(body)
+        world.add_connection(FixedConnection(parent=root, child=body))
+    builder = MujocoBuilder()
+
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    file_of = {mesh.name: mesh.file for mesh in builder.spec.meshes}
+    seen_with, collides_with = sorted(
+        _geoms_of(builder, TWO_COLOURED_CUBES_BODY), key=lambda geom: geom.contype
+    )
+    assert file_of[seen_with.meshname] == str(visual_file)
+    assert file_of[collides_with.meshname] == str(collision_file)
+
+
 def test_a_colour_the_shape_states_is_drawn_over_the_files_own(tmp_path):
     """
     A shape given a colour of its own is drawn in it, whatever its file says, the way a

@@ -1,6 +1,7 @@
 """
-How Tracy is fitted out for a simulation: every link below its root is held up against
-gravity, the frames its description states no mass for included.
+How Tracy is fitted out for a simulation: the links its servos drive are held up against
+gravity where the servos are what moves it, and every link below its root where nothing
+drives it.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 from experiments.tracy_experiments.equipment import (
     apply_gravity_compensation,
+    compensate_gravity_on_every_link,
     parse_tracy,
 )
 
@@ -39,11 +41,27 @@ def compensated_bodies_of(world: World) -> set[Body]:
     }
 
 
-def test_gravity_compensation_covers_every_link_below_the_robots_root():
+def test_gravity_compensation_covers_the_links_of_the_arms_and_their_grippers():
     world = parse_tracy()
     robot = Tracy.from_world(world)
 
     apply_gravity_compensation(world, robot)
+
+    arms_and_grippers = {
+        body
+        for arm in robot.get_arms()
+        for body in arm.bodies + arm.end_effector.bodies
+    }
+    compensated = compensated_bodies_of(world)
+    assert compensated == arms_and_grippers
+    assert world.get_body_by_name(A_FRAME_STATING_NO_MASS) not in compensated
+
+
+def test_compensating_every_link_covers_every_link_below_the_robots_root():
+    world = parse_tracy()
+    robot = Tracy.from_world(world)
+
+    compensate_gravity_on_every_link(world, robot)
 
     below_the_root = {
         entity

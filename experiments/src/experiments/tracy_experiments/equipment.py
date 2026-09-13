@@ -287,20 +287,44 @@ def table_top_z(robot: Tracy) -> float:
 # %% physical simulation
 
 
-def apply_gravity_compensation(world: World, robot: AbstractRobot) -> None:
+def apply_gravity_compensation(world: World, robot: Tracy) -> None:
     """
-    Give every link of the robot below its root MuJoCo's own gravity compensation.
+    Give every arm and gripper link MuJoCo's own gravity compensation.
 
     Without it, each link's own position servo would have to spend part of its available
-    torque fighting gravity instead of tracking its commanded target, and a joint nothing
-    drives sags until its link lies on whatever is below it. Every link below the root is
-    covered, not only the ones an arm or a gripper lists as its own: a description's
-    frames -- a flange, a tool frame, a force-torque frame -- hang off the wrist as bodies
-    of their own, and the twin gives a body that states no mass a kilogram, so left
-    uncompensated they weigh on every joint above them. The gripper's own links are
-    covered the same way: an entirely separate semantic annotation hanging off the arm's
-    end, whose comparatively weak servo (see :data:`GRIPPER_JOINT_SERVO`) never has
-    enough authority to fight the whole uncompensated finger assembly's own weight.
+    torque fighting gravity instead of tracking its commanded target. This covers the
+    gripper's own links too, not just the arm's own chain up to the wrist: without it,
+    the gripper -- an entirely separate semantic annotation hanging off the arm's end,
+    not part of ``arm.active_connections`` -- settles wherever gravity pulls it
+    regardless of its own actuator's commanded target, since its comparatively weak
+    servo (see :data:`GRIPPER_JOINT_SERVO`) never has enough authority to fight the whole
+    uncompensated finger assembly's own weight.
+
+    The frames a description hangs between a wrist and its gripper -- a flange, a tool
+    frame, a force-torque frame -- are left to the servos, which carry them the way the
+    grasps are tuned for.
+
+    :param world: The world to modify in place.
+    :param robot: The robot to compensate.
+    """
+    with world.modify_world():
+        for arm in robot.get_arms():
+            for body in arm.bodies + arm.end_effector.bodies:
+                body.simulator_additional_properties.append(
+                    MujocoBody(gravitation_compensation_factor=1.0)
+                )
+
+
+def compensate_gravity_on_every_link(world: World, robot: AbstractRobot) -> None:
+    """
+    Give every link of the robot below its root MuJoCo's own gravity compensation, so a
+    robot nothing drives keeps the pose it was built in.
+
+    A joint nothing drives sags until its link lies on whatever is below it, so every
+    link below the root is covered, not only the ones an arm or a gripper lists as its
+    own: a description's frames -- a flange, a tool frame, a force-torque frame -- hang
+    off the wrist as bodies of their own, and the twin gives a body that states no mass
+    a kilogram, so left uncompensated they would weigh on every joint above them.
 
     :param world: The world to modify in place.
     :param robot: The robot to compensate.
