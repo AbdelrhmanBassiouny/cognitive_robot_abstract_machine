@@ -15,7 +15,7 @@ Plan: make the query cards of the simulated corpus right.
       (TracyOnItsOwnTable.build) and held there: apply_gravity_compensation now covers every
       link below the robot root (the 1 kg massless frames were uncompensated) and
       exclude_self_collision applied too -- without both, the unused arm sagged out of park
-- [ ] commit round 2, push, update #356 description (keep draft)
+- [x] commit round 2 (7c4caf7d0b), pushed, #356 description updated (draft)
 
 Open points for the user: film camera (SceneRecording._camera_watching_the_scene) frames the
 constant TABLE_BOUNDS, wrong for Tracy's table -> corpus videos mis-framed (not fixed);
