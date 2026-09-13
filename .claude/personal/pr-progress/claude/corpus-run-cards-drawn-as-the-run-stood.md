@@ -28,6 +28,9 @@ Plan: make the query cards of the simulated corpus right.
 - [ ] once done: check a scene card of a re-recorded episode shows the idle arm parked, report
 - rehearsal cluster on port 55432 stopped 2026-09-13
 
-Open point for the user: the 75 earlier simulated episodes (manifest corpus_episodes.txt,
-stretched idle arm in their traces) stay in the lab DB beside the re-recorded ones, so the
-figures count both until they are removed (delete_smoke_episodes.py is the pattern).
+- [x] old recording removed from the lab DB (user asked 2026-09-13 19:20): backup
+      montessori_sorting_results_before_old_corpus_removal_2026-09-13.dump, then
+      scratchpad/delete_old_corpus_episodes.py --apply deleted the 75 episodes of
+      corpus_episodes.txt plus the 02:08 smoke episode 29c9ca09 (76 episodes, 76 trials,
+      4868 scored queries, association rows); lab DB now 75 re-recorded + 5 robot episodes.
+      Their plans/worlds/ticks/motions stay as unreferenced rows (same as the smoke cleanup).
