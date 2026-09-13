@@ -15,10 +15,12 @@ from dataclasses import asdict, dataclass
 from enum import IntEnum
 from pathlib import Path
 
+from bastler.changed_paths import PathSubject
 from bastler.maintenance_board import BoardExport
 from bastler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
 from bastler.maintenance_promotion import Promotion
 from bastler.maintenance_restack_steps import BranchOutcome, RestackOutcome
+from bastler.maintenance_tooling_label import ToolingLabelling
 from bastler.stack import Reparent, Stack, landed_branches, promotion_order, reparents
 
 # %% the report a caller renders or emits
@@ -178,6 +180,19 @@ def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> N
             )
     for branch in cleared:
         print(f"{branch}\tlink-label-cleared\t")
+
+
+def print_tooling_labels(labelled: Sequence[ToolingLabelling]) -> None:
+    """:param labelled: What each pull request read was found to be, and whether its
+    labels had to move to say so."""
+    for labelling in labelled:
+        subject = (
+            PathSubject.TOOLING
+            if labelling.is_a_tooling_change
+            else PathSubject.SOFTWARE
+        )
+        written = "written" if labelling.label_was_written else "already-right"
+        print(f"#{labelling.pull_request_number}\t{subject}\t{written}")
 
 
 # %% the exit status
