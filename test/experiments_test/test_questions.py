@@ -412,6 +412,18 @@ def test_the_colours_are_the_ones_the_shapes_carry(robot: AbstractRobot):
     assert ObjectColours().ask(robot) == [TABLE_COLOUR, CUBE_COLOUR, CYLINDER_COLOUR]
 
 
+def test_the_colours_are_true_in_any_order(robot: AbstractRobot):
+    """
+    A query and the twin enumerate the scene's objects in orders of their own, and a
+    scene whose things were re-stood enumerates them in a new order again, so the
+    colours are the same colours each as often rather than the same list.
+    """
+    truth = ObjectColours().ground_truth(robot)
+
+    assert truth.agrees_with([CYLINDER_COLOUR, CUBE_COLOUR, TABLE_COLOUR])
+    assert not truth.agrees_with([TABLE_COLOUR, CUBE_COLOUR, CUBE_COLOUR])
+
+
 def test_the_places_are_where_the_scene_stood_the_objects(
     scene: QuestionedScene, robot: AbstractRobot
 ):
