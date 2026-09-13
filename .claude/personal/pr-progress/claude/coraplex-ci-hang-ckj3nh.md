@@ -1,35 +1,39 @@
-## Branch `claude/coraplex-ci-hang-ckj3nh` - coraplex CI job hangs to the 6 h limit
+## Branch `claude/coraplex-ci-hang-ckj3nh` - PR #350 (draft) - coraplex CI job hangs to the 6 h limit
 
-**Goal**: find and fix what makes `test_each_lib (coraplex) / test` hang until the
-6 h job limit on every branch stacked on #265 (#344, #346, #348, #349), plus the
-sibling `coraplex/scripts/test_notebook_examples.sh` job.
+Base: `claude/icra-experiments-simulation-pipeline-w4ep7n` (#265). Label: bug.
 
-**Evidence so far**
-- Job 103648777877 (run 34725288521): 2 xdist workers, 496 items. gw1 finished its
-  queue 03:45:28. gw0 reported PASSED for the last-but-one test 04:04:03, then the
-  final test `test_publisher_lifecycle.py::test_force_torque_sensor_is_not_retained_after_stop`
-  produced nothing until the cancel at 09:36:04. No pytest summary line was ever printed.
-- Notebook job 103641565173: the last notebook (`location_designator.ipynb`) reported
-  PASSED at 02:56:04, then silence until the cancel at 08:50:30 - treon never printed
-  its summary. So both coraplex jobs stop after the last unit of work and before the
-  process exits.
-- `test_publisher_lifecycle.py` itself is on `main` (63d0f8a03) and unchanged since
-  #265's last green run (020cbc41a); `test/conftest.py` and `test/coraplex_test/test_ros_utils/`
-  are unchanged too. What did change in #265's 111 new commits and could matter:
-  `MotionStatechartNode` became a `krrood` `Symbol` (graph_node.py), `SymbolGraph` grew
-  an `RLock`, and `coraplex/plans/executables.py` gained per-tick motion bookkeeping.
-- Cannot reproduce locally: this container has no ROS (`rclpy`, `geometry_msgs` absent)
-  and the workspace packages are not installed, so `coraplex.ros_utils` cannot be imported.
+**Root cause (found)**
+`GiskardExecutable.keep_the_motions_in_step` (new on #265's branch) copies each motion's
+task's life cycle onto the plan's motion node every tick. A task the chart holds through a
+`PausedUntilTrue` monitor reports `LifeCycleValues.PAUSED`, which is also what
+`PlanNode.pause()` sets, so `_execute_simulation`'s `if self.is_paused: sleep; continue`
+read the chart's pause as the plan's and stopped ticking - and only ticking lifts that
+pause. Infinite 100 Hz spin, no output, job cancelled at 6 h.
 
-**Plan**
-1. [done] Temporary workflow `.github/workflows/coraplex_hang_diagnosis.yml` runs the
-   coraplex tests single-process under `timeout --signal=ABRT` with `PYTHONFAULTHANDLER=1`,
-   so the hang dumps every thread's stack. Three steps: ros_utils group alone, the
-   lifecycle file alone, then the whole suite.
-2. [next] Read the stack dump, name what blocks.
-3. Write a failing test naming the behaviour (bounded stop / no thread left alive).
-4. Fix the cause in coraplex (not in the test, no pytest-timeout, no skip markers).
-5. Remove the diagnostic workflow, open the draft PR against
-   `claude/icra-experiments-simulation-pipeline-w4ep7n`, keep its description current.
+**Evidence**
+- Comparing every nodeid job 103648777877 started against every one it reported leaves
+  exactly one that never reported: `test_multi_robot_action_designator.py::test_elevator_navigation[stretch]`
+  (gw1, 03:45:28Z). `ElevatorNavigation` is built out of two `pause_until`s.
+- The notebook job triggered 8 notebooks and reported 7; the missing one is
+  `language.ipynb`, whose last cell is the `pause_until` example.
+- main's coraplex job is green in 17.5 min (run 34731312174) and #265 at 020cbc41a was
+  green too, so it came in with #265's 111 newer commits - which is where
+  `keep_the_motions_in_step` was added.
 
-**Outstanding**: the diagnosis run (34751002125) is still in flight.
+**Done**
+- Failing tests: `test/coraplex_test/test_plan/test_motion_pausing.py` (commit cb3a1a635).
+- Fix: leave `HELD_BY_THE_PLAN` states to the plan whether the motion is already in one or
+  its task has just reached one (commit 5f9d21de2).
+- Draft PR #350 opened with the session link.
+
+**Next**
+1. Read the pre-fix watchdog dump (run 34751400716, job 103708466191) to confirm the stack.
+2. Confirm the post-fix run (34751416+) passes the elevator test, test_motion_pausing,
+   test_language, test_executables, test_graph_parsing, test_motion_node_timing and the
+   language example script.
+3. Remove `.github/workflows/coraplex_hang_diagnosis.yml` and its three commits' worth of
+   scaffolding before the PR is ready; keep the PR description current.
+4. Report whether the coraplex job is green on the PR.
+
+Note: no ROS in this session's container (`rclpy`/`geometry_msgs` absent, workspace packages
+not installed), so nothing coraplex can be run locally; all verification is through CI.
